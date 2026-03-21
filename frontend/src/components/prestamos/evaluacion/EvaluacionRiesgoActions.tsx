@@ -1,102 +1,102 @@
-import { Calculator, CheckCircle } from 'lucide-react'
-import { Button } from '../../../components/ui/button'
-
-interface EvaluacionRiesgoActionsProps {
-  resultado: any
-  isLoading: boolean
-  todasSeccionesCompletas: boolean
-  bloqueadoPorMora: boolean
-  criteriosFaltantes: string[]
-  onClose: () => void
-  onSuccess: () => void
-}
-
-export function EvaluacionRiesgoActions({
-  resultado,
-  isLoading,
-  todasSeccionesCompletas,
-  bloqueadoPorMora,
-  criteriosFaltantes,
-  onClose,
-  onSuccess,
-}: EvaluacionRiesgoActionsProps) {
-  if (!resultado) {
-    return (
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cancelar
-        </Button>
-        <Button
-          type="submit"
-          disabled={isLoading || !todasSeccionesCompletas || bloqueadoPorMora}
-          title={
-            !todasSeccionesCompletas
-              ? `Complete todos los 7 criterios. Faltan: ${criteriosFaltantes.join(', ')}`
-              : bloqueadoPorMora
-              ? 'El cliente tiene cuotas en mora'
-              : undefined
-          }
-        >
-          <Calculator className="h-4 w-4 mr-2" />
-          {isLoading ? 'Evaluando...' : 'Evaluar Riesgo'}
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4 pt-4 border-t">
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border-2 border-blue-300">
-        <div className="flex items-start gap-3">
-          <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h3 className="text-base font-bold text-blue-900 mb-2">
-              [OK] FASE 1 COMPLETADA: EvaluaciÃÂ³n de Riesgo
-            </h3>
-            <div className="space-y-2 text-sm text-blue-800">
-              <p>
-                - <strong>Estado actualizado:</strong> El prÃÂ©stamo ahora estÃÂ¡ marcado como{' '}
-                <span className="font-bold text-blue-600">EVALUADO</span>
-              </p>
-              <p>
-                - <strong>PuntuaciÃÂ³n obtenida:</strong>{' '}
-                {resultado.puntuacion_total?.toFixed(2) || 'N/A'}/100 puntos
-              </p>
-              <p>
-                - <strong>ClasificaciÃÂ³n de riesgo:</strong>{' '}
-                <span className="font-semibold">{resultado.clasificacion_riesgo || 'N/A'}</span>
-              </p>
-              <div className="mt-3 pt-3 border-t border-blue-300">
-                <p className="font-semibold text-purple-700 mb-1">Ã¢ÂÂ SIGUIENTE PASO: Fase 2 - AprobaciÃÂ³n</p>
-                <p className="text-xs">
-                  El icono de <strong>calculadora (Calculator)</strong> en el dashboard desaparecerÃÂ¡ y serÃÂ¡
-                  reemplazado por el icono de <strong>verde (CheckCircle2)</strong> para &quot;Aprobar CrÃÂ©dito&quot;.
-                  Haga clic en ese nuevo icono para continuar con la asignaciÃÂ³n de:
-                </p>
-                <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-blue-700">
-                  <li>Tasa de interÃÂ©s</li>
-                  <li>Fecha de desembolso</li>
-                  <li>Plazo mÃÂ¡ximo</li>
-                  <li>Observaciones</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            onSuccess()
-            onClose()
-          }}
-        >
-          Continuar al Dashboard
-        </Button>
-      </div>
-    </div>
-  )
-}
+import { Calculator, CheckCircle } from 'lucide-react'
+import { Button } from '../../../components/ui/button'
+
+interface EvaluacionRiesgoActionsProps {
+  resultado: any
+  isLoading: boolean
+  todasSeccionesCompletas: boolean
+  bloqueadoPorMora: boolean
+  criteriosFaltantes: string[]
+  onClose: () => void
+  onSuccess: () => void
+}
+
+export function EvaluacionRiesgoActions({
+  resultado,
+  isLoading,
+  todasSeccionesCompletas,
+  bloqueadoPorMora,
+  criteriosFaltantes,
+  onClose,
+  onSuccess,
+}: EvaluacionRiesgoActionsProps) {
+  if (!resultado) {
+    return (
+      <div className="flex justify-end gap-3 pt-4 border-t">
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button
+          type="submit"
+          disabled={isLoading || !todasSeccionesCompletas || bloqueadoPorMora}
+          title={
+            !todasSeccionesCompletas
+              ? `Complete todos los 7 criterios. Faltan: ${criteriosFaltantes.join(', ')}`
+              : bloqueadoPorMora
+              ? 'El cliente tiene cuotas en mora'
+              : undefined
+          }
+        >
+          <Calculator className="h-4 w-4 mr-2" />
+          {isLoading ? 'Evaluando...' : 'Evaluar Riesgo'}
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4 pt-4 border-t">
+      <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border-2 border-blue-300">
+        <div className="flex items-start gap-3">
+          <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-base font-bold text-blue-900 mb-2">
+              [OK] FASE 1 COMPLETADA: EvaluaciÃ³n de Riesgo
+            </h3>
+            <div className="space-y-2 text-sm text-blue-800">
+              <p>
+                - <strong>Estado actualizado:</strong> El prÃ©stamo ahora estÃ¡ marcado como{' '}
+                <span className="font-bold text-blue-600">EVALUADO</span>
+              </p>
+              <p>
+                - <strong>PuntuaciÃ³n obtenida:</strong>{' '}
+                {resultado.puntuacion_total?.toFixed(2) || 'N/A'}/100 puntos
+              </p>
+              <p>
+                - <strong>ClasificaciÃ³n de riesgo:</strong>{' '}
+                <span className="font-semibold">{resultado.clasificacion_riesgo || 'N/A'}</span>
+              </p>
+              <div className="mt-3 pt-3 border-t border-blue-300">
+                <p className="font-semibold text-purple-700 mb-1">â SIGUIENTE PASO: Fase 2 - AprobaciÃ³n</p>
+                <p className="text-xs">
+                  El icono de <strong>calculadora (Calculator)</strong> en el dashboard desaparecerÃ¡ y serÃ¡
+                  reemplazado por el icono de <strong>verde (CheckCircle2)</strong> para &quot;Aprobar CrÃ©dito&quot;.
+                  Haga clic en ese nuevo icono para continuar con la asignaciÃ³n de:
+                </p>
+                <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-blue-700">
+                  <li>Tasa de interÃ©s</li>
+                  <li>Fecha de desembolso</li>
+                  <li>Plazo mÃ¡ximo</li>
+                  <li>Observaciones</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            onSuccess()
+            onClose()
+          }}
+        >
+          Continuar al Dashboard
+        </Button>
+      </div>
+    </div>
+  )
+}

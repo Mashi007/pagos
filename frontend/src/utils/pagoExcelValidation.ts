@@ -1,897 +1,897 @@
-├â┬»├é┬╗├é┬┐/**
-
-
- * Validaci├â┬â├é┬│n carga masiva de pagos (Excel).
-
-
- *
-
-
- * N├â┬â├é┬ÜMERO DE DOCUMENTO: acepta TODOS los formatos sin distinci├â┬â├é┬│n (num├â┬â├é┬⌐rico, BNC/, ZELLE, BS., ├â┬ó├é┬é├é┬¼ $, etc.).
-
-
- * ├â┬â├é┬ÜNICA REGLA para documento: nunca duplicados (ni en el archivo ni en la BD).
-
-
- */
-
-
-
-
-
-import { validateExcelFile, validateExcelData, sanitizeFileName } from './excelValidation'
-
-
-
-
-
-/** Texto de observaci├â┬â├é┬│n por columna; se muestra solo en la celda correspondiente del Excel. Especifican exactamente qu├â┬â├é┬⌐ falla. */
-
-
-export const OBSERVACIONES_POR_CAMPO: Record<string, string> = {
-
-
-  numero_documento: 'Documento duplicado (en archivo o en BD). Se aceptan todos los formatos; ├â┬â├é┬║nica regla: no duplicados.',
-
-
-  fecha_pago: 'Fecha inv├â┬â├é┬ílida o formato incorrecto (use DD/MM/YYYY)',
-
-
-  cedula: 'C├â┬â├é┬⌐dula no existe en clientes',
-
-
-  monto_pagado: 'Monto inv├â┬â├é┬ílido o ├â┬ó├é┬ë├é┬ñ 0',
-
-
-  prestamo_id: 'Cr├â┬â├é┬⌐dito inv├â┬â├é┬ílido (ID fuera de rango o elegir en lista)',
-
-
-  conciliado: 'Conciliaci├â┬â├é┬│n inv├â┬â├é┬ílida',
-
-
-}
-
-
-
-
-
-/** Observaciones espec├â┬â├é┬¡ficas al enviar a Revisar sin error de validaci├â┬â├é┬│n pero con contexto de cr├â┬â├é┬⌐dito. */
-
-
-export const OBSERVACION_SIN_CREDITO = 'C├â┬â├é┬⌐dula sin cr├â┬â├é┬⌐dito activo'
-
-
-export const OBSERVACION_MULTIPLES_CREDITOS = 'M├â┬â├é┬║ltiples cr├â┬â├é┬⌐ditos; elegir uno en la lista'
-
-
-
-
-
-export interface PagoExcelRow {
-
-
-  _rowIndex: number
-
-
-  _validation: Record<string, { isValid: boolean; message?: string }>
-
-
-  _hasErrors: boolean
-
-
-  cedula: string
-
-
-  fecha_pago: string
-
-
-  monto_pagado: number
-
-
-  numero_documento: string
-
-
-  prestamo_id: number | null
-
-
-  conciliado: boolean
-
-
-}
-
-
-
-
-
-export function convertirFechaExcelPago(val: unknown): string {
-
-
-  if (val == null || val === '') return ''
-
-
-  if (val instanceof Date) {
-
-
-    if (Number.isNaN(val.getTime())) return ''
-
-
-    return `${String(val.getDate()).padStart(2, '0')}/${String(val.getMonth() + 1).padStart(2, '0')}/${val.getFullYear()}`
-
-
-  }
-
-
-  const s = String(val).trim()
-
-
-  if (!s) return ''
-
-
-  if (/^\d{4,}$/.test(s)) {
-
-
-    try {
-
-
-      const d = new Date(1900, 0, 1)
-
-
-      d.setDate(d.getDate() + parseInt(s, 10) - 2)
-
-
-      return Number.isNaN(d.getTime())
-
-
-        ? s
-
-
-        : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
-
-
-    } catch {
-
-
-      return s
-
-
-    }
-
-
-  }
-
-
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s
-
-
-  if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
-
-
-    const [d, m, yy] = s.split('-')
-
-
-    const y = parseInt(yy, 10) < 50 ? 2000 + parseInt(yy, 10) : 1900 + parseInt(yy, 10)
-
-
-    return `${d}/${m}/${y}`
-
-
-  }
-
-
-  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
-
-
-    const [d, m, y] = s.split('-')
-
-
-    return `${d}/${m}/${y}`
-
-
-  }
-
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-
-
-    const [y, m, d] = s.split('-')
-
-
-    return `${d}/${m}/${y}`
-
-
-  }
-
-
-  const p = new Date(s)
-
-
-  return !Number.isNaN(p.getTime())
-
-
-    ? `${String(p.getDate()).padStart(2, '0')}/${String(p.getMonth() + 1).padStart(2, '0')}/${p.getFullYear()}`
-
-
-    : s
-
-
-}
-
-
-
-
-
-export function convertirFechaParaBackendPago(f: string): string {
-
-
-  if (!f?.trim()) return ''
-
-
-  const s = f.trim()
-
-
-
-
-
-  // Try DD/MM/YYYY format first (most common in ES locales)
-
-
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-
-
-  if (m) {
-
-
-    const [, day, month, year] = m
-
-
-    const d = parseInt(day, 10)
-
-
-    const mo = parseInt(month, 10)
-
-
-    const y = parseInt(year, 10)
-
-
-
-
-
-    // Validate day (1-31) and month (1-12)
-
-
-    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12 && y >= 1900 && y <= 2100) {
-
-
-      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-
-
-    }
-
-
-  }
-
-
-
-
-
-  // If it already looks like YYYY-MM-DD, return as-is
-
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-
-
-
-
-
-  // Try parsing as a Date object (handles various formats)
-
-
-  try {
-
-
-    const parsed = new Date(s)
-
-
-    if (!Number.isNaN(parsed.getTime())) {
-
-
-      return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
-
-
-    }
-
-
-  } catch {
-
-
-    // Fall through
-
-
-  }
-
-
-
-
-
-  // Return empty if we can't parse it (will trigger fallback to today's date)
-
-
-  return ''
-
-
-}
-
-
-
-
-
-/** Parsea numero de credito (ej: VE/96179604, 96, 96179604) y extrae prestamo_id. */
-
-
-export function parsePrestamoIdFromNumeroCredito(raw: unknown): number | null {
-
-
-  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return null
-
-
-  const s = String(raw).trim()
-
-
-  if (!s) return null
-
-
-  const soloDigitos = s.replace(/^[A-Za-z\/\-_]+\s*/i, '').replace(/[^0-9]/g, '')
-
-
-  if (!soloDigitos) return null
-
-
-  const n = parseInt(soloDigitos, 10)
-
-
-  return Number.isNaN(n) || n < 1 ? null : n
-
-
-}
-
-
-
-
-
-/** C├â┬â├é┬⌐dula v├â┬â├é┬ílida: solo V, E o J + 6-11 d├â┬â├é┬¡gitos (no se admite Z). */
-
-
-const LOOKS_LIKE_CEDULA = /^[VEJ]\d{6,11}$/i
-
-
-
-
-
-export function cedulaParaLookup(val: unknown): string {
-
-
-  if (val == null || val === '') return ''
-
-
-  const s = String(val).trim()
-
-
-  if (!s) return ''
-
-
-  const sinGuion = s.replace(/-/g, '').replace(/\s+/g, '')
-
-
-  if (LOOKS_LIKE_CEDULA.test(sinGuion)) return sinGuion
-
-
-  const match = s.match(/[VEJ]\d{6,11}/i)
-
-
-  if (match) return match[0].replace(/-/g, '')
-
-
-  if (/^\d{8}$/.test(sinGuion)) return 'V' + sinGuion
-
-
-  return s
-
-
-}
-
-
-
-
-
-export function cedulaLookupParaFila(cedula: string, numero_documento: string): string {
-
-
-  const fromC = cedulaParaLookup(cedula)
-
-
-  const fromD = cedulaParaLookup(numero_documento)
-
-
-  if (fromC && LOOKS_LIKE_CEDULA.test(fromC.replace(/-/g, ''))) return fromC
-
-
-  if (fromD && LOOKS_LIKE_CEDULA.test(fromD.replace(/-/g, ''))) return fromD
-
-
-  return fromC || fromD
-
-
-}
-
-
-
-
-
-/** True si el valor parece N├â┬é├é┬║ documento (ej. 10+ d├â┬â├é┬¡gitos, BNC/ZELLE) y no c├â┬â├é┬⌐dula V/E/J/Z. */
-
-
-export function looksLikeDocumentNotCedula(val: unknown): boolean {
-
-
-  if (val == null || val === '') return false
-
-
-  const s = String(val).trim()
-
-
-  if (!s) return false
-
-
-  if (LOOKS_LIKE_CEDULA.test(s.replace(/-/g, ''))) return false
-
-
-  if (/^\d{10,}$/.test(s)) return true
-
-
-  if (/^(BNC|ZELLE|BINANCE|VE\/|BS\.|REF\.?)\s*\/?/i.test(s) || /^[A-Z0-9\/\.\s\-]{10,}$/i.test(s)) return true
-
-
-  return false
-
-
-}
-
-
-
-
-
-function limpiarDocumento(s: string): string {
-
-
-  return s.replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim()
-
-
-}
-
-
-
-
-
-/** L├â┬â├é┬¡mite de la columna numero_documento en BD (alineado con backend app/core/documento.py). */
-
-
-export const MAX_LEN_NUMERO_DOCUMENTO = 100
-
-
-
-
-
-/**
-
-
- * Normaliza el valor a string para usar como clave de documento.
-
-
- * Reglas alineadas con backend normalize_documento: trim, colapsar espacios, notaci├â┬â├é┬│n cient├â┬â├é┬¡fica ├â┬ó├é┬å├é┬Æ d├â┬â├é┬¡gitos, truncar 100.
-
-
- * Acepta CUALQUIER formato: num├â┬â├é┬⌐rico, con ├â┬ó├é┬é├é┬¼ $ Bs, BNC/, ZELLE/, etc. No se quitan s├â┬â├é┬¡mbolos de moneda.
-
-
- * Misma clave = mismo documento (para detectar duplicados). ├â┬â├é┬Ünica regla: no duplicados.
-
-
- */
-
-
-export function normalizarNumeroDocumento(val: unknown): string {
-
-
-  if (val == null || val === '') return ''
-
-
-  let s: string
-
-
-  if (typeof val === 'object' && val !== null) {
-
-
-    const rt = (val as { richText?: Array<{ text?: string }> }).richText
-
-
-    if (Array.isArray(rt)) s = rt.map((x) => x?.text ? '').join('')
-
-
-    else if ((val as { text?: string }).text != null) s = String((val as { text?: string }).text)
-
-
-    else return ''
-
-
-  } else if (typeof val === 'number') {
-
-
-    if (Number.isNaN(val)) return ''
-
-
-    if (Math.abs(val) >= 1e12) {
-
-
-      try {
-
-
-        s = BigInt(Math.round(val)).toString()
-
-
-      } catch {
-
-
-        s = val.toFixed(0)
-
-
-      }
-
-
-    } else if (Math.abs(val) >= 1e11) {
-
-
-      s = String(Math.round(val))
-
-
-    } else {
-
-
-      s = Math.round(val).toString()
-
-
-    }
-
-
-  } else {
-
-
-    s = String(val)
-
-
-  }
-
-
-  s = s.trim()
-
-
-  if (s.startsWith("'")) s = s.slice(1).trim()
-
-
-  s = limpiarDocumento(s)
-
-
-  if (!s || /^(nan|none|undefined|na|n\/a)$/i.test(s)) return ''
-
-
-  if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
-
-
-    try {
-
-
-      const n = parseFloat(s)
-
-
-      if (!Number.isNaN(n) && isFinite(n))
-
-
-        s = Math.abs(n) >= 1e15 ? BigInt(Math.round(n)).toString() : String(Math.round(n))
-
-
-    } catch {
-
-
-      /* mantener s */
-
-
-    }
-
-
-  }
-
-
-  s = s.replace(/\s+/g, ' ').trim()
-
-
-  if (s.length > MAX_LEN_NUMERO_DOCUMENTO) s = s.slice(0, MAX_LEN_NUMERO_DOCUMENTO)
-
-
-  return s
-
-
-}
-
-
-
-
-
-const MAX_MONTO = 999_999_999_999.99
-
-
-const FECHA_REGEX = /^(\d{2})\/(\d{2})\/(\d{4})$/
-
-
-
-
-
-/** Valida un campo de fila de pago. Retorna isValid + mensaje de error. */
-
-
-export function validatePagoField(
-
-
-  field: string,
-
-
-  value: string | number,
-
-
-  options?: {
-
-
-    documentosExistentes?: Set<string>
-
-
-    documentosEnArchivo?: Set<string>
-
-
-    cedulasInvalidas?: Set<string>
-
-
-    documentosDuplicadosBD?: Set<string>
-
-
-  }
-
-
-): { isValid: boolean; message?: string } {
-
-
-
-
-
-  // ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç C├â┬â├é┬ëDULA ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç
-
-
-  if (field === 'cedula') {
-
-
-    const s = String(value ? '').trim().replace(/-/g, '').toUpperCase()
-
-
-    if (!s) return { isValid: false, message: 'C├â┬â├é┬⌐dula requerida' }
-
-
-    if (!/^[VEJ]\d{6,11}$/.test(s))
-
-
-      return { isValid: false, message: 'Formato inv├â┬â├é┬ílido (solo V, E o J + 6-11 d├â┬â├é┬¡gitos; no se admite Z)' }
-
-
-    if (options?.cedulasInvalidas?.has(s))
-
-
-      return { isValid: false, message: 'C├â┬â├é┬⌐dula no existe en clientes' }
-
-
-    return { isValid: true }
-
-
-  }
-
-
-
-
-
-  // ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç FECHA ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç
-
-
-  if (field === 'fecha_pago') {
-
-
-    const s = String(value ? '').trim()
-
-
-    if (!s) return { isValid: false, message: 'Fecha requerida' }
-
-
-    const m = FECHA_REGEX.exec(s)
-
-
-    if (!m) return { isValid: false, message: 'Formato inv├â┬â├é┬ílido (use DD/MM/YYYY)' }
-
-
-    const [, dd, mm, yyyy] = m
-
-
-    const day = Number(dd)
-
-
-    const month = Number(mm)
-
-
-    const year = Number(yyyy)
-
-
-    
-
-
-    // Validar rango de mes ANTES de crear la fecha
-
-
-    if (month < 1 || month > 12)
-
-
-      return { isValid: false, message: 'Mes inv├â┬â├é┬ílido (1-12)' }
-
-
-    
-
-
-    // Validar rango de d├â┬â├é┬¡a ANTES de crear la fecha
-
-
-    if (day < 1 || day > 31)
-
-
-      return { isValid: false, message: 'D├â┬â├é┬¡a inv├â┬â├é┬ílido (1-31)' }
-
-
-    
-
-
-    // Validar que la fecha sea real (rechaza 30/02/2025, etc.)
-
-
-    const d = new Date(year, month - 1, day)
-
-
-    if (
-
-
-      d.getFullYear() !== year ||
-
-
-      d.getMonth() !== month - 1 ||
-
-
-      d.getDate() !== day
-
-
-    ) return { isValid: false, message: 'Fecha inv├â┬â├é┬ílida (ej: 30 de febrero)' }
-
-
-    
-
-
-    // Validar rango de a├â┬â├é┬▒o
-
-
-    if (year < 2000 || year > 2100)
-
-
-      return { isValid: false, message: 'A├â┬â├é┬▒o fuera de rango (2000-2100)' }
-
-
-    
-
-
-    return { isValid: true }
-
-
-  }
-
-
-
-
-
-  // ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç MONTO ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç
-
-
-  if (field === 'monto_pagado') {
-
-
-    const n = typeof value === 'number' ? value : parseFloat(String(value ? '').replace(',', '.'))
-
-
-    if (isNaN(n) || !isFinite(n)) return { isValid: false, message: 'Monto inv├â┬â├é┬ílido' }
-
-
-    if (n <= 0) return { isValid: false, message: 'El monto debe ser mayor a 0' }
-
-
-    if (n > MAX_MONTO) return { isValid: false, message: `Monto excede el l├â┬â├é┬¡mite (${MAX_MONTO})` }
-
-
-    return { isValid: true }
-
-
-  }
-
-
-
-
-
-  // ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç N├â┬â├é┬ÜMERO DE DOCUMENTO ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç
-
-
-  // Acepta CUALQUIER formato (BNC/, ZELLE, num├â┬â├é┬⌐rico, REF, etc.). ├â┬â├é┬ÜNICA REGLA: no duplicados.
-
-
-  if (field === 'numero_documento') {
-
-
-    const docNorm = (value === 'NaN' || value === 'nan' || value === 'undefined')
-
-
-      ? ''
-
-
-      : (normalizarNumeroDocumento(value) || String(value)).trim() || ''
-
-
-    if (!docNorm) return { isValid: true }  // Documento vac├â┬â├é┬¡o permitido (varias filas sin documento)
-
-
-
-
-
-    if (options?.documentosDuplicadosBD?.has(docNorm))
-
-
-      return { isValid: false, message: 'Documento ya existe en la base de datos. ├â┬â├é┬Ünica regla: no duplicados.' }
-
-
-    if (options?.documentosExistentes?.has(docNorm))
-
-
-      return { isValid: false, message: 'Documento duplicado. No se aceptan duplicados.' }
-
-
-    if (options?.documentosEnArchivo?.has(docNorm))
-
-
-      return { isValid: false, message: 'Documento repetido en este archivo' }
-
-
-    return { isValid: true }
-
-
-  }
-
-
-
-
-
-  return { isValid: true }
-
-
-}
-
-
-
-
-
-export { validateExcelFile, validateExcelData, sanitizeFileName }
-
-
+├â┬»├é┬╗├é┬┐/**
+
+
+ * Validaci├â┬â├é┬│n carga masiva de pagos (Excel).
+
+
+ *
+
+
+ * N├â┬â├é┬ÜMERO DE DOCUMENTO: acepta TODOS los formatos sin distinci├â┬â├é┬│n (num├â┬â├é┬⌐rico, BNC/, ZELLE, BS., ├â┬ó├é┬é├é┬¼ $, etc.).
+
+
+ * ├â┬â├é┬ÜNICA REGLA para documento: nunca duplicados (ni en el archivo ni en la BD).
+
+
+ */
+
+
+
+
+
+import { validateExcelFile, validateExcelData, sanitizeFileName } from './excelValidation'
+
+
+
+
+
+/** Texto de observaci├â┬â├é┬│n por columna; se muestra solo en la celda correspondiente del Excel. Especifican exactamente qu├â┬â├é┬⌐ falla. */
+
+
+export const OBSERVACIONES_POR_CAMPO: Record<string, string> = {
+
+
+  numero_documento: 'Documento duplicado (en archivo o en BD). Se aceptan todos los formatos; ├â┬â├é┬║nica regla: no duplicados.',
+
+
+  fecha_pago: 'Fecha inv├â┬â├é┬ílida o formato incorrecto (use DD/MM/YYYY)',
+
+
+  cedula: 'C├â┬â├é┬⌐dula no existe en clientes',
+
+
+  monto_pagado: 'Monto inv├â┬â├é┬ílido o ├â┬ó├é┬ë├é┬ñ 0',
+
+
+  prestamo_id: 'Cr├â┬â├é┬⌐dito inv├â┬â├é┬ílido (ID fuera de rango o elegir en lista)',
+
+
+  conciliado: 'Conciliaci├â┬â├é┬│n inv├â┬â├é┬ílida',
+
+
+}
+
+
+
+
+
+/** Observaciones espec├â┬â├é┬¡ficas al enviar a Revisar sin error de validaci├â┬â├é┬│n pero con contexto de cr├â┬â├é┬⌐dito. */
+
+
+export const OBSERVACION_SIN_CREDITO = 'C├â┬â├é┬⌐dula sin cr├â┬â├é┬⌐dito activo'
+
+
+export const OBSERVACION_MULTIPLES_CREDITOS = 'M├â┬â├é┬║ltiples cr├â┬â├é┬⌐ditos; elegir uno en la lista'
+
+
+
+
+
+export interface PagoExcelRow {
+
+
+  _rowIndex: number
+
+
+  _validation: Record<string, { isValid: boolean; message?: string }>
+
+
+  _hasErrors: boolean
+
+
+  cedula: string
+
+
+  fecha_pago: string
+
+
+  monto_pagado: number
+
+
+  numero_documento: string
+
+
+  prestamo_id: number | null
+
+
+  conciliado: boolean
+
+
+}
+
+
+
+
+
+export function convertirFechaExcelPago(val: unknown): string {
+
+
+  if (val == null || val === '') return ''
+
+
+  if (val instanceof Date) {
+
+
+    if (Number.isNaN(val.getTime())) return ''
+
+
+    return `${String(val.getDate()).padStart(2, '0')}/${String(val.getMonth() + 1).padStart(2, '0')}/${val.getFullYear()}`
+
+
+  }
+
+
+  const s = String(val).trim()
+
+
+  if (!s) return ''
+
+
+  if (/^\d{4,}$/.test(s)) {
+
+
+    try {
+
+
+      const d = new Date(1900, 0, 1)
+
+
+      d.setDate(d.getDate() + parseInt(s, 10) - 2)
+
+
+      return Number.isNaN(d.getTime())
+
+
+        ? s
+
+
+        : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+
+
+    } catch {
+
+
+      return s
+
+
+    }
+
+
+  }
+
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s
+
+
+  if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
+
+
+    const [d, m, yy] = s.split('-')
+
+
+    const y = parseInt(yy, 10) < 50 ? 2000 + parseInt(yy, 10) : 1900 + parseInt(yy, 10)
+
+
+    return `${d}/${m}/${y}`
+
+
+  }
+
+
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+
+
+    const [d, m, y] = s.split('-')
+
+
+    return `${d}/${m}/${y}`
+
+
+  }
+
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+
+
+    const [y, m, d] = s.split('-')
+
+
+    return `${d}/${m}/${y}`
+
+
+  }
+
+
+  const p = new Date(s)
+
+
+  return !Number.isNaN(p.getTime())
+
+
+    ? `${String(p.getDate()).padStart(2, '0')}/${String(p.getMonth() + 1).padStart(2, '0')}/${p.getFullYear()}`
+
+
+    : s
+
+
+}
+
+
+
+
+
+export function convertirFechaParaBackendPago(f: string): string {
+
+
+  if (!f?.trim()) return ''
+
+
+  const s = f.trim()
+
+
+
+
+
+  // Try DD/MM/YYYY format first (most common in ES locales)
+
+
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+
+
+  if (m) {
+
+
+    const [, day, month, year] = m
+
+
+    const d = parseInt(day, 10)
+
+
+    const mo = parseInt(month, 10)
+
+
+    const y = parseInt(year, 10)
+
+
+
+
+
+    // Validate day (1-31) and month (1-12)
+
+
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12 && y >= 1900 && y <= 2100) {
+
+
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+
+
+    }
+
+
+  }
+
+
+
+
+
+  // If it already looks like YYYY-MM-DD, return as-is
+
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+
+
+
+
+
+  // Try parsing as a Date object (handles various formats)
+
+
+  try {
+
+
+    const parsed = new Date(s)
+
+
+    if (!Number.isNaN(parsed.getTime())) {
+
+
+      return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
+
+
+    }
+
+
+  } catch {
+
+
+    // Fall through
+
+
+  }
+
+
+
+
+
+  // Return empty if we can't parse it (will trigger fallback to today's date)
+
+
+  return ''
+
+
+}
+
+
+
+
+
+/** Parsea numero de credito (ej: VE/96179604, 96, 96179604) y extrae prestamo_id. */
+
+
+export function parsePrestamoIdFromNumeroCredito(raw: unknown): number | null {
+
+
+  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return null
+
+
+  const s = String(raw).trim()
+
+
+  if (!s) return null
+
+
+  const soloDigitos = s.replace(/^[A-Za-z\/\-_]+\s*/i, '').replace(/[^0-9]/g, '')
+
+
+  if (!soloDigitos) return null
+
+
+  const n = parseInt(soloDigitos, 10)
+
+
+  return Number.isNaN(n) || n < 1 ? null : n
+
+
+}
+
+
+
+
+
+/** C├â┬â├é┬⌐dula v├â┬â├é┬ílida: solo V, E o J + 6-11 d├â┬â├é┬¡gitos (no se admite Z). */
+
+
+const LOOKS_LIKE_CEDULA = /^[VEJ]\d{6,11}$/i
+
+
+
+
+
+export function cedulaParaLookup(val: unknown): string {
+
+
+  if (val == null || val === '') return ''
+
+
+  const s = String(val).trim()
+
+
+  if (!s) return ''
+
+
+  const sinGuion = s.replace(/-/g, '').replace(/\s+/g, '')
+
+
+  if (LOOKS_LIKE_CEDULA.test(sinGuion)) return sinGuion
+
+
+  const match = s.match(/[VEJ]\d{6,11}/i)
+
+
+  if (match) return match[0].replace(/-/g, '')
+
+
+  if (/^\d{8}$/.test(sinGuion)) return 'V' + sinGuion
+
+
+  return s
+
+
+}
+
+
+
+
+
+export function cedulaLookupParaFila(cedula: string, numero_documento: string): string {
+
+
+  const fromC = cedulaParaLookup(cedula)
+
+
+  const fromD = cedulaParaLookup(numero_documento)
+
+
+  if (fromC && LOOKS_LIKE_CEDULA.test(fromC.replace(/-/g, ''))) return fromC
+
+
+  if (fromD && LOOKS_LIKE_CEDULA.test(fromD.replace(/-/g, ''))) return fromD
+
+
+  return fromC || fromD
+
+
+}
+
+
+
+
+
+/** True si el valor parece N├â┬é├é┬║ documento (ej. 10+ d├â┬â├é┬¡gitos, BNC/ZELLE) y no c├â┬â├é┬⌐dula V/E/J/Z. */
+
+
+export function looksLikeDocumentNotCedula(val: unknown): boolean {
+
+
+  if (val == null || val === '') return false
+
+
+  const s = String(val).trim()
+
+
+  if (!s) return false
+
+
+  if (LOOKS_LIKE_CEDULA.test(s.replace(/-/g, ''))) return false
+
+
+  if (/^\d{10,}$/.test(s)) return true
+
+
+  if (/^(BNC|ZELLE|BINANCE|VE\/|BS\.|REF\.?)\s*\/?/i.test(s) || /^[A-Z0-9\/\.\s\-]{10,}$/i.test(s)) return true
+
+
+  return false
+
+
+}
+
+
+
+
+
+function limpiarDocumento(s: string): string {
+
+
+  return s.replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim()
+
+
+}
+
+
+
+
+
+/** L├â┬â├é┬¡mite de la columna numero_documento en BD (alineado con backend app/core/documento.py). */
+
+
+export const MAX_LEN_NUMERO_DOCUMENTO = 100
+
+
+
+
+
+/**
+
+
+ * Normaliza el valor a string para usar como clave de documento.
+
+
+ * Reglas alineadas con backend normalize_documento: trim, colapsar espacios, notaci├â┬â├é┬│n cient├â┬â├é┬¡fica ├â┬ó├é┬å├é┬Æ d├â┬â├é┬¡gitos, truncar 100.
+
+
+ * Acepta CUALQUIER formato: num├â┬â├é┬⌐rico, con ├â┬ó├é┬é├é┬¼ $ Bs, BNC/, ZELLE/, etc. No se quitan s├â┬â├é┬¡mbolos de moneda.
+
+
+ * Misma clave = mismo documento (para detectar duplicados). ├â┬â├é┬Ünica regla: no duplicados.
+
+
+ */
+
+
+export function normalizarNumeroDocumento(val: unknown): string {
+
+
+  if (val == null || val === '') return ''
+
+
+  let s: string
+
+
+  if (typeof val === 'object' && val !== null) {
+
+
+    const rt = (val as { richText?: Array<{ text?: string }> }).richText
+
+
+    if (Array.isArray(rt)) s = rt.map((x) => x?.text ? '').join('')
+
+
+    else if ((val as { text?: string }).text != null) s = String((val as { text?: string }).text)
+
+
+    else return ''
+
+
+  } else if (typeof val === 'number') {
+
+
+    if (Number.isNaN(val)) return ''
+
+
+    if (Math.abs(val) >= 1e12) {
+
+
+      try {
+
+
+        s = BigInt(Math.round(val)).toString()
+
+
+      } catch {
+
+
+        s = val.toFixed(0)
+
+
+      }
+
+
+    } else if (Math.abs(val) >= 1e11) {
+
+
+      s = String(Math.round(val))
+
+
+    } else {
+
+
+      s = Math.round(val).toString()
+
+
+    }
+
+
+  } else {
+
+
+    s = String(val)
+
+
+  }
+
+
+  s = s.trim()
+
+
+  if (s.startsWith("'")) s = s.slice(1).trim()
+
+
+  s = limpiarDocumento(s)
+
+
+  if (!s || /^(nan|none|undefined|na|n\/a)$/i.test(s)) return ''
+
+
+  if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
+
+
+    try {
+
+
+      const n = parseFloat(s)
+
+
+      if (!Number.isNaN(n) && isFinite(n))
+
+
+        s = Math.abs(n) >= 1e15 ? BigInt(Math.round(n)).toString() : String(Math.round(n))
+
+
+    } catch {
+
+
+      /* mantener s */
+
+
+    }
+
+
+  }
+
+
+  s = s.replace(/\s+/g, ' ').trim()
+
+
+  if (s.length > MAX_LEN_NUMERO_DOCUMENTO) s = s.slice(0, MAX_LEN_NUMERO_DOCUMENTO)
+
+
+  return s
+
+
+}
+
+
+
+
+
+const MAX_MONTO = 999_999_999_999.99
+
+
+const FECHA_REGEX = /^(\d{2})\/(\d{2})\/(\d{4})$/
+
+
+
+
+
+/** Valida un campo de fila de pago. Retorna isValid + mensaje de error. */
+
+
+export function validatePagoField(
+
+
+  field: string,
+
+
+  value: string | number,
+
+
+  options?: {
+
+
+    documentosExistentes?: Set<string>
+
+
+    documentosEnArchivo?: Set<string>
+
+
+    cedulasInvalidas?: Set<string>
+
+
+    documentosDuplicadosBD?: Set<string>
+
+
+  }
+
+
+): { isValid: boolean; message?: string } {
+
+
+
+
+
+  // ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç C├â┬â├é┬ëDULA ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç
+
+
+  if (field === 'cedula') {
+
+
+    const s = String(value ? '').trim().replace(/-/g, '').toUpperCase()
+
+
+    if (!s) return { isValid: false, message: 'C├â┬â├é┬⌐dula requerida' }
+
+
+    if (!/^[VEJ]\d{6,11}$/.test(s))
+
+
+      return { isValid: false, message: 'Formato inv├â┬â├é┬ílido (solo V, E o J + 6-11 d├â┬â├é┬¡gitos; no se admite Z)' }
+
+
+    if (options?.cedulasInvalidas?.has(s))
+
+
+      return { isValid: false, message: 'C├â┬â├é┬⌐dula no existe en clientes' }
+
+
+    return { isValid: true }
+
+
+  }
+
+
+
+
+
+  // ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç FECHA ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç
+
+
+  if (field === 'fecha_pago') {
+
+
+    const s = String(value ? '').trim()
+
+
+    if (!s) return { isValid: false, message: 'Fecha requerida' }
+
+
+    const m = FECHA_REGEX.exec(s)
+
+
+    if (!m) return { isValid: false, message: 'Formato inv├â┬â├é┬ílido (use DD/MM/YYYY)' }
+
+
+    const [, dd, mm, yyyy] = m
+
+
+    const day = Number(dd)
+
+
+    const month = Number(mm)
+
+
+    const year = Number(yyyy)
+
+
+    
+
+
+    // Validar rango de mes ANTES de crear la fecha
+
+
+    if (month < 1 || month > 12)
+
+
+      return { isValid: false, message: 'Mes inv├â┬â├é┬ílido (1-12)' }
+
+
+    
+
+
+    // Validar rango de d├â┬â├é┬¡a ANTES de crear la fecha
+
+
+    if (day < 1 || day > 31)
+
+
+      return { isValid: false, message: 'D├â┬â├é┬¡a inv├â┬â├é┬ílido (1-31)' }
+
+
+    
+
+
+    // Validar que la fecha sea real (rechaza 30/02/2025, etc.)
+
+
+    const d = new Date(year, month - 1, day)
+
+
+    if (
+
+
+      d.getFullYear() !== year ||
+
+
+      d.getMonth() !== month - 1 ||
+
+
+      d.getDate() !== day
+
+
+    ) return { isValid: false, message: 'Fecha inv├â┬â├é┬ílida (ej: 30 de febrero)' }
+
+
+    
+
+
+    // Validar rango de a├â┬â├é┬▒o
+
+
+    if (year < 2000 || year > 2100)
+
+
+      return { isValid: false, message: 'A├â┬â├é┬▒o fuera de rango (2000-2100)' }
+
+
+    
+
+
+    return { isValid: true }
+
+
+  }
+
+
+
+
+
+  // ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç MONTO ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç
+
+
+  if (field === 'monto_pagado') {
+
+
+    const n = typeof value === 'number' ? value : parseFloat(String(value ? '').replace(',', '.'))
+
+
+    if (isNaN(n) || !isFinite(n)) return { isValid: false, message: 'Monto inv├â┬â├é┬ílido' }
+
+
+    if (n <= 0) return { isValid: false, message: 'El monto debe ser mayor a 0' }
+
+
+    if (n > MAX_MONTO) return { isValid: false, message: `Monto excede el l├â┬â├é┬¡mite (${MAX_MONTO})` }
+
+
+    return { isValid: true }
+
+
+  }
+
+
+
+
+
+  // ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç N├â┬â├é┬ÜMERO DE DOCUMENTO ├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç├â┬ó├é┬ö├é┬Ç
+
+
+  // Acepta CUALQUIER formato (BNC/, ZELLE, num├â┬â├é┬⌐rico, REF, etc.). ├â┬â├é┬ÜNICA REGLA: no duplicados.
+
+
+  if (field === 'numero_documento') {
+
+
+    const docNorm = (value === 'NaN' || value === 'nan' || value === 'undefined')
+
+
+      ? ''
+
+
+      : (normalizarNumeroDocumento(value) || String(value)).trim() || ''
+
+
+    if (!docNorm) return { isValid: true }  // Documento vac├â┬â├é┬¡o permitido (varias filas sin documento)
+
+
+
+
+
+    if (options?.documentosDuplicadosBD?.has(docNorm))
+
+
+      return { isValid: false, message: 'Documento ya existe en la base de datos. ├â┬â├é┬Ünica regla: no duplicados.' }
+
+
+    if (options?.documentosExistentes?.has(docNorm))
+
+
+      return { isValid: false, message: 'Documento duplicado. No se aceptan duplicados.' }
+
+
+    if (options?.documentosEnArchivo?.has(docNorm))
+
+
+      return { isValid: false, message: 'Documento repetido en este archivo' }
+
+
+    return { isValid: true }
+
+
+  }
+
+
+
+
+
+  return { isValid: true }
+
+
+}
+
+
+
+
+
+export { validateExcelFile, validateExcelData, sanitizeFileName }
+
+

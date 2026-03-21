@@ -1,161 +1,161 @@
-Ã¯Â»Â¿/**
- * Card: Pipeline Gmail - estado, iniciar descarga, descargar Excel desde tabla temporal.
- * Muestra "Generando..." cuando last_status === 'running'.
- * BotÃÂ³n "Descargar Excel (tabla temporal)" permite descargar aunque el pipeline siga corriendo.
- */
-import { useState, useEffect, useCallback } from 'react'
-import { Mail, Download, Loader2 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
-import { Button } from '../../components/ui/button'
-import { toast } from 'sonner'
-import { apiClient } from '../../services/api'
-import { getBackendBaseUrl } from './InformePagosConfig'
-
-interface GmailStatus {
-  last_run: string | null
-  last_status: string | null
-  last_emails: number
-  last_files: number
-  last_error: string | null
-  next_run_approx: string | null
-  latest_data_date: string | null
-}
-
-const POLL_INTERVAL_MS = 8000
-
-export function GmailPipelineCard() {
-  const [status, setStatus] = useState<GmailStatus | null>(null)
-  const [loadingStatus, setLoadingStatus] = useState(true)
-  const [downloadingExcel, setDownloadingExcel] = useState(false)
-  const [starting, setStarting] = useState(false)
-
-  const fetchStatus = useCallback(async () => {
-    try {
-      const data = await apiClient.get<GmailStatus>('/api/v1/pagos/gmail/status')
-      setStatus(data)
-    } catch (e) {
-      console.error('Error fetching Gmail status:', e)
-      setStatus(null)
-    } finally {
-      setLoadingStatus(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchStatus()
-    const id = setInterval(fetchStatus, POLL_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [fetchStatus])
-
-  const handleRunNow = async () => {
-    try {
-      setStarting(true)
-      await apiClient.post('/api/v1/pagos/gmail/run-now', {}, { params: { force: true, scan_filter: 'unread' } })
-      toast.success('Descarga de correos iniciada. El Excel se irÃÂ¡ llenando en la tabla temporal.')
-      fetchStatus()
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ? 'Error al iniciar'
-      toast.error(typeof msg === 'string' ? msg : 'Error al iniciar descarga')
-    } finally {
-      setStarting(false)
-    }
-  }
-
-  const handleDownloadExcelTemporal = async () => {
-    try {
-      setDownloadingExcel(true)
-      const base = getBackendBaseUrl()
-      const token = (apiClient as { defaults?: { headers?: { common?: Record<string, string> } } })?.defaults?.headers?.common?.Authorization ? ''
-      const url = `${base}/api/v1/pagos/gmail/download-excel-temporal`
-      const res = await fetch(url, { headers: token ? { Authorization: token } : {} })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.detail ? `Error ${res.status}`)
-      }
-      const blob = await res.blob()
-      const name = res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ? 'Pagos_Gmail_temporal.xlsx'
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = name
-      a.click()
-      URL.revokeObjectURL(a.href)
-      toast.success('Excel descargado. La tabla temporal se ha vaciado.')
-      fetchStatus()
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al descargar'
-      toast.error(msg)
-    } finally {
-      setDownloadingExcel(false)
-    }
-  }
-
-  const isRunning = status?.last_status === 'running'
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Mail className="h-5 w-5 text-blue-600" />
-          Pipeline Gmail Ã¢ÂÂ cantidad de correos y archivos procesados
-        </CardTitle>
-        <CardDescription>
-          Iniciar descarga de correos no leÃÂ­dos; luego descargar Excel desde la tabla temporal (al descargar se vacÃÂ­a la tabla).
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {loadingStatus && !status ? (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Cargando estadoÃ¢ÂÂ¦
-          </div>
-        ) : status ? (
-          <>
-            <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium ${isRunning ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300' : 'bg-muted/60 text-muted-foreground'}`}>
-              {isRunning ? (
-                <>
-                  <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
-                  GenerandoÃ¢ÂÂ¦ {status.last_emails} correos, {status.last_files} archivos procesados
-                </>
-              ) : (
-                <>
-                  <Mail className="h-5 w-5 shrink-0" />
-                  ÃÂltima ejecuciÃÂ³n: {status.last_status ? 'Ã¢ÂÂ'} ÃÂ· {status.last_emails} correos, {status.last_files} archivos
-                </>
-              )}
-            </div>
-            {status.last_error && (
-              <p className="text-sm text-red-600 dark:text-red-400">{status.last_error}</p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                onClick={handleRunNow}
-                disabled={starting || isRunning}
-              >
-                {starting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
-                {isRunning ? 'GenerandoÃ¢ÂÂ¦' : starting ? 'IniciandoÃ¢ÂÂ¦' : 'Iniciar descarga de correos'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadExcelTemporal}
-                disabled={downloadingExcel}
-              >
-                {downloadingExcel ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
-                {downloadingExcel ? 'PreparandoÃ¢ÂÂ¦' : 'Descargar Excel (tabla temporal)'}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Puedes descargar el Excel aunque siga ÃÂ«GenerandoÃ¢ÂÂ¦ÃÂ»: se incluirÃÂ¡ lo ya guardado en la tabla temporal. Al descargar, la tabla se vacÃÂ­a.
-            </p>
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">No se pudo cargar el estado del pipeline Gmail.</p>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
+ï»¿/**
+ * Card: Pipeline Gmail - estado, iniciar descarga, descargar Excel desde tabla temporal.
+ * Muestra "Generando..." cuando last_status === 'running'.
+ * BotÃ³n "Descargar Excel (tabla temporal)" permite descargar aunque el pipeline siga corriendo.
+ */
+import { useState, useEffect, useCallback } from 'react'
+import { Mail, Download, Loader2 } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { toast } from 'sonner'
+import { apiClient } from '../../services/api'
+import { getBackendBaseUrl } from './InformePagosConfig'
+
+interface GmailStatus {
+  last_run: string | null
+  last_status: string | null
+  last_emails: number
+  last_files: number
+  last_error: string | null
+  next_run_approx: string | null
+  latest_data_date: string | null
+}
+
+const POLL_INTERVAL_MS = 8000
+
+export function GmailPipelineCard() {
+  const [status, setStatus] = useState<GmailStatus | null>(null)
+  const [loadingStatus, setLoadingStatus] = useState(true)
+  const [downloadingExcel, setDownloadingExcel] = useState(false)
+  const [starting, setStarting] = useState(false)
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const data = await apiClient.get<GmailStatus>('/api/v1/pagos/gmail/status')
+      setStatus(data)
+    } catch (e) {
+      console.error('Error fetching Gmail status:', e)
+      setStatus(null)
+    } finally {
+      setLoadingStatus(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchStatus()
+    const id = setInterval(fetchStatus, POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [fetchStatus])
+
+  const handleRunNow = async () => {
+    try {
+      setStarting(true)
+      await apiClient.post('/api/v1/pagos/gmail/run-now', {}, { params: { force: true, scan_filter: 'unread' } })
+      toast.success('Descarga de correos iniciada. El Excel se irÃ¡ llenando en la tabla temporal.')
+      fetchStatus()
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ? 'Error al iniciar'
+      toast.error(typeof msg === 'string' ? msg : 'Error al iniciar descarga')
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  const handleDownloadExcelTemporal = async () => {
+    try {
+      setDownloadingExcel(true)
+      const base = getBackendBaseUrl()
+      const token = (apiClient as { defaults?: { headers?: { common?: Record<string, string> } } })?.defaults?.headers?.common?.Authorization ? ''
+      const url = `${base}/api/v1/pagos/gmail/download-excel-temporal`
+      const res = await fetch(url, { headers: token ? { Authorization: token } : {} })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail ? `Error ${res.status}`)
+      }
+      const blob = await res.blob()
+      const name = res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ? 'Pagos_Gmail_temporal.xlsx'
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = name
+      a.click()
+      URL.revokeObjectURL(a.href)
+      toast.success('Excel descargado. La tabla temporal se ha vaciado.')
+      fetchStatus()
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error al descargar'
+      toast.error(msg)
+    } finally {
+      setDownloadingExcel(false)
+    }
+  }
+
+  const isRunning = status?.last_status === 'running'
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Mail className="h-5 w-5 text-blue-600" />
+          Pipeline Gmail â cantidad de correos y archivos procesados
+        </CardTitle>
+        <CardDescription>
+          Iniciar descarga de correos no leÃ­dos; luego descargar Excel desde la tabla temporal (al descargar se vacÃ­a la tabla).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loadingStatus && !status ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando estadoâ¦
+          </div>
+        ) : status ? (
+          <>
+            <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium ${isRunning ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300' : 'bg-muted/60 text-muted-foreground'}`}>
+              {isRunning ? (
+                <>
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                  Generandoâ¦ {status.last_emails} correos, {status.last_files} archivos procesados
+                </>
+              ) : (
+                <>
+                  <Mail className="h-5 w-5 shrink-0" />
+                  Ãltima ejecuciÃ³n: {status.last_status ? 'â'} Â· {status.last_emails} correos, {status.last_files} archivos
+                </>
+              )}
+            </div>
+            {status.last_error && (
+              <p className="text-sm text-red-600 dark:text-red-400">{status.last_error}</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={handleRunNow}
+                disabled={starting || isRunning}
+              >
+                {starting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
+                {isRunning ? 'Generandoâ¦' : starting ? 'Iniciandoâ¦' : 'Iniciar descarga de correos'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadExcelTemporal}
+                disabled={downloadingExcel}
+              >
+                {downloadingExcel ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                {downloadingExcel ? 'Preparandoâ¦' : 'Descargar Excel (tabla temporal)'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Puedes descargar el Excel aunque siga Â«Generandoâ¦Â»: se incluirÃ¡ lo ya guardado en la tabla temporal. Al descargar, la tabla se vacÃ­a.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">No se pudo cargar el estado del pipeline Gmail.</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

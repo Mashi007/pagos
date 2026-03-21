@@ -1,527 +1,527 @@
-import { useState, useRef, useEffect } from 'react'
-import { Brain, ChevronRight, Loader2, AlertCircle, MessageSquare, CheckCircle, X } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Button } from '../components/ui/button'
-import { Textarea } from '../components/ui/textarea'
-import { Badge } from '../components/ui/badge'
-import { toast } from 'sonner'
-import { apiClient } from '../services/api'
-import { BASE_PATH, env } from '../config/env'
-import { safeGetItem, safeGetSessionItem } from '../utils/storage'
-
-interface Mensaje {
-  id: string
-  tipo: 'usuario' | 'ai'
-  contenido: string
-  timestamp: Date
-  error?: boolean
-  pregunta?: string  // Para guardar la pregunta cuando es respuesta AI
-  calificacion?: 'arriba' | 'abajo' | null  // CalificaciÃÂ³n del usuario
-}
-
-export function ChatAI() {
-  const [mensajes, setMensajes] = useState<Mensaje[]>([])
-  const [pregunta, setPregunta] = useState('')
-  const [enviando, setEnviando] = useState(false)
-  const [aiConfigurado, setAiConfigurado] = useState(false)
-  const [verificando, setVerificando] = useState(true)
-  const [streaming, setStreaming] = useState(true) // Streaming por defecto para mejor UX
-  const mensajesEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    verificarConfiguracionAI()
-    // Mensaje de bienvenida
-    setMensajes([{
-      id: 'bienvenida',
-      tipo: 'ai',
-      contenido: 'ÃÂ¡Hola! Soy tu asistente especializado en consultas sobre la base de datos del sistema. Puedo ayudarte con preguntas sobre clientes, prÃÂ©stamos, pagos, cuotas, estadÃÂ­sticas y la fecha/hora actual. ÃÂ¿En quÃÂ© puedo ayudarte?',
-      timestamp: new Date()
-    }])
-  }, [])
-
-  useEffect(() => {
-    mensajesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [mensajes])
-
-  const verificarConfiguracionAI = async () => {
-    setVerificando(true)
-    try {
-      const config = await apiClient.get<{
-        configured?: boolean
-        activo?: string
-      }>('/api/v1/configuracion/ai/configuracion')
-      const tieneConfig = !!config?.configured
-      const estaActivo = config?.activo?.toLowerCase() === 'true'
-      const configuradoCorrectamente = tieneConfig && estaActivo
-
-      setAiConfigurado(configuradoCorrectamente)
-
-      // Solo mostrar toasts si NO estÃÂ¡ configurado correctamente Y es la primera vez
-      // No mostrar toasts si el usuario ya sabe que no estÃÂ¡ configurado
-      if (!configuradoCorrectamente) {
-        if (!tieneConfig) {
-          console.log('AI no configurado (OPENROUTER_API_KEY en backend)')
-        } else if (!estaActivo) {
-          // Solo mostrar warning si hay token pero estÃÂ¡ inactivo (no cada vez)
-          console.log('AI inactivo')
-        }
-      }
-    } catch (error) {
-      console.error('Error verificando configuraciÃÂ³n AI:', error)
-      setAiConfigurado(false)
-      // No mostrar toast de error en cada carga, solo loguear
-    } finally {
-      setVerificando(false)
-    }
-  }
-
-  const getAuthToken = (): string => {
-    const rememberMe = safeGetItem('remember_me', false)
-    let token = rememberMe ? safeGetItem('access_token', '') : safeGetSessionItem('access_token', '')
-    if (token && typeof token === 'string') token = token.trim()
-    if (token?.startsWith('Bearer ')) token = token.slice(7)
-    return token || ''
-  }
-
-  const enviarConStreaming = async (preguntaTexto: string) => {
-    const baseUrl = env.API_URL || ''
-    const url = `${baseUrl}/api/v1/configuracion/ai/chat/stream`
-    const token = getAuthToken()
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ pregunta: preguntaTexto }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || err.message || `Error ${res.status}`)
-    }
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error('Stream no disponible')
-    const decoder = new TextDecoder()
-    let buffer = ''
-    const mensajeId = (Date.now() + 1).toString()
-    const mensajeAI: Mensaje = {
-      id: mensajeId,
-      tipo: 'ai',
-      contenido: '',
-      timestamp: new Date(),
-      pregunta: preguntaTexto,
-      calificacion: null,
-    }
-    setMensajes(prev => [...prev, mensajeAI])
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
-              if (data.content) {
-                setMensajes(prev =>
-                  prev.map(m => (m.id === mensajeId ? { ...m, contenido: m.contenido + data.content } : m))
-                )
-              }
-              if (data.error) throw new Error(data.error)
-            } catch (e) {
-              if (e instanceof Error && e.message !== 'Unexpected end of JSON input') throw e
-            }
-          }
-        }
-      }
-    } catch (e) {
-      setMensajes(prev =>
-        prev.map(m =>
-          m.id === mensajeId ? { ...m, contenido: `Error: ${(e as Error).message}`, error: true } : m
-        )
-      )
-      throw e
-    }
-  }
-
-  const enviarSinStreaming = async (preguntaTexto: string) => {
-    const respuesta = await apiClient.post<{
-      success: boolean
-      respuesta: string
-      pregunta: string
-      tokens_usados?: number
-      modelo_usado?: string
-      tiempo_respuesta?: number
-      error?: string
-    }>('/api/v1/configuracion/ai/chat', { pregunta: preguntaTexto })
-    if (respuesta.success) {
-      const mensajeAI: Mensaje = {
-        id: (Date.now() + 1).toString(),
-        tipo: 'ai',
-        contenido: respuesta.respuesta,
-        timestamp: new Date(),
-        pregunta: preguntaTexto,
-        calificacion: null,
-      }
-      setMensajes(prev => [...prev, mensajeAI])
-    } else {
-      throw new Error(respuesta.error || 'Error generando respuesta')
-    }
-  }
-
-  const enviarPregunta = async () => {
-    if (!pregunta.trim()) return
-    if (!aiConfigurado) {
-      toast.error('AI no estÃÂ¡ configurado o activo. ConfigÃÂºralo primero.')
-      return
-    }
-
-    const preguntaTexto = pregunta.trim()
-    setPregunta('')
-
-    // Agregar mensaje del usuario
-    const mensajeUsuario: Mensaje = {
-      id: Date.now().toString(),
-      tipo: 'usuario',
-      contenido: preguntaTexto,
-      timestamp: new Date()
-    }
-    setMensajes(prev => [...prev, mensajeUsuario])
-    setEnviando(true)
-
-    try {
-      if (streaming) {
-        await enviarConStreaming(preguntaTexto)
-      } else {
-        await enviarSinStreaming(preguntaTexto)
-      }
-    } catch (error: any) {
-      console.error('Error enviando pregunta:', error)
-      const errorDetail = error?.response?.data?.detail || error?.message || 'No se pudo generar la respuesta'
-      const statusCode = error?.response?.status
-      const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')
-
-      // Manejo especial para timeouts
-      if (isTimeout) {
-        const mensajeError: Mensaje = {
-          id: (Date.now() + 1).toString(),
-          tipo: 'ai',
-          contenido: `Ã¢ÂÂ±Ã¯Â¸Â La consulta estÃÂ¡ tardando mÃÂ¡s de lo esperado. Esto puede deberse a:\nÃ¢ÂÂ¢ Consultas complejas a la base de datos\nÃ¢ÂÂ¢ Procesamiento de informaciÃÂ³n extensa\nÃ¢ÂÂ¢ Carga alta en el servidor\n\nÃÂ°ÃÂ¸Ã¢ÂÂÃÂ¡ Intenta reformular tu pregunta de forma mÃÂ¡s especÃÂ­fica o intenta nuevamente en unos momentos.`,
-          timestamp: new Date(),
-          error: true
-        }
-        setMensajes(prev => [...prev, mensajeError])
-        toast.warning('La consulta estÃÂ¡ tardando mÃÂ¡s de lo esperado. Intenta nuevamente.')
-        return
-      }
-
-      // Rate limit (429)
-      if (statusCode === 429) {
-        toast.warning(errorDetail)
-        const mensajeError: Mensaje = {
-          id: (Date.now() + 1).toString(),
-          tipo: 'ai',
-          contenido: `Ã¢ÂÂ³ ${errorDetail}`,
-          timestamp: new Date(),
-          error: true,
-        }
-        setMensajes(prev => [...prev, mensajeError])
-        return
-      }
-
-      // Si es un error 400 (pregunta rechazada o validaciÃÂ³n), mostrar mensaje apropiado
-      if (statusCode === 400) {
-        const esPreguntaRechazada = errorDetail.includes('solo responde preguntas') ||
-                                    errorDetail.includes('base de datos') ||
-                                    errorDetail.includes('no puede estar vacÃÂ­a')
-
-        if (esPreguntaRechazada) {
-          // Mostrar mensaje en el chat con explicaciÃÂ³n
-          const mensajeError: Mensaje = {
-            id: (Date.now() + 1).toString(),
-            tipo: 'ai',
-            contenido: `ÃÂ¢ÃÂ¡ ÃÂ¯ÃÂ¸ÃÂ ${errorDetail}\n\nÃÂ°ÃÂ¸Ã¢ÂÂÃÂ¡ Tip: AsegÃÂºrate de que tu pregunta incluya tÃÂ©rminos relacionados con:\nÃ¢ÂÂ¢ Clientes, prÃÂ©stamos, pagos, cuotas\nÃ¢ÂÂ¢ Morosidad, estadÃÂ­sticas, datos\nÃ¢ÂÂ¢ Fechas, montos, anÃÂ¡lisis\nÃ¢ÂÂ¢ O cualquier tÃÂ©rmino relacionado con la base de datos del sistema`,
-            timestamp: new Date(),
-            error: true
-          }
-          setMensajes(prev => [...prev, mensajeError])
-          toast.warning(errorDetail)
-        } else {
-          // Otros errores 400 (configuraciÃÂ³n, etc.)
-          const mensajeError: Mensaje = {
-            id: (Date.now() + 1).toString(),
-            tipo: 'ai',
-            contenido: `ÃÂ¢ÃÂÃÂ Error: ${errorDetail}`,
-            timestamp: new Date(),
-            error: true
-          }
-          setMensajes(prev => [...prev, mensajeError])
-          toast.error(errorDetail)
-        }
-      } else {
-        // Para otros errores (500, etc.), sÃÂ­ mostrar mensaje en el chat
-        const mensajeError: Mensaje = {
-          id: (Date.now() + 1).toString(),
-          tipo: 'ai',
-          contenido: `ÃÂ¢ÃÂÃÂ Error: ${errorDetail}`,
-          timestamp: new Date(),
-          error: true
-        }
-        setMensajes(prev => [...prev, mensajeError])
-        toast.error('Error al generar respuesta')
-      }
-    } finally {
-      setEnviando(false)
-    }
-  }
-
-  const handleCalificar = async (mensajeId: string, calificacion: 'arriba' | 'abajo') => {
-    try {
-      const mensaje = mensajes.find(m => m.id === mensajeId)
-      if (!mensaje || !mensaje.pregunta) return
-
-      await apiClient.post('/api/v1/configuracion/ai/chat/calificar', {
-        pregunta: mensaje.pregunta,
-        respuesta: mensaje.contenido,
-        calificacion: calificacion === 'arriba' ? 5 : 1
-      })
-
-      setMensajes(prev => prev.map(m => 
-        m.id === mensajeId ? { ...m, calificacion } : m
-      ))
-
-      toast.success(`CalificaciÃÂ³n ${calificacion === 'arriba' ? 'positiva' : 'negativa'} registrada`)
-    } catch (error: any) {
-      console.error('Error calificando:', error)
-      const status = error?.response?.status
-      const detail = error?.response?.data?.detail || ''
-      
-      if (status === 503) {
-        toast.error(
-          'Sistema de calificaciones no disponible. Ejecuta la migraciÃÂ³n SQL para crear la tabla.',
-          {
-            duration: 5000,
-            action: {
-              label: 'Ver instrucciones',
-              onClick: () => {
-                window.open('/configuracion?tab=ai&subtab=calificaciones-chat', '_blank')
-              }
-            }
-          }
-        )
-      } else {
-        toast.error(detail || 'Error al registrar la calificaciÃÂ³n')
-      }
-    }
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      enviarPregunta()
-    }
-  }
-
-  return (
-    <div className="container mx-auto p-6 max-w-6xl">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <Brain className="h-8 w-8 text-blue-600" />
-          <h1 className="text-3xl font-bold">Chat AI</h1>
-        </div>
-        <div className="space-y-2">
-          <p className="text-gray-600">
-            Consulta informaciÃÂ³n de la base de datos usando inteligencia artificial
-          </p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-              Solo consultas de base de datos
-            </Badge>
-            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={streaming}
-                onChange={(e) => setStreaming(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              Respuesta en tiempo real (streaming)
-            </label>
-            <span className="text-xs text-gray-500">
-              Para preguntas generales, usa el Chat de Prueba en ConfiguraciÃÂ³n &gt; AI
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Estado de configuraciÃÂ³n */}
-      {verificando ? (
-        <Card className="mb-4">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Verificando configuraciÃÂ³n de AI...</span>
-            </div>
-          </CardContent>
-        </Card>
-      ) : !aiConfigurado ? (
-        <Card className="mb-4 border-amber-200 bg-amber-50">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-semibold text-amber-900 mb-1">AI no configurado</p>
-                <p className="text-sm text-amber-700">
-                  Para usar Chat AI, necesitas configurar y activar la Inteligencia Artificial en{' '}
-                  <a href={BASE_PATH + '/configuracion?tab=ai'} className="underline font-medium">
-                    ConfiguraciÃÂ³n &gt; Inteligencia Artificial
-                  </a>
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* Chat */}
-      <Card className="h-[calc(100vh-280px)] flex flex-col">
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5" />
-            ConversaciÃÂ³n
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col p-0">
-          {/* ÃÂrea de mensajes */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {mensajes.map((mensaje) => (
-              <div
-                key={mensaje.id}
-                className={`flex gap-3 ${
-                  mensaje.tipo === 'usuario' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                {mensaje.tipo === 'ai' && (
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Brain className="h-4 w-4 text-blue-600" />
-                  </div>
-                )}
-                <div className="flex flex-col gap-2 max-w-[80%]">
-                  <div
-                    className={`rounded-lg p-3 ${
-                      mensaje.tipo === 'usuario'
-                        ? 'bg-blue-600 text-white'
-                        : mensaje.error
-                        ? 'bg-red-50 text-red-900 border border-red-200'
-                        : 'bg-gray-100 text-gray-900'
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap">{mensaje.contenido}</p>
-                    <span className="text-xs opacity-70 mt-1 block">
-                      {mensaje.timestamp.toLocaleTimeString('es-ES', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </span>
-                  </div>
-                  {/* Botones de calificaciÃÂ³n solo para respuestas AI sin error */}
-                  {mensaje.tipo === 'ai' && !mensaje.error && mensaje.pregunta && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCalificar(mensaje.id, 'arriba')}
-                        disabled={mensaje.calificacion !== null}
-                        className={`h-7 px-2 ${
-                          mensaje.calificacion === 'arriba'
-                            ? 'bg-green-100 text-green-700 hover:bg-green-100'
-                            : 'text-gray-600 hover:text-green-600'
-                        }`}
-                        title="Calificar como buena respuesta"
-                      >
-                        <CheckCircle className={`h-3 w-3 ${mensaje.calificacion === 'arriba' ? 'fill-current' : ''}`} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCalificar(mensaje.id, 'abajo')}
-                        disabled={mensaje.calificacion !== null}
-                        className={`h-7 px-2 ${
-                          mensaje.calificacion === 'abajo'
-                            ? 'bg-red-100 text-red-700 hover:bg-red-100'
-                            : 'text-gray-600 hover:text-red-600'
-                        }`}
-                        title="Calificar como respuesta a mejorar"
-                      >
-                        <X className={`h-3 w-3 ${mensaje.calificacion === 'abajo' ? 'fill-current' : ''}`} />
-                      </Button>
-                      {mensaje.calificacion && (
-                        <span className="text-xs text-gray-500">
-                          {mensaje.calificacion === 'arriba' ? 'ÃÂ¢ÃÂÃ¢ÂÂ Calificada positivamente' : 'ÃÂ¢ÃÂÃ¢ÂÂ Marcada para revisiÃÂ³n'}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                {mensaje.tipo === 'usuario' && (
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                    <span className="text-xs font-semibold">TÃÂº</span>
-                  </div>
-                )}
-              </div>
-            ))}
-            {enviando && (
-              <div className="flex gap-3 justify-start">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Brain className="h-4 w-4 text-blue-600" />
-                </div>
-                <div className="bg-gray-100 rounded-lg p-3">
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                </div>
-              </div>
-            )}
-            <div ref={mensajesEndRef} />
-          </div>
-
-          {/* Input de pregunta */}
-          <div className="border-t p-4">
-            <div className="flex gap-2">
-              <Textarea
-                value={pregunta}
-                onChange={(e) => setPregunta(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder={
-                  aiConfigurado
-                    ? "Escribe tu pregunta sobre la base de datos... (Presiona Enter para enviar, Shift+Enter para nueva lÃÂ­nea)"
-                    : "Configura AI primero para usar el chat..."
-                }
-                disabled={!aiConfigurado || enviando}
-                rows={3}
-                className="resize-none"
-              />
-              <Button
-                onClick={enviarPregunta}
-                disabled={!aiConfigurado || enviando || !pregunta.trim()}
-                className="self-end"
-              >
-                {enviando ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Ejemplos: "ÃÂ¿CuÃÂ¡ntos prÃÂ©stamos activos hay?", "ÃÂ¿CuÃÂ¡l es el total de pagos del mes?", "MuÃÂ©strame los clientes en mora"
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-export default ChatAI
-
+import { useState, useRef, useEffect } from 'react'
+import { Brain, ChevronRight, Loader2, AlertCircle, MessageSquare, CheckCircle, X } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Textarea } from '../components/ui/textarea'
+import { Badge } from '../components/ui/badge'
+import { toast } from 'sonner'
+import { apiClient } from '../services/api'
+import { BASE_PATH, env } from '../config/env'
+import { safeGetItem, safeGetSessionItem } from '../utils/storage'
+
+interface Mensaje {
+  id: string
+  tipo: 'usuario' | 'ai'
+  contenido: string
+  timestamp: Date
+  error?: boolean
+  pregunta?: string  // Para guardar la pregunta cuando es respuesta AI
+  calificacion?: 'arriba' | 'abajo' | null  // CalificaciÃ³n del usuario
+}
+
+export function ChatAI() {
+  const [mensajes, setMensajes] = useState<Mensaje[]>([])
+  const [pregunta, setPregunta] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [aiConfigurado, setAiConfigurado] = useState(false)
+  const [verificando, setVerificando] = useState(true)
+  const [streaming, setStreaming] = useState(true) // Streaming por defecto para mejor UX
+  const mensajesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    verificarConfiguracionAI()
+    // Mensaje de bienvenida
+    setMensajes([{
+      id: 'bienvenida',
+      tipo: 'ai',
+      contenido: 'Â¡Hola! Soy tu asistente especializado en consultas sobre la base de datos del sistema. Puedo ayudarte con preguntas sobre clientes, prÃ©stamos, pagos, cuotas, estadÃ­sticas y la fecha/hora actual. Â¿En quÃ© puedo ayudarte?',
+      timestamp: new Date()
+    }])
+  }, [])
+
+  useEffect(() => {
+    mensajesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [mensajes])
+
+  const verificarConfiguracionAI = async () => {
+    setVerificando(true)
+    try {
+      const config = await apiClient.get<{
+        configured?: boolean
+        activo?: string
+      }>('/api/v1/configuracion/ai/configuracion')
+      const tieneConfig = !!config?.configured
+      const estaActivo = config?.activo?.toLowerCase() === 'true'
+      const configuradoCorrectamente = tieneConfig && estaActivo
+
+      setAiConfigurado(configuradoCorrectamente)
+
+      // Solo mostrar toasts si NO estÃ¡ configurado correctamente Y es la primera vez
+      // No mostrar toasts si el usuario ya sabe que no estÃ¡ configurado
+      if (!configuradoCorrectamente) {
+        if (!tieneConfig) {
+          console.log('AI no configurado (OPENROUTER_API_KEY en backend)')
+        } else if (!estaActivo) {
+          // Solo mostrar warning si hay token pero estÃ¡ inactivo (no cada vez)
+          console.log('AI inactivo')
+        }
+      }
+    } catch (error) {
+      console.error('Error verificando configuraciÃ³n AI:', error)
+      setAiConfigurado(false)
+      // No mostrar toast de error en cada carga, solo loguear
+    } finally {
+      setVerificando(false)
+    }
+  }
+
+  const getAuthToken = (): string => {
+    const rememberMe = safeGetItem('remember_me', false)
+    let token = rememberMe ? safeGetItem('access_token', '') : safeGetSessionItem('access_token', '')
+    if (token && typeof token === 'string') token = token.trim()
+    if (token?.startsWith('Bearer ')) token = token.slice(7)
+    return token || ''
+  }
+
+  const enviarConStreaming = async (preguntaTexto: string) => {
+    const baseUrl = env.API_URL || ''
+    const url = `${baseUrl}/api/v1/configuracion/ai/chat/stream`
+    const token = getAuthToken()
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ pregunta: preguntaTexto }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || err.message || `Error ${res.status}`)
+    }
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('Stream no disponible')
+    const decoder = new TextDecoder()
+    let buffer = ''
+    const mensajeId = (Date.now() + 1).toString()
+    const mensajeAI: Mensaje = {
+      id: mensajeId,
+      tipo: 'ai',
+      contenido: '',
+      timestamp: new Date(),
+      pregunta: preguntaTexto,
+      calificacion: null,
+    }
+    setMensajes(prev => [...prev, mensajeAI])
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              if (data.content) {
+                setMensajes(prev =>
+                  prev.map(m => (m.id === mensajeId ? { ...m, contenido: m.contenido + data.content } : m))
+                )
+              }
+              if (data.error) throw new Error(data.error)
+            } catch (e) {
+              if (e instanceof Error && e.message !== 'Unexpected end of JSON input') throw e
+            }
+          }
+        }
+      }
+    } catch (e) {
+      setMensajes(prev =>
+        prev.map(m =>
+          m.id === mensajeId ? { ...m, contenido: `Error: ${(e as Error).message}`, error: true } : m
+        )
+      )
+      throw e
+    }
+  }
+
+  const enviarSinStreaming = async (preguntaTexto: string) => {
+    const respuesta = await apiClient.post<{
+      success: boolean
+      respuesta: string
+      pregunta: string
+      tokens_usados?: number
+      modelo_usado?: string
+      tiempo_respuesta?: number
+      error?: string
+    }>('/api/v1/configuracion/ai/chat', { pregunta: preguntaTexto })
+    if (respuesta.success) {
+      const mensajeAI: Mensaje = {
+        id: (Date.now() + 1).toString(),
+        tipo: 'ai',
+        contenido: respuesta.respuesta,
+        timestamp: new Date(),
+        pregunta: preguntaTexto,
+        calificacion: null,
+      }
+      setMensajes(prev => [...prev, mensajeAI])
+    } else {
+      throw new Error(respuesta.error || 'Error generando respuesta')
+    }
+  }
+
+  const enviarPregunta = async () => {
+    if (!pregunta.trim()) return
+    if (!aiConfigurado) {
+      toast.error('AI no estÃ¡ configurado o activo. ConfigÃºralo primero.')
+      return
+    }
+
+    const preguntaTexto = pregunta.trim()
+    setPregunta('')
+
+    // Agregar mensaje del usuario
+    const mensajeUsuario: Mensaje = {
+      id: Date.now().toString(),
+      tipo: 'usuario',
+      contenido: preguntaTexto,
+      timestamp: new Date()
+    }
+    setMensajes(prev => [...prev, mensajeUsuario])
+    setEnviando(true)
+
+    try {
+      if (streaming) {
+        await enviarConStreaming(preguntaTexto)
+      } else {
+        await enviarSinStreaming(preguntaTexto)
+      }
+    } catch (error: any) {
+      console.error('Error enviando pregunta:', error)
+      const errorDetail = error?.response?.data?.detail || error?.message || 'No se pudo generar la respuesta'
+      const statusCode = error?.response?.status
+      const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')
+
+      // Manejo especial para timeouts
+      if (isTimeout) {
+        const mensajeError: Mensaje = {
+          id: (Date.now() + 1).toString(),
+          tipo: 'ai',
+          contenido: `â±ï¸ La consulta estÃ¡ tardando mÃ¡s de lo esperado. Esto puede deberse a:\nâ¢ Consultas complejas a la base de datos\nâ¢ Procesamiento de informaciÃ³n extensa\nâ¢ Carga alta en el servidor\n\nÃ°Å¸âÂ¡ Intenta reformular tu pregunta de forma mÃ¡s especÃ­fica o intenta nuevamente en unos momentos.`,
+          timestamp: new Date(),
+          error: true
+        }
+        setMensajes(prev => [...prev, mensajeError])
+        toast.warning('La consulta estÃ¡ tardando mÃ¡s de lo esperado. Intenta nuevamente.')
+        return
+      }
+
+      // Rate limit (429)
+      if (statusCode === 429) {
+        toast.warning(errorDetail)
+        const mensajeError: Mensaje = {
+          id: (Date.now() + 1).toString(),
+          tipo: 'ai',
+          contenido: `â³ ${errorDetail}`,
+          timestamp: new Date(),
+          error: true,
+        }
+        setMensajes(prev => [...prev, mensajeError])
+        return
+      }
+
+      // Si es un error 400 (pregunta rechazada o validaciÃ³n), mostrar mensaje apropiado
+      if (statusCode === 400) {
+        const esPreguntaRechazada = errorDetail.includes('solo responde preguntas') ||
+                                    errorDetail.includes('base de datos') ||
+                                    errorDetail.includes('no puede estar vacÃ­a')
+
+        if (esPreguntaRechazada) {
+          // Mostrar mensaje en el chat con explicaciÃ³n
+          const mensajeError: Mensaje = {
+            id: (Date.now() + 1).toString(),
+            tipo: 'ai',
+            contenido: `Ã¢Å¡ Ã¯Â¸Â ${errorDetail}\n\nÃ°Å¸âÂ¡ Tip: AsegÃºrate de que tu pregunta incluya tÃ©rminos relacionados con:\nâ¢ Clientes, prÃ©stamos, pagos, cuotas\nâ¢ Morosidad, estadÃ­sticas, datos\nâ¢ Fechas, montos, anÃ¡lisis\nâ¢ O cualquier tÃ©rmino relacionado con la base de datos del sistema`,
+            timestamp: new Date(),
+            error: true
+          }
+          setMensajes(prev => [...prev, mensajeError])
+          toast.warning(errorDetail)
+        } else {
+          // Otros errores 400 (configuraciÃ³n, etc.)
+          const mensajeError: Mensaje = {
+            id: (Date.now() + 1).toString(),
+            tipo: 'ai',
+            contenido: `Ã¢ÂÅ Error: ${errorDetail}`,
+            timestamp: new Date(),
+            error: true
+          }
+          setMensajes(prev => [...prev, mensajeError])
+          toast.error(errorDetail)
+        }
+      } else {
+        // Para otros errores (500, etc.), sÃ­ mostrar mensaje en el chat
+        const mensajeError: Mensaje = {
+          id: (Date.now() + 1).toString(),
+          tipo: 'ai',
+          contenido: `Ã¢ÂÅ Error: ${errorDetail}`,
+          timestamp: new Date(),
+          error: true
+        }
+        setMensajes(prev => [...prev, mensajeError])
+        toast.error('Error al generar respuesta')
+      }
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const handleCalificar = async (mensajeId: string, calificacion: 'arriba' | 'abajo') => {
+    try {
+      const mensaje = mensajes.find(m => m.id === mensajeId)
+      if (!mensaje || !mensaje.pregunta) return
+
+      await apiClient.post('/api/v1/configuracion/ai/chat/calificar', {
+        pregunta: mensaje.pregunta,
+        respuesta: mensaje.contenido,
+        calificacion: calificacion === 'arriba' ? 5 : 1
+      })
+
+      setMensajes(prev => prev.map(m => 
+        m.id === mensajeId ? { ...m, calificacion } : m
+      ))
+
+      toast.success(`CalificaciÃ³n ${calificacion === 'arriba' ? 'positiva' : 'negativa'} registrada`)
+    } catch (error: any) {
+      console.error('Error calificando:', error)
+      const status = error?.response?.status
+      const detail = error?.response?.data?.detail || ''
+      
+      if (status === 503) {
+        toast.error(
+          'Sistema de calificaciones no disponible. Ejecuta la migraciÃ³n SQL para crear la tabla.',
+          {
+            duration: 5000,
+            action: {
+              label: 'Ver instrucciones',
+              onClick: () => {
+                window.open('/configuracion?tab=ai&subtab=calificaciones-chat', '_blank')
+              }
+            }
+          }
+        )
+      } else {
+        toast.error(detail || 'Error al registrar la calificaciÃ³n')
+      }
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      enviarPregunta()
+    }
+  }
+
+  return (
+    <div className="container mx-auto p-6 max-w-6xl">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-2">
+          <Brain className="h-8 w-8 text-blue-600" />
+          <h1 className="text-3xl font-bold">Chat AI</h1>
+        </div>
+        <div className="space-y-2">
+          <p className="text-gray-600">
+            Consulta informaciÃ³n de la base de datos usando inteligencia artificial
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              Solo consultas de base de datos
+            </Badge>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={streaming}
+                onChange={(e) => setStreaming(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Respuesta en tiempo real (streaming)
+            </label>
+            <span className="text-xs text-gray-500">
+              Para preguntas generales, usa el Chat de Prueba en ConfiguraciÃ³n &gt; AI
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Estado de configuraciÃ³n */}
+      {verificando ? (
+        <Card className="mb-4">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Verificando configuraciÃ³n de AI...</span>
+            </div>
+          </CardContent>
+        </Card>
+      ) : !aiConfigurado ? (
+        <Card className="mb-4 border-amber-200 bg-amber-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-amber-900 mb-1">AI no configurado</p>
+                <p className="text-sm text-amber-700">
+                  Para usar Chat AI, necesitas configurar y activar la Inteligencia Artificial en{' '}
+                  <a href={BASE_PATH + '/configuracion?tab=ai'} className="underline font-medium">
+                    ConfiguraciÃ³n &gt; Inteligencia Artificial
+                  </a>
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Chat */}
+      <Card className="h-[calc(100vh-280px)] flex flex-col">
+        <CardHeader className="border-b">
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            ConversaciÃ³n
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex-1 flex flex-col p-0">
+          {/* Ãrea de mensajes */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {mensajes.map((mensaje) => (
+              <div
+                key={mensaje.id}
+                className={`flex gap-3 ${
+                  mensaje.tipo === 'usuario' ? 'justify-end' : 'justify-start'
+                }`}
+              >
+                {mensaje.tipo === 'ai' && (
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                    <Brain className="h-4 w-4 text-blue-600" />
+                  </div>
+                )}
+                <div className="flex flex-col gap-2 max-w-[80%]">
+                  <div
+                    className={`rounded-lg p-3 ${
+                      mensaje.tipo === 'usuario'
+                        ? 'bg-blue-600 text-white'
+                        : mensaje.error
+                        ? 'bg-red-50 text-red-900 border border-red-200'
+                        : 'bg-gray-100 text-gray-900'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{mensaje.contenido}</p>
+                    <span className="text-xs opacity-70 mt-1 block">
+                      {mensaje.timestamp.toLocaleTimeString('es-ES', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                  {/* Botones de calificaciÃ³n solo para respuestas AI sin error */}
+                  {mensaje.tipo === 'ai' && !mensaje.error && mensaje.pregunta && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCalificar(mensaje.id, 'arriba')}
+                        disabled={mensaje.calificacion !== null}
+                        className={`h-7 px-2 ${
+                          mensaje.calificacion === 'arriba'
+                            ? 'bg-green-100 text-green-700 hover:bg-green-100'
+                            : 'text-gray-600 hover:text-green-600'
+                        }`}
+                        title="Calificar como buena respuesta"
+                      >
+                        <CheckCircle className={`h-3 w-3 ${mensaje.calificacion === 'arriba' ? 'fill-current' : ''}`} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCalificar(mensaje.id, 'abajo')}
+                        disabled={mensaje.calificacion !== null}
+                        className={`h-7 px-2 ${
+                          mensaje.calificacion === 'abajo'
+                            ? 'bg-red-100 text-red-700 hover:bg-red-100'
+                            : 'text-gray-600 hover:text-red-600'
+                        }`}
+                        title="Calificar como respuesta a mejorar"
+                      >
+                        <X className={`h-3 w-3 ${mensaje.calificacion === 'abajo' ? 'fill-current' : ''}`} />
+                      </Button>
+                      {mensaje.calificacion && (
+                        <span className="text-xs text-gray-500">
+                          {mensaje.calificacion === 'arriba' ? 'Ã¢Åâ Calificada positivamente' : 'Ã¢Åâ Marcada para revisiÃ³n'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {mensaje.tipo === 'usuario' && (
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                    <span className="text-xs font-semibold">TÃº</span>
+                  </div>
+                )}
+              </div>
+            ))}
+            {enviando && (
+              <div className="flex gap-3 justify-start">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Brain className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="bg-gray-100 rounded-lg p-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                </div>
+              </div>
+            )}
+            <div ref={mensajesEndRef} />
+          </div>
+
+          {/* Input de pregunta */}
+          <div className="border-t p-4">
+            <div className="flex gap-2">
+              <Textarea
+                value={pregunta}
+                onChange={(e) => setPregunta(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder={
+                  aiConfigurado
+                    ? "Escribe tu pregunta sobre la base de datos... (Presiona Enter para enviar, Shift+Enter para nueva lÃ­nea)"
+                    : "Configura AI primero para usar el chat..."
+                }
+                disabled={!aiConfigurado || enviando}
+                rows={3}
+                className="resize-none"
+              />
+              <Button
+                onClick={enviarPregunta}
+                disabled={!aiConfigurado || enviando || !pregunta.trim()}
+                className="self-end"
+              >
+                {enviando ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Ejemplos: "Â¿CuÃ¡ntos prÃ©stamos activos hay?", "Â¿CuÃ¡l es el total de pagos del mes?", "MuÃ©strame los clientes en mora"
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export default ChatAI
+

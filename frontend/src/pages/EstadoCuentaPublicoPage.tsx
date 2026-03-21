@@ -1,527 +1,527 @@
-/**
- * Consulta PÃÂBLICA de estado de cuenta por cÃÂ©dula.
- * Flujo: bienvenida Ã¢ÂÂ ingresar cÃÂ©dula Ã¢ÂÂ bienvenida con nombre Ã¢ÂÂ PDF + envÃÂ­o al email.
- * Sin login. Misma lÃÂ³gica y seguridades que rapicredit-cobros (rate limit, validaciÃÂ³n).
- * Marca sesiÃÂ³n para que, si intentan ir a login/sistema, vean "Acceso prohibido" y puedan volver aquÃÂ­.
- */
-import React, { useState, useEffect, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
-import { validarCedulaEstadoCuenta, solicitarCodigo, verificarCodigo, solicitarEstadoCuenta, type ReciboCuotaItem } from '../services/estadoCuentaService'
-import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
-import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-
-const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
-
-/** Normaliza para validar: quita espacios, guiones y puntos. Si solo 6-11 dÃÂ­gitos, al procesar se antepone V. No acepta puntos ni signos intermedios. */
-function normalizarCedulaParaProcesar(val: string): { valido: boolean; valorParaEnviar?: string; error?: string } {
-  const s = val.trim().toUpperCase().replace(/[\s.\-]/g, '')
-  if (!s) return { valido: false, error: 'Ingrese el nÃÂºmero de cÃÂ©dula.' }
-  if (!/^[VEGJ]?\d+$/.test(s)) {
-    return { valido: false, error: 'No use puntos ni signos intermedios. Solo letra (V, E, G o J) y dÃÂ­gitos.' }
-  }
-  if (/^\d{6,11}$/.test(s)) return { valido: true, valorParaEnviar: 'V' + s }
-  if (CEDULA_REGEX.test(s)) return { valido: true, valorParaEnviar: s }
-  return { valido: false, error: 'CÃÂ©dula invÃÂ¡lida. Use letra V, E, G o J seguida de 6 a 11 dÃÂ­gitos.' }
-}
-
-type NotificationState = { type: 'error' | 'success'; message: string } | null
-
-function NotificationBanner({
-  notification,
-  onDismiss,
-}: {
-  notification: NotificationState
-  onDismiss: () => void
-}) {
-  if (!notification) return null
-  const isError = notification.type === 'error'
-  return (
-    <div
-      role="alert"
-      className={`w-full max-w-md min-w-0 rounded-2xl px-4 sm:px-5 py-4 flex items-center gap-3 shadow-xl border-2 backdrop-blur-sm ${
-        isError ? 'bg-red-600/95 border-red-700 text-white' : 'bg-emerald-600/95 border-emerald-700 text-white'
-      }`}
-    >
-      <span className="flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/20" aria-hidden>
-        {isError ? (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        )}
-      </span>
-      <p className="flex-1 min-w-0 font-semibold text-sm sm:text-base leading-snug break-words">{notification.message}</p>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="flex-shrink-0 p-2 rounded-md hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
-        aria-label="Cerrar notificaciÃÂ³n"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-  )
-}
-
-export default function EstadoCuentaPublicoPage() {
-  const [step, setStep] = useState(0)
-  const [cedula, setCedula] = useState('')
-  const [codigo, setCodigo] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [loadingPdf, setLoadingPdf] = useState(false)
-  const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null)
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
-  const [mensajeEnvio, setMensajeEnvio] = useState('')
-  const [expiraEn, setExpiraEn] = useState<string | null>(null) // ISO 8601 para "CÃÂ³digo vÃÂ¡lido hasta las HH:MM"
-  const [notification, setNotification] = useState<NotificationState>(null)
-  const [reenviarCooldown, setReenviarCooldown] = useState(0)
-  const [reenviarLoading, setReenviarLoading] = useState(false)
-  const [recibosCuotas, setRecibosCuotas] = useState<ReciboCuotaItem[] | null>(null)
-  const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl) }
-  }, [pdfBlobUrl])
-
-  useEffect(() => {
-    return () => {
-      if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current)
-    }
-  }, [])
-
-  const showNotification = (type: 'error' | 'success', message: string) => {
-    if (notificationTimeoutRef.current) {
-      clearTimeout(notificationTimeoutRef.current)
-      notificationTimeoutRef.current = null
-    }
-    setNotification({ type, message })
-    notificationTimeoutRef.current = setTimeout(() => {
-      notificationTimeoutRef.current = null
-      setNotification(null)
-    }, 10000)
-  }
-  const dismissNotification = () => setNotification(null)
-
-  const resetForm = (irAStep: number) => {
-    setNotification(null)
-    setExpiraEn(null)
-    setReenviarCooldown(0)
-    setRecibosCuotas(null)
-    if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
-    setCedula('')
-    setCodigo('')
-    setPdfDataUrl(null)
-    setMensajeEnvio('')
-    setStep(irAStep)
-  }
-
-  /** Formatea expira_en ISO a "HH:MM" (hora local) para mostrar "CÃÂ³digo vÃÂ¡lido hasta las HH:MM" */
-  const formatExpiraEn = (iso: string | null | undefined): string | null => {
-    if (!iso) return null
-    try {
-      const d = new Date(iso)
-      if (Number.isNaN(d.getTime())) return null
-      return d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: false })
-    } catch {
-      return null
-    }
-  }
-
-  const goToStep = (newStep: number) => {
-    setNotification(null)
-    setStep(newStep)
-  }
-
-  // Cooldown de reenviar cÃÂ³digo: baja 1 cada segundo cuando estamos en paso 2
-  const REENVIAR_COOLDOWN_SEC = 60
-  useEffect(() => {
-    if (step !== 2 || reenviarCooldown <= 0) return
-    const t = setInterval(() => {
-      setReenviarCooldown((s) => (s <= 1 ? 0 : s - 1))
-    }, 1000)
-    return () => clearInterval(t)
-  }, [step, reenviarCooldown])
-
-  const handleReenviarCodigo = async () => {
-    if (!cedula || reenviarCooldown > 0 || reenviarLoading) return
-    setReenviarLoading(true)
-    try {
-      const res = await solicitarCodigo(cedula)
-      if (!res.ok) {
-        showNotification('error', res.error || 'No se pudo reenviar el cÃÂ³digo.')
-        return
-      }
-      setReenviarCooldown(REENVIAR_COOLDOWN_SEC)
-      setExpiraEn(res.expira_en ? null)
-      setMensajeEnvio(res.mensaje ? 'Si la cÃÂ©dula estÃÂ¡ registrada, recibirÃÂ¡s un nuevo cÃÂ³digo en tu correo.')
-      showNotification('success', 'CÃÂ³digo reenviado. Revisa tu correo (y carpeta de spam).')
-    } catch (e: unknown) {
-      showNotification('error', (e as Error)?.message || 'Error al reenviar el cÃÂ³digo.')
-    } finally {
-      setReenviarLoading(false)
-    }
-  }
-
-  const stepAnnouncements: Record<number, string> = {
-    0: 'Pantalla de bienvenida: consulta de estado de cuenta',
-    1: 'Ingrese su nÃÂºmero de cÃÂ©dula',
-    2: 'VerificaciÃÂ³n por correo: ingrese el cÃÂ³digo de 6 dÃÂ­gitos',
-    3: 'Estado de cuenta generado',
-  }
-  const stepAnnouncement = stepAnnouncements[step] ? `Paso ${step}`
-
-  const location = useLocation()
-  const publicPath = (location.pathname || '').replace(/^\//, '')
-  const isInformesRoute = publicPath === 'informes'
-  // Marcar flujo pÃÂºblico para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver aquÃÂ­
-  useEffect(() => {
-    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
-    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', (location.pathname || '').replace(/^\//, '') || 'rapicredit-estadocuenta')
-  }, [])
-
-  const handleSolicitarCodigo = async () => {
-    const v = normalizarCedulaParaProcesar(cedula)
-    if (!v.valido) {
-      showNotification('error', v.error ? 'CÃÂ©dula invÃÂ¡lida.')
-      return
-    }
-    const cedulaEnviar = v.valorParaEnviar!
-    setLoading(true)
-    try {
-      const validacion = await validarCedulaEstadoCuenta(
-        cedulaEnviar,
-        isInformesRoute ? { origen: 'informes' } : undefined,
-      )
-      if (!validacion.ok) {
-        showNotification('error', validacion.error || 'CÃÂ©dula no vÃÂ¡lida.')
-        return
-      }
-      
-      if (isInformesRoute) {
-        const resPdf = await solicitarEstadoCuenta(cedulaEnviar, { origen: 'informes' })
-        if (!resPdf.ok) {
-          showNotification('error', resPdf.error || 'No se pudo generar el estado de cuenta.')
-          return
-        }
-        setCedula(cedulaEnviar)
-        if (resPdf.pdf_base64) {
-          setPdfDataUrl(`data:application/pdf;base64,${resPdf.pdf_base64}`)
-          try {
-            const bin = atob(resPdf.pdf_base64)
-            const bytes = new Uint8Array(bin.length)
-            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-            const blob = new Blob([bytes], { type: 'application/pdf' })
-            setPdfBlobUrl(URL.createObjectURL(blob))
-          } catch (_) { setPdfBlobUrl(null) }
-          setStep(3)
-        }
-        return
-      }
-      const res = await solicitarCodigo(cedulaEnviar)
-      if (!res.ok) {
-        showNotification('error', res.error || 'CÃÂ©dula no vÃÂ¡lida.')
-        return
-      }
-      setCedula(cedulaEnviar)
-      setMensajeEnvio(res.mensaje ? 'Si la cedula esta registrada, recibiras un codigo en tu correo.')
-      setExpiraEn(res.expira_en ? null)
-      setReenviarCooldown(60)
-      setStep(2)
-    } catch (e: unknown) {
-      showNotification('error', (e as Error)?.message || 'Error al validar cÃÂ©dula.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-
-
-  
-  const handleVerificarCodigo = async () => {
-    if (!codigo.trim()) {
-      showNotification('error', 'Ingrese el codigo recibido por correo.')
-      return
-    }
-    setLoadingPdf(true)
-    try {
-      const res = await verificarCodigo(cedula, codigo.trim())
-      if (!res.ok) {
-        showNotification('error', res.error || 'Codigo invalido o expirado.')
-        return
-      }
-      if (res.pdf_base64) {
-        setPdfDataUrl(`data:application/pdf;base64,${res.pdf_base64}`)
-        setRecibosCuotas(res.recibos_cuotas ? null)
-        try {
-          const bin = atob(res.pdf_base64)
-          const bytes = new Uint8Array(bin.length)
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-          const blob = new Blob([bytes], { type: 'application/pdf' })
-          setPdfBlobUrl(URL.createObjectURL(blob))
-        } catch (_) {
-          setPdfBlobUrl(null)
-        }
-        setStep(3)
-      }
-    } catch (e: unknown) {
-      showNotification('error', (e as Error)?.message || 'Error al verificar codigo.')
-    } finally {
-      setLoadingPdf(false)
-    }
-  }
-// Paso 0: Bienvenida (logo y colores RapiCredit: azul oscuro, naranja/marrÃÂ³n)
-  const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
-  if (step === 0) {
-    return (
-      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-100 via-[#e0eaf2] to-[#c9d6e8] flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
-        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-          {stepAnnouncement}
-        </div>
-        <Card className="w-full max-w-lg min-w-0 shadow-2xl shadow-slate-300/40 border border-slate-200/90 overflow-hidden rounded-2xl ring-1 ring-slate-200/50 mx-1 sm:mx-0">
-          <div className="bg-gradient-to-b from-white to-slate-50/80 px-6 sm:px-8 py-6 sm:py-8 text-center border-b border-slate-100">
-            <div className="inline-flex flex-col items-center justify-center">
-              <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-16 sm:h-20 mx-auto object-contain drop-shadow-sm" />
-              <p className="text-[#b8954a] text-sm sm:text-base mt-3 font-semibold tracking-wide">Consulta de estado de cuenta</p>
-            </div>
-          </div>
-          <CardHeader className="text-center pb-2 px-4 sm:px-6">
-            <CardTitle className="text-2xl sm:text-3xl text-[#1e3a5f] font-bold tracking-tight">
-              {isInformesRoute ? 'Informes Ã¢ÂÂ Uso interno' : 'Bienvenido'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 sm:space-y-5 px-4 sm:px-6 pb-6">
-            {isInformesRoute ? (
-              <>
-                <p className="text-slate-700 text-center text-sm sm:text-base">
-                  GeneraciÃÂ³n de estado de cuenta para empleados. Ingrese la cÃÂ©dula del cliente y obtenga el PDF al instante. No se solicita cÃÂ³digo ni se envÃÂ­a correo.
-                </p>
-                <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
-                  <li>Ingrese la cÃÂ©dula (V, E, G o J + dÃÂ­gitos).</li>
-                  <li>Se generarÃÂ¡ el PDF y podrÃÂ¡ descargarlo directamente.</li>
-                </ul>
-              </>
-            ) : (
-              <>
-                <p className="text-slate-700 text-center text-sm sm:text-base">
-                  Desde aquÃÂ­ puede consultar su estado de cuenta. Solo debe ingresar su cÃÂ©dula; el documento se generarÃÂ¡ y se enviarÃÂ¡ al correo registrado.
-                </p>
-                <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
-                  <li>Ingrese su nÃÂºmero de cÃÂ©dula (V, E, G o J + dÃÂ­gitos).</li>
-                  <li>Se generarÃÂ¡ un PDF con sus prÃÂ©stamos y cuotas pendientes.</li>
-                  <li>Una copia se enviarÃÂ¡ al correo electrÃÂ³nico registrado.</li>
-                </ul>
-                <p className="text-xs text-slate-500 text-center">
-                  Este servicio solo permite consultar su propio estado de cuenta. No da acceso a otros servicios.
-                </p>
-                <p className="text-xs text-slate-500 text-center">
-                  Si desea consultar otra cÃÂ©dula, al finalizar use el botÃÂ³n ÃÂ«Consultar otra cÃÂ©dulaÃÂ» o reinicie el proceso.
-                </p>
-              </>
-            )}
-            <Button className="w-full text-base py-6 min-h-[52px] font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white touch-manipulation rounded-xl shadow-lg shadow-[#1e3a5f]/25 hover:shadow-xl transition-all duration-200 active:scale-[0.98]" size="lg" onClick={() => goToStep(1)}>
-              Iniciar
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Paso 1: Ingresar cÃÂ©dula
-  if (step === 1) {
-    return (
-      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
-        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-          {stepAnnouncement}
-        </div>
-        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-4 px-1 sm:px-0">
-          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden">
-            <CardHeader className="px-5 sm:px-6 pb-2">
-              <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">Estado de cuenta</CardTitle>
-              <p className="text-sm text-gray-600">
-                {isInformesRoute
-                  ? 'Uso interno. Ingrese la cÃÂ©dula del cliente para generar el PDF. No se envÃÂ­a correo.'
-                  : 'Solo letra (V, E, G o J) y 6 a 11 dÃÂ­gitos. No use puntos ni signos. Si solo ingresa nÃÂºmeros se procesarÃÂ¡ con V.'}
-              </p>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 space-y-4">
-              <Input
-                className="min-h-[44px] touch-manipulation rounded-xl border-slate-200 focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
-                placeholder="Ej: V12345678, E12345678 o 12345678"
-                value={cedula}
-                onChange={(e) => setCedula(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSolicitarCodigo()}
-                maxLength={20}
-              />
-              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation rounded-xl border-2" onClick={() => goToStep(0)}>
-                  AtrÃÂ¡s
-                </Button>
-                <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation rounded-xl bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md" onClick={handleSolicitarCodigo} disabled={loading}>
-                  {loading
-                    ? (isInformesRoute ? 'Generando PDF...' : 'Enviando cÃÂ³digo...')
-                    : isInformesRoute
-                      ? 'Generar PDF'
-                      : 'Enviar cÃÂ³digo al correo'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  // Paso 2: Ingresar codigo
-  if (step === 2) {
-    return (
-      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
-        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{stepAnnouncement}</div>
-        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
-          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden">
-            <CardHeader className="px-5 sm:px-6 pb-2">
-              <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">VerificaciÃÂ³n por correo</CardTitle>
-              <p className="text-sm text-gray-600">{mensajeEnvio || 'Revisa tu correo e ingresa el cÃÂ³digo de 6 dÃÂ­gitos.'}</p>
-              {formatExpiraEn(expiraEn) && (
-                <p className="text-sm text-[#1e3a5f] font-medium mt-1">CÃÂ³digo vÃÂ¡lido hasta las {formatExpiraEn(expiraEn)}</p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">Si no lo recibes, revisa la carpeta de spam. Puedes solicitar otro cÃÂ³digo volviendo al paso anterior (lÃÂ­mite 5 por hora).</p>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 space-y-4">
-              <Input
-                className="min-h-[44px] touch-manipulation text-center text-lg tracking-widest rounded-xl border-2 border-slate-200 focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
-                placeholder="CÃÂ³digo de 6 dÃÂ­gitos"
-                value={codigo}
-                onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                onKeyDown={(e) => e.key === 'Enter' && handleVerificarCodigo()}
-                maxLength={6}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-              />
-              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation rounded-xl border-2" onClick={() => goToStep(1)}>AtrÃÂ¡s</Button>
-                <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation rounded-xl bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md" onClick={handleVerificarCodigo} disabled={loadingPdf}>
-                  {loadingPdf ? 'Verificando...' : 'Ver estado de cuenta'}
-                </Button>
-              </div>
-              <div className="pt-2 border-t border-gray-100">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-gray-600 hover:text-[#1e3a5f]"
-                  onClick={handleReenviarCodigo}
-                  disabled={reenviarCooldown > 0 || reenviarLoading || loadingPdf}
-                >
-                  {reenviarLoading
-                    ? 'Enviando...'
-                    : reenviarCooldown > 0
-                      ? `ÃÂ¿No llegÃÂ³ el correo? Reenviar cÃÂ³digo (${reenviarCooldown} s)`
-                      : 'ÃÂ¿No llegÃÂ³ el correo? Reenviar cÃÂ³digo'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  // Paso 3: PDF
-  return (
-    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
-      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {stepAnnouncement}
-      </div>
-      <div className="w-full max-w-3xl min-w-0 flex flex-col items-center gap-4 px-1 sm:px-0">
-        <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-        <Card className="w-full max-w-3xl min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden ring-2 ring-emerald-500/20">
-          <CardHeader className="px-5 sm:px-6 pb-2">
-            <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">Estado de cuenta</CardTitle>
-            <p className="text-sm text-slate-600 font-medium break-words mt-2">
-              Agradecemos que revises tu estado de cuenta. Si encuentras algÃÂºn problema, repÃÂ³rtalo por{' '}
-              <a
-                href="https://wa.me/584244579934"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-emerald-600 hover:text-emerald-700 underline font-semibold transition-colors decoration-2 underline-offset-2"
-              >
-                WhatsApp
-              </a>
-              {' '}o ingresa a{' '}
-              <a
-                href="https://rapicredit.onrender.com/pagos/rapicredit-cobros"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#1e3a5f] hover:text-[#152a47] underline font-semibold transition-colors decoration-2 underline-offset-2"
-              >
-                rapicredit-cobros
-              </a>
-              {' '}para actualizar tu estado de cuenta en 1 hora.
-            </p>
-          </CardHeader>
-          <CardContent className="px-4 sm:px-6 space-y-4">
-            {loadingPdf && (
-              <p className="text-gray-600">Generando estado de cuenta...</p>
-            )}
-            {pdfDataUrl && !loadingPdf && (
-              <>
-                <p className="text-center text-xl sm:text-2xl text-slate-800 font-bold py-6">
-                  Descarga tu estado de cuenta
-                </p>
-                <p className="text-center text-sm text-slate-500 -mt-4 pb-2">
-                  Los datos reflejan el estado al momento de esta consulta. Cada nueva consulta muestra los pagos mÃÂ¡s recientes.
-                </p>
-              </>
-            )}
-            <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
-              <Button variant="outline" className="flex-1 min-h-[48px] touch-manipulation min-w-0 rounded-xl border-2" onClick={() => resetForm(0)}>
-                Termina
-              </Button>
-              <Button className="flex-1 min-h-[48px] bg-[#1e3a5f] hover:bg-[#152a47] touch-manipulation min-w-0 rounded-xl shadow-md" onClick={() => resetForm(1)}>
-                Consultar otra cÃÂ©dula
-              </Button>
-              {pdfDataUrl && (
-                <a
-                  href={pdfBlobUrl || pdfDataUrl}
-                  download={`estado_cuenta_${cedula.replace(/\s/g, '_')}.pdf`}
-                  className="inline-flex items-center justify-center rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 min-h-[48px] px-4 py-2 flex-1 min-w-0 touch-manipulation shadow-lg shadow-emerald-600/25 hover:shadow-xl transition-all duration-200"
-                >
-                  Descargar estado de cuenta
-                </a>
-              )}
-            </div>
-            {recibosCuotas && recibosCuotas.length > 0 && (
-              <div className="pt-4 border-t border-slate-200">
-                <p className="text-sm font-semibold text-[#1e3a5f] mb-2">Recibos de cuotas pagadas</p>
-                <ul className="space-y-2">
-                  {recibosCuotas.map((r, i) => (
-                    <li key={`${r.prestamo_id}-${r.cuota_id}-${i}`}>
-                      <a
-                        href={r.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-800 underline underline-offset-2 font-medium"
-                      >
-                        Recibo cuota {r.numero_cuota} Ã¢ÂÂ PrÃÂ©stamo #{r.prestamo_id} {r.producto}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
+/**
+ * Consulta PÃBLICA de estado de cuenta por cÃ©dula.
+ * Flujo: bienvenida â ingresar cÃ©dula â bienvenida con nombre â PDF + envÃ­o al email.
+ * Sin login. Misma lÃ³gica y seguridades que rapicredit-cobros (rate limit, validaciÃ³n).
+ * Marca sesiÃ³n para que, si intentan ir a login/sistema, vean "Acceso prohibido" y puedan volver aquÃ­.
+ */
+import React, { useState, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
+import { validarCedulaEstadoCuenta, solicitarCodigo, verificarCodigo, solicitarEstadoCuenta, type ReciboCuotaItem } from '../services/estadoCuentaService'
+import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+
+const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
+
+/** Normaliza para validar: quita espacios, guiones y puntos. Si solo 6-11 dÃ­gitos, al procesar se antepone V. No acepta puntos ni signos intermedios. */
+function normalizarCedulaParaProcesar(val: string): { valido: boolean; valorParaEnviar?: string; error?: string } {
+  const s = val.trim().toUpperCase().replace(/[\s.\-]/g, '')
+  if (!s) return { valido: false, error: 'Ingrese el nÃºmero de cÃ©dula.' }
+  if (!/^[VEGJ]?\d+$/.test(s)) {
+    return { valido: false, error: 'No use puntos ni signos intermedios. Solo letra (V, E, G o J) y dÃ­gitos.' }
+  }
+  if (/^\d{6,11}$/.test(s)) return { valido: true, valorParaEnviar: 'V' + s }
+  if (CEDULA_REGEX.test(s)) return { valido: true, valorParaEnviar: s }
+  return { valido: false, error: 'CÃ©dula invÃ¡lida. Use letra V, E, G o J seguida de 6 a 11 dÃ­gitos.' }
+}
+
+type NotificationState = { type: 'error' | 'success'; message: string } | null
+
+function NotificationBanner({
+  notification,
+  onDismiss,
+}: {
+  notification: NotificationState
+  onDismiss: () => void
+}) {
+  if (!notification) return null
+  const isError = notification.type === 'error'
+  return (
+    <div
+      role="alert"
+      className={`w-full max-w-md min-w-0 rounded-2xl px-4 sm:px-5 py-4 flex items-center gap-3 shadow-xl border-2 backdrop-blur-sm ${
+        isError ? 'bg-red-600/95 border-red-700 text-white' : 'bg-emerald-600/95 border-emerald-700 text-white'
+      }`}
+    >
+      <span className="flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/20" aria-hidden>
+        {isError ? (
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        ) : (
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </span>
+      <p className="flex-1 min-w-0 font-semibold text-sm sm:text-base leading-snug break-words">{notification.message}</p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="flex-shrink-0 p-2 rounded-md hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+        aria-label="Cerrar notificaciÃ³n"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
+export default function EstadoCuentaPublicoPage() {
+  const [step, setStep] = useState(0)
+  const [cedula, setCedula] = useState('')
+  const [codigo, setCodigo] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [loadingPdf, setLoadingPdf] = useState(false)
+  const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
+  const [mensajeEnvio, setMensajeEnvio] = useState('')
+  const [expiraEn, setExpiraEn] = useState<string | null>(null) // ISO 8601 para "CÃ³digo vÃ¡lido hasta las HH:MM"
+  const [notification, setNotification] = useState<NotificationState>(null)
+  const [reenviarCooldown, setReenviarCooldown] = useState(0)
+  const [reenviarLoading, setReenviarLoading] = useState(false)
+  const [recibosCuotas, setRecibosCuotas] = useState<ReciboCuotaItem[] | null>(null)
+  const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl) }
+  }, [pdfBlobUrl])
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current)
+    }
+  }, [])
+
+  const showNotification = (type: 'error' | 'success', message: string) => {
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current)
+      notificationTimeoutRef.current = null
+    }
+    setNotification({ type, message })
+    notificationTimeoutRef.current = setTimeout(() => {
+      notificationTimeoutRef.current = null
+      setNotification(null)
+    }, 10000)
+  }
+  const dismissNotification = () => setNotification(null)
+
+  const resetForm = (irAStep: number) => {
+    setNotification(null)
+    setExpiraEn(null)
+    setReenviarCooldown(0)
+    setRecibosCuotas(null)
+    if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
+    setCedula('')
+    setCodigo('')
+    setPdfDataUrl(null)
+    setMensajeEnvio('')
+    setStep(irAStep)
+  }
+
+  /** Formatea expira_en ISO a "HH:MM" (hora local) para mostrar "CÃ³digo vÃ¡lido hasta las HH:MM" */
+  const formatExpiraEn = (iso: string | null | undefined): string | null => {
+    if (!iso) return null
+    try {
+      const d = new Date(iso)
+      if (Number.isNaN(d.getTime())) return null
+      return d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: false })
+    } catch {
+      return null
+    }
+  }
+
+  const goToStep = (newStep: number) => {
+    setNotification(null)
+    setStep(newStep)
+  }
+
+  // Cooldown de reenviar cÃ³digo: baja 1 cada segundo cuando estamos en paso 2
+  const REENVIAR_COOLDOWN_SEC = 60
+  useEffect(() => {
+    if (step !== 2 || reenviarCooldown <= 0) return
+    const t = setInterval(() => {
+      setReenviarCooldown((s) => (s <= 1 ? 0 : s - 1))
+    }, 1000)
+    return () => clearInterval(t)
+  }, [step, reenviarCooldown])
+
+  const handleReenviarCodigo = async () => {
+    if (!cedula || reenviarCooldown > 0 || reenviarLoading) return
+    setReenviarLoading(true)
+    try {
+      const res = await solicitarCodigo(cedula)
+      if (!res.ok) {
+        showNotification('error', res.error || 'No se pudo reenviar el cÃ³digo.')
+        return
+      }
+      setReenviarCooldown(REENVIAR_COOLDOWN_SEC)
+      setExpiraEn(res.expira_en ? null)
+      setMensajeEnvio(res.mensaje ? 'Si la cÃ©dula estÃ¡ registrada, recibirÃ¡s un nuevo cÃ³digo en tu correo.')
+      showNotification('success', 'CÃ³digo reenviado. Revisa tu correo (y carpeta de spam).')
+    } catch (e: unknown) {
+      showNotification('error', (e as Error)?.message || 'Error al reenviar el cÃ³digo.')
+    } finally {
+      setReenviarLoading(false)
+    }
+  }
+
+  const stepAnnouncements: Record<number, string> = {
+    0: 'Pantalla de bienvenida: consulta de estado de cuenta',
+    1: 'Ingrese su nÃºmero de cÃ©dula',
+    2: 'VerificaciÃ³n por correo: ingrese el cÃ³digo de 6 dÃ­gitos',
+    3: 'Estado de cuenta generado',
+  }
+  const stepAnnouncement = stepAnnouncements[step] ? `Paso ${step}`
+
+  const location = useLocation()
+  const publicPath = (location.pathname || '').replace(/^\//, '')
+  const isInformesRoute = publicPath === 'informes'
+  // Marcar flujo pÃºblico para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver aquÃ­
+  useEffect(() => {
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', (location.pathname || '').replace(/^\//, '') || 'rapicredit-estadocuenta')
+  }, [])
+
+  const handleSolicitarCodigo = async () => {
+    const v = normalizarCedulaParaProcesar(cedula)
+    if (!v.valido) {
+      showNotification('error', v.error ? 'CÃ©dula invÃ¡lida.')
+      return
+    }
+    const cedulaEnviar = v.valorParaEnviar!
+    setLoading(true)
+    try {
+      const validacion = await validarCedulaEstadoCuenta(
+        cedulaEnviar,
+        isInformesRoute ? { origen: 'informes' } : undefined,
+      )
+      if (!validacion.ok) {
+        showNotification('error', validacion.error || 'CÃ©dula no vÃ¡lida.')
+        return
+      }
+      
+      if (isInformesRoute) {
+        const resPdf = await solicitarEstadoCuenta(cedulaEnviar, { origen: 'informes' })
+        if (!resPdf.ok) {
+          showNotification('error', resPdf.error || 'No se pudo generar el estado de cuenta.')
+          return
+        }
+        setCedula(cedulaEnviar)
+        if (resPdf.pdf_base64) {
+          setPdfDataUrl(`data:application/pdf;base64,${resPdf.pdf_base64}`)
+          try {
+            const bin = atob(resPdf.pdf_base64)
+            const bytes = new Uint8Array(bin.length)
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+            const blob = new Blob([bytes], { type: 'application/pdf' })
+            setPdfBlobUrl(URL.createObjectURL(blob))
+          } catch (_) { setPdfBlobUrl(null) }
+          setStep(3)
+        }
+        return
+      }
+      const res = await solicitarCodigo(cedulaEnviar)
+      if (!res.ok) {
+        showNotification('error', res.error || 'CÃ©dula no vÃ¡lida.')
+        return
+      }
+      setCedula(cedulaEnviar)
+      setMensajeEnvio(res.mensaje ? 'Si la cedula esta registrada, recibiras un codigo en tu correo.')
+      setExpiraEn(res.expira_en ? null)
+      setReenviarCooldown(60)
+      setStep(2)
+    } catch (e: unknown) {
+      showNotification('error', (e as Error)?.message || 'Error al validar cÃ©dula.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+
+
+  
+  const handleVerificarCodigo = async () => {
+    if (!codigo.trim()) {
+      showNotification('error', 'Ingrese el codigo recibido por correo.')
+      return
+    }
+    setLoadingPdf(true)
+    try {
+      const res = await verificarCodigo(cedula, codigo.trim())
+      if (!res.ok) {
+        showNotification('error', res.error || 'Codigo invalido o expirado.')
+        return
+      }
+      if (res.pdf_base64) {
+        setPdfDataUrl(`data:application/pdf;base64,${res.pdf_base64}`)
+        setRecibosCuotas(res.recibos_cuotas ? null)
+        try {
+          const bin = atob(res.pdf_base64)
+          const bytes = new Uint8Array(bin.length)
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+          const blob = new Blob([bytes], { type: 'application/pdf' })
+          setPdfBlobUrl(URL.createObjectURL(blob))
+        } catch (_) {
+          setPdfBlobUrl(null)
+        }
+        setStep(3)
+      }
+    } catch (e: unknown) {
+      showNotification('error', (e as Error)?.message || 'Error al verificar codigo.')
+    } finally {
+      setLoadingPdf(false)
+    }
+  }
+// Paso 0: Bienvenida (logo y colores RapiCredit: azul oscuro, naranja/marrÃ³n)
+  const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
+  if (step === 0) {
+    return (
+      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-100 via-[#e0eaf2] to-[#c9d6e8] flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {stepAnnouncement}
+        </div>
+        <Card className="w-full max-w-lg min-w-0 shadow-2xl shadow-slate-300/40 border border-slate-200/90 overflow-hidden rounded-2xl ring-1 ring-slate-200/50 mx-1 sm:mx-0">
+          <div className="bg-gradient-to-b from-white to-slate-50/80 px-6 sm:px-8 py-6 sm:py-8 text-center border-b border-slate-100">
+            <div className="inline-flex flex-col items-center justify-center">
+              <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-16 sm:h-20 mx-auto object-contain drop-shadow-sm" />
+              <p className="text-[#b8954a] text-sm sm:text-base mt-3 font-semibold tracking-wide">Consulta de estado de cuenta</p>
+            </div>
+          </div>
+          <CardHeader className="text-center pb-2 px-4 sm:px-6">
+            <CardTitle className="text-2xl sm:text-3xl text-[#1e3a5f] font-bold tracking-tight">
+              {isInformesRoute ? 'Informes â Uso interno' : 'Bienvenido'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 sm:space-y-5 px-4 sm:px-6 pb-6">
+            {isInformesRoute ? (
+              <>
+                <p className="text-slate-700 text-center text-sm sm:text-base">
+                  GeneraciÃ³n de estado de cuenta para empleados. Ingrese la cÃ©dula del cliente y obtenga el PDF al instante. No se solicita cÃ³digo ni se envÃ­a correo.
+                </p>
+                <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
+                  <li>Ingrese la cÃ©dula (V, E, G o J + dÃ­gitos).</li>
+                  <li>Se generarÃ¡ el PDF y podrÃ¡ descargarlo directamente.</li>
+                </ul>
+              </>
+            ) : (
+              <>
+                <p className="text-slate-700 text-center text-sm sm:text-base">
+                  Desde aquÃ­ puede consultar su estado de cuenta. Solo debe ingresar su cÃ©dula; el documento se generarÃ¡ y se enviarÃ¡ al correo registrado.
+                </p>
+                <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
+                  <li>Ingrese su nÃºmero de cÃ©dula (V, E, G o J + dÃ­gitos).</li>
+                  <li>Se generarÃ¡ un PDF con sus prÃ©stamos y cuotas pendientes.</li>
+                  <li>Una copia se enviarÃ¡ al correo electrÃ³nico registrado.</li>
+                </ul>
+                <p className="text-xs text-slate-500 text-center">
+                  Este servicio solo permite consultar su propio estado de cuenta. No da acceso a otros servicios.
+                </p>
+                <p className="text-xs text-slate-500 text-center">
+                  Si desea consultar otra cÃ©dula, al finalizar use el botÃ³n Â«Consultar otra cÃ©dulaÂ» o reinicie el proceso.
+                </p>
+              </>
+            )}
+            <Button className="w-full text-base py-6 min-h-[52px] font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white touch-manipulation rounded-xl shadow-lg shadow-[#1e3a5f]/25 hover:shadow-xl transition-all duration-200 active:scale-[0.98]" size="lg" onClick={() => goToStep(1)}>
+              Iniciar
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Paso 1: Ingresar cÃ©dula
+  if (step === 1) {
+    return (
+      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {stepAnnouncement}
+        </div>
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-4 px-1 sm:px-0">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden">
+            <CardHeader className="px-5 sm:px-6 pb-2">
+              <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">Estado de cuenta</CardTitle>
+              <p className="text-sm text-gray-600">
+                {isInformesRoute
+                  ? 'Uso interno. Ingrese la cÃ©dula del cliente para generar el PDF. No se envÃ­a correo.'
+                  : 'Solo letra (V, E, G o J) y 6 a 11 dÃ­gitos. No use puntos ni signos. Si solo ingresa nÃºmeros se procesarÃ¡ con V.'}
+              </p>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6 space-y-4">
+              <Input
+                className="min-h-[44px] touch-manipulation rounded-xl border-slate-200 focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
+                placeholder="Ej: V12345678, E12345678 o 12345678"
+                value={cedula}
+                onChange={(e) => setCedula(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSolicitarCodigo()}
+                maxLength={20}
+              />
+              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation rounded-xl border-2" onClick={() => goToStep(0)}>
+                  AtrÃ¡s
+                </Button>
+                <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation rounded-xl bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md" onClick={handleSolicitarCodigo} disabled={loading}>
+                  {loading
+                    ? (isInformesRoute ? 'Generando PDF...' : 'Enviando cÃ³digo...')
+                    : isInformesRoute
+                      ? 'Generar PDF'
+                      : 'Enviar cÃ³digo al correo'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // Paso 2: Ingresar codigo
+  if (step === 2) {
+    return (
+      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{stepAnnouncement}</div>
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden">
+            <CardHeader className="px-5 sm:px-6 pb-2">
+              <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">VerificaciÃ³n por correo</CardTitle>
+              <p className="text-sm text-gray-600">{mensajeEnvio || 'Revisa tu correo e ingresa el cÃ³digo de 6 dÃ­gitos.'}</p>
+              {formatExpiraEn(expiraEn) && (
+                <p className="text-sm text-[#1e3a5f] font-medium mt-1">CÃ³digo vÃ¡lido hasta las {formatExpiraEn(expiraEn)}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">Si no lo recibes, revisa la carpeta de spam. Puedes solicitar otro cÃ³digo volviendo al paso anterior (lÃ­mite 5 por hora).</p>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6 space-y-4">
+              <Input
+                className="min-h-[44px] touch-manipulation text-center text-lg tracking-widest rounded-xl border-2 border-slate-200 focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
+                placeholder="CÃ³digo de 6 dÃ­gitos"
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={(e) => e.key === 'Enter' && handleVerificarCodigo()}
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+              />
+              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation rounded-xl border-2" onClick={() => goToStep(1)}>AtrÃ¡s</Button>
+                <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation rounded-xl bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md" onClick={handleVerificarCodigo} disabled={loadingPdf}>
+                  {loadingPdf ? 'Verificando...' : 'Ver estado de cuenta'}
+                </Button>
+              </div>
+              <div className="pt-2 border-t border-gray-100">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-gray-600 hover:text-[#1e3a5f]"
+                  onClick={handleReenviarCodigo}
+                  disabled={reenviarCooldown > 0 || reenviarLoading || loadingPdf}
+                >
+                  {reenviarLoading
+                    ? 'Enviando...'
+                    : reenviarCooldown > 0
+                      ? `Â¿No llegÃ³ el correo? Reenviar cÃ³digo (${reenviarCooldown} s)`
+                      : 'Â¿No llegÃ³ el correo? Reenviar cÃ³digo'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // Paso 3: PDF
+  return (
+    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {stepAnnouncement}
+      </div>
+      <div className="w-full max-w-3xl min-w-0 flex flex-col items-center gap-4 px-1 sm:px-0">
+        <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+        <Card className="w-full max-w-3xl min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden ring-2 ring-emerald-500/20">
+          <CardHeader className="px-5 sm:px-6 pb-2">
+            <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">Estado de cuenta</CardTitle>
+            <p className="text-sm text-slate-600 font-medium break-words mt-2">
+              Agradecemos que revises tu estado de cuenta. Si encuentras algÃºn problema, repÃ³rtalo por{' '}
+              <a
+                href="https://wa.me/584244579934"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-600 hover:text-emerald-700 underline font-semibold transition-colors decoration-2 underline-offset-2"
+              >
+                WhatsApp
+              </a>
+              {' '}o ingresa a{' '}
+              <a
+                href="https://rapicredit.onrender.com/pagos/rapicredit-cobros"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#1e3a5f] hover:text-[#152a47] underline font-semibold transition-colors decoration-2 underline-offset-2"
+              >
+                rapicredit-cobros
+              </a>
+              {' '}para actualizar tu estado de cuenta en 1 hora.
+            </p>
+          </CardHeader>
+          <CardContent className="px-4 sm:px-6 space-y-4">
+            {loadingPdf && (
+              <p className="text-gray-600">Generando estado de cuenta...</p>
+            )}
+            {pdfDataUrl && !loadingPdf && (
+              <>
+                <p className="text-center text-xl sm:text-2xl text-slate-800 font-bold py-6">
+                  Descarga tu estado de cuenta
+                </p>
+                <p className="text-center text-sm text-slate-500 -mt-4 pb-2">
+                  Los datos reflejan el estado al momento de esta consulta. Cada nueva consulta muestra los pagos mÃ¡s recientes.
+                </p>
+              </>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+              <Button variant="outline" className="flex-1 min-h-[48px] touch-manipulation min-w-0 rounded-xl border-2" onClick={() => resetForm(0)}>
+                Termina
+              </Button>
+              <Button className="flex-1 min-h-[48px] bg-[#1e3a5f] hover:bg-[#152a47] touch-manipulation min-w-0 rounded-xl shadow-md" onClick={() => resetForm(1)}>
+                Consultar otra cÃ©dula
+              </Button>
+              {pdfDataUrl && (
+                <a
+                  href={pdfBlobUrl || pdfDataUrl}
+                  download={`estado_cuenta_${cedula.replace(/\s/g, '_')}.pdf`}
+                  className="inline-flex items-center justify-center rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 min-h-[48px] px-4 py-2 flex-1 min-w-0 touch-manipulation shadow-lg shadow-emerald-600/25 hover:shadow-xl transition-all duration-200"
+                >
+                  Descargar estado de cuenta
+                </a>
+              )}
+            </div>
+            {recibosCuotas && recibosCuotas.length > 0 && (
+              <div className="pt-4 border-t border-slate-200">
+                <p className="text-sm font-semibold text-[#1e3a5f] mb-2">Recibos de cuotas pagadas</p>
+                <ul className="space-y-2">
+                  {recibosCuotas.map((r, i) => (
+                    <li key={`${r.prestamo_id}-${r.cuota_id}-${i}`}>
+                      <a
+                        href={r.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-800 underline underline-offset-2 font-medium"
+                      >
+                        Recibo cuota {r.numero_cuota} â PrÃ©stamo #{r.prestamo_id} {r.producto}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}

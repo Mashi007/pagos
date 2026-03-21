@@ -1,479 +1,479 @@
-import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  X,
-  DollarSign,
-  Calendar,
-  CreditCard,
-  FileText,
-  Building2,
-  Upload,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  Info,
-} from 'lucide-react'
-import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
-import { Textarea } from '../../components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
-import { pagoService, type PagoCreate } from '../../services/pagoService'
-import { pagoConErrorService } from '../../services/pagoConErrorService'
-import { usePrestamosByCedula, usePrestamo } from '../../hooks/usePrestamos'
-import { useDebounce } from '../../hooks/useDebounce'
-import { getErrorMessage, isAxiosError, getErrorDetail } from '../../types/errors'
-
-interface RegistrarPagoFormProps {
-  onClose: () => void
-  onSuccess: () => void
-  pagoInicial?: Partial<PagoCreate>
-  pagoId?: number  // Si estÃÂ¡ presente, es modo ediciÃÂ³n
-  /** Si true, muestra "Guardar y Procesar": actualiza BD y aplica reglas (conciliaciÃÂ³n + aplicar a cuotas) */
-  modoGuardarYProcesar?: boolean
-  /** Si true, ediciÃÂ³n usa pagos_con_errores */
-  esPagoConError?: boolean
-}
-
-export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, modoGuardarYProcesar, esPagoConError }: RegistrarPagoFormProps) {
-  const isEditing = !!pagoId
-  const [formData, setFormData] = useState<PagoCreate>({
-    cedula_cliente: pagoInicial?.cedula_cliente || '',
-    prestamo_id: pagoInicial?.prestamo_id || null,
-    fecha_pago: pagoInicial?.fecha_pago || new Date().toISOString().split('T')[0],
-    monto_pagado: pagoInicial?.monto_pagado || 0,
-    numero_documento: pagoInicial?.numero_documento || '',
-    institucion_bancaria: pagoInicial?.institucion_bancaria || null,
-    notas: pagoInicial?.notas || null,
-  })
-
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
-
-  // Debounce de la cÃÂ©dula para buscar prÃÂ©stamos
-  const debouncedCedula = useDebounce(formData.cedula_cliente, 500)
-
-  // Buscar prÃÂ©stamos cuando cambia la cÃÂ©dula (con al menos 2 caracteres)
-  const { data: prestamos, isLoading: isLoadingPrestamos } = usePrestamosByCedula(
-    debouncedCedula.length >= 2 ? debouncedCedula : ''
-  )
-
-  // InformaciÃÂ³n del prÃÂ©stamo seleccionado (el crÃÂ©dito solo puede ser uno de la lista por cÃÂ©dula)
-  const { data: prestamoSeleccionado } = usePrestamo(formData.prestamo_id || 0)
-
-  // Auto-seleccionar prÃÂ©stamo si hay solo uno disponible
-  useEffect(() => {
-    if (prestamos && prestamos.length === 1 && !formData.prestamo_id) {
-      setFormData(prev => ({ ...prev, prestamo_id: prestamos[0].id }))
-    } else if (prestamos && prestamos.length === 0) {
-      // Limpiar ID si no hay prÃÂ©stamos
-      setFormData(prev => ({ ...prev, prestamo_id: null }))
-    }
-  }, [prestamos])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // ÃÂ¢ÃÂÃ¢ÂÂ¦ VALIDACIONES SEGÃÂÃÂ¡N CRITERIOS DOCUMENTADOS
-
-    // Validar campos bÃÂ¡sicos
-    const newErrors: Record<string, string> = {}
-    if (!formData.cedula_cliente) {
-      newErrors.cedula_cliente = 'CÃÂ©dula requerida'
-    }
-
-    // CrÃÂ©dito: solo se acepta uno de la lista obtenida por cÃÂ©dula (tabla prestamos). Si hay mÃÂ¡s de uno, debe escogerse.
-    if (prestamos && prestamos.length > 0 && !formData.prestamo_id) {
-      newErrors.prestamo_id = prestamos.length > 1 ? 'Debe escoger un crÃÂ©dito de la lista' : 'Debe seleccionar el crÃÂ©dito'
-    }
-    if (formData.prestamo_id && prestamos && prestamos.length > 0 && !prestamos.some(p => p.id === formData.prestamo_id)) {
-      newErrors.prestamo_id = 'El crÃÂ©dito debe ser uno de la lista para esta cÃÂ©dula'
-    }
-
-    // ÃÂ¢ÃÂÃ¢ÂÂ¦ CRITERIO 1: VerificaciÃÂ³n de cÃÂ©dula del pago vs cÃÂ©dula del prÃÂ©stamo
-    if (formData.prestamo_id && prestamoSeleccionado) {
-      if (formData.cedula_cliente !== prestamoSeleccionado.cedula) {
-        newErrors.cedula_cliente = `La cÃÂ©dula del pago (${formData.cedula_cliente}) no coincide con la cÃÂ©dula del prÃÂ©stamo (${prestamoSeleccionado.cedula}). El pago solo se aplicarÃÂ¡ si las cÃÂ©dulas coinciden.`
-        newErrors.prestamo_id = 'La cÃÂ©dula del pago debe coincidir con la cÃÂ©dula del prÃÂ©stamo seleccionado'
-      }
-    }
-
-    // ÃÂ¢ÃÂÃ¢ÂÂ¦ CRITERIO 2: ValidaciÃÂ³n de monto
-    if (!formData.monto_pagado || formData.monto_pagado <= 0) {
-      newErrors.monto_pagado = 'Monto invÃÂ¡lido. Debe ser mayor a cero'
-    } else if (formData.monto_pagado > 1000000) {
-      newErrors.monto_pagado = 'Monto muy alto. Por favor verifique el valor'
-    }
-
-    // ÃÂ¢ÃÂÃ¢ÂÂ¦ CRITERIO 3: ValidaciÃÂ³n y normalizaciÃÂ³n de nÃÂºmero de documento
-    // Normalizar formato cientÃÂ­fico si existe (ej: 7.40087E+14 -> 740087000000000)
-    let numeroDocumentoNormalizado = formData.numero_documento.trim()
-    if (numeroDocumentoNormalizado && (/[eE]/.test(numeroDocumentoNormalizado))) {
-      try {
-        const numeroFloat = parseFloat(numeroDocumentoNormalizado)
-        numeroDocumentoNormalizado = Math.floor(numeroFloat).toString()
-        // Mostrar advertencia al usuario
-        console.warn(`ÃÂ¢ÃÂ¡ ÃÂ¯ÃÂ¸ÃÂ NÃÂºmero de documento normalizado de formato cientÃÂ­fico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`)
-      } catch (e) {
-        console.error('Error normalizando nÃÂºmero de documento:', e)
-      }
-    }
-    
-    if (!numeroDocumentoNormalizado || numeroDocumentoNormalizado === '') {
-      newErrors.numero_documento = 'NÃÂºmero de documento requerido'
-    }
-
-    // ÃÂ¢ÃÂÃ¢ÂÂ¦ CRITERIO 4: ValidaciÃÂ³n de fecha
-    if (!formData.fecha_pago) {
-      newErrors.fecha_pago = 'Fecha de pago requerida'
-    } else {
-      const fechaPago = new Date(formData.fecha_pago)
-      const hoy = new Date()
-      hoy.setHours(23, 59, 59, 999) // Permitir hasta el final del dÃÂ­a
-      if (fechaPago > hoy) {
-        newErrors.fecha_pago = 'La fecha de pago no puede ser futura'
-      }
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      // Aplicar normalizaciÃÂ³n al nÃÂºmero de documento antes de enviar
-      const datosEnvio: any = {
-        ...formData,
-        numero_documento: numeroDocumentoNormalizado
-      }
-      // Siempre conciliar cuando hay crÃÂ©dito asignado: asÃÂ­ el backend aplica el pago a cuotas
-      // (desde tabla normal o desde "Revisar Pagos" con Guardar y Procesar)
-      if (formData.prestamo_id && formData.monto_pagado > 0) {
-        datosEnvio.conciliado = true
-      }
-
-      if (isEditing && pagoId) {
-        if (esPagoConError) {
-          await pagoConErrorService.update(pagoId, datosEnvio)
-        } else {
-          await pagoService.updatePago(pagoId, datosEnvio)
-        }
-        // La asignaciÃÂ³n a cuotas la hace el backend al recibir conciliado=true (con prestamo_id y monto)
-      } else {
-        await pagoService.createPago(datosEnvio)
-      }
-      onSuccess()
-    } catch (error: unknown) {
-      console.error(`ÃÂ¢ÃÂÃÂ Error ${isEditing ? 'actualizando' : 'registrando'} pago:`, error)
-      let errorMessage = getErrorMessage(error)
-      if (isAxiosError(error)) {
-        const detail = getErrorDetail(error)
-        if (detail) {
-          errorMessage = detail
-        }
-      }
-      setErrors({ general: errorMessage || `Error al ${isEditing ? 'actualizar' : 'registrar'} el pago` })
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      >
-        <motion.div
-          initial={{ scale: 0.95, y: 20 }}
-          animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.95 }}
-          className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col"
-        >
-          {/* Header fijo (fuera del scroll, evita efecto scroll-linked en Firefox) */}
-          <div className="flex-shrink-0 bg-white border-b p-4 flex justify-between items-center rounded-t-lg">
-            <h2 className="text-xl font-bold">{isEditing ? 'Editar Pago' : 'Registrar Pago'}</h2>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="w-5 h-5" />
-            </Button>
-          </div>
-
-          {/* Form con scroll */}
-          <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
-            {/* Error general */}
-            {errors.general && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                {errors.general}
-              </div>
-            )}
-
-            {/* CÃÂ©dula e ID PrÃÂ©stamo */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  CÃÂ©dula Cliente <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    type="text"
-                    value={formData.cedula_cliente}
-                    onChange={e => {
-                      setFormData({ ...formData, cedula_cliente: e.target.value, prestamo_id: null })
-                    }}
-                    className={`pl-10 ${errors.cedula_cliente ? 'border-red-500' : ''}`}
-                    placeholder="V12345678"
-                  />
-                </div>
-                {errors.cedula_cliente && (
-                  <p className="text-sm text-red-600">{errors.cedula_cliente}</p>
-                )}
-                {isLoadingPrestamos && formData.cedula_cliente.length >= 2 && (
-                  <p className="text-xs text-blue-600 flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Buscando prÃÂ©stamos...
-                  </p>
-                )}
-                {!isLoadingPrestamos && prestamos && prestamos.length > 0 && formData.cedula_cliente.length >= 2 && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" />
-                    {prestamos.length} prÃÂ©stamo{prestamos.length !== 1 ? 's' : ''} encontrado{prestamos.length !== 1 ? 's' : ''}
-                  </p>
-                )}
-                {!isLoadingPrestamos && prestamos && prestamos.length === 0 && formData.cedula_cliente.length >= 2 && (
-                  <p className="text-xs text-yellow-600">
-                    No se encontraron prÃÂ©stamos para esta cÃÂ©dula
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  CrÃÂ©dito al que aplica el pago {formData.cedula_cliente && prestamos && prestamos.length > 0 && <span className="text-red-500">*</span>}
-                </label>
-                {prestamos && prestamos.length > 1 && (
-                  <p className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
-                    Esta persona tiene {prestamos.length} prÃÂ©stamos. Seleccione a cuÃÂ¡l se carga este pago.
-                  </p>
-                )}
-                {prestamos && prestamos.length > 0 ? (
-                  <Select
-                    value={formData.prestamo_id?.toString() || undefined}
-                    onValueChange={(value) => setFormData({ ...formData, prestamo_id: parseInt(value) })}
-                  >
-                    <SelectTrigger className={errors.prestamo_id ? 'border-red-500' : ''}>
-                      <SelectValue placeholder={prestamos.length > 1 ? 'Seleccione el crÃÂ©dito' : 'Seleccione un crÃÂ©dito'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {prestamos.map((prestamo) => {
-                        const modelo = (prestamo as any).modelo_vehiculo || (prestamo as any).modelo || prestamo.producto || ''
-                        const concesionario = (prestamo as any).concesionario || ''
-                        const desc = [modelo, concesionario].filter(Boolean).join(' ÃÂ· ') || prestamo.estado
-                        return (
-                          <SelectItem key={prestamo.id} value={prestamo.id.toString()}>
-                            ID {prestamo.id} Ã¢ÂÂ {desc} Ã¢ÂÂ ${Number(prestamo.total_financiamiento ? 0).toFixed(2)}
-                          </SelectItem>
-                        )
-                      })}
-                    </SelectContent>
-                  </Select>
-                ) : formData.cedula_cliente && prestamos && prestamos.length === 0 ? (
-                  <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    No hay prÃÂ©stamo asociado
-                  </div>
-                ) : null}
-                {(errors.prestamo_id || (formData.cedula_cliente && prestamos && prestamos.length > 0 && !formData.prestamo_id)) && (
-                  <p className="text-sm text-red-600 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.prestamo_id || (prestamos && prestamos.length > 1 ? 'Debe escoger un crÃÂ©dito de la lista' : 'Debe seleccionar un crÃÂ©dito')}
-                  </p>
-                )}
-
-                {/* ÃÂ¢ÃÂÃ¢ÂÂ¦ VerificaciÃÂ³n de cÃÂ©dula del prÃÂ©stamo vs cÃÂ©dula del pago */}
-                {formData.prestamo_id && prestamoSeleccionado && formData.cedula_cliente && (
-                  <div className={`text-xs p-2 rounded flex items-start gap-2 ${
-                    formData.cedula_cliente === prestamoSeleccionado.cedula
-                      ? 'bg-green-50 text-green-700 border border-green-200'
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}>
-                    {formData.cedula_cliente === prestamoSeleccionado.cedula ? (
-                      <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    )}
-                    <div>
-                      {formData.cedula_cliente === prestamoSeleccionado.cedula ? (
-                        <span className="font-medium">ÃÂ¢ÃÂÃ¢ÂÂ¦ CÃÂ©dulas coinciden</span>
-                      ) : (
-                        <div>
-                          <span className="font-medium">ÃÂ¢ÃÂ¡ ÃÂ¯ÃÂ¸ÃÂ CÃÂ©dulas no coinciden</span>
-                          <p className="mt-1">
-                            CÃÂ©dula del pago: <strong>{formData.cedula_cliente}</strong><br />
-                            CÃÂ©dula del prÃÂ©stamo: <strong>{prestamoSeleccionado.cedula}</strong><br />
-                            <span className="text-xs">El pago solo se aplicarÃÂ¡ si las cÃÂ©dulas coinciden.</span>
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Fecha y Monto */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Fecha de Pago <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    type="date"
-                    value={formData.fecha_pago}
-                    onChange={e => setFormData({ ...formData, fecha_pago: e.target.value })}
-                    className={`pl-10 ${errors.fecha_pago ? 'border-red-500' : ''}`}
-                    max={new Date().toISOString().split('T')[0]} // ÃÂ¢ÃÂÃ¢ÂÂ¦ No permitir fechas futuras
-                  />
-                </div>
-                {errors.fecha_pago && (
-                  <p className="text-sm text-red-600 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.fecha_pago}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Monto Pagado <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.monto_pagado}
-                    onChange={e => setFormData({ ...formData, monto_pagado: parseFloat(e.target.value) || 0 })}
-                    className={`pl-10 ${errors.monto_pagado ? 'border-red-500' : ''}`}
-                    placeholder="0.00"
-                  />
-                </div>
-                {errors.monto_pagado && (
-                  <p className="text-sm text-red-600 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.monto_pagado}
-                  </p>
-                )}
-
-                {/* ÃÂ¢ÃÂÃ¢ÂÂ¦ InformaciÃÂ³n sobre cÃÂ³mo se aplicarÃÂ¡ el pago */}
-                {formData.monto_pagado > 0 && formData.prestamo_id && prestamoSeleccionado && (
-                  <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-700">
-                    <div className="flex items-start gap-2">
-                      <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium mb-1">ÃÂ¢Ã¢ÂÂÃÂ¹ÃÂ¯ÃÂ¸ÃÂ CÃÂ³mo se aplicarÃÂ¡ el pago:</p>
-                        <ul className="list-disc list-inside space-y-1 ml-2">
-                          <li>Se aplicarÃÂ¡ a las cuotas mÃÂ¡s antiguas primero (por fecha de vencimiento)</li>
-                          <li>Se distribuirÃÂ¡ proporcionalmente entre capital e interÃÂ©s</li>
-                          {formData.monto_pagado >= 500 && (
-                            <li>Si el monto cubre una cuota completa y sobra, el exceso se aplicarÃÂ¡ a la siguiente cuota</li>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* InstituciÃÂ³n Bancaria */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                InstituciÃÂ³n Bancaria
-              </label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  type="text"
-                  value={formData.institucion_bancaria || ''}
-                  onChange={e => setFormData({ ...formData, institucion_bancaria: e.target.value || null })}
-                  className="pl-10"
-                  placeholder="Banco de Venezuela, Banesco, etc."
-                />
-              </div>
-            </div>
-
-            {/* NÃÂºmero de Documento */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                NÃÂºmero de Documento <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  type="text"
-                  value={formData.numero_documento}
-                  onChange={e => setFormData({ ...formData, numero_documento: e.target.value })}
-                  className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
-                  placeholder="NÃÂºmero de referencia"
-                />
-              </div>
-              {errors.numero_documento && (
-                <p className="text-sm text-red-600">{errors.numero_documento}</p>
-              )}
-            </div>
-
-            {/* Notas */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Notas (Opcional)
-              </label>
-              <Textarea
-                value={formData.notas || ''}
-                onChange={e => setFormData({ ...formData, notas: e.target.value || null })}
-                placeholder="Observaciones adicionales"
-                rows={3}
-              />
-            </div>
-
-            {modoGuardarYProcesar && (
-              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
-                <div className="flex items-start gap-2">
-                  <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <p>
-                    <strong>Guardar y Procesar</strong> actualizarÃÂ¡ el pago en la base de datos y aplicarÃÂ¡ las reglas de negocio
-                    (conciliaciÃÂ³n y aplicaciÃÂ³n a cuotas) automÃÂ¡ticamente.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Botones */}
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {modoGuardarYProcesar ? 'Guardando y procesando...' : isEditing ? 'Actualizando...' : 'Registrando...'}
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    {modoGuardarYProcesar ? 'Guardar y Procesar' : isEditing ? 'Actualizar Pago' : 'Registrar Pago'}
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
-  )
-}
-
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  X,
+  DollarSign,
+  Calendar,
+  CreditCard,
+  FileText,
+  Building2,
+  Upload,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  Info,
+} from 'lucide-react'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { pagoService, type PagoCreate } from '../../services/pagoService'
+import { pagoConErrorService } from '../../services/pagoConErrorService'
+import { usePrestamosByCedula, usePrestamo } from '../../hooks/usePrestamos'
+import { useDebounce } from '../../hooks/useDebounce'
+import { getErrorMessage, isAxiosError, getErrorDetail } from '../../types/errors'
+
+interface RegistrarPagoFormProps {
+  onClose: () => void
+  onSuccess: () => void
+  pagoInicial?: Partial<PagoCreate>
+  pagoId?: number  // Si estÃ¡ presente, es modo ediciÃ³n
+  /** Si true, muestra "Guardar y Procesar": actualiza BD y aplica reglas (conciliaciÃ³n + aplicar a cuotas) */
+  modoGuardarYProcesar?: boolean
+  /** Si true, ediciÃ³n usa pagos_con_errores */
+  esPagoConError?: boolean
+}
+
+export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, modoGuardarYProcesar, esPagoConError }: RegistrarPagoFormProps) {
+  const isEditing = !!pagoId
+  const [formData, setFormData] = useState<PagoCreate>({
+    cedula_cliente: pagoInicial?.cedula_cliente || '',
+    prestamo_id: pagoInicial?.prestamo_id || null,
+    fecha_pago: pagoInicial?.fecha_pago || new Date().toISOString().split('T')[0],
+    monto_pagado: pagoInicial?.monto_pagado || 0,
+    numero_documento: pagoInicial?.numero_documento || '',
+    institucion_bancaria: pagoInicial?.institucion_bancaria || null,
+    notas: pagoInicial?.notas || null,
+  })
+
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Debounce de la cÃ©dula para buscar prÃ©stamos
+  const debouncedCedula = useDebounce(formData.cedula_cliente, 500)
+
+  // Buscar prÃ©stamos cuando cambia la cÃ©dula (con al menos 2 caracteres)
+  const { data: prestamos, isLoading: isLoadingPrestamos } = usePrestamosByCedula(
+    debouncedCedula.length >= 2 ? debouncedCedula : ''
+  )
+
+  // InformaciÃ³n del prÃ©stamo seleccionado (el crÃ©dito solo puede ser uno de la lista por cÃ©dula)
+  const { data: prestamoSeleccionado } = usePrestamo(formData.prestamo_id || 0)
+
+  // Auto-seleccionar prÃ©stamo si hay solo uno disponible
+  useEffect(() => {
+    if (prestamos && prestamos.length === 1 && !formData.prestamo_id) {
+      setFormData(prev => ({ ...prev, prestamo_id: prestamos[0].id }))
+    } else if (prestamos && prestamos.length === 0) {
+      // Limpiar ID si no hay prÃ©stamos
+      setFormData(prev => ({ ...prev, prestamo_id: null }))
+    }
+  }, [prestamos])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    // Ã¢Åâ¦ VALIDACIONES SEGÃÅ¡N CRITERIOS DOCUMENTADOS
+
+    // Validar campos bÃ¡sicos
+    const newErrors: Record<string, string> = {}
+    if (!formData.cedula_cliente) {
+      newErrors.cedula_cliente = 'CÃ©dula requerida'
+    }
+
+    // CrÃ©dito: solo se acepta uno de la lista obtenida por cÃ©dula (tabla prestamos). Si hay mÃ¡s de uno, debe escogerse.
+    if (prestamos && prestamos.length > 0 && !formData.prestamo_id) {
+      newErrors.prestamo_id = prestamos.length > 1 ? 'Debe escoger un crÃ©dito de la lista' : 'Debe seleccionar el crÃ©dito'
+    }
+    if (formData.prestamo_id && prestamos && prestamos.length > 0 && !prestamos.some(p => p.id === formData.prestamo_id)) {
+      newErrors.prestamo_id = 'El crÃ©dito debe ser uno de la lista para esta cÃ©dula'
+    }
+
+    // Ã¢Åâ¦ CRITERIO 1: VerificaciÃ³n de cÃ©dula del pago vs cÃ©dula del prÃ©stamo
+    if (formData.prestamo_id && prestamoSeleccionado) {
+      if (formData.cedula_cliente !== prestamoSeleccionado.cedula) {
+        newErrors.cedula_cliente = `La cÃ©dula del pago (${formData.cedula_cliente}) no coincide con la cÃ©dula del prÃ©stamo (${prestamoSeleccionado.cedula}). El pago solo se aplicarÃ¡ si las cÃ©dulas coinciden.`
+        newErrors.prestamo_id = 'La cÃ©dula del pago debe coincidir con la cÃ©dula del prÃ©stamo seleccionado'
+      }
+    }
+
+    // Ã¢Åâ¦ CRITERIO 2: ValidaciÃ³n de monto
+    if (!formData.monto_pagado || formData.monto_pagado <= 0) {
+      newErrors.monto_pagado = 'Monto invÃ¡lido. Debe ser mayor a cero'
+    } else if (formData.monto_pagado > 1000000) {
+      newErrors.monto_pagado = 'Monto muy alto. Por favor verifique el valor'
+    }
+
+    // Ã¢Åâ¦ CRITERIO 3: ValidaciÃ³n y normalizaciÃ³n de nÃºmero de documento
+    // Normalizar formato cientÃ­fico si existe (ej: 7.40087E+14 -> 740087000000000)
+    let numeroDocumentoNormalizado = formData.numero_documento.trim()
+    if (numeroDocumentoNormalizado && (/[eE]/.test(numeroDocumentoNormalizado))) {
+      try {
+        const numeroFloat = parseFloat(numeroDocumentoNormalizado)
+        numeroDocumentoNormalizado = Math.floor(numeroFloat).toString()
+        // Mostrar advertencia al usuario
+        console.warn(`Ã¢Å¡ Ã¯Â¸Â NÃºmero de documento normalizado de formato cientÃ­fico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`)
+      } catch (e) {
+        console.error('Error normalizando nÃºmero de documento:', e)
+      }
+    }
+    
+    if (!numeroDocumentoNormalizado || numeroDocumentoNormalizado === '') {
+      newErrors.numero_documento = 'NÃºmero de documento requerido'
+    }
+
+    // Ã¢Åâ¦ CRITERIO 4: ValidaciÃ³n de fecha
+    if (!formData.fecha_pago) {
+      newErrors.fecha_pago = 'Fecha de pago requerida'
+    } else {
+      const fechaPago = new Date(formData.fecha_pago)
+      const hoy = new Date()
+      hoy.setHours(23, 59, 59, 999) // Permitir hasta el final del dÃ­a
+      if (fechaPago > hoy) {
+        newErrors.fecha_pago = 'La fecha de pago no puede ser futura'
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      // Aplicar normalizaciÃ³n al nÃºmero de documento antes de enviar
+      const datosEnvio: any = {
+        ...formData,
+        numero_documento: numeroDocumentoNormalizado
+      }
+      // Siempre conciliar cuando hay crÃ©dito asignado: asÃ­ el backend aplica el pago a cuotas
+      // (desde tabla normal o desde "Revisar Pagos" con Guardar y Procesar)
+      if (formData.prestamo_id && formData.monto_pagado > 0) {
+        datosEnvio.conciliado = true
+      }
+
+      if (isEditing && pagoId) {
+        if (esPagoConError) {
+          await pagoConErrorService.update(pagoId, datosEnvio)
+        } else {
+          await pagoService.updatePago(pagoId, datosEnvio)
+        }
+        // La asignaciÃ³n a cuotas la hace el backend al recibir conciliado=true (con prestamo_id y monto)
+      } else {
+        await pagoService.createPago(datosEnvio)
+      }
+      onSuccess()
+    } catch (error: unknown) {
+      console.error(`Ã¢ÂÅ Error ${isEditing ? 'actualizando' : 'registrando'} pago:`, error)
+      let errorMessage = getErrorMessage(error)
+      if (isAxiosError(error)) {
+        const detail = getErrorDetail(error)
+        if (detail) {
+          errorMessage = detail
+        }
+      }
+      setErrors({ general: errorMessage || `Error al ${isEditing ? 'actualizar' : 'registrar'} el pago` })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      >
+        <motion.div
+          initial={{ scale: 0.95, y: 20 }}
+          animate={{ scale: 1, y: 0 }}
+          exit={{ scale: 0.95 }}
+          className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+        >
+          {/* Header fijo (fuera del scroll, evita efecto scroll-linked en Firefox) */}
+          <div className="flex-shrink-0 bg-white border-b p-4 flex justify-between items-center rounded-t-lg">
+            <h2 className="text-xl font-bold">{isEditing ? 'Editar Pago' : 'Registrar Pago'}</h2>
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+
+          {/* Form con scroll */}
+          <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+            {/* Error general */}
+            {errors.general && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                {errors.general}
+              </div>
+            )}
+
+            {/* CÃ©dula e ID PrÃ©stamo */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  CÃ©dula Cliente <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="text"
+                    value={formData.cedula_cliente}
+                    onChange={e => {
+                      setFormData({ ...formData, cedula_cliente: e.target.value, prestamo_id: null })
+                    }}
+                    className={`pl-10 ${errors.cedula_cliente ? 'border-red-500' : ''}`}
+                    placeholder="V12345678"
+                  />
+                </div>
+                {errors.cedula_cliente && (
+                  <p className="text-sm text-red-600">{errors.cedula_cliente}</p>
+                )}
+                {isLoadingPrestamos && formData.cedula_cliente.length >= 2 && (
+                  <p className="text-xs text-blue-600 flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Buscando prÃ©stamos...
+                  </p>
+                )}
+                {!isLoadingPrestamos && prestamos && prestamos.length > 0 && formData.cedula_cliente.length >= 2 && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    {prestamos.length} prÃ©stamo{prestamos.length !== 1 ? 's' : ''} encontrado{prestamos.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+                {!isLoadingPrestamos && prestamos && prestamos.length === 0 && formData.cedula_cliente.length >= 2 && (
+                  <p className="text-xs text-yellow-600">
+                    No se encontraron prÃ©stamos para esta cÃ©dula
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  CrÃ©dito al que aplica el pago {formData.cedula_cliente && prestamos && prestamos.length > 0 && <span className="text-red-500">*</span>}
+                </label>
+                {prestamos && prestamos.length > 1 && (
+                  <p className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                    Esta persona tiene {prestamos.length} prÃ©stamos. Seleccione a cuÃ¡l se carga este pago.
+                  </p>
+                )}
+                {prestamos && prestamos.length > 0 ? (
+                  <Select
+                    value={formData.prestamo_id?.toString() || undefined}
+                    onValueChange={(value) => setFormData({ ...formData, prestamo_id: parseInt(value) })}
+                  >
+                    <SelectTrigger className={errors.prestamo_id ? 'border-red-500' : ''}>
+                      <SelectValue placeholder={prestamos.length > 1 ? 'Seleccione el crÃ©dito' : 'Seleccione un crÃ©dito'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {prestamos.map((prestamo) => {
+                        const modelo = (prestamo as any).modelo_vehiculo || (prestamo as any).modelo || prestamo.producto || ''
+                        const concesionario = (prestamo as any).concesionario || ''
+                        const desc = [modelo, concesionario].filter(Boolean).join(' Â· ') || prestamo.estado
+                        return (
+                          <SelectItem key={prestamo.id} value={prestamo.id.toString()}>
+                            ID {prestamo.id} â {desc} â ${Number(prestamo.total_financiamiento ? 0).toFixed(2)}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                ) : formData.cedula_cliente && prestamos && prestamos.length === 0 ? (
+                  <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    No hay prÃ©stamo asociado
+                  </div>
+                ) : null}
+                {(errors.prestamo_id || (formData.cedula_cliente && prestamos && prestamos.length > 0 && !formData.prestamo_id)) && (
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors.prestamo_id || (prestamos && prestamos.length > 1 ? 'Debe escoger un crÃ©dito de la lista' : 'Debe seleccionar un crÃ©dito')}
+                  </p>
+                )}
+
+                {/* Ã¢Åâ¦ VerificaciÃ³n de cÃ©dula del prÃ©stamo vs cÃ©dula del pago */}
+                {formData.prestamo_id && prestamoSeleccionado && formData.cedula_cliente && (
+                  <div className={`text-xs p-2 rounded flex items-start gap-2 ${
+                    formData.cedula_cliente === prestamoSeleccionado.cedula
+                      ? 'bg-green-50 text-green-700 border border-green-200'
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}>
+                    {formData.cedula_cliente === prestamoSeleccionado.cedula ? (
+                      <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    )}
+                    <div>
+                      {formData.cedula_cliente === prestamoSeleccionado.cedula ? (
+                        <span className="font-medium">Ã¢Åâ¦ CÃ©dulas coinciden</span>
+                      ) : (
+                        <div>
+                          <span className="font-medium">Ã¢Å¡ Ã¯Â¸Â CÃ©dulas no coinciden</span>
+                          <p className="mt-1">
+                            CÃ©dula del pago: <strong>{formData.cedula_cliente}</strong><br />
+                            CÃ©dula del prÃ©stamo: <strong>{prestamoSeleccionado.cedula}</strong><br />
+                            <span className="text-xs">El pago solo se aplicarÃ¡ si las cÃ©dulas coinciden.</span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Fecha y Monto */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Fecha de Pago <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="date"
+                    value={formData.fecha_pago}
+                    onChange={e => setFormData({ ...formData, fecha_pago: e.target.value })}
+                    className={`pl-10 ${errors.fecha_pago ? 'border-red-500' : ''}`}
+                    max={new Date().toISOString().split('T')[0]} // Ã¢Åâ¦ No permitir fechas futuras
+                  />
+                </div>
+                {errors.fecha_pago && (
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors.fecha_pago}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Monto Pagado <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.monto_pagado}
+                    onChange={e => setFormData({ ...formData, monto_pagado: parseFloat(e.target.value) || 0 })}
+                    className={`pl-10 ${errors.monto_pagado ? 'border-red-500' : ''}`}
+                    placeholder="0.00"
+                  />
+                </div>
+                {errors.monto_pagado && (
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors.monto_pagado}
+                  </p>
+                )}
+
+                {/* Ã¢Åâ¦ InformaciÃ³n sobre cÃ³mo se aplicarÃ¡ el pago */}
+                {formData.monto_pagado > 0 && formData.prestamo_id && prestamoSeleccionado && (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-700">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium mb-1">Ã¢âÂ¹Ã¯Â¸Â CÃ³mo se aplicarÃ¡ el pago:</p>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>Se aplicarÃ¡ a las cuotas mÃ¡s antiguas primero (por fecha de vencimiento)</li>
+                          <li>Se distribuirÃ¡ proporcionalmente entre capital e interÃ©s</li>
+                          {formData.monto_pagado >= 500 && (
+                            <li>Si el monto cubre una cuota completa y sobra, el exceso se aplicarÃ¡ a la siguiente cuota</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* InstituciÃ³n Bancaria */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                InstituciÃ³n Bancaria
+              </label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  type="text"
+                  value={formData.institucion_bancaria || ''}
+                  onChange={e => setFormData({ ...formData, institucion_bancaria: e.target.value || null })}
+                  className="pl-10"
+                  placeholder="Banco de Venezuela, Banesco, etc."
+                />
+              </div>
+            </div>
+
+            {/* NÃºmero de Documento */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                NÃºmero de Documento <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  type="text"
+                  value={formData.numero_documento}
+                  onChange={e => setFormData({ ...formData, numero_documento: e.target.value })}
+                  className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
+                  placeholder="NÃºmero de referencia"
+                />
+              </div>
+              {errors.numero_documento && (
+                <p className="text-sm text-red-600">{errors.numero_documento}</p>
+              )}
+            </div>
+
+            {/* Notas */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Notas (Opcional)
+              </label>
+              <Textarea
+                value={formData.notas || ''}
+                onChange={e => setFormData({ ...formData, notas: e.target.value || null })}
+                placeholder="Observaciones adicionales"
+                rows={3}
+              />
+            </div>
+
+            {modoGuardarYProcesar && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
+                <div className="flex items-start gap-2">
+                  <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <p>
+                    <strong>Guardar y Procesar</strong> actualizarÃ¡ el pago en la base de datos y aplicarÃ¡ las reglas de negocio
+                    (conciliaciÃ³n y aplicaciÃ³n a cuotas) automÃ¡ticamente.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Botones */}
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {modoGuardarYProcesar ? 'Guardando y procesando...' : isEditing ? 'Actualizando...' : 'Registrando...'}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    {modoGuardarYProcesar ? 'Guardar y Procesar' : isEditing ? 'Actualizar Pago' : 'Registrar Pago'}
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
