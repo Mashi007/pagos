@@ -2,9 +2,9 @@
  * Servicio de autenticación
  * Usa almacenamiento seguro para evitar DOMException "The operation is insecure" en iframes/contextos restrictivos.
  */
-import apiClient from './api';
-import { handleApiError } from '../utils/errorHandler';
-import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage';
+import apiClient from './api'
+import { handleApiError } from '../utils/errorHandler'
+import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage'
 
 export const authService = {
   /**
@@ -15,15 +15,15 @@ export const authService = {
       const response = await apiClient.post('/api/v1/auth/login', {
         email,
         password,
-      });
-      const { access_token, refresh_token, user } = response.data;
+      })
+      const { access_token, refresh_token, user } = response.data
 
-      safeSetItem('access_token', access_token);
-      safeSetItem('refresh_token', refresh_token);
+      safeSetItem('access_token', access_token)
+      safeSetItem('refresh_token', refresh_token)
 
-      return { user, access_token, refresh_token };
+      return { user, access_token, refresh_token }
     } catch (error) {
-      throw new Error(handleApiError(error));
+      throw new Error(handleApiError(error))
     }
   },
 
@@ -32,44 +32,44 @@ export const authService = {
    */
   async logout() {
     try {
-      await apiClient.post('/api/v1/auth/logout');
+      await apiClient.post('/api/v1/auth/logout')
     } catch (error) {
-      console.error('Error en logout:', error);
+      console.error('Error en logout:', error)
     } finally {
-      safeRemoveItem('access_token');
-      safeRemoveItem('refresh_token');
+      safeRemoveItem('access_token')
+      safeRemoveItem('refresh_token')
     }
   },
-  
+
   /**
    * Obtener usuario actual
    * NOTA: Este endpoint requiere que el backend tenga /api/v1/auth/me implementado
    */
   async getCurrentUser() {
     try {
-      const response = await apiClient.get('/api/v1/auth/me');
-      return response.data;
+      const response = await apiClient.get('/api/v1/auth/me')
+      return response.data
     } catch (error) {
       // Si el endpoint no existe (404) o hay error del servidor (500), no lanzar error visible
       if (error.response?.status === 404 || error.response?.status === 500) {
-        console.warn('Endpoint /api/v1/auth/me no disponible en el backend');
-        return null; // Retornar null en lugar de lanzar error
+        console.warn('Endpoint /api/v1/auth/me no disponible en el backend')
+        return null // Retornar null en lugar de lanzar error
       }
-      throw new Error(handleApiError(error));
+      throw new Error(handleApiError(error))
     }
   },
-  
+
   /**
    * Verificar si el usuario está autenticado
    */
   isAuthenticated() {
-    return !!safeGetItem('access_token');
+    return !!safeGetItem('access_token')
   },
 
   /**
    * Obtener token de acceso
    */
   getToken() {
-    return safeGetItem('access_token');
+    return safeGetItem('access_token')
   },
-};
+}

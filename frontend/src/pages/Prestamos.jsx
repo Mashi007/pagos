@@ -1,5 +1,5 @@
-import { PrestamosList } from '../components/prestamos/PrestamosList';
-import './Prestamos.css';
+import { PrestamosList } from '../components/prestamos/PrestamosList'
+import './Prestamos.css'
 
 /**
  * Página de Gestión de Préstamos.
@@ -10,7 +10,7 @@ function Prestamos() {
     <div className="page-container">
       <PrestamosList />
     </div>
-  );
+  )
 }
 
-export default Prestamos;
+export default Prestamos

@@ -31,11 +31,13 @@ FineTuningTab (main orchestrator)
 ## Component Descriptions
 
 ### 1. **FineTuningTab.tsx** (~100 lines)
+
 **Location:** `frontend/src/components/configuracion/FineTuningTab.tsx`
 
 Main component wrapper that orchestrates the entire fine-tuning workflow.
 
 **Responsibilities:**
+
 - Initialize the `useFineTuning` hook
 - Manage overall UI state (statistics panel visibility, feedback filter toggle)
 - Calculate derived state (ready conversations count, filtered count)
@@ -44,16 +46,19 @@ Main component wrapper that orchestrates the entire fine-tuning workflow.
 - Handle high-level data preparation and training workflows
 
 **State Management:**
+
 - Uses `useFineTuning` hook for all data and handlers
 - Local state for UI visibility (`mostrarEstadisticas`, `filtrarFeedbackNegativo`)
 - Refs for file input handling
 
 ### 2. **ConversationManagement.tsx** (~350 lines)
+
 **Location:** `frontend/src/components/configuracion/fineTuning/ConversationManagement.tsx`
 
 Displays and manages the conversation list with editing and rating capabilities.
 
 **Features:**
+
 - View conversation list with pagination/scrolling
 - Edit existing conversations (inline edit mode)
 - Rate conversations (1-5 stars with optional feedback)
@@ -63,6 +68,7 @@ Displays and manages the conversation list with editing and rating capabilities.
 - Toggle between view/edit/rate modes
 
 **Props:**
+
 ```typescript
 interface ConversationManagementProps {
   conversaciones: ConversacionAI[]
@@ -77,11 +83,13 @@ interface ConversationManagementProps {
 ```
 
 ### 3. **ConversationForms.tsx** (~350 lines)
+
 **Location:** `frontend/src/components/configuracion/fineTuning/ConversationForms.tsx`
 
 Form component for creating and improving conversations.
 
 **Features:**
+
 - New conversation creation form with question/response fields
 - Table and field insertion from database schema
 - AI enhancement buttons (improve question, response, or both)
@@ -89,6 +97,7 @@ Form component for creating and improving conversations.
 - Textarea focus tracking for intelligent insertion
 
 **Props:**
+
 ```typescript
 interface ConversationFormsProps {
   tablasYCampos: Record<string, string[]>
@@ -98,16 +107,21 @@ interface ConversationFormsProps {
   onCreate: (pregunta: string, respuesta: string) => Promise<void>
   onMejorarPregunta: (pregunta: string) => Promise<string>
   onMejorarRespuesta: (respuesta: string) => Promise<string>
-  onMejorarConversacion: (q: string, r: string) => Promise<{pregunta, respuesta}>
+  onMejorarConversacion: (
+    q: string,
+    r: string
+  ) => Promise<{ pregunta; respuesta }>
 }
 ```
 
 ### 4. **StatisticsPanel.tsx** (~150 lines)
+
 **Location:** `frontend/src/components/configuracion/fineTuning/StatisticsPanel.tsx`
 
 Displays feedback statistics and training readiness indicators.
 
 **Features:**
+
 - Total conversations count
 - Rated conversations percentage
 - Positive feedback count (rating ≥ 4)
@@ -116,6 +130,7 @@ Displays feedback statistics and training readiness indicators.
 - Usage guidelines and best practices
 
 **Props:**
+
 ```typescript
 interface StatisticsPanelProps {
   estadisticasFeedback: any | null
@@ -125,16 +140,17 @@ interface StatisticsPanelProps {
 ```
 
 ### 5. **TrainingWorkflow.tsx** (~400 lines)
+
 **Location:** `frontend/src/components/configuracion/fineTuning/TrainingWorkflow.tsx`
 
 Manages the entire training pipeline from data preparation to job monitoring.
 
 **Sections:**
+
 1. **Data Preparation**
    - Shows conversation readiness status
    - Feedback negative filter toggle
    - "Prepare Data" button
-   
 2. **Training Form**
    - Base model selector (gpt-4o-2024-08-06 recommended)
    - Start training button
@@ -148,6 +164,7 @@ Manages the entire training pipeline from data preparation to job monitoring.
    - Auto-refresh button
 
 **Props:**
+
 ```typescript
 interface TrainingWorkflowProps {
   jobs: FineTuningJob[]
@@ -164,11 +181,13 @@ interface TrainingWorkflowProps {
 ```
 
 ### 6. **useFineTuning.ts** (~400 lines)
+
 **Location:** `frontend/src/hooks/useFineTuning.ts`
 
 Custom React hook encapsulating all business logic and data fetching.
 
 **State Management:**
+
 - `conversaciones`: List of AI training conversations
 - `jobs`: Fine-tuning training jobs
 - `estadisticasFeedback`: Feedback statistics
@@ -179,23 +198,27 @@ Custom React hook encapsulating all business logic and data fetching.
 **API Handlers:**
 
 Data Loading:
+
 - `cargarConversaciones(params)`: Fetch conversations with filters
 - `cargarJobs()`: Fetch training jobs
 - `cargarEstadisticasFeedback()`: Fetch feedback statistics
 - `cargarTablasCampos()`: Fetch database schema
 
 CRUD Operations:
+
 - `crearConversacion(pregunta, respuesta)`: Create new conversation
 - `actualizarConversacion(id, pregunta, respuesta)`: Update conversation
 - `eliminarConversacion(id)`: Delete conversation
 - `calificar(id, calificacion, feedback)`: Rate conversation
 
 AI Enhancement:
+
 - `mejorarPregunta(pregunta)`: Improve question with AI
 - `mejorarRespuesta(respuesta)`: Improve response with AI
 - `mejorarConversacionCompleta(q, r)`: Improve both
 
 Training Operations:
+
 - `prepararDatos(ids, soloCalificadas)`: Prepare training dataset
 - `iniciarEntrenamiento(modeloBase, archivoId)`: Start training job
 - `activarModelo(modeloId)`: Activate trained model
@@ -204,10 +227,12 @@ Training Operations:
 - `eliminarTodosJobs(soloFallidos)`: Batch delete jobs
 
 Import/Export:
+
 - `exportarConversaciones()`: Export to JSON file
 - `importarConversaciones(event)`: Import from JSON file
 
 **Effects:**
+
 - Time update polling (30 seconds)
 - Job status polling (10 seconds)
 
@@ -246,6 +271,7 @@ FineTuningTab receives data and distributes to sub-components:
 ## Type Safety
 
 All components are fully typed with TypeScript:
+
 - Interface definitions for all props
 - Type-safe hook return values
 - Proper event handler typing
@@ -269,7 +295,9 @@ All components are fully typed with TypeScript:
 ## Migration Notes
 
 ### From Old Structure
+
 The original 2000+ line file has been split while maintaining:
+
 - All imports and dependencies
 - All state variables and logic
 - All API calls and handlers
@@ -278,7 +306,9 @@ The original 2000+ line file has been split while maintaining:
 - All useEffect hooks
 
 ### Import Changes
+
 If any other files import from `FineTuningTab`:
+
 ```typescript
 // OLD: Single import
 import { FineTuningTab } from '...'
@@ -305,6 +335,7 @@ No import changes needed - the component export remains the same!
 ## Testing
 
 Each component is independently testable:
+
 ```typescript
 // Example test structure
 describe('ConversationManagement', () => {
@@ -317,18 +348,22 @@ describe('ConversationManagement', () => {
 ## Dependencies
 
 Core:
+
 - React 18+
 - TypeScript 5+
 
 UI Components:
+
 - lucide-react (icons)
 - Custom UI components (Card, Button, Input, etc.)
 
 Services:
+
 - `aiTrainingService`: API communication
 - `constants/fineTuning`: Constants and utilities
 
 Utilities:
+
 - `sonner`: Toast notifications
 
 ---

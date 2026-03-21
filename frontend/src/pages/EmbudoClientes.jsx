@@ -1,4 +1,4 @@
-import './EmbudoClientes.css';
+import './EmbudoClientes.css'
 
 function EmbudoClientes() {
   return (
@@ -10,7 +10,7 @@ function EmbudoClientes() {
         <p>Visualización del embudo de clientes - En desarrollo</p>
       </div>
     </div>
-  );
+  )
 }
 
-export default EmbudoClientes;
+export default EmbudoClientes

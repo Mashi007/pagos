@@ -1,5 +1,5 @@
-import { ModelosVehiculosConfig } from '../ModelosVehiculosConfig'
-
-export function ConfigModelosTab() {
-  return <ModelosVehiculosConfig />
-}
+import { ModelosVehiculosConfig } from '../ModelosVehiculosConfig'
+
+export function ConfigModelosTab() {
+  return <ModelosVehiculosConfig />
+}

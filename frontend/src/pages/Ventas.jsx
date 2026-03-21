@@ -1,4 +1,4 @@
-import './Ventas.css';
+import './Ventas.css'
 
 function Ventas() {
   return (
@@ -10,7 +10,7 @@ function Ventas() {
         <p>Gestión de ventas - En desarrollo</p>
       </div>
     </div>
-  );
+  )
 }
 
-export default Ventas;
+export default Ventas

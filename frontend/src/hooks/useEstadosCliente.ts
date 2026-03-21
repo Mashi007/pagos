@@ -1,47 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 
-
-
-
 import { clienteService } from '../services/clienteService'
 
-
-
-
-
-
-
-
-
 export interface EstadoClienteOption {
-
-
-
-
   valor: string
-
-
-
 
   etiqueta: string
 
-
-
-
   orden: number
-
-
-
-
 }
-
-
-
-
-
-
-
-
 
 /**
 
@@ -60,56 +27,16 @@ export interface EstadoClienteOption {
 
  */
 
-
-
-
 export function useEstadosCliente() {
-
-
-
-
   const { data, isLoading } = useQuery({
-
-
-
-
     queryKey: ['estados-cliente'],
-
-
-
 
     queryFn: () => clienteService.getEstadosCliente(),
 
-
-
-
     staleTime: 10 * 60 * 1000, // 10 min - los estados cambian poco
-
-
-
-
   })
 
-
-
-
-
-
-
-
-
-  const opciones: EstadoClienteOption[] = data?.estados?? []
-
-
-
+  const opciones: EstadoClienteOption[] = data?.estados ?? []
 
   return { opciones, isLoading }
-
-
-
-
 }
-
-
-
-

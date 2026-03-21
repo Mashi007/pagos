@@ -1,4 +1,4 @@
-import './ConversacionesWhatsApp.css';
+import './ConversacionesWhatsApp.css'
 
 function ConversacionesWhatsApp() {
   return (
@@ -10,7 +10,7 @@ function ConversacionesWhatsApp() {
         <p>Gestión de conversaciones de WhatsApp - En desarrollo</p>
       </div>
     </div>
-  );
+  )
 }
 
-export default ConversacionesWhatsApp;
+export default ConversacionesWhatsApp

@@ -1,4 +1,4 @@
-import './EmbudoConcesionarios.css';
+import './EmbudoConcesionarios.css'
 
 function EmbudoConcesionarios() {
   return (
@@ -10,7 +10,7 @@ function EmbudoConcesionarios() {
         <p>Visualización del embudo de concesionarios - En desarrollo</p>
       </div>
     </div>
-  );
+  )
 }
 
-export default EmbudoConcesionarios;
+export default EmbudoConcesionarios

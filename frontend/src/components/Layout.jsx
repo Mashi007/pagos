@@ -1,22 +1,22 @@
-import { useState } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { authService } from '../services/auth';
-import './Layout.css';
+import { useState } from 'react'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
+import { authService } from '../services/auth'
+import './Layout.css'
 
 function Layout() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const handleLogout = async () => {
     try {
-      await authService.logout();
+      await authService.logout()
     } catch (error) {
-      console.error('Error en logout:', error);
+      console.error('Error en logout:', error)
     } finally {
-      navigate('/login');
+      navigate('/login')
     }
-  };
+  }
 
   const menuItems = [
     { path: '/', label: 'Dashboard', icon: '📊' },
@@ -29,7 +29,11 @@ function Layout() {
     { path: '/concesionarios', label: 'Concesionarios', icon: '🏢' },
     { path: '/usuarios', label: 'Usuarios', icon: '👤' },
     { path: '/embudo-clientes', label: 'Embudo Clientes', icon: '📈' },
-    { path: '/embudo-concesionarios', label: 'Embudo Concesionarios', icon: '📊' },
+    {
+      path: '/embudo-concesionarios',
+      label: 'Embudo Concesionarios',
+      icon: '📊',
+    },
     { path: '/chat-ai', label: 'Chat AI', icon: '🤖' },
     { path: '/conversaciones-whatsapp', label: 'WhatsApp', icon: '💬' },
     { path: '/comunicaciones', label: 'Comunicaciones', icon: '📧' },
@@ -42,7 +46,7 @@ function Layout() {
     { path: '/plantillas', label: 'Plantillas', icon: '📑' },
     { path: '/reportes', label: 'Reportes', icon: '📄' },
     { path: '/configuracion', label: 'Configuración', icon: '⚙️' },
-  ];
+  ]
 
   return (
     <div className="layout-container">
@@ -58,23 +62,25 @@ function Layout() {
             {sidebarCollapsed ? '→' : '←'}
           </button>
         </div>
-        
+
         <nav className="sidebar-nav">
           <ul>
-            {menuItems.map((item) => (
+            {menuItems.map(item => (
               <li key={item.path}>
                 <Link
                   to={item.path}
                   className={location.pathname === item.path ? 'active' : ''}
                 >
                   <span className="icon">{item.icon}</span>
-                  {!sidebarCollapsed && <span className="label">{item.label}</span>}
+                  {!sidebarCollapsed && (
+                    <span className="label">{item.label}</span>
+                  )}
                 </Link>
               </li>
             ))}
           </ul>
         </nav>
-        
+
         <div className="sidebar-footer">
           <button onClick={handleLogout} className="logout-btn">
             <span className="icon">🚪</span>
@@ -90,7 +96,7 @@ function Layout() {
         </div>
       </main>
     </div>
-  );
+  )
 }
 
-export default Layout;
+export default Layout

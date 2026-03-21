@@ -1,4 +1,4 @@
-import './Solicitudes.css';
+import './Solicitudes.css'
 
 function Solicitudes() {
   return (
@@ -10,7 +10,7 @@ function Solicitudes() {
         <p>Gestión de solicitudes - En desarrollo</p>
       </div>
     </div>
-  );
+  )
 }
 
-export default Solicitudes;
+export default Solicitudes

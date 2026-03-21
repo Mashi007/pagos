@@ -1,4 +1,4 @@
-import './Auditoria.css';
+import './Auditoria.css'
 
 function Auditoria() {
   return (
@@ -10,7 +10,7 @@ function Auditoria() {
         <p>Registro de auditoría - En desarrollo</p>
       </div>
     </div>
-  );
+  )
 }
 
-export default Auditoria;
+export default Auditoria

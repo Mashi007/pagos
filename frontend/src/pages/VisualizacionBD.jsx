@@ -1,4 +1,4 @@
-import './VisualizacionBD.css';
+import './VisualizacionBD.css'
 
 function VisualizacionBD() {
   return (
@@ -10,7 +10,7 @@ function VisualizacionBD() {
         <p>Visualización y consulta de la base de datos - En desarrollo</p>
       </div>
     </div>
-  );
+  )
 }
 
-export default VisualizacionBD;
+export default VisualizacionBD

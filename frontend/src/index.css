@@ -56,7 +56,9 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
   }
 }
 
@@ -100,7 +102,7 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground rounded-full;
+    @apply rounded-full bg-muted-foreground;
   }
 
   ::-webkit-scrollbar-thumb:hover {
@@ -110,19 +112,29 @@
 
 /* Clases utilitarias personalizadas */
 .glass {
-  @apply bg-white/80 backdrop-blur-sm border border-white/20;
+  @apply border border-white/20 bg-white/80 backdrop-blur-sm;
 }
 
 .shadow-elegant {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .gradient-primary {
-  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)) 100%);
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)) 0%,
+    hsl(var(--primary)) 100%
+  );
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)) 100%);
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary)) 0%,
+    hsl(var(--primary)) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -150,7 +162,7 @@
   background: #06b6d4;
   cursor: pointer;
   margin-top: -5px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   border: 2px solid #fff;
 }
 .chart-range-input::-moz-range-track {
@@ -165,15 +177,15 @@
   background: #06b6d4;
   cursor: pointer;
   border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 /* Toggle switch: estilos del knob en CSS puro para evitar selector inválido (after:content-[''] etc.) */
 .toggle-switch-track {
-  @apply w-11 h-6 bg-gray-200 rounded-full;
+  @apply h-6 w-11 rounded-full bg-gray-200;
 }
 .toggle-switch-track::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 2px;
   left: 2px;
@@ -197,10 +209,10 @@
 }
 
 .toggle-switch-track-lg {
-  @apply w-14 h-7 bg-gray-200 rounded-full;
+  @apply h-7 w-14 rounded-full bg-gray-200;
 }
 .toggle-switch-track-lg::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 2px;
   left: 2px;

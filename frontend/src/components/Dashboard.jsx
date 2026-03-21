@@ -1,41 +1,41 @@
 /**
  * Dashboard básico - Muestra información del sistema
  */
-import { useState, useEffect } from 'react';
-import apiClient from '../services/api';
-import { authService } from '../services/auth';
-import './Dashboard.css';
+import { useState, useEffect } from 'react'
+import apiClient from '../services/api'
+import { authService } from '../services/auth'
+import './Dashboard.css'
 
 function Dashboard() {
-  const [healthStatus, setHealthStatus] = useState(null);
-  const [apiInfo, setApiInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [user, setUser] = useState(null);
+  const [healthStatus, setHealthStatus] = useState(null)
+  const [apiInfo, setApiInfo] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [user, setUser] = useState(null)
 
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    loadDashboardData()
+  }, [])
 
   const loadDashboardData = async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
 
     try {
       // Verificar health del backend
       try {
-        const healthResponse = await apiClient.get('/health');
-        setHealthStatus(healthResponse.data);
+        const healthResponse = await apiClient.get('/health')
+        setHealthStatus(healthResponse.data)
       } catch (err) {
-        console.warn('Health check falló:', err);
+        console.warn('Health check falló:', err)
       }
 
       // Obtener información de la API
       try {
-        const apiResponse = await apiClient.get('/');
-        setApiInfo(apiResponse.data);
+        const apiResponse = await apiClient.get('/')
+        setApiInfo(apiResponse.data)
       } catch (err) {
-        console.warn('Info API falló:', err);
+        console.warn('Info API falló:', err)
       }
 
       // Intentar obtener usuario actual (si está autenticado)
@@ -59,24 +59,24 @@ function Dashboard() {
       }
       */
     } catch (err) {
-      setError('Error al cargar datos del dashboard');
-      console.error('Error:', err);
+      setError('Error al cargar datos del dashboard')
+      console.error('Error:', err)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleLogout = async () => {
-    await authService.logout();
-    window.location.reload();
-  };
+    await authService.logout()
+    window.location.reload()
+  }
 
   if (loading) {
     return (
       <div className="dashboard-container">
         <div className="loading">Cargando dashboard...</div>
       </div>
-    );
+    )
   }
 
   return (
@@ -90,11 +90,7 @@ function Dashboard() {
         )}
       </header>
 
-      {error && (
-        <div className="error-banner">
-          {error}
-        </div>
-      )}
+      {error && <div className="error-banner">{error}</div>}
 
       <div className="dashboard-content">
         <div className="dashboard-section">
@@ -107,22 +103,16 @@ function Dashboard() {
                   ✅ {healthStatus.status || 'Conectado'}
                 </div>
               ) : (
-                <div className="status-error">
-                  ❌ No disponible
-                </div>
+                <div className="status-error">❌ No disponible</div>
               )}
             </div>
 
             <div className="status-card">
               <h3>Autenticación</h3>
               {authService.isAuthenticated() ? (
-                <div className="status-success">
-                  ✅ Autenticado
-                </div>
+                <div className="status-success">✅ Autenticado</div>
               ) : (
-                <div className="status-warning">
-                  ⚠️ No autenticado
-                </div>
+                <div className="status-warning">⚠️ No autenticado</div>
               )}
             </div>
 
@@ -133,9 +123,7 @@ function Dashboard() {
                   ✅ {apiInfo.message || 'Conectado'}
                 </div>
               ) : (
-                <div className="status-error">
-                  ❌ No disponible
-                </div>
+                <div className="status-error">❌ No disponible</div>
               )}
             </div>
           </div>
@@ -145,9 +133,22 @@ function Dashboard() {
           <div className="dashboard-section">
             <h2>Información del Sistema</h2>
             <div className="info-card">
-              <p><strong>Mensaje:</strong> {apiInfo.message}</p>
-              <p><strong>Versión:</strong> {apiInfo.version}</p>
-              <p><strong>Documentación:</strong> <a href={`${import.meta.env.VITE_API_URL}/docs`} target="_blank" rel="noopener noreferrer">Ver API Docs</a></p>
+              <p>
+                <strong>Mensaje:</strong> {apiInfo.message}
+              </p>
+              <p>
+                <strong>Versión:</strong> {apiInfo.version}
+              </p>
+              <p>
+                <strong>Documentación:</strong>{' '}
+                <a
+                  href={`${import.meta.env.VITE_API_URL}/docs`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Ver API Docs
+                </a>
+              </p>
             </div>
           </div>
         )}
@@ -156,8 +157,12 @@ function Dashboard() {
           <div className="dashboard-section">
             <h2>Usuario Actual</h2>
             <div className="info-card">
-              <p><strong>Email:</strong> {user.email}</p>
-              <p><strong>Usuario:</strong> {user.username || 'N/A'}</p>
+              <p>
+                <strong>Email:</strong> {user.email}
+              </p>
+              <p>
+                <strong>Usuario:</strong> {user.username || 'N/A'}
+              </p>
             </div>
           </div>
         )}
@@ -177,7 +182,7 @@ function Dashboard() {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-export default Dashboard;
+export default Dashboard

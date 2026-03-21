@@ -1,5 +1,5 @@
-import { ConcesionariosConfig } from '../ConcesionariosConfig'
-
-export function ConfigConcesionariosTab() {
-  return <ConcesionariosConfig />
-}
+import { ConcesionariosConfig } from '../ConcesionariosConfig'
+
+export function ConfigConcesionariosTab() {
+  return <ConcesionariosConfig />
+}
