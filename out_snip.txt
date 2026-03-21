@@ -1,0 +1,100 @@
+﻿"""
+Endpoints para administrar tasas de cambio oficial (admin).
+"""
+from datetime import date
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.models.tasa_cambio_diaria import TasaCambioDiaria
+from app.services.tasa_cambio_service import (
+    obtener_tasa_hoy,
+    obtener_tasa_por_fecha,
+    guardar_tasa_diaria,
+    debe_ingresar_tasa,
+)
+
+router = APIRouter(prefix="/admin/tasas-cambio", tags=["admin-tasas-cambio"])
+
+
+class TasaCambioResponse(BaseModel):
+    id: int
+    fecha: date
+    tasa_oficial: float
+    usuario_email: Optional[str]
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class GuardarTasaRequest(BaseModel):
+    tasa_oficial: float = Field(..., gt=0, description="Tasa oficial BS/USD, ej: 2850.50")
+
+
+@router.get("/hoy", response_model=Optional[TasaCambioResponse])
+def get_tasa_hoy(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Obtiene la tasa de cambio para hoy."""
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    
+    tasa = obtener_tasa_hoy(db)
+    return tasa
+
+
+@router.get("/estado")
+def get_estado_tasa(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Verifica si es necesario ingresar la tasa y devuelve el estado."""
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    
+    debe_ingresar = debe_ingresar_tasa()
+    tasa_guardada = obtener_tasa_hoy(db)
+    
+    return {
+        "debe_ingresar": debe_ingresar,
+        "tasa_ya_ingresada": tasa_guardada is not None,
+        "hora_obligatoria_desde": "01:00",
+        "hora_obligatoria_hasta": "23:59",
+    }
+
+
+@router.post("/guardar", response_model=TasaCambioResponse)
+def guardar_tasa(
+    req: GuardarTasaRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Guarda la tasa de cambio oficial para hoy. Obligatorio desde 01:00 AM."""
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    
+    if not debe_ingresar_tasa():
+        raise HTTPException(
+            status_code=400,
+            detail="La tasa solo se puede ingresar desde las 01:00 AM hasta las 23:59 PM"
+        )
+    
+    usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
+    usuario_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+    
+    tasa = guardar_tasa_diaria(
+        db=db,
+        tasa_oficial=req.tasa_oficial,
+        usuario_id=usuario_id,
+        usuario_email=usuario_email,
+    )
+    
+    return tasa
+
+
+@

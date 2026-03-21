@@ -1876,9 +1876,19 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
     if not fecha_recep and cuota.fecha_pago:
 
-        fecha_recep = datetime.combine(cuota.fecha_pago, datetime.min.time())
+        fp_c = cuota.fecha_pago
 
-        fecha_pago_date = cuota.fecha_pago
+        if isinstance(fp_c, datetime):
+
+            fecha_recep = fp_c
+
+            fecha_pago_date = fp_c.date()
+
+        else:
+
+            fecha_pago_date = fp_c
+
+            fecha_recep = datetime.combine(fp_c, datetime.min.time())
 
     pdf_bytes = generar_recibo_cuota_amortizacion(
 
@@ -1890,13 +1900,15 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
         institucion_financiera=institucion,
 
-        monto=monto_str + " Bs.",
+        monto=monto_str,
 
         numero_operacion=numero_operacion,
 
         fecha_recepcion=fecha_recep,
 
         fecha_pago=fecha_pago_date,
+
+        moneda="Bs.",
 
     )
 

@@ -853,6 +853,23 @@ class ApiClient {
 
     const response: AxiosResponse<T> = await this.client.get(url, finalConfig)
 
+    if (response.status >= 400 && response.status < 500) {
+      const backendMessage =
+        (response.data as any)?.detail ||
+        (response.data as any)?.message ||
+        `Request failed with status ${response.status}`
+
+      const error = new Error(backendMessage) as any
+
+      error.response = response
+
+      error.isAxiosError = true
+
+      error.code = `ERR_HTTP_${response.status}`
+
+      throw error
+    }
+
     return response.data
   }
 

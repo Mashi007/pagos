@@ -22,6 +22,7 @@ def generar_recibo_cuota_amortizacion(
     saldo_final: Optional[str] = None,
     numero_cuota: Optional[int] = None,
     fecha_pago_display: Optional[str] = None,
+    moneda: Optional[str] = None,
 ) -> bytes:
     """
     Genera el PDF del recibo para una cuota de la tabla de amortización.
@@ -54,4 +55,5 @@ def generar_recibo_cuota_amortizacion(
         saldo_final=saldo_final,
         numero_cuota=numero_cuota,
         fecha_pago_display=fecha_pago_display,
+        moneda=moneda,
     )

@@ -87,6 +87,19 @@ def generar_recibo_pago_reportado(
     numero_op = (numero_operacion or "").strip()
     cuotas_txt = (aplicado_a_cuotas or "").strip() or "Pendiente de aplicar"
 
+    # Simbolo de moneda en tablas (antes faltaba y causaba NameError al generar PDF)
+    _m = (moneda or "").strip()
+    if _m:
+        moneda_symbol = _m
+    else:
+        md_u = (monto_display or "").upper()
+        if "USD" in md_u:
+            moneda_symbol = ""
+        elif "BS" in md_u:
+            moneda_symbol = ""
+        else:
+            moneda_symbol = "Bs."
+
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf,
