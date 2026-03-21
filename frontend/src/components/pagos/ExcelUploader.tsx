@@ -318,7 +318,7 @@ export function ExcelUploader({ onClose, onSuccess, onGoToRevisarPagos }: ExcelU
 
 
 
-      const d = e.datos ? {}
+      const d = e.datos ?? {}
 
 
 
@@ -854,7 +854,7 @@ export function ExcelUploader({ onClose, onSuccess, onGoToRevisarPagos }: ExcelU
 
 
 
-      const registrados = result.registros_procesados ? 0
+      const registrados = result.registros_procesados ?? 0
 
 
 
@@ -862,7 +862,7 @@ export function ExcelUploader({ onClose, onSuccess, onGoToRevisarPagos }: ExcelU
 
 
 
-      const filasOmitidas = result.filas_omitidas ? 0
+      const filasOmitidas = result.filas_omitidas ?? 0
 
 
 
@@ -870,7 +870,7 @@ export function ExcelUploader({ onClose, onSuccess, onGoToRevisarPagos }: ExcelU
 
 
 
-      const numErrores = result.errores_total ? result.errores?.length?? 0
+      const numErrores = result.errores_total ?? result.errores?.length ?? 0
 
 
 
@@ -1638,7 +1638,7 @@ export function ExcelUploader({ onClose, onSuccess, onGoToRevisarPagos }: ExcelU
 
 
 
-                      <span className="font-semibold">{results.registros_procesados ? 0} pago(s) registrado(s)</span>
+                      <span className="font-semibold">{results.registros_procesados ?? 0} pago(s) registrado(s)</span>
 
 
 
@@ -1694,7 +1694,7 @@ export function ExcelUploader({ onClose, onSuccess, onGoToRevisarPagos }: ExcelU
 
 
 
-                    {(results.errores?.length?? 0) > 0 && (
+                    {(results.errores?.length ?? 0) > 0 && (
 
 
 
@@ -1710,7 +1710,7 @@ export function ExcelUploader({ onClose, onSuccess, onGoToRevisarPagos }: ExcelU
 
 
 
-                        {(results.errores_total ? results.errores?.length?? 0)} fila(s) con error. Revisa la tabla inferior para ver fila, cédula y descripción.
+                        {(results.errores_total ?? results.errores?.length ?? 0)} fila(s) con error. Revisa la tabla inferior para ver fila, cédula y descripción.
 
 
 

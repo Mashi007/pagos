@@ -17,6 +17,7 @@ import logging
 
 from app.models.pago import Pago
 from app.models.cuota import Cuota
+from app.services.cuota_estado import clasificar_estado_cuota, hoy_negocio
 from app.models.cuota_pago import CuotaPago
 from app.models.prestamo import Prestamo
 
@@ -27,17 +28,21 @@ class EstadoCuota:
     """Estados vÃ¡lidos de una cuota con documentaciÃ³n."""
     PAGADO = 'PAGADO'
     PENDIENTE = 'PENDIENTE'
+    VENCIDO = 'VENCIDO'
     MORA = 'MORA'
     PARCIAL = 'PARCIAL'
+    PAGO_ADELANTADO = 'PAGO_ADELANTADO'
     CANCELADA = 'CANCELADA'
     
-    ESTADOS_VALIDOS = {PAGADO, PENDIENTE, MORA, PARCIAL, CANCELADA}
+    ESTADOS_VALIDOS = {PAGADO, PENDIENTE, VENCIDO, MORA, PARCIAL, PAGO_ADELANTADO, CANCELADA}
     
     DOCUMENTACION = {
-        PAGADO: 'Cuota completamente pagada. Monto aplicado >= monto de la cuota.',
-        PENDIENTE: 'Cuota sin pagar o con vencimiento futuro. No hay aplicaciones o aplicaciÃ³n parcial.',
-        MORA: 'Cuota vencida (fecha_vencimiento < hoy) y sin pagar completamente. Estado de riesgo de cobranza.',
-        PARCIAL: 'Cuota con pagos parciales aplicados. Monto aplicado < monto de la cuota.',
+        PAGADO: 'Cuota cubierta al 100% (vencimiento ya cumplido o hoy).',
+        PENDIENTE: 'Sin cubrir al 100%; al corriente (vencimiento hoy o futuro).',
+        VENCIDO: 'Sin cubrir al 100%; 1 a 91 dias despues del vencimiento.',
+        MORA: 'Sin cubrir al 100%; 92 o mas dias despues del vencimiento.',
+        PARCIAL: 'Abonos sin cubrir al 100%; aun al corriente respecto al vencimiento.',
+        PAGO_ADELANTADO: 'Cubierta al 100% antes de la fecha de vencimiento.',
         CANCELADA: 'Cuota anulada o no vigente. No requiere pago.',
     }
 
@@ -85,19 +90,13 @@ class ValidadorSobreAplicacion:
         cuota = db.query(Cuota).filter(Cuota.id == cuota_id).first()
         if not cuota:
             return EstadoCuota.PENDIENTE
-        
+
         monto_aplicado = ValidadorSobreAplicacion.obtener_monto_aplicado_actual(db, cuota_id)
-        monto_total = Decimal(str(cuota.monto or 0))
-        
-        if monto_aplicado >= monto_total - Decimal('0.01'):
-            return EstadoCuota.PAGADO
-        elif monto_aplicado > 0:
-            return EstadoCuota.PARCIAL
-        else:
-            if cuota.dias_mora and cuota.dias_mora > 0:
-                  return EstadoCuota.MORA if cuota.dias_mora > 90 else EstadoCuota.VENCIDO
-            else:
-                  return EstadoCuota.PENDIENTE
+        monto_total_f = float(cuota.monto or 0)
+        total_pagado_f = float(monto_aplicado)
+        fv = cuota.fecha_vencimiento
+        fv_d = fv.date() if fv and hasattr(fv, "date") else fv
+        return clasificar_estado_cuota(total_pagado_f, monto_total_f, fv_d, hoy_negocio())
 
 
 class ConciliacionAutomaticaService:

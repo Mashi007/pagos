@@ -226,19 +226,19 @@ export function PlantillaPdfCobranza() {
 
 
 
-          setCiudadDefault(pdfData.ciudad_default ? 'Guacara')
+          setCiudadDefault(pdfData.ciudad_default ?? 'Guacara')
 
 
 
 
 
-          setCuerpoPrincipal(pdfData.cuerpo_principal ? DEFAULT_CUERPO)
+          setCuerpoPrincipal(pdfData.cuerpo_principal ?? DEFAULT_CUERPO)
 
 
 
 
 
-          setClausulaSeptima(pdfData.clausula_septima ? DEFAULT_CLAUSULA)
+          setClausulaSeptima(pdfData.clausula_septima ?? DEFAULT_CLAUSULA)
 
 
 

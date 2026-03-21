@@ -1,4 +1,10 @@
-"""
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+TARGET = ROOT / "backend" / "app" / "services" / "cuota_estado.py"
+
+TARGET.write_text(
+    '''"""
 Estado de cuota unificado (America/Caracas).
 
 Reglas de negocio:
@@ -89,3 +95,7 @@ def estado_cuota_para_mostrar(
     return clasificar_estado_cuota(
         total_pagado, monto_cuota, fecha_vencimiento, fecha_referencia
     )
+''',
+    encoding="utf-8",
+)
+print("OK", TARGET)

@@ -3,7 +3,17 @@
 
 
 
+
+
+
+
+
  * Card: Pipeline Gmail - estado, iniciar descarga, descargar Excel desde tabla temporal.
+
+
+
+
+
 
 
 
@@ -13,7 +23,17 @@
 
 
 
+
+
+
+
+
  * Botón "Descargar Excel (tabla temporal)" permite descargar aunque el pipeline siga corriendo.
+
+
+
+
+
 
 
 
@@ -23,7 +43,17 @@
 
 
 
+
+
+
+
+
 import { useState, useEffect, useCallback } from 'react'
+
+
+
+
+
 
 
 
@@ -33,7 +63,17 @@ import { Mail, Download, Loader2 } from 'lucide-react'
 
 
 
+
+
+
+
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
+
+
+
+
+
 
 
 
@@ -43,12 +83,27 @@ import { Button } from '../../components/ui/button'
 
 
 
+
+
+
+
+
 import { toast } from 'sonner'
 
 
 
 
+
+
+
+
+
 import { apiClient } from '../../services/api'
+
+
+
+
+
 
 
 
@@ -63,7 +118,22 @@ import { getBackendBaseUrl } from './InformePagosConfig'
 
 
 
+
+
+
+
+
+
+
+
+
+
 interface GmailStatus {
+
+
+
+
+
 
 
 
@@ -73,7 +143,17 @@ interface GmailStatus {
 
 
 
+
+
+
+
+
   last_status: string | null
+
+
+
+
+
 
 
 
@@ -83,7 +163,17 @@ interface GmailStatus {
 
 
 
+
+
+
+
+
   last_files: number
+
+
+
+
+
 
 
 
@@ -93,7 +183,17 @@ interface GmailStatus {
 
 
 
+
+
+
+
+
   next_run_approx: string | null
+
+
+
+
+
 
 
 
@@ -103,7 +203,22 @@ interface GmailStatus {
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -123,7 +238,22 @@ const POLL_INTERVAL_MS = 8000
 
 
 
+
+
+
+
+
+
+
+
+
+
 export function GmailPipelineCard() {
+
+
+
+
+
 
 
 
@@ -133,12 +263,27 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
   const [loadingStatus, setLoadingStatus] = useState(true)
 
 
 
 
+
+
+
+
+
   const [downloadingExcel, setDownloadingExcel] = useState(false)
+
+
+
+
+
 
 
 
@@ -153,7 +298,22 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
+
+
+
+
+
   const fetchStatus = useCallback(async () => {
+
+
+
+
+
 
 
 
@@ -163,7 +323,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       const data = await apiClient.get<GmailStatus>('/api/v1/pagos/gmail/status')
+
+
+
+
+
 
 
 
@@ -173,7 +343,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
     } catch (e) {
+
+
+
+
+
 
 
 
@@ -183,7 +363,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       setStatus(null)
+
+
+
+
+
 
 
 
@@ -193,12 +383,27 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       setLoadingStatus(false)
 
 
 
 
+
+
+
+
+
     }
+
+
+
+
+
 
 
 
@@ -213,7 +418,22 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
+
+
+
+
+
   useEffect(() => {
+
+
+
+
+
 
 
 
@@ -223,12 +443,27 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
     const id = setInterval(fetchStatus, POLL_INTERVAL_MS)
 
 
 
 
+
+
+
+
+
     return () => clearInterval(id)
+
+
+
+
+
 
 
 
@@ -243,7 +478,22 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
+
+
+
+
+
   const handleRunNow = async () => {
+
+
+
+
+
 
 
 
@@ -253,7 +503,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       setStarting(true)
+
+
+
+
+
 
 
 
@@ -263,7 +523,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       toast.success('Descarga de correos iniciada. El Excel se irá llenando en la tabla temporal.')
+
+
+
+
+
 
 
 
@@ -273,7 +543,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
     } catch (e: unknown) {
+
+
+
+
+
 
 
 
@@ -283,7 +563,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       toast.error(typeof msg === 'string' ? msg : 'Error al iniciar descarga')
+
+
+
+
+
 
 
 
@@ -293,7 +583,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       setStarting(false)
+
+
+
+
+
 
 
 
@@ -303,7 +603,22 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
   }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -318,7 +633,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
     try {
+
+
+
+
+
 
 
 
@@ -328,7 +653,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       const base = getBackendBaseUrl()
+
+
+
+
+
 
 
 
@@ -338,7 +673,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       const url = `${base}/api/v1/pagos/gmail/download-excel-temporal`
+
+
+
+
+
 
 
 
@@ -348,7 +693,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       if (!res.ok) {
+
+
+
+
+
 
 
 
@@ -358,7 +713,17 @@ export function GmailPipelineCard() {
 
 
 
-        throw new Error(err.detail ? `Error ${res.status}`)
+
+
+
+
+
+        throw new Error(String(err.detail ?? `Error ${res.status}`))
+
+
+
+
+
 
 
 
@@ -368,12 +733,27 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       const blob = await res.blob()
 
 
 
 
-      const name = res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ? 'Pagos_Gmail_temporal.xlsx'
+
+
+
+
+
+      const name = res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ?? 'Pagos_Gmail_temporal.xlsx'
+
+
+
+
+
 
 
 
@@ -383,7 +763,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       a.href = URL.createObjectURL(blob)
+
+
+
+
+
 
 
 
@@ -393,7 +783,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       a.click()
+
+
+
+
+
 
 
 
@@ -403,7 +803,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       toast.success('Excel descargado. La tabla temporal se ha vaciado.')
+
+
+
+
+
 
 
 
@@ -413,7 +823,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
     } catch (e: unknown) {
+
+
+
+
+
 
 
 
@@ -423,7 +843,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       toast.error(msg)
+
+
+
+
+
 
 
 
@@ -433,7 +863,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       setDownloadingExcel(false)
+
+
+
+
+
 
 
 
@@ -443,7 +883,22 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
   }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -463,7 +918,22 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
+
+
+
+
+
   return (
+
+
+
+
+
 
 
 
@@ -473,7 +943,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       <CardHeader>
+
+
+
+
+
 
 
 
@@ -483,7 +963,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
           <Mail className="h-5 w-5 text-blue-600" />
+
+
+
+
+
 
 
 
@@ -493,7 +983,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
         </CardTitle>
+
+
+
+
+
 
 
 
@@ -503,7 +1003,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
           Iniciar descarga de correos no leídos; luego descargar Excel desde la tabla temporal (al descargar se vacía la tabla).
+
+
+
+
+
 
 
 
@@ -513,7 +1023,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
       </CardHeader>
+
+
+
+
+
 
 
 
@@ -523,7 +1043,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
         {loadingStatus && !status ? (
+
+
+
+
+
 
 
 
@@ -533,7 +1063,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
             <Loader2 className="h-4 w-4 animate-spin" />
+
+
+
+
+
 
 
 
@@ -543,7 +1083,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
           </div>
+
+
+
+
+
 
 
 
@@ -553,7 +1103,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
           <>
+
+
+
+
+
 
 
 
@@ -563,12 +1123,27 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
               {isRunning ? (
 
 
 
 
+
+
+
+
+
                 <>
+
+
+
+
+
 
 
 
@@ -578,12 +1153,27 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                   Generando… {status.last_emails} correos, {status.last_files} archivos procesados
 
 
 
 
+
+
+
+
+
                 </>
+
+
+
+
+
 
 
 
@@ -593,7 +1183,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                 <>
+
+
+
+
+
 
 
 
@@ -603,7 +1203,17 @@ export function GmailPipelineCard() {
 
 
 
-                  Última ejecución: {status.last_status ? '-'} · {status.last_emails} correos, {status.last_files} archivos
+
+
+
+
+
+                  Última ejecución: {status.last_status ?? '-'} · {status.last_emails} correos, {status.last_files} archivos
+
+
+
+
+
 
 
 
@@ -613,12 +1223,27 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
               )}
 
 
 
 
+
+
+
+
+
             </div>
+
+
+
+
+
 
 
 
@@ -628,7 +1253,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
               <p className="text-sm text-red-600 dark:text-red-400">{status.last_error}</p>
+
+
+
+
+
 
 
 
@@ -638,7 +1273,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
             <div className="flex flex-wrap gap-2">
+
+
+
+
+
 
 
 
@@ -648,7 +1293,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                 type="button"
+
+
+
+
+
 
 
 
@@ -658,7 +1313,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                 size="sm"
+
+
+
+
+
 
 
 
@@ -668,12 +1333,27 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                 disabled={starting || isRunning}
 
 
 
 
+
+
+
+
+
               >
+
+
+
+
+
 
 
 
@@ -683,12 +1363,27 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                 {isRunning ? 'Generando…' : starting ? 'Iniciando…' : 'Iniciar descarga de correos'}
 
 
 
 
+
+
+
+
+
               </Button>
+
+
+
+
+
 
 
 
@@ -698,7 +1393,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                 type="button"
+
+
+
+
+
 
 
 
@@ -708,7 +1413,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                 size="sm"
+
+
+
+
+
 
 
 
@@ -718,7 +1433,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                 disabled={downloadingExcel}
+
+
+
+
+
 
 
 
@@ -728,7 +1453,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
                 {downloadingExcel ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+
+
+
+
+
 
 
 
@@ -738,7 +1473,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
               </Button>
+
+
+
+
+
 
 
 
@@ -748,7 +1493,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
             <p className="text-xs text-muted-foreground">
+
+
+
+
+
 
 
 
@@ -758,7 +1513,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
             </p>
+
+
+
+
+
 
 
 
@@ -768,7 +1533,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
         ) : (
+
+
+
+
+
 
 
 
@@ -778,7 +1553,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
         )}
+
+
+
+
+
 
 
 
@@ -788,7 +1573,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
     </Card>
+
+
+
+
+
 
 
 
@@ -798,7 +1593,17 @@ export function GmailPipelineCard() {
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
 
 
 

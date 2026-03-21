@@ -2,7 +2,15 @@ import { useState } from 'react'
 
 
 
+
+
+
+
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+
+
+
+
 
 
 
@@ -10,7 +18,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 
 
 
+
+
+
+
 import { Button } from '../ui/button'
+
+
+
+
 
 
 
@@ -18,7 +34,15 @@ import { notificacionService } from '../../services/notificacionService'
 
 
 
+
+
+
+
 import { toast } from 'sonner'
+
+
+
+
 
 
 
@@ -26,7 +50,15 @@ import { Link, Upload, Loader2, Trash2, FileText } from 'lucide-react'
 
 
 
+
+
+
+
 import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
+
+
+
+
 
 
 
@@ -34,7 +66,15 @@ import {
 
 
 
+
+
+
+
   Select,
+
+
+
+
 
 
 
@@ -42,7 +82,15 @@ import {
 
 
 
+
+
+
+
   SelectItem,
+
+
+
+
 
 
 
@@ -50,7 +98,15 @@ import {
 
 
 
+
+
+
+
   SelectValue,
+
+
+
+
 
 
 
@@ -62,7 +118,19 @@ import {
 
 
 
+
+
+
+
+
+
+
+
 const TIPOS_CASO: { value: string; label: string }[] = [
+
+
+
+
 
 
 
@@ -70,7 +138,15 @@ const TIPOS_CASO: { value: string; label: string }[] = [
 
 
 
+
+
+
+
   { value: 'dias_3', label: 'Faltan 3' },
+
+
+
+
 
 
 
@@ -78,7 +154,15 @@ const TIPOS_CASO: { value: string; label: string }[] = [
 
 
 
+
+
+
+
   { value: 'hoy', label: 'Hoy vence' },
+
+
+
+
 
 
 
@@ -86,7 +170,15 @@ const TIPOS_CASO: { value: string; label: string }[] = [
 
 
 
+
+
+
+
   { value: 'dias_3_retraso', label: '3 días retraso' },
+
+
+
+
 
 
 
@@ -94,7 +186,15 @@ const TIPOS_CASO: { value: string; label: string }[] = [
 
 
 
+
+
+
+
   { value: 'prejudicial', label: 'Prejudicial' },
+
+
+
+
 
 
 
@@ -102,7 +202,19 @@ const TIPOS_CASO: { value: string; label: string }[] = [
 
 
 
+
+
+
+
 ]
+
+
+
+
+
+
+
+
 
 
 
@@ -118,7 +230,19 @@ type AdjuntoItem = { id: string; nombre_archivo: string; ruta: string }
 
 
 
+
+
+
+
+
+
+
+
 export function DocumentosPdfAnexos() {
+
+
+
+
 
 
 
@@ -126,7 +250,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
   const { data: porCaso = {}, isLoading: loading } = useQuery({
+
+
+
+
 
 
 
@@ -134,7 +266,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
     queryFn: () => notificacionService.getAdjuntosFijosCobranza(),
+
+
+
+
 
 
 
@@ -142,7 +282,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
   })
+
+
+
+
 
 
 
@@ -150,11 +298,23 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
   const [archivo, setArchivo] = useState<File | null>(null)
 
 
 
+
+
+
+
   const [subiendo, setSubiendo] = useState(false)
+
+
+
+
 
 
 
@@ -166,7 +326,19 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
+
+
+
+
   const toggleTipo = (value: string) => {
+
+
+
+
 
 
 
@@ -174,7 +346,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
   }
+
+
+
+
 
 
 
@@ -182,7 +362,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
   const handleSubir = async () => {
+
+
+
+
 
 
 
@@ -190,7 +378,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
     if (!(archivo.name || '').toLowerCase().endsWith('.pdf')) {
+
+
+
+
 
 
 
@@ -198,7 +394,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
     }
+
+
+
+
 
 
 
@@ -206,7 +410,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
     setSubiendo(true)
+
+
+
+
 
 
 
@@ -214,7 +426,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       const tiposToUpload: string[] =
+
+
+
+
 
 
 
@@ -222,7 +442,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
           ? TIPOS_CASO.map((t) => t.value)
+
+
+
+
 
 
 
@@ -230,7 +458,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       for (const tipoCaso of tiposToUpload) {
+
+
+
+
 
 
 
@@ -238,7 +474,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       }
+
+
+
+
 
 
 
@@ -246,7 +490,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       setArchivo(null)
+
+
+
+
 
 
 
@@ -254,7 +506,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
     } catch (e: unknown) {
+
+
+
+
 
 
 
@@ -262,7 +522,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       toast.error(msg || 'Error al subir.')
+
+
+
+
 
 
 
@@ -270,7 +538,19 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -282,7 +562,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
     setEliminandoId(id)
+
+
+
+
 
 
 
@@ -290,7 +578,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       await notificacionService.deleteAdjuntoFijoCobranza(id)
+
+
+
+
 
 
 
@@ -298,7 +594,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.adjuntosFijos })
+
+
+
+
 
 
 
@@ -306,7 +610,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       toast.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Error al eliminar.')
+
+
+
+
 
 
 
@@ -314,7 +626,19 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -326,7 +650,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
     return (
+
+
+
+
 
 
 
@@ -334,7 +666,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+
+
+
+
 
 
 
@@ -342,7 +682,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
     )
+
+
+
+
 
 
 
@@ -354,7 +702,19 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
+
+
+
+
   return (
+
+
+
+
 
 
 
@@ -362,7 +722,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       <Card>
+
+
+
+
 
 
 
@@ -370,7 +738,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
           <CardTitle className="flex items-center gap-2" aria-label="Documentos PDF anexos">
+
+
+
+
 
 
 
@@ -378,7 +754,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
             Documentos PDF anexos
+
+
+
+
 
 
 
@@ -386,7 +770,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
           <CardDescription>
+
+
+
+
 
 
 
@@ -394,7 +786,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
           </CardDescription>
+
+
+
+
 
 
 
@@ -402,7 +802,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
         <CardContent className="space-y-4">
+
+
+
+
 
 
 
@@ -410,7 +818,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
             <div className="space-y-1">
+
+
+
+
 
 
 
@@ -418,7 +834,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
               <div className="flex flex-wrap gap-2 mt-1">
+
+
+
+
 
 
 
@@ -426,7 +850,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                   <label key={t.value} className="inline-flex items-center gap-1.5 cursor-pointer text-sm">
+
+
+
+
 
 
 
@@ -434,7 +866,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                     <span>{t.label}</span>
+
+
+
+
 
 
 
@@ -442,7 +882,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                 ))}
+
+
+
+
 
 
 
@@ -450,11 +898,23 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
               </div>
 
 
 
+
+
+
+
             </div>
+
+
+
+
 
 
 
@@ -462,15 +922,31 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
               <label htmlFor="archivo-pdf" className="text-sm font-medium text-gray-700">Archivo PDF</label>
 
 
 
-              <input id="archivo-pdf" type="file" accept=".pdf,application/pdf" className="block w-full max-w-xs text-sm text-gray-700 file:mr-2 file:rounded file:border-0 file:bg-violet-100 file:px-3 file:py-1.5 file:text-violet-700" onChange={(e) => setArchivo(e.target.files?.[0] ? null)} />
+
+
+
+
+              <input id="archivo-pdf" type="file" accept=".pdf,application/pdf" className="block w-full max-w-xs text-sm text-gray-700 file:mr-2 file:rounded file:border-0 file:bg-violet-100 file:px-3 file:py-1.5 file:text-violet-700" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
+
+
+
+
 
 
 
             </div>
+
+
+
+
 
 
 
@@ -478,7 +954,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
               {subiendo ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+
+
+
+
 
 
 
@@ -486,11 +970,23 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
             </Button>
 
 
 
+
+
+
+
           </div>
+
+
+
+
 
 
 
@@ -498,7 +994,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
             <h4 className="text-sm font-medium text-gray-700 mb-1">Documentos almacenados por pestaña</h4>
+
+
+
+
 
 
 
@@ -506,7 +1010,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
             <div className="space-y-3">
+
+
+
+
 
 
 
@@ -514,7 +1026,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                 const items = porCaso[value] || []
+
+
+
+
 
 
 
@@ -522,7 +1042,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                 return (
+
+
+
+
 
 
 
@@ -530,7 +1058,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                     <span className="text-sm font-medium text-gray-600" title={`Se envían con la notificación: ${label}`}>{label}</span>
+
+
+
+
 
 
 
@@ -538,7 +1074,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                       {items.map((doc) => (
+
+
+
+
 
 
 
@@ -546,7 +1090,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                           <span className="flex items-center gap-2 truncate"><FileText className="h-4 w-4 shrink-0 text-gray-500" />{doc.nombre_archivo}</span>
+
+
+
+
 
 
 
@@ -554,7 +1106,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                             {eliminandoId === doc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-red-600" />}
+
+
+
+
 
 
 
@@ -562,7 +1122,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                         </li>
+
+
+
+
 
 
 
@@ -570,7 +1138,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                     </ul>
+
+
+
+
 
 
 
@@ -578,7 +1154,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
                 )
+
+
+
+
 
 
 
@@ -586,7 +1170,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
               {TIPOS_CASO.every((t) => (porCaso[t.value]?.length?? 0) === 0) && (
+
+
+
+
 
 
 
@@ -594,7 +1186,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
               )}
+
+
+
+
 
 
 
@@ -602,7 +1202,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
           </div>
+
+
+
+
 
 
 
@@ -610,7 +1218,15 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
       </Card>
+
+
+
+
 
 
 
@@ -618,11 +1234,23 @@ export function DocumentosPdfAnexos() {
 
 
 
+
+
+
+
   )
 
 
 
+
+
+
+
 }
+
+
+
+
 
 
 

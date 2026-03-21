@@ -2338,12 +2338,12 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
 
 
-      const start = (el as any).selectionStart ? current.length
+      const start = (el as any).selectionStart ?? current.length
 
 
 
 
-      const end = (el as any).selectionEnd ? current.length
+      const end = (el as any).selectionEnd ?? current.length
 
 
 
@@ -2638,12 +2638,12 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
 
 
-      const start = el.selectionStart ? 0
+      const start = el.selectionStart ?? 0
 
 
 
 
-      const end = el.selectionEnd ? 0
+      const end = el.selectionEnd ?? 0
 
 
 
@@ -5393,12 +5393,12 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
 
 
-                        const start = elTarget.selectionStart ? currentTarget.length
+                        const start = elTarget.selectionStart ?? currentTarget.length
 
 
 
 
-                        const end = elTarget.selectionEnd ? currentTarget.length
+                        const end = elTarget.selectionEnd ?? currentTarget.length
 
 
 

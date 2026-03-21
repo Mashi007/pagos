@@ -698,7 +698,7 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
 
 
 
-    emailsPruebas = [data.emails_pruebas[0] ?? '', data.emails_pruebas[1] ? '']
+    emailsPruebas = [data.emails_pruebas[0] ?? '', data.emails_pruebas[1] ?? '']
 
 
 
@@ -1368,7 +1368,7 @@ export function ConfiguracionNotificaciones() {
 
 
 
-      plantilla_id: c.plantilla_id ? null,
+      plantilla_id: c.plantilla_id ?? null,
 
 
 
@@ -1378,7 +1378,7 @@ export function ConfiguracionNotificaciones() {
 
 
 
-      programador: c.programador ? HORA_DEFAULT,
+      programador: c.programador ?? HORA_DEFAULT,
 
 
 
@@ -2818,7 +2818,7 @@ export function ConfiguracionNotificaciones() {
 
 
 
-        const { enviados, fallidos, sin_email, omitidos_config } = res ? {}
+        const { enviados, fallidos, sin_email, omitidos_config } = res ?? {}
 
 
 
@@ -2858,7 +2858,7 @@ export function ConfiguracionNotificaciones() {
 
 
 
-          toast.success(`Envíos masivos prueba: ${enviados ? 0} enviados, ${fallidos ? 0} fallidos, ${sin_email ? 0} sin email.`)
+          toast.success(`Envíos masivos prueba: ${enviados ?? 0} enviados, ${fallidos ?? 0} fallidos, ${sin_email ?? 0} sin email.`)
 
 
 

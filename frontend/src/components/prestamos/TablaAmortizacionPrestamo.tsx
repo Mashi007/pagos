@@ -135,85 +135,63 @@ export function TablaAmortizacionPrestamo({
     refetchOnWindowFocus: true,
   })
 
-  // Función para determinar el estado correcto basado en los datos
+  // Estados de cuota: misma regla que backend (America/Caracas). Conciliacion no cambia el estado mostrado.
+
+  const parseIsoDateOnly = (iso: string): Date => {
+    const part = iso.slice(0, 10)
+    const [y, m, d] = part.split('-').map((x) => parseInt(x, 10))
+    return new Date(y, m - 1, d)
+  }
+
+  const hoyCaracas = (): Date => {
+    const s = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/Caracas',
+    })
+    const [y, m, d] = s.split('-').map((x) => parseInt(x, 10))
+    return new Date(y, m - 1, d)
+  }
+
+  const clasificarEstadoRespaldo = (cuota: Cuota): string => {
+    const montoCuota = Number(cuota.monto_cuota) || 0
+    const paid = Math.max(
+      Number(cuota.total_pagado) || 0,
+      Number(cuota.pago_monto_conciliado) || 0
+    )
+    const fvIso = cuota.fecha_vencimiento || ''
+    const fv = fvIso ? parseIsoDateOnly(fvIso) : null
+    const hoy = hoyCaracas()
+    if (montoCuota > 0 && paid >= montoCuota - 0.01) {
+      if (fv && fv > hoy) return 'PAGO_ADELANTADO'
+      return 'PAGADO'
+    }
+    if (!fv) return 'PENDIENTE'
+    const diasRet = Math.max(
+      0,
+      Math.round((hoy.getTime() - fv.getTime()) / 86400000)
+    )
+    if (diasRet === 0) {
+      return paid > 0.001 ? 'PARCIAL' : 'PENDIENTE'
+    }
+    if (diasRet >= 92) return 'MORA'
+    return 'VENCIDO'
+  }
 
   const determinarEstadoReal = (cuota: Cuota): string => {
     const backend = (cuota.estado || '').trim().toUpperCase()
-
-    const pagoConciliado = cuota.pago_conciliado === true
-
-    // Prioridad: estado calculado en API (misma fuente que PDF / informes)
-
-    if (backend === 'PAGADO' && pagoConciliado) {
-      return 'CONCILIADO'
-    }
-
-    if (backend === 'PAGADO') {
-      return 'PAGADO'
-    }
-
-    if (
-      [
-        'PENDIENTE',
-        'VENCIDO',
-        'MORA',
-        'PAGO_ADELANTADO',
-        'PARCIAL',
-        'CONCILIADO',
-        'PAGADA',
-      ].includes(backend)
-    ) {
+    const confianza = [
+      'PENDIENTE',
+      'PARCIAL',
+      'VENCIDO',
+      'MORA',
+      'PAGADO',
+      'PAGO_ADELANTADO',
+      'PAGADA',
+    ]
+    if (confianza.includes(backend)) {
+      if (backend === 'PAGADA') return 'PAGADO'
       return backend
     }
-
-    // Respaldo si el API no envía estado útil (versiones antiguas)
-
-    const totalPagado = cuota.total_pagado ?? 0
-
-    const montoConciliado = cuota.pago_monto_conciliado ?? 0
-
-    const montoPagado = Math.max(
-      Number(totalPagado) || 0,
-      Number(montoConciliado) || 0
-    )
-
-    const montoCuota = cuota.monto_cuota || 0
-
-    if (montoPagado >= montoCuota - 0.01 && pagoConciliado) {
-      return 'CONCILIADO'
-    }
-
-    if (montoPagado >= montoCuota - 0.01) {
-      return 'PAGADO'
-    }
-
-    const hoy = new Date()
-
-    const fechaVencimiento = cuota.fecha_vencimiento
-      ? new Date(cuota.fecha_vencimiento)
-      : null
-
-    let diasMora = 0
-
-    if (fechaVencimiento && fechaVencimiento < hoy) {
-      diasMora = Math.floor(
-        (hoy.getTime() - fechaVencimiento.getTime()) / (1000 * 60 * 60 * 24)
-      )
-    }
-
-    if (montoPagado > 0) {
-      if (diasMora > 90) return 'MORA'
-
-      if (diasMora > 0) return 'VENCIDO'
-
-      return 'PAGO_ADELANTADO'
-    }
-
-    if (diasMora > 90) return 'MORA'
-
-    if (diasMora > 0) return 'VENCIDO'
-
-    return cuota.estado || 'PENDIENTE'
+    return clasificarEstadoRespaldo(cuota)
   }
 
   const getEstadoBadge = (estado: string) => {
@@ -226,15 +204,13 @@ export function TablaAmortizacionPrestamo({
 
       PAGADA: 'bg-green-100 text-green-800',
 
-      CONCILIADO: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
-
       PAGO_ADELANTADO: 'bg-blue-100 text-blue-800',
 
-      VENCIDO: 'bg-orange-100 text-orange-800', // [MORA] Nueva: vencida pero <= 90 días
+      VENCIDO: 'bg-orange-100 text-orange-800',
 
-      MORA: 'bg-red-100 text-red-800', // [MORA] Nueva: >= 91 días
+      MORA: 'bg-red-100 text-red-800',
 
-      PARCIAL: 'bg-blue-100 text-blue-800',
+      PARCIAL: 'bg-amber-100 text-amber-900',
     }
 
     return badges[estadoNormalizado as keyof typeof badges] || badges.PENDIENTE
@@ -250,19 +226,18 @@ export function TablaAmortizacionPrestamo({
 
       PAGADA: 'Pagada',
 
-      CONCILIADO: 'Conciliado',
-
       PAGO_ADELANTADO: 'Pago adelantado',
 
-      VENCIDO: 'Vencido (≤90 d)', // [MORA] Nueva
+      VENCIDO: 'Vencido (1-91 d)',
 
-      MORA: 'Mora (>90 d)', // [MORA] Nueva
+      MORA: 'Mora (92+ d)',
 
-      PARCIAL: 'Parcial',
+      PARCIAL: 'Pendiente parcial',
     }
 
     return labels[estadoNormalizado] || estado
   }
+
 
   // Total pendiente por pagar (cuotas no cubiertas al 100%) - usa total_pagado y pago_monto_conciliado
 
@@ -506,7 +481,7 @@ export function TablaAmortizacionPrestamo({
                 const estaPagado =
                   totalPagado > 0 ||
                   montoConciliadoBackend > 0 ||
-                  ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoReal)
+                  ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(estadoReal)
 
                 // Priorizar pago_monto_conciliado del backend (valores conciliados por préstamo), luego total_pagado, luego monto_cuota si está pagado
 
@@ -529,8 +504,8 @@ export function TablaAmortizacionPrestamo({
                     montoConciliadoBackend >= montoCuota - 0.01)
 
                 const puedeDescargarRecibo =
-                  ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoReal) ||
-                  ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoBackend) ||
+                  ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(estadoReal) ||
+                  ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(estadoBackend) ||
                   cuotaCubiertaPorMonto
 
                 // Calcular monto_capital y monto_interes si no existen

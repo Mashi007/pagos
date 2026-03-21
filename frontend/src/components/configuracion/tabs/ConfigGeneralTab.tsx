@@ -760,7 +760,7 @@ export function ConfigGeneralTab() {
 
 
 
-      if (!validacion.valido) error = validacion.error ? null
+      if (!validacion.valido) error = validacion.error ?? null
 
 
 

@@ -1666,7 +1666,7 @@ export function GeneraVariables() {
 
 
 
-                  checked={nuevaVariable.activa ? true}
+                  checked={!!nuevaVariable.activa}
 
 
 

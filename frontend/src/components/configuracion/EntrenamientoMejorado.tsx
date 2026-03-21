@@ -1708,7 +1708,7 @@ export function EntrenamientoMejorado() {
 
 
 
-    const totalDisponible = metricas.conversaciones.listas_entrenamiento ? 0
+    const totalDisponible = metricas.conversaciones.listas_entrenamiento ?? 0
 
 
 
@@ -2138,7 +2138,7 @@ export function EntrenamientoMejorado() {
 
 
 
-        descripcion: `Tienes ${conv.listas_entrenamiento ? 0} conversaciones listas. Puedes iniciar el fine-tuning ahora.`,
+        descripcion: `Tienes ${conv.listas_entrenamiento ?? 0} conversaciones listas. Puedes iniciar el fine-tuning ahora.`,
 
 
 
@@ -2258,7 +2258,7 @@ export function EntrenamientoMejorado() {
 
 
 
-        descripcion: `Tienes ${conv.listas_entrenamiento ? 0} conversaciones listas. Se recomiendan al menos 10 para entrenar (ideal: 50+).`,
+        descripcion: `Tienes ${conv.listas_entrenamiento ?? 0} conversaciones listas. Se recomiendan al menos 10 para entrenar (ideal: 50+).`,
 
 
 
@@ -7258,7 +7258,7 @@ export function EntrenamientoMejorado() {
 
 
 
-                      <p className="text-3xl font-bold text-blue-900">{metricas.conversaciones.total ? 0}</p>
+                      <p className="text-3xl font-bold text-blue-900">{metricas.conversaciones.total ?? 0}</p>
 
 
 
@@ -7308,7 +7308,7 @@ export function EntrenamientoMejorado() {
 
 
 
-                      <p className="text-3xl font-bold text-purple-900">{metricas.conversaciones.con_calificacion ? 0}</p>
+                      <p className="text-3xl font-bold text-purple-900">{metricas.conversaciones.con_calificacion ?? 0}</p>
 
 
 
@@ -7368,7 +7368,7 @@ export function EntrenamientoMejorado() {
 
 
 
-                        {metricas.conversaciones.listas_entrenamiento ? 0}
+                        {metricas.conversaciones.listas_entrenamiento ?? 0}
 
 
 

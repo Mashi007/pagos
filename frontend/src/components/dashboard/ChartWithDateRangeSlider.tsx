@@ -346,13 +346,13 @@ export function ChartWithDateRangeSlider<T extends Record<string, unknown>>({
 
 
 
-  const labelFrom = data[fromIndex]?.[dataKey] ? ''
+  const labelFrom = data[fromIndex]?.[dataKey] ?? ''
 
 
 
 
 
-  const labelTo = data[toIndex]?.[dataKey] ? ''
+  const labelTo = data[toIndex]?.[dataKey] ?? ''
 
 
 

@@ -18,7 +18,7 @@ from typing import Optional, List, Tuple
 from app.core.database import SessionLocal
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 from app.core.email import send_email
-from app.services.cuota_estado import estado_cuota_para_mostrar
+from app.services.cuota_estado import estado_cuota_para_mostrar, hoy_negocio
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 import logging
@@ -198,25 +198,33 @@ Equipo RapiCredit"""
             
             # Obtener cuotas pendientes del cliente
             result_cuotas = db.execute(text("""
-                SELECT c.prestamo_id, c.numero_cuota, c.fecha_vencimiento, c.monto_cuota, c.estado
+                SELECT c.prestamo_id, c.numero_cuota, c.fecha_vencimiento,
+                       COALESCE(c.monto_cuota, 0), COALESCE(c.total_pagado, 0)
                 FROM cuotas c
                 INNER JOIN prestamos p ON c.prestamo_id = p.id
-                WHERE p.cliente_id = :cliente_id AND c.estado = 'PENDIENTE'
+                WHERE p.cliente_id = :cliente_id
+                  AND COALESCE(c.total_pagado, 0) < COALESCE(c.monto_cuota, 0) - 0.01
                 ORDER BY c.prestamo_id, c.numero_cuota
             """), {'cliente_id': cliente_id}).fetchall()
             
             cuotas_data = []
             total_pendiente = 0.0
+            hoy_ref = hoy_negocio()
             for row in result_cuotas:
-                estado_str = estado_cuota_para_mostrar(row[4])
+                fv = row[2]
+                fv_d = fv.date() if fv and hasattr(fv, 'date') else fv
+                monto_c = float(row[3] or 0)
+                total_p = float(row[4] or 0)
+                estado_str = estado_cuota_para_mostrar(total_p, monto_c, fv_d, hoy_ref)
+                pend = max(0.0, monto_c - total_p)
                 cuotas_data.append({
                     'prestamo_id': row[0],
                     'numero_cuota': row[1],
                     'fecha_vencimiento': row[2].isoformat() if row[2] else '',
-                    'monto': float(row[3] or 0),
+                    'monto': pend,
                     'estado': estado_str,
                 })
-                total_pendiente += float(row[3] or 0)
+                total_pendiente += pend
             
             # Generar PDF
             pdf_bytes = generar_pdf_estado_cuenta(
