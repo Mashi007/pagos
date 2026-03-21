@@ -1,6 +1,6 @@
 """
-Endpoints de administración del módulo Cobros (requieren autenticación).
-Listado de pagos reportados, detalle, aprobar, rechazar, histórico por cédula.
+Endpoints de administraciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n del mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³dulo Cobros (requieren autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n).
+Listado de pagos reportados, detalle, aprobar, rechazar, histÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³rico por cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula.
 """
 import logging
 from datetime import date, datetime, time as dt_time
@@ -18,23 +18,26 @@ from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.pago_reportado_exportado import PagoReportadoExportado
+from app.models.pago_pendiente_descargar import PagoPendienteDescargar
 from app.models.cedula_reportar_bs import CedulaReportarBs
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK, WHATSAPP_DISPLAY
+from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
 from app.core.email import send_email
 from app.core.email_config_holder import get_email_activo_servicio
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
+from app.services.cobros.pagos_pendiente_descargar_service import obtener_pagos_aprobados_pendientes, vaciar_tabla_pendiente_descargar, obtener_datos_excel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
-# Mensaje genérico al rechazar: indicar que se comuniquen por WhatsApp (424-4579934)
+# Mensaje genÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©rico al rechazar: indicar que se comuniquen por WhatsApp (424-4579934)
 MENSAJE_RECHAZO_GENERICO = (
     "Su reporte de pago no ha sido aprobado. "
-    "Para más información o aclaratorias, comuníquese con nosotros por WhatsApp: {whatsapp} ({link}).\n\n"
+    "Para mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡s informaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n o aclaratorias, comunÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­quese con nosotros por WhatsApp: {whatsapp} ({link}).\n\n"
     "RapiCredit C.A."
 ).format(whatsapp=WHATSAPP_DISPLAY, link=WHATSAPP_LINK)
 
@@ -53,8 +56,24 @@ def _monto_con_moneda(pr: PagoReportado) -> str:
     return f"{monto_str} {moneda}".strip()
 
 
-def _generar_recibo_desde_pago(pr: PagoReportado) -> bytes:
-    """Genera recibo siempre con datos del pago reportado actual."""
+def _generar_recibo_desde_pago(db: Session, pr: PagoReportado) -> bytes:
+    cuotas_txt = texto_cuotas_aplicadas_pago_reportado(db, pr)
+    saldo_init, saldo_fin, num_cuota = None, None, None
+    try:
+        from app.services.cobros.recibo_cuotas_lookup import obtener_saldos_cuota_aplicada
+        saldo_init, saldo_fin, num_cuota = obtener_saldos_cuota_aplicada(db, pr)
+    except Exception:
+        pass
+    fecha_pago_display = pr.fecha_pago.strftime("%d/%m/%Y") if pr.fecha_pago else None
+    moneda = (pr.moneda or "BS").strip().upper()
+    tasa_cambio = None
+    if moneda == "BS":
+        try:
+            from app.services.tasa_cambio_service import obtener_tasa_hoy
+            tasa_obj = obtener_tasa_hoy(db)
+            tasa_cambio = float(tasa_obj.tasa_oficial) if tasa_obj else None
+        except Exception:
+            pass
     return generar_recibo_pago_reportado(
         referencia_interna=pr.referencia_interna,
         nombres=pr.nombres,
@@ -65,74 +84,18 @@ def _generar_recibo_desde_pago(pr: PagoReportado) -> bytes:
         monto=_monto_con_moneda(pr),
         numero_operacion=pr.numero_operacion,
         fecha_pago=pr.fecha_pago,
+        aplicado_a_cuotas=cuotas_txt,
+        saldo_inicial=saldo_init,
+        saldo_final=saldo_fin,
+        numero_cuota=num_cuota,
+        fecha_pago_display=fecha_pago_display,
+        moneda=moneda,
+        tasa_cambio=tasa_cambio,
     )
 
 
-class PagoReportadoListItem(BaseModel):
-    id: int
-    referencia_interna: str
-    nombres: str
-    apellidos: str
-    cedula_display: str
-    institucion_financiera: str
-    monto: float
-    moneda: str
-    fecha_pago: date
-    numero_operacion: str
-    fecha_reporte: datetime
-    estado: str
-    gemini_coincide_exacto: Optional[str] = None
-    observacion: Optional[str] = None  # Divergencias Gemini (gemini_comentario) para facilidad de revisión
-    correo_enviado_a: Optional[str] = None  # Para icono estado envío recibo en Acciones
-    tiene_recibo_pdf: bool = False
-
-    class Config:
-        from_attributes = True
-
-
-class PagoReportadoDetalle(BaseModel):
-    id: int
-    referencia_interna: str
-    nombres: str
-    apellidos: str
-    tipo_cedula: str
-    numero_cedula: str
-    fecha_pago: date
-    institucion_financiera: str
-    numero_operacion: str
-    monto: float
-    moneda: str
-    ruta_comprobante: Optional[str] = None
-    tiene_comprobante: bool = False
-    tiene_recibo_pdf: bool = False
-    observacion: Optional[str] = None
-    correo_enviado_a: Optional[str] = None
-    estado: str
-    motivo_rechazo: Optional[str] = None
-    gemini_coincide_exacto: Optional[str] = None
-    gemini_comentario: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    historial: List[dict]
-
-    class Config:
-        from_attributes = True
-
-
-class AprobarRechazarBody(BaseModel):
-    motivo: Optional[str] = None  # Obligatorio si rechaza
-
-
-class MarcarExportadosBody(BaseModel):
-    pago_reportado_ids: List[int]
-
-
-# Nombres de columnas para Observación (solo mostrar estos en el listado)
-OBSERVACION_COLUMNAS = ["Cédula", "Banco", "Fecha pago", "Nº operación", "Monto", "Moneda"]
-
-
 def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
-    """Devuelve la observación mostrando solo nombres de columnas (formato estándar: separador único ' / '). Si raw ya es lista corta, normaliza separadores; si es texto largo, extrae columnas por palabras clave."""
+    """Devuelve la observaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n mostrando solo nombres de columnas (formato estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ndar: separador ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºnico ' / '). Si raw ya es lista corta, normaliza separadores; si es texto largo, extrae columnas por palabras clave."""
     if not raw or not (raw := raw.strip()):
         return None
     # Si ya parece lista de columnas (corta, sin frases largas): normalizar a " / "
@@ -142,14 +105,14 @@ def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
     # Extraer columnas por palabras clave (registros antiguos con texto largo)
     lower = raw.lower()
     columnas = []
-    if "cédula" in lower or "cedula" in lower:
-        columnas.append("Cédula")
-    if "banco" in lower or "institución" in lower or "institucion" in lower or "financiera" in lower:
+    if "cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula" in lower or "cedula" in lower:
+        columnas.append("CÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula")
+    if "banco" in lower or "instituciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n" in lower or "institucion" in lower or "financiera" in lower:
         columnas.append("Banco")
-    if "fecha" in lower and ("pago" in lower or "operación" not in lower):
+    if "fecha" in lower and ("pago" in lower or "operaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n" not in lower):
         columnas.append("Fecha pago")
-    if "operación" in lower or "operacion" in lower or "referencia" in lower or "serial" in lower:
-        columnas.append("Nº operación")
+    if "operaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n" in lower or "operacion" in lower or "referencia" in lower or "serial" in lower:
+        columnas.append("NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº operaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n")
     if "monto" in lower or "cantidad" in lower:
         columnas.append("Monto")
     if "moneda" in lower:
@@ -158,7 +121,7 @@ def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
 
 
 def _normalize_cedula_for_client_lookup(cedula: str) -> str:
-    """Normaliza cédula para comparar con tabla clientes: sin guión/espacios, mayúsculas, sin ceros a la izquierda en el número (V08752971 -> V8752971)."""
+    """Normaliza cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula para comparar con tabla clientes: sin guiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n/espacios, mayÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºsculas, sin ceros a la izquierda en el nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero (V08752971 -> V8752971)."""
     s = (cedula or "").replace("-", "").replace(" ", "").strip().upper()
     if not s:
         return s
@@ -169,7 +132,7 @@ def _normalize_cedula_for_client_lookup(cedula: str) -> str:
 
 
 def _cedula_lookup_variants(cedula_norm: str) -> List[str]:
-    """Para buscar cliente por cédula: si cedula_norm es V/E/J/G + dígitos, incluir también solo los dígitos (en clientes a veces está solo el número)."""
+    """Para buscar cliente por cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula: si cedula_norm es V/E/J/G + dÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­gitos, incluir tambiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©n solo los dÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­gitos (en clientes a veces estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ solo el nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero)."""
     if not cedula_norm:
         return []
     variants = [cedula_norm]
@@ -180,10 +143,10 @@ def _cedula_lookup_variants(cedula_norm: str) -> List[str]:
 
 def _cedulas_en_clientes_set(db: Session) -> set:
     """
-    Devuelve el conjunto de cédulas que se consideran "en clientes" para la regla NO CLIENTES.
-    Incluye la forma normalizada de cada clientes.cedula y, si la cédula en BD es solo dígitos (ej. 20149164),
-    también añade la variante con prefijo V (V20149164), porque en préstamos/reportes suele usarse V+numero
-    y el cliente puede estar guardado solo con el número.
+    Devuelve el conjunto de cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dulas que se consideran "en clientes" para la regla NO CLIENTES.
+    Incluye la forma normalizada de cada clientes.cedula y, si la cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula en BD es solo dÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­gitos (ej. 20149164),
+    tambiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©n aÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±ade la variante con prefijo V (V20149164), porque en prÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©stamos/reportes suele usarse V+numero
+    y el cliente puede estar guardado solo con el nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero.
     """
     clientes_cedulas = db.execute(select(Cliente.cedula).select_from(Cliente)).scalars().all()
     out = set()
@@ -198,7 +161,7 @@ def _cedulas_en_clientes_set(db: Session) -> set:
         if not norm:
             continue
         out.add(norm)
-        # Si en clientes está solo el número (con o sin ceros a la izq.), añadir variante sin ceros y V+numero
+        # Si en clientes estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ solo el nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero (con o sin ceros a la izq.), aÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±adir variante sin ceros y V+numero
         if len(norm) >= 6 and norm.isdigit():
             num = norm.lstrip("0") or "0"
             out.add(num)
@@ -213,7 +176,7 @@ def _observacion_reglas_carga(
     cedulas_bolivares: set,
     numeros_doc_en_pagos: set,
 ) -> list:
-    """Para cada fila de pagos_reportados, devuelve lista de observaciones por reglas: NO CLIENTES, Monto (Bs no autorizado), DUPLICADO DOC. Cédula normalizada igual que en clientes (sin ceros a la izquierda)."""
+    """Para cada fila de pagos_reportados, devuelve lista de observaciones por reglas: NO CLIENTES, Monto (Bs no autorizado), DUPLICADO DOC. CÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula normalizada igual que en clientes (sin ceros a la izquierda)."""
     result = []
     for r in rows:
         partes = []
@@ -221,7 +184,7 @@ def _observacion_reglas_carga(
         cedula_norm = _normalize_cedula_for_client_lookup(raw_cedula)
         if cedula_norm and cedula_norm not in cedulas_en_clientes:
             partes.append("NO CLIENTES")
-            # Auditoría: log para diagnosticar por qué se marca NO CLIENTES
+            # AuditorÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a: log para diagnosticar por quÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© se marca NO CLIENTES
             logger.info(
                 "[COBROS] NO CLIENTES: ref=%s tipo_cedula=%r numero_cedula=%r raw=%r cedula_norm=%r | set_size=%s V20149164_in_set=%s",
                 getattr(r, "referencia_interna", None),
@@ -234,7 +197,7 @@ def _observacion_reglas_carga(
             )
         moneda = (r.moneda or "BS").strip().upper()
         if moneda == "BS" and cedula_norm and cedula_norm not in cedulas_bolivares:
-            partes.append("Monto: solo Bs si está en lista Bolívares")
+            partes.append("Monto: solo Bs si estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ en lista BolÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­vares")
         num_op = (r.numero_operacion or "").strip()
         n_doc = normalize_documento(num_op) if num_op else None
         if n_doc and n_doc in numeros_doc_en_pagos:
@@ -262,7 +225,7 @@ def list_pagos_reportados(
         q = q.where(PagoReportado.estado == estado)
         count_q = count_q.where(PagoReportado.estado == estado)
     else:
-        # Por defecto ocultar aprobados: solo casos pendientes (revisi�n, pendiente, rechazado)
+        # Por defecto ocultar aprobados: solo casos pendientes (revisiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½n, pendiente, rechazado)
         q = q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
         count_q = count_q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
 
@@ -275,10 +238,10 @@ def list_pagos_reportados(
     if fecha_hasta:
         q = q.where(PagoReportado.created_at <= datetime.combine(fecha_hasta, datetime.max.time()))
         count_q = count_q.where(PagoReportado.created_at <= datetime.combine(fecha_hasta, datetime.max.time()))
-    # Búsqueda por cédula: todas las formas posibles (tipo+numero, solo numero, con/sin guión)
+    # BÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºsqueda por cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula: todas las formas posibles (tipo+numero, solo numero, con/sin guiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n)
     if cedula:
         ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
-        # Coincide: concatenación tipo+numero, o solo numero_cedula, o tipo
+        # Coincide: concatenaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n tipo+numero, o solo numero_cedula, o tipo
         cond_cedula = or_(
             func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula).like(f"%{ced_clean}%"),
             PagoReportado.numero_cedula.like(f"%{ced_clean}%"),
@@ -297,15 +260,15 @@ def list_pagos_reportados(
         count_q = count_q.where(PagoReportado.institucion_financiera.ilike(f"%{institucion}%"))
 
     total = db.execute(count_q).scalar()
-    # Rechazados al final de la lista; luego por fecha (más viejo primero)
+    # Rechazados al final de la lista; luego por fecha (mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡s viejo primero)
     q = q.order_by(
         case((PagoReportado.estado == "rechazado", 1), else_=0),
         PagoReportado.created_at.asc(),
     ).offset((page - 1) * per_page).limit(per_page)
     rows = db.execute(q).scalars().all()
 
-    # Conjuntos para reglas de observación al cargar (cédula en clientes, lista Bs, duplicado en pagos).
-    # Normalizar cédula igual que en clientes: sin guión/espacios y sin ceros a la izquierda (V08752971 = V8752971).
+    # Conjuntos para reglas de observaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n al cargar (cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula en clientes, lista Bs, duplicado en pagos).
+    # Normalizar cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula igual que en clientes: sin guiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n/espacios y sin ceros a la izquierda (V08752971 = V8752971).
     cedula_norms = [
         _normalize_cedula_for_client_lookup(
             ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
@@ -313,7 +276,7 @@ def list_pagos_reportados(
         for r in rows
     ]
     unique_cedulas = set(c for c in cedula_norms if c)
-    # Conjunto de cédulas que existen en clientes (incluye variante V+numero si en BD está solo el número)
+    # Conjunto de cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dulas que existen en clientes (incluye variante V+numero si en BD estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ solo el nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero)
     cedulas_en_clientes = _cedulas_en_clientes_set(db)
     logger.debug(
         "[COBROS] pagos-reportados: cedulas_en_clientes set_size=%s V20149164_in_set=%s",
@@ -345,7 +308,7 @@ def list_pagos_reportados(
     for i, r in enumerate(rows):
         obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
         partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
-        # Orden estándar: reglas (NO CLIENTES, DUPLICADO DOC, Monto...) primero; luego divergencias Gemini (columnas). Un solo separador " / ".
+        # Orden estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ndar: reglas (NO CLIENTES, DUPLICADO DOC, Monto...) primero; luego divergencias Gemini (columnas). Un solo separador " / ".
         partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
         observacion = " / ".join(partes_final) if partes_final else None
         items.append(PagoReportadoListItem(
@@ -495,7 +458,7 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
         ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
     )
     if not cedula_norm:
-        raise HTTPException(status_code=400, detail="Cédula del reporte vacía; no se puede crear el pago en préstamos.")
+        raise HTTPException(status_code=400, detail="CÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula del reporte vacÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a; no se puede crear el pago en prÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©stamos.")
     variants = _cedula_lookup_variants(cedula_norm)
     cedula_lookup = func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", ""))
     cliente = db.execute(
@@ -504,7 +467,7 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
     if not cliente:
         raise HTTPException(
             status_code=400,
-            detail="No se encontró cliente con la cédula indicada. Verifique la cédula o registre al cliente para que el estado de cuenta se actualice.",
+            detail="No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ cliente con la cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula indicada. Verifique la cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula o registre al cliente para que el estado de cuenta se actualice.",
         )
     prestamo = db.execute(
         select(Prestamo)
@@ -515,7 +478,7 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
     if not prestamo:
         raise HTTPException(
             status_code=400,
-            detail="El cliente no tiene un préstamo APROBADO activo. No se puede actualizar estado de cuenta.",
+            detail="El cliente no tiene un prÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©stamo APROBADO activo. No se puede actualizar estado de cuenta.",
         )
     num_doc = ("COB-" + pr.referencia_interna)[:100]
     if db.execute(select(Pago.id).where(Pago.numero_documento == num_doc)).scalar() is not None:
@@ -553,7 +516,7 @@ def aprobar_pago_reportado(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Aprueba el pago reportado: genera recibo PDF, envía por correo, guarda en recibos/."""
+    """Aprueba el pago reportado: genera recibo PDF, envÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a por correo, guarda en recibos/."""
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
@@ -572,30 +535,12 @@ def aprobar_pago_reportado(
     estado_anterior = pr.estado
     pr.estado = "aprobado"
     pr.motivo_rechazo = None
+    
+    # Agregar a tabla temporal de descargas
+    from app.services.cobros.pagos_pendiente_descargar_service import agregar_a_pendiente_descargar
+    agregar_a_pendiente_descargar(db, pr.id)
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    try:
-        pdf_bytes = _generar_recibo_desde_pago(pr)
-    except Exception as e:
-        logger.exception("[COBROS] Aprobar ref=%s: error generando recibo PDF: %s", pr.referencia_interna, e)
-        raise HTTPException(status_code=500, detail=f"Error al generar el recibo PDF: {e!s}")
-    pr.recibo_pdf = pdf_bytes
-    to_email = _email_cliente_pago_reportado(db, pr)
-    if not pr.correo_enviado_a and to_email:
-        pr.correo_enviado_a = to_email
-    mensaje_final = "Pago aprobado y recibo enviado por correo."
-    if to_email:
-        body = f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
-        ok_mail, err_mail = send_email([to_email], f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)], servicio="cobros", respetar_destinos_manuales=True)
-        if ok_mail:
-            logger.info("[COBROS] Aprobar ref=%s: recibo enviado por correo a %s.", pr.referencia_interna, to_email)
-        else:
-            logger.error(
-                "[COBROS] Aprobar ref=%s: correo NO enviado a %s. Error: %s.",
-                pr.referencia_interna, to_email, err_mail or "desconocido",
-            )
-            mensaje_final = "Pago aprobado. El recibo no pudo enviarse por correo; use 'Enviar recibo por correo' desde el detalle."
-    _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
     try:
         _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
         db.commit()
@@ -606,6 +551,30 @@ def aprobar_pago_reportado(
         db.rollback()
         logger.exception("[COBROS] Aprobar ref=%s: error al crear pago o aplicar a cuotas: %s", pr.referencia_interna, e)
         raise HTTPException(status_code=500, detail=f"Error al aprobar: {e!s}")
+    db.refresh(pr)
+    try:
+        pdf_bytes = _generar_recibo_desde_pago(db, pr)
+    except Exception as e:
+        logger.exception("[COBROS] Aprobar ref=%s: error generando recibo PDF: %s", pr.referencia_interna, e)
+        raise HTTPException(status_code=500, detail=f"Error al generar el recibo PDF: {e!s}")
+    pr.recibo_pdf = pdf_bytes
+    to_email = _email_cliente_pago_reportado(db, pr)
+    if not pr.correo_enviado_a and to_email:
+        pr.correo_enviado_a = to_email
+    mensaje_final = "Pago aprobado y recibo enviado por correo."
+    if to_email:
+        body = f"Su reporte de pago ha sido aprobado. NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrarÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ el recibo.\n\nRapiCredit C.A."
+        ok_mail, err_mail = send_email([to_email], f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)], servicio="cobros", respetar_destinos_manuales=True)
+        if ok_mail:
+            logger.info("[COBROS] Aprobar ref=%s: recibo enviado por correo a %s.", pr.referencia_interna, to_email)
+        else:
+            logger.error(
+                "[COBROS] Aprobar ref=%s: correo NO enviado a %s. Error: %s.",
+                pr.referencia_interna, to_email, err_mail or "desconocido",
+            )
+            mensaje_final = "Pago aprobado. El recibo no pudo enviarse por correo; use 'Enviar recibo por correo' desde el detalle."
+    _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
+    db.commit()
     return {"ok": True, "mensaje": mensaje_final}
 
 
@@ -616,7 +585,7 @@ def rechazar_pago_reportado(
   db: Session = Depends(get_db),
   current_user: dict = Depends(get_current_user),
 ):
-    """Rechaza el pago reportado. Motivo obligatorio. Envía correo al cliente informando que no fue aprobado."""
+    """Rechaza el pago reportado. Motivo obligatorio. EnvÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a correo al cliente informando que no fue aprobado."""
     if not (body.motivo or "").strip():
         raise HTTPException(status_code=400, detail="El motivo de rechazo es obligatorio.")
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
@@ -641,7 +610,7 @@ def rechazar_pago_reportado(
             f"Referencia: {pr.referencia_interna}\n\n"
             f"Su reporte de pago no ha sido aprobado.\n\n"
             f"Motivo del rechazo: {pr.motivo_rechazo}\n\n"
-            f"Para más información o aclaratorias, comuníquese con nosotros por WhatsApp: {WHATSAPP_DISPLAY} ({WHATSAPP_LINK}).\n\n"
+            f"Para mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡s informaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n o aclaratorias, comunÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­quese con nosotros por WhatsApp: {WHATSAPP_DISPLAY} ({WHATSAPP_LINK}).\n\n"
             "RapiCredit C.A."
         )
         attachments: List[Tuple[str, bytes]] = []
@@ -667,9 +636,9 @@ def rechazar_pago_reportado(
                 pr.referencia_interna, to_email, err_mail or "desconocido",
             )
     elif to_email and not notif_activo:
-        logger.warning("[COBROS] Rechazar ref=%s: servicio notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
+        logger.warning("[COBROS] Rechazar ref=%s: servicio notificaciones desactivado, no se enviÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ correo a %s.", pr.referencia_interna, to_email)
     elif not to_email:
-        logger.info("[COBROS] Rechazar ref=%s: no hay correo del cliente, no se envió notificación.", pr.referencia_interna)
+        logger.info("[COBROS] Rechazar ref=%s: no hay correo del cliente, no se enviÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ notificaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n.", pr.referencia_interna)
     _registrar_historial(db, pago_id, estado_anterior, "rechazado", usuario_email, pr.motivo_rechazo)
     db.commit()
     return {"ok": True, "mensaje": "Pago rechazado y cliente notificado."}
@@ -680,7 +649,7 @@ def eliminar_pago_reportado(
     pago_id: int,
     db: Session = Depends(get_db),
 ):
-    """Elimina un pago reportado y su historial (CASCADE). Acción irreversible."""
+    """Elimina un pago reportado y su historial (CASCADE). AcciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n irreversible."""
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
@@ -696,10 +665,10 @@ def historico_por_cliente(
     cedula: str = Query(..., min_length=6),
     db: Session = Depends(get_db),
 ):
-    """Lista todos los pagos reportados por un cliente (por cédula). Incluye acceso a recibos PDF."""
+    """Lista todos los pagos reportados por un cliente (por cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula). Incluye acceso a recibos PDF."""
     ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
     if len(ced_clean) < 6:
-        raise HTTPException(status_code=400, detail="Cédula inválida.")
+        raise HTTPException(status_code=400, detail="CÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida.")
     if ced_clean[0:1] in ("V", "E", "J") and ced_clean[1:].isdigit():
         tipo, num = ced_clean[0:1], ced_clean[1:]
         q = select(PagoReportado).where(
@@ -744,7 +713,7 @@ def get_recibo_pdf(pago_id: int, db: Session = Depends(get_db)):
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
-    pdf_bytes = _generar_recibo_desde_pago(pr)
+    pdf_bytes = _generar_recibo_desde_pago(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
     return Response(
@@ -759,19 +728,19 @@ def enviar_recibo_manual(
     pago_id: int,
     db: Session = Depends(get_db),
 ):
-    """Envía por correo el recibo PDF del pago (manual). Genera el PDF si no existe y lo guarda en BD."""
+    """EnvÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a por correo el recibo PDF del pago (manual). Genera el PDF si no existe y lo guarda en BD."""
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     to_email = _email_cliente_pago_reportado(db, pr)
     if not to_email:
         raise HTTPException(status_code=400, detail="No hay correo del cliente para este pago. Registre el correo en el detalle del pago o en la ficha del cliente.")
-    pdf_bytes = _generar_recibo_desde_pago(pr)
+    pdf_bytes = _generar_recibo_desde_pago(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
     body = (
-        f"Recibo de reporte de pago. Número de referencia: {_referencia_display(pr.referencia_interna)}.\n\n"
-        "Adjunto encontrará el recibo.\n\nRapiCredit C.A."
+        f"Recibo de reporte de pago. NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero de referencia: {_referencia_display(pr.referencia_interna)}.\n\n"
+        "Adjunto encontrarÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ el recibo.\n\nRapiCredit C.A."
     )
     send_email([to_email], f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes))], servicio="cobros", respetar_destinos_manuales=True)
     return {"ok": True, "mensaje": "Recibo enviado por correo."}
@@ -783,7 +752,7 @@ class CambiarEstadoBody(BaseModel):
 
 
 class EditarPagoReportadoBody(BaseModel):
-    """Campos editables para que el pago cumpla con los validadores (cédula, fecha, monto, etc.)."""
+    """Campos editables para que el pago cumpla con los validadores (cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula, fecha, monto, etc.)."""
     nombres: Optional[str] = None
     apellidos: Optional[str] = None
     tipo_cedula: Optional[str] = None
@@ -798,7 +767,7 @@ class EditarPagoReportadoBody(BaseModel):
 
 
 def _rechazar_si_numero_operacion_duplicado(db: Session, numero_operacion: str) -> None:
-    """Si el número de operación ya existe en tabla pagos (numero_documento), lanza HTTPException 400. Nunca se permite guardar duplicado."""
+    """Si el nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero de operaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n ya existe en tabla pagos (numero_documento), lanza HTTPException 400. Nunca se permite guardar duplicado."""
     num_op = (numero_operacion or "").strip()
     if not num_op:
         return
@@ -806,12 +775,12 @@ def _rechazar_si_numero_operacion_duplicado(db: Session, numero_operacion: str) 
     if existe:
         raise HTTPException(
             status_code=400,
-            detail="Número de operación duplicado. No se permite guardar. Ya existe un pago con ese documento.",
+            detail="NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero de operaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n duplicado. No se permite guardar. Ya existe un pago con ese documento.",
         )
 
 
 def _normalizar_cedula_editar(tipo: Optional[str], numero: Optional[str]) -> Tuple[str, str]:
-    """Devuelve (tipo, numero) normalizados; si solo viene numero con 6-11 dígitos, antepone V."""
+    """Devuelve (tipo, numero) normalizados; si solo viene numero con 6-11 dÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­gitos, antepone V."""
     if tipo is None and numero is None:
         return "", ""
     t = (tipo or "").strip().upper()
@@ -822,7 +791,7 @@ def _normalizar_cedula_editar(tipo: Optional[str], numero: Optional[str]) -> Tup
         return t, n
     if not t and n.isdigit() and 6 <= len(n) <= 11:
         return "V", n
-    # Intentar validar como cédula completa
+    # Intentar validar como cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula completa
     cedula_input = f"{t}{n}" if t else n
     val = validate_cedula(cedula_input)
     if val.get("valido"):
@@ -840,7 +809,7 @@ def editar_pago_reportado(
     body: EditarPagoReportadoBody,
     db: Session = Depends(get_db),
 ):
-    """Edita los datos del pago reportado para que cumplan con los validadores (cédula, fecha, monto, etc.). Solo actualiza los campos enviados."""
+    """Edita los datos del pago reportado para que cumplan con los validadores (cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula, fecha, monto, etc.). Solo actualiza los campos enviados."""
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
@@ -860,7 +829,7 @@ def editar_pago_reportado(
         if tipo and numero:
             val = validate_cedula(f"{tipo}{numero}")
             if not val.get("valido"):
-                raise HTTPException(status_code=400, detail=val.get("error", "Cédula inválida."))
+                raise HTTPException(status_code=400, detail=val.get("error", "CÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida."))
             pr.tipo_cedula = tipo
             pr.numero_cedula = numero[:13]
     if body.fecha_pago is not None:
@@ -875,7 +844,7 @@ def editar_pago_reportado(
         pr.monto = body.monto
     if body.moneda is not None:
         m = (body.moneda or "BS").strip().upper()[:10]
-        # USDT = Dólares = USD = $; normalizar a USD
+        # USDT = DÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³lares = USD = $; normalizar a USD
         if m in ("USD", "USDT"):
             m = "USD"
         pr.moneda = m or pr.moneda
@@ -884,10 +853,10 @@ def editar_pago_reportado(
     if body.observacion is not None:
         pr.observacion = (body.observacion or "").strip()[:500] or None
 
-    # Número de operación: nunca permitir duplicado en tabla pagos
+    # NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero de operaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n: nunca permitir duplicado en tabla pagos
     _rechazar_si_numero_operacion_duplicado(db, pr.numero_operacion)
 
-    # Si la moneda queda en BS, la cédula debe estar en la lista de autorizadas para Bolívares (misma normalización que en listado)
+    # Si la moneda queda en BS, la cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula debe estar en la lista de autorizadas para BolÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­vares (misma normalizaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n que en listado)
     moneda_final = (pr.moneda or "").strip().upper()
     if moneda_final == "BS":
         raw_cedula = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
@@ -902,11 +871,11 @@ def editar_pago_reportado(
             if not permitido_bs:
                 raise HTTPException(
                     status_code=400,
-                    detail="Observación: Bolívares. No puede guardar con moneda Bs; la cédula no está en la lista autorizada. Cambie a USD.",
+                    detail="ObservaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n: BolÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­vares. No puede guardar con moneda Bs; la cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula no estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ en la lista autorizada. Cambie a USD.",
                 )
 
     if pr.recibo_pdf:
-        pr.recibo_pdf = _generar_recibo_desde_pago(pr)
+        pr.recibo_pdf = _generar_recibo_desde_pago(db, pr)
     db.commit()
     logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
     return {"ok": True, "mensaje": "Datos actualizados. Los cambios cumplen con los validadores."}
@@ -919,9 +888,9 @@ def cambiar_estado_pago(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Cambia el estado del pago reportado (pendiente, en_revision, aprobado, rechazado). Si pasa a aprobado, genera recibo PDF y envía por correo al email del cliente (cédula)."""
+    """Cambia el estado del pago reportado (pendiente, en_revision, aprobado, rechazado). Si pasa a aprobado, genera recibo PDF y envÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a por correo al email del cliente (cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dula)."""
     if body.estado not in ("pendiente", "en_revision", "aprobado", "rechazado"):
-        raise HTTPException(status_code=400, detail="Estado no válido.")
+        raise HTTPException(status_code=400, detail="Estado no vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lido.")
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
@@ -937,13 +906,24 @@ def cambiar_estado_pago(
 
     mensaje = f"Estado actualizado a {body.estado}."
     if body.estado == "aprobado":
-        pdf_bytes = _generar_recibo_desde_pago(pr)
+        try:
+            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+            db.commit()
+        except HTTPException:
+            raise
+        
+        # Agregar a tabla temporal de descargas
+        from app.services.cobros.pagos_pendiente_descargar_service import agregar_a_pendiente_descargar
+        agregar_a_pendiente_descargar(db, pr.id)
+        
+        db.refresh(pr)
+        pdf_bytes = _generar_recibo_desde_pago(db, pr)
         pr.recibo_pdf = pdf_bytes
         to_email = _email_cliente_pago_reportado(db, pr)
         if not pr.correo_enviado_a and to_email:
             pr.correo_enviado_a = to_email
         if to_email:
-            body_mail = f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
+            body_mail = f"Su reporte de pago ha sido aprobado. NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºmero de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrarÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ el recibo.\n\nRapiCredit C.A."
             ok_mail, err_mail = send_email(
                 [to_email],
                 f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}",
@@ -962,12 +942,8 @@ def cambiar_estado_pago(
                 )
                 mensaje = "Estado actualizado a aprobado. El recibo no pudo enviarse por correo."
         else:
-            mensaje = "Estado actualizado a aprobado. No hay correo registrado para este pago (no se envió recibo)."
-        # Crear pago en tabla pagos y aplicar a cuotas (igual que POST /aprobar) para que estado de cuenta y préstamos se actualicen
-        try:
-            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
-        except HTTPException:
-            raise
+            mensaje = "Estado actualizado a aprobado. No hay correo registrado para este pago (no se enviÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ recibo)."
+
     elif body.estado == "rechazado":
         to_email = _email_cliente_pago_reportado(db, pr)
         notif_activo = get_email_activo_servicio("notificaciones")
@@ -980,7 +956,7 @@ def cambiar_estado_pago(
                 f"Referencia: {pr.referencia_interna}\n\n"
                 f"Su reporte de pago no ha sido aprobado.\n\n"
                 f"Motivo del rechazo: {pr.motivo_rechazo}\n\n"
-                f"Para más información o aclaratorias, comuníquese con nosotros por WhatsApp: {WHATSAPP_DISPLAY} ({WHATSAPP_LINK}).\n\n"
+                f"Para mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡s informaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n o aclaratorias, comunÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­quese con nosotros por WhatsApp: {WHATSAPP_DISPLAY} ({WHATSAPP_LINK}).\n\n"
                 "RapiCredit C.A."
             )
             attachments_rech: List[Tuple[str, bytes]] = []
@@ -1008,10 +984,10 @@ def cambiar_estado_pago(
                 )
                 mensaje = "Estado actualizado a rechazado. El correo al cliente no pudo enviarse."
         elif to_email and not notif_activo:
-            logger.warning("[COBROS] PATCH estado=rechazado ref=%s: servicio notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
+            logger.warning("[COBROS] PATCH estado=rechazado ref=%s: servicio notificaciones desactivado, no se enviÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ correo a %s.", pr.referencia_interna, to_email)
             mensaje = "Estado actualizado a rechazado. Servicio de correo desactivado."
         else:
-            logger.info("[COBROS] PATCH estado=rechazado ref=%s: no hay correo del cliente, no se envió notificación.", pr.referencia_interna)
+            logger.info("[COBROS] PATCH estado=rechazado ref=%s: no hay correo del cliente, no se enviÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ notificaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n.", pr.referencia_interna)
             mensaje = "Estado actualizado a rechazado."
 
     _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
@@ -1042,7 +1018,7 @@ def marcar_pagos_reportados_exportados(
     if no_aprobados:
         raise HTTPException(
             status_code=400,
-            detail=f"Solo se pueden marcar exportados pagos en estado aprobado. IDs inválidos: {no_aprobados}",
+            detail=f"Solo se pueden marcar exportados pagos en estado aprobado. IDs invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lidos: {no_aprobados}",
         )
 
     ya_exportados = set(
@@ -1067,3 +1043,65 @@ def marcar_pagos_reportados_exportados(
         "ya_exportados": len(ya_exportados),
         "total_solicitados": len(ids),
     }
+
+
+@router.get("/descargar-pagos-aprobados-excel")
+def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
+    """
+    Descarga los pagos aprobados pendientes en Excel y luego vacÃƒÆ’Ã‚Â­a la tabla temporal.
+    Columnas: CÃƒÆ’Ã‚Â©dula, Fecha, Comentario, NÃƒÆ’Ã‚Âºmero de Documento.
+    """
+    from io import BytesIO
+    from openpyxl import Workbook
+    from fastapi.responses import StreamingResponse
+    from datetime import datetime
+    
+    # Obtener pagos pendientes de descargar
+    pagos = obtener_pagos_aprobados_pendientes(db)
+    
+    if not pagos:
+        raise HTTPException(status_code=204, detail="No hay pagos aprobados pendientes para descargar.")
+    
+    # Generar datos para Excel
+    datos = obtener_datos_excel(pagos)
+    
+    # Crear workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Pagos Aprobados"
+    
+    # Encabezados
+    headers = ["Cedula", "Fecha", "Comentario", "Numero de Documento"]
+    ws.append(headers)
+    
+    # Datos
+    for row in datos:
+        ws.append([
+            row["Cedula"],
+            row["Fecha"],
+            row["Comentario"],
+            row["Numero de Documento"],
+        ])
+    
+    # Ajustar ancho de columnas
+    ws.column_dimensions["A"].width = 15
+    ws.column_dimensions["B"].width = 12
+    ws.column_dimensions["C"].width = 30
+    ws.column_dimensions["D"].width = 25
+    
+    # Generar bytes
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    # Vaciar tabla despuÃƒÆ’Ã‚Â©s de generar el Excel
+    cantidad_vaciada = vaciar_tabla_pendiente_descargar(db)
+    
+    fecha = datetime.now().strftime("%Y%m%d")
+    filename = f"pagos_aprobados_{fecha}.xlsx"
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

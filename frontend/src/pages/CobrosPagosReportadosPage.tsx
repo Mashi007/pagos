@@ -1,5 +1,5 @@
 /**
- * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
+ * Listado de pagos reportados (mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³dulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
  */
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -11,6 +11,7 @@ import {
   eliminarPagoReportado,
   markPagosReportadosExportados,
   type PagoReportadoItem,
+  descargarPagosAprobadosExcel,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
 } from '../services/cobrosService'
@@ -37,11 +38,11 @@ La imagen no se aprecia detalles, agradezco enviar una imagen sin recortar a cob
 
 Gracias
 
-Angélica Fuentes`
+AngÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©lica Fuentes`
 
 const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof Clock }> = {
   pendiente: { label: 'Pendiente', short: 'Pend.', variant: 'secondary', Icon: Clock },
-  en_revision: { label: 'En revisión (manual)', short: 'Revisión', variant: 'outline', Icon: Search },
+  en_revision: { label: 'En revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n (manual)', short: 'RevisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n', variant: 'outline', Icon: Search },
   aprobado: { label: 'Aprobado', short: 'Aprobado', variant: 'default', Icon: CheckCircle },
   importado: { label: 'Importado a Pagos', short: 'Import.', variant: 'default', Icon: CheckCircle },
   rechazado: { label: 'Rechazado', short: 'Rechazado', variant: 'destructive', Icon: XCircle },
@@ -72,6 +73,7 @@ export default function CobrosPagosReportadosPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [rechazarModal, setRechazarModal] = useState<{ open: boolean; row: PagoReportadoItem | null }>({ open: false, row: null })
   const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [descargandoTabla, setDescargandoTabla] = useState(false)
   const [kpis, setKpis] = useState<PagosReportadosKpis | null>(null)
 
   const load = async (overrides?: { estado?: string; page?: number }) => {
@@ -147,7 +149,7 @@ export default function CobrosPagosReportadosPage() {
   }
 
   const handleEliminar = async (id: number, ref: string) => {
-    if (!window.confirm(`¿Eliminar el pago reportado ${ref}? Esta acción no se puede deshacer.`)) return
+    if (!window.confirm(`ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿Eliminar el pago reportado ${ref}? Esta acciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n no se puede deshacer.`)) return
     setDeletingId(id)
     try {
       await eliminarPagoReportado(id)
@@ -204,7 +206,20 @@ export default function CobrosPagosReportadosPage() {
     } catch (e: any) {
       toast.error(e?.message || 'Se descarg? el Excel, pero fall? el marcado de exportados. Recargue e intente de nuevo.')
     }
-  }
+
+  const handleDescargarPagosTablaTemporalExcel = async () => {
+    setDescargandoTabla(true)
+    try {
+      await descargarPagosAprobadosExcel()
+      toast.success('Excel descargado. Los pagos han sido eliminados de la tabla temporal.')
+      // Recargar la lista despuÃ©s de descargar
+      await load({ page: 1 })
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al descargar el Excel.')
+    } finally {
+      setDescargandoTabla(false)
+    }
+  }  }
 
   return (
     <div className="p-6 space-y-6">
@@ -216,7 +231,7 @@ export default function CobrosPagosReportadosPage() {
           rel="noopener noreferrer"
           className="text-sm text-blue-600 hover:underline"
         >
-          Link formulario público →
+          Link formulario pÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºblico ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢
         </a>
       </div>
 
@@ -232,7 +247,7 @@ export default function CobrosPagosReportadosPage() {
           >
             <option value="">Todos los estados</option>
             <option value="pendiente">Pendiente</option>
-            <option value="en_revision">En revisión</option>
+            <option value="en_revision">En revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n</option>
             <option value="aprobado">Aprobado</option>
             <option value="rechazado">Rechazado</option>
             <option value="importado">Importado a Pagos</option>
@@ -252,19 +267,23 @@ export default function CobrosPagosReportadosPage() {
             className="w-40"
           />
           <Input
-            placeholder="Cédula"
+            placeholder="CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula"
             value={cedula}
             onChange={(e) => setCedula(e.target.value)}
             className="w-40"
           />
           <Input
-            placeholder="Institución"
+            placeholder="InstituciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n"
             value={institucion}
             onChange={(e) => setInstitucion(e.target.value)}
             className="w-48"
           />
           <Button onClick={() => load()}>Buscar</Button>
           <Button variant="outline" onClick={handleDescargarExcelAprobados}>Descargar Excel Aprobados</Button>
+          <Button variant="outline" onClick={handleDescargarPagosTablaTemporalExcel} disabled={descargandoTabla}>
+            {descargandoTabla ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
+            Descargar de Tabla Temporal
+          </Button>
         </CardContent>
       </Card>
 
@@ -324,13 +343,13 @@ export default function CobrosPagosReportadosPage() {
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="text-left py-3 px-3 font-semibold">Nombre</th>
-                    <th className="text-left py-3 px-3 font-semibold">Cédula</th>
+                    <th className="text-left py-3 px-3 font-semibold">CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula</th>
                     <th className="text-left py-3 px-3 font-semibold">Banco</th>
                     <th className="text-right py-3 px-3 font-semibold">Monto</th>
                     <th className="text-left py-3 px-3 font-semibold">Fecha pago</th>
-                    <th className="text-left py-3 px-3 font-semibold">Nº operación</th>
+                    <th className="text-left py-3 px-3 font-semibold">NÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº operaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n</th>
                     <th className="text-left py-3 px-3 font-semibold">Fecha reporte</th>
-                    <th className="text-left py-3 px-3 font-semibold">Observación</th>
+                    <th className="text-left py-3 px-3 font-semibold">ObservaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n</th>
                     <th className="text-left py-3 px-3 font-semibold">Estado</th>
                     <th className="text-left py-3 px-3 font-semibold">Acciones</th>
                   </tr>
@@ -341,8 +360,8 @@ export default function CobrosPagosReportadosPage() {
                       <td className="py-3 px-3 align-top min-w-0">
                         <span className="block truncate" title={`${row.nombres} ${row.apellidos}`}>{row.nombres} {row.apellidos}</span>
                       </td>
-                      <td className={`py-3 px-3 align-top whitespace-nowrap ${/c[eé]dula/i.test(row.observacion || '') ? 'bg-destructive/10 text-destructive font-medium' : ''}`} title={/c[eé]dula/i.test(row.observacion || '') ? 'Observación: ' + (row.observacion || '') : undefined}>
-                        {/c[eé]dula/i.test(row.observacion || '') && <AlertCircle className="inline-block h-4 w-4 mr-1 align-middle" aria-hidden />}
+                      <td className={`py-3 px-3 align-top whitespace-nowrap ${/c[eÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©]dula/i.test(row.observacion || '') ? 'bg-destructive/10 text-destructive font-medium' : ''}`} title={/c[eÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©]dula/i.test(row.observacion || '') ? 'ObservaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n: ' + (row.observacion || '') : undefined}>
+                        {/c[eÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©]dula/i.test(row.observacion || '') && <AlertCircle className="inline-block h-4 w-4 mr-1 align-middle" aria-hidden />}
                         {row.cedula_display}
                       </td>
                       <td className="py-3 px-3 align-top min-w-0">
@@ -358,9 +377,9 @@ export default function CobrosPagosReportadosPage() {
                         className="py-3 px-3 align-top min-w-0"
                         title={
                           /NO CLIENTES/i.test(row.observacion || '')
-                            ? `NO CLIENTES: la cédula del reporte (${row.cedula_display}) no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.`
-                            : /solo Bs|Bolívares/i.test(row.observacion || '')
-                              ? 'Monto en Bs: solo está permitido si la cédula está en la lista de autorizadas para Bolívares (tabla cedulas_reportar_bs). Si no está, use USD o agregue la cédula a la lista en Configuración.'
+                            ? `NO CLIENTES: la cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula del reporte (${row.cedula_display}) no figura en la tabla clientes. Se compara normalizada (sin guiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n, sin ceros a la izquierda). Verifique en PrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©stamos > Clientes o registre al cliente.`
+                            : /solo Bs|BolÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vares/i.test(row.observacion || '')
+                              ? 'Monto en Bs: solo estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ permitido si la cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ en la lista de autorizadas para BolÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vares (tabla cedulas_reportar_bs). Si no estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡, use USD o agregue la cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula a la lista en ConfiguraciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.'
                               : (row.observacion ?? '')
                         }
                       >
@@ -368,7 +387,7 @@ export default function CobrosPagosReportadosPage() {
                           <span className={`text-xs line-clamp-2 ${
                             /NO CLIENTES/i.test(row.observacion || '') ? 'text-destructive font-medium' : 'text-muted-foreground'
                           }`}>{row.observacion}</span>
-                        ) : '—'}
+                        ) : 'ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â'}
                       </td>
                       <td className="py-3 px-3 align-top whitespace-nowrap">
                         {(() => {
@@ -384,11 +403,11 @@ export default function CobrosPagosReportadosPage() {
                       </td>
                       <td className="py-3 px-3 align-top">
                         <div className="flex flex-wrap gap-1 items-center justify-start">
-                          {/* Estado envío recibo: X = no enviado, visto = entregado, triángulo = en revisión */}
+                          {/* Estado envÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­o recibo: X = no enviado, visto = entregado, triÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ngulo = en revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n */}
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground" title={
                             row.estado === 'aprobado'
-                              ? (row.tiene_recibo_pdf && row.correo_enviado_a ? 'Recibo enviado por correo' : 'No se envió recibo por correo')
-                              : 'En revisión'
+                              ? (row.tiene_recibo_pdf && row.correo_enviado_a ? 'Recibo enviado por correo' : 'No se enviÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ recibo por correo')
+                              : 'En revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n'
                           }>
                             {row.estado === 'aprobado' ? (
                               row.tiene_recibo_pdf && row.correo_enviado_a ? (
@@ -433,8 +452,8 @@ export default function CobrosPagosReportadosPage() {
                               }}
                               disabled={changingEstadoId === row.id}
                             >
-                              <option value="">—</option>
-                              <option value="en_revision">En revisión</option>
+                              <option value="">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â</option>
+                              <option value="en_revision">En revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n</option>
                               <option value="aprobado">Aprobar</option>
                               <option value="rechazado">Rechazar</option>
                             </select>
@@ -474,7 +493,7 @@ export default function CobrosPagosReportadosPage() {
         </CardContent>
       </Card>
 
-      {/* Modal: interfaz rápida para escribir mensaje de rechazo y enviar correo al cliente */}
+      {/* Modal: interfaz rÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡pida para escribir mensaje de rechazo y enviar correo al cliente */}
       <Dialog
         open={rechazarModal.open}
         onOpenChange={(open) => {
@@ -495,7 +514,7 @@ export default function CobrosPagosReportadosPage() {
                   Referencia: <strong>{rechazarModal.row.referencia_interna?.startsWith("#") ? rechazarModal.row.referencia_interna : `#${rechazarModal.row.referencia_interna}`}</strong>
                   {rechazarModal.row.correo_enviado_a && (
                     <span className="block mt-1">
-                      Se enviará un correo automáticamente a <strong>{rechazarModal.row.correo_enviado_a}</strong> desde <strong>notificaciones@rapicreditca.com</strong> con el mensaje y el comprobante adjunto.
+                      Se enviarÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ un correo automÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ticamente a <strong>{rechazarModal.row.correo_enviado_a}</strong> desde <strong>notificaciones@rapicreditca.com</strong> con el mensaje y el comprobante adjunto.
                     </span>
                   )}
                 </>
@@ -506,7 +525,7 @@ export default function CobrosPagosReportadosPage() {
             <label className="block text-sm font-medium">Mensaje para el cliente (obligatorio)</label>
             <textarea
               className="w-full border rounded-md px-3 py-2 min-h-[100px] text-sm resize-y"
-              placeholder="Indique el motivo del rechazo. Este texto se enviará por correo al cliente."
+              placeholder="Indique el motivo del rechazo. Este texto se enviarÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ por correo al cliente."
               value={motivoRechazo}
               onChange={(e) => setMotivoRechazo(e.target.value)}
               autoFocus

@@ -1,7 +1,7 @@
 /**
- * Servicio para el módulo Cobros.
- * - Público: validar cédula, enviar reporte (sin auth).
- * - Admin: listado, detalle, aprobar, rechazar, histórico (con auth).
+ * Servicio para el mÃ³dulo Cobros.
+ * - PÃºblico: validar cÃ©dula, enviar reporte (sin auth).
+ * - Admin: listado, detalle, aprobar, rechazar, histÃ³rico (con auth).
  */
 import { apiClient } from './api'
 import { env } from '../config/env'
@@ -17,7 +17,7 @@ export interface ValidarCedulaResponse {
   email?: string
   email_enmascarado?: string
   error?: string
-  /** True si esta cédula puede reportar pagos en Bolívares (Bs) en cobros/infopagos. */
+  /** True si esta cÃ©dula puede reportar pagos en BolÃ­vares (Bs) en cobros/infopagos. */
   puede_reportar_bs?: boolean
 }
 
@@ -36,9 +36,11 @@ export interface EnviarReporteInfopagosResponse {
   error?: string
   recibo_descarga_token?: string
   pago_id?: number
+  /** Ej. Cuota 1 / Cuotas 1, 2 si ya aplico en amortizacion. */
+  aplicado_a_cuotas?: string | null
 }
 
-/** Público: validar cédula (formato + tiene préstamo). Sin auth. Sin envío de token. */
+/** PÃºblico: validar cÃ©dula (formato + tiene prÃ©stamo). Sin auth. Sin envÃ­o de token. */
 export async function validarCedulaPublico(
   cedula: string,
   opts?: { origen?: string },
@@ -54,7 +56,7 @@ export async function validarCedulaPublico(
   return res.json()
 }
 
-/** Público: enviar reporte de pago (multipart). Sin auth. Sin envío de token. */
+/** PÃºblico: enviar reporte de pago (multipart). Sin auth. Sin envÃ­o de token. */
 export async function enviarReportePublico(formData: FormData): Promise<EnviarReporteResponse> {
   const url = `${BASE_PUBLIC}/enviar-reporte`
   const res = await fetch(url, {
@@ -64,12 +66,12 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
     // No Content-Type: el navegador fija multipart boundary
   })
   if (res.status === 429) {
-    return { ok: false, error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.' }
+    return { ok: false, error: 'Ha alcanzado el lÃ­mite de envÃ­os por hora. Intente mÃ¡s tarde.' }
   }
   if (res.status === 503) {
     return {
       ok: false,
-      error: 'Servicio temporalmente no disponible. Intente más tarde o contacte por WhatsApp 424-4579934.',
+      error: 'Servicio temporalmente no disponible. Intente mÃ¡s tarde o contacte por WhatsApp 424-4579934.',
     }
   }
   // Leer el body una sola vez (evita "body stream already read" si el servidor devuelve 500/HTML)
@@ -80,11 +82,11 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
   } catch {
     return {
       ok: false,
-      error: (text || `Error ${res.status}. Intente más tarde o contacte por WhatsApp 424-4579934.`).slice(0, 200),
+      error: (text || `Error ${res.status}. Intente mÃ¡s tarde o contacte por WhatsApp 424-4579934.`).slice(0, 200),
     }
   }
   if (!res.ok && data && typeof data === 'object') {
-    return { ok: false, error: (data as EnviarReporteResponse).error || `Error ${res.status}. Intente más tarde o contacte por WhatsApp 424-4579934.` }
+    return { ok: false, error: (data as EnviarReporteResponse).error || `Error ${res.status}. Intente mÃ¡s tarde o contacte por WhatsApp 424-4579934.` }
   }
   return data
 }
@@ -98,7 +100,7 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
     credentials: 'same-origin',
   })
   if (res.status === 429) {
-    return { ok: false, error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.' }
+    return { ok: false, error: 'Ha alcanzado el lÃ­mite de envÃ­os por hora. Intente mÃ¡s tarde.' }
   }
   const text = await res.text()
   let data: EnviarReporteInfopagosResponse
@@ -107,7 +109,7 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
   } catch {
     return {
       ok: false,
-      error: (text || `Error ${res.status}. Intente más tarde.`).slice(0, 200),
+      error: (text || `Error ${res.status}. Intente mÃ¡s tarde.`).slice(0, 200),
     }
   }
   if (!res.ok && data && typeof data === 'object') {
@@ -138,9 +140,9 @@ export interface PagoReportadoItem {
   fecha_reporte: string
   estado: string
   gemini_coincide_exacto?: string
-  /** Divergencias de Gemini con lo ingresado (para columna Observación y revisión manual) */
+  /** Divergencias de Gemini con lo ingresado (para columna ObservaciÃ³n y revisiÃ³n manual) */
   observacion?: string
-  /** Correo al que se envió (o se enviaría) el recibo; para icono estado en Acciones */
+  /** Correo al que se enviÃ³ (o se enviarÃ­a) el recibo; para icono estado en Acciones */
   correo_enviado_a?: string
   /** Si tiene recibo PDF generado (enviado o disponible) */
   tiene_recibo_pdf?: boolean
@@ -254,7 +256,7 @@ export async function historicoPorCliente(cedula: string): Promise<{ cedula: str
   return data
 }
 
-/** Abre el comprobante (imagen/PDF) en nueva pestaña. Usa auth del apiClient. */
+/** Abre el comprobante (imagen/PDF) en nueva pestaÃ±a. Usa auth del apiClient. */
 export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
   const data = await apiClient.get<Blob>(`${BASE_COBROS}/pagos-reportados/${pagoId}/comprobante`, { responseType: 'blob' })
   const url = URL.createObjectURL(data)
@@ -268,7 +270,7 @@ export async function openReciboPdfInNewTab(pagoId: number): Promise<void> {
   window.open(url, '_blank')
 }
 
-/** Envía por correo el recibo PDF (manual). Genera PDF si no existe. */
+/** EnvÃ­a por correo el recibo PDF (manual). Genera PDF si no existe. */
 export async function enviarReciboManual(pagoId: number): Promise<{ ok: boolean; mensaje?: string }> {
   const data = await apiClient.post<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}/enviar-recibo`)
   return data
@@ -318,4 +320,30 @@ export async function markPagosReportadosExportados(pagoReportadoIds: number[]):
     { pago_reportado_ids: pagoReportadoIds },
   )
   return data
+}
+
+
+export async function descargarPagosAprobadosExcel(): Promise<void> {
+  const response = await fetch(\/descargar-pagos-aprobados-excel, {
+    method: 'GET',
+    credentials: 'same-origin',
+    headers: {
+      'Authorization': Bearer \,
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(error || Error descargando Excel: \)
+  }
+
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = \pagos_aprobados_\.xlsx\
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
