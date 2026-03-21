@@ -740,10 +740,19 @@ class PrestamoService {
       { responseType: 'blob' }
     )
 
-    const raw: Blob = response.data instanceof Blob ? response.data : new Blob([response.data])
+    const raw: Blob =
+      response.data instanceof Blob ? response.data : new Blob([response.data])
     const head = new Uint8Array(await raw.slice(0, 5).arrayBuffer())
-    const looksPdf = head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46
-    const ct = String(response.headers?.['content-type'] || response.headers?.['Content-Type'] || '')
+    const looksPdf =
+      head[0] === 0x25 &&
+      head[1] === 0x50 &&
+      head[2] === 0x44 &&
+      head[3] === 0x46
+    const ct = String(
+      response.headers?.['content-type'] ||
+        response.headers?.['Content-Type'] ||
+        ''
+    )
     const looksExcel =
       ct.includes('spreadsheet') ||
       ct.includes('excel') ||
@@ -756,7 +765,9 @@ class PrestamoService {
       )
     }
     if (!looksPdf && !ct.includes('pdf')) {
-      throw new Error('La respuesta no es un PDF válido. Verifique sesión e intente de nuevo.')
+      throw new Error(
+        'La respuesta no es un PDF válido. Verifique sesión e intente de nuevo.'
+      )
     }
 
     const blob = new Blob([raw], { type: 'application/pdf' })
