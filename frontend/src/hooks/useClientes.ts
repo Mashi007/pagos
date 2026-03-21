@@ -30,10 +30,10 @@ export function useClientes(
   return useQuery({
     queryKey: clienteKeys.list({ ...filters, per_page: perPage }),
     queryFn: () => clienteService.getClientes(filters, page, perPage),
-    staleTime: STALE_TIME_SHORT, // Ã¢Å“â€¦ Reducido a 2 minutos para datos más frescos
-    refetchOnMount: true, // Ã¢Å“â€¦ Refrescar cuando el componente se monta
-    refetchOnWindowFocus: true, // Ã¢Å“â€¦ Refrescar cuando el usuario vuelve a la ventana
-    refetchInterval: 3 * 60 * 1000, // Ã¢Å“â€¦ Auto-refresh cada 3 minutos
+    staleTime: STALE_TIME_SHORT, // Ã¢Å"â€¦ Reducido a 2 minutos para datos más frescos
+    refetchOnMount: true, // Ã¢Å"â€¦ Refrescar cuando el componente se monta
+    refetchOnWindowFocus: true, // Ã¢Å"â€¦ Refrescar cuando el usuario vuelve a la ventana
+    refetchInterval: 3 * 60 * 1000, // Ã¢Å"â€¦ Auto-refresh cada 3 minutos
   })
 }
 
@@ -88,7 +88,7 @@ export function useCreateCliente() {
       // Invalidar y refetch queries relacionadas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
       queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
-      // Ã¢Å“â€¦ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
+      // Ã¢Å"â€¦ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
       queryClient.invalidateQueries({
         queryKey: ['clientes', 'search'],
         exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
@@ -119,7 +119,7 @@ export function useUpdateCliente() {
 
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
-      // Ã¢Å“â€¦ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
+      // Ã¢Å"â€¦ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
       queryClient.invalidateQueries({
         queryKey: ['clientes', 'search'],
         exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]

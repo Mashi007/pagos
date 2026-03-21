@@ -2283,7 +2283,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
 
 
 
-                                        <SelectItem value="none">— Seleccionar —</SelectItem>
+                                        <SelectItem value="none">- Seleccionar -</SelectItem>
 
 
 
@@ -2438,7 +2438,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
 
 
 
-                                        <span className="text-xs text-gray-400">—</span>
+                                        <span className="text-xs text-gray-400">-</span>
 
 
 

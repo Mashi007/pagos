@@ -240,7 +240,7 @@ export function DialogReporteContableFiltros({
                         }`}
                       >
                         <span>
-                          {c.cedula} — {c.nombre || '(sin nombre)'}
+                          {c.cedula} - {c.nombre || '(sin nombre)'}
                         </span>
                         {cedulasSeleccionadas.has(c.cedula) && (
                           <Check className="h-4 w-4 text-blue-600 shrink-0" />

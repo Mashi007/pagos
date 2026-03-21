@@ -353,14 +353,14 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                           ${montoPagoConciliado.toFixed(2)}
                         </span>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400">-</span>
                       )}
                     </TableCell>
                     <TableCell>
                       <Badge className={getEstadoBadge(estadoReal)}>
                         {getEstadoLabel(estadoReal)}
                       </Badge>
-                      {/* ðŸ” DEBUG: Mostrar información de depuración */}
+                      {/* ðŸ" DEBUG: Mostrar información de depuración */}
                       {process.env.NODE_ENV === 'development' && (
                         <div className="text-xs text-gray-400 mt-1">
                           <div>Estado BD: {cuota.estado || 'NULL'}</div>
@@ -389,7 +389,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                           )}
                         </Button>
                       ) : (
-                        <span className="text-gray-400 text-xs">—</span>
+                        <span className="text-gray-400 text-xs">-</span>
                       )}
                     </TableCell>
                   </TableRow>

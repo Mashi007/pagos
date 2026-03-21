@@ -3138,7 +3138,7 @@ export function PagosListResumen() {
 
 
 
-                        <TableCell>{pago.numero_documento ? '—'}</TableCell>
+                        <TableCell>{pago.numero_documento ? '-'}</TableCell>
 
 
 

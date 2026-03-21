@@ -8,7 +8,7 @@
 
 
 
- * Listado de pagos reportados (mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³dulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
+ * Listado de pagos reportados (mÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³dulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
 
 
 
@@ -394,7 +394,7 @@ Gracias
 
 
 
-AngÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©lica Fuentes`
+AngÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©lica Fuentes`
 
 
 
@@ -434,7 +434,7 @@ const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'de
 
 
 
-  en_revision: { label: 'En revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n (manual)', short: 'RevisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n', variant: 'outline', Icon: Search },
+  en_revision: { label: 'En revisiÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n (manual)', short: 'RevisiÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n', variant: 'outline', Icon: Search },
 
 
 
@@ -504,7 +504,7 @@ const normalizeEstadoValue = (value: string) =>
 
 
 
-  String(value ? '')
+  String(value ?? '')
 
 
 
@@ -1502,7 +1502,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-    if (!window.confirm(`ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿Eliminar el pago reportado ${ref}? Esta acciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n no se puede deshacer.`)) return
+    if (!window.confirm(`ÃƒÆ'Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿Eliminar el pago reportado ${ref}? Esta acciÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n no se puede deshacer.`)) return
 
 
 
@@ -1902,7 +1902,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-      Observacion: row.observacion ? '',
+      Observacion: row.observacion ?? '',
 
 
 
@@ -2296,7 +2296,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-          Link formulario pÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºblico ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢
+          Link formulario pÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Âºblico ÃƒÆ'Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢
 
 
 
@@ -2456,7 +2456,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-            <option value="en_revision">En revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n</option>
+            <option value="en_revision">En revisiÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n</option>
 
 
 
@@ -2656,7 +2656,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-            placeholder="CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula"
+            placeholder="CÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©dula"
 
 
 
@@ -2716,7 +2716,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-            placeholder="InstituciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n"
+            placeholder="InstituciÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n"
 
 
 
@@ -3208,16 +3208,8 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-          ) : !data?.items?.length?? (<p className="text-gray-500">No hay registros.</p>
-
-
-
-
-
-
-
-
-
+          ) : !data?.items?.length ? (
+            <p className="text-gray-500">No hay registros.</p>
           ) : (
 
 
@@ -3398,7 +3390,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                    <th className="text-left py-3 px-3 font-semibold">CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula</th>
+                    <th className="text-left py-3 px-3 font-semibold">CÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©dula</th>
 
 
 
@@ -3438,7 +3430,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                    <th className="text-left py-3 px-3 font-semibold">NÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº operaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n</th>
+                    <th className="text-left py-3 px-3 font-semibold">NÃƒÆ'Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº operaciÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n</th>
 
 
 
@@ -3458,7 +3450,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                    <th className="text-left py-3 px-3 font-semibold">ObservaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n</th>
+                    <th className="text-left py-3 px-3 font-semibold">ObservaciÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n</th>
 
 
 
@@ -3568,7 +3560,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                      <td className={`py-3 px-3 align-top whitespace-nowrap ${/c[eÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©]dula/i.test(row.observacion || '') ? 'bg-destructive/10 text-destructive font-medium' : ''}`} title={/c[eÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©]dula/i.test(row.observacion || '') ? 'ObservaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n: ' + (row.observacion || '') : undefined}>
+                      <td className={`py-3 px-3 align-top whitespace-nowrap ${/c[eÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©]dula/i.test(row.observacion || '') ? 'bg-destructive/10 text-destructive font-medium' : ''}`} title={/c[eÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©]dula/i.test(row.observacion || '') ? 'ObservaciÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n: ' + (row.observacion || '') : undefined}>
 
 
 
@@ -3578,7 +3570,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                        {/c[eÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©]dula/i.test(row.observacion || '') && <AlertCircle className="inline-block h-4 w-4 mr-1 align-middle" aria-hidden />}
+                        {/c[eÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©]dula/i.test(row.observacion || '') && <AlertCircle className="inline-block h-4 w-4 mr-1 align-middle" aria-hidden />}
 
 
 
@@ -3738,7 +3730,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                            ? `NO CLIENTES: la cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula del reporte (${row.cedula_display}) no figura en la tabla clientes. Se compara normalizada (sin guiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n, sin ceros a la izquierda). Verifique en PrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©stamos > Clientes o registre al cliente.`
+                            ? `NO CLIENTES: la cÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©dula del reporte (${row.cedula_display}) no figura en la tabla clientes. Se compara normalizada (sin guiÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n, sin ceros a la izquierda). Verifique en PrÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©stamos > Clientes o registre al cliente.`
 
 
 
@@ -3748,7 +3740,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                            : /solo Bs|BolÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vares/i.test(row.observacion || '')
+                            : /solo Bs|BolÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â­vares/i.test(row.observacion || '')
 
 
 
@@ -3758,7 +3750,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                              ? 'Monto en Bs: solo estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ permitido si la cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ en la lista de autorizadas para BolÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vares (tabla cedulas_reportar_bs). Si no estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡, use USD o agregue la cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dula a la lista en ConfiguraciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.'
+                              ? 'Monto en Bs: solo estÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â¡ permitido si la cÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©dula estÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â¡ en la lista de autorizadas para BolÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â­vares (tabla cedulas_reportar_bs). Si no estÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â¡, use USD o agregue la cÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â©dula a la lista en ConfiguraciÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n.'
 
 
 
@@ -3768,7 +3760,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                              : (row.observacion ? '')
+                              : (row.observacion ?? '')
 
 
 
@@ -3838,7 +3830,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                        ) : 'ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â'}
+                        ) : 'ÃƒÆ'Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â'}
 
 
 
@@ -3998,7 +3990,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                          {/* Estado envÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­o recibo: X = no enviado, visto = entregado, triÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ngulo = en revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n */}
+                          {/* Estado envÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â­o recibo: X = no enviado, visto = entregado, triÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â¡ngulo = en revisiÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n */}
 
 
 
@@ -4028,7 +4020,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                              ? (row.tiene_recibo_pdf && row.correo_enviado_a ? 'Recibo enviado por correo' : 'No se enviÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ recibo por correo')
+                              ? (row.tiene_recibo_pdf && row.correo_enviado_a ? 'Recibo enviado por correo' : 'No se enviÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³ recibo por correo')
 
 
 
@@ -4038,7 +4030,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                              : 'En revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n'
+                              : 'En revisiÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n'
 
 
 
@@ -4488,7 +4480,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                              <option value="">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â</option>
+                              <option value="">ÃƒÆ'Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â</option>
 
 
 
@@ -4498,7 +4490,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                              <option value="en_revision">En revisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n</option>
+                              <option value="en_revision">En revisiÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â³n</option>
 
 
 
@@ -4898,7 +4890,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-      {/* Modal: interfaz rÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡pida para escribir mensaje de rechazo y enviar correo al cliente */}
+      {/* Modal: interfaz rÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â¡pida para escribir mensaje de rechazo y enviar correo al cliente */}
 
 
 
@@ -5108,7 +5100,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-                      Se enviarÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ un correo automÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ticamente a <strong>{rechazarModal.row.correo_enviado_a}</strong> desde <strong>notificaciones@rapicreditca.com</strong> con el mensaje y el comprobante adjunto.
+                      Se enviarÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â¡ un correo automÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â¡ticamente a <strong>{rechazarModal.row.correo_enviado_a}</strong> desde <strong>notificaciones@rapicreditca.com</strong> con el mensaje y el comprobante adjunto.
 
 
 
@@ -5218,7 +5210,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-              placeholder="Indique el motivo del rechazo. Este texto se enviarÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ por correo al cliente."
+              placeholder="Indique el motivo del rechazo. Este texto se enviarÃƒÆ'Ã†â€™Ãƒâ€šÃ‚Â¡ por correo al cliente."
 
 
 
@@ -5428,7 +5420,7 @@ export default function CobrosPagosReportadosPage() {
 
 
 
-              {changingEstadoId === rechazarModal.row?.id?? (<Loader2 className="h-4 w-4 animate-spin mr-2" />
+              {changingEstadoId === rechazarModal.row?.id ? (<Loader2 className="h-4 w-4 animate-spin mr-2" />
 
 
 

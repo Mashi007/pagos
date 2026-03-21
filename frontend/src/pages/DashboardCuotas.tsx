@@ -326,7 +326,7 @@ export function DashboardCuotas() {
             <Card className="shadow-lg border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 sticky top-4">
               <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-t-lg -m-0.5 mb-4">
                 <CardTitle className="text-xl font-bold text-white flex items-center space-x-2">
-                  <span>ðŸ”</span>
+                  <span>ðŸ"</span>
                   <span>Explorar Detalles</span>
                 </CardTitle>
               </CardHeader>

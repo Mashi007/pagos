@@ -30,7 +30,8 @@
     "start": "npm run setup && npm run dev",
     "serve": "serve -s dist -l $PORT",
     "render-build": "npm install && npm run build",
-    "render-start": "node server.js"
+    "render-start": "node server.js",
+    "sanitize:chars": "node scripts/sanitize-artifact-chars.mjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.0.18",

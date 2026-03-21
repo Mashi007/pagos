@@ -216,7 +216,7 @@ export function ValidadoresConfig() {
 
           {tipo === 'fecha' && (
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2">ðŸ“… Formato DD/MM/YYYY</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">ðŸ"… Formato DD/MM/YYYY</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <strong>Requisitos:</strong>
@@ -241,7 +241,7 @@ export function ValidadoresConfig() {
 
           {tipo === 'email' && (
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2">ðŸ“§ Validación RFC 5322</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">ðŸ"§ Validación RFC 5322</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <strong>Características:</strong>

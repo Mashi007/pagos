@@ -26,7 +26,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   // Variables derivadas del usuario
   const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
-  const userRole = (user?.rol || 'operativo') === 'administrador' ? 'Administrador' : 'Operativo'  // Cambio clave: rol â†’ is_admin
+  const userRole = (user?.rol || 'operativo') === 'administrador' ? 'Administrador' : 'Operativo'  // Cambio clave: rol â†' is_admin
 
   // Mock de notificaciones - en producción vendrían del backend
   const notifications = [
@@ -225,7 +225,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                         }}
                         className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center space-x-2"
                       >
-                        <span>ðŸ”„ Actualizar Rol</span>
+                        <span>ðŸ"„ Actualizar Rol</span>
                       </button>
                     )}
                   </div>

@@ -189,11 +189,11 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                   <CardContent className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm text-gray-600">Cédula</label>
-                      <p className="font-medium">{prestamoData.cedula ? '—'}</p>
+                      <p className="font-medium">{prestamoData.cedula ? '-'}</p>
                     </div>
                     <div>
                       <label className="text-sm text-gray-600">Nombres</label>
-                      <p className="font-medium">{prestamoData.nombres ? '—'}</p>
+                      <p className="font-medium">{prestamoData.nombres ? '-'}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -381,7 +381,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                       ) : (
                         <div className="text-center py-4">
                           <p className="text-sm text-gray-500">
-                            No hay modelo activo para predecir impago. Entrena un modelo en Configuración â†’ AI â†’ ML Impago.
+                            No hay modelo activo para predecir impago. Entrena un modelo en Configuración â†' AI â†' ML Impago.
                           </p>
                         </div>
                       )}

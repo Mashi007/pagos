@@ -704,7 +704,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess, onAprobarManua
 
                 {prestamo && prestamo.estado === 'APROBADO' && (
                   <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h4 className="font-semibold text-blue-900 mb-2">ðŸ“… Fecha de Desembolso (Día/Mes/Año)</h4>
+                    <h4 className="font-semibold text-blue-900 mb-2">ðŸ"… Fecha de Desembolso (Día/Mes/Año)</h4>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1">

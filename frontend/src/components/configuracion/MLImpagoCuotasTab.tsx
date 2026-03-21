@@ -195,7 +195,7 @@ export function MLImpagoCuotasTab() {
 
       // Expandir el objeto de error para ver todos los detalles
       if (error?.response?.data) {
-        console.error('ðŸ“‹ Detalles del error del servidor:', JSON.stringify(error.response.data, null, 2))
+        console.error('ðŸ"‹ Detalles del error del servidor:', JSON.stringify(error.response.data, null, 2))
       }
       console.groupEnd()
 
@@ -215,7 +215,7 @@ export function MLImpagoCuotasTab() {
         mensajeError = String(error.error.detail)
       }
 
-      console.error('ðŸ“ Mensaje de error extraído para mostrar al usuario:', mensajeError)
+      console.error('ðŸ" Mensaje de error extraído para mostrar al usuario:', mensajeError)
 
       // Mostrar toast con el mensaje completo
       toast.error(`Error entrenando modelo: ${mensajeError}`, {
@@ -259,7 +259,7 @@ export function MLImpagoCuotasTab() {
     }
 
     try {
-      console.log('ðŸ”„ Activando modelo ML Impago:', modeloId)
+      console.log('ðŸ"„ Activando modelo ML Impago:', modeloId)
       const resultado = await aiTrainingService.activarModeloImpago(modeloId)
       console.log('âœ… Modelo activado exitosamente:', resultado)
       toast.success(esDesactivacion ? 'Modelo desactivado' : 'Modelo activado exitosamente')

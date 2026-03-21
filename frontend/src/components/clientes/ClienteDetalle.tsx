@@ -122,7 +122,7 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
 
 
 
-      <p className="text-sm text-slate-900">{value ? '—'}</p>
+      <p className="text-sm text-slate-900">{value ? '-'}</p>
 
 
 
@@ -618,11 +618,11 @@ export function ClienteDetalle() {
 
 
 
-          <InfoItem label="Teléfono" value={cédulaiente.telefono?.trim() || '—'} />
+          <InfoItem label="Teléfono" value={cédulaiente.telefono?.trim() || '-'} />
 
 
 
-          <InfoItem label="Correo electrónico" value={cédulaiente.email?.trim() || '—'} />
+          <InfoItem label="Correo electrónico" value={cédulaiente.email?.trim() || '-'} />
 
 
 
@@ -630,7 +630,7 @@ export function ClienteDetalle() {
 
 
 
-          <InfoItem label="Océdulapación/Empleador" value={cédulaiente.océdulapacion?.trim() || '—'} />
+          <InfoItem label="Océdulapación/Empleador" value={cédulaiente.océdulapacion?.trim() || '-'} />
 
 
 
@@ -642,7 +642,7 @@ export function ClienteDetalle() {
 
 
 
-            value={cédulaiente.fecha_nacimiento ? formatDate(cédulaiente.fecha_nacimiento) : '—'}
+            value={cédulaiente.fecha_nacimiento ? formatDate(cédulaiente.fecha_nacimiento) : '-'}
 
 
 

@@ -424,7 +424,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       if (filenameChanged || hadNoLogo) {
         // âœ… Solo mostrar mensaje si el logo realmente cambió
         if (filenameChanged && currentFilename) {
-          devDebug('ðŸ”„ Actualizando logo desde caché compartido, versión:', version, 'filename:', newFilename)
+          devDebug('ðŸ"„ Actualizando logo desde caché compartido, versión:', version, 'filename:', newFilename)
         }
         setCustomLogoUrl(url)
         setLogoVersion(version)
@@ -467,7 +467,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
     const handleLogoUpdate = (event: CustomEvent) => {
       const { filename, url, confirmed } = event.detail || {}
 
-      devDebug('ðŸ“¢ Evento logoUpdated recibido:', { filename, url, confirmed })
+      devDebug('ðŸ"¢ Evento logoUpdated recibido:', { filename, url, confirmed })
 
       // Si solo viene confirmed: true sin filename ni url, ignorar
       if (confirmed && !filename && !url) {
@@ -477,7 +477,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
 
       // Cuando se confirma el logo, invalidar caché y recargar desde configuración
       if (confirmed && (filename || url)) {
-        devDebug('ðŸ”„ Logo confirmado, invalidando caché y recargando desde configuración')
+        devDebug('ðŸ"„ Logo confirmado, invalidando caché y recargando desde configuración')
         // Invalidar caché para forzar recarga desde BD
         logoCache.logoUrl = null
         logoCache.hasChecked = false
@@ -659,7 +659,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
 
       if (newLogoUrl) {
         // Actualizar cache y notificar a todos los listeners
-        devDebug('ðŸ”„ Actualizando logo (preview):', newLogoUrl)
+        devDebug('ðŸ"„ Actualizando logo (preview):', newLogoUrl)
         const logoFilename = filename || null
         logoCache.logoUrl = newLogoUrl
         logoCache.logoFilename = logoFilename // âœ… Guardar nombre del archivo

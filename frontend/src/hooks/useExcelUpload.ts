@@ -1803,7 +1803,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
 
 
 
-        // Cédula: comparar con tabla clientes — NUNCA permitir guardar si ya está en BD (100% igual)
+        // Cédula: comparar con tabla clientes - NUNCA permitir guardar si ya está en BD (100% igual)
 
 
 

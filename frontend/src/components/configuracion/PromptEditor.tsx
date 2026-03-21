@@ -579,7 +579,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-800">
-          ðŸ’¡ <strong>Tip:</strong> Puedes personalizar el comportamiento del AI ajustando el prompt.
+          ðŸ'¡ <strong>Tip:</strong> Puedes personalizar el comportamiento del AI ajustando el prompt.
           Los placeholders se reemplazarán automáticamente con datos reales del sistema.
           Si dejas el prompt vacío, se usará el prompt por defecto.
         </p>

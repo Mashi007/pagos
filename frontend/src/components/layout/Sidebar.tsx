@@ -606,7 +606,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                             }}
                             className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 transition-colors flex items-center space-x-2"
                           >
-                            <span>ðŸ”„ Actualizar Rol</span>
+                            <span>ðŸ"„ Actualizar Rol</span>
                           </button>
                         )}
                       </div>

@@ -135,7 +135,7 @@ export function WhatsAppConfig() {
         }
       }
 
-      console.log('ðŸ“¤ [MENSAJE PRUEBA] Enviando mensaje de prueba...')
+      console.log('ðŸ"¤ [MENSAJE PRUEBA] Enviando mensaje de prueba...')
       const resultado = await whatsappConfigService.probarConfiguracionWhatsApp(
         telefonoPruebaDestino.trim() || undefined,
         mensajePrueba.trim() || undefined
@@ -143,7 +143,7 @@ export function WhatsAppConfig() {
       setResultadoPrueba(resultado)
 
       // âœ… LOG DETALLADO: Mostrar resultado del mensaje de prueba
-      console.log('ðŸ“Š [MENSAJE PRUEBA] Resultado completo:', resultado)
+      console.log('ðŸ"Š [MENSAJE PRUEBA] Resultado completo:', resultado)
 
       if (resultado.success || resultado.mensaje?.includes('enviado')) {
         console.log('âœ… [CONFIRMACIÓN] Mensaje de prueba ENVIADO EXITOSAMENTE')
@@ -178,12 +178,12 @@ export function WhatsAppConfig() {
       setResultadoTestCompleto(resultado)
 
       // âœ… LOG DETALLADO: Mostrar resultados del test completo
-      console.log('ðŸ“Š [TEST COMPLETO] Resultado completo:', resultado)
+      console.log('ðŸ"Š [TEST COMPLETO] Resultado completo:', resultado)
 
       // Verificar específicamente la conexión con Meta API
       const testConexion = resultado.tests?.conexion
       if (testConexion) {
-        console.log('ðŸ” [TEST CONEXIÓN META API]:', {
+        console.log('ðŸ" [TEST CONEXIÓN META API]:', {
           nombre: testConexion.nombre,
           exito: testConexion.exito,
           mensaje: testConexion.mensaje || testConexion.error,
@@ -204,7 +204,7 @@ export function WhatsAppConfig() {
       }
 
       const resumen = resultado.resumen || {}
-      console.log('ðŸ“ˆ [RESUMEN TEST]:', {
+      console.log('ðŸ"ˆ [RESUMEN TEST]:', {
         total: resumen.total,
         exitosos: resumen.exitosos,
         fallidos: resumen.fallidos,
@@ -287,11 +287,11 @@ export function WhatsAppConfig() {
               />
               {pareceNumeroTelefonoParaMeta(config.phone_number_id || '') && (
                 <p className="text-xs text-amber-700 mt-1 font-medium">
-                  Has puesto un número de teléfono (ej. 4244545242 o +58…). Meta pide el <strong>ID numérico largo</strong> (ej. 1038026026054793), que ves en Meta Developers → WhatsApp → Enviar y recibir mensajes → “Identificador del número de teléfono”. No es el mismo que el número +58 424 4545242.
+                  Has puesto un número de teléfono (ej. 4244545242 o +58…). Meta pide el <strong>ID numérico largo</strong> (ej. 1038026026054793), que ves en Meta Developers → WhatsApp → Enviar y recibir mensajes → "Identificador del número de teléfono". No es el mismo que el número +58 424 4545242.
                 </p>
               )}
               <p className="text-xs text-gray-500 mt-1">
-                ID numérico largo de Meta (15–16 dígitos), en Business Suite o Meta Developers → WhatsApp → tu número → “Identificador del número de teléfono”. No uses el número de teléfono (424… ni +58…); ese es el número de destino.
+                ID numérico largo de Meta (15-16 dígitos), en Business Suite o Meta Developers → WhatsApp → tu número → "Identificador del número de teléfono". No uses el número de teléfono (424… ni +58…); ese es el número de destino.
               </p>
             </div>
           </div>

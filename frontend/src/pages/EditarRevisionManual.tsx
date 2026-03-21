@@ -3748,7 +3748,7 @@ export function EditarRevisionManual() {
 
 
 
-                    <SelectValue placeholder="—" />
+                    <SelectValue placeholder="-" />
 
 
 
@@ -3766,7 +3766,7 @@ export function EditarRevisionManual() {
 
 
 
-                    <SelectItem value="-">—</SelectItem>
+                    <SelectItem value="-">-</SelectItem>
 
 
 
@@ -4510,7 +4510,7 @@ export function EditarRevisionManual() {
 
 
 
-                    <SelectValue placeholder="—" />
+                    <SelectValue placeholder="-" />
 
 
 
@@ -4528,7 +4528,7 @@ export function EditarRevisionManual() {
 
 
 
-                    <SelectItem value="-">—</SelectItem>
+                    <SelectItem value="-">-</SelectItem>
 
 
 
@@ -4648,7 +4648,7 @@ export function EditarRevisionManual() {
 
 
 
-                    <SelectValue placeholder="—" />
+                    <SelectValue placeholder="-" />
 
 
 
@@ -4666,7 +4666,7 @@ export function EditarRevisionManual() {
 
 
 
-                    <SelectItem value="-">—</SelectItem>
+                    <SelectItem value="-">-</SelectItem>
 
 
 
@@ -4786,7 +4786,7 @@ export function EditarRevisionManual() {
 
 
 
-                    <SelectValue placeholder="—" />
+                    <SelectValue placeholder="-" />
 
 
 
@@ -4804,7 +4804,7 @@ export function EditarRevisionManual() {
 
 
 
-                    <SelectItem value="-">—</SelectItem>
+                    <SelectItem value="-">-</SelectItem>
 
 
 

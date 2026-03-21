@@ -90,7 +90,7 @@ export function AuditoriaPrestamo({ prestamoId }: AuditoriaPrestamoProps) {
                       <span className="px-3 py-1 bg-red-50 text-red-700 rounded-md font-medium border border-red-200">
                         {entry.estado_anterior}
                       </span>
-                      <span className="text-gray-400">â†’</span>
+                      <span className="text-gray-400">â†'</span>
                       <span className="px-3 py-1 bg-green-50 text-green-700 rounded-md font-medium border border-green-200">
                         {entry.estado_nuevo}
                       </span>

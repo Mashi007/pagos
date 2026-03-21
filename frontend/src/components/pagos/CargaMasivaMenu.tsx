@@ -438,7 +438,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
 
 
 
-                <>Última sync: {formatLastSyncDate(gmailStatus.last_run)} – {gmailStatus.last_emails} correos, {gmailStatus.last_files} archivos</>
+                <>Última sync: {formatLastSyncDate(gmailStatus.last_run)} - {gmailStatus.last_emails} correos, {gmailStatus.last_files} archivos</>
 
 
 

@@ -25,7 +25,7 @@ function Layout() {
     { path: '/prestamos', label: 'Préstamos', icon: '📋' },
     { path: '/cobranzas', label: 'Cobranzas', icon: '💵' },
     { path: '/notificaciones', label: 'Notificaciones', icon: '🔔' },
-    { path: '/analistas', label: 'Analistas', icon: '👨‍💼' },
+    { path: '/analistas', label: 'Analistas', icon: '👨💼' },
     { path: '/concesionarios', label: 'Concesionarios', icon: '🏢' },
     { path: '/usuarios', label: 'Usuarios', icon: '👤' },
     { path: '/embudo-clientes', label: 'Embudo Clientes', icon: '📈' },

@@ -17,7 +17,7 @@ interface FormularioAprobacionCondicionesProps {
 
 export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }: FormularioAprobacionCondicionesProps) {
   const [condicionesAprobacion, setCondicionesAprobacion] = useState({
-    tasa_interes: 0.0, // Siempre 0% — producto sin interés
+    tasa_interes: 0.0, // Siempre 0% - producto sin interés
     plazo_maximo: prestamo.numero_cuotas || 36,
     fecha_base_calculo: prestamo.fecha_base_calculo || new Date().toISOString().split('T')[0],
     observaciones: prestamo.observaciones || ''
@@ -32,7 +32,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
     const obtenerSugerencias = async () => {
       try {
         await prestamoService.getAuditoria(prestamo.id)
-        // tasa_interes siempre 0% — no se sobreescribe desde sugerencias
+        // tasa_interes siempre 0% - no se sobreescribe desde sugerencias
       } catch (error) {
         console.log('No se encontraron sugerencias previas, usando valores por defecto')
       }
@@ -41,8 +41,8 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
   }, [prestamo.id])
 
   const handleAprobar = async () => {
-    console.log('ðŸ”„ handleAprobar llamado')
-    console.log('ðŸ“‹ Condiciones:', condicionesAprobacion)
+    console.log('ðŸ"„ handleAprobar llamado')
+    console.log('ðŸ"‹ Condiciones:', condicionesAprobacion)
 
     // Validaciones
     if (!condicionesAprobacion.fecha_base_calculo) {
@@ -86,8 +86,8 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
         observaciones: condicionesAprobacion.observaciones || `Aprobado manualmente. Préstamo ID: ${prestamo.id}`
       }
 
-      console.log('ðŸ“¤ Enviando condiciones al backend:', condiciones)
-      console.log('ðŸ†” Prestamo ID:', prestamo.id)
+      console.log('ðŸ"¤ Enviando condiciones al backend:', condiciones)
+      console.log('ðŸ†" Prestamo ID:', prestamo.id)
 
       const resultado = await aplicarCondiciones.mutateAsync({
         prestamoId: prestamo.id,
@@ -145,7 +145,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
           <CardContent className="p-6">
             <div className="space-y-6">
               <div className="bg-blue-50 p-4 rounded border border-blue-200">
-                <h5 className="font-semibold text-blue-900 mb-4">ðŸ“‹ Condiciones para Aprobación:</h5>
+                <h5 className="font-semibold text-blue-900 mb-4">ðŸ"‹ Condiciones para Aprobación:</h5>
 
                 <div className="bg-white p-4 rounded border border-blue-300 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -163,7 +163,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                           value={condicionesAprobacion.tasa_interes || ''}
                           onChange={(e) => {
                             const valor = e.target.value === '' ? 0 : parseFloat(e.target.value)
-                            console.log('ðŸ“ Tasa de interés cambiada:', valor)
+                            console.log('ðŸ" Tasa de interés cambiada:', valor)
                             setCondicionesAprobacion({
                               ...condicionesAprobacion,
                               tasa_interes: isNaN(valor) ? 0 : valor
@@ -186,7 +186,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                         value={condicionesAprobacion.plazo_maximo || ''}
                         onChange={(e) => {
                           const valor = e.target.value === '' ? 36 : parseInt(e.target.value)
-                          console.log('ðŸ“ Plazo máximo cambiado:', valor)
+                          console.log('ðŸ" Plazo máximo cambiado:', valor)
                           setCondicionesAprobacion({
                             ...condicionesAprobacion,
                             plazo_maximo: isNaN(valor) ? 36 : valor
@@ -246,8 +246,8 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    console.log('ðŸ–±ï¸ Click en botón Aprobar Préstamo')
-                    console.log('ðŸ“‹ Estado actual de condiciones:', condicionesAprobacion)
+                    console.log('ðŸ-±ï¸ Click en botón Aprobar Préstamo')
+                    console.log('ðŸ"‹ Estado actual de condiciones:', condicionesAprobacion)
                     handleAprobar()
                   }}
                   disabled={

@@ -95,11 +95,11 @@ export function DefinicionesCamposTab() {
       // Contar total de campos (sumar campos de todas las tablas)
       const totalCampos = Object.values(camposCargados).reduce((total, campos) => total + campos.length, 0)
       
-      console.log(`ðŸ“Š Campos disponibles: ${totalCampos}, Definiciones existentes: ${definicionesCargadas.length}`)
+      console.log(`ðŸ"Š Campos disponibles: ${totalCampos}, Definiciones existentes: ${definicionesCargadas.length}`)
       
       // Si no hay definiciones pero hay campos disponibles, sincronizar automáticamente
       if (definicionesCargadas.length === 0 && totalCampos > 0 && !yaSincronizado) {
-        console.log('ðŸ”„ No hay definiciones precargadas. Sincronizando automáticamente...')
+        console.log('ðŸ"„ No hay definiciones precargadas. Sincronizando automáticamente...')
         setYaSincronizado(true)
         await handleSincronizarAutomatico()
       }
@@ -148,7 +148,7 @@ export function DefinicionesCamposTab() {
       
       // Log para debugging
       const totalCampos = Object.values(camposCargados).reduce((total, campos) => total + campos.length, 0)
-      console.log(`ðŸ“‹ Campos disponibles cargados: ${totalCampos} campos en ${Object.keys(camposCargados).length} tablas`)
+      console.log(`ðŸ"‹ Campos disponibles cargados: ${totalCampos} campos en ${Object.keys(camposCargados).length} tablas`)
       
       return camposCargados
     } catch (error: any) {
@@ -742,7 +742,7 @@ export function DefinicionesCamposTab() {
                           </div>
                           {def.notas && (
                             <div className="mt-2 text-sm text-gray-500 italic">
-                              ðŸ’¡ {def.notas}
+                              ðŸ'¡ {def.notas}
                             </div>
                           )}
                         </div>

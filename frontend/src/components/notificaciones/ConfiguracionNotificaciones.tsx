@@ -2548,7 +2548,7 @@ export function ConfiguracionNotificaciones() {
 
 
 
-                        Hora y CCO (1–3)
+                        Hora y CCO (1-3)
 
 
 

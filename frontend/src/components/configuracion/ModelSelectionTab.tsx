@@ -160,7 +160,7 @@ export function ModelSelectionTab({
               autoComplete="off"
               value={config.openai_api_key === '***' ? '' : (config.openai_api_key ? '')}
               onChange={(e) => onConfigChange('openai_api_key', e.target.value)}
-              placeholder={config.openai_api_key === '***' ? '•••••••• (ya configurada — deja en blanco para no cambiar)' : 'Pega tu API key de OpenRouter'}
+              placeholder={config.openai_api_key === '***' ? '•••••••• (ya configurada - deja en blanco para no cambiar)' : 'Pega tu API key de OpenRouter'}
               className="font-mono text-sm"
             />
             <p className="text-xs text-gray-500 mt-1">
@@ -189,7 +189,7 @@ export function ModelSelectionTab({
                 </SelectContent>
               </Select>
               {config.modelo_recomendado && (
-                <p className="text-xs text-gray-500 mt-1">Recomendado: GPT-4o Mini — buen balance costo y velocidad</p>
+                <p className="text-xs text-gray-500 mt-1">Recomendado: GPT-4o Mini - buen balance costo y velocidad</p>
               )}
             </div>
 

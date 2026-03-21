@@ -7,14 +7,14 @@ import { BASE_PATH } from '../../config/env'
 
 interface SimpleProtectedRouteProps {
   children: React.ReactNode
-  requireAdmin?: boolean  // Cambio clave: requiredRoles â†’ requireAdmin
+  requireAdmin?: boolean  // Cambio clave: requiredRoles â†' requireAdmin
   /** Si no autenticado, redirige aquí. Por defecto /rapicredit (formulario público). Empleados usan /login. */
   fallbackPath?: string
 }
 
 export function SimpleProtectedRoute({
   children,
-  requireAdmin = false,  // Cambio clave: requiredRoles â†’ requireAdmin
+  requireAdmin = false,  // Cambio clave: requiredRoles â†' requireAdmin
   fallbackPath = '/login'
 }: SimpleProtectedRouteProps) {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()

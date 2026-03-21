@@ -1078,7 +1078,7 @@ export function Validadores() {
 
 
 
-      ejemplo: 'JUAN PEDRO â†’ Juan pedro',
+      ejemplo: 'JUAN PEDRO â†' Juan pedro',
 
 
 
@@ -1148,7 +1148,7 @@ export function Validadores() {
 
 
 
-      ejemplo: 'PEREZ GONZALEZ â†’ Perez gonzalez',
+      ejemplo: 'PEREZ GONZALEZ â†' Perez gonzalez',
 
 
 
@@ -2208,7 +2208,7 @@ export function Validadores() {
 
 
 
-                                <strong>ðŸ’¡ Sugerencia:</strong> {resultadoTest.validacion.sugerencia}
+                                <strong>ðŸ'¡ Sugerencia:</strong> {resultadoTest.validacion.sugerencia}
 
 
 
@@ -2988,7 +2988,7 @@ export function Validadores() {
 
 
 
-                      ðŸ’µ USD - Dólar Americano
+                      ðŸ'µ USD - Dólar Americano
 
 
 
@@ -3018,7 +3018,7 @@ export function Validadores() {
 
 
 
-                      ðŸ’° Bs. - Bolívares (Venezuela)
+                      ðŸ'° Bs. - Bolívares (Venezuela)
 
 
 

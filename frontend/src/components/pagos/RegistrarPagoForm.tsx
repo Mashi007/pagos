@@ -273,7 +273,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, mod
                         const desc = [modelo, concesionario].filter(Boolean).join(' · ') || prestamo.estado
                         return (
                           <SelectItem key={prestamo.id} value={prestamo.id.toString()}>
-                            ID {prestamo.id} — {desc} — ${Number(prestamo.total_financiamiento ? 0).toFixed(2)}
+                            ID {prestamo.id} - {desc} - ${Number(prestamo.total_financiamiento ? 0).toFixed(2)}
                           </SelectItem>
                         )
                       })}

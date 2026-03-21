@@ -70,11 +70,11 @@ function validateEnv(): EnvConfig {
       try {
         new URL(API_URL);
       } catch {
-        console.warn(`â ï¸ VITE_API_URL tiene formato invÃ¡lido: ${API_URL}. Usando rutas relativas.`);
+        console.warn(`â ï¸ VITE_API_URL tiene formato invÃ¡lido: ${API_URL}. Usando rutas relativas.`);
         API_URL = '';
       }
     } else {
-      console.warn('â ï¸ VITE_API_URL no configurada. Usando rutas relativas en desarrollo.');
+      console.warn('â ï¸ VITE_API_URL no configurada. Usando rutas relativas en desarrollo.');
     }
   }
 

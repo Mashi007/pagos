@@ -188,7 +188,7 @@ function ViñetaPagoVencido({ item }: { item: MorosidadPorRangosItem }) {
 
 
 
-            <span>Último pago: {item.ultimo_pago_fecha ? formatDate(item.ultimo_pago_fecha) : '—'}</span>
+            <span>Último pago: {item.ultimo_pago_fecha ? formatDate(item.ultimo_pago_fecha) : '-'}</span>
 
 
 
@@ -208,7 +208,7 @@ function ViñetaPagoVencido({ item }: { item: MorosidadPorRangosItem }) {
 
 
 
-            <span>Próximo pago: {item.proximo_pago_fecha ? formatDate(item.proximo_pago_fecha) : '—'}</span>
+            <span>Próximo pago: {item.proximo_pago_fecha ? formatDate(item.proximo_pago_fecha) : '-'}</span>
 
 
 
@@ -523,7 +523,7 @@ export function InformePagoVencido() {
 
 
 
-            Clientes con cuotas vencidas por rango de días. Fecha de corte: {data?.fecha_corte ? formatDate(data.fecha_corte) : '—'}
+            Clientes con cuotas vencidas por rango de días. Fecha de corte: {data?.fecha_corte ? formatDate(data.fecha_corte) : '-'}
 
 
 

@@ -289,7 +289,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
             <div className={`bg-gradient-to-r from-blue-50 to-blue-100 p-${GRID_GAP} rounded-lg border border-blue-200`}>
             <h4 className="font-bold text-blue-900 mb-4 flex items-center">
               <FileSpreadsheet className={`h-${ICON_SIZE} w-${ICON_SIZE} mr-2`} />
-              ðŸ“‹ Instrucciones para Corrección
+              ðŸ"‹ Instrucciones para Corrección
             </h4>
             <div className={`grid grid-cols-1 md:grid-cols-${GRID_COLS_MD} gap-${CARD_PADDING}`}>
               <div>

@@ -1618,7 +1618,7 @@ export function Reportes() {
 
 
 
-        toast.success('âœ“ Reporte Contable descargado exitosamente')
+        toast.success('âœ" Reporte Contable descargado exitosamente')
 
 
 
@@ -2518,7 +2518,7 @@ export function Reportes() {
 
 
 
-        toast.success('âœ“ Reporte de Cartera descargado exitosamente')
+        toast.success('âœ" Reporte de Cartera descargado exitosamente')
 
 
 
@@ -2588,7 +2588,7 @@ export function Reportes() {
 
 
 
-        toast.success('âœ“ Informe de Pagos descargado exitosamente')
+        toast.success('âœ" Informe de Pagos descargado exitosamente')
 
 
 
@@ -2658,7 +2658,7 @@ export function Reportes() {
 
 
 
-        toast.success('âœ“ Reporte de Morosidad descargado exitosamente')
+        toast.success('âœ" Reporte de Morosidad descargado exitosamente')
 
 
 
@@ -2708,7 +2708,7 @@ export function Reportes() {
 
 
 
-        toast.success('âœ“ Reporte de Vencimiento descargado exitosamente')
+        toast.success('âœ" Reporte de Vencimiento descargado exitosamente')
 
 
 
@@ -2768,7 +2768,7 @@ export function Reportes() {
 
 
 
-        toast.success('âœ“ Reporte de Pago Vencido descargado exitosamente')
+        toast.success('âœ" Reporte de Pago Vencido descargado exitosamente')
 
 
 
@@ -2818,7 +2818,7 @@ export function Reportes() {
 
 
 
-        toast.success('âœ“ Reporte por Cédula descargado exitosamente')
+        toast.success('âœ" Reporte por Cédula descargado exitosamente')
 
 
 
@@ -3168,7 +3168,7 @@ return (
 
 
 
-      {/* ——— Encabezado de página ——— */}
+      {/* --- Encabezado de página --- */}
 
 
 
@@ -3318,7 +3318,7 @@ return (
 
 
 
-      {/* ——— Sección: Enlaces para compartir ——— */}
+      {/* --- Sección: Enlaces para compartir --- */}
 
 
 
@@ -3968,7 +3968,7 @@ return (
 
 
 
-      {/* ——— Sección: Reportes para descargar ——— */}
+      {/* --- Sección: Reportes para descargar --- */}
 
 
 
@@ -4798,7 +4798,7 @@ return (
 
 
 
-      {/* ——— Sección: Historial de notificaciones ——— */}
+      {/* --- Sección: Historial de notificaciones --- */}
 
 
 

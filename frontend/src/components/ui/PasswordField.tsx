@@ -139,19 +139,19 @@ export const PasswordField = ({
           {/* Requisitos de contraseña */}
           <div className="text-xs text-gray-500 space-y-0.5">
             <div className={validation.hasMinLength ? 'text-green-600' : ''}>
-              âœ“ Mínimo 8 caracteres
+              âœ" Mínimo 8 caracteres
             </div>
             <div className={validation.hasUppercase ? 'text-green-600' : ''}>
-              âœ“ Al menos una mayúscula
+              âœ" Al menos una mayúscula
             </div>
             <div className={validation.hasLowercase ? 'text-green-600' : ''}>
-              âœ“ Al menos una minúscula
+              âœ" Al menos una minúscula
             </div>
             <div className={validation.hasNumbers ? 'text-green-600' : ''}>
-              âœ“ Al menos un número
+              âœ" Al menos un número
             </div>
             <div className={validation.hasSymbols ? 'text-green-600' : ''}>
-              âœ“ Al menos un símbolo
+              âœ" Al menos un símbolo
             </div>
           </div>
         </div>

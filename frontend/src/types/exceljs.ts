@@ -28,7 +28,7 @@ import * as exceljsModule from 'exceljs'
 
 
 
- * ✓ OPTIMIZACIÃ“N: Todos los imports son dinámicos para reducir el bundle inicial
+ * ✓ OPTIMIZACIÃ"N: Todos los imports son dinámicos para reducir el bundle inicial
 
 
 
@@ -393,7 +393,7 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
 
 
 
-        // Columnas 1–8: forzar string y limpiar (documento puede estar en cualquier posición típica)
+        // Columnas 1-8: forzar string y limpiar (documento puede estar en cualquier posición típica)
 
 
 

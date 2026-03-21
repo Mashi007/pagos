@@ -103,7 +103,7 @@ function CreditoCell({
         value={displayId ? ''}
         readOnly
         className="w-full p-1 border border-gray-200 rounded bg-green-50 text-green-800 text-sm font-medium"
-        placeholder="—"
+        placeholder="-"
         title="Cargado automáticamente (un solo crédito por cédula)"
       />
     )
@@ -123,7 +123,7 @@ function CreditoCell({
         <SelectValue placeholder="Elegir crédito" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="none">— Elegir crédito —</SelectItem>
+        <SelectItem value="none">- Elegir crédito -</SelectItem>
         {prestamos.map((p) => (
           <SelectItem key={p.id} value={String(p.id)}>
             Crédito #{p.id}
@@ -364,7 +364,7 @@ export function TablaEditablePagos({
                     </div>
                     )
                   })() : (
-                    <span className="text-gray-400 text-xs">—</span>
+                    <span className="text-gray-400 text-xs">-</span>
                   )}
                 </td>
               </tr>

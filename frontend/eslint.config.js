@@ -41,6 +41,8 @@ export default [
       'no-useless-catch': 'warn',
       'no-self-assign': 'warn',
       'no-control-regex': 'warn',
+      // Evita espacios raros / Unicode que suelen colarse con pegar texto o IA (TS1127)
+      'no-irregular-whitespace': 'warn',
       '@typescript-eslint/no-empty-object-type': 'warn',
       'react-hooks/rules-of-hooks': 'warn',
     },

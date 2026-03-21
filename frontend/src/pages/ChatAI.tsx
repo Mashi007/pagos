@@ -208,7 +208,7 @@ export function ChatAI() {
         const mensajeError: Mensaje = {
           id: (Date.now() + 1).toString(),
           tipo: 'ai',
-          contenido: `⏱️ La consulta está tardando más de lo esperado. Esto puede deberse a:\n• Consultas complejas a la base de datos\n• Procesamiento de información extensa\n• Carga alta en el servidor\n\nðŸ’¡ Intenta reformular tu pregunta de forma más específica o intenta nuevamente en unos momentos.`,
+          contenido: `⏱️ La consulta está tardando más de lo esperado. Esto puede deberse a:\n• Consultas complejas a la base de datos\n• Procesamiento de información extensa\n• Carga alta en el servidor\n\nðŸ'¡ Intenta reformular tu pregunta de forma más específica o intenta nuevamente en unos momentos.`,
           timestamp: new Date(),
           error: true
         }
@@ -242,7 +242,7 @@ export function ChatAI() {
           const mensajeError: Mensaje = {
             id: (Date.now() + 1).toString(),
             tipo: 'ai',
-            contenido: `âš ï¸ ${errorDetail}\n\nðŸ’¡ Tip: Asegúrate de que tu pregunta incluya términos relacionados con:\n• Clientes, préstamos, pagos, cuotas\n• Morosidad, estadísticas, datos\n• Fechas, montos, análisis\n• O cualquier término relacionado con la base de datos del sistema`,
+            contenido: `âš ï¸ ${errorDetail}\n\nðŸ'¡ Tip: Asegúrate de que tu pregunta incluya términos relacionados con:\n• Clientes, préstamos, pagos, cuotas\n• Morosidad, estadísticas, datos\n• Fechas, montos, análisis\n• O cualquier término relacionado con la base de datos del sistema`,
             timestamp: new Date(),
             error: true
           }
@@ -459,7 +459,7 @@ export function ChatAI() {
                       </Button>
                       {mensaje.calificacion && (
                         <span className="text-xs text-gray-500">
-                          {mensaje.calificacion === 'arriba' ? 'âœ“ Calificada positivamente' : 'âœ“ Marcada para revisión'}
+                          {mensaje.calificacion === 'arriba' ? 'âœ" Calificada positivamente' : 'âœ" Marcada para revisión'}
                         </span>
                       )}
                     </div>

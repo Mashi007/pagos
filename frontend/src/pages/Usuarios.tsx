@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Users, Plus, Search, Edit, Trash2, Shield, Mail, UserCheck, UserX, Loader2, RefreshCw, X, Save } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -30,7 +30,7 @@ export function Usuarios() {
     email: '',
     nombre: '',
     apellido: '',
-    rol: 'operativo',  // Cambio clave: rol â†’ is_admin
+    rol: 'operativo',  // Cambio clave: rol â†' is_admin
     password: '',
     cargo: 'Usuario', // Valor por defecto para evitar error de NOT NULL
     is_active: true
@@ -141,7 +141,7 @@ export function Usuarios() {
       email: usuario.email,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
-      rol: usuario.rol || 'operativo',  // Cambio clave: rol â†’ is_admin
+      rol: usuario.rol || 'operativo',  // Cambio clave: rol â†' is_admin
       password: '',
       cargo: usuario.cargo || '', // Si es null, usar string vacío (no 'Usuario')
       is_active: usuario.is_active
@@ -204,7 +204,7 @@ export function Usuarios() {
         }
 
         // âœ… CRÍTICO: Logging detallado del usuario que se está actualizando
-        console.log('ðŸ“¤ [Usuarios] Enviando actualización:', {
+        console.log('ðŸ"¤ [Usuarios] Enviando actualización:', {
           userId: editingUsuario.id,
           email: editingUsuario.email,
           nombre: editingUsuario.nombre,
@@ -290,7 +290,7 @@ export function Usuarios() {
       email: '',
       nombre: '',
       apellido: '',
-      rol: 'operativo',  // Cambio clave: rol â†’ is_admin
+      rol: 'operativo',  // Cambio clave: rol â†' is_admin
       password: '',
       cargo: 'Usuario', // Valor por defecto
       is_active: true
@@ -310,8 +310,8 @@ export function Usuarios() {
     (usuario.email && usuario.email.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
-  const getRoleBadgeColor = (rol: string) => {  // Cambio clave: rol â†’ is_admin
-    return rol === 'administrador' ? 'bg-red-600' : 'bg-blue-600'  // Cambio clave: rol â†’ is_admin
+  const getRoleBadgeColor = (rol: string) => {  // Cambio clave: rol â†' is_admin
+    return rol === 'administrador' ? 'bg-red-600' : 'bg-blue-600'  // Cambio clave: rol â†' is_admin
   }
 
   return (
@@ -381,7 +381,7 @@ export function Usuarios() {
               <div>
                 <p className="text-sm text-gray-500">Administradores</p>
                 <p className="text-2xl font-bold text-red-600">
-                  {usuarios.filter(u => (u.rol || 'operativo') === 'administrador').length}  {/* Cambio clave: rol â†’ is_admin */}
+                  {usuarios.filter(u => (u.rol || 'operativo') === 'administrador').length}  {/* Cambio clave: rol â†' is_admin */}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
                   {loading ? 'Cargando...' : 'Pueden crear usuarios'}
@@ -489,8 +489,8 @@ export function Usuarios() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getRoleBadgeColor(usuario.rol || 'operativo')}>  {/* Cambio clave: rol â†’ is_admin */}
-                        {(usuario.rol || 'operativo') === 'administrador' ? 'Administrador' : 'Operativo'}  {/* Cambio clave: rol â†’ is_admin */}
+                      <Badge className={getRoleBadgeColor(usuario.rol || 'operativo')}>  {/* Cambio clave: rol â†' is_admin */}
+                        {(usuario.rol || 'operativo') === 'administrador' ? 'Administrador' : 'Operativo'}  {/* Cambio clave: rol â†' is_admin */}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">

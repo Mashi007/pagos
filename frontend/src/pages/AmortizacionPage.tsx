@@ -34,7 +34,7 @@ export function AmortizacionPage() {
           </CardHeader>
           <CardContent>
             <div className="text-center py-8">
-              <div className="text-6xl mb-4">ðŸ“Š</div>
+              <div className="text-6xl mb-4">ðŸ"Š</div>
               <h3 className="text-xl font-semibold mb-2">Página en Desarrollo</h3>
               <p className="text-muted-foreground mb-4">
                 Esta funcionalidad está siendo implementada y estará disponible próximamente.

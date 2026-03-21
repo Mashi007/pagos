@@ -1007,7 +1007,7 @@ export function InformePagosConfig() {
 
 
 
-            Google (Drive, Sheets, OCR y Gmail) — varios servicios
+            Google (Drive, Sheets, OCR y Gmail) - varios servicios
 
 
 
@@ -1192,7 +1192,7 @@ export function InformePagosConfig() {
 
 
 
-                    Conexión OK — Drive, Sheets, OCR y Gmail operativos.
+                    Conexión OK - Drive, Sheets, OCR y Gmail operativos.
 
 
 
@@ -1217,7 +1217,7 @@ export function InformePagosConfig() {
 
 
 
-                    Conexión no OK — Revisa credenciales, ID de carpeta/hoja, comparte con la cuenta o vuelve a «Conectar con Google».
+                    Conexión no OK - Revisa credenciales, ID de carpeta/hoja, comparte con la cuenta o vuelve a «Conectar con Google».
 
 
 
@@ -2397,7 +2397,7 @@ export function InformePagosConfig() {
 
 
 
-              <label className="text-sm font-medium block mb-2">Columna C — Institución financiera</label>
+              <label className="text-sm font-medium block mb-2">Columna C - Institución financiera</label>
 
 
 
@@ -2452,7 +2452,7 @@ export function InformePagosConfig() {
 
 
 
-              <label className="text-sm font-medium block mb-2">Columna D — Documento (número de comprobante o recibo)</label>
+              <label className="text-sm font-medium block mb-2">Columna D - Documento (número de comprobante o recibo)</label>
 
 
 
@@ -2507,7 +2507,7 @@ export function InformePagosConfig() {
 
 
 
-              <label className="text-sm font-medium block mb-2">Columna D — Documento (referencia / número de depósito)</label>
+              <label className="text-sm font-medium block mb-2">Columna D - Documento (referencia / número de depósito)</label>
 
 
 

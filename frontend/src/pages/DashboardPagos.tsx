@@ -67,7 +67,7 @@ export function DashboardPagos() {
     refetchOnWindowFocus: false,
   })
 
-  // Cargar KPIs de pagos — queryKey compartida con useSidebarCounts para evitar llamadas duplicadas
+  // Cargar KPIs de pagos - queryKey compartida con useSidebarCounts para evitar llamadas duplicadas
   const { data: kpisPagos, isLoading: loadingKPIs } = useQuery({
     queryKey: tieneFiltrosActivos ? ['kpis-pagos', filtros] : ['kpis-pagos'],
     queryFn: async ({ signal }) => {
@@ -403,7 +403,7 @@ export function DashboardPagos() {
         >
           <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl p-6 shadow-xl">
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
-              <span>ðŸ”</span>
+              <span>ðŸ"</span>
               <span>Explorar Análisis Detallados</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -393,7 +393,7 @@ export function DashboardCobranza() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-8">
           <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-6 shadow-xl">
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
-              <span>ðŸ”</span>
+              <span>ðŸ"</span>
               <span>Explorar Análisis Detallados</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -43,7 +43,7 @@ export function shouldSaveField(value: string | undefined | null): boolean {
  */
 export function getPasswordPlaceholder(isMasked: boolean): string {
   return isMasked
-    ? '•••••••• (ya configurada — deja en blanco para no cambiar)'
+    ? '•••••••• (ya configurada - deja en blanco para no cambiar)'
     : 'Pega tu contraseña o API key aquí'
 }
 

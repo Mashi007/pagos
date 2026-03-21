@@ -473,7 +473,7 @@ export function PagosBuscadorAmortizacion() {
 
 
 
-          Buscar por cédula – Tabla de amortización
+          Buscar por cédula - Tabla de amortización
 
 
 
@@ -883,7 +883,7 @@ export function PagosBuscadorAmortizacion() {
 
 
 
-                                : '—'}
+                                : '-'}
 
 
 
@@ -908,7 +908,7 @@ export function PagosBuscadorAmortizacion() {
 
 
 
-                                : '—'}
+                                : '-'}
 
 
 
@@ -923,7 +923,7 @@ export function PagosBuscadorAmortizacion() {
 
 
 
-                              ${typeof (c as any).monto_cuota === 'number' ? (c as any).monto_cuota.toFixed(2) : (c as any).monto?.toFixed(2) ? '—'}
+                              ${typeof (c as any).monto_cuota === 'number' ? (c as any).monto_cuota.toFixed(2) : (c as any).monto?.toFixed(2) ? '-'}
 
 
 

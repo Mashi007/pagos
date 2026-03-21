@@ -105,7 +105,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
           <CardContent className="p-6">
             <div className="space-y-6">
               <div className="bg-green-50 p-4 rounded border border-green-200">
-                <h5 className="font-semibold text-green-900 mb-4">ðŸ“… Fecha de Aprobación y Desembolso:</h5>
+                <h5 className="font-semibold text-green-900 mb-4">ðŸ"… Fecha de Aprobación y Desembolso:</h5>
                 <div className="bg-blue-50 p-3 rounded border border-blue-200 mb-4">
                   <p className="text-sm font-medium text-blue-900 mb-2">
                     âš ï¸ Requisitos para desembolsar:

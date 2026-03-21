@@ -454,7 +454,7 @@ export function Comunicaciones({
 
 
 
-  // Usuarios desde API (para Responsable y escalación) — conectado a /api/v1/usuarios
+  // Usuarios desde API (para Responsable y escalación) - conectado a /api/v1/usuarios
 
 
 
@@ -4098,7 +4098,7 @@ export function Comunicaciones({
 
 
 
-                  <p className="text-xs text-gray-600 font-medium">Modo Manual — Responde desde aquí (Enter para enviar, Shift+Enter nueva línea)</p>
+                  <p className="text-xs text-gray-600 font-medium">Modo Manual - Responde desde aquí (Enter para enviar, Shift+Enter nueva línea)</p>
 
 
 

@@ -10,7 +10,7 @@ interface DireccionJson {
 }
 
 export function formatAddress(direccion: string | null | undefined): string {
-  if (!direccion || direccion.trim() === '') return '—'
+  if (!direccion || direccion.trim() === '') return '-'
   try {
     const trimmed = direccion.trim()
     if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || trimmed.startsWith('[')) {

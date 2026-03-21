@@ -2854,7 +2854,7 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
 
 
 
-            <CardTitle className="text-lg sm:text-xl">{isInfopagos ? 'Deudor: ' : 'Hola, '}{nombre || (isInfopagos ? '—' : 'Cliente')}</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">{isInfopagos ? 'Deudor: ' : 'Hola, '}{nombre || (isInfopagos ? '-' : 'Cliente')}</CardTitle>
 
 
 

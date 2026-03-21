@@ -6302,7 +6302,7 @@ export function ClientesList() {
 
 
 
-                          : '—'}
+                          : '-'}
 
 
 
@@ -6358,7 +6358,7 @@ export function ClientesList() {
 
 
 
-                          : '—'}
+                          : '-'}
 
 
 

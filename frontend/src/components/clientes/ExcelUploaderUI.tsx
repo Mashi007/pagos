@@ -81,7 +81,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
     emailDuplicadosEnArchivo.size > 0 ||
     telefonoDuplicadosEnArchivo.size > 0
 
-  /** Regla: observación 100% solo nombre(s) de columna — sin "duplicado" ni texto extra */
+  /** Regla: observación 100% solo nombre(s) de columna - sin "duplicado" ni texto extra */
   const columnasDuplicadas = (motivos: string[]) =>
     [...new Set(motivos.map((m) => {
       if (m.includes('cédula')) return 'Cédula'
@@ -554,7 +554,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                     </div>
                                   </div>
                                 ) : (
-                                  <span className="text-gray-400 text-xs">—</span>
+                                  <span className="text-gray-400 text-xs">-</span>
                                 )}
                               </td>
                             </tr>

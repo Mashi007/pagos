@@ -3298,7 +3298,7 @@ export function TicketsAtencion() {
 
 
 
-            CRM — Centro de tickets
+            CRM - Centro de tickets
 
 
 
@@ -9588,7 +9588,7 @@ export function TicketsAtencion() {
 
 
 
-                                          Ver cliente completo → â†’
+                                          Ver cliente completo → â†'
 
 
 

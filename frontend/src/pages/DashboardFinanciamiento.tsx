@@ -2073,7 +2073,7 @@ export function DashboardFinanciamiento() {
 
 
 
-                  <span>ðŸ”</span>
+                  <span>ðŸ"</span>
 
 
 

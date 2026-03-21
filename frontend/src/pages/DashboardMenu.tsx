@@ -758,7 +758,7 @@ export function DashboardMenu() {
 
 
 
-  // Ã¢Å“… OPTIMIZACIÃ“N PRIORIDAD 1: Carga por batches con priorización
+  // Ã¢Å"… OPTIMIZACIÃ"N PRIORIDAD 1: Carga por batches con priorización
 
 
 
@@ -838,7 +838,7 @@ export function DashboardMenu() {
 
 
 
-    // Ã¢Å“… Prioridad máxima - carga inmediatamente
+    // Ã¢Å"… Prioridad máxima - carga inmediatamente
 
 
 
@@ -1662,7 +1662,7 @@ export function DashboardMenu() {
 
 
 
-    retry: 1, // Ã¢Å“… Permitir 1 reintento para errores de red
+    retry: 1, // Ã¢Å"… Permitir 1 reintento para errores de red
 
 
 
@@ -8390,7 +8390,7 @@ export function DashboardMenu() {
 
 
 
-                      <span>Pago vencido por Analista — Cuotas vencidas</span>
+                      <span>Pago vencido por Analista - Cuotas vencidas</span>
 
 
 
@@ -8798,7 +8798,7 @@ export function DashboardMenu() {
 
 
 
-                      <span>Pago vencido por Analista — Dólares vencidos</span>
+                      <span>Pago vencido por Analista - Dólares vencidos</span>
 
 
 

@@ -488,7 +488,7 @@ export function GmailPipelineCard() {
 
 
 
-          Pipeline Gmail – cantidad de correos y archivos procesados
+          Pipeline Gmail - cantidad de correos y archivos procesados
 
 
 
@@ -603,7 +603,7 @@ export function GmailPipelineCard() {
 
 
 
-                  Última ejecución: {status.last_status ? '—'} · {status.last_emails} correos, {status.last_files} archivos
+                  Última ejecución: {status.last_status ? '-'} · {status.last_emails} correos, {status.last_files} archivos
 
 
 

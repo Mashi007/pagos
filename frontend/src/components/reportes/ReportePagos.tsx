@@ -243,7 +243,7 @@ function TablaPagosMes({
 
 
 
-                    <TableCell>{item.prestamo_id ? '—'}</TableCell>
+                    <TableCell>{item.prestamo_id ? '-'}</TableCell>
 
 
 
@@ -258,7 +258,7 @@ function TablaPagosMes({
 
 
 
-                      {item.nombre || '—'}
+                      {item.nombre || '-'}
 
 
 
@@ -283,7 +283,7 @@ function TablaPagosMes({
 
 
 
-                    <TableCell className="font-mono text-sm">{item.documento || '—'}</TableCell>
+                    <TableCell className="font-mono text-sm">{item.documento || '-'}</TableCell>
 
 
 

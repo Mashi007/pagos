@@ -1768,7 +1768,7 @@ export default function EstadoCuentaPublicoPage() {
 
 
 
-              {isInformesRoute ? 'Informes — Uso interno' : 'Bienvenido'}
+              {isInformesRoute ? 'Informes - Uso interno' : 'Bienvenido'}
 
 
 
@@ -3082,7 +3082,7 @@ export default function EstadoCuentaPublicoPage() {
 
 
 
-                        Recibo cuota {r.numero_cuota} — Préstamo #{r.prestamo_id} {r.producto}
+                        Recibo cuota {r.numero_cuota} - Préstamo #{r.prestamo_id} {r.producto}
 
 
 

@@ -4334,7 +4334,7 @@ export function PrestamosList() {
 
 
 
-                      {((pageRevisar - 1) * perPageRevisar) + 1}–{Math.min(pageRevisar * perPageRevisar, revisarData.total)} de {revisarData.total}
+                      {((pageRevisar - 1) * perPageRevisar) + 1}-{Math.min(pageRevisar * perPageRevisar, revisarData.total)} de {revisarData.total}
 
 
 
@@ -7166,7 +7166,7 @@ export function PrestamosList() {
 
 
 
-                           prestamo.modalidad_pago ? '—'}
+                           prestamo.modalidad_pago ? '-'}
 
 
 
@@ -7182,7 +7182,7 @@ export function PrestamosList() {
 
 
 
-                        <TableCell>{prestamo.numero_cuotas != null ? prestamo.numero_cuotas : '—'}</TableCell>
+                        <TableCell>{prestamo.numero_cuotas != null ? prestamo.numero_cuotas : '-'}</TableCell>
 
 
 
@@ -7254,7 +7254,7 @@ export function PrestamosList() {
 
 
 
-                            {prestamo.fecha_aprobacion ? formatDate(prestamo.fecha_aprobacion) : '—'}
+                            {prestamo.fecha_aprobacion ? formatDate(prestamo.fecha_aprobacion) : '-'}
 
 
 
