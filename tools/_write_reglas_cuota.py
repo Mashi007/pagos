@@ -1,4 +1,7 @@
-# Reglas de negocio - Estados de cuota
+# -*- coding: utf-8 -*-
+from pathlib import Path
+
+CONTENT = """# Reglas de negocio - Estados de cuota
 
 Documento alineado con la **tabla de amortizacion** en el modal **Detalles del Prestamo** (columna **Estado**) y con la implementacion en `backend/app/services/cuota_estado.py` (**America/Caracas**).
 
@@ -160,3 +163,9 @@ A: No para esta regla: **hoy** de negocio es **America/Caracas** en el codigo un
 | 20/03/2026 | Documentacion inicial |
 | 21/03/2026 | Alineacion con UI modal amortizacion, VENCIDO 1-91 / MORA 92+, Caracas, columnas, PAGO_ADELANTADO y PARCIAL |
 
+"""
+
+Path(__file__).resolve().parents[1].joinpath(
+    "REGLAS_NEGOCIO_ESTADOS_CUOTA.md"
+).write_text(CONTENT, encoding="utf-8")
+print("ok")
