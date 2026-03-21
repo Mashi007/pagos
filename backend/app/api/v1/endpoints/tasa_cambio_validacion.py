@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Patch para mejorar validación de tasas de cambio.
 Agrega endpoint para validación clara antes de procesar pagos.
@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.auth import get_current_user
+from app.core.deps import get_current_user
 from app.services.tasa_cambio_service import obtener_tasa_hoy, debe_ingresar_tasa
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
 
@@ -207,3 +207,4 @@ def get_estado_completo_tasa(
 #     
 #     # PASO 3: Procesar con monto en USD
 #     # ... resto del código
+
