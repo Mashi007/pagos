@@ -29,6 +29,7 @@ import {
   DollarSign,
   Clock,
   Download,
+  TrendingUp,
 } from 'lucide-react'
 import { cn } from '../../utils'
 import { useSimpleAuth } from '../../store/simpleAuthStore'

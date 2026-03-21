@@ -392,6 +392,24 @@ class PrestamoService {
     const response = await apiClient.get<any>(`${this.baseUrl}/${prestamoId}/evaluacion-riesgo`)
     return response
   }
+
+  // Descargar estado de cuenta PDF (privado, autenticado)
+  async descargarEstadoCuentaPDF(prestamoId: number): Promise<void> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/${prestamoId}/estado-cuenta/pdf`,
+      { responseType: 'blob' }
+    )
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `Estado_Cuenta_Prestamo_${prestamoId}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
 }
 
 export const prestamoService = new PrestamoService()

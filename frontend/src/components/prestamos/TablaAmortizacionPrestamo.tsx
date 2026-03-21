@@ -166,11 +166,11 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
 
   const exportarPDF = async () => {
     try {
-      await prestamoService.descargarAmortizacionExcel(prestamo.id, prestamo.cedula)
-      toast.success('PDF descargado exitosamente')
+      await prestamoService.descargarEstadoCuentaPDF(prestamo.id)
+      toast.success('Estado de cuenta PDF descargado exitosamente')
     } catch (error) {
       console.error('Error al exportar a PDF:', error)
-      toast.error('Error al exportar a PDF')
+      toast.error('Error al exportar estado de cuenta PDF')
     }
   }
 

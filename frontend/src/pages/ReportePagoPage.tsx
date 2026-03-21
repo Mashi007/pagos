@@ -144,6 +144,7 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
   const [reciboToken, setReciboToken] = useState<string | null>(null)
   const [pagoId, setPagoId] = useState<number | null>(null)
   const [descargandoRecibo, setDescargandoRecibo] = useState(false)
+  const [aplicadoCuotas, setAplicadoCuotas] = useState<string | null>(null)
   const [messageForScreenReader, setMessageForScreenReader] = useState('')
   const [notification, setNotification] = useState<NotificationState>(null)
   const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -187,6 +188,7 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
     setEnviado(false)
     setReciboToken(null)
     setPagoId(null)
+    setAplicadoCuotas(null)
     setStep(irAStep)
   }
 
@@ -300,6 +302,7 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
         }
         showNotification('success', res.mensaje || 'Pago registrado.')
         setReferencia(res.referencia_interna || '')
+        setAplicadoCuotas(res.aplicado_a_cuotas ?? null)
         if (res.recibo_descarga_token) setReciboToken(res.recibo_descarga_token)
         if (res.pago_id != null) setPagoId(res.pago_id)
         setEnviado(true)
@@ -780,6 +783,14 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
               {referencia?.startsWith("#") ? referencia : `#${referencia}`}
             </p>
           </div>
+          {isInfopagos && aplicadoCuotas ? (
+            <div className="text-sm text-left bg-slate-100 rounded-md px-3 py-2 border border-slate-200">
+              <p className="font-semibold text-[#1e3a5f]">Abono aplicado a</p>
+              <p className="mt-1 font-mono text-slate-800">{aplicadoCuotas}</p>
+              <p className="mt-1 text-xs text-slate-600">Mismo dato aparece en el PDF del recibo.</p>
+            </div>
+          ) : null}
+
           {isInfopagos ? (
             <>
               <p className="text-sm text-gray-600">

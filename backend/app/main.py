@@ -137,7 +137,9 @@ from app.api.v1.endpoints import criticos
 app.include_router(criticos.router)
 # Incluir dashboard de monitoreo
 from app.api.v1.endpoints import dashboard_conciliacion
+from app.api.v1.endpoints import admin_tasas_cambio
 app.include_router(dashboard_conciliacion.router)
+app.include_router(admin_tasas_cambio.router)
 
 
 def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.0):

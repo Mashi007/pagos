@@ -2103,3 +2103,49 @@ def resolver_prestamo_error(error_id: int, db: Session = Depends(get_db)):
     db.commit()
     return None
 
+
+
+@router.get("/{prestamo_id}/estado-cuenta/pdf")
+def get_estado_cuenta_prestamo_pdf(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Genera PDF de estado de cuenta para un prestamo especifico."""
+    from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta, obtener_datos_estado_cuenta_prestamo
+    
+    datos = obtener_datos_estado_cuenta_prestamo(db, prestamo_id)
+    if not datos:
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+    
+    try:
+        cedula_display = datos.get("cedula_display") or ""
+        nombre = datos.get("nombre") or ""
+        prestamos_list = datos.get("prestamos_list") or []
+        cuotas_pendientes = datos.get("cuotas_pendientes") or []
+        total_pendiente = float(datos.get("total_pendiente") or 0)
+        fecha_corte = datos.get("fecha_corte") or date.today()
+        amortizaciones_por_prestamo = datos.get("amortizaciones_por_prestamo") or []
+        
+        pdf_bytes = generar_pdf_estado_cuenta(
+            cedula=cedula_display,
+            nombre=nombre,
+            prestamos=prestamos_list,
+            cuotas_pendientes=cuotas_pendientes,
+            total_pendiente=total_pendiente,
+            fecha_corte=fecha_corte,
+            amortizaciones_por_prestamo=amortizaciones_por_prestamo,
+            recibos=None,
+            recibo_token=None,
+            base_url="",
+        )
+        
+        filename = f"Estado_Cuenta_Prestamo_{prestamo_id}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except Exception as e:
+        logger.exception("Error generando PDF: prestamo_id=%s error=%s", prestamo_id, e)
+        raise HTTPException(status_code=500, detail="Error generando PDF del estado de cuenta")

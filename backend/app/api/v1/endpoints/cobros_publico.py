@@ -32,6 +32,7 @@ from app.api.v1.endpoints.validadores import validate_cedula
 # Servicio Gemini del sistema (mismo GEMINI_API_KEY y GEMINI_MODEL que Pagos Gmail / health)
 from app.services.pagos_gmail.gemini_service import compare_form_with_image
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK
+from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
 from app.core.email import send_email
 from app.core.security import decode_token, create_recibo_infopagos_token
 
@@ -51,8 +52,24 @@ def _monto_con_moneda(pr: PagoReportado) -> str:
     return f"{monto_str} {moneda}".strip()
 
 
-def _generar_recibo_desde_pago(pr: PagoReportado) -> bytes:
-    """Genera recibo siempre con datos del pago reportado actual."""
+def _generar_recibo_desde_pago(db: Session, pr: PagoReportado) -> bytes:
+    cuotas_txt = texto_cuotas_aplicadas_pago_reportado(db, pr)
+    saldo_init, saldo_fin, num_cuota = None, None, None
+    try:
+        from app.services.cobros.recibo_cuotas_lookup import obtener_saldos_cuota_aplicada
+        saldo_init, saldo_fin, num_cuota = obtener_saldos_cuota_aplicada(db, pr)
+    except Exception:
+        pass
+    fecha_pago_display = pr.fecha_pago.strftime("%d/%m/%Y") if pr.fecha_pago else None
+    moneda = (pr.moneda or "BS").strip().upper()
+    tasa_cambio = None
+    if moneda == "BS":
+        try:
+            from app.services.tasa_cambio_service import obtener_tasa_hoy
+            tasa_obj = obtener_tasa_hoy(db)
+            tasa_cambio = float(tasa_obj.tasa_oficial) if tasa_obj else None
+        except Exception:
+            pass
     return generar_recibo_pago_reportado(
         referencia_interna=pr.referencia_interna,
         nombres=pr.nombres,
@@ -63,6 +80,13 @@ def _generar_recibo_desde_pago(pr: PagoReportado) -> bytes:
         monto=_monto_con_moneda(pr),
         numero_operacion=pr.numero_operacion,
         fecha_pago=pr.fecha_pago,
+        aplicado_a_cuotas=cuotas_txt,
+        saldo_inicial=saldo_init,
+        saldo_final=saldo_fin,
+        numero_cuota=num_cuota,
+        fecha_pago_display=fecha_pago_display,
+        moneda=moneda,
+        tasa_cambio=tasa_cambio,
     )
 
 
@@ -489,7 +513,14 @@ async def enviar_reporte_publico(
 
         if coincide:
             pr.estado = "aprobado"
-            pdf_bytes = _generar_recibo_desde_pago(pr)
+        else:
+            pr.estado = "en_revision"
+
+        db.commit()
+        if coincide:
+            _intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
+            db.refresh(pr)
+            pdf_bytes = _generar_recibo_desde_pago(db, pr)
             pr.recibo_pdf = pdf_bytes
             to_email = (cliente.email or "").strip()
             if to_email:
@@ -512,11 +543,7 @@ async def enviar_reporte_publico(
                         "[COBROS_PUBLIC] Recibo aprobado ref=%s: correo NO enviado a %s. Error: %s.",
                         referencia, to_email, err_mail or "desconocido",
                     )
-        else:
-            pr.estado = "en_revision"
-
-        db.commit()
-        _intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
+            db.commit()
 
         return EnviarReporteResponse(
             ok=True,
@@ -554,7 +581,7 @@ def get_recibo_publico(
     cedula_pr = (getattr(pr, "tipo_cedula", "") or "") + (getattr(pr, "numero_cedula", "") or "")
     if cedula_pr.replace("-", "") != cedula_token.replace("-", ""):
         raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
-    pdf_bytes = _generar_recibo_desde_pago(pr)
+    pdf_bytes = _generar_recibo_desde_pago(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
     ref = getattr(pr, "referencia_interna", "recibo") or "recibo"
@@ -703,7 +730,10 @@ async def enviar_reporte_infopagos(
             gemini_result = compare_form_with_image(form_data, content, filename)
             pr.gemini_coincide_exacto = "true" if gemini_result.get("coincide_exacto", False) else "false"
             pr.gemini_comentario = gemini_result.get("comentario")
-        pdf_bytes = _generar_recibo_desde_pago(pr)
+        _intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
+        db.refresh(pr)
+        cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
+        pdf_bytes = _generar_recibo_desde_pago(db, pr)
         pr.recibo_pdf = pdf_bytes
         to_email = (cliente.email or "").strip()
         if to_email:
@@ -725,13 +755,13 @@ async def enviar_reporte_infopagos(
                 logger.error("[INFOPAGOS] Recibo ref=%s: correo NO enviado a %s. Error: %s.", referencia, to_email, err_mail or "desconocido")
         recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
         db.commit()
-        _intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
         return EnviarReporteInfopagosResponse(
             ok=True,
             referencia_interna=referencia,
             mensaje="Pago registrado. Se envió el recibo al correo del deudor. Puede descargar el recibo aquí.",
             recibo_descarga_token=recibo_token,
             pago_id=pr.id,
+            aplicado_a_cuotas=cuotas_display,
         )
     except Exception as e:
         logger.exception("[INFOPAGOS] Error en enviar-reporte: %s", e)
@@ -768,7 +798,7 @@ def get_recibo_infopagos(
     if not pr:
         raise HTTPException(status_code=404, detail="Recibo no encontrado.")
     pr = pr[0] if hasattr(pr, "__getitem__") else pr
-    pdf_bytes = _generar_recibo_desde_pago(pr)
+    pdf_bytes = _generar_recibo_desde_pago(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
     ref = getattr(pr, "referencia_interna", "recibo") or "recibo"

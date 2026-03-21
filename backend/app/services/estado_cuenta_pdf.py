@@ -353,3 +353,126 @@ def generar_pdf_estado_cuenta(
 
     doc.build(story)
     return buf.getvalue()
+
+
+
+def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
+    """
+    Obtiene datos formateados para generar PDF de estado de cuenta de UN prestamo especifico.
+    Reutilizable desde endpoints privados (autenticados).
+    """
+    from sqlalchemy import select
+    from app.models.prestamo import Prestamo
+    from app.models.cliente import Cliente
+    from app.models.cuota import Cuota
+    from app.services.cuota_estado import estado_cuota_para_mostrar
+    from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
+    
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        return None
+    
+    cliente = db.get(Cliente, prestamo.cliente_id)
+    if not cliente:
+        return None
+    
+    cedula_display = (getattr(cliente, "cedula", None) or "").strip()
+    nombre = (getattr(cliente, "nombres", None) or "").strip()
+    email = (getattr(cliente, "email", None) or "").strip()
+    
+    sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
+    
+    prestamos_list = [{
+        "id": prestamo.id,
+        "producto": getattr(prestamo, "producto", None) or "",
+        "total_financiamiento": float(getattr(prestamo, "total_financiamiento", 0) or 0),
+        "estado": getattr(prestamo, "estado", None) or "",
+    }]
+    
+    cuotas_pendientes = []
+    total_pendiente = 0.0
+    fecha_corte_dt = date.today()
+    
+    cuotas_rows = db.execute(
+        select(Cuota)
+        .where(Cuota.prestamo_id == prestamo_id)
+        .order_by(Cuota.numero_cuota)
+    ).scalars().all()
+    
+    for cuota in cuotas_rows:
+        monto_cuota = float(getattr(cuota, "monto", 0) or 0)
+        total_pagado = float(getattr(cuota, "total_pagado", 0) or 0)
+        monto_pendiente = max(0.0, monto_cuota - total_pagado)
+        
+        if monto_pendiente <= 0:
+            continue
+        
+        total_pendiente += monto_pendiente
+        fv = getattr(cuota, "fecha_vencimiento", None)
+        fv_date = fv.date() if fv and hasattr(fv, "date") else fv
+        estado_mostrar = estado_cuota_para_mostrar(total_pagado, monto_cuota, fv_date, fecha_corte_dt)
+        
+        cuotas_pendientes.append({
+            "prestamo_id": prestamo_id,
+            "numero_cuota": getattr(cuota, "numero_cuota", ""),
+            "fecha_vencimiento": fv.isoformat() if fv else "",
+            "monto": monto_pendiente,
+            "estado": estado_mostrar,
+        })
+    
+    amortizaciones_por_prestamo = []
+    estado = (getattr(prestamo, "estado", "") or "").strip().upper()
+    
+    if estado == "APROBADO":
+        cuotas_amortizacion = db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id == prestamo_id)
+            .order_by(Cuota.numero_cuota)
+        ).scalars().all()
+        
+        if cuotas_amortizacion:
+            cuotas_data = []
+            for c in cuotas_amortizacion:
+                total_pagado_c = float(getattr(c, "total_pagado", 0) or 0)
+                monto_c = float(getattr(c, "monto", 0) or 0)
+                pago_conciliado = getattr(c, "pago_conciliado", False)
+                
+                estado_backend = (getattr(c, "estado", "") or "").strip().upper()
+                fv_c = getattr(c, "fecha_vencimiento", None)
+                fv_date_c = fv_c.date() if fv_c and hasattr(fv_c, "date") else fv_c
+                
+                if estado_backend == "PAGADO" and pago_conciliado:
+                    estado_cuota = "CONCILIADO"
+                else:
+                    estado_cuota = estado_cuota_para_mostrar(total_pagado_c, monto_c, fv_date_c, fecha_corte_dt)
+                
+                pago_conc_display = "Si" if pago_conciliado else "-"
+                
+                cuotas_data.append({
+                    "id": c.id,
+                    "numero_cuota": getattr(c, "numero_cuota", ""),
+                    "fecha_vencimiento": fv_c.strftime("%d/%m/%Y") if fv_c else "",
+                    "monto_capital": float(getattr(c, "monto_capital", 0) or 0),
+                    "monto_interes": float(getattr(c, "monto_interes", 0) or 0),
+                    "monto_cuota": monto_c,
+                    "saldo_capital_final": float(getattr(c, "saldo_capital_final", 0) or 0),
+                    "pago_conciliado_display": pago_conc_display,
+                    "estado": estado_cuota,
+                })
+            
+            amortizaciones_por_prestamo.append({
+                "prestamo_id": prestamo_id,
+                "producto": getattr(prestamo, "producto", None) or "Prestamo",
+                "cuotas": cuotas_data,
+            })
+    
+    return {
+        "cedula_display": cedula_display,
+        "nombre": nombre,
+        "email": email,
+        "prestamos_list": prestamos_list,
+        "cuotas_pendientes": cuotas_pendientes,
+        "total_pendiente": total_pendiente,
+        "fecha_corte": fecha_corte_dt,
+        "amortizaciones_por_prestamo": amortizaciones_por_prestamo,
+    }

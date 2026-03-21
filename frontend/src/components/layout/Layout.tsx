@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { Footer } from './Footer'
+import { TasaCambioNotificacion } from '../TasaCambioNotificacion'
 
 // Constantes de configuración
 const DESKTOP_BREAKPOINT = 1024
@@ -35,14 +36,19 @@ export function Layout() {
   }
 
   return (
-    <div className="h-screen bg-gray-50 flex overflow-hidden">
-      {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} onToggle={toggleSidebar} />
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+      {/* Notificación de Tasa de Cambio (si es necesaria) */}
+      <TasaCambioNotificacion />
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Page content */}
-        <main className="flex-1 overflow-auto">
+      {/* Contenedor principal */}
+      <div className="flex overflow-hidden flex-1">
+        {/* Sidebar */}
+        <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} onToggle={toggleSidebar} />
+
+        {/* Main content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Page content */}
+          <main className="flex-1 overflow-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -51,10 +57,11 @@ export function Layout() {
           >
             <Outlet />
           </motion.div>
-        </main>
+          </main>
 
-        {/* Footer */}
-        <Footer />
+          {/* Footer */}
+          <Footer />
+        </div>
       </div>
     </div>
   )

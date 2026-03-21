@@ -372,6 +372,16 @@ def get_recibo_cuota_publico(
     if not fecha_recep and cuota.fecha_pago:
         fecha_recep = datetime.combine(cuota.fecha_pago, datetime.min.time())
         fecha_pago_date = cuota.fecha_pago
+    saldo_inicial_display = f"{float(cuota.saldo_capital_inicial or 0):,.2f} Bs." if cuota.saldo_capital_inicial else "-"
+    saldo_final_display = f"{float(cuota.saldo_capital_final or 0):,.2f} Bs." if cuota.saldo_capital_final else "-"
+    fecha_pago_display = fecha_pago_date.strftime("%d/%m/%Y") if fecha_pago_date else "-"
+    tasa_hoy = None
+    try:
+        from app.services.tasa_cambio_service import obtener_tasa_hoy
+        tasa_obj = obtener_tasa_hoy(db)
+        tasa_hoy = float(tasa_obj.tasa_oficial) if tasa_obj else None
+    except Exception:
+        pass
     pdf_bytes = generar_recibo_cuota_amortizacion(
         referencia_interna=referencia,
         nombres_completos=(prestamo.nombres or "").strip(),
@@ -381,6 +391,13 @@ def get_recibo_cuota_publico(
         numero_operacion=numero_operacion,
         fecha_recepcion=fecha_recep,
         fecha_pago=fecha_pago_date,
+        aplicado_a_cuotas=f"Cuota {cuota.numero_cuota}",
+        saldo_inicial=saldo_inicial_display,
+        saldo_final=saldo_final_display,
+        numero_cuota=cuota.numero_cuota,
+        fecha_pago_display=fecha_pago_display,
+        moneda="BS",
+        tasa_cambio=tasa_hoy,
     )
     return Response(
         content=pdf_bytes,

@@ -53,6 +53,13 @@ def generar_recibo_pago_reportado(
     numero_operacion: str,
     fecha_recepcion: Optional[object] = None,
     fecha_pago: Optional[date] = None,
+    aplicado_a_cuotas: Optional[str] = None,
+    saldo_inicial: Optional[str] = None,
+    saldo_final: Optional[str] = None,
+    numero_cuota: Optional[int] = None,
+    fecha_pago_display: Optional[str] = None,
+    moneda: Optional[str] = None,
+    tasa_cambio: Optional[float] = None,
 ) -> bytes:
     """Genera el PDF del recibo con datos reales del pago reportado."""
     from reportlab.lib import colors
@@ -63,6 +70,12 @@ def generar_recibo_pago_reportado(
 
     del fecha_recepcion  # No se usa: la emision del recibo es la fecha actual.
 
+    # Saldos del abono
+    saldo_init_display = (saldo_inicial or "").strip() or "-"
+    saldo_fin_display = (saldo_final or "").strip() or "-"
+    monto_abono = (monto or "").strip() or "-"
+    cuota_num_display = f"Cuota {numero_cuota}" if numero_cuota else "-"
+
     fecha_emision_str = date.today().strftime("%d/%m/%Y")
     fecha_pago_str = fecha_pago.strftime("%d/%m/%Y") if fecha_pago else "-"
 
@@ -72,6 +85,7 @@ def generar_recibo_pago_reportado(
     banco_valido = "" if _is_placeholder_text(banco) else banco
     monto_display = _normalize_monto_display(monto)
     numero_op = (numero_operacion or "").strip()
+    cuotas_txt = (aplicado_a_cuotas or "").strip() or "Pendiente de aplicar"
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -139,7 +153,13 @@ def generar_recibo_pago_reportado(
         [Paragraph("Fecha de emision", label_style), Paragraph(fecha_emision_str, value_style), Paragraph("Fecha de pago", label_style), Paragraph(fecha_pago_str, value_style)],
         [Paragraph("Titular", label_style), Paragraph(nombre_completo or "-", value_style), Paragraph("Cedula", label_style), Paragraph(cedula or "-", value_style)],
         [Paragraph("Banco", label_style), Paragraph(banco_valido or "-", value_style), Paragraph("Operacion", label_style), Paragraph(numero_op or "-", value_style)],
-        [Paragraph("Monto reportado", label_style), Paragraph(f"<b>{monto_display or '-'}</b>", value_style), Paragraph("Referencia", label_style), Paragraph(ref_display, value_style)],
+        [Paragraph("Monto reportado", label_style), Paragraph(f"<b>{monto_display or '-'} {moneda_symbol}</b>", value_style), Paragraph("Referencia", label_style), Paragraph(ref_display, value_style)],
+        [
+            Paragraph("Aplicado a", label_style),
+            Paragraph(f"<b>{cuotas_txt}</b>", value_style),
+            Paragraph("", label_style),
+            Paragraph("", value_style),
+        ],
     ]
 
     table = Table(info, colWidths=[1.45 * inch, 2.0 * inch, 1.2 * inch, 1.45 * inch])
@@ -148,6 +168,7 @@ def generar_recibo_pago_reportado(
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f8fafc")),
         ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#f8fafc")),
+        ("BACKGROUND", (0, 4), (-1, 4), colors.HexColor("#f8fafc")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
@@ -157,6 +178,48 @@ def generar_recibo_pago_reportado(
 
     story.append(table)
     story.append(Spacer(1, 12))
+
+    # Tabla de saldos si hay cuota
+    if numero_cuota:
+        fecha_pago_col = (fecha_pago_display or "").strip() or "-"
+        saldos_table = Table(
+            [
+                [
+                    Paragraph("Cuota", label_style),
+                    Paragraph("Saldo Inicial", label_style),
+                    Paragraph("Abono", label_style),
+                    Paragraph("Fecha de Pago", label_style),
+                    Paragraph("Saldo Final", label_style),
+                ],
+                [
+                    Paragraph(f"<b>{cuota_num_display}</b>", value_style),
+                    Paragraph(f"{saldo_init_display} {moneda_symbol}" if saldo_init_display != "-" else "-", value_style),
+                    Paragraph(f"<b>{monto_abono} {moneda_symbol}</b>" if monto_abono != "-" else "-", value_style),
+                    Paragraph(fecha_pago_col, value_style),
+                    Paragraph(f"{saldo_fin_display} {moneda_symbol}" if saldo_fin_display != "-" else "-", value_style),
+                ],
+            ],
+            colWidths=[0.8 * inch, 1.3 * inch, 1.2 * inch, 1.3 * inch, 1.3 * inch],
+        )
+        saldos_table.setStyle(
+            TableStyle([
+                ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#cbd5e1")),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f8fafc")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ])
+        )
+        story.append(Paragraph("<b>Desglose del abono</b>", value_style))
+        story.append(Spacer(1, 6))
+        story.append(saldos_table)
+        story.append(Spacer(1, 12))
 
     if banco_valido:
         cuerpo = (
@@ -171,6 +234,11 @@ def generar_recibo_pago_reportado(
             f"<b>{nombre_completo or '-'}</b> (cedula <b>{cedula or '-'}</b>). "
             f"El pago fue reportado por <b>{monto_display or '-'}</b>, "
             f"con numero de operacion <b>{numero_op or '-'}</b>."
+        )
+    if aplicado_a_cuotas and (aplicado_a_cuotas or "").strip():
+        cuerpo += (
+            f" Este comprobante corresponde al abono registrado a <b>{(aplicado_a_cuotas or '').strip()}</b> "
+            "del credito, segun la tabla de amortizacion."
         )
     story.append(Paragraph(cuerpo, body_style))
     story.append(Spacer(1, 18))
