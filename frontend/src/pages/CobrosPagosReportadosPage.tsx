@@ -411,28 +411,26 @@ export default function CobrosPagosReportadosPage() {
     } catch (e: any) {
       toast.error(
         e?.message ||
-          'Se descarg? el Excel, pero fall? el marcado de exportados. Recargue e intente de nuevo.'
+          'Se descargo el Excel, pero fallo el marcado de exportados. Recargue e intente de nuevo.'
       )
     }
+  }
 
-    const handleDescargarPagosTablaTemporalExcel = async () => {
-      setDescargandoTabla(true)
+  const handleDescargarPagosTablaTemporalExcel = async () => {
+    setDescargandoTabla(true)
 
-      try {
-        await descargarPagosAprobadosExcel()
+    try {
+      await descargarPagosAprobadosExcel()
 
-        toast.success(
-          'Excel descargado. Los pagos han sido eliminados de la tabla temporal.'
-        )
+      toast.success(
+        'Excel descargado. Los pagos han sido eliminados de la tabla temporal.'
+      )
 
-        // Recargar la lista después de descargar
-
-        await load({ page: 1 })
-      } catch (e: any) {
-        toast.error(e?.message || 'Error al descargar el Excel.')
-      } finally {
-        setDescargandoTabla(false)
-      }
+      await load({ page: 1 })
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al descargar el Excel.')
+    } finally {
+      setDescargandoTabla(false)
     }
   }
 

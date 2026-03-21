@@ -68,7 +68,7 @@ function getEffectiveApiBaseUrl(): string {
   }
 }
 
-const API_BASE_URL = getEffectiveApiBaseUrl()
+export const API_BASE_URL = getEffectiveApiBaseUrl()
 
 // Ruta de login con base path (ej. /pagos/login cuando BASE_PATH es /pagos)
 

@@ -125,6 +125,7 @@ export function PagosList() {
   } | null>(null)
   const [isDescargandoExcelCobrosErrores, setIsDescargandoExcelCobrosErrores] =
     useState(false)
+  const [isImportingCobros, setIsImportingCobros] = useState(false)
   const [isExportingRevisionPagos, setIsExportingRevisionPagos] =
     useState(false)
   const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)

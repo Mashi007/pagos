@@ -378,3 +378,17 @@ export function validatePagoField(
 }
 
 export { validateExcelFile, validateExcelData, sanitizeFileName }
+
+export function parsePrestamoIdFromNumeroCredito(val: unknown): number | null {
+  if (val == null) return null
+  const s = String(val).trim()
+  if (s === '' || s === 'none') return null
+  if (/^\d+$/.test(s)) {
+    const n = parseInt(s, 10)
+    return Number.isNaN(n) ? null : n
+  }
+  const parts = s.match(/\d+/g)
+  if (!parts?.length) return null
+  const n = parseInt(parts[parts.length - 1], 10)
+  return Number.isNaN(n) ? null : n
+}
