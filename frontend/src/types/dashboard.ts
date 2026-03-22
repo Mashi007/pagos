@@ -171,3 +171,17 @@ export interface CobranzasSemanalesResponse {
 
   fecha_fin: string
 }
+
+export interface AnalisisCuentasPorCobrarItem {
+  mes: string
+
+  cartera: number
+
+  pagos_atrasos: number
+}
+
+export interface AnalisisCuentasPorCobrarResponse {
+  analisis: AnalisisCuentasPorCobrarItem[]
+
+  origen: 'demo' | 'bd'
+}

@@ -440,6 +440,93 @@ def _compute_dashboard_admin(
     }
 
 
+def _compute_analisis_cuentas_por_cobrar(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+) -> dict:
+    """Calcula análisis de cuentas por cobrar: lo programado vs pagos de atrasos."""
+    if fecha_inicio and fecha_fin:
+        try:
+            inicio = date.fromisoformat(fecha_inicio)
+            fin = date.fromisoformat(fecha_fin)
+            if inicio <= fin:
+                meses = _meses_desde_rango(inicio, fin)
+            else:
+                meses = _etiquetas_12_meses()
+        except ValueError:
+            meses = _etiquetas_12_meses()
+    else:
+        meses = _etiquetas_12_meses()
+
+    analisis = []
+    try:
+        for i, m in enumerate(meses):
+            if "year" in m and "month" in m:
+                y, mo = m["year"], m["month"]
+                inicio_d = date(y, mo, 1)
+                if mo == 12:
+                    fin_d = date(y, 12, 31)
+                else:
+                    fin_d = date(y, mo + 1, 1) - timedelta(days=1)
+            else:
+                hoy = datetime.now(timezone.utc)
+                fin_mes = hoy - timedelta(days=30 * (len(meses) - 1 - i))
+                if fin_mes.tzinfo is None:
+                    fin_mes = fin_mes.replace(tzinfo=timezone.utc)
+                inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
+
+            # 1. LO QUE DEBERÍA COBRARSE: Cuotas programadas en este mes
+            cartera = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= inicio_d,
+                    Cuota.fecha_vencimiento <= fin_d,
+                )
+            ) or 0
+
+            # 2. PAGOS DE MESES ANTERIORES: Cuotas que vencieron ANTES de este mes pero se pagaron EN este mes
+            pagos_atrasos = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < inicio_d,  # Vencimiento ANTES de este mes
+                    Cuota.fecha_pago >= inicio_d,        # Pero se pagó EN este mes
+                    Cuota.fecha_pago <= fin_d,
+                    Cuota.fecha_pago.isnot(None),
+                )
+            ) or 0
+
+            cartera_f = _safe_float(cartera)
+            pagos_atrasos_f = _safe_float(pagos_atrasos)
+
+            analisis.append({
+                "mes": m["mes"],
+                "cartera": cartera_f,
+                "pagos_atrasos": pagos_atrasos_f,
+            })
+        origen = "bd"
+    except Exception as e:
+        logger.exception("Error en analisis_cuentas_por_cobrar: %s", e)
+        analisis = [
+            {"mes": m["mes"], "cartera": 0.0, "pagos_atrasos": 0.0}
+            for m in meses
+        ]
+        origen = "bd"
+
+    return {
+        "analisis": analisis,
+        "origen": origen,
+    }
+
+
 @router.get("/admin")
 def get_dashboard_admin(
     periodo: Optional[str] = Query(None),
@@ -464,3 +551,14 @@ def get_dashboard_admin(
             _DASHBOARD_ADMIN_CACHE["refreshed_at"] = datetime.now()
         return data
     return _compute_dashboard_admin(db, fecha_inicio, fecha_fin)
+
+
+@router.get("/analisis-cuentas-por-cobrar")
+def get_analisis_cuentas_por_cobrar(
+    periodo: Optional[str] = Query(None),
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Análisis de cuentas por cobrar: cartera vs pagos de atrasos por mes."""
+    return _compute_analisis_cuentas_por_cobrar(db, fecha_inicio, fecha_fin)

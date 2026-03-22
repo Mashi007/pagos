@@ -81,6 +81,7 @@ import type {
   CobranzasSemanalesResponse,
   MorosidadPorAnalistaItem,
   PrestamosPorModeloResponse,
+  AnalisisCuentasPorCobrarResponse,
 } from '../types/dashboard'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
@@ -543,6 +544,41 @@ export function DashboardMenu() {
     enabled: true,
   })
 
+  const periodoAnalisisCuentas = getPeriodoGrafico('analisis-cuentas')
+
+  const {
+    data: datosAnalisisCuentas,
+    isLoading: loadingAnalisisCuentas,
+  } = useQuery({
+    queryKey: ['analisis-cuentas-por-cobrar', periodoAnalisisCuentas, JSON.stringify(filtros)],
+
+    queryFn: async () => {
+      const params = construirFiltrosObject(periodoAnalisisCuentas)
+
+      const queryParams = new URLSearchParams()
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+
+      if (!queryParams.has('periodo') && periodoAnalisisCuentas)
+        queryParams.append('periodo', periodoAnalisisCuentas)
+
+      const response = await apiClient.get(
+        `/api/v1/dashboard/analisis-cuentas-por-cobrar${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
+        { timeout: 60000 }
+      )
+
+      return response as AnalisisCuentasPorCobrarResponse
+    },
+
+    staleTime: 4 * 60 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    enabled: true,
+  })
+
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Mostrar toast cuando falla la carga del gráfico principal (auditoría: no fallar en silencio)
@@ -607,6 +643,11 @@ export function DashboardMenu() {
         exact: false,
       })
 
+      await queryClient.invalidateQueries({
+        queryKey: ['analisis-cuentas-por-cobrar'],
+        exact: false,
+      })
+
       // Refrescar todas las queries activas del dashboard
 
       await queryClient.refetchQueries({
@@ -646,6 +687,11 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['monto-programado-proxima-semana'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['analisis-cuentas-por-cobrar'],
         exact: false,
       })
 
@@ -1234,6 +1280,136 @@ export function DashboardMenu() {
                               dot={{ r: 4 }}
                             />
                           </ComposedChart>
+                        </ResponsiveContainer>
+                      )}
+                    </ChartWithDateRangeSlider>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">
+                      No hay datos para el período seleccionado
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Análisis de Cuentas por Cobrar - Cartera vs Pagos de Atrasos */}
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+            >
+              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-amber-50/90 to-orange-50/90 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <DollarSign className="h-5 w-5 text-amber-600" />
+
+                      <span>Análisis de Cuentas por Cobrar</span>
+                    </CardTitle>
+
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="analisis-cuentas" />
+
+                      <Badge
+                        variant="secondary"
+                        className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                      >
+                        Últimos 12 meses
+                      </Badge>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-6 pt-4">
+                  {loadingAnalisisCuentas ? (
+                    <div className="flex items-center justify-center py-16 text-gray-500">
+                      Cargando análisis de cuentas por cobrar...
+                    </div>
+                  ) : datosAnalisisCuentas?.analisis &&
+                    datosAnalisisCuentas.analisis.length > 0 ? (
+                    <ChartWithDateRangeSlider
+                      data={datosAnalisisCuentas.analisis}
+                      dataKey="mes"
+                      chartHeight={400}
+                    >
+                      {filteredData => (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={filteredData}
+                            margin={{
+                              top: 14,
+                              right: 24,
+                              left: 12,
+                              bottom: 14,
+                            }}
+                          >
+                            <CartesianGrid {...chartCartesianGrid} />
+
+                            <XAxis dataKey="mes" tick={chartAxisTick} />
+
+                            <YAxis
+                              tick={chartAxisTick}
+                              tickFormatter={value => {
+                                if (value >= 1000) {
+                                  return `$${(value / 1000).toFixed(0)}K`
+                                }
+
+                                return `$${value}`
+                              }}
+                              label={{
+                                value: 'Monto (USD)',
+                                angle: -90,
+                                position: 'insideLeft',
+                                style: { fill: '#374151', fontSize: 13 },
+                              }}
+                            />
+
+                            <Tooltip
+                              contentStyle={chartTooltipStyle.contentStyle}
+                              labelStyle={chartTooltipStyle.labelStyle}
+                              formatter={(value: number, name: string) => [
+                                formatCurrency(value),
+                                name,
+                              ]}
+                            />
+
+                            <Legend {...chartLegendStyle} />
+
+                            <Bar
+                              dataKey="cartera"
+                              fill="#3b82f6"
+                              name="Lo que debería cobrarse"
+                              radius={[4, 4, 0, 0]}
+                            />
+
+                            <Bar
+                              dataKey="pagos_atrasos"
+                              fill="#f97316"
+                              name="Pagos de meses anteriores"
+                              radius={[4, 4, 0, 0]}
+                            />
+
+                            <Line
+                              type="monotone"
+                              dataKey="cartera"
+                              stroke="#3b82f6"
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                              name="Tendencia programado"
+                              isAnimationActive={false}
+                            />
+
+                            <Line
+                              type="monotone"
+                              dataKey="pagos_atrasos"
+                              stroke="#f97316"
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                              name="Tendencia atrasos"
+                              isAnimationActive={false}
+                            />
+                          </BarChart>
                         </ResponsiveContainer>
                       )}
                     </ChartWithDateRangeSlider>
