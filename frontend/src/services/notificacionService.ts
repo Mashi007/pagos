@@ -103,6 +103,8 @@ export interface ClientesRetrasadosResponse {
 
   hoy: ClienteRetrasadoItem[]
 
+  dias_1_atraso?: ClienteRetrasadoItem[]
+
   dias_5_atraso?: ClienteRetrasadoItem[]
 
   dias_30_atraso?: ClienteRetrasadoItem[]
@@ -130,6 +132,10 @@ export interface EstadisticasPorTab {
   dias_1: EstadisticasTabItem
 
   hoy: EstadisticasTabItem
+
+  /** Envíos del caso "1 día de retraso" (tipo_tab en BD). */
+
+  dias_1_retraso: EstadisticasTabItem
 
   mora_90: EstadisticasTabItem
 }

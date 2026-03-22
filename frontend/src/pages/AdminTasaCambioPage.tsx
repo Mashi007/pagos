@@ -179,10 +179,10 @@ export const AdminTasaCambioPage: React.FC = () => {
             Tasa para una fecha de pago (pagos en Bs.)
           </h2>
           <p className="mb-4 text-sm text-gray-700">
-            Use la <strong>fecha de pago</strong> del reporte o del comprobante. Es la misma tasa
-            oficial Bs./USD que usa el sistema para convertir bolívares a cartera en dólares. No
-            reemplaza el ingreso de &quot;tasa de hoy&quot; arriba; sirve para días pasados o
-            faltantes.
+            Use la <strong>fecha de pago</strong> del reporte o del comprobante.
+            Es la misma tasa oficial Bs./USD que usa el sistema para convertir
+            bolívares a cartera en dólares. No reemplaza el ingreso de
+            &quot;tasa de hoy&quot; arriba; sirve para días pasados o faltantes.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div>

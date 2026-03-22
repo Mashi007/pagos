@@ -52,9 +52,7 @@ function toastAfterRechazoDetalle(data: CambiarEstadoPagoResponse) {
   } else if (data.rechazo_correo_enviado === false) {
     const err = data.rechazo_correo_error
     toast.error(
-      err
-        ? `${msg} (${err.length > 160 ? `${err.slice(0, 160)}…` : err})`
-        : msg
+      err ? `${msg} (${err.length > 160 ? `${err.slice(0, 160)}…` : err})` : msg
     )
   } else {
     toast(msg, { duration: 7000 })
@@ -303,8 +301,7 @@ export default function CobrosDetallePage() {
                 variant="outline"
                 size="sm"
                 onClick={() =>
-                  id &&
-                  navigate(`/cobros/pagos-reportados/${id}/editar`)
+                  id && navigate(`/cobros/pagos-reportados/${id}/editar`)
                 }
               >
                 <Edit className="mr-1 h-4 w-4" /> Editar datos

@@ -55,9 +55,7 @@ function toastAfterRechazoCobros(data: CambiarEstadoPagoResponse) {
   } else if (data.rechazo_correo_enviado === false) {
     const err = data.rechazo_correo_error
     toast.error(
-      err
-        ? `${msg} (${err.length > 160 ? `${err.slice(0, 160)}…` : err})`
-        : msg
+      err ? `${msg} (${err.length > 160 ? `${err.slice(0, 160)}…` : err})` : msg
     )
   } else {
     toast(msg, { duration: 7000 })
@@ -491,10 +489,10 @@ export default function CobrosPagosReportadosPage() {
             Descargar Excel Aprobados
           </Button>
 
-          <div className="basis-full w-full space-y-2 rounded-md border border-dashed border-muted-foreground/30 bg-muted/25 p-3 text-sm">
+          <div className="w-full basis-full space-y-2 rounded-md border border-dashed border-muted-foreground/30 bg-muted/25 p-3 text-sm">
             <p className="text-foreground">
               <span className="font-semibold">
-                Descargar Excel Aprobados —{' '}
+                Descargar Excel Aprobados -{' '}
               </span>
               Solo <strong>aprobados</strong> aún no exportados. Las fechas del
               filtro no aplican; sí cédula e institución si las escribiste. El
@@ -504,7 +502,7 @@ export default function CobrosPagosReportadosPage() {
 
             <p className="text-muted-foreground">
               <span className="font-semibold text-foreground">
-                Columnas del Excel —{' '}
+                Columnas del Excel -{' '}
               </span>
               Referencia, Nombre, Cédula, Banco, Monto, Moneda,{' '}
               <strong>Tasa cambio (Bs/USD)</strong>, Fecha pago, Nº operación,
@@ -718,7 +716,9 @@ export default function CobrosPagosReportadosPage() {
                             ? 'NO CLIENTES: la cédula del reporte (' +
                               row.cedula_display +
                               ') no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.'
-                            : /No pag Bs|solo Bs|Bolívares/i.test(row.observacion || '')
+                            : /No pag Bs|solo Bs|Bolívares/i.test(
+                                  row.observacion || ''
+                                )
                               ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
                               : (row.observacion ?? '')
                         }

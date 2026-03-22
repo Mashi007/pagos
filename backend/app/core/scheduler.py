@@ -24,7 +24,6 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.scripts.aplicar_pagos_pendientes_job import aplicar_pagos_pendientes
 from app.api.v1.endpoints import cobranzas, notificaciones, notificaciones_tabs
 from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running, _last_run_too_recent, _run_pipeline_background
 from app.models.pagos_gmail_sync import PagosGmailSync
@@ -230,23 +229,10 @@ def start_scheduler() -> None:
         name=f"Pagos Gmail pipeline (cada {cron_min} min)",
     )
     logger.info("Pagos Gmail sync programado cada %d minutos (PAGOS_GMAIL_CRON_MINUTES=%d)", cron_min, cron_min)
-    
-    
 
-    # Aplicar pagos pendientes a cuotas: solo en el scheduler del worker lider (ver main.py).
-    # Evita dos BackgroundScheduler disparando el mismo job con varios workers Uvicorn.
-    _scheduler.add_job(
-        aplicar_pagos_pendientes,
-        IntervalTrigger(minutes=3),
-        id="aplicar_pagos_pendientes",
-        name="Aplicar pagos pendientes (cada 3 min)",
-        max_instances=1,
-        coalesce=True,
-        misfire_grace_time=60,
-    )
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: aplicar_pagos_pendientes cada 3 min; notificaciones 2:00; envÃ­o notificaciones 23:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
+        "Scheduler iniciado: notificaciones 2:00; envÃ­o notificaciones 23:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
         SCHEDULER_TZ,
     )
 

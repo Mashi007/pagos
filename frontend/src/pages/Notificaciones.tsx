@@ -44,6 +44,7 @@ type TabId =
   | 'dias_3'
   | 'dias_1'
   | 'hoy'
+  | 'dias_1_atraso'
   | 'dias_5_atraso'
   | 'dias_30_atraso'
   | 'mora_90'
@@ -59,6 +60,8 @@ const TABS: { id: TabId; label: string; icon: typeof Calendar }[] = [
 
   { id: 'hoy', label: 'Hoy vence', icon: AlertTriangle },
 
+  { id: 'dias_1_atraso', label: '1 día atrasado', icon: Clock },
+
   { id: 'dias_5_atraso', label: '5 días atrasado', icon: Clock },
 
   { id: 'dias_30_atraso', label: '30 días atrasado', icon: Clock },
@@ -70,6 +73,35 @@ const TABS: { id: TabId; label: string; icon: typeof Calendar }[] = [
   { id: 'configuracion', label: 'Configuración', icon: Settings },
 ]
 
+/** Clave de GET estadisticas-por-tab / rebotados (coincide con tipo_tab en envíos). */
+
+type EstadisticaTabKey = keyof EstadisticasPorTab
+
+function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
+  switch (tab) {
+    case 'dias_5':
+      return 'dias_5'
+
+    case 'dias_3':
+      return 'dias_3'
+
+    case 'dias_1':
+      return 'dias_1'
+
+    case 'hoy':
+      return 'hoy'
+
+    case 'mora_90':
+      return 'mora_90'
+
+    case 'dias_1_atraso':
+      return 'dias_1_retraso'
+
+    default:
+      return null
+  }
+}
+
 const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
   actualizado_en: new Date().toISOString(),
 
@@ -80,6 +112,8 @@ const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
   dias_1: [],
 
   hoy: [],
+
+  dias_1_atraso: [],
 
   dias_5_atraso: [],
 
@@ -150,6 +184,8 @@ export function Notificaciones() {
 
       hoy: { enviados: 0, rebotados: 0 },
 
+      dias_1_retraso: { enviados: 0, rebotados: 0 },
+
       mora_90: { enviados: 0, rebotados: 0 },
     } as EstadisticasPorTab,
   })
@@ -165,18 +201,14 @@ export function Notificaciones() {
   }
 
   const handleDescargarInformeRebotados = async () => {
-    if (
-      activeTab === 'configuracion' ||
-      activeTab === 'liquidados' ||
-      activeTab === 'dias_5_atraso' ||
-      activeTab === 'dias_30_atraso'
-    )
-      return
+    const tipoApi = tipoParaKpiYRebotados(activeTab)
+
+    if (!tipoApi) return
 
     setDescargandoExcel(true)
 
     try {
-      const { total } = await notificacionService.getRebotadosPorTab(activeTab)
+      const { total } = await notificacionService.getRebotadosPorTab(tipoApi)
 
       if (total === 0) {
         toast.success('Todos los correos fueron enviados.')
@@ -186,7 +218,7 @@ export function Notificaciones() {
         return
       }
 
-      const blob = await notificacionService.descargarExcelRebotados(activeTab)
+      const blob = await notificacionService.descargarExcelRebotados(tipoApi)
 
       const url = window.URL.createObjectURL(blob)
 
@@ -194,7 +226,7 @@ export function Notificaciones() {
 
       a.href = url
 
-      a.download = `correos_no_entregados_${activeTab}.xlsx`
+      a.download = `correos_no_entregados_${tipoApi}.xlsx`
 
       document.body.appendChild(a)
 
@@ -230,6 +262,9 @@ export function Notificaciones() {
       case 'hoy':
         return data.hoy
 
+      case 'dias_1_atraso':
+        return data.dias_1_atraso ?? []
+
       case 'dias_5_atraso':
         return data.dias_5_atraso ?? []
 
@@ -248,6 +283,8 @@ export function Notificaciones() {
   }
 
   const list = getListForTab()
+
+  const statTabKey = tipoParaKpiYRebotados(activeTab)
 
   const hasColumnasCuota = list.some(
     row =>
@@ -308,7 +345,7 @@ export function Notificaciones() {
           <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
 
           <p className="mt-1 text-gray-600">
-            Recordatorios (Faltan 5, 3, 1), vence hoy, atrasos (5 y 30 días),
+            Recordatorios (Faltan 5, 3, 1), vence hoy, atrasos (1, 5 y 30 días),
             mora 90+ y crédito pagado. Datos desde BD. Se recomienda actualizar
             a las 2:00.
           </p>
@@ -347,11 +384,13 @@ export function Notificaciones() {
                     ? (data?.dias_1?.length ?? 0)
                     : tab.id === 'hoy'
                       ? (data?.hoy?.length ?? 0)
-                      : tab.id === 'mora_90'
-                        ? (data?.mora_90?.total_cuotas ?? 0)
-                        : tab.id === 'liquidados'
-                          ? (data?.liquidados?.length ?? 0)
-                          : 0
+                      : tab.id === 'dias_1_atraso'
+                        ? (data?.dias_1_atraso?.length ?? 0)
+                        : tab.id === 'mora_90'
+                          ? (data?.mora_90?.total_cuotas ?? 0)
+                          : tab.id === 'liquidados'
+                            ? (data?.liquidados?.length ?? 0)
+                            : 0
 
             return (
               <button
@@ -404,11 +443,13 @@ export function Notificaciones() {
                 ? 'Informe: cuotas con 90 o más días de mora - moroso (una a una)'
                 : activeTab === 'liquidados'
                   ? 'Crédito pagado (Total financiamiento = Total abonos)'
-                  : activeTab === 'dias_5_atraso'
-                    ? 'Cuotas con 5 días de atraso'
-                    : activeTab === 'dias_30_atraso'
-                      ? 'Cuotas con 30 días de atraso'
-                      : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 días' : activeTab === 'dias_3' ? 'y faltan 3 días' : activeTab === 'dias_1' ? 'y falta 1 día' : 'y vence hoy'}`}
+                  : activeTab === 'dias_1_atraso'
+                    ? 'Cuotas con 1 día de atraso'
+                    : activeTab === 'dias_5_atraso'
+                      ? 'Cuotas con 5 días de atraso'
+                      : activeTab === 'dias_30_atraso'
+                        ? 'Cuotas con 30 días de atraso'
+                        : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 días' : activeTab === 'dias_3' ? 'y faltan 3 días' : activeTab === 'dias_1' ? 'y falta 1 día' : 'y vence hoy'}`}
             </CardTitle>
 
             <CardDescription>
@@ -416,9 +457,10 @@ export function Notificaciones() {
                 ? 'Listado de cada cuota atrasada 90+ días (moroso) con nombre, cédula, número de cuota, fecha de vencimiento, días de atraso y monto.'
                 : activeTab === 'liquidados'
                   ? 'Préstamos donde total financiamiento (tabla préstamo) menos total abonos (tabla cuotas) es cero. Por cédula/cliente.'
-                  : activeTab === 'dias_5_atraso' ||
+                  : activeTab === 'dias_1_atraso' ||
+                      activeTab === 'dias_5_atraso' ||
                       activeTab === 'dias_30_atraso'
-                    ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso (nombre, cédula, nº cuota, fecha venc., días atraso, monto).'
+                    ? 'Cuotas vencidas no pagadas con 1, 5 o 30 días de atraso (nombre, cédula, nº cuota, fecha venc., días atraso, monto).'
                     : 'Nombre y cédula de clientes a notificar.'}
             </CardDescription>
           </CardHeader>
@@ -435,7 +477,9 @@ export function Notificaciones() {
 
                     <div>
                       <p className="text-2xl font-bold text-green-800">
-                        {estadisticasPorTab[activeTab]?.enviados ?? 0}
+                        {statTabKey
+                          ? (estadisticasPorTab[statTabKey]?.enviados ?? 0)
+                          : 0}
                       </p>
 
                       <p className="text-xs font-medium text-green-700">
@@ -449,7 +493,9 @@ export function Notificaciones() {
 
                     <div>
                       <p className="text-2xl font-bold text-red-800">
-                        {estadisticasPorTab[activeTab]?.rebotados ?? 0}
+                        {statTabKey
+                          ? (estadisticasPorTab[statTabKey]?.rebotados ?? 0)
+                          : 0}
                       </p>
 
                       <p className="text-xs font-medium text-red-700">
@@ -462,32 +508,29 @@ export function Notificaciones() {
 
             {/* Botón descargar informe Excel de no entregados (rebotados) */}
 
-            {(activeTab as TabId) !== 'configuracion' &&
-              (activeTab as TabId) !== 'liquidados' &&
-              (activeTab as TabId) !== 'dias_5_atraso' &&
-              (activeTab as TabId) !== 'dias_30_atraso' && (
-                <div className="mb-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDescargarInformeRebotados}
-                    disabled={descargandoExcel}
-                  >
-                    <Download
-                      className={`mr-2 h-4 w-4 ${descargandoExcel ? 'animate-pulse' : ''}`}
-                    />
+            {statTabKey != null && (
+              <div className="mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDescargarInformeRebotados}
+                  disabled={descargandoExcel}
+                >
+                  <Download
+                    className={`mr-2 h-4 w-4 ${descargandoExcel ? 'animate-pulse' : ''}`}
+                  />
 
-                    {descargandoExcel
-                      ? 'Preparando...'
-                      : 'Descargar informe de correos no entregados (Excel)'}
-                  </Button>
+                  {descargandoExcel
+                    ? 'Preparando...'
+                    : 'Descargar informe de correos no entregados (Excel)'}
+                </Button>
 
-                  <p className="mt-1 text-xs text-gray-500">
-                    Si todos los correos se enviaron correctamente se mostrará
-                    una notificación.
-                  </p>
-                </div>
-              )}
+                <p className="mt-1 text-xs text-gray-500">
+                  Si todos los correos se enviaron correctamente se mostrará una
+                  notificación.
+                </p>
+              </div>
+            )}
 
             {isError && (
               <div className="mb-4 flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">

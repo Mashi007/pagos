@@ -546,38 +546,40 @@ export function DashboardMenu() {
 
   const periodoAnalisisCuentas = getPeriodoGrafico('analisis-cuentas')
 
-  const {
-    data: datosAnalisisCuentas,
-    isLoading: loadingAnalisisCuentas,
-  } = useQuery({
-    queryKey: ['analisis-cuentas-por-cobrar', periodoAnalisisCuentas, JSON.stringify(filtros)],
+  const { data: datosAnalisisCuentas, isLoading: loadingAnalisisCuentas } =
+    useQuery({
+      queryKey: [
+        'analisis-cuentas-por-cobrar',
+        periodoAnalisisCuentas,
+        JSON.stringify(filtros),
+      ],
 
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodoAnalisisCuentas)
+      queryFn: async () => {
+        const params = construirFiltrosObject(periodoAnalisisCuentas)
 
-      const queryParams = new URLSearchParams()
+        const queryParams = new URLSearchParams()
 
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
+        Object.entries(params).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value.toString())
+        })
 
-      if (!queryParams.has('periodo') && periodoAnalisisCuentas)
-        queryParams.append('periodo', periodoAnalisisCuentas)
+        if (!queryParams.has('periodo') && periodoAnalisisCuentas)
+          queryParams.append('periodo', periodoAnalisisCuentas)
 
-      const response = await apiClient.get(
-        `/api/v1/dashboard/analisis-cuentas-por-cobrar${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
-        { timeout: 60000 }
-      )
+        const response = await apiClient.get(
+          `/api/v1/dashboard/analisis-cuentas-por-cobrar${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
+          { timeout: 60000 }
+        )
 
-      return response as AnalisisCuentasPorCobrarResponse
-    },
+        return response as AnalisisCuentasPorCobrarResponse
+      },
 
-    staleTime: 4 * 60 * 60 * 1000,
+      staleTime: 4 * 60 * 60 * 1000,
 
-    refetchOnWindowFocus: false,
+      refetchOnWindowFocus: false,
 
-    enabled: true,
-  })
+      enabled: true,
+    })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 

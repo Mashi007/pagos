@@ -1,8 +1,11 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Job background para aplicar pagos pendientes a cuotas.
-Ejecuta periodicamente para procesar pagos sin aplicar.
+Aplicacion masiva de pagos pendientes a cuotas (FIFO por prestamo).
+
+Ya no se programa en el scheduler: la conciliacion con cuotas se hace en otros
+flujos (p. ej. aplicar_pagos_pendientes_prestamo al operar un prestamo).
+Se mantiene el script para ejecucion manual: python -m app.scripts.aplicar_pagos_pendientes_job
 """
 import logging
 from decimal import Decimal

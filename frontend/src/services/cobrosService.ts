@@ -740,7 +740,9 @@ export async function exportarPagosReportadosAprobadosExcel(opts: {
       const data = err.response?.data as ArrayBuffer | undefined
 
       if (st === 401 || st === 403) {
-        throw new Error('Sesión expirada o sin permiso. Vuelva a iniciar sesión.')
+        throw new Error(
+          'Sesión expirada o sin permiso. Vuelva a iniciar sesión.'
+        )
       }
 
       if (data instanceof ArrayBuffer && data.byteLength > 0) {
@@ -839,7 +841,9 @@ export async function descargarPagosAprobadosExcel(): Promise<void> {
       const data = err.response?.data as ArrayBuffer | undefined
 
       if (st === 401 || st === 403) {
-        throw new Error('Sesión expirada o sin permiso. Vuelva a iniciar sesión.')
+        throw new Error(
+          'Sesión expirada o sin permiso. Vuelva a iniciar sesión.'
+        )
       }
 
       if (data instanceof ArrayBuffer && data.byteLength > 0) {
