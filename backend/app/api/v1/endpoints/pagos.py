@@ -87,6 +87,15 @@ from app.schemas.auth import UserResponse
 from app.services.cuota_estado import clasificar_estado_cuota, dias_retraso_desde_vencimiento
 
 
+from app.services.tasa_cambio_service import (
+
+    convertir_bs_a_usd,
+
+    obtener_tasa_por_fecha,
+
+)
+
+
 
 class MoverRevisarPagosBody(BaseModel):
 
@@ -479,6 +488,14 @@ def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict
         "documento_ruta": getattr(row, "documento_ruta", None),
 
         "cuotas_atrasadas": cuotas_atrasadas,
+
+        "moneda_registro": getattr(row, "moneda_registro", None),
+
+        "monto_bs_original": float(row.monto_bs_original) if getattr(row, "monto_bs_original", None) is not None else None,
+
+        "tasa_cambio_bs_usd": float(row.tasa_cambio_bs_usd) if getattr(row, "tasa_cambio_bs_usd", None) is not None else None,
+
+        "fecha_tasa_referencia": row.fecha_tasa_referencia.isoformat() if getattr(row, "fecha_tasa_referencia", None) else None,
 
     }
 
@@ -1918,7 +1935,75 @@ def importar_un_pago_reportado_a_pagos(
 
     prestamo_id = prestamos[0].id
 
+    moneda_pr = (getattr(pr, "moneda", None) or "USD").strip().upper()
+
+    if moneda_pr == "USDT":
+
+        moneda_pr = "USD"
+
     monto = float(pr.monto or 0)
+
+    monto_bs_original = None
+
+    tasa_aplicada = None
+
+    fecha_tasa_ref = None
+
+    if moneda_pr == "BS":
+
+        if not pr.fecha_pago:
+
+            return _err_con_pce(
+
+                "Fecha de pago requerida para convertir bolivares a USD",
+
+                cedula_cliente=cedula_raw,
+
+                prestamo_id=prestamo_id,
+
+            )
+
+        tasa_obj = obtener_tasa_por_fecha(db, pr.fecha_pago)
+
+        if tasa_obj is None:
+
+            return _err_con_pce(
+
+                "No hay tasa de cambio registrada para la fecha de pago "
+
+                f"{pr.fecha_pago.isoformat()}; no se puede importar en bolivares",
+
+                cedula_cliente=cedula_raw,
+
+                prestamo_id=prestamo_id,
+
+            )
+
+        tasa_aplicada = float(tasa_obj.tasa_oficial)
+
+        monto_bs_original = monto
+
+        try:
+
+            monto = convertir_bs_a_usd(monto_bs_original, tasa_aplicada)
+
+        except ValueError as e:
+
+            return _err_con_pce(str(e), cedula_cliente=cedula_raw, prestamo_id=prestamo_id)
+
+        fecha_tasa_ref = pr.fecha_pago
+
+    elif moneda_pr != "USD":
+
+        return _err_con_pce(
+
+            f"Moneda no soportada en importacion: {moneda_pr}",
+
+            cedula_cliente=cedula_raw,
+
+            prestamo_id=prestamo_id,
+
+        )
 
     if monto < _MIN_MONTO_PAGADO:
 
@@ -1961,6 +2046,14 @@ def importar_un_pago_reportado_a_pagos(
         fecha_conciliacion=ahora_imp,
 
         verificado_concordancia="SI",
+
+        moneda_registro=moneda_pr,
+
+        monto_bs_original=Decimal(str(round(monto_bs_original, 2))) if monto_bs_original is not None else None,
+
+        tasa_cambio_bs_usd=Decimal(str(tasa_aplicada)) if tasa_aplicada is not None else None,
+
+        fecha_tasa_referencia=fecha_tasa_ref,
 
     )
 

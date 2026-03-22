@@ -6,7 +6,7 @@ Agrega endpoint para validación clara antes de procesar pagos.
 
 from datetime import date
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -14,7 +14,12 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.user_utils import user_is_administrator
 from app.schemas.auth import UserResponse
-from app.services.tasa_cambio_service import obtener_tasa_hoy, debe_ingresar_tasa
+from app.services.tasa_cambio_service import (
+    obtener_tasa_hoy,
+    obtener_tasa_por_fecha,
+    debe_ingresar_tasa,
+    fecha_hoy_caracas,
+)
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
 
 router = APIRouter(prefix="/admin/tasas-cambio", tags=["tasas-cambio"])
@@ -68,7 +73,11 @@ class ValidacionTasaResponse(BaseModel):
 )
 def validar_tasa_para_pago(
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    current_user: UserResponse = Depends(get_current_user),
+    fecha_pago: Optional[date] = Query(
+        None,
+        description="Fecha de pago del reporte; valida tasa en tasas_cambio_diaria para esa fecha (Bs).",
+    ),
 ):
     """
     Endpoint para validar si se pueden procesar pagos en Bolívares.
@@ -78,10 +87,13 @@ def validar_tasa_para_pago(
     # Verificar que sea admin o que tenga permisos (opcional para usuarios comunes)
     # Por ahora permitimos que cualquier usuario consulte
     
-    tasa = obtener_tasa_hoy(db)
     debe_ingresar = debe_ingresar_tasa()
-    
-    # Caso 1: Tasa existe y estamos en horario de ingreso
+    if fecha_pago is not None:
+        tasa = obtener_tasa_por_fecha(db, fecha_pago)
+    else:
+        tasa = obtener_tasa_hoy(db)
+
+    # Caso 1: Tasa existe para la fecha de pago indicada o para hoy (Caracas)
     if tasa:
         return ValidacionTasaResponse(
             puede_procesar_pagos_bs=True,
@@ -96,6 +108,23 @@ def validar_tasa_para_pago(
             ]
         )
     
+    if fecha_pago is not None:
+        return ValidacionTasaResponse(
+            puede_procesar_pagos_bs=False,
+            tasa_actual=None,
+            fecha_tasa=None,
+            hora_obligatoria_desde="01:00",
+            hora_obligatoria_hasta="23:59",
+            mensaje=(
+                "CRITICO: No hay tasa de cambio registrada para la fecha de pago "
+                f"{fecha_pago.isoformat()}. Registrela en Administracion > Tasas de cambio para esa fecha."
+            ),
+            acciones_recomendadas=[
+                "Registrar la tasa oficial para esa fecha en tasas_cambio_diaria",
+                "O solicitar al cliente que reporte en USD",
+            ],
+        )
+
     # Caso 2: Tasa no existe y estamos en horario de ingreso obligatorio
     if debe_ingresar:
         return ValidacionTasaResponse(

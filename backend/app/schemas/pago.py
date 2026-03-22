@@ -97,3 +97,7 @@ class PagoResponse(BaseModel):
     documento_tipo: Optional[str] = None
     documento_ruta: Optional[str] = None
     cuotas_atrasadas: Optional[int] = None  # calculado en listado
+    moneda_registro: Optional[str] = None
+    monto_bs_original: Optional[Decimal] = None
+    tasa_cambio_bs_usd: Optional[Decimal] = None
+    fecha_tasa_referencia: Optional[date] = None

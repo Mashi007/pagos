@@ -91,16 +91,20 @@ def generar_recibo_pago_reportado(
 
     # Simbolo de moneda en tablas (antes faltaba y causaba NameError al generar PDF)
     _m = (moneda or "").strip()
+    md_u = (monto_display or "").upper()
+    moneda_u_sym = (moneda or "").strip().upper()
     if _m:
         moneda_symbol = _m
+    elif moneda_u_sym == "USD":
+        moneda_symbol = "USD"
+    elif moneda_u_sym == "BS":
+        moneda_symbol = "Bs."
+    elif "USD" in md_u:
+        moneda_symbol = "USD"
+    elif "BS" in md_u:
+        moneda_symbol = "Bs."
     else:
-        md_u = (monto_display or "").upper()
-        if "USD" in md_u:
-            moneda_symbol = ""
-        elif "BS" in md_u:
-            moneda_symbol = ""
-        else:
-            moneda_symbol = "Bs."
+        moneda_symbol = "Bs."
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -254,6 +258,8 @@ def generar_recibo_pago_reportado(
         story.append(saldos_table)
         story.append(Spacer(1, 12))
 
+    moneda_u = (moneda or "").strip().upper()
+
     if banco_valido:
         cuerpo = (
             "Se confirma la recepcion de su reporte de pago, asociado al titular "
@@ -272,6 +278,15 @@ def generar_recibo_pago_reportado(
         cuerpo += (
             f" Este comprobante corresponde al abono registrado a <b>{(aplicado_a_cuotas or '').strip()}</b> "
             "del credito, segun la tabla de amortizacion."
+        )
+    if moneda_u == "USD":
+        cuerpo += (
+            " Monto indicado en <b>USD</b> (dolares estadounidenses)."
+        )
+    elif moneda_u == "BS" and tasa_cambio is not None:
+        cuerpo += (
+            f" Monto en <b>bolivares (Bs.)</b>. Tasa de cambio oficial para la fecha de pago "
+            f"(<b>{fecha_pago_str}</b>): <b>{tasa_cambio:,.2f}</b> Bs. por 1 USD."
         )
     story.append(Paragraph(cuerpo, body_style))
     story.append(Spacer(1, 18))

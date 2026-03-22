@@ -3,7 +3,7 @@ Modelo SQLAlchemy para registro de pagos (tabla pagos).
 Conectado al frontend /pagos/pagos; lista y CRUD desde BD.
 Columnas alineadas con la tabla real en Render (cedula, fecha_pago timestamp, referencia_pago, etc.).
 """
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, Text, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Text, Boolean, ForeignKey, Date
 from sqlalchemy.sql import func, text
 
 from app.core.database import Base
@@ -17,6 +17,7 @@ class Pago(Base):
     # BD tiene columna "cedula"; en Python/API se expone como cedula_cliente
     cedula_cliente = Column("cedula", String(20), nullable=True, index=True)
     fecha_pago = Column(DateTime(timezone=False), nullable=False)
+    # Monto en USD para cartera/cuotas (si el reporte fue en Bs, se convierte con tasa del dia de fecha_pago).
     monto_pagado = Column(Numeric(14, 2), nullable=False)
     numero_documento = Column(String(100), nullable=True, unique=True)  # Regla general: no duplicados en documentos
     institucion_bancaria = Column(String(255), nullable=True)
@@ -32,3 +33,8 @@ class Pago(Base):
     documento_ruta = Column(String(255), nullable=True)
     # NOT NULL en BD; obligatorio al insertar
     referencia_pago = Column(String(100), nullable=False, server_default=text("''"))
+    # Auditoria moneda (solo datos en BD; monto_pagado siempre USD cuando aplica conversion)
+    moneda_registro = Column(String(10), nullable=True)  # USD | BS
+    monto_bs_original = Column(Numeric(15, 2), nullable=True)
+    tasa_cambio_bs_usd = Column(Numeric(15, 6), nullable=True)
+    fecha_tasa_referencia = Column(Date, nullable=True)  # misma fecha de pago usada para buscar tasa
