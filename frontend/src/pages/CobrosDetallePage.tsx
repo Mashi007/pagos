@@ -43,7 +43,7 @@ import { Badge } from '../components/ui/badge'
 
 import toast from 'react-hot-toast'
 
-import { Eye, FileText, Mail, Loader2 } from 'lucide-react'
+import { Eye, FileText, Mail, Loader2, Pencil } from 'lucide-react'
 
 function toastAfterRechazoDetalle(data: CambiarEstadoPagoResponse) {
   const msg = data.mensaje ?? 'Pago rechazado.'
@@ -293,6 +293,21 @@ export default function CobrosDetallePage() {
                 onClick={() => id && openComprobanteInNewTab(Number(id))}
               >
                 <Eye className="mr-1 h-4 w-4" /> Ver comprobante
+              </Button>
+            )}
+
+            {(detalle.estado === 'pendiente' ||
+              detalle.estado === 'en_revision' ||
+              detalle.estado === 'rechazado') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  id &&
+                  navigate(`/cobros/pagos-reportados/${id}/editar`)
+                }
+              >
+                <Pencil className="mr-1 h-4 w-4" /> Editar datos
               </Button>
             )}
 

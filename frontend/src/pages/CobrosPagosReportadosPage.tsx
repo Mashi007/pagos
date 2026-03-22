@@ -864,39 +864,41 @@ export default function CobrosPagosReportadosPage() {
                           </Button>
 
                           {(row.estado === 'pendiente' ||
-                            row.estado === 'en_revision') && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 shrink-0"
-                                title="Editar (modificar valores para cumplir validadores)"
-                                onClick={() =>
-                                  navigate(
-                                    '/cobros/pagos-reportados/' +
-                                      String(row.id) +
-                                      '/editar'
-                                  )
-                                }
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                            row.estado === 'en_revision' ||
+                            row.estado === 'rechazado') && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0"
+                              title="Editar (monto, referencia, cédula, etc.)"
+                              onClick={() =>
+                                navigate(
+                                  '/cobros/pagos-reportados/' +
+                                    String(row.id) +
+                                    '/editar'
+                                )
+                              }
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
 
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                title="Rechazar (escribir mensaje y enviar correo)"
-                                onClick={() => handleAbrirModalRechazo(row)}
-                                disabled={changingEstadoId === row.id}
-                              >
-                                {changingEstadoId === row.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <XCircle className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </>
+                          {(row.estado === 'pendiente' ||
+                            row.estado === 'en_revision') && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              title="Rechazar (escribir mensaje y enviar correo)"
+                              onClick={() => handleAbrirModalRechazo(row)}
+                              disabled={changingEstadoId === row.id}
+                            >
+                              {changingEstadoId === row.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <XCircle className="h-4 w-4" />
+                              )}
+                            </Button>
                           )}
 
                           <div className="relative inline-block h-8 w-8">

@@ -941,8 +941,7 @@ def editar_pago_reportado(
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     if pr.estado in ("aprobado", "importado"):
         raise HTTPException(status_code=400, detail="No se puede editar un pago ya aprobado o importado a pagos.")
-    if pr.estado == "rechazado":
-        raise HTTPException(status_code=400, detail="No se puede editar un pago rechazado.")
+    # rechazado: permitir corregir datos (monto, referencia, etc.) antes de volver a revisión
 
     if body.nombres is not None:
         pr.nombres = (body.nombres or "").strip()[:200] or pr.nombres

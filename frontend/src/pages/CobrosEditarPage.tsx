@@ -10,7 +10,7 @@
 
 
 
- * Solo disponible cuando estado es pendiente o en_revision.
+ * Editable si no está aprobado ni importado a pagos (incluye rechazado y en revisión).
 
 
 
@@ -99,7 +99,11 @@ export default function CobrosEditarPage() {
 
       setDetalle(res)
 
-      const montoRaw = res.monto != null ? String(res.monto) : ''
+      // Monto como texto plano para <input type="number"> (evita miles es-VE que bloquean la edición)
+      const montoRaw =
+        res.monto != null && res.monto !== ''
+          ? String(Number(res.monto))
+          : ''
 
       setForm({
         nombres: res.nombres || '',
@@ -118,7 +122,10 @@ export default function CobrosEditarPage() {
 
         monto: montoRaw,
 
-        moneda: res.moneda || 'BS',
+        moneda: (() => {
+          const m = (res.moneda || 'BS').toUpperCase()
+          return ['BS', 'USD', 'USDT'].includes(m) ? m : 'BS'
+        })(),
 
         correo_enviado_a: res.correo_enviado_a || '',
 
@@ -183,11 +190,9 @@ export default function CobrosEditarPage() {
         observacion: form.observacion.trim() || undefined,
       })
 
-      toast.success(
-        'Datos actualizados. Los cambios cumplen con los validadores.'
-      )
+      toast.success('Guardado. Datos recargados desde el servidor.')
 
-      navigate(`/cobros/pagos-reportados/${id}`)
+      await load()
     } catch (e: any) {
       toast.error(
         e?.response?.data?.detail || e?.message || 'Error al guardar.'
@@ -205,40 +210,12 @@ export default function CobrosEditarPage() {
     )
   }
 
-  const formatMontoDisplay = (val: string) => {
-    const num = parseFloat(val.replace(/,/g, '.').replace(/\s/g, ''))
-
-    if (Number.isNaN(num)) return ''
-
-    return num.toLocaleString('es-VE', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
-  }
-
-  const parseMontoInput = (val: string) => {
-    const cleaned = val.replace(/[^\d.,]/g, '')
-
-    const lastSep = Math.max(cleaned.lastIndexOf('.'), cleaned.lastIndexOf(','))
-
-    if (lastSep === -1) return cleaned
-
-    const before = cleaned.slice(0, lastSep).replace(/[.,]/g, '')
-
-    const after = cleaned
-      .slice(lastSep + 1)
-      .replace(/\D/g, '')
-      .slice(0, 2)
-
-    return after ? `${before || '0'}.${after}` : before || '0'
-  }
-
-  if (detalle.estado === 'aprobado' || detalle.estado === 'rechazado') {
+  if (detalle.estado === 'aprobado' || detalle.estado === 'importado') {
     return (
       <div className="space-y-4 p-6">
         <p className="text-muted-foreground">
           No se puede editar un pago ya{' '}
-          {detalle.estado === 'aprobado' ? 'aprobado' : 'rechazado'}.
+          {detalle.estado === 'aprobado' ? 'aprobado' : 'importado a pagos'}.
         </p>
 
         <Button
@@ -261,13 +238,32 @@ export default function CobrosEditarPage() {
           ← Volver al listado
         </Button>
 
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/cobros/pagos-reportados/${id}`)}
-        >
-          Ver detalle
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={loading || saving}
+            onClick={() => load()}
+          >
+            Recargar datos
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/cobros/pagos-reportados/${id}`)}
+          >
+            Ver detalle
+          </Button>
+        </div>
       </div>
+
+      {detalle.estado === 'rechazado' && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Este reporte está <strong>rechazado</strong>. Puede corregir montos,
+          referencia y demás datos; luego cambie el estado a «En revisión» desde
+          el detalle si corresponde.
+        </p>
+      )}
 
       <Card>
         <CardHeader>
@@ -279,8 +275,9 @@ export default function CobrosEditarPage() {
           </CardTitle>
 
           <p className="text-sm text-muted-foreground">
-            Modifica los valores para que cumplan con los validadores (cédula,
-            fecha, monto, etc.).
+            Todos los campos se cargan desde el servidor al abrir la página y al
+            pulsar «Recargar datos». Tras guardar, se vuelven a cargar los valores
+            guardados.
           </p>
         </CardHeader>
 
@@ -334,6 +331,8 @@ export default function CobrosEditarPage() {
                   <option value="E">E</option>
 
                   <option value="J">J</option>
+
+                  <option value="G">G</option>
                 </select>
               </div>
 
@@ -349,7 +348,7 @@ export default function CobrosEditarPage() {
                       ...f,
                       numero_cedula: e.target.value
                         .replace(/\D/g, '')
-                        .slice(0, 11),
+                        .slice(0, 13),
                     }))
                   }
                   placeholder="Solo dígitos"
@@ -448,29 +447,40 @@ export default function CobrosEditarPage() {
                 <label className="mb-1 block text-sm font-medium">Monto</label>
 
                 <Input
-                  type="text"
+                  type="number"
                   inputMode="decimal"
-                  value={form.monto ? formatMontoDisplay(form.monto) : ''}
+                  step="any"
+                  min={0}
+                  value={form.monto}
                   onChange={e =>
-                    setForm(f => ({
-                      ...f,
-                      monto: parseMontoInput(e.target.value),
-                    }))
+                    setForm(f => ({ ...f, monto: e.target.value }))
                   }
-                  placeholder="0,00"
+                  placeholder="0.00"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Use punto como decimal (ej. 94.01). Editable en todos los
+                  estados permitidos.
+                </p>
               </div>
 
               <div>
                 <label className="mb-1 block text-sm font-medium">Moneda</label>
 
-                <Input
-                  value={form.moneda}
+                <select
+                  className="w-full rounded-md border bg-white px-3 py-2"
+                  value={
+                    ['BS', 'USD', 'USDT'].includes(form.moneda)
+                      ? form.moneda
+                      : 'BS'
+                  }
                   onChange={e =>
                     setForm(f => ({ ...f, moneda: e.target.value }))
                   }
-                  placeholder="BS, USD, USDT ($)"
-                />
+                >
+                  <option value="BS">BS (Bolívares)</option>
+                  <option value="USD">USD (Dólares)</option>
+                  <option value="USDT">USDT (equivale a USD al guardar)</option>
+                </select>
               </div>
             </div>
 
@@ -494,21 +504,23 @@ export default function CobrosEditarPage() {
                 Observación (opcional)
               </label>
 
-              <Input
+              <textarea
+                className="min-h-[88px] w-full rounded-md border px-3 py-2 text-sm"
                 value={form.observacion}
                 onChange={e =>
                   setForm(f => ({ ...f, observacion: e.target.value }))
                 }
                 placeholder="Nota interna"
+                maxLength={500}
               />
             </div>
 
-            <div className="flex gap-2 pt-4">
+            <div className="flex flex-wrap gap-2 pt-4">
               <Button type="submit" disabled={saving}>
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                Guardar cambios
+                Guardar y recargar
               </Button>
 
               <Button
@@ -516,7 +528,15 @@ export default function CobrosEditarPage() {
                 variant="outline"
                 onClick={() => navigate(`/cobros/pagos-reportados/${id}`)}
               >
-                Cancelar
+                Volver al detalle
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => navigate('/cobros/pagos-reportados')}
+              >
+                Listado
               </Button>
             </div>
           </form>
