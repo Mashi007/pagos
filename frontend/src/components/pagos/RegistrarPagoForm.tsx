@@ -38,6 +38,10 @@ import { usePrestamosByCedula, usePrestamo } from '../../hooks/usePrestamos'
 
 import { useDebounce } from '../../hooks/useDebounce'
 
+import { Link } from 'react-router-dom'
+
+import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
+
 import {
   getErrorMessage,
   isAxiosError,
@@ -121,7 +125,7 @@ export function RegistrarPagoForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // âœ… VALIDACIONES SEGÃšN CRITERIOS DOCUMENTADOS
+    // Validaciones segun criterios documentados
 
     // Validar campos básicos
 
@@ -150,7 +154,7 @@ export function RegistrarPagoForm({
         'El crédito debe ser uno de la lista para esta cédula'
     }
 
-    // âœ… CRITERIO 1: Verificación de cédula del pago vs cédula del préstamo
+    // CRITERIO 1: Verificación de cédula del pago vs cédula del préstamo
 
     if (formData.prestamo_id && prestamoSeleccionado) {
       if (formData.cedula_cliente !== prestamoSeleccionado.cedula) {
@@ -161,7 +165,7 @@ export function RegistrarPagoForm({
       }
     }
 
-    // âœ… CRITERIO 2: Validación de monto
+    // CRITERIO 2: Validación de monto
 
     if (!formData.monto_pagado || formData.monto_pagado <= 0) {
       newErrors.monto_pagado = 'Monto inválido. Debe ser mayor a cero'
@@ -169,7 +173,7 @@ export function RegistrarPagoForm({
       newErrors.monto_pagado = 'Monto muy alto. Por favor verifique el valor'
     }
 
-    // âœ… CRITERIO 3: Validación y normalización de número de documento
+    // CRITERIO 3: Validación y normalización de número de documento
 
     // Normalizar formato científico si existe (ej: 7.40087E+14 -> 740087000000000)
 
@@ -184,7 +188,7 @@ export function RegistrarPagoForm({
         // Mostrar advertencia al usuario
 
         console.warn(
-          `âš ï¸ Número de documento normalizado de formato científico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`
+          `Numero de documento normalizado de formato científico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`
         )
       } catch (e) {
         console.error('Error normalizando número de documento:', e)
@@ -195,7 +199,7 @@ export function RegistrarPagoForm({
       newErrors.numero_documento = 'Número de documento requerido'
     }
 
-    // âœ… CRITERIO 4: Validación de fecha
+    // CRITERIO 4: Validación de fecha
 
     if (!formData.fecha_pago) {
       newErrors.fecha_pago = 'Fecha de pago requerida'
@@ -251,7 +255,7 @@ export function RegistrarPagoForm({
       onSuccess()
     } catch (error: unknown) {
       console.error(
-        `âŒ Error ${isEditing ? 'actualizando' : 'registrando'} pago:`,
+        `Error ${isEditing ? 'actualizando' : 'registrando'} pago:`,
         error
       )
 
@@ -308,6 +312,23 @@ export function RegistrarPagoForm({
             className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6"
           >
             {/* Error general */}
+
+            {!isEditing && (
+              <div className="rounded border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+                <p>
+                  Para elegir moneda (Bs./USD), adjuntar comprobante y recibo
+                  PDF con la tasa del dia de la fecha de pago, use{' '}
+                  <Link
+                    to={`/${SEGMENTO_INFOPAGOS}`}
+                    className="font-semibold text-amber-900 underline"
+                  >
+                    Infopagos
+                  </Link>
+                  . Este formulario es para registro o edición directa en la
+                  tabla interna de pagos (conciliación).
+                </p>
+              </div>
+            )}
 
             {errors.general && (
               <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-red-700">
@@ -464,7 +485,7 @@ export function RegistrarPagoForm({
                   </p>
                 )}
 
-                {/* âœ… Verificación de cédula del préstamo vs cédula del pago */}
+                {/* Verificación de cédula del préstamo vs cédula del pago */}
 
                 {formData.prestamo_id &&
                   prestamoSeleccionado &&
@@ -486,13 +507,12 @@ export function RegistrarPagoForm({
                       <div>
                         {formData.cedula_cliente ===
                         prestamoSeleccionado.cedula ? (
-                          <span className="font-medium">
-                            âœ… Cédulas coinciden
-                          </span>
+                          <span className="font-medium">Cédulas coinciden</span>
                         ) : (
                           <div>
                             <span className="font-medium">
-                              âš ï¸ Cédulas no coinciden
+                              {' '}
+                              Cédulas no coinciden
                             </span>
 
                             <p className="mt-1">
@@ -533,7 +553,7 @@ export function RegistrarPagoForm({
                       setFormData({ ...formData, fecha_pago: e.target.value })
                     }
                     className={`pl-10 ${errors.fecha_pago ? 'border-red-500' : ''}`}
-                    max={new Date().toISOString().split('T')[0]} // âœ… No permitir fechas futuras
+                    max={new Date().toISOString().split('T')[0]} // No permitir fechas futuras
                   />
                 </div>
 
@@ -577,7 +597,7 @@ export function RegistrarPagoForm({
                   </p>
                 )}
 
-                {/* âœ… Información sobre cómo se aplicará el pago */}
+                {/* Información sobre cómo se aplicará el pago */}
 
                 {formData.monto_pagado > 0 &&
                   formData.prestamo_id &&
@@ -588,7 +608,8 @@ export function RegistrarPagoForm({
 
                         <div>
                           <p className="mb-1 font-medium">
-                            â„¹ï¸ Cómo se aplicará el pago:
+                            {' '}
+                            Cómo se aplicará el pago:
                           </p>
 
                           <ul className="ml-2 list-inside list-disc space-y-1">

@@ -1,25 +1,8 @@
 /**
-
-
-
-
- * Página pública Infopagos: registro de pago a nombre del deudor (uso interno / personal).
-
-
-
-
- * Mismo flujo que rapicredit-cobros pero sin token para el deudor; al final el recibo
-
-
-
-
- * se envía al email registrado (por cédula) y el colaborador puede descargar el recibo aquí.
-
-
-
-
+ * Pagina publica Infopagos: registro de pago a nombre del deudor (colaborador).
+ * Mismo flujo y reglas de moneda (Bs./USD) que /rapicredit-cobros (ReportePagoPage).
+ * El recibo se envia al correo del deudor; el colaborador puede descargarlo en pantalla.
  */
-
 import ReportePagoPage from './ReportePagoPage'
 
 export default function InfopagosPage() {

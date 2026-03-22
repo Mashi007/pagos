@@ -21,6 +21,7 @@ import {
   Loader2,
   Mail,
   Upload,
+  DollarSign,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -77,7 +78,9 @@ import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
 import { useSearchParams, Link } from 'react-router-dom'
+import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
+import { getTasaHoy } from '../../services/tasaCambioService'
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
@@ -143,6 +146,19 @@ export function PagosList() {
   const [nuevaCedulaBs, setNuevaCedulaBs] = useState('')
   const fileInputCedulasBsRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
+
+  const { data: tasaHoyBanner, isLoading: tasaHoyBannerLoading } = useQuery({
+    queryKey: ['tasa-hoy-banner-pagos'],
+    queryFn: async () => {
+      try {
+        return await getTasaHoy()
+      } catch {
+        return null
+      }
+    },
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  })
 
   const {
     loading: loadingGmail,
@@ -582,6 +598,46 @@ export function PagosList() {
           )}
         </CardContent>
       </Card>
+      <Card className="border-emerald-200 bg-emerald-50/90 shadow-sm">
+        <CardContent className="flex flex-wrap items-center gap-3 py-4">
+          {tasaHoyBannerLoading ? (
+            <div className="flex items-center gap-2 text-sm text-emerald-800">
+              <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+              Consultando tasa del dia (Caracas)...
+            </div>
+          ) : tasaHoyBanner ? (
+            <>
+              <DollarSign className="h-6 w-6 shrink-0 text-emerald-700" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-emerald-900">
+                  Tasa de cambio vigente del dia
+                </p>
+                <p className="mt-0.5 text-sm text-emerald-800">
+                  Fecha{' '}
+                  <strong>{(tasaHoyBanner.fecha || '').slice(0, 10)}</strong>:{' '}
+                  <strong>
+                    {new Intl.NumberFormat('es-VE', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    }).format(tasaHoyBanner.tasa_oficial)}
+                  </strong>{' '}
+                  Bs. por 1 USD. Es la tasa oficial ingresada diariamente; se
+                  usa para reportes en bolivares segun la fecha de pago.
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-start gap-2 text-sm text-amber-900">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <span>
+                No hay tasa cargada para hoy (Caracas) o no tiene permisos para
+                verla. Ingrese la tasa en Administracion (tasa de cambio) para
+                poder operar pagos en bolivares.
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
         <Button
           variant="outline"
@@ -657,20 +713,17 @@ export function PagosList() {
               </p>
             )}
             <div className="space-y-2">
-              <button
-                type="button"
+              <Link
+                to={`/${SEGMENTO_INFOPAGOS}`}
                 className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-blue-50"
-                onClick={() => {
-                  setShowRegistrarPago(true)
-                  setAgregarPagoOpen(false)
-                }}
+                onClick={() => setAgregarPagoOpen(false)}
               >
                 <Edit className="h-5 w-5 text-gray-600" />
                 <span>Registrar un pago</span>
                 <span className="ml-auto text-xs text-gray-500">
-                  Formulario
+                  Infopagos (un solo flujo)
                 </span>
-              </button>
+              </Link>
               <button
                 type="button"
                 className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-blue-50"

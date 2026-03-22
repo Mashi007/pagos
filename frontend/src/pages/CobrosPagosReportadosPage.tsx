@@ -8,7 +8,7 @@
 
 
 
- * Listado de pagos reportados (mÃÆ'ƒÂ³dulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
+ * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
 
 
 
@@ -469,7 +469,7 @@ export default function CobrosPagosReportadosPage() {
 
             <option value="pendiente">Pendiente</option>
 
-            <option value="en_revision">En revisiÃÆ'ƒÂ³n</option>
+            <option value="en_revision">En revisión</option>
 
             <option value="aprobado">Aprobado</option>
 
@@ -495,14 +495,14 @@ export default function CobrosPagosReportadosPage() {
           />
 
           <Input
-            placeholder="CÃÆ'ƒÂ©dula"
+            placeholder="Cédula"
             value={cedula}
             onChange={e => setCedula(e.target.value)}
             className="w-40"
           />
 
           <Input
-            placeholder="InstituciÃÆ'ƒÂ³n"
+            placeholder="Institución"
             value={institucion}
             onChange={e => setInstitucion(e.target.value)}
             className="w-48"
@@ -620,7 +620,7 @@ export default function CobrosPagosReportadosPage() {
                     </th>
 
                     <th className="px-3 py-3 text-left font-semibold">
-                      CÃÆ'ƒÂ©dula
+                      Cédula
                     </th>
 
                     <th className="px-3 py-3 text-left font-semibold">Banco</th>
@@ -634,7 +634,7 @@ export default function CobrosPagosReportadosPage() {
                     </th>
 
                     <th className="px-3 py-3 text-left font-semibold">
-                      NÃÆ''º operaciÃÆ'ƒÂ³n
+                      Nº operación
                     </th>
 
                     <th className="px-3 py-3 text-left font-semibold">
@@ -642,7 +642,7 @@ export default function CobrosPagosReportadosPage() {
                     </th>
 
                     <th className="px-3 py-3 text-left font-semibold">
-                      ObservaciÃÆ'ƒÂ³n
+                      Observación
                     </th>
 
                     <th className="px-3 py-3 text-left font-semibold">
@@ -783,7 +783,7 @@ export default function CobrosPagosReportadosPage() {
 
                       <td className="px-3 py-3 align-top">
                         <div className="flex flex-wrap items-center justify-start gap-1">
-                          {/* Estado envÃÆ'ƒÂ­o recibo: X = no enviado, visto = entregado, triÃÆ'ƒÂ¡ngulo = en revisiÃÆ'ƒÂ³n */}
+                          {/* Estado envío recibo: X = no enviado, visto = entregado, triángulo = en revisión */}
 
                           <span
                             className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground"
@@ -902,11 +902,9 @@ export default function CobrosPagosReportadosPage() {
                               }}
                               disabled={changingEstadoId === row.id}
                             >
-                              <option value="">ÃÆ'¢â'¬â€</option>
+                              <option value="">Seleccionar estado</option>
 
-                              <option value="en_revision">
-                                En revisiÃÆ'ƒÂ³n
-                              </option>
+                              <option value="en_revision">En revisión</option>
 
                               <option value="aprobado">Aprobar</option>
 
@@ -978,7 +976,7 @@ export default function CobrosPagosReportadosPage() {
         </CardContent>
       </Card>
 
-      {/* Modal: interfaz rÃÆ'ƒÂ¡pida para escribir mensaje de rechazo y enviar correo al cliente */}
+      {/* Modal: interfaz rápida para escribir mensaje de rechazo y enviar correo al cliente */}
 
       <Dialog
         open={rechazarModal.open}
@@ -1025,7 +1023,7 @@ export default function CobrosPagosReportadosPage() {
 
             <textarea
               className="min-h-[100px] w-full resize-y rounded-md border px-3 py-2 text-sm"
-              placeholder="Indique el motivo del rechazo. Este texto se enviarÃÆ'ƒÂ¡ por correo al cliente."
+              placeholder="Indique el motivo del rechazo. Este texto se enviará por correo al cliente."
               value={motivoRechazo}
               onChange={e => setMotivoRechazo(e.target.value)}
               autoFocus

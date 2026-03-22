@@ -59,6 +59,11 @@ const MAX_MONTO = 999_999_999.99
 
 const MIN_MONTO = 0.01
 
+/** Alineado con backend: cobros_publico MIN/MAX para reporte en Bs. */
+const MIN_MONTO_BS_REPORTAR = 1
+
+const MAX_MONTO_BS_REPORTAR = 10_000_000
+
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
 
 const ALLOWED_FILE_TYPES = [
@@ -115,7 +120,10 @@ function normalizarCedulaInput(val: string): string {
     .replace(/[\s.\-]/g, '')
 }
 
-function validarMonto(val: string): {
+function validarMonto(
+  val: string,
+  moneda: 'BS' | 'USD'
+): {
   valido: boolean
   valor?: number
   error?: string
@@ -128,11 +136,28 @@ function validarMonto(val: string): {
   if (Number.isNaN(num))
     return {
       valido: false,
-      error: 'Monto no válido. Ingrese un número (ej: 150.50).',
+      error: 'Monto no valido. Ingrese un numero (ej: 150.50).',
     }
 
+  if (moneda === 'BS') {
+    if (num < MIN_MONTO_BS_REPORTAR)
+      return {
+        valido: false,
+        error: 'En bolivares el monto debe ser al menos 1 Bs.',
+      }
+    if (num > MAX_MONTO_BS_REPORTAR)
+      return {
+        valido: false,
+        error: 'En bolivares el monto no puede superar 10.000.000 Bs.',
+      }
+    return { valido: true, valor: num }
+  }
+
   if (num < MIN_MONTO)
-    return { valido: false, error: `El monto debe ser mayor a ${MIN_MONTO}.` }
+    return {
+      valido: false,
+      error: 'El monto debe ser mayor a ' + String(MIN_MONTO) + '.',
+    }
 
   if (num > MAX_MONTO)
     return {
@@ -142,7 +167,6 @@ function validarMonto(val: string): {
 
   return { valido: true, valor: num }
 }
-
 function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
   if (!fecha || !fecha.trim()) {
     return {
@@ -450,11 +474,11 @@ export default function ReportePagoPage({
 
     1: 'Paso 1: Ingrese su número de cédula',
 
-    2: 'Paso 2: Datos del pago',
+    2: 'Paso 2: Camino de moneda y datos del pago',
 
     3: 'Paso 3: Institución financiera',
 
-    4: 'Paso 4: Fecha y monto del pago',
+    4: 'Paso 4: Fecha y monto segun camino Bs. o USD',
 
     5: 'Paso 5: Número de documento u operación',
 
@@ -547,7 +571,7 @@ export default function ReportePagoPage({
       return
     }
 
-    const vMonto = validarMonto(monto)
+    const vMonto = validarMonto(monto, moneda)
 
     if (!vMonto.valido) {
       showNotification('error', vMonto.error ?? 'Monto inválido.')
@@ -710,6 +734,11 @@ export default function ReportePagoPage({
           },
 
           {
+            icon: 'path' as const,
+            text: 'Segun la cedula: si esta autorizada para bolivares podra elegir Bs. o USD; si no, solo USD.',
+          },
+
+          {
             icon: 'bank' as const,
             text: 'Indique institución financiera, fecha, monto y número de operación.',
           },
@@ -728,6 +757,11 @@ export default function ReportePagoPage({
           {
             icon: 'id' as const,
             text: 'Ingrese su número de cédula (V, E, G o J + dígitos).',
+          },
+
+          {
+            icon: 'path' as const,
+            text: 'Segun su cedula: autorizada en bolivares podra elegir Bs. o USD; de lo contrario, solo USD.',
           },
 
           {
@@ -825,6 +859,22 @@ export default function ReportePagoPage({
                           strokeLinejoin="round"
                           strokeWidth={2}
                           d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                        />
+                      </svg>
+                    )}
+
+                    {item.icon === 'path' && (
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 4v5m-3 3l3-3 3 3M12 9v11M7 20h10"
                         />
                       </svg>
                     )}
@@ -997,7 +1047,52 @@ export default function ReportePagoPage({
               </p>
             </CardHeader>
 
-            <CardContent className="px-4 sm:px-6">
+            <CardContent className="space-y-4 px-4 sm:px-6">
+              <div
+                role="region"
+                aria-label="Opciones de moneda segun su cedula"
+                className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm text-slate-700"
+              >
+                <p className="font-semibold text-[#1e3a5f]">
+                  Su camino de reporte (moneda)
+                </p>
+                {puedeReportarBs ? (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border border-emerald-200 bg-white p-3 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                        Bolivares (Bs.)
+                      </p>
+                      <p className="mt-1 text-xs leading-snug text-slate-600">
+                        Puede reportar en bolivares. El recibo usara la tasa
+                        oficial del dia de su fecha de pago; en sistema se
+                        registra el equivalente en USD con esa misma tasa. Monto
+                        permitido: 1 a 10.000.000 Bs.
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#1e3a5f]">
+                        Dolares (USD)
+                      </p>
+                      <p className="mt-1 text-xs leading-snug text-slate-600">
+                        Tambien puede reportar en USD. El monto y el recibo iran
+                        en dolares.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+                      Solo dolares (USD)
+                    </p>
+                    <p className="mt-1 text-xs leading-snug text-amber-950/90">
+                      Su cedula no esta en la lista para pagos en bolivares.
+                      Indique el monto en USD; el recibo y la verificacion seran
+                      en dolares.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <Button
                 className="min-h-[48px] w-full touch-manipulation"
                 onClick={() => setStep(3)}
@@ -1124,13 +1219,44 @@ export default function ReportePagoPage({
           />
 
           <Card className="w-full min-w-0 max-w-md">
-            <CardHeader className="px-4 sm:px-6">
+            <CardHeader className="space-y-2 px-4 sm:px-6">
               <CardTitle className="text-lg sm:text-xl">
                 Fecha y monto del pago
               </CardTitle>
+
+              <p className="text-sm font-medium text-[#1e3a5f]">
+                {moneda === 'BS'
+                  ? 'Camino activo: bolivares (Bs.)'
+                  : 'Camino activo: dolares (USD)'}
+              </p>
             </CardHeader>
 
             <CardContent className="space-y-4 px-4 sm:px-6">
+              <div
+                role="status"
+                className={
+                  moneda === 'BS'
+                    ? 'rounded-md border border-emerald-200 bg-emerald-50/80 p-3 text-xs leading-snug text-emerald-950'
+                    : 'rounded-md border border-slate-200 bg-white p-3 text-xs leading-snug text-slate-700'
+                }
+              >
+                {moneda === 'BS' ? (
+                  <p>
+                    Indique el monto de su comprobante en{' '}
+                    <strong>bolivares</strong>. El recibo mostrara el monto en
+                    Bs. y la{' '}
+                    <strong>tasa oficial del dia de la fecha de pago</strong>.
+                    En sistema se guarda el equivalente en USD con esa misma
+                    tasa.
+                  </p>
+                ) : (
+                  <p>
+                    Indique el monto en <strong>dolares (USD)</strong>. El
+                    recibo y la verificacion usaran USD.
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
                   Fecha de pago (obligatorio)
@@ -1159,9 +1285,9 @@ export default function ReportePagoPage({
                   <Input
                     type="number"
                     step="0.01"
-                    min={MIN_MONTO}
-                    max={MAX_MONTO}
-                    placeholder="Ej: 150.50"
+                    min={moneda === 'BS' ? MIN_MONTO_BS_REPORTAR : MIN_MONTO}
+                    max={moneda === 'BS' ? MAX_MONTO_BS_REPORTAR : MAX_MONTO}
+                    placeholder={moneda === 'BS' ? 'Ej: 1500.00' : 'Ej: 150.50'}
                     className="min-h-[44px] min-w-0 flex-1 touch-manipulation"
                     value={monto}
                     onChange={e => setMonto(e.target.value)}
@@ -1180,7 +1306,9 @@ export default function ReportePagoPage({
                 </div>
 
                 <p className="mt-1 text-xs text-gray-500">
-                  Monto mayor a 0. Máximo permitido: 999.999.999,99
+                  {moneda === 'BS'
+                    ? 'En bolivares: entre 1 y 10.000.000 Bs. La fecha de pago define la tasa en el recibo.'
+                    : 'En USD: mayor a 0. Maximo permitido 999.999.999,99.'}
                 </p>
               </div>
 
@@ -1204,7 +1332,7 @@ export default function ReportePagoPage({
                       return
                     }
 
-                    const vM = validarMonto(monto)
+                    const vM = validarMonto(monto, moneda)
 
                     if (!vM.valido) {
                       showNotification('error', vM.error ?? 'Monto inválido.')
@@ -1445,6 +1573,12 @@ export default function ReportePagoPage({
 
               <p>
                 <strong>Monto:</strong> {monto} {moneda}
+              </p>
+
+              <p className="text-xs text-slate-600">
+                {moneda === 'BS'
+                  ? 'Recibo en bolivares; tasa oficial del dia de la fecha de pago. Equivalente USD en sistema con esa tasa.'
+                  : 'Recibo y registro en dolares (USD).'}
               </p>
 
               <p>

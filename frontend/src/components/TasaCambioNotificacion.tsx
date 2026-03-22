@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 import { AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -85,9 +85,12 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
 
     void verificarTasa()
 
-    const interval = setInterval(() => {
-      void verificarTasa()
-    }, 5 * 60 * 1000)
+    const interval = setInterval(
+      () => {
+        void verificarTasa()
+      },
+      5 * 60 * 1000
+    )
 
     return () => clearInterval(interval)
   }, [onTasaCargada])

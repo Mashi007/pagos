@@ -16,16 +16,16 @@ import { useSimpleAuth } from './store/simpleAuthStore'
 
 import { BASE_PATH } from './config/env'
 
-/** Rutas que no requieren login: solo formulario de reporte de pago y login. El resto usa Layout con sidebar (protegido). */
+import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
+
+/** Rutas que no requieren login: reporte de pago (un solo flujo, varias URLs), login e informes publicos. */
 
 const PUBLIC_PATHS = [
   '/',
   '/login',
-  '/reporte-pago',
-  '/rapicredit-cobros',
+  ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
   '/informes',
-  '/infopagos',
 ]
 
 /** En rutas pblicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login

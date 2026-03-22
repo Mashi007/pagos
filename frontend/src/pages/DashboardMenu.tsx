@@ -154,7 +154,7 @@ export function DashboardMenu() {
     )
   }
 
-  // Ã¢Å"… OPTIMIZACIÃ"N PRIORIDAD 1: Carga por batches con priorización
+  // Así. OPTIMIZACIÓN PRIORIDAD 1: Carga por batches con priorización
 
   // Batch 1: CRÍTICO - Opciones de filtros y KPIs principales (carga inmediata)
 
@@ -175,7 +175,7 @@ export function DashboardMenu() {
 
     refetchOnWindowFocus: false, // No recargar automáticamente
 
-    // Ã¢Å"… Prioridad máxima - carga inmediatamente
+    // Prioridad máxima - carga inmediatamente
   })
 
   // Batch 1: CRÍTICO - KPIs principales (visible primero para el usuario)
@@ -381,7 +381,7 @@ export function DashboardMenu() {
 
     enabled: true,
 
-    retry: 1, // Ã¢Å"… Permitir 1 reintento para errores de red
+    retry: 1, // Permitir 1 reintento para errores de red
 
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
   })
@@ -1115,7 +1115,7 @@ export function DashboardMenu() {
                       período. Cargue <strong>préstamos</strong> y{' '}
                       <strong>cuotas</strong> en el sistema para ver la
                       información. Puede usar la opción{' '}
-                      <strong>Últimos 12 meses</strong> si ya tiene datos de
+                      <strong>últimos 12 meses</strong> si ya tiene datos de
                       meses anteriores.
                     </p>
                   </CardContent>

@@ -82,6 +82,21 @@ logger = logging.getLogger(__name__)
 
 
 
+
+def _validar_monto_reporte_publico(monto: float, moneda_upper: str) -> Optional[str]:
+    """Si moneda BS, rango Bs autorizado; si USD/USDT, limite general. None = OK."""
+    if moneda_upper == "BS":
+        if monto < MIN_MONTO_BS_REPORTAR or monto > MAX_MONTO_BS_REPORTAR:
+            return (
+                f"Monto en bolivares debe estar entre "
+                f"{MIN_MONTO_BS_REPORTAR:,.0f} y {MAX_MONTO_BS_REPORTAR:,.0f} Bs. "
+                "(cedula autorizada para pagos en bolivares)."
+            )
+        return None
+    if monto <= 0 or monto > 999_999_999.99:
+        return "Monto no valido."
+    return None
+
 def _referencia_display(referencia_interna: str) -> str:
 
     ref = (referencia_interna or "").strip()
@@ -597,6 +612,11 @@ ERROR_TASA_BS_NO_REGISTRADA = (
 
 ERROR_BS_NO_AUTORIZADO = "Observación: Bolívares. No puede enviar pago en Bolívares; su cédula no está autorizada. Use USD."
 
+# Monto en bolivares (solo cedulas en cedulas_reportar_bs): 1 a 10_000_000 Bs.
+MIN_MONTO_BS_REPORTAR = 1.0
+MAX_MONTO_BS_REPORTAR = 10_000_000.0
+
+
 
 
 
@@ -851,9 +871,11 @@ async def enviar_reporte_publico(
 
             )
 
-    if monto <= 0 or monto > 999_999_999.99:
+    err_monto = _validar_monto_reporte_publico(monto, moneda_upper)
 
-        return EnviarReporteResponse(ok=False, error="Monto no válido.")
+    if err_monto:
+
+        return EnviarReporteResponse(ok=False, error=err_monto)
 
     if fecha_pago > fecha_hoy_caracas():
 
@@ -1339,9 +1361,11 @@ async def enviar_reporte_infopagos(
 
             )
 
-    if monto <= 0 or monto > 999_999_999.99:
+    err_monto = _validar_monto_reporte_publico(monto, moneda_upper)
 
-        return EnviarReporteInfopagosResponse(ok=False, error="Monto no válido.")
+    if err_monto:
+
+        return EnviarReporteInfopagosResponse(ok=False, error=err_monto)
 
     if fecha_pago > fecha_hoy_caracas():
 
