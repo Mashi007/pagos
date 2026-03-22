@@ -379,6 +379,7 @@ def _compute_dashboard_admin(
                 if fin_mes.tzinfo is None:
                     fin_mes = fin_mes.replace(tzinfo=timezone.utc)
                 inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
+            # CARTERA: Cuotas programadas (vencimiento) en este mes = INDEPENDIENTE DE SI FUERON PAGADAS
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
@@ -390,20 +391,25 @@ def _compute_dashboard_admin(
                     Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
-            monto_usd = _monto_pago_usd_sql()
+            
+            # COBRADO: Cuotas que FUERON PAGADAS en este mes (basándose en fecha_pago de la cuota, NO del pago reportado)
             cobrado = db.scalar(
-                select(func.coalesce(func.sum(monto_usd), 0))
-                .select_from(Pago)
-                .join(Prestamo, Pago.prestamo_id == Prestamo.id)
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    or_(Pago.conciliado.is_(True), Pago.verificado_concordancia == "SI"),
-                    func.date(Pago.fecha_pago) >= inicio_d,
-                    func.date(Pago.fecha_pago) <= fin_d,
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_pago >= inicio_d,
+                    Cuota.fecha_pago <= fin_d,
+                    Cuota.fecha_pago.isnot(None),
                 )
             ) or 0
+            
             cartera_f = _safe_float(cartera)
             cobrado_f = _safe_float(cobrado)
+            
+            # MOROSIDAD: Cuotas que vencieron en este mes Y NO FUERON PAGADAS (aún vencidas)
             morosidad_f = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
