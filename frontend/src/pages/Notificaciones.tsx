@@ -139,6 +139,10 @@ export function Notificaciones() {
     refetchOnWindowFocus: true,
 
     placeholderData: PLACEHOLDER_NOTIFICACIONES,
+
+    /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
+
+    enabled: activeTab !== 'configuracion',
   })
 
   const { data: estadisticasPorTab } = useQuery({
@@ -147,6 +151,8 @@ export function Notificaciones() {
     queryFn: () => notificacionService.getEstadisticasPorTab(),
 
     staleTime: 1 * 60 * 1000,
+
+    enabled: activeTab !== 'configuracion',
 
     placeholderData: {
       dias_5: { enviados: 0, rebotados: 0 },

@@ -8,7 +8,7 @@
 
 
 
- * ConfiguraciÃ³n de 4 cuentas de correo con asignaciÃ³n por servicio.
+ * Configuración de 4 cuentas de correo con asignación por servicio.
 
 
 
@@ -18,7 +18,7 @@
 
 
 
- * Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaÃ±a).
+ * Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaña).
 
 
 
@@ -121,7 +121,7 @@ export function EmailCuentasConfig() {
     } catch (e) {
       console.error(e)
 
-      toast.error('Error cargando configuraciÃ³n de cuentas')
+      toast.error('Error cargando configuración de cuentas')
 
       setData({
         version: 2,
@@ -176,13 +176,13 @@ export function EmailCuentasConfig() {
   }[] = [
     {
       key: 'email_activo_cobros',
-      label: 'Cobros (formulario pÃºblico, recibos)',
+      label: 'Cobros (formulario público, recibos)',
       cuenta: 1,
     },
 
     {
       key: 'email_activo_estado_cuenta',
-      label: 'Estado de cuenta (cÃ³digo y envÃ­o PDF)',
+      label: 'Estado de cuenta (código y envío PDF)',
       cuenta: 2,
     },
 
@@ -229,7 +229,7 @@ export function EmailCuentasConfig() {
         tickets_notify_emails: data.tickets_notify_emails,
       })
 
-      toast.success('ConfiguraciÃ³n de 4 cuentas guardada')
+      toast.success('Configuración de 4 cuentas guardada')
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.emailEstado,
@@ -304,7 +304,7 @@ export function EmailCuentasConfig() {
     return (
       <Card>
         <CardContent className="pt-6">
-          Cargando configuraciÃ³n de cuentas...
+          Cargando configuración de cuentas...
         </CardContent>
       </Card>
     )
@@ -504,7 +504,12 @@ export function EmailCuentasConfig() {
             aprobar pagos reportados),
             <strong> Cuenta 2</strong> = Estado de cuenta,{' '}
             <strong>Cuentas 3 y 4</strong> = Notificaciones (puede elegir por
-            pestaña; también rechazo de pagos reportados).
+            pestaña; también rechazo de pagos reportados).{' '}
+            <span className="block pt-2 text-amber-900 dark:text-amber-200">
+              Gmail con verificación en dos pasos: en SMTP debe usar una{' '}
+              <strong>contraseña de aplicación</strong> (16 caracteres) desde
+              Seguridad de la cuenta de Google, no la contraseña habitual.
+            </span>
           </CardDescription>
         </CardHeader>
       </Card>
@@ -513,7 +518,7 @@ export function EmailCuentasConfig() {
         <Card key={i}>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
-              Cuenta {i + 1} â {SERVICIO_POR_CUENTA[i + 1] ?? `Cuenta ${i + 1}`}
+              Cuenta {i + 1} - {SERVICIO_POR_CUENTA[i + 1] ?? `Cuenta ${i + 1}`}
             </CardTitle>
 
             <CardDescription>
@@ -521,10 +526,10 @@ export function EmailCuentasConfig() {
                 'Usada en: Cobros (reporte público, recibo al aprobar y envío manual de recibo).'}
 
               {i === 1 &&
-                'Usada en: rapicredit-estadocuenta (consulta y envÃ­o de PDF).'}
+                'Usada en: rapicredit-estadocuenta (consulta y envío de PDF).'}
 
               {(i === 2 || i === 3) &&
-                `Usada en: Notificaciones (pestaÃ±as que elija como "Cuenta ${i + 1}" abajo).`}
+                `Usada en: Notificaciones (pestañas que elija como "Cuenta ${i + 1}" abajo).`}
             </CardDescription>
           </CardHeader>
 
@@ -563,7 +568,7 @@ export function EmailCuentasConfig() {
               </div>
 
               <div>
-                <Label>ContraseÃ±a</Label>
+                <Label>Contraseña</Label>
 
                 <Input
                   type="password"
@@ -609,11 +614,11 @@ export function EmailCuentasConfig() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <AlertCircle className="h-4 w-4" />
-            AsignaciÃ³n Notificaciones: quÃ© cuenta usa cada pestaÃ±a
+            Asignación Notificaciones: qué cuenta usa cada pestaña
           </CardTitle>
 
           <CardDescription>
-            Elija para cada pestaÃ±a de Notificaciones si usa{' '}
+            Elija para cada pestaña de Notificaciones si usa{' '}
             <strong>Cuenta 3</strong> o <strong>Cuenta 4</strong>.
           </CardDescription>
         </CardHeader>
@@ -646,7 +651,7 @@ export function EmailCuentasConfig() {
         <Button onClick={handleSave} disabled={saving}>
           <Save className="mr-2 h-4 w-4" />
 
-          {saving ? 'Guardandoâ¦' : 'Guardar configuraciÃ³n de 4 cuentas'}
+          {saving ? 'Guardando...' : 'Guardar configuración de 4 cuentas'}
         </Button>
       </div>
     </div>

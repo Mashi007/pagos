@@ -1238,7 +1238,7 @@ export function EmailConfig() {
                 </div>
               )}
 
-              {/*  Estado: Requiere App Password (prioridad sobre otros estados) */}
+              {/* Estado: Requiere App Password (prioridad sobre otros estados) */}
 
               {requiereAppPassword && !vinculacionConfirmada && (
                 <div className="rounded-lg border-2 border-amber-400 bg-white p-4">

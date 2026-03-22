@@ -1363,7 +1363,14 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     Datos desde BD: get_cuotas_pendientes_con_cliente y tabla prestamos/cuotas.
     """
     hoy = date.today()
-    rows = get_cuotas_pendientes_con_cliente(db)
+    try:
+        rows = get_cuotas_pendientes_con_cliente(db)
+    except Exception as e:
+        logger.exception("clientes-retrasados: error cargando cuotas pendientes: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudieron cargar las cuotas pendientes. Reintente en unos segundos.",
+        ) from e
 
     dias_5: List[dict] = []
     dias_3: List[dict] = []
@@ -1414,22 +1421,28 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
         )
         .where(p_t.c.estado == "LIQUIDADO")
     )
-    rows_liq = db.execute(q_liq).all()
     liquidados: List[dict] = []
-    for row in rows_liq:
-        m = row._mapping
-        liquidados.append({
-            "cliente_id": m["cliente_id"],
-            "nombre": m.get("nombres") or "",
-            "cedula": m.get("cedula") or "",
-            "prestamo_id": m["prestamo_id"],
-            "total_financiamiento": float(m["total_financiamiento"])
-            if m.get("total_financiamiento") is not None
-            else 0,
-            "total_abonos": float(m["total_abonos"])
-            if m.get("total_abonos") is not None
-            else 0,
-        })
+    try:
+        rows_liq = db.execute(q_liq).all()
+        for row in rows_liq:
+            m = row._mapping
+            liquidados.append({
+                "cliente_id": m["cliente_id"],
+                "nombre": m.get("nombres") or "",
+                "cedula": m.get("cedula") or "",
+                "prestamo_id": m["prestamo_id"],
+                "total_financiamiento": float(m["total_financiamiento"])
+                if m.get("total_financiamiento") is not None
+                else 0,
+                "total_abonos": float(m["total_abonos"])
+                if m.get("total_abonos") is not None
+                else 0,
+            })
+    except Exception as e:
+        logger.exception(
+            "clientes-retrasados: error liquidados (respuesta parcial sin lista liquidados): %s",
+            e,
+        )
 
     return {
         "actualizado_en": hoy.isoformat(),

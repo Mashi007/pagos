@@ -6,6 +6,7 @@ Tambi�n soporta prueba de conexi�n IMAP para recibir correos.
 """
 import logging
 import re
+import smtplib
 import time
 from typing import List, Optional, Tuple
 from email.utils import formatdate
@@ -124,23 +125,65 @@ def _sanitize_imap_error(exc: Exception) -> str:
 
 
 
+def _normalize_smtp_exception_text(exc: Exception) -> str:
+    """
+    smtplib suele exponer SMTPAuthenticationError como (534, b'5.7.9 ...'); str(exc) muestra b'...' crudo.
+    Usar smtp_code + smtp_error decodificado para mensajes legibles.
+    """
+    try:
+        import smtplib
+
+        if isinstance(exc, smtplib.SMTPResponseException):
+            err = getattr(exc, "smtp_error", b"")
+            code = getattr(exc, "smtp_code", None)
+            if isinstance(err, (bytes, bytearray)):
+                inner = bytes(err).decode("utf-8", errors="replace").replace("\n", " ").strip()
+            elif err:
+                inner = str(err).strip()
+            else:
+                inner = ""
+            if code is not None and inner:
+                return f"{code} {inner}"
+            if inner:
+                return inner
+    except Exception:
+        pass
+    return str(exc).strip()
+
+
 def _sanitize_smtp_error(exc: Exception) -> str:
-    """Mensaje seguro para el usuario al fallar SMTP (sin contrase�as ni rutas)."""
-    msg = str(exc).strip()
+    """Mensaje seguro para el usuario al fallar SMTP (sin contrasenas ni rutas ni repr de bytes)."""
+    msg = _normalize_smtp_exception_text(exc)
     if not msg:
-        return "Error de conexi�n SMTP."
+        return "Error de conexion SMTP."
     lower = msg.lower()
+    if (
+        "application-specific password" in lower
+        or "invalidsecondfactor" in lower
+        or "5.7.9" in lower
+        or (
+            "534" in msg
+            and ("gmail" in lower or "gsmtp" in lower or "application-specific" in lower)
+        )
+    ):
+        return (
+            "Gmail rechazo el inicio de sesion: con verificacion en dos pasos activa debe usar una "
+            "Contrasena de aplicacion (16 caracteres), no la contrasena habitual. "
+            "Google: Cuenta > Seguridad > Contrasenas de aplicaciones. "
+            "Workspace: segun politica del admin puede bastar la contrasena normal."
+        )
     if "username and password not accepted" in lower or "authentication failed" in lower or "login failed" in lower:
-        return "Usuario o contrase�a no aceptados. Gmail personal: usa Contrase�a de aplicaci�n. Cuentas corporativas/Google Workspace: prueba con tu contrase�a normal."
+        return "Usuario o contrasena no aceptados. Gmail personal: usa Contrasena de aplicacion. Google Workspace: prueba contrasena normal o App Password segun politica."
     if "connection refused" in lower or "timed out" in lower or "timeout" in lower:
-        return "La conexi�n al servidor SMTP tard� demasiado o fue rechazada. Revisa host, puerto (587 o 465) y red."
+        return "La conexion al servidor SMTP tardo demasiado o fue rechazada. Revisa host, puerto (587 o 465) y red."
     if "ssl" in lower or "certificate" in lower:
         return "Error SSL/TLS. Prueba puerto 587 con TLS o 465 con SSL."
     if "connection unexpectedly closed" in lower or "connection closed" in lower or "serverdisconnected" in lower:
         return "El servidor SMTP cerro la conexion durante el inicio de sesion. En entornos cloud (Render, etc.) suele deberse a restricciones de red o a que Gmail exige Contrasena de aplicacion; revisa puerto (587 o 465) y vuelve a intentar."
     if "daily user sending limit exceeded" in lower or "5.4.5" in msg:
-        return "Límite diario de envío de Gmail alcanzado (550 5.4.5). Gmail personal: ~100-500/día. Espera 24h o usa Google Workspace / otro SMTP para más envíos."
+        return "Limite diario de envio de Gmail alcanzado (550 5.4.5). Gmail personal: ~100-500/dia. Espera 24h o usa Google Workspace / otro SMTP para mas envios."
     return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
+
 
 def test_imap_connection(
     imap_host: str,
@@ -445,23 +488,28 @@ def send_email(
         )
         return True, None
     except Exception as e:
-        log_phase(logger, FASE_SMTP_ENVIO, False, str(e))
+        err_msg = _sanitize_smtp_error(e)
+        log_phase(logger, FASE_SMTP_ENVIO, False, err_msg[:500])
         logger.warning(
             "[SMTP_ENVIO] estado=error_excepcion modo_pruebas=%s redirigido_modo_pruebas=%s servicio=%s tipo_tab=%s err=%s",
             modo_pruebas,
             redirigido_modo_pruebas,
             servicio or "",
             tipo_tab or "",
-            str(e)[:300],
+            err_msg[:400],
         )
-        err_msg = _sanitize_smtp_error(e)
-        if "límite diario" in err_msg.lower() or "daily" in str(e).lower() and "sending limit" in str(e).lower():
+        if "límite diario" in err_msg.lower() or (
+            "daily" in str(e).lower() and "sending limit" in str(e).lower()
+        ):
             logger.warning(
                 "LIMITE DIARIO GMAIL ALCANZADO: Gmail rechaza mas envios hasta mañana. "
                 "Opciones: 1) Esperar 24h 2) Usar SMTP de proveedor transaccional (SendGrid, Mailgun, SES, Resend) en Configuracion > Email. "
                 "Ver docs/LIMITE_EMAIL_GMAIL.md"
             )
-        logger.exception("Error enviando correo: %s", e)
+        if isinstance(e, smtplib.SMTPException):
+            logger.error("Error enviando correo (SMTP): %s", err_msg)
+        else:
+            logger.exception("Error enviando correo: %s", e)
         return False, err_msg
 
 
