@@ -35,6 +35,7 @@ import {
   descargarPagosAprobadosExcel,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
+  type CambiarEstadoPagoResponse,
 } from '../services/cobrosService'
 
 import { Button } from '../components/ui/button'
@@ -46,6 +47,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 
 import toast from 'react-hot-toast'
+
+/** Toast según envío real del correo de rechazo (API devuelve mensaje + flags). */
+function toastAfterRechazoCobros(data: CambiarEstadoPagoResponse) {
+  const msg = data.mensaje ?? 'Estado actualizado a rechazado.'
+  if (data.rechazo_correo_enviado === true) {
+    toast.success(msg)
+  } else if (data.rechazo_correo_enviado === false) {
+    const err = data.rechazo_correo_error
+    toast.error(
+      err
+        ? `${msg} (${err.length > 160 ? `${err.slice(0, 160)}…` : err})`
+        : msg
+    )
+  } else {
+    toast(msg, { duration: 7000 })
+  }
+}
 
 import {
   Loader2,
@@ -281,13 +299,13 @@ export default function CobrosPagosReportadosPage() {
     setChangingEstadoId(id)
 
     try {
-      await cambiarEstadoPago(id, estado, motivo)
+      const data = await cambiarEstadoPago(id, estado, motivo)
 
-      toast.success(
-        estado === 'rechazado'
-          ? 'Pago rechazado. Correo enviado al cliente desde notificaciones@rapicreditca.com.'
-          : 'Estado actualizado.'
-      )
+      if (estado === 'rechazado') {
+        toastAfterRechazoCobros(data)
+      } else {
+        toast.success(data.mensaje || 'Estado actualizado.')
+      }
 
       load()
 

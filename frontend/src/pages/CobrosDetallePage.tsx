@@ -32,6 +32,7 @@ import {
   openComprobanteInNewTab,
   openReciboPdfInNewTab,
   type PagoReportadoDetalleResponse,
+  type CambiarEstadoPagoResponse,
 } from '../services/cobrosService'
 
 import { Button } from '../components/ui/button'
@@ -43,6 +44,22 @@ import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
 
 import { Eye, FileText, Mail, Loader2 } from 'lucide-react'
+
+function toastAfterRechazoDetalle(data: CambiarEstadoPagoResponse) {
+  const msg = data.mensaje ?? 'Pago rechazado.'
+  if (data.rechazo_correo_enviado === true) {
+    toast.success(msg)
+  } else if (data.rechazo_correo_enviado === false) {
+    const err = data.rechazo_correo_error
+    toast.error(
+      err
+        ? `${msg} (${err.length > 160 ? `${err.slice(0, 160)}…` : err})`
+        : msg
+    )
+  } else {
+    toast(msg, { duration: 7000 })
+  }
+}
 
 const ESTADO_BADGE: Record<string, string> = {
   pendiente: 'Pendiente 🟡',
@@ -187,11 +204,9 @@ export default function CobrosDetallePage() {
     setAccion('rechazar')
 
     try {
-      await rechazarPagoReportado(Number(id), motivoRechazo.trim())
+      const data = await rechazarPagoReportado(Number(id), motivoRechazo.trim())
 
-      toast.success(
-        'Pago rechazado. Correo enviado al cliente desde notificaciones@rapicreditca.com con el motivo y el comprobante adjunto.'
-      )
+      toastAfterRechazoDetalle(data)
 
       setAccion('idle')
 

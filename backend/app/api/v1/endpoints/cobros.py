@@ -1053,24 +1053,32 @@ def cambiar_estado_pago(
                 respetar_destinos_manuales=True,
             )
             if ok_mail:
+                rechazo_correo_enviado = True
                 logger.info("[COBROS] PATCH estado=rechazado ref=%s: correo enviado a %s (servicio notificaciones OK).", pr.referencia_interna, to_email)
                 mensaje = "Estado actualizado a rechazado. Cliente notificado por correo (notificaciones@rapicreditca.com)."
             else:
+                rechazo_correo_enviado = False
+                rechazo_correo_error = (err_mail or "desconocido")[:500]
                 logger.error(
                     "[COBROS] PATCH estado=rechazado ref=%s: correo NO enviado a %s. Error: %s.",
                     pr.referencia_interna, to_email, err_mail or "desconocido",
                 )
-                mensaje = "Estado actualizado a rechazado. El correo al cliente no pudo enviarse."
+                mensaje = "Estado actualizado a rechazado. El correo al cliente no pudo enviarse; revise logs o configuración SMTP."
         elif to_email and not notif_activo:
             logger.warning("[COBROS] PATCH estado=rechazado ref=%s: servicio notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
-            mensaje = "Estado actualizado a rechazado. Servicio de correo desactivado."
+            mensaje = "Estado actualizado a rechazado. Servicio de correo desactivado; no se envió correo."
         else:
             logger.info("[COBROS] PATCH estado=rechazado ref=%s: no hay correo del cliente, no se envió notificación.", pr.referencia_interna)
-            mensaje = "Estado actualizado a rechazado."
+            mensaje = "Estado actualizado a rechazado. No hay correo del cliente; no se envió notificación."
 
     _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
     db.commit()
-    return {"ok": True, "mensaje": mensaje}
+    resp: dict = {"ok": True, "mensaje": mensaje}
+    if body.estado == "rechazado":
+        resp["rechazo_correo_enviado"] = rechazo_correo_enviado
+        if rechazo_correo_error:
+            resp["rechazo_correo_error"] = rechazo_correo_error
+    return resp
 
 
 

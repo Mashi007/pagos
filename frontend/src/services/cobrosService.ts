@@ -467,8 +467,8 @@ export async function aprobarPagoReportado(
 export async function rechazarPagoReportado(
   pagoId: number,
   motivo: string
-): Promise<{ ok: boolean; mensaje?: string }> {
-  const data = await apiClient.post<{ ok: boolean; mensaje?: string }>(
+): Promise<CambiarEstadoPagoResponse> {
+  const data = await apiClient.post<CambiarEstadoPagoResponse>(
     `${BASE_COBROS}/pagos-reportados/${pagoId}/rechazar`,
     { motivo }
   )
@@ -543,6 +543,15 @@ export async function enviarReciboManual(
   return data
 }
 
+/** Respuesta al cambiar estado; si es rechazo, indica si el correo al cliente se envió. */
+export interface CambiarEstadoPagoResponse {
+  ok: boolean
+  mensaje?: string
+  /** true = enviado, false = intentó y falló, undefined/null = no hubo intento (sin correo o servicio off) */
+  rechazo_correo_enviado?: boolean | null
+  rechazo_correo_error?: string
+}
+
 /** Cambia el estado del pago (pendiente, en_revision, aprobado, rechazado). Motivo obligatorio si rechazado. */
 
 export async function cambiarEstadoPago(
@@ -551,8 +560,8 @@ export async function cambiarEstadoPago(
   estado: string,
 
   motivo?: string
-): Promise<{ ok: boolean; mensaje?: string }> {
-  const data = await apiClient.patch<{ ok: boolean; mensaje?: string }>(
+): Promise<CambiarEstadoPagoResponse> {
+  const data = await apiClient.patch<CambiarEstadoPagoResponse>(
     `${BASE_COBROS}/pagos-reportados/${pagoId}/estado`,
     { estado, motivo }
   )

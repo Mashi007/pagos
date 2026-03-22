@@ -1033,7 +1033,8 @@ async def enviar_reporte_publico(
 
             "monto": str(monto),
 
-            "moneda": moneda,
+            # USDT se normaliza a USD para BD y para Gemini (misma moneda)
+            "moneda": moneda_guardar,
 
             "tipo_cedula": tipo_cedula,
 
@@ -1493,7 +1494,8 @@ async def enviar_reporte_infopagos(
 
             "monto": str(monto),
 
-            "moneda": moneda,
+            # USDT se normaliza a USD para BD y para Gemini (misma moneda)
+            "moneda": moneda_guardar,
 
             "tipo_cedula": tipo_cedula,
 
