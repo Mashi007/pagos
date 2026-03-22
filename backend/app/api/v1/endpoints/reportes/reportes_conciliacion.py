@@ -333,57 +333,6 @@ async def cargar_conciliacion_excel(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al procesar Excel: {str(e)}") from e
-@router.post("/conciliacion/cargar")
-def cargar_conciliacion_temporal(
-    body: List[dict] = Body(...),
-    db: Session = Depends(get_db),
-):
-    """
-    Recibe lista de filas: cedula, total_financiamiento, total_abonos, columna_e (opcional), columna_f (opcional).
-    Valida cédula y cantidades; si todo es válido borra datos previos e inserta los nuevos.
-    """
-    if not body or not isinstance(body, list):
-        raise HTTPException(status_code=400, detail="Se requiere una lista de filas")
-    errores: List[str] = []
-    filas_ok: List[dict] = []
-    for i, row in enumerate(body):
-        if not isinstance(row, dict):
-            errores.append(f"Fila {i + 1}: debe ser un objeto con cedula, total_financiamiento, total_abonos")
-            continue
-        cedula = row.get("cedula")
-        tf = row.get("total_financiamiento")
-        ta = row.get("total_abonos")
-        if not _validar_cedula(cedula):
-            errores.append(f"Fila {i + 1}: cedula invalida")
-            continue
-        if not _validar_numero(tf):
-            errores.append(f"Fila {i + 1}: total financiamiento debe ser un numero >= 0")
-            continue
-        if not _validar_numero(ta):
-            errores.append(f"Fila {i + 1}: total abonos debe ser un numero >= 0")
-            continue
-        filas_ok.append({
-            "cedula": str(cedula).strip(),
-            "total_financiamiento": _parse_numero(tf),
-            "total_abonos": _parse_numero(ta),
-            "columna_e": str(row.get("columna_e") or "").strip() or None,
-            "columna_f": str(row.get("columna_f") or "").strip() or None,
-        })
-    if errores:
-        raise HTTPException(status_code=422, detail={"errores": errores, "mensaje": "Corrija los errores antes de guardar"})
-    db.execute(delete(ConciliacionTemporal))
-    for f in filas_ok:
-        db.add(ConciliacionTemporal(
-            cedula=f["cedula"],
-            total_financiamiento=f["total_financiamiento"],
-            total_abonos=f["total_abonos"],
-            columna_e=f.get("columna_e"),
-            columna_f=f.get("columna_f"),
-        ))
-    db.commit()
-    return {"ok": True, "filas_guardadas": len(filas_ok)}
-
-
 def _generar_excel_conciliacion(
     db: Session,
     fecha_inicio: Optional[date] = None,

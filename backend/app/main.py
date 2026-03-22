@@ -1,5 +1,5 @@
 """
-Aplicación principal FastAPI
+AplicaciÃ³n principal FastAPI
 """
 import time
 import logging
@@ -27,14 +27,6 @@ from app.middleware.security_headers import (
 )
 from app.api.v1.endpoints import auth_csrf_cookies
 
-# Importar middlewares de seguridad FASE 1
-from app.middleware.security_headers import (
-    SecurityHeadersMiddleware,
-    ContentSecurityPolicyMiddleware,
-    RequestIdMiddleware,
-)
-from app.api.v1.endpoints import auth_csrf_cookies
-
 # Configurar logging con UTF-8 para tildes/caracteres en Render
 import sys
 import io
@@ -49,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 class RequestLogMiddleware(BaseHTTPMiddleware):
-    """Registra método, ruta, código de estado y tiempo para correlacionar con logs de Render."""
+    """Registra mÃ©todo, ruta, cÃ³digo de estado y tiempo para correlacionar con logs de Render."""
     async def dispatch(self, request: Request, call_next):
         start = time.perf_counter()
         response = await call_next(request)
@@ -57,7 +49,7 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         status = response.status_code
         path = request.url.path
         msg = "request method=%s path=%s status=%s elapsed_ms=%s"
-        # run-now puede tardar 20–120 s; no marcar como slow
+        # run-now puede tardar 20â€“120 s; no marcar como slow
         is_run_now = "gmail/run-now" in path
         if status >= 500:
             logger.warning(msg + " (error)", request.method, path, status, elapsed_ms)
@@ -70,7 +62,7 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             logger.info(msg, request.method, path, status, elapsed_ms)
         return response
 
-# Crear aplicación FastAPI
+# Crear aplicaciÃ³n FastAPI
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -113,13 +105,13 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Log de cada request (método, ruta, status, tiempo) para depuración en Render
+# Log de cada request (mÃ©todo, ruta, status, tiempo) para depuraciÃ³n en Render
 app.add_middleware(RequestLogMiddleware)
 
-# Middleware: Validaci�n en tiempo real de sobre-aplicaciones
+# Middleware: Validaciï¿½n en tiempo real de sobre-aplicaciones
 app.add_middleware(ValidadorSobreAplicacionMiddleware)
 
-# Auditoría automática: registra todos los POST/PUT/DELETE/PATCH en tabla auditoria
+# AuditorÃ­a automÃ¡tica: registra todos los POST/PUT/DELETE/PATCH en tabla auditoria
 app.add_middleware(AuditMiddleware)
 
 # Configurar CORS
@@ -128,7 +120,15 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Accept-Language",
+        "X-Requested-With",
+        "X-CSRF-Token",
+        "X-Request-Id",
+    ],
     expose_headers=["X-Total-Count", "X-Page-Count"],
     max_age=3600,
 )
@@ -144,16 +144,16 @@ app.include_router(auth_csrf_cookies.router, prefix=settings.API_V1_STR)
 # Incluir endpoint del scheduler de LIQUIDADO
 from app.api.v1.endpoints import prestamos_liquidado_automatico
 app.include_router(prestamos_liquidado_automatico.router)
-# Incluir endpoint de conciliaci�n autom�tica
+# Incluir endpoint de conciliaciï¿½n automï¿½tica
 from app.api.v1.endpoints import conciliacion
 app.include_router(conciliacion.router)
 # Incluir endpoint de referencia de estados de cuota
 from app.api.v1.endpoints import referencia_estados_cuota
 app.include_router(referencia_estados_cuota.router)
-# Incluir endpoint de auditor�a de conciliaci�n
+# Incluir endpoint de auditorï¿½a de conciliaciï¿½n
 from app.api.v1.endpoints import auditoria_conciliacion
 app.include_router(auditoria_conciliacion.router)
-# Incluir endpoint de problemas cr�ticos (diagn�stico y correcci�n)
+# Incluir endpoint de problemas crï¿½ticos (diagnï¿½stico y correcciï¿½n)
 from app.api.v1.endpoints import criticos
 app.include_router(criticos.router)
 # Incluir dashboard de monitoreo
@@ -169,8 +169,8 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
     Mejorado:
     - Aumentados intentos de 5 a 10
     - Delay inicial de 3 segundos con backoff exponencial
-    - Verificación explícita de que la tabla 'prestamos' existe
-    - Logging más detallado para debugging en Render
+    - VerificaciÃ³n explÃ­cita de que la tabla 'prestamos' existe
+    - Logging mÃ¡s detallado para debugging en Render
     """
     from sqlalchemy import text, inspect
     # Importar todos los modelos para que Base.metadata tenga todas las tablas (pagos_reportados, usuarios, etc.)
@@ -187,32 +187,32 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
             Base.metadata.create_all(bind=engine)
             logger.info("[DB Startup] Tablas creadas o ya existentes.")
             
-            # Verificar conexión básica
+            # Verificar conexiÃ³n bÃ¡sica
             with engine.connect() as conn:
                 result = conn.execute(text("SELECT 1"))
                 if not result.fetchone():
-                    raise Exception("SELECT 1 no retornó resultado")
-            logger.info("[DB Startup] Conexión básica verificada.")
+                    raise Exception("SELECT 1 no retornÃ³ resultado")
+            logger.info("[DB Startup] ConexiÃ³n bÃ¡sica verificada.")
             
-            # Verificar que tabla crítica 'prestamos' existe
+            # Verificar que tabla crÃ­tica 'prestamos' existe
             inspector = inspect(engine)
             tables = inspector.get_table_names()
             logger.info(f"[DB Startup] Tablas en BD: {tables}")
             
             if 'prestamos' not in tables:
-                raise Exception("Tabla crítica 'prestamos' no fue creada. Tablas disponibles: " + str(tables))
+                raise Exception("Tabla crÃ­tica 'prestamos' no fue creada. Tablas disponibles: " + str(tables))
             
-            logger.info("[DB Startup] ✅ Tabla 'prestamos' verificada exitosamente.")
+            logger.info("[DB Startup] âœ… Tabla 'prestamos' verificada exitosamente.")
             
-            # Contar registros en tabla crítica para verificar acceso
+            # Contar registros en tabla crÃ­tica para verificar acceso
             with engine.connect() as conn:
                 result = conn.execute(text("SELECT COUNT(*) FROM prestamos"))
                 count = result.scalar()
                 logger.info(f"[DB Startup] Tabla 'prestamos' contiene {count} registros.")
 
-            logger.info("[DB Startup] ✅ BASE DE DATOS INICIALIZADA CORRECTAMENTE")
+            logger.info("[DB Startup] âœ… BASE DE DATOS INICIALIZADA CORRECTAMENTE")
 
-            # Migración en caliente: columna drive_email_link (link al .eml en Drive) si no existe
+            # MigraciÃ³n en caliente: columna drive_email_link (link al .eml en Drive) si no existe
             try:
                 with engine.connect() as conn:
                     r = conn.execute(text("""
@@ -224,9 +224,9 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
                             "ALTER TABLE pagos_gmail_sync_item ADD COLUMN drive_email_link VARCHAR(500) NULL"
                         ))
                         conn.commit()
-                        logger.info("[DB Startup] Columna pagos_gmail_sync_item.drive_email_link añadida.")
+                        logger.info("[DB Startup] Columna pagos_gmail_sync_item.drive_email_link aÃ±adida.")
             except Exception as col_err:
-                logger.warning("[DB Startup] drive_email_link (no crítico): %s", col_err)
+                logger.warning("[DB Startup] drive_email_link (no crÃ­tico): %s", col_err)
 
             return
 
@@ -242,8 +242,8 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
                 current_delay *= 1.5  # Backoff exponencial: 3s, 4.5s, 6.75s, etc.
     
     logger.error(
-        f"[DB Startup] ❌ FALLO CRÍTICO tras {max_attempts} intentos. "
-        f"Última excepción: {type(last_error).__name__}: {str(last_error)}"
+        f"[DB Startup] âŒ FALLO CRÃTICO tras {max_attempts} intentos. "
+        f"Ãšltima excepciÃ³n: {type(last_error).__name__}: {str(last_error)}"
     )
     raise RuntimeError(
         f"No se pudo inicializar la base de datos tras {max_attempts} intentos. "
@@ -259,13 +259,13 @@ def on_startup():
     from app.core.scheduler import start_scheduler
 
     init_email_config()
-    logger.info("Configuración de email (SMTP/tickets) inicializada desde variables de entorno.")
+    logger.info("ConfiguraciÃ³n de email (SMTP/tickets) inicializada desde variables de entorno.")
 
-    # Crear tablas y verificar BD con reintentos (Render puede tener la BD aún no lista en el primer worker)
+    # Crear tablas y verificar BD con reintentos (Render puede tener la BD aÃºn no lista en el primer worker)
     try:
         _startup_db_with_retry(engine)
     except Exception as e:
-        logger.exception("Startup BD falló tras reintentos: %s", e)
+        logger.exception("Startup BD fallÃ³ tras reintentos: %s", e)
         raise
 
     # Scheduler: solo un worker (leader) inicia los jobs para evitar duplicados con --workers 2
@@ -285,12 +285,12 @@ def on_startup():
     except Exception as e:
         logger.exception("No se pudo iniciar el scheduler de reportes cobranzas: %s", e)
 
-    # Caché dashboard: actualización a las 1:00 y 13:00 (hora local) para cargas rápidas
+    # CachÃ© dashboard: actualizaciÃ³n a las 1:00 y 13:00 (hora local) para cargas rÃ¡pidas
     try:
         from app.api.v1.endpoints.dashboard import start_dashboard_cache_refresh
         start_dashboard_cache_refresh()
     except Exception as e:
-        logger.exception("No se pudo iniciar el worker de caché dashboard: %s", e)
+        logger.exception("No se pudo iniciar el worker de cachÃ© dashboard: %s", e)
 
 # Scheduler automatico de LIQUIDADO: ejecutar a las 21:00 (9 PM) diariamente
     try:
@@ -325,12 +325,12 @@ def on_startup():
         finally:
             db_startup.close()
     except Exception as e:
-        logger.warning("[PAGOS_GMAIL] No se pudieron limpiar syncs huérfanas al iniciar: %s", e)
+        logger.warning("[PAGOS_GMAIL] No se pudieron limpiar syncs huÃ©rfanas al iniciar: %s", e)
 
 
 @app.on_event("shutdown")
 def on_shutdown():
-    """Detener scheduler y heartbeat de leader al cerrar la aplicación."""
+    """Detener scheduler y heartbeat de leader al cerrar la aplicaciÃ³n."""
     # Detener scheduler de LIQUIDADO
     try:
         liquidado_scheduler.detener_scheduler()
@@ -350,7 +350,7 @@ def on_shutdown():
 
 @app.get("/")
 async def root():
-    """Endpoint raíz"""
+    """Endpoint raÃ­z"""
     return {
         "message": f"Bienvenido a {settings.PROJECT_NAME}",
         "version": settings.VERSION,
@@ -360,7 +360,7 @@ async def root():
 
 @app.head("/")
 async def root_head():
-    """Endpoint raíz para HEAD requests (health checks)"""
+    """Endpoint raÃ­z para HEAD requests (health checks)"""
     return
 
 
@@ -373,9 +373,9 @@ async def health_check():
 @app.post("/api/admin/run-migration-auditoria-fk")
 async def run_migration_auditoria_fk(request: Request):
     """
-    Ejecuta la migración auditoria.usuario_id FK -> usuarios(id).
+    Ejecuta la migraciÃ³n auditoria.usuario_id FK -> usuarios(id).
     Requiere header: X-Migration-Secret = MIGRATION_AUDITORIA_SECRET (env).
-    Ejecutar una sola vez para corregir el error 500 en aprobación manual.
+    Ejecutar una sola vez para corregir el error 500 en aprobaciÃ³n manual.
     """
     from fastapi import HTTPException
     from sqlalchemy import text
@@ -386,7 +386,7 @@ async def run_migration_auditoria_fk(request: Request):
         raise HTTPException(status_code=404, detail="Endpoint no configurado")
     header_secret = request.headers.get("X-Migration-Secret")
     if header_secret != secret:
-        raise HTTPException(status_code=403, detail="Secreto inválido")
+        raise HTTPException(status_code=403, detail="Secreto invÃ¡lido")
 
     try:
         with engine.connect() as conn:
@@ -398,15 +398,15 @@ async def run_migration_auditoria_fk(request: Request):
                     ALTER TABLE auditoria ADD CONSTRAINT auditoria_usuario_id_fkey
                     FOREIGN KEY (usuario_id) REFERENCES usuarios(id) NOT VALID
                 """))
-        return {"success": True, "message": "Migración auditoria FK completada. La aprobación manual debería funcionar."}
+        return {"success": True, "message": "MigraciÃ³n auditoria FK completada. La aprobaciÃ³n manual deberÃ­a funcionar."}
     except Exception as e:
-        logger.exception("Migración auditoria FK falló: %s", e)
+        logger.exception("MigraciÃ³n auditoria FK fallÃ³: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/health/gemini")
 async def health_check_gemini_root():
-    """Test indirecto de Gemini (API key y servicio). Disponible también en GET /api/v1/health/gemini."""
+    """Test indirecto de Gemini (API key y servicio). Disponible tambiÃ©n en GET /api/v1/health/gemini."""
     from fastapi import HTTPException
     from app.services.pagos_gmail.gemini_service import check_gemini_available
     result = check_gemini_available()
@@ -417,7 +417,7 @@ async def health_check_gemini_root():
 
 @app.get("/health/db")
 async def health_check_db():
-    """Verifica que la conexión a la BD responde (SELECT 1)."""
+    """Verifica que la conexiÃ³n a la BD responde (SELECT 1)."""
     from sqlalchemy import text
     from fastapi.responses import JSONResponse
     from app.core.database import engine

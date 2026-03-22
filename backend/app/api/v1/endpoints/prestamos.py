@@ -60,6 +60,16 @@ from app.models.user import User
 
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
 
+from app.models.auditoria_cambios_estado_prestamo import AuditoriaCambiosEstadoPrestamo
+
+from app.models.envio_notificacion import EnvioNotificacion
+
+from app.models.datos_importados_conerrores import DatosImportadosConErrores
+
+from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
+
+from app.models.reporte_contable_cache import ReporteContableCache
+
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
 
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
@@ -3501,35 +3511,111 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
 def delete_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
-    """Elimina un préstamo en BD. Borra antes las cuotas asociadas para evitar huérfanos o fallo de FK."""
+    """Elimina un prestamo y limpia filas hijas (cuotas, cuota_pagos, cache contable, etc.)."""
 
     row = db.get(Prestamo, prestamo_id)
 
     if not row:
 
-        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
 
-    db.execute(
-        delete(RevisionManualPrestamo).where(
-            RevisionManualPrestamo.prestamo_id == prestamo_id
+    try:
+
+        db.execute(
+            delete(RevisionManualPrestamo).where(
+                RevisionManualPrestamo.prestamo_id == prestamo_id
+            )
         )
-    )
 
-    db.execute(
-        update(Pago).where(Pago.prestamo_id == prestamo_id).values(prestamo_id=None)
-    )
+        db.execute(
+            delete(AuditoriaCambiosEstadoPrestamo).where(
+                AuditoriaCambiosEstadoPrestamo.prestamo_id == prestamo_id
+            )
+        )
 
-    db.execute(
-        update(PagoConError)
-        .where(PagoConError.prestamo_id == prestamo_id)
-        .values(prestamo_id=None)
-    )
+        db.execute(
+            update(EnvioNotificacion)
+            .where(EnvioNotificacion.prestamo_id == prestamo_id)
+            .values(prestamo_id=None)
+        )
 
-    db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
+        db.execute(
+            update(DatosImportadosConErrores)
+            .where(DatosImportadosConErrores.prestamo_id == prestamo_id)
+            .values(prestamo_id=None)
+        )
 
-    db.delete(row)
+        db.execute(
+            update(Pago).where(Pago.prestamo_id == prestamo_id).values(prestamo_id=None)
+        )
 
-    db.commit()
+        db.execute(
+            update(PagoConError)
+            .where(PagoConError.prestamo_id == prestamo_id)
+            .values(prestamo_id=None)
+        )
+
+        cuota_ids = list(
+            db.scalars(
+                select(Cuota.id).where(Cuota.prestamo_id == prestamo_id)
+            ).all()
+        )
+
+        if cuota_ids:
+
+            db.execute(delete(CuotaPago).where(CuotaPago.cuota_id.in_(cuota_ids)))
+
+            db.execute(
+                delete(AuditoriaConciliacionManual).where(
+                    AuditoriaConciliacionManual.cuota_id.in_(cuota_ids)
+                )
+            )
+
+            db.execute(
+                delete(ReporteContableCache).where(
+                    ReporteContableCache.cuota_id.in_(cuota_ids)
+                )
+            )
+
+        db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
+
+        db.flush()
+
+        db.delete(row)
+
+        db.commit()
+
+    except IntegrityError as e:
+
+        db.rollback()
+
+        orig = getattr(e, "orig", None)
+
+        detalle = str(orig) if orig is not None else str(e)
+
+        logger.warning("delete_prestamo IntegrityError prestamo_id=%s: %s", prestamo_id, detalle)
+
+        raise HTTPException(
+
+            status_code=409,
+
+            detail=f"No se puede eliminar el prestamo: restriccion en base de datos. {detalle}",
+
+        ) from e
+
+    except Exception as e:
+
+        db.rollback()
+
+        logger.exception("delete_prestamo prestamo_id=%s", prestamo_id)
+
+        raise HTTPException(
+
+            status_code=500,
+
+            detail=f"Error al eliminar el prestamo: {e}",
+
+        ) from e
 
     return None
 

@@ -13,6 +13,8 @@ from datetime import datetime
 from sqlalchemy import and_, text
 from sqlalchemy.orm import Session
 
+from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -258,19 +260,18 @@ class CorrectoresCriticos:
                 SET monto_aplicado = :nuevo_monto
                 WHERE id = :cp_id
             '''), {'nuevo_monto': nuevo_monto, 'cp_id': ultimo_pago[0]})
-            
-            # Registrar en auditoría
-            db.execute(text('''
-                INSERT INTO auditoria_conciliacion_manual 
-                (pago_id, cuota_id, monto_asignado, tipo_asignacion, resultado, motivo)
-                VALUES (:pago_id, :cuota_id, :monto, 'MANUAL', 'EXITOSA', :motivo)
-            '''), {
-                'pago_id': ultimo_pago[1],
-                'cuota_id': cuota_id,
-                'monto': exceso,
-                'motivo': f'Corrección de sobre-aplicación: reducción de {exceso}'
-            })
-            
+            # Registrar en auditoria (ORM: AuditoriaConciliacionManual)
+            db.add(
+                AuditoriaConciliacionManual(
+                    pago_id=ultimo_pago[1],
+                    cuota_id=cuota_id,
+                    monto_asignado=exceso,
+                    tipo_asignacion="MANUAL",
+                    resultado="EXITOSA",
+                    motivo=f"Corrección de sobre-aplicación: reducción de {exceso}",
+                )
+            )
+
             db.commit()
             logger.info(f'Cuota {cuota_id} corregida: reducido {exceso} BS del último pago')
             

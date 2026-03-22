@@ -9,6 +9,7 @@ from app.models.conversacion_cobranza import ConversacionCobranza
 from app.models.pagos_informe import PagosInforme
 from app.models.configuracion import Configuracion
 from app.models.auditoria import Auditoria
+from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
 from app.models.user import User
 from app.models.definicion_campo import DefinicionCampo
 from app.models.conversacion_ai import ConversacionAI
@@ -52,6 +53,7 @@ __all__ = [
     "MensajeWhatsapp",
     "Configuracion",
     "Auditoria",
+    "AuditoriaConciliacionManual",
     "User",
     "DefinicionCampo",
     "ConversacionAI",
@@ -61,6 +63,7 @@ __all__ = [
     "RevisarPago",
     "PagoConError",
     "ClienteConError",
+    "PrestamoConError",
     "ConciliacionTemporal",
     "PagoReportado",
     "PagoReportadoHistorial",

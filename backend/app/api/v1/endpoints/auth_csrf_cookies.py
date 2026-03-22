@@ -3,7 +3,7 @@ Rutas de Autenticación - Login con CSRF Token y Secure Cookies
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
@@ -25,74 +25,83 @@ class LoginFormRequest(BaseModel):
 
 class LoginFormResponse(BaseModel):
     """Esquema para respuesta del formulario de login"""
-    csrf_token: str
-    form_url: str
-    
-    class Config:
-        schema_extra = {
+
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "csrf_token": "rN3x_8mK9pL2qR5sT7uV9wX0yZ1aB2cD3eF4gH5iJ6",
-                "form_url": "/api/v1/auth/login"
+                "form_url": "/api/v1/auth/login",
             }
         }
+    )
+
+    csrf_token: str
+    form_url: str
 
 
 class LoginRequest(BaseModel):
     """Esquema para solicitud de login"""
-    email: EmailStr
-    password: str = None  # Optional para desarrollo
-    csrf_token: str
-    remember_me: bool = False
-    
-    @validator('password')
-    def password_not_empty(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Password is required')
-        return v
-    
-    class Config:
-        schema_extra = {
+
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "email": "user@example.com",
                 "password": "SecurePassword123!",
                 "csrf_token": "rN3x_8mK9pL2qR5sT7uV9wX0yZ1aB2cD3eF4gH5iJ6",
-                "remember_me": False
+                "remember_me": False,
             }
         }
+    )
+
+    email: EmailStr
+    password: str = None  # Optional para desarrollo
+    csrf_token: str
+    remember_me: bool = False
+
+    @field_validator("password")
+    @classmethod
+    def password_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Password is required")
+        return v
 
 
 class LoginResponse(BaseModel):
     """Esquema para respuesta exitosa de login"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "success",
+                "message": "Sesion iniciada correctamente",
+                "user_id": "user_123",
+                "email": "user@example.com",
+            }
+        }
+    )
+
     status: str
     message: str
     user_id: str
     email: str
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "status": "success",
-                "message": "Sesión iniciada correctamente",
-                "user_id": "user_123",
-                "email": "user@example.com"
-            }
-        }
 
 
 class LoginErrorResponse(BaseModel):
     """Esquema para respuesta de error en login"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "error",
+                "detail": "Email o contrasena incorrectos",
+                "code": "INVALID_CREDENTIALS",
+            }
+        }
+    )
+
     status: str
     detail: str
     code: str
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "status": "error",
-                "detail": "Email o contraseña incorrectos",
-                "code": "INVALID_CREDENTIALS"
-            }
-        }
 
 
 # ========================
