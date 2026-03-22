@@ -282,7 +282,7 @@ def list_pagos_reportados(
     cedula: Optional[str] = Query(None),
     institucion: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1, le=300),
 ):
     """Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados para mostrar solo casos pendientes."""
     q = select(PagoReportado)

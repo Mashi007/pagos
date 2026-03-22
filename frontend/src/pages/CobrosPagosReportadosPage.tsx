@@ -193,9 +193,6 @@ const normalizeEstadoValue = (value: string) =>
 
     .toLowerCase()
 
-const isEstadoAprobado = (estadoValue: string) =>
-  normalizeEstadoValue(estadoValue) === 'aprobado'
-
 export default function CobrosPagosReportadosPage() {
   const navigate = useNavigate()
 
@@ -231,6 +228,9 @@ export default function CobrosPagosReportadosPage() {
   const [motivoRechazo, setMotivoRechazo] = useState('')
 
   const [descargandoTabla, setDescargandoTabla] = useState(false)
+
+  const [descargandoExcelAprobados, setDescargandoExcelAprobados] =
+    useState(false)
 
   const [kpis, setKpis] = useState<PagosReportadosKpis | null>(null)
 
@@ -377,49 +377,79 @@ export default function CobrosPagosReportadosPage() {
   }
 
   const handleDescargarExcelAprobados = async () => {
-    const aprobados = (data?.items ?? []).filter(row =>
-      isEstadoAprobado(row.estado)
-    )
+    // Pedir estado=aprobado por API (el listado en pantalla suele ocultar aprobados).
+    // No enviamos fecha_desde/fecha_hasta: en backend filtran por created_at del reporte
+    // y suelen dejar 0 filas aunque haya muchos aprobados. Cédula/institución sí acotan si las llenaste.
+    setDescargandoExcelAprobados(true)
 
-    if (!aprobados.length) {
-      toast('No hay pagos aprobados para exportar con los filtros actuales.')
-
-      return
-    }
-
-    const rows = aprobados.map(row => {
-      const mNum = row.monto != null ? Number(row.monto) : Number.NaN
-      const montoStr =
-        Number.isFinite(mNum) && mNum >= 0
-          ? `${mNum.toFixed(2)} ${row.moneda ?? ''}`.trim()
-          : ''
-
-      return {
-        Nombre: String(row.nombres) + ' ' + String(row.apellidos),
-        Cedula: row.cedula_display,
-        Banco: row.institucion_financiera,
-        Monto: montoStr,
-        'Fecha pago': row.fecha_pago,
-        'Numero operacion': row.numero_operacion,
-        'Fecha reporte': row.fecha_reporte
-          ? new Date(row.fecha_reporte).toLocaleDateString()
-          : '',
-        Observacion: row.observacion ?? '',
-        Estado:
-          ESTADO_CONFIG[normalizeEstadoValue(row.estado)]?.label ?? row.estado,
-      }
-    })
-
-    const fecha = new Date().toISOString().slice(0, 10)
+    const perPage = 300
+    const allAprobados: PagoReportadoItem[] = []
+    let total = 0
+    let pageNum = 1
+    const maxPages = 50
 
     try {
+      while (pageNum <= maxPages) {
+        const res = await listPagosReportados({
+          page: pageNum,
+          per_page: perPage,
+          estado: 'aprobado',
+          cedula: cedula.trim() || undefined,
+          institucion: institucion.trim() || undefined,
+        })
+
+        total = res.total
+        allAprobados.push(...res.items)
+
+        if (res.items.length < perPage || allAprobados.length >= total) {
+          break
+        }
+
+        pageNum++
+      }
+
+      if (!allAprobados.length) {
+        toast(
+          'No hay pagos aprobados pendientes de exportar. ' +
+            'Si ya los exportó antes, dejan de listarse; use la tabla temporal o revise filtros de fecha/cédula.'
+        )
+
+        return
+      }
+
+      const rows = allAprobados.map(row => {
+        const mNum = row.monto != null ? Number(row.monto) : Number.NaN
+        const montoVal =
+          Number.isFinite(mNum) && mNum >= 0 ? mNum.toFixed(2) : ''
+
+        return {
+          Referencia: row.referencia_interna,
+          Nombre: `${row.nombres} ${row.apellidos}`.trim(),
+          Cedula: row.cedula_display,
+          Banco: row.institucion_financiera,
+          Monto: montoVal,
+          Moneda: row.moneda ?? '',
+          'Fecha pago': row.fecha_pago,
+          'Numero operacion': row.numero_operacion,
+          'Fecha reporte': row.fecha_reporte
+            ? new Date(row.fecha_reporte).toLocaleDateString()
+            : '',
+          Observacion: row.observacion ?? '',
+          Estado:
+            ESTADO_CONFIG[normalizeEstadoValue(row.estado)]?.label ??
+            row.estado,
+        }
+      })
+
+      const fecha = new Date().toISOString().slice(0, 10)
+
       await createAndDownloadExcel(
         rows,
         'Pagos Aprobados',
         'pagos_reportados_aprobados_' + fecha + '.xlsx'
       )
 
-      const idsAprobados = aprobados.map(row => row.id)
+      const idsAprobados = allAprobados.map(row => row.id)
 
       const markResult = await markPagosReportadosExportados(idsAprobados)
 
@@ -437,6 +467,8 @@ export default function CobrosPagosReportadosPage() {
         e?.message ||
           'Se descargo el Excel, pero fallo el marcado de exportados. Recargue e intente de nuevo.'
       )
+    } finally {
+      setDescargandoExcelAprobados(false)
     }
   }
 
@@ -534,7 +566,15 @@ export default function CobrosPagosReportadosPage() {
 
           <Button onClick={() => load()}>Buscar</Button>
 
-          <Button variant="outline" onClick={handleDescargarExcelAprobados}>
+          <Button
+            variant="outline"
+            onClick={handleDescargarExcelAprobados}
+            disabled={descargandoExcelAprobados}
+            title="Aprobados pendientes de exportar. No usa fechas del filtro; sí cédula/institución si las llenaste."
+          >
+            {descargandoExcelAprobados ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
             Descargar Excel Aprobados
           </Button>
 
@@ -542,6 +582,7 @@ export default function CobrosPagosReportadosPage() {
             variant="outline"
             onClick={handleDescargarPagosTablaTemporalExcel}
             disabled={descargandoTabla}
+            title="Cola temporal para el banco: descarga y vacía esa cola."
           >
             {descargandoTabla ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -550,6 +591,28 @@ export default function CobrosPagosReportadosPage() {
             )}
             Descargar de Tabla Temporal
           </Button>
+
+          <div className="basis-full w-full space-y-2 rounded-md border border-dashed border-muted-foreground/30 bg-muted/25 p-3 text-sm">
+            <p className="text-foreground">
+              <span className="font-semibold">
+                1) Descargar Excel Aprobados —{' '}
+              </span>
+              Lista los pagos que ya están{' '}
+              <strong>aprobados</strong> y que todavía no has bajado en Excel.
+              Al terminar, el sistema los marca como exportados para no
+              repetirlos. Las fechas de arriba no aplican a este botón; sí
+              aplican cédula e institución si las escribiste.
+            </p>
+
+            <p className="text-foreground">
+              <span className="font-semibold">
+                2) Descargar de Tabla Temporal —{' '}
+              </span>
+              Es otro flujo: baja lo que está en la{' '}
+              <strong>cola temporal</strong> (para llevar al banco). Al
+              descargar, ese Excel se genera y la cola temporal se vacía.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
