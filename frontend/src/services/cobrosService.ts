@@ -279,6 +279,14 @@ export interface PagoReportadoItem {
 
   moneda: string
 
+  /** Tasa oficial Bs por 1 USD (día fecha_pago); ausente si USD o sin tasa en BD. */
+
+  tasa_cambio_bs_usd?: number | null
+
+  /** Monto en USD (Bs÷tasa si BS; si USD el monto). */
+
+  equivalente_usd?: number | null
+
   fecha_pago: string
 
   numero_operacion: string

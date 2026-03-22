@@ -9,7 +9,7 @@ from typing import Optional, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, and_, case
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
@@ -34,7 +34,11 @@ from app.services.cobros.cedula_reportar_bs_service import (
     load_autorizados_bs_claves,
     cedula_coincide_autorizados_bs,
 )
-from app.services.tasa_cambio_service import obtener_tasa_por_fecha, convertir_bs_a_usd
+from app.services.tasa_cambio_service import (
+    obtener_tasa_por_fecha,
+    convertir_bs_a_usd,
+    tasa_y_equivalente_usd_excel,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -58,6 +62,14 @@ class PagoReportadoListItem(BaseModel):
     institucion_financiera: str
     monto: float
     moneda: str
+    tasa_cambio_bs_usd: Optional[float] = Field(
+        None,
+        description="Tasa oficial Bs por 1 USD (día fecha_pago); null si USD o sin tasa en BD.",
+    )
+    equivalente_usd: Optional[float] = Field(
+        None,
+        description="Monto en USD (Bs÷tasa si BS; si USD el monto; null si BS sin tasa).",
+    )
     fecha_pago: date
     numero_operacion: str
     fecha_reporte: datetime
@@ -373,6 +385,9 @@ def list_pagos_reportados(
         # Orden estándar: reglas (NO CLIENTES, DUPLICADO DOC, Monto...) primero; luego divergencias Gemini (columnas). Un solo separador " / ".
         partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
         observacion = " / ".join(partes_final) if partes_final else None
+        tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
+            db, r.fecha_pago, float(r.monto), r.moneda
+        )
         items.append(PagoReportadoListItem(
             id=r.id,
             referencia_interna=r.referencia_interna,
@@ -382,6 +397,8 @@ def list_pagos_reportados(
             institucion_financiera=r.institucion_financiera,
             monto=float(r.monto),
             moneda=r.moneda or "BS",
+            tasa_cambio_bs_usd=tasa_x,
+            equivalente_usd=eq_usd,
             fecha_pago=r.fecha_pago,
             numero_operacion=r.numero_operacion,
             fecha_reporte=r.created_at,
@@ -1207,7 +1224,7 @@ def marcar_pagos_reportados_exportados(
 def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
     """
     Descarga los pagos aprobados pendientes en Excel y luego vacía la tabla temporal.
-    Columnas: Cédula, Fecha, Monto, Moneda, Banco, Comentario, Número de Documento.
+    Incluye tasa Bs/USD (día fecha de pago) y columna equivalente USD para Bs.
     """
     from io import BytesIO
     from openpyxl import Workbook
@@ -1221,7 +1238,7 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
         raise HTTPException(status_code=204, detail="No hay pagos aprobados pendientes para descargar.")
     
     # Generar datos para Excel
-    datos = obtener_datos_excel(pagos)
+    datos = obtener_datos_excel(db, pagos)
     
     # Crear workbook
     wb = Workbook()
@@ -1234,9 +1251,12 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
         "Fecha",
         "Monto",
         "Moneda",
+        "Tasa cambio (Bs/USD)",
+        "Bs a USD (equiv.)",
         "Banco",
         "Comentario",
         "Numero de Documento",
+        "Monto en USD (solo dólares)",
     ]
     ws.append(headers)
 
@@ -1248,9 +1268,12 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
                 row["Fecha"],
                 row["Monto"],
                 row["Moneda"],
+                row["Tasa cambio (Bs/USD)"],
+                row["Bs a USD (equiv.)"],
                 row["Banco"],
                 row["Comentario"],
                 row["Numero de Documento"],
+                row["Monto en USD (solo dólares)"],
             ]
         )
 
@@ -1260,8 +1283,11 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
     ws.column_dimensions["C"].width = 14
     ws.column_dimensions["D"].width = 10
     ws.column_dimensions["E"].width = 22
-    ws.column_dimensions["F"].width = 30
-    ws.column_dimensions["G"].width = 25
+    ws.column_dimensions["F"].width = 18
+    ws.column_dimensions["G"].width = 22
+    ws.column_dimensions["H"].width = 30
+    ws.column_dimensions["I"].width = 25
+    ws.column_dimensions["J"].width = 26
     
     # Generar bytes
     output = BytesIO()

@@ -422,6 +422,16 @@ export default function CobrosPagosReportadosPage() {
         const montoVal =
           Number.isFinite(mNum) && mNum >= 0 ? mNum.toFixed(2) : ''
 
+        const tasaStr =
+          row.tasa_cambio_bs_usd != null &&
+          Number.isFinite(Number(row.tasa_cambio_bs_usd))
+            ? Number(row.tasa_cambio_bs_usd).toFixed(4)
+            : ''
+        const usdStr =
+          row.equivalente_usd != null && Number.isFinite(Number(row.equivalente_usd))
+            ? Number(row.equivalente_usd).toFixed(2)
+            : ''
+
         return {
           Referencia: row.referencia_interna,
           Nombre: `${row.nombres} ${row.apellidos}`.trim(),
@@ -429,6 +439,8 @@ export default function CobrosPagosReportadosPage() {
           Banco: row.institucion_financiera,
           Monto: montoVal,
           Moneda: row.moneda ?? '',
+          'Tasa cambio (Bs/USD)': tasaStr,
+          'Bs a USD (equiv.)': usdStr,
           'Fecha pago': row.fecha_pago,
           'Numero operacion': row.numero_operacion,
           'Fecha reporte': row.fecha_reporte
@@ -438,6 +450,8 @@ export default function CobrosPagosReportadosPage() {
           Estado:
             ESTADO_CONFIG[normalizeEstadoValue(row.estado)]?.label ??
             row.estado,
+          // Última columna: mismo cálculo que "Bs a USD (equiv.)", siempre en dólares para totales
+          'Monto en USD (solo dólares)': usdStr,
         }
       })
 
@@ -611,6 +625,18 @@ export default function CobrosPagosReportadosPage() {
               Es otro flujo: baja lo que está en la{' '}
               <strong>cola temporal</strong> (para llevar al banco). Al
               descargar, ese Excel se genera y la cola temporal se vacía.
+            </p>
+
+            <p className="text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                Columnas de tasa en el Excel —{' '}
+              </span>
+              Ambos archivos incluyen <strong>Tasa cambio (Bs/USD)</strong> (oficial
+              del día de la <em>fecha de pago</em>) y <strong>Bs a USD (equiv.)</strong>{' '}
+              (bolívares ÷ tasa). Al final va <strong>Monto en USD (solo dólares)</strong>{' '}
+              con el mismo valor en dólares para sumar en Excel. Si falta tasa para
+              una fecha en Bs, tasa y equivalentes quedan vacíos (registre la tasa
+              en admin).
             </p>
           </div>
         </CardContent>

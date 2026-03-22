@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.models.pago_reportado import PagoReportado
 from app.models.pago_pendiente_descargar import PagoPendienteDescargar
+from app.services.tasa_cambio_service import tasa_y_equivalente_usd_excel
 
 
 def obtener_pagos_aprobados_pendientes(db: Session) -> List[PagoReportado]:
@@ -61,10 +62,10 @@ def vaciar_tabla_pendiente_descargar(db: Session) -> int:
     return cantidad
 
 
-def obtener_datos_excel(pagos: List[PagoReportado]) -> List[Dict[str, Any]]:
+def obtener_datos_excel(db: Session, pagos: List[PagoReportado]) -> List[Dict[str, Any]]:
     """
     Convierte pagos a filas para exportar a Excel.
-    Columnas: Cédula, Fecha, Monto, Moneda, Banco, Comentario, Número de Documento
+    Incluye tasa oficial Bs/USD (día fecha_pago) y equivalente en USD para pagos en Bs.
     """
     rows = []
 
@@ -76,6 +77,11 @@ def obtener_datos_excel(pagos: List[PagoReportado]) -> List[Dict[str, Any]]:
             else pago.numero_cedula or ""
         )
         monto_val = float(pago.monto) if pago.monto is not None else 0.0
+        tasa_bs_usd, equiv_usd = (None, None)
+        if pago.fecha_pago is not None:
+            tasa_bs_usd, equiv_usd = tasa_y_equivalente_usd_excel(
+                db, pago.fecha_pago, monto_val, pago.moneda
+            )
 
         rows.append(
             {
@@ -83,9 +89,13 @@ def obtener_datos_excel(pagos: List[PagoReportado]) -> List[Dict[str, Any]]:
                 "Fecha": fecha_str,
                 "Monto": monto_val,
                 "Moneda": (pago.moneda or "BS").strip(),
+                "Tasa cambio (Bs/USD)": tasa_bs_usd,
+                "Bs a USD (equiv.)": equiv_usd,
                 "Banco": (pago.institucion_financiera or "").strip(),
                 "Comentario": pago.observacion or "",
                 "Numero de Documento": pago.numero_operacion or "",
+                # Última columna: referencia única en dólares (mismo valor que Bs a USD cuando aplica)
+                "Monto en USD (solo dólares)": equiv_usd,
             }
         )
 

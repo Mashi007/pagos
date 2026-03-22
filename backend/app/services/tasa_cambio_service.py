@@ -2,7 +2,7 @@
 Servicios para gestionar tasas de cambio oficiales.
 """
 from datetime import date, datetime, time
-from typing import Optional
+from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -112,6 +112,36 @@ def convertir_bs_a_usd(monto_bs: float, tasa: float) -> float:
     if tasa <= 0:
         raise ValueError("La tasa de cambio debe ser mayor a 0")
     return round(monto_bs / tasa, 2)
+
+
+def tasa_y_equivalente_usd_excel(
+    db: Session,
+    fecha_pago: date,
+    monto: float,
+    moneda: Optional[str],
+) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Para exportes (Excel/API): tasa oficial Bs/USD del día fecha_pago y monto en USD.
+
+    - Pago en USD: (None, monto) — no aplica tasa Bs; el monto ya es dólares.
+    - Pago en Bs: (tasa_oficial, monto_bs/tasa) si existe tasa para fecha_pago; si no, (None, None).
+    """
+    raw = (moneda or "BS").strip().upper()
+    if raw in (
+        "USD",
+        "US$",
+        "$",
+        "DOLAR",
+        "DÓLAR",
+        "DOLARES",
+        "DÓLARES",
+    ):
+        return None, round(float(monto), 2)
+    tasa_row = obtener_tasa_por_fecha(db, fecha_pago)
+    if tasa_row is None:
+        return None, None
+    t = float(tasa_row.tasa_oficial)
+    return t, convertir_bs_a_usd(float(monto), t)
 
 
 def debe_ingresar_tasa() -> bool:

@@ -36,7 +36,7 @@ Funciones:
 - `obtener_pagos_aprobados_pendientes(db)`: Retorna pagos de la tabla temporal
 - `agregar_a_pendiente_descargar(db, pago_id)`: Inserta pago al aprobar
 - `vaciar_tabla_pendiente_descargar(db)`: Elimina todos los registros
-- `obtener_datos_excel(pagos)`: Formatea datos para Excel
+- `obtener_datos_excel(db, pagos)`: Formatea datos para Excel (incluye tasa Bs/USD del día `fecha_pago` y equivalente USD)
 
 ### 4. Endpoint Backend
 **Archivo:** `backend/app/api/v1/endpoints/cobros.py`
@@ -48,10 +48,11 @@ GET /api/v1/cobros/descargar-pagos-aprobados-excel
 
 - Obtiene pagos pendientes
 - Genera archivo Excel con columnas:
-  - **Cédula** (tipo + número)
-  - **Fecha** (DD/MM/YYYY)
-  - **Comentario** (observación del pago)
-  - **Número de Documento** (número de operación)
+  - **Cédula**, **Fecha**, **Monto**, **Moneda**
+  - **Tasa cambio (Bs/USD)** (oficial del día `fecha_pago` en `tasas_cambio_diaria`; vacío si el pago es USD o no hay tasa)
+  - **Bs a USD (equiv.)** (monto en bolívares ÷ tasa; si moneda USD, el monto en dólares)
+  - **Banco**, **Comentario**, **Número de Documento**
+  - **Monto en USD (solo dólares)** (última columna; mismo valor en USD para totales en Excel)
 - Devuelve archivo con nombre: `pagos_aprobados_YYYYMMDD.xlsx`
 - **Vacía automáticamente la tabla** después de generar el Excel
 
