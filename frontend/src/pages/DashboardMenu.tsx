@@ -82,6 +82,7 @@ import type {
   MorosidadPorAnalistaItem,
   PrestamosPorModeloResponse,
   AnalisisCuentasPorCobrarResponse,
+  TendenciaProgramadoTotalCobradoResponse,
 } from '../types/dashboard'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
@@ -581,6 +582,45 @@ export function DashboardMenu() {
       enabled: true,
     })
 
+  const periodoTendenciaCobranza = getPeriodoGrafico('tendencia-cobranza-lineas')
+
+  const {
+    data: datosTendenciaCobranza,
+    isLoading: loadingTendenciaCobranza,
+  } = useQuery({
+    queryKey: [
+      'tendencia-programado-total-cobrado',
+      periodoTendenciaCobranza,
+      JSON.stringify(filtros),
+    ],
+
+    queryFn: async () => {
+      const params = construirFiltrosObject(periodoTendenciaCobranza)
+
+      const queryParams = new URLSearchParams()
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+
+      if (!queryParams.has('periodo') && periodoTendenciaCobranza)
+        queryParams.append('periodo', periodoTendenciaCobranza)
+
+      const response = await apiClient.get(
+        `/api/v1/dashboard/tendencia-programado-total-cobrado${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
+        { timeout: 60000 }
+      )
+
+      return response as TendenciaProgramadoTotalCobradoResponse
+    },
+
+    staleTime: 4 * 60 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    enabled: true,
+  })
+
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Mostrar toast cuando falla la carga del gráfico principal (auditoría: no fallar en silencio)
@@ -650,6 +690,11 @@ export function DashboardMenu() {
         exact: false,
       })
 
+      await queryClient.invalidateQueries({
+        queryKey: ['tendencia-programado-total-cobrado'],
+        exact: false,
+      })
+
       // Refrescar todas las queries activas del dashboard
 
       await queryClient.refetchQueries({
@@ -694,6 +739,11 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['analisis-cuentas-por-cobrar'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['tendencia-programado-total-cobrado'],
         exact: false,
       })
 
@@ -1381,7 +1431,7 @@ export function DashboardMenu() {
                             <Bar
                               dataKey="cartera"
                               fill="#3b82f6"
-                              name="Lo que debería cobrarse"
+                              name="PAGOS CONCILIADOS"
                               radius={[4, 4, 0, 0]}
                             />
 
@@ -1398,7 +1448,7 @@ export function DashboardMenu() {
                               stroke="#3b82f6"
                               strokeWidth={2}
                               dot={{ r: 3 }}
-                              name="Tendencia programado"
+                              name="Tendencia PAGOS CONCILIADOS"
                               isAnimationActive={false}
                             />
 
@@ -1412,6 +1462,120 @@ export function DashboardMenu() {
                               isAnimationActive={false}
                             />
                           </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </ChartWithDateRangeSlider>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">
+                      No hay datos para el período seleccionado
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Tendencia: programado vs total cobrado (2 líneas) */}
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <LineChart className="h-5 w-5 text-sky-600" />
+
+                      <span>Programado vs cobrado (mensual)</span>
+                    </CardTitle>
+
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="tendencia-cobranza-lineas" />
+
+                      <Badge
+                        variant="secondary"
+                        className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                      >
+                        2 líneas
+                      </Badge>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-6 pt-4">
+                  {loadingTendenciaCobranza ? (
+                    <div className="flex items-center justify-center py-16 text-gray-500">
+                      Cargando tendencia programado vs cobrado...
+                    </div>
+                  ) : datosTendenciaCobranza?.series &&
+                    datosTendenciaCobranza.series.length > 0 ? (
+                    <ChartWithDateRangeSlider
+                      data={datosTendenciaCobranza.series}
+                      dataKey="mes"
+                      chartHeight={400}
+                    >
+                      {filteredData => (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RechartsLineChart
+                            data={filteredData}
+                            margin={{
+                              top: 14,
+                              right: 24,
+                              left: 12,
+                              bottom: 14,
+                            }}
+                          >
+                            <CartesianGrid {...chartCartesianGrid} />
+
+                            <XAxis dataKey="mes" tick={chartAxisTick} />
+
+                            <YAxis
+                              tick={chartAxisTick}
+                              tickFormatter={value => {
+                                if (value >= 1000) {
+                                  return `$${(value / 1000).toFixed(0)}K`
+                                }
+
+                                return `$${value}`
+                              }}
+                              label={{
+                                value: 'Monto (USD)',
+                                angle: -90,
+                                position: 'insideLeft',
+                                style: { fill: '#374151', fontSize: 13 },
+                              }}
+                            />
+
+                            <Tooltip
+                              contentStyle={chartTooltipStyle.contentStyle}
+                              labelStyle={chartTooltipStyle.labelStyle}
+                              formatter={(value: number, name: string) => [
+                                formatCurrency(value),
+                                name,
+                              ]}
+                            />
+
+                            <Legend {...chartLegendStyle} />
+
+                            <Line
+                              type="monotone"
+                              dataKey="cuotas_programadas"
+                              stroke="#2563eb"
+                              strokeWidth={2}
+                              dot={{ r: 4 }}
+                              name="Cuotas programadas a cobrar"
+                            />
+
+                            <Line
+                              type="monotone"
+                              dataKey="total_cobrado"
+                              stroke="#059669"
+                              strokeWidth={2}
+                              dot={{ r: 4 }}
+                              name="Pagos conciliados + meses anteriores"
+                            />
+                          </RechartsLineChart>
                         </ResponsiveContainer>
                       )}
                     </ChartWithDateRangeSlider>

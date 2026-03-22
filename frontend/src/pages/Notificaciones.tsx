@@ -34,6 +34,8 @@ import {
   type EstadisticasPorTab,
 } from '../services/notificacionService'
 
+import { prestamoService } from '../services/prestamoService'
+
 import { toast } from 'sonner'
 
 import { ConfiguracionNotificaciones } from '../components/notificaciones/ConfiguracionNotificaciones'
@@ -160,6 +162,54 @@ export function Notificaciones() {
   })
 
   const [descargandoExcel, setDescargandoExcel] = useState(false)
+
+  const [descargandoEstadoCuentaId, setDescargandoEstadoCuentaId] = useState<
+    number | null
+  >(null)
+
+  const handleDescargarEstadoCuentaPdf = async (prestamoId: number) => {
+    setDescargandoEstadoCuentaId(prestamoId)
+
+    try {
+      await prestamoService.descargarEstadoCuentaPDF(prestamoId)
+
+      toast.success('Estado de cuenta PDF descargado exitosamente')
+    } catch (e) {
+      console.error(e)
+
+      toast.error('Error al exportar estado de cuenta PDF')
+    } finally {
+      setDescargandoEstadoCuentaId(null)
+    }
+  }
+
+  const estadoCuentaPdfCell = (prestamoId: number | undefined) => {
+    if (prestamoId == null) {
+      return (
+        <span className="text-xs text-gray-400" title="Sin id de préstamo">
+          -
+        </span>
+      )
+    }
+
+    return (
+      <Button
+        variant="link"
+        size="sm"
+        className="inline-flex h-auto items-center gap-1 p-0 text-blue-600"
+        disabled={descargandoEstadoCuentaId === prestamoId}
+        onClick={() => handleDescargarEstadoCuentaPdf(prestamoId)}
+        title="Mismo PDF que en tabla de amortización (Exportar PDF)"
+      >
+        <Download
+          className={`h-4 w-4 shrink-0 ${
+            descargandoEstadoCuentaId === prestamoId ? 'animate-pulse' : ''
+          }`}
+        />
+        Exportar PDF
+      </Button>
+    )
+  }
 
   const handleRefresh = () => {
     refetch()
@@ -301,8 +351,9 @@ export function Notificaciones() {
           <p className="mt-1 text-gray-600">
             Politica: no hay avisos antes del vencimiento ni el día del
             vencimiento. El primer listado es el día calendario siguiente (ej.
-            vence 22 → aparece el 23). También 5 y 30 días de atraso y crédito
-            pagado. Datos desde BD.
+            vence 22 → aparece el 23). También 5 y 30 días de atraso. Crédito
+            pagado = préstamos en estado LIQUIDADO. En cada tabla puede exportar
+            el PDF de estado de cuenta del préstamo. Datos desde BD.
           </p>
 
           {data?.actualizado_en && (
@@ -389,7 +440,7 @@ export function Notificaciones() {
               })()}
 
               {activeTab === 'liquidados'
-                ? 'Crédito pagado (Total financiamiento = Total abonos)'
+                ? 'Crédito pagado (estado LIQUIDADO en préstamos)'
                 : activeTab === 'dias_1_atraso'
                   ? 'Día siguiente al vencimiento (1 día de atraso calendario)'
                   : activeTab === 'dias_5_atraso'
@@ -401,12 +452,12 @@ export function Notificaciones() {
 
             <CardDescription>
               {activeTab === 'liquidados'
-                ? 'Préstamos donde total financiamiento (tabla préstamo) menos total abonos (tabla cuotas) es cero. Por cédula/cliente.'
+                ? 'Solo préstamos con estado LIQUIDADO en la tabla préstamos (crédito cerrado en BD). Los totales financiamiento / abonos son referencia frente a cuotas.'
                 : activeTab === 'dias_1_atraso'
-                  ? 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Ej.: vence 22 → entra el 23.'
+                  ? 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Ej.: vence 22 → entra el 23. Columna Estado de cuenta: mismo PDF que en amortización del préstamo.'
                   : activeTab === 'dias_5_atraso' ||
                       activeTab === 'dias_30_atraso'
-                    ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso (nombre, cédula, nº cuota, fecha venc., días atraso, monto).'
+                    ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso. Columna Estado de cuenta: mismo PDF que en amortización del préstamo.'
                     : 'Nombre y cédula de clientes a notificar.'}
             </CardDescription>
           </CardHeader>
@@ -525,6 +576,10 @@ export function Notificaciones() {
                       <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
                         Total abonos
                       </th>
+
+                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                        Estado de cuenta
+                      </th>
                     </tr>
                   </thead>
 
@@ -532,11 +587,10 @@ export function Notificaciones() {
                     {(data?.liquidados ?? []).length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={6}
                           className="py-8 text-center text-gray-500"
                         >
-                          No hay préstamos con crédito pagado (Total
-                          financiamiento = Total abonos).
+                          No hay préstamos en estado LIQUIDADO.
                         </td>
                       </tr>
                     ) : (
@@ -562,6 +616,10 @@ export function Notificaciones() {
 
                             <td className="px-3 py-2 text-right">
                               {Number(row.total_abonos).toLocaleString('es')}
+                            </td>
+
+                            <td className="px-3 py-2">
+                              {estadoCuentaPdfCell(row.prestamo_id)}
                             </td>
                           </tr>
                         )
@@ -602,6 +660,10 @@ export function Notificaciones() {
                       <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
                         Monto
                       </th>
+
+                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                        Estado de cuenta
+                      </th>
                     </tr>
                   </thead>
 
@@ -609,7 +671,7 @@ export function Notificaciones() {
                     {list.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className="py-8 text-center text-gray-500"
                         >
                           Ningún registro en este criterio.
@@ -646,6 +708,10 @@ export function Notificaciones() {
                               ? Number(row.monto).toLocaleString('es')
                               : '-'}
                           </td>
+
+                          <td className="px-3 py-2">
+                            {estadoCuentaPdfCell(row.prestamo_id)}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -666,6 +732,10 @@ export function Notificaciones() {
                       <th className="px-3 py-2 text-left font-semibold">
                         Cédula
                       </th>
+
+                      <th className="px-3 py-2 text-left font-semibold">
+                        Estado de cuenta
+                      </th>
                     </tr>
                   </thead>
 
@@ -673,7 +743,7 @@ export function Notificaciones() {
                     {list.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={3}
+                          colSpan={4}
                           className="py-8 text-center text-gray-500"
                         >
                           Ningún cliente en este criterio.
@@ -692,6 +762,10 @@ export function Notificaciones() {
                           </td>
 
                           <td className="px-3 py-2">{row.cedula}</td>
+
+                          <td className="px-3 py-2">
+                            {estadoCuentaPdfCell(row.prestamo_id)}
+                          </td>
                         </tr>
                       ))
                     )}

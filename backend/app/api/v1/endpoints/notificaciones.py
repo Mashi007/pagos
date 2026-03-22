@@ -1357,7 +1357,8 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     1. 1 dia despues del vencimiento (ayer fue la fecha de vencimiento)
     2. 5 dias despues del vencimiento
     3. 30 dias despues del vencimiento
-    4. Credito pagado (liquidados): prestamo.total_financiamiento = SUM(cuotas.total_pagado).
+    4. Credito pagado (liquidados): prestamos con estado LIQUIDADO (misma columna estado en BD).
+       Se muestran total_financiamiento y suma de abonos en cuotas para referencia.
     Claves dias_5, dias_3, dias_1, hoy se devuelven vacias (compatibilidad API).
     Datos desde BD: get_cuotas_pendientes_con_cliente y tabla prestamos/cuotas.
     """
@@ -1388,7 +1389,7 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
             elif dias_atraso == 30:
                 dias_30_atraso.append(_item(cliente, cuota, dias_atraso=30))
 
-    # Liquidados: prÃƒÂ©stamos donde Total financiamiento = total abonos (SUM total_pagado por prÃƒÂ©stamo)
+    # Crédito pagado: préstamos en estado LIQUIDADO (alineado con prestamos.estado).
     subq = (
         select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.total_pagado), 0).label("total_abonos"))
         .group_by(Cuota.prestamo_id)
@@ -1397,7 +1398,7 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
         select(Prestamo, Cliente, subq.c.total_abonos)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .join(subq, Prestamo.id == subq.c.prestamo_id)
-        .where(Prestamo.total_financiamiento == subq.c.total_abonos)
+        .where(Prestamo.estado == "LIQUIDADO")
     )
     rows_liq = db.execute(q_liq).all()
     liquidados: List[dict] = []

@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Servicio de scheduler para ejecutar actualizacion de estado a LIQUIDADO a las 9 PM
-con generación y envío de notificaciones con PDF adjunto.
+Scheduler: actualizacion de estado a LIQUIDADO a las 21:00 (Caracas).
+
+El correo con PDF de estado de cuenta NO se envia aqui: el job diario
+liquidado_email_deferido (01:10) lo envia 1 y 2 dias calendario despues
+segun prestamos.fecha_liquidado.
 """
-from apscheduler.schedulers.background import BackgroundScheduler
-from app.core.database import SessionLocal
-from sqlalchemy import text
 import logging
-from datetime import datetime
-from app.services.liquidado_notificacion_service import notificacion_service
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy import text, update
+
+from app.core.database import SessionLocal
+from app.models.prestamo import Prestamo
+from app.services.cuota_estado import hoy_negocio
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +22,7 @@ class LiquidadoScheduler:
         self.scheduler = None
     
     def actualizar_prestamos_liquidado(self):
-        """Ejecuta la funcion que actualiza prestamos a LIQUIDADO y genera notificaciones"""
+        """Ejecuta la funcion que actualiza prestamos a LIQUIDADO y asigna fecha_liquidado (Caracas)."""
         db = SessionLocal()
         try:
             logger.info('INICIANDO: Actualizacion de prestamos a LIQUIDADO')
@@ -40,27 +45,22 @@ class LiquidadoScheduler:
             ''')).fetchone()
             
             db.commit()
-            
-            # Generar notificaciones para cada prestamo liquidado
-            logger.info('Iniciando generacion de notificaciones con PDF')
-            notificaciones_exitosas = 0
-            notificaciones_fallidas = 0
-            
-            for prestamo_id, capital, suma_pagado in prestamos_a_liquidar:
-                try:
-                    exito = notificacion_service.crear_notificacion(
-                        prestamo_id=prestamo_id,
-                        capital=float(capital or 0),
-                        suma_pagado=float(suma_pagado or 0)
-                    )
-                    if exito:
-                        notificaciones_exitosas += 1
-                    else:
-                        notificaciones_fallidas += 1
-                except Exception as e:
-                    logger.error(f'Error generando notificacion para prestamo {prestamo_id}: {e}')
-                    notificaciones_fallidas += 1
-            
+
+            ids_liquidados = [row[0] for row in prestamos_a_liquidar]
+            if ids_liquidados:
+                fd = hoy_negocio()
+                db.execute(
+                    update(Prestamo)
+                    .where(Prestamo.id.in_(ids_liquidados))
+                    .values(fecha_liquidado=fd)
+                )
+                db.commit()
+                logger.info(
+                    "fecha_liquidado=%s asignada a %s prestamos (emails PDF dias siguientes via job 01:10)",
+                    fd,
+                    len(ids_liquidados),
+                )
+
             # Consultar total de cambios registrados
             cambios = db.execute(text('''
                 SELECT COUNT(*) FROM auditoria_cambios_estado_prestamo
@@ -68,7 +68,6 @@ class LiquidadoScheduler:
             ''')).fetchone()
             
             logger.info(f'COMPLETADO: {cambios[0]} prestamos actualizados a LIQUIDADO')
-            logger.info(f'Notificaciones: {notificaciones_exitosas} exitosas, {notificaciones_fallidas} fallidas')
             
         except Exception as e:
             logger.error(f'ERROR en actualizar_prestamos_liquidado: {e}', exc_info=True)
@@ -90,7 +89,7 @@ class LiquidadoScheduler:
             hour=21,
             minute=0,
             id='actualizar_liquidado_diario',
-            name='Actualizacion diaria de prestamos a LIQUIDADO con notificaciones',
+            name='Actualizacion diaria de prestamos a LIQUIDADO (sin email; email 01:10)',
             misfire_grace_time=60
         )
         

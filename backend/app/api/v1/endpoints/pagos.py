@@ -84,7 +84,11 @@ from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 
 from app.schemas.auth import UserResponse
 
-from app.services.cuota_estado import clasificar_estado_cuota, dias_retraso_desde_vencimiento
+from app.services.cuota_estado import (
+    clasificar_estado_cuota,
+    dias_retraso_desde_vencimiento,
+    hoy_negocio,
+)
 
 
 from app.services.tasa_cambio_service import (
@@ -4452,6 +4456,8 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
         if prestamo and (prestamo.estado or "").upper() == "APROBADO":
 
             prestamo.estado = "LIQUIDADO"
+
+            prestamo.fecha_liquidado = hoy_negocio()
 
             logger.info("Prestamo id=%s marcado como LIQUIDADO (todas las cuotas pagadas).", prestamo_id)
 

@@ -155,6 +155,12 @@ class Settings(BaseSettings):
         default=True,
         description="Exige plantilla + PDF variable (carta) + PDF fijo antes de enviar notificaciones por pestaña",
     )
+    # Dias calendario (Caracas) despues de prestamos.fecha_liquidado para enviar correo con PDF estado de cuenta.
+    # Ej. "1,2" = primer correo al dia siguiente de la fecha_liquidado, segundo al segundo dia. Un correo por cliente por oleada.
+    NOTIFICACIONES_LIQUIDADO_DIAS_ENVIO: str = Field(
+        default="1,2",
+        description="CSV de enteros >=1: dias despues de fecha_liquidado para enviar emails liquidado+PDF",
+    )
 
     # ============================================
     # AI / OpenRouter (clave solo en backend, nunca en frontend)

@@ -65,6 +65,9 @@ export interface NotificacionStats {
 export interface ClienteRetrasadoItem {
   cliente_id: number
 
+  /** ID del préstamo (para PDF estado de cuenta, mismo endpoint que amortización). */
+  prestamo_id?: number
+
   nombre: string
 
   cedula: string

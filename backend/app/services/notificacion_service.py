@@ -55,6 +55,7 @@ def format_cuota_item(
         "cliente_id": cliente.id,
         "nombre": cliente.nombres or "",
         "cedula": cliente.cedula or "",
+        "prestamo_id": cuota.prestamo_id,
         "numero_cuota": cuota.numero_cuota,
         "fecha_vencimiento": cuota.fecha_vencimiento.isoformat() if cuota.fecha_vencimiento else None,
         "monto": float(cuota.monto) if cuota.monto is not None else None,
@@ -70,7 +71,6 @@ def format_cuota_item(
             "telefono": (cliente.telefono or "").strip(),
             "modelo_vehiculo": None,
             "monto_cuota": float(cuota.monto) if cuota.monto is not None else None,
-            "prestamo_id": cuota.prestamo_id,  # Corregir: usar prestamo_id, no cliente.id
             "estado": "PENDIENTE",
         })
         

@@ -527,6 +527,112 @@ def _compute_analisis_cuentas_por_cobrar(
     }
 
 
+def _compute_tendencia_programado_vs_total_cobrado(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+) -> dict:
+    """Línea 1: cuotas programadas (vencimiento en el mes). Línea 2: cobrado del mes + atrasos cobrados en el mes."""
+    if fecha_inicio and fecha_fin:
+        try:
+            inicio = date.fromisoformat(fecha_inicio)
+            fin = date.fromisoformat(fecha_fin)
+            if inicio <= fin:
+                meses = _meses_desde_rango(inicio, fin)
+            else:
+                meses = _etiquetas_12_meses()
+        except ValueError:
+            meses = _etiquetas_12_meses()
+    else:
+        meses = _etiquetas_12_meses()
+
+    series = []
+    try:
+        for i, m in enumerate(meses):
+            if "year" in m and "month" in m:
+                y, mo = m["year"], m["month"]
+                inicio_d = date(y, mo, 1)
+                if mo == 12:
+                    fin_d = date(y, 12, 31)
+                else:
+                    fin_d = date(y, mo + 1, 1) - timedelta(days=1)
+            else:
+                hoy = datetime.now(timezone.utc)
+                fin_mes = hoy - timedelta(days=30 * (len(meses) - 1 - i))
+                if fin_mes.tzinfo is None:
+                    fin_mes = fin_mes.replace(tzinfo=timezone.utc)
+                inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
+
+            programadas = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= inicio_d,
+                    Cuota.fecha_vencimiento <= fin_d,
+                )
+            ) or 0
+
+            conciliados_mes = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= inicio_d,
+                    Cuota.fecha_vencimiento <= fin_d,
+                    Cuota.fecha_pago.isnot(None),
+                )
+            ) or 0
+
+            pagos_meses_anteriores = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < inicio_d,
+                    Cuota.fecha_pago >= inicio_d,
+                    Cuota.fecha_pago <= fin_d,
+                    Cuota.fecha_pago.isnot(None),
+                )
+            ) or 0
+
+            prog_f = _safe_float(programadas)
+            conc_f = _safe_float(conciliados_mes)
+            atras_f = _safe_float(pagos_meses_anteriores)
+            series.append({
+                "mes": m["mes"],
+                "cuotas_programadas": prog_f,
+                "total_cobrado": conc_f + atras_f,
+                "conciliados_mes": conc_f,
+                "pagos_meses_anteriores": atras_f,
+            })
+        origen = "bd"
+    except Exception as e:
+        logger.exception("Error en tendencia_programado_vs_total_cobrado: %s", e)
+        series = [
+            {
+                "mes": mm["mes"],
+                "cuotas_programadas": 0.0,
+                "total_cobrado": 0.0,
+                "conciliados_mes": 0.0,
+                "pagos_meses_anteriores": 0.0,
+            }
+            for mm in meses
+        ]
+        origen = "bd"
+
+    return {
+        "series": series,
+        "origen": origen,
+    }
+
+
 @router.get("/admin")
 def get_dashboard_admin(
     periodo: Optional[str] = Query(None),
@@ -562,3 +668,14 @@ def get_analisis_cuentas_por_cobrar(
 ):
     """Análisis de cuentas por cobrar: cartera vs pagos de atrasos por mes."""
     return _compute_analisis_cuentas_por_cobrar(db, fecha_inicio, fecha_fin)
+
+
+@router.get("/tendencia-programado-total-cobrado")
+def get_tendencia_programado_total_cobrado(
+    periodo: Optional[str] = Query(None),
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Tendencia mensual: cuotas programadas vs total cobrado (conciliados del mes + pagos de meses anteriores)."""
+    return _compute_tendencia_programado_vs_total_cobrado(db, fecha_inicio, fecha_fin)

@@ -10,6 +10,7 @@ ActualizaciÃ³n periÃ³dica de informes y reportes:
 - 16:00  CachÃ© dashboard (hilo aparte en main: 1:00, 13:00).
 - 16:30  Informe de pagos por email.
 - 01:00  Envio automatico de notificaciones (email con paquete completo; America/Caracas).
+- 01:10  Emails credito liquidado: PDF estado de cuenta (dias 1 y 2 despues de fecha_liquidado; America/Caracas).
 
 Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
 se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.
@@ -47,6 +48,26 @@ def _job_actualizar_notificaciones() -> None:
         )
     except Exception as e:
         logger.exception("Error en job actualizar_notificaciones: %s", e)
+    finally:
+        db.close()
+
+
+def _job_emails_liquidado_diferidos() -> None:
+    """Job 01:10. Correos con PDF estado de cuenta para prestamos LIQUIDADO (N dias despues de fecha_liquidado)."""
+    db = SessionLocal()
+    try:
+        from app.services.liquidado_email_deferido import ejecutar_emails_liquidado_diferidos
+
+        res = ejecutar_emails_liquidado_diferidos(db)
+        logger.info(
+            "Emails liquidado diferido: enviados_ok=%s fallidos=%s omitidos_dup=%s dias=%s",
+            res.get("enviados_ok"),
+            res.get("fallidos"),
+            res.get("omitidos_duplicado"),
+            res.get("dias_config"),
+        )
+    except Exception as e:
+        logger.exception("Error en job emails_liquidado_diferidos: %s", e)
     finally:
         db.close()
 
@@ -155,7 +176,7 @@ def _job_pagos_gmail_pipeline() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: actualizacion notificaciones 00:50; envio notificaciones 01:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
+    """Inicia el scheduler: notificaciones 00:50/01:00; liquidado+PDF 01:10; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
@@ -174,6 +195,12 @@ def start_scheduler() -> None:
         CronTrigger(hour=1, minute=0, timezone=SCHEDULER_TZ),
         id="envio_notificaciones_1am",
         name="Envio notificaciones 01:00",
+    )
+    _scheduler.add_job(
+        _job_emails_liquidado_diferidos,
+        CronTrigger(hour=1, minute=10, timezone=SCHEDULER_TZ),
+        id="emails_liquidado_diferidos_0110",
+        name="Emails liquidado + PDF estado cuenta 01:10",
     )
     # 1:00 y 13:00 - Reportes cobranzas (actualizaciÃ³n automÃ¡tica de informes)
     _scheduler.add_job(
@@ -233,7 +260,7 @@ def start_scheduler() -> None:
 
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: notificaciones 00:50; envio notificaciones 01:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
+        "Scheduler iniciado: notificaciones 00:50/01:00; liquidado PDF 01:10; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
         SCHEDULER_TZ,
     )
 

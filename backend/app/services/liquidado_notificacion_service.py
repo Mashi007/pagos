@@ -1,195 +1,267 @@
 # -*- coding: utf-8 -*-
 """
-Servicio de notificaciones automáticas para préstamos LIQUIDADO con PDF de estado de cuenta.
-Se dispara cuando el scheduler actualiza estado a LIQUIDADO cada 9 PM.
-Genera PDF de estado de cuenta y lo adjunta al correo de notificación.
+Correos automaticos por prestamo LIQUIDADO con PDF de estado de cuenta.
+
+El envio NO es el mismo dia del cambio a LIQUIDADO: lo programa el job diario
+`liquidado_email_deferido` segun NOTIFICACIONES_LIQUIDADO_DIAS_ENVIO (por defecto
+1 y 2 dias calendario despues de prestamos.fecha_liquidado, zona Caracas).
 """
 
-from datetime import date
-from typing import Optional, List, Tuple
-from app.core.database import SessionLocal
-from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
-from app.core.email import send_email
-from app.services.cuota_estado import estado_cuota_para_mostrar, hoy_negocio
+from __future__ import annotations
+
+import logging
+from typing import List, Optional, Tuple
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-import logging
+
+from app.core.database import SessionLocal
+from app.core.email import send_email
+from app.models.envio_notificacion import EnvioNotificacion
+from app.services.cuota_estado import estado_cuota_para_mostrar, hoy_negocio
+from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 
 logger = logging.getLogger(__name__)
 
 
 class LiquidadoNotificacionService:
-    """Crea notificaciones con PDF de estado de cuenta cuando préstamos se marcan como LIQUIDADO"""
-    
+    """Envia correo con PDF de estado de cuenta para prestamos liquidados (envio diferido)."""
+
     @staticmethod
     def crear_notificacion(prestamo_id: int, capital: float, suma_pagado: float) -> bool:
         """
-        Crea y envía notificación cuando un préstamo se marca como LIQUIDADO.
-        Adjunta PDF del estado de cuenta actual del cliente.
-        La notificación aparecerá en la pestaña 'liquidados' del frontend.
-        
-        Args:
-            prestamo_id: ID del préstamo
-            capital: Monto total financiado
-            suma_pagado: Total pagado
-            
-        Returns:
-            bool: True si se creó exitosamente, False si hubo error
+        Compatibilidad: envia inmediatamente correo #1 (mismo dia). Preferir el job diferido.
         """
         db = SessionLocal()
         try:
-            # 1. Obtener datos del préstamo y cliente
-            result = db.execute(text("""
-                SELECT 
+            return LiquidadoNotificacionService.enviar_correo_liquidacion_pdf(
+                db,
+                prestamo_id,
+                recordatorio_seq=1,
+                capital_override=capital,
+                suma_pagado_override=suma_pagado,
+            )
+        finally:
+            db.close()
+
+    @staticmethod
+    def enviar_correo_liquidacion_pdf(
+        db: Session,
+        prestamo_id: int,
+        recordatorio_seq: int,
+        capital_override: Optional[float] = None,
+        suma_pagado_override: Optional[float] = None,
+    ) -> bool:
+        """
+        Genera PDF de estado de cuenta del cliente y envia un correo.
+        recordatorio_seq: 1 = primer envio (dia +N segun job); 2 = segundo envio; correlativo en envios_notificacion.
+        """
+        try:
+            result = db.execute(
+                text(
+                    """
+                SELECT
                     p.cliente_id,
                     c.email,
                     c.cedula,
-                    p.referencia_interna,
+                    ('#' || CAST(p.id AS TEXT)),
                     c.nombres,
                     p.total_financiamiento,
                     p.id
                 FROM prestamos p
                 LEFT JOIN clientes c ON p.cliente_id = c.id
                 WHERE p.id = :prestamo_id
-            """), {'prestamo_id': prestamo_id}).fetchone()
-            
+            """
+                ),
+                {"prestamo_id": prestamo_id},
+            ).fetchone()
+
             if not result:
-                logger.warning(f'[LIQUIDADO_NOTIF] Prestamo {prestamo_id} no encontrado para notificacion')
+                logger.warning(
+                    "[LIQUIDADO_NOTIF] Prestamo %s no encontrado para notificacion",
+                    prestamo_id,
+                )
                 return False
-            
-            cliente_id, email, cedula, referencia, nombre_cliente, capital_bd, _ = result
-            
-            if not email:
-                logger.warning(f'[LIQUIDADO_NOTIF] Cliente {cliente_id} sin email registrado')
+
+            (
+                cliente_id,
+                email,
+                cedula,
+                referencia,
+                nombre_cliente,
+                capital_bd,
+                _pid,
+            ) = result
+
+            sum_row = db.execute(
+                text(
+                    """
+                SELECT COALESCE(SUM(total_pagado), 0) FROM cuotas WHERE prestamo_id = :pid
+            """
+                ),
+                {"pid": prestamo_id},
+            ).fetchone()
+            suma_cuotas = float(sum_row[0] or 0) if sum_row else 0.0
+
+            if not email or "@" not in (email or ""):
+                logger.warning(
+                    "[LIQUIDADO_NOTIF] Cliente %s sin email valido", cliente_id
+                )
                 return False
-            
-            # 2. Generar PDF de estado de cuenta
-            logger.info(f'[LIQUIDADO_NOTIF] Generando PDF para prestamo {prestamo_id}, cliente {cliente_id}')
+
+            capital = (
+                float(capital_override)
+                if capital_override is not None
+                else float(capital_bd or 0)
+            )
+            suma_pagado = (
+                float(suma_pagado_override)
+                if suma_pagado_override is not None
+                else suma_cuotas
+            )
+
+            logger.info(
+                "[LIQUIDADO_NOTIF] Generando PDF prestamo=%s cliente=%s rec=%s",
+                prestamo_id,
+                cliente_id,
+                recordatorio_seq,
+            )
+            pdf_bytes: Optional[bytes] = None
             try:
-                pdf_bytes = LiquidadoNotificacionService._generar_pdf_estado_cuenta(db, cliente_id)
-                if not pdf_bytes:
-                    logger.warning(f'[LIQUIDADO_NOTIF] No se pudo generar PDF para cliente {cliente_id}')
-                    pdf_bytes = None
+                pdf_bytes = LiquidadoNotificacionService._generar_pdf_estado_cuenta(
+                    db, cliente_id
+                )
             except Exception as e:
-                logger.error(f'[LIQUIDADO_NOTIF] Error generando PDF: {e}')
-                pdf_bytes = None
-            
-            # 3. Preparar datos del correo
-            asunto = f'Préstamo {referencia} - 100% Liquidado'
-            cuerpo_texto = f"""Estimado(a) {nombre_cliente or 'Cliente'},
+                logger.error("[LIQUIDADO_NOTIF] Error generando PDF: %s", e)
 
-Su préstamo por {capital:,.2f} ha sido completamente pagado.
+            if recordatorio_seq <= 1:
+                asunto = f"Préstamo {referencia} — Crédito liquidado (estado de cuenta)"
+                cuerpo_texto = f"""Estimado(a) {nombre_cliente or "Cliente"},
 
-Total pagado: {suma_pagado:,.2f}
+Su préstamo ref. {referencia} por {capital:,.2f} USD quedó liquidado.
 
-Su estado de cuenta actualizado se adjunta a este correo.
+Total abonado en cuotas (referencia): {suma_pagado:,.2f}
 
-Muchas gracias por su confianza en RapiCredit.
+Adjuntamos su estado de cuenta en PDF.
 
-Saludos cordiales,
+Gracias por su confianza en RapiCredit.
+
 Equipo RapiCredit"""
-            
-            # 4. Enviar correo con PDF adjunto (si se generó)
+            else:
+                asunto = f"Recordatorio — Estado de cuenta (préstamo {referencia})"
+                cuerpo_texto = f"""Estimado(a) {nombre_cliente or "Cliente"},
+
+Le reenviamos el estado de cuenta en PDF correspondiente a su préstamo {referencia}, ya liquidado.
+
+Si ya recibió el mensaje anterior, puede ignorar este correo.
+
+Equipo RapiCredit"""
+
             adjuntos: Optional[List[Tuple[str, bytes]]] = None
             if pdf_bytes:
-                nombre_pdf = f'estado_cuenta_{referencia.replace(" ", "_")[:50]}.pdf'
+                safe_ref = (referencia or str(prestamo_id)).replace(" ", "_")[:50]
+                nombre_pdf = f"estado_cuenta_{safe_ref}.pdf"
                 adjuntos = [(nombre_pdf, pdf_bytes)]
-                logger.info(f'[LIQUIDADO_NOTIF] Enviando correo con PDF adjunto a {email}')
-            else:
-                logger.info(f'[LIQUIDADO_NOTIF] Enviando correo sin PDF adjunto a {email}')
-            
+
+            exito = False
+            error_msg: Optional[str] = None
             try:
                 exito, error_msg = send_email(
-                    to_emails=[email],
-                    subject=asunto,
-                    body_text=cuerpo_texto,
+                    [email.strip()],
+                    asunto,
+                    cuerpo_texto,
                     attachments=adjuntos,
-                    tipo_tab='liquidados'
+                    servicio="notificaciones",
+                    tipo_tab="liquidados",
                 )
-                
-                if exito:
-                    logger.info(f'[LIQUIDADO_NOTIF] Correo enviado exitosamente a {email}')
-                else:
-                    logger.warning(f'[LIQUIDADO_NOTIF] Error enviando correo a {email}: {error_msg}')
             except Exception as e:
-                logger.error(f'[LIQUIDADO_NOTIF] Excepción enviando correo: {e}')
+                logger.error("[LIQUIDADO_NOTIF] Excepcion enviando correo: %s", e)
                 exito = False
-            
-            # 5. Insertar en tabla envio_notificacion para auditoria
-            db.execute(text("""
-                INSERT INTO envio_notificacion 
-                    (prestamo_id, cliente_id, cedula, email, tipo, asunto, cuerpo, exito, fecha_envio)
-                VALUES 
-                    (:prestamo_id, :cliente_id, :cedula, :email, :tipo, :asunto, :cuerpo, :exito, NOW())
-            """), {
-                'prestamo_id': prestamo_id,
-                'cliente_id': cliente_id,
-                'cedula': cedula or '',
-                'email': email or '',
-                'tipo': 'liquidado',
-                'asunto': asunto,
-                'cuerpo': cuerpo_texto[:2000]
-            })
-            
+                error_msg = str(e)
+
+            if exito:
+                logger.info(
+                    "[LIQUIDADO_NOTIF] Correo enviado ok prestamo=%s rec=%s",
+                    prestamo_id,
+                    recordatorio_seq,
+                )
+            else:
+                logger.warning(
+                    "[LIQUIDADO_NOTIF] Fallo envio prestamo=%s: %s",
+                    prestamo_id,
+                    error_msg,
+                )
+
+            db.add(
+                EnvioNotificacion(
+                    tipo_tab="liquidados",
+                    asunto=(asunto or "")[:500],
+                    email=(email or "")[:255],
+                    nombre=(nombre_cliente or "")[:255],
+                    cedula=(cedula or "")[:50],
+                    exito=bool(exito),
+                    error_mensaje=None if exito else (error_msg or "")[:5000],
+                    prestamo_id=prestamo_id,
+                    correlativo=recordatorio_seq,
+                )
+            )
             db.commit()
-            logger.info(f'[LIQUIDADO_NOTIF] Notificacion auditada: prestamo_id={prestamo_id}, cliente={cliente_id}')
-            return exito
-            
+            return bool(exito)
+
         except Exception as e:
-            logger.error(f'[LIQUIDADO_NOTIF] Error: prestamo_id={prestamo_id}: {e}', exc_info=True)
+            logger.error(
+                "[LIQUIDADO_NOTIF] Error prestamo_id=%s: %s",
+                prestamo_id,
+                e,
+                exc_info=True,
+            )
             try:
                 db.rollback()
-            except:
+            except Exception:
                 pass
             return False
-        finally:
-            try:
-                db.close()
-            except:
-                pass
-    
+
     @staticmethod
     def _generar_pdf_estado_cuenta(db: Session, cliente_id: int) -> Optional[bytes]:
-        """
-        Genera PDF de estado de cuenta para un cliente.
-        
-        Args:
-            db: Sesion de base de datos
-            cliente_id: ID del cliente
-            
-        Returns:
-            bytes: Contenido del PDF o None si hay error
-        """
         try:
-            # Obtener datos del cliente
-            result_cliente = db.execute(text("""
-                SELECT cedula, nombres, email FROM clientes WHERE id = :cliente_id
-            """), {'cliente_id': cliente_id}).fetchone()
-            
+            result_cliente = db.execute(
+                text(
+                    "SELECT cedula, nombres, email FROM clientes WHERE id = :cliente_id"
+                ),
+                {"cliente_id": cliente_id},
+            ).fetchone()
+
             if not result_cliente:
                 return None
-            
-            cedula, nombre, email = result_cliente
-            
-            # Obtener préstamos del cliente
-            result_prestamos = db.execute(text("""
-                SELECT id, producto, total_financiamiento, estado 
-                FROM prestamos 
+
+            cedula, nombre, _email = result_cliente
+
+            result_prestamos = db.execute(
+                text(
+                    """
+                SELECT id, producto, total_financiamiento, estado
+                FROM prestamos
                 WHERE cliente_id = :cliente_id
                 ORDER BY id DESC
-            """), {'cliente_id': cliente_id}).fetchall()
-            
+            """
+                ),
+                {"cliente_id": cliente_id},
+            ).fetchall()
+
             prestamos_data = []
             for row in result_prestamos:
-                prestamos_data.append({
-                    'id': row[0],
-                    'producto': row[1] or 'Préstamo',
-                    'total_financiamiento': float(row[2] or 0),
-                    'estado': row[3],
-                })
-            
-            # Obtener cuotas pendientes del cliente
-            result_cuotas = db.execute(text("""
+                prestamos_data.append(
+                    {
+                        "id": row[0],
+                        "producto": row[1] or "Préstamo",
+                        "total_financiamiento": float(row[2] or 0),
+                        "estado": row[3],
+                    }
+                )
+
+            result_cuotas = db.execute(
+                text(
+                    """
                 SELECT c.prestamo_id, c.numero_cuota, c.fecha_vencimiento,
                        COALESCE(c.monto_cuota, 0), COALESCE(c.total_pagado, 0)
                 FROM cuotas c
@@ -197,8 +269,11 @@ Equipo RapiCredit"""
                 WHERE p.cliente_id = :cliente_id
                   AND COALESCE(c.total_pagado, 0) < COALESCE(c.monto_cuota, 0) - 0.01
                 ORDER BY c.prestamo_id, c.numero_cuota
-            """), {'cliente_id': cliente_id}).fetchall()
-            
+            """
+                ),
+                {"cliente_id": cliente_id},
+            ).fetchall()
+
             cuotas_data = []
             total_pendiente = 0.0
             hoy_ref = hoy_negocio()
@@ -207,33 +282,38 @@ Equipo RapiCredit"""
                 fv_d = fv.date() if fv and hasattr(fv, "date") else fv
                 monto_c = float(row[3] or 0)
                 total_p = float(row[4] or 0)
-                estado_str = estado_cuota_para_mostrar(total_p, monto_c, fv_d, hoy_ref)
+                estado_str = estado_cuota_para_mostrar(
+                    total_p, monto_c, fv_d, hoy_ref
+                )
                 pend = max(0.0, monto_c - total_p)
-                cuotas_data.append({
-                    'prestamo_id': row[0],
-                    'numero_cuota': row[1],
-                    'fecha_vencimiento': row[2].isoformat() if row[2] else '',
-                    'monto': pend,
-                    'estado': estado_str,
-                })
+                cuotas_data.append(
+                    {
+                        "prestamo_id": row[0],
+                        "numero_cuota": row[1],
+                        "fecha_vencimiento": row[2].isoformat() if row[2] else "",
+                        "monto": pend,
+                        "estado": estado_str,
+                    }
+                )
                 total_pendiente += pend
-            
-            # Generar PDF
-            pdf_bytes = generar_pdf_estado_cuenta(
-                cedula=cedula or '',
-                nombre=nombre or '',
+
+            corte = hoy_negocio()
+            return generar_pdf_estado_cuenta(
+                cedula=cedula or "",
+                nombre=nombre or "",
                 prestamos=prestamos_data,
                 cuotas_pendientes=cuotas_data,
                 total_pendiente=total_pendiente,
-                fecha_corte=date.today(),
+                fecha_corte=corte,
             )
-            
-            return pdf_bytes
-            
+
         except Exception as e:
-            logger.error(f'[LIQUIDADO_NOTIF] Error en _generar_pdf_estado_cuenta: {e}', exc_info=True)
+            logger.error(
+                "[LIQUIDADO_NOTIF] Error en _generar_pdf_estado_cuenta: %s",
+                e,
+                exc_info=True,
+            )
             return None
 
 
-# Instancia global del servicio
 notificacion_service = LiquidadoNotificacionService()

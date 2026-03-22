@@ -185,3 +185,21 @@ export interface AnalisisCuentasPorCobrarResponse {
 
   origen: 'demo' | 'bd'
 }
+
+export interface TendenciaProgramadoTotalCobradoItem {
+  mes: string
+
+  cuotas_programadas: number
+
+  total_cobrado: number
+
+  conciliados_mes: number
+
+  pagos_meses_anteriores: number
+}
+
+export interface TendenciaProgramadoTotalCobradoResponse {
+  series: TendenciaProgramadoTotalCobradoItem[]
+
+  origen: 'demo' | 'bd'
+}
