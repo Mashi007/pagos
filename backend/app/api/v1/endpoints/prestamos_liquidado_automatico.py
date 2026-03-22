@@ -11,6 +11,7 @@ from sqlalchemy import text
 from datetime import datetime
 
 from app.services.cuota_estado import hoy_negocio
+from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquidado
 
 router = APIRouter(prefix='/api/v1/prestamos', tags=['prestamos'])
 
@@ -31,10 +32,11 @@ async def actualizar_liquidado_manual(
 
         db.commit()
 
-        fd = hoy_negocio()
-        db.execute(
-            text(
-                """
+        if prestamos_tiene_columna_fecha_liquidado(db):
+            fd = hoy_negocio()
+            db.execute(
+                text(
+                    """
                 UPDATE prestamos p
                 SET fecha_liquidado = :fd
                 WHERE p.estado = 'LIQUIDADO'
@@ -46,10 +48,10 @@ async def actualizar_liquidado_manual(
                       AND CAST(a.fecha_cambio AS DATE) = :fd
                   )
                 """
-            ),
-            {"fd": fd},
-        )
-        db.commit()
+                ),
+                {"fd": fd},
+            )
+            db.commit()
         
         # Contar cambios hoy
         cambios_hoy = db.execute(text('''

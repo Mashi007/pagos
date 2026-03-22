@@ -89,6 +89,7 @@ from app.services.cuota_estado import (
     dias_retraso_desde_vencimiento,
     hoy_negocio,
 )
+from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquidado
 
 
 from app.services.tasa_cambio_service import (
@@ -4457,7 +4458,8 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
 
             prestamo.estado = "LIQUIDADO"
 
-            prestamo.fecha_liquidado = hoy_negocio()
+            if prestamos_tiene_columna_fecha_liquidado(db):
+                prestamo.fecha_liquidado = hoy_negocio()
 
             logger.info("Prestamo id=%s marcado como LIQUIDADO (todas las cuotas pagadas).", prestamo_id)
 

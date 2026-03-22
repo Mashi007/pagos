@@ -16,7 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.core.email import send_email
+from app.core.email import mask_email_for_log, send_email
 from app.models.envio_notificacion import EnvioNotificacion
 from app.services.cuota_estado import estado_cuota_para_mostrar, hoy_negocio
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
@@ -166,6 +166,12 @@ Equipo RapiCredit"""
             exito = False
             error_msg: Optional[str] = None
             try:
+                logger.info(
+                    "[SMTP_ENVIO] context=liquidado_notif prestamo_id=%s recordatorio=%s email_cliente_MASK=%s",
+                    prestamo_id,
+                    recordatorio_seq,
+                    mask_email_for_log(email.strip()),
+                )
                 exito, error_msg = send_email(
                     [email.strip()],
                     asunto,

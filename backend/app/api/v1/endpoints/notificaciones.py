@@ -1394,22 +1394,41 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
         select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.total_pagado), 0).label("total_abonos"))
         .group_by(Cuota.prestamo_id)
     ).subquery()
+    # Core tables only: el ORM Prestamo incluye fecha_liquidado en el mapper y SQLAlchemy
+    # expande a todas las columnas al unir con Cliente; si la migracion no esta en BD, falla.
+    p_t = Prestamo.__table__
+    c_t = Cliente.__table__
     q_liq = (
-        select(Prestamo, Cliente, subq.c.total_abonos)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .join(subq, Prestamo.id == subq.c.prestamo_id)
-        .where(Prestamo.estado == "LIQUIDADO")
+        select(
+            p_t.c.id.label("prestamo_id"),
+            p_t.c.total_financiamiento,
+            c_t.c.id.label("cliente_id"),
+            c_t.c.nombres,
+            c_t.c.cedula,
+            subq.c.total_abonos,
+        )
+        .select_from(
+            p_t.join(c_t, p_t.c.cliente_id == c_t.c.id).join(
+                subq, p_t.c.id == subq.c.prestamo_id
+            )
+        )
+        .where(p_t.c.estado == "LIQUIDADO")
     )
     rows_liq = db.execute(q_liq).all()
     liquidados: List[dict] = []
-    for (prestamo, cliente, total_abonos) in rows_liq:
+    for row in rows_liq:
+        m = row._mapping
         liquidados.append({
-            "cliente_id": cliente.id,
-            "nombre": cliente.nombres or "",
-            "cedula": cliente.cedula or "",
-            "prestamo_id": prestamo.id,
-            "total_financiamiento": float(prestamo.total_financiamiento) if prestamo.total_financiamiento is not None else 0,
-            "total_abonos": float(total_abonos) if total_abonos is not None else 0,
+            "cliente_id": m["cliente_id"],
+            "nombre": m.get("nombres") or "",
+            "cedula": m.get("cedula") or "",
+            "prestamo_id": m["prestamo_id"],
+            "total_financiamiento": float(m["total_financiamiento"])
+            if m.get("total_financiamiento") is not None
+            else 0,
+            "total_abonos": float(m["total_abonos"])
+            if m.get("total_abonos") is not None
+            else 0,
         })
 
     return {

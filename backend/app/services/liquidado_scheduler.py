@@ -14,6 +14,7 @@ from sqlalchemy import text, update
 from app.core.database import SessionLocal
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import hoy_negocio
+from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquidado
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class LiquidadoScheduler:
             db.commit()
 
             ids_liquidados = [row[0] for row in prestamos_a_liquidar]
-            if ids_liquidados:
+            if ids_liquidados and prestamos_tiene_columna_fecha_liquidado(db):
                 fd = hoy_negocio()
                 db.execute(
                     update(Prestamo)
@@ -59,6 +60,10 @@ class LiquidadoScheduler:
                     "fecha_liquidado=%s asignada a %s prestamos (emails PDF dias siguientes via job 01:10)",
                     fd,
                     len(ids_liquidados),
+                )
+            elif ids_liquidados:
+                logger.warning(
+                    "Omitido UPDATE fecha_liquidado: columna no existe (aplique migracion 023)."
                 )
 
             # Consultar total de cambios registrados

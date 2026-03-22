@@ -27,6 +27,7 @@ from app.models.envio_notificacion import EnvioNotificacion
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import hoy_negocio
 from app.services.liquidado_notificacion_service import LiquidadoNotificacionService
+from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquidado
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,20 @@ def ejecutar_emails_liquidado_diferidos(db: Session) -> dict:
     """
     Ejecutar una vez al dia (p. ej. 01:10 Caracas). Respeta modo_pruebas via send_email.
     """
+    if not prestamos_tiene_columna_fecha_liquidado(db):
+        logger.warning(
+            "[LIQUIDADO_DEFERIDO] Omitido: falta columna prestamos.fecha_liquidado (migracion 023)."
+        )
+        return {
+            "fecha_job": hoy_negocio().isoformat(),
+            "omitido": True,
+            "motivo": "sin_columna_fecha_liquidado",
+            "enviados_ok": 0,
+            "fallidos": 0,
+            "omitidos_duplicado": 0,
+            "dias_config": [],
+        }
+
     hoy = hoy_negocio()
     dias = _parse_dias_envio()
     enviados_ok = 0
@@ -68,24 +83,26 @@ def ejecutar_emails_liquidado_diferidos(db: Session) -> dict:
     omitidos_dup = 0
     for seq in dias:
         target = hoy - timedelta(days=seq)
-        prestamos = db.execute(
-            select(Prestamo).where(
-                Prestamo.estado == "LIQUIDADO",
-                Prestamo.fecha_liquidado == target,
+        p_t = Prestamo.__table__
+        rows = db.execute(
+            select(p_t.c.id, p_t.c.cliente_id).where(
+                p_t.c.estado == "LIQUIDADO",
+                p_t.c.fecha_liquidado == target,
             )
-        ).scalars().all()
+        ).all()
 
-        by_client: dict[int, list[Prestamo]] = {}
-        for p in prestamos:
-            by_client.setdefault(p.cliente_id, []).append(p)
+        by_client: dict[int, list[int]] = {}
+        for row in rows:
+            pid, cid = row[0], row[1]
+            by_client.setdefault(cid, []).append(pid)
 
-        for _cid, plist in by_client.items():
-            rep = min(plist, key=lambda x: x.id)
-            if _ya_enviado_exito(db, rep.id, seq):
+        for _cid, pids in by_client.items():
+            rep_id = min(pids)
+            if _ya_enviado_exito(db, rep_id, seq):
                 omitidos_dup += 1
                 continue
             ok = LiquidadoNotificacionService.enviar_correo_liquidacion_pdf(
-                db, rep.id, recordatorio_seq=seq
+                db, rep_id, recordatorio_seq=seq
             )
             if ok:
                 enviados_ok += 1

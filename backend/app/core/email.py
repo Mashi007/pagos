@@ -33,6 +33,20 @@ logger = logging.getLogger(__name__)
 AttachmentType = Tuple[str, bytes]
 
 
+def mask_email_for_log(addr: str) -> str:
+    """Oculta parte del local-part para logs; deja dominio visible."""
+    s = (addr or "").strip()
+    if not s or "@" not in s:
+        return s or "?"
+    local, _, domain = s.partition("@")
+    domain = domain.strip()
+    if not domain:
+        return "**"
+    if len(local) <= 2:
+        return f"**@{domain}"
+    return f"{local[:2]}***@{domain}"
+
+
 def _strip_html_to_plain(html: str, max_len: int = 8000) -> str:
     '''Quita tags y data URLs para usar como parte text/plain cuando el cuerpo es HTML.'''
     if not html or not html.strip():
@@ -207,33 +221,87 @@ def send_email(
     Devuelve (True, None) si se envi�; (False, mensaje_error) si no hay SMTP configurado o fall�.
     """
     if not to_emails:
+        logger.info("[SMTP_ENVIO] estado=abortado razon=sin_destinatarios servicio=%s tipo_tab=%s", servicio or "", tipo_tab or "")
         return False, "No hay destinatarios."
     sync_from_db()
+    dest_solicitados_originales = [str(e).strip() for e in to_emails if e is not None and str(e).strip()]
     # Modo Pruebas: redirigir todos los env�os al correo(s) de pruebas (desde notificaciones_envios o email_config)
     # EXCEPCI�N: si respetar_destinos_manuales=True (ej. usuario hizo clic en "Enviar Email de Prueba"), se env�an a los correos indicados en la interfaz.
     modo_pruebas, emails_pruebas_list = get_modo_pruebas_email(servicio=servicio)
     log_phase(logger, FASE_MODO_PRUEBAS, True, "modo_pruebas=%s servicio=%s" % (modo_pruebas, servicio or "global"))
-    if modo_pruebas and emails_pruebas_list and not respetar_destinos_manuales:
+    redirigido_modo_pruebas = bool(modo_pruebas and emails_pruebas_list and not respetar_destinos_manuales)
+    if redirigido_modo_pruebas:
         to_emails = emails_pruebas_list
         cc_list = []
         bcc_list = []
-        logger.info("Modo Pruebas: env�o redirigido a %s", emails_pruebas_list)
+        logger.info(
+            "[SMTP_ENVIO] modo_pruebas=1 redirigido=1 servicio=%s tipo_tab=%s solicitados_MASK=%s efectivos=%s",
+            servicio or "",
+            tipo_tab or "",
+            [mask_email_for_log(x) for x in dest_solicitados_originales],
+            list(to_emails),
+        )
+        logger.info("Modo Pruebas: envio redirigido a %s", emails_pruebas_list)
     else:
         if modo_pruebas and not emails_pruebas_list:
             log_phase(logger, FASE_SMTP_CONFIG, False, "modo pruebas sin email de pruebas configurado")
-            logger.warning("Modo Pruebas activo pero no hay correo de pruebas configurado. Configure en Notificaciones > Configuraci�n o Configuraci�n > Email.")
-            return False, "En modo Pruebas debe configurar el correo de pruebas en Notificaciones > Configuraci�n o Configuraci�n > Email."
+            logger.warning(
+                "[SMTP_ENVIO] estado=abortado razon=modo_pruebas_sin_correo servicio=%s tipo_tab=%s solicitados_MASK=%s",
+                servicio or "",
+                tipo_tab or "",
+                [mask_email_for_log(x) for x in dest_solicitados_originales],
+            )
+            logger.warning(
+                "Modo Pruebas activo pero no hay correo de pruebas configurado. "
+                "Configure en Notificaciones > Configuracion (envios) o en Configuracion > Email."
+            )
+            return False, (
+                "En modo Pruebas debe configurar el correo de pruebas en Notificaciones > Configuracion (envios) "
+                "o en Configuracion > Email."
+            )
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
+
     has_attachments = bool(attachments)
     cfg = get_smtp_config(servicio=servicio, tipo_tab=tipo_tab)
     if not cfg.get("smtp_host") or not cfg.get("smtp_user"):
         log_phase(logger, FASE_SMTP_CONFIG, False, "falta smtp_host o smtp_user")
+        logger.warning(
+            "[SMTP_ENVIO] estado=abortado razon=sin_smtp_config servicio=%s tipo_tab=%s modo_pruebas=%s redirigido=%s",
+            servicio or "",
+            tipo_tab or "",
+            modo_pruebas,
+            redirigido_modo_pruebas,
+        )
         return False, "No hay servidor SMTP configurado. Configura en Configuracion > Email."
     if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() == "***":
         log_phase(logger, FASE_SMTP_CONFIG, False, "falta contrasena SMTP")
+        logger.warning(
+            "[SMTP_ENVIO] estado=abortado razon=sin_smtp_password servicio=%s tipo_tab=%s modo_pruebas=%s redirigido=%s",
+            servicio or "",
+            tipo_tab or "",
+            modo_pruebas,
+            redirigido_modo_pruebas,
+        )
         return False, "Falta contrasena SMTP. Configura en Configuracion > Email."
     log_phase(logger, FASE_SMTP_CONFIG, True, "host=%s port=%s" % (cfg.get("smtp_host"), cfg.get("smtp_port")))
+
+    solicitados_mask = [mask_email_for_log(x) for x in dest_solicitados_originales]
+    efectivos_para_smtp = list(to_emails) + cc_list + bcc_list
+    logger.info(
+        "[SMTP_ENVIO] intento modo_pruebas=%s redirigido_modo_pruebas=%s servicio=%s tipo_tab=%s "
+        "respetar_destinos_manuales=%s solicitados_MASK=%s efectivos_smtp=%s asunto=%s adjuntos=%s smtp_host=%s",
+        modo_pruebas,
+        redirigido_modo_pruebas,
+        servicio or "",
+        tipo_tab or "",
+        respetar_destinos_manuales,
+        solicitados_mask,
+        efectivos_para_smtp,
+        (subject or "")[:200],
+        len(attachments or []),
+        cfg.get("smtp_host") or "",
+    )
 
     try:
         import smtplib
@@ -335,6 +403,14 @@ def send_email(
         if refused:
             log_phase(logger, FASE_SMTP_ENVIO, False, f"smtp_rechazo_destinatarios={refused}", duration_ms=(time.time() - t0_smtp) * 1000)
             logger.warning(
+                "[SMTP_ENVIO] estado=rechazo_destinatarios modo_pruebas=%s redirigido_modo_pruebas=%s refused=%s efectivos=%s asunto=%s",
+                modo_pruebas,
+                redirigido_modo_pruebas,
+                refused,
+                all_recipients,
+                (subject or "")[:200],
+            )
+            logger.warning(
                 "SMTP acepto sesion pero rechazo destinatarios refused=%s from=%s subject=%s",
                 refused,
                 msg.get("From"),
@@ -348,6 +424,19 @@ def send_email(
             f"destinos={len(all_recipients)} smtp_acepto_envio=si",
             duration_ms=(time.time() - t0_smtp) * 1000,
         )
+        dur_ms = (time.time() - t0_smtp) * 1000
+        logger.info(
+            "[SMTP_ENVIO] estado=aceptado modo_pruebas=%s redirigido_modo_pruebas=%s servicio=%s tipo_tab=%s "
+            "destinatarios=%s duracion_ms=%.0f asunto=%s from=%s",
+            modo_pruebas,
+            redirigido_modo_pruebas,
+            servicio or "",
+            tipo_tab or "",
+            all_recipients,
+            dur_ms,
+            (subject or "")[:200],
+            msg.get("From"),
+        )
         logger.info(
             "Correo aceptado por SMTP (sendmail OK, sin rechazos): to=%s subject=%s from=%s",
             all_recipients,
@@ -357,6 +446,14 @@ def send_email(
         return True, None
     except Exception as e:
         log_phase(logger, FASE_SMTP_ENVIO, False, str(e))
+        logger.warning(
+            "[SMTP_ENVIO] estado=error_excepcion modo_pruebas=%s redirigido_modo_pruebas=%s servicio=%s tipo_tab=%s err=%s",
+            modo_pruebas,
+            redirigido_modo_pruebas,
+            servicio or "",
+            tipo_tab or "",
+            str(e)[:300],
+        )
         err_msg = _sanitize_smtp_error(e)
         if "límite diario" in err_msg.lower() or "daily" in str(e).lower() and "sending limit" in str(e).lower():
             logger.warning(
