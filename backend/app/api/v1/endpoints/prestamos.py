@@ -4343,7 +4343,21 @@ def get_estado_cuenta_prestamo_pdf(
 
     
 
-    datos = obtener_datos_estado_cuenta_prestamo(db, prestamo_id)
+    try:
+
+        datos = obtener_datos_estado_cuenta_prestamo(db, prestamo_id)
+
+    except Exception:
+
+        logger.exception("Error cargando datos para PDF estado de cuenta prestamo_id=%s", prestamo_id)
+
+        raise HTTPException(
+
+            status_code=500,
+
+            detail="Error al preparar los datos del estado de cuenta. Verifique migraciones de BD o contacte soporte.",
+
+        )
 
     if not datos:
 

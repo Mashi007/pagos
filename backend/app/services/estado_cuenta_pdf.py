@@ -7,6 +7,7 @@ Diseño profesional con logo RapiCredit, colores corporativos y tablas legibles.
 """
 
 import io
+import logging
 
 from datetime import date
 
@@ -15,6 +16,8 @@ from pathlib import Path
 from typing import List, Optional
 
 from app.services.cuota_estado import etiqueta_estado_cuota
+
+logger = logging.getLogger(__name__)
 
 
 # Ruta al logo: backend/static/logo.png (desde app/services/ subimos a backend)
@@ -727,6 +730,29 @@ def generar_pdf_estado_cuenta(
 
 
 
+def _cargar_prestamo_para_estado_cuenta_pdf(db, prestamo_id: int):
+    """
+    Carga el prestamo para armar el PDF. Si en BD no existe la columna fecha_liquidado (migracion 023),
+    evita db.get(Prestamo) porque el mapper haria SELECT de esa columna y PostgreSQL fallaria.
+    """
+    from types import SimpleNamespace
+
+    from sqlalchemy import select
+
+    from app.models.prestamo import Prestamo
+
+    from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquidado
+
+    if prestamos_tiene_columna_fecha_liquidado(db):
+        return db.get(Prestamo, prestamo_id)
+    t = Prestamo.__table__
+    cols = tuple(c for c in t.c if c.name != "fecha_liquidado")
+    rowm = db.execute(select(*cols).where(t.c.id == prestamo_id)).mappings().first()
+    if not rowm:
+        return None
+    return SimpleNamespace(**dict(rowm))
+
+
 def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
 
     """
@@ -739,8 +765,6 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
 
     from sqlalchemy import select
 
-    from app.models.prestamo import Prestamo
-
     from app.models.cliente import Cliente
 
     from app.models.cuota import Cuota
@@ -751,7 +775,7 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
 
     
 
-    prestamo = db.get(Prestamo, prestamo_id)
+    prestamo = _cargar_prestamo_para_estado_cuenta_pdf(db, prestamo_id)
 
     if not prestamo:
 
@@ -775,7 +799,21 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
 
     
 
-    sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
+    try:
+
+        sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
+
+    except Exception as sync_exc:
+
+        logger.warning(
+
+            "obtener_datos_estado_cuenta_prestamo: sincronizar_pagos_pendientes_a_prestamos prestamo_id=%s: %s",
+
+            prestamo_id,
+
+            sync_exc,
+
+        )
 
     
 
