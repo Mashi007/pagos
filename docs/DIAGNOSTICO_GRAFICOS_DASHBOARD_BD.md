@@ -54,7 +54,12 @@ Cada bloque visual del dashboard (KPIs, gráficos) está conectado a un endpoint
 - **Endpoint:** `GET /api/v1/dashboard/admin` → `get_dashboard_admin(...)` → `_compute_dashboard_admin(db, fecha_inicio, fecha_fin)`
 - **BD:** Misma PostgreSQL.
 - **Tablas:**
-  - **cuotas**: por cada mes del rango, suma `monto` con `fecha_vencimiento` en el mes (cartera); misma condición + `fecha_pago IS NOT NULL` (cobrado). Morosidad = cartera - cobrado.  
+  - **cuotas**: Por cada mes del rango, **independientemente**:
+    1. **Cartera**: SUM(monto) WHERE fecha_vencimiento en el mes (cuotas programadas, sin importar si fueron pagadas)
+    2. **Cobrado**: SUM(monto) WHERE fecha_pago en el mes AND fecha_pago IS NOT NULL (cuotas realmente pagadas en ese mes)
+    3. **Morosidad**: SUM(monto) WHERE fecha_vencimiento en el mes AND fecha_pago IS NULL AND fecha_vencimiento < hoy (cuotas vencidas en ese mes que aún no fueron pagadas)
+  
+  **IMPORTANTE**: Morosidad ≠ Cartera - Cobrado. Cada métrica es independiente porque Cobrado puede incluir cuotas de meses anteriores pagadas después de su vencimiento.
   No usa tabla **prestamos** en esta vista (no filtra por analista/concesionario/modelo en admin).
 
 ---
@@ -65,7 +70,10 @@ Cada bloque visual del dashboard (KPIs, gráficos) está conectado a un endpoint
 - **Endpoint:** `GET /api/v1/dashboard/morosidad-por-dia` → `get_morosidad_por_dia(...)` → `_compute_morosidad_por_dia(db, ...)`
 - **BD:** Misma PostgreSQL.
 - **Tablas:**
-  - **cuotas**: por cada día del rango, cartera del día (suma `monto` donde `fecha_vencimiento = d`) y cobrado (suma `monto` donde `fecha_pago` cae en ese día). Morosidad = cartera - cobrado.
+  - **cuotas**: por cada día del rango, **independientemente**:
+    - Cartera del día: SUM(monto) WHERE fecha_vencimiento = d (cuotas programadas para ese día)
+    - Cobrado del día: SUM(monto) WHERE fecha_pago = d AND fecha_pago IS NOT NULL (cuotas pagadas ese día)
+    - Morosidad del día: SUM(monto) WHERE fecha_vencimiento = d AND fecha_pago IS NULL AND fecha_vencimiento < hoy (cuotas que vencieron ese día y aún no fueron pagadas)
 
 ---
 
