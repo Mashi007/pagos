@@ -43,7 +43,7 @@ import { Badge } from '../components/ui/badge'
 
 import toast from 'react-hot-toast'
 
-import { Eye, FileText, Mail, Loader2, Pencil } from 'lucide-react'
+import { Eye, FileText, Mail, Loader2, Edit } from 'lucide-react'
 
 function toastAfterRechazoDetalle(data: CambiarEstadoPagoResponse) {
   const msg = data.mensaje ?? 'Pago rechazado.'
@@ -307,7 +307,7 @@ export default function CobrosDetallePage() {
                   navigate(`/cobros/pagos-reportados/${id}/editar`)
                 }
               >
-                <Pencil className="mr-1 h-4 w-4" /> Editar datos
+                <Edit className="mr-1 h-4 w-4" /> Editar datos
               </Button>
             )}
 

@@ -12,6 +12,7 @@ rearticular_prestamo(2526)  # sustituir por el prestamo_id
 O desde backend con PYTHONPATH=.:
   python scripts/rearticular_prestamo_fifo.py 2526
   python scripts/rearticular_prestamo_fifo.py 2735 1672 3200   # varios préstamos
+  python scripts/rearticular_prestamo_fifo.py --verificar-pago=57856 2060  # tras FIFO, imprime suma cuota_pagos vs monto_pagado
 """
 from __future__ import annotations
 
@@ -35,7 +36,22 @@ if os.path.isfile(env_path):
                 os.environ.setdefault(k.strip(), v.strip().replace('"', "").replace("'", ""))
 
 
-def rearticular_prestamo(prestamo_id: int, db=None):
+def _mascarar_database_url(url: str) -> str:
+    if not url or "@" not in url:
+        return url or "(vacío)"
+    try:
+        head, tail = url.rsplit("@", 1)
+        if "://" in head:
+            scheme, rest = head.split("://", 1)
+            if ":" in rest:
+                user, _pwd = rest.split(":", 1)
+                return f"{scheme}://{user}:***@{tail}"
+    except Exception:
+        pass
+    return "***@" + tail if "@" in url else url
+
+
+def rearticular_prestamo(prestamo_id: int, db=None, verificar_pago_id: int | None = None):
     """
     Para el préstamo dado:
     1. Borra todos los CuotaPago de las cuotas del préstamo.
@@ -43,7 +59,7 @@ def rearticular_prestamo(prestamo_id: int, db=None):
     3. Obtiene todos los pagos del préstamo ordenados por fecha_pago, id.
     4. Aplica cada pago a cuotas con la lógica FIFO (usa _aplicar_pago_a_cuotas_interno).
     """
-    from sqlalchemy import delete, select
+    from sqlalchemy import delete, select, text
     from sqlalchemy.orm import Session
 
     from app.core.database import SessionLocal
@@ -107,10 +123,30 @@ def rearticular_prestamo(prestamo_id: int, db=None):
             total_cp += cp
 
         session.commit()
+
+        verif_line = ""
+        if verificar_pago_id is not None:
+            row = session.execute(
+                text(
+                    "SELECT p.monto_pagado, COALESCE(SUM(cp.monto_aplicado), 0) "
+                    "FROM pagos p LEFT JOIN cuota_pagos cp ON cp.pago_id = p.id "
+                    "WHERE p.id = :pid GROUP BY p.monto_pagado"
+                ),
+                {"pid": verificar_pago_id},
+            ).first()
+            if row:
+                monto, suma = row[0], row[1]
+                verif_line = (
+                    f" | verif pago {verificar_pago_id}: monto_pagado={monto} "
+                    f"sum(cuota_pagos)={suma}"
+                )
+            else:
+                verif_line = f" | verif pago {verificar_pago_id}: no encontrado"
+
         return {
             "ok": True,
             "message": f"Préstamo {prestamo_id} rearticulado: {len(pagos)} pagos aplicados (FIFO); "
-            f"{total_cc} cuotas completadas, {total_cp} parciales.",
+            f"{total_cc} cuotas completadas, {total_cp} parciales.{verif_line}",
             "pagos_aplicados": len(pagos),
             "cuotas_completadas": total_cc,
             "cuotas_parciales": total_cp,
@@ -124,18 +160,41 @@ def rearticular_prestamo(prestamo_id: int, db=None):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Uso: python rearticular_prestamo_fifo.py <prestamo_id> [prestamo_id ...]")
+    raw = sys.argv[1:]
+    verificar_pago_id: int | None = None
+    args: list[str] = []
+    for a in raw:
+        if a.startswith("--verificar-pago="):
+            try:
+                verificar_pago_id = int(a.split("=", 1)[1].strip())
+            except ValueError:
+                print(f"Uso: --verificar-pago=NUM (entero), recibido: {a}")
+                sys.exit(1)
+        else:
+            args.append(a)
+
+    if not args:
+        print(
+            "Uso: python rearticular_prestamo_fifo.py [--verificar-pago=ID] <prestamo_id> [prestamo_id ...]"
+        )
         sys.exit(1)
+
+    try:
+        from app.core.config import settings as _settings
+
+        print(f"BD (mascarada): {_mascarar_database_url(_settings.DATABASE_URL or '')}")
+    except Exception:
+        pass
+
     failed = 0
-    for arg in sys.argv[1:]:
+    for arg in args:
         try:
             pid = int(arg)
         except ValueError:
             print(f"prestamo_id invalido: {arg}")
             failed += 1
             continue
-        result = rearticular_prestamo(pid)
+        result = rearticular_prestamo(pid, verificar_pago_id=verificar_pago_id)
         print(f"[{pid}] {result['message']}")
         if not result.get("ok"):
             failed += 1

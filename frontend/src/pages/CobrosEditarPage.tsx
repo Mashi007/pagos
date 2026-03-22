@@ -101,8 +101,8 @@ export default function CobrosEditarPage() {
 
       // Monto como texto plano para <input type="number"> (evita miles es-VE que bloquean la edición)
       const montoRaw =
-        res.monto != null && res.monto !== ''
-          ? String(Number(res.monto))
+        typeof res.monto === 'number' && !Number.isNaN(res.monto)
+          ? String(res.monto)
           : ''
 
       setForm({
