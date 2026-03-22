@@ -36,6 +36,106 @@ def _normalize_monto_display(monto: str) -> str:
     return txt
 
 
+def _formato_monto_venezolano(n: float) -> str:
+    """Miles con punto, decimales con coma (ej. 2.000.000,00)."""
+    neg = n < 0
+    n = abs(n)
+    ip, dec = f"{n:.2f}".split(".")
+    rev = ip[::-1]
+    chunks = [rev[i : i + 3][::-1] for i in range(0, len(rev), 3)]
+    int_fmt = ".".join(reversed(chunks))
+    if neg:
+        int_fmt = "-" + int_fmt
+    return f"{int_fmt},{dec}"
+
+
+def _formato_decimal_ve(n: float) -> str:
+    """Numero con coma decimal (ej. tasa 527,79)."""
+    ip, dec = f"{n:.2f}".split(".")
+    return f"{ip},{dec}"
+
+
+def _parse_numero_desde_texto_monto(txt: str) -> Optional[float]:
+    """Extrae el monto numerico de cadenas como '2000000.00 BS' o '1.234,56'."""
+    import re
+
+    t = (txt or "").strip()
+    if not t:
+        return None
+    t = _normalize_monto_display(t)
+    while True:
+        t2 = re.sub(r"\s+(BS\.?|USD|USDT|VES|VEF)\s*$", "", t, flags=re.IGNORECASE).strip()
+        if t2 == t:
+            break
+        t = t2
+    if not t:
+        return None
+    # Formato VE: 2.000.000,50
+    if "," in t and "." in t:
+        if t.rfind(",") > t.rfind("."):
+            t_norm = t.replace(".", "").replace(",", ".")
+        else:
+            t_norm = t.replace(",", "")
+    elif t.count(",") == 1 and t.count(".") == 0:
+        parts = t.split(",")
+        if len(parts[-1]) <= 2 and parts[-1].isdigit():
+            t_norm = parts[0].replace(".", "") + "." + parts[-1]
+        else:
+            t_norm = t.replace(",", ".")
+    else:
+        t_norm = t.replace(",", "")
+    try:
+        return float(t_norm)
+    except ValueError:
+        m = re.search(r"[-]?\d+(?:\.\d+)?", t.replace(",", "."))
+        if m:
+            try:
+                return float(m.group(0))
+            except ValueError:
+                return None
+        return None
+
+
+def _etiqueta_moneda(moneda_codigo: Optional[str], monto_upper: str) -> str:
+    c = (moneda_codigo or "").strip().upper()
+    if c == "USD" or "USD" in monto_upper:
+        return "USD"
+    return "Bs."
+
+
+def _celda_monto_con_simbolo(raw: str, sym: str) -> str:
+    """Formatea un monto numerico (saldos) en estilo VE con una sola moneda."""
+    if not raw or (raw or "").strip() == "-":
+        return "-"
+    n = _parse_numero_desde_texto_monto(raw)
+    if n is None:
+        try:
+            n = float(str(raw).replace(",", "").strip())
+        except ValueError:
+            t = (raw or "").strip()
+            return f"{t} {sym}".strip()
+    return f"{_formato_monto_venezolano(n)} {sym}"
+
+
+def _monto_tabla_y_cuerpo(monto: str, moneda: Optional[str]) -> tuple[str, str]:
+    """
+    Texto para tabla/cuerpo: numero formateado VE + una sola moneda.
+    Si no se puede parsear, devuelve texto normalizado sin duplicar BS/USD.
+    """
+    raw = _normalize_monto_display(monto)
+    up = raw.upper()
+    num = _parse_numero_desde_texto_monto(raw)
+    sym = _etiqueta_moneda(moneda, up)
+    if num is not None:
+        return _formato_monto_venezolano(num), sym
+    # Fallback: quitar tokens de moneda del final y mostrar + simbolo una vez
+    import re
+
+    t = (raw or "").strip()
+    t = re.sub(r"\s*(BS\.?|USD|USDT)\s*$", "", t, flags=re.IGNORECASE).strip()
+    return (t or "-"), sym
+
+
 def _cedula_display(tipo_cedula: str, numero_cedula: str) -> str:
     tipo = (tipo_cedula or "").strip().upper()
     numero = (numero_cedula or "").strip().upper().replace("-", "").replace(" ", "")
@@ -66,6 +166,7 @@ def generar_recibo_pago_reportado(
 ) -> bytes:
     """Genera el PDF del recibo con datos reales del pago reportado."""
     from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
@@ -73,10 +174,24 @@ def generar_recibo_pago_reportado(
 
     del fecha_recepcion  # No se usa; fecha de emision = hoy en America/Caracas.
 
+    # Paleta corporativa (documento formal)
+    _c = {
+        "ink": colors.HexColor("#0f172a"),
+        "muted": colors.HexColor("#64748b"),
+        "subtle": colors.HexColor("#475569"),
+        "border": colors.HexColor("#e2e8f0"),
+        "border_strong": colors.HexColor("#cbd5e1"),
+        "row_alt": colors.HexColor("#f8fafc"),
+        "row_white": colors.white,
+        "accent": colors.HexColor("#0d9488"),
+        "accent_dark": colors.HexColor("#115e59"),
+        "panel": colors.HexColor("#f1f5f9"),
+        "table_head": colors.HexColor("#1e293b"),
+    }
+
     # Saldos del abono
     saldo_init_display = (saldo_inicial or "").strip() or "-"
     saldo_fin_display = (saldo_final or "").strip() or "-"
-    monto_abono = (monto or "").strip() or "-"
     cuota_num_display = f"Cuota {numero_cuota}" if numero_cuota else "-"
 
     fecha_emision_str = fecha_hoy_caracas().strftime("%d/%m/%Y")
@@ -86,98 +201,214 @@ def generar_recibo_pago_reportado(
     cedula = _cedula_display(tipo_cedula, numero_cedula)
     banco = (institucion_financiera or "").strip()
     banco_valido = "" if _is_placeholder_text(banco) else banco
-    monto_display = _normalize_monto_display(monto)
     numero_op = (numero_operacion or "").strip()
     cuotas_txt = (aplicado_a_cuotas or "").strip() or "Pendiente de aplicar"
     estado_cuota_lbl = ((estado_cuota or "").strip() or None)
 
-    # Simbolo de moneda en tablas (antes faltaba y causaba NameError al generar PDF)
-    _m = (moneda or "").strip()
-    md_u = (monto_display or "").upper()
-    moneda_u_sym = (moneda or "").strip().upper()
-    if _m:
-        moneda_symbol = _m
-    elif moneda_u_sym == "USD":
-        moneda_symbol = "USD"
-    elif moneda_u_sym == "BS":
-        moneda_symbol = "Bs."
-    elif "USD" in md_u:
-        moneda_symbol = "USD"
-    elif "BS" in md_u:
-        moneda_symbol = "Bs."
-    else:
-        moneda_symbol = "Bs."
+    monto_ve, moneda_sym = _monto_tabla_y_cuerpo(monto, moneda)
+    monto_display = f"{monto_ve} {moneda_sym}" if monto_ve != "-" else "-"
+    moneda_symbol = moneda_sym
 
     buf = io.BytesIO()
+    _content_w = letter[0] - 1.3 * inch
     doc = SimpleDocTemplate(
         buf,
         pagesize=letter,
-        topMargin=0.55 * inch,
+        topMargin=0.5 * inch,
         bottomMargin=0.55 * inch,
         leftMargin=0.65 * inch,
         rightMargin=0.65 * inch,
     )
 
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "ReceiptTitle",
-        parent=styles["Title"],
-        fontSize=17,
-        leading=21,
-        textColor=colors.HexColor("#0f172a"),
-        spaceAfter=4,
-    )
-    subtitle_style = ParagraphStyle(
-        "ReceiptSubtitle",
+    doc_kind_style = ParagraphStyle(
+        "ReceiptDocKind",
         parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=13,
+        leading=17,
+        textColor=_c["ink"],
+        alignment=TA_CENTER,
+        spaceBefore=4,
+        spaceAfter=8,
+    )
+    ref_style = ParagraphStyle(
+        "ReceiptRef",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=14,
+        textColor=_c["accent_dark"],
+        alignment=TA_CENTER,
+        spaceAfter=14,
+    )
+    company_fallback_style = ParagraphStyle(
+        "ReceiptCompanyFallback",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=18,
+        leading=22,
+        textColor=_c["ink"],
+        alignment=TA_CENTER,
+        spaceAfter=6,
+    )
+    section_style = ParagraphStyle(
+        "ReceiptSection",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
         fontSize=10,
-        textColor=colors.HexColor("#475569"),
+        leading=13,
+        textColor=_c["table_head"],
+        alignment=TA_LEFT,
+        spaceBefore=4,
         spaceAfter=8,
     )
     label_style = ParagraphStyle(
         "Label",
         parent=styles["Normal"],
-        fontSize=9,
-        textColor=colors.HexColor("#64748b"),
+        fontSize=8.5,
+        leading=11,
+        textColor=_c["muted"],
+        fontName="Helvetica-Bold",
     )
     value_style = ParagraphStyle(
         "Value",
         parent=styles["Normal"],
         fontSize=10,
-        textColor=colors.HexColor("#0f172a"),
+        leading=13,
+        textColor=_c["ink"],
+        fontName="Helvetica",
+    )
+    value_emphasis_style = ParagraphStyle(
+        "ValueEmphasis",
+        parent=styles["Normal"],
+        fontSize=10.5,
+        leading=14,
+        textColor=_c["ink"],
+        fontName="Helvetica-Bold",
     )
     body_style = ParagraphStyle(
         "Body",
         parent=styles["Normal"],
-        fontSize=10.2,
+        fontSize=10,
         leading=15,
-        textColor=colors.HexColor("#111827"),
+        textColor=_c["ink"],
+        alignment=TA_JUSTIFY,
+        fontName="Helvetica",
+    )
+    footer_title_style = ParagraphStyle(
+        "FooterTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        textColor=_c["table_head"],
+        spaceAfter=4,
     )
     footer_style = ParagraphStyle(
         "Footer",
         parent=styles["Normal"],
         fontSize=9,
-        textColor=colors.HexColor("#475569"),
+        leading=12,
+        textColor=_c["subtle"],
+        fontName="Helvetica",
+    )
+    saldo_head_style = ParagraphStyle(
+        "SaldoHead",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=10,
+        textColor=colors.white,
+        alignment=TA_CENTER,
+    )
+    saldo_cell_style = ParagraphStyle(
+        "SaldoCell",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=12,
+        textColor=_c["ink"],
+        alignment=TA_RIGHT,
+        fontName="Helvetica",
+    )
+    saldo_cell_center_style = ParagraphStyle(
+        "SaldoCellCtr",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=12,
+        textColor=_c["ink"],
+        alignment=TA_CENTER,
+        fontName="Helvetica",
     )
 
     story = []
-
-    if _LOGO_PATH.exists():
-        story.append(Image(str(_LOGO_PATH), width=1.45 * inch, height=1.45 * inch))
-        story.append(Spacer(1, 6))
-
-    story.append(Paragraph("<b>RapiCredit C.A.</b>", title_style))
     ref_display = _referencia_display(referencia_interna)
-    story.append(Paragraph(f"Recibo de pago Nro. {ref_display}", subtitle_style))
+
+    # Cabecera centrada (membrete)
+    if _LOGO_PATH.exists():
+        _logo = Image(str(_LOGO_PATH), width=1.35 * inch, height=1.35 * inch)
+        _logo_tbl = Table([[_logo]], colWidths=[_content_w])
+        _logo_tbl.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ]
+            )
+        )
+        story.append(_logo_tbl)
+    else:
+        story.append(Paragraph("<b>RapiCredit C.A.</b>", company_fallback_style))
+
+    story.append(Paragraph("COMPROBANTE DE PAGO", doc_kind_style))
+    story.append(Paragraph(f"Nro. {ref_display}", ref_style))
+
+    _accent = Table([[""]], colWidths=[_content_w], rowHeights=[3])
+    _accent.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), _c["accent"]),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(_accent)
+    story.append(Spacer(1, 16))
+
+    story.append(Paragraph("Datos del comprobante", section_style))
 
     info = [
-        [Paragraph("Fecha de emision", label_style), Paragraph(fecha_emision_str, value_style), Paragraph("Fecha de pago", label_style), Paragraph(fecha_pago_str, value_style)],
-        [Paragraph("Titular", label_style), Paragraph(nombre_completo or "-", value_style), Paragraph("Cedula", label_style), Paragraph(cedula or "-", value_style)],
-        [Paragraph("Banco", label_style), Paragraph(banco_valido or "-", value_style), Paragraph("Operacion", label_style), Paragraph(numero_op or "-", value_style)],
-        [Paragraph("Monto reportado", label_style), Paragraph(f"<b>{monto_display or '-'} {moneda_symbol}</b>", value_style), Paragraph("Referencia", label_style), Paragraph(ref_display, value_style)],
         [
-            Paragraph("Aplicado a", label_style),
-            Paragraph(f"<b>{cuotas_txt}</b>", value_style),
+            Paragraph("FECHA DE EMISIÓN", label_style),
+            Paragraph(fecha_emision_str, value_style),
+            Paragraph("FECHA DE PAGO", label_style),
+            Paragraph(fecha_pago_str, value_style),
+        ],
+        [
+            Paragraph("TITULAR", label_style),
+            Paragraph(nombre_completo or "-", value_style),
+            Paragraph("CÉDULA", label_style),
+            Paragraph(cedula or "-", value_style),
+        ],
+        [
+            Paragraph("BANCO", label_style),
+            Paragraph(banco_valido or "-", value_style),
+            Paragraph("OPERACIÓN", label_style),
+            Paragraph(numero_op or "-", value_style),
+        ],
+        [
+            Paragraph("MONTO REPORTADO", label_style),
+            Paragraph(f"<b>{monto_display}</b>", value_emphasis_style),
+            Paragraph("", label_style),
+            Paragraph("", label_style),
+        ],
+        [
+            Paragraph("APLICADO A", label_style),
+            Paragraph(f"<b>{cuotas_txt}</b>", value_emphasis_style),
             Paragraph("", label_style),
             Paragraph("", value_style),
         ],
@@ -185,24 +416,25 @@ def generar_recibo_pago_reportado(
     if estado_cuota_lbl:
         info.append(
             [
-                Paragraph("Estado (cuota)", label_style),
-                Paragraph(f"<b>{estado_cuota_lbl}</b>", value_style),
+                Paragraph("ESTADO (CUOTA)", label_style),
+                Paragraph(f"<b>{estado_cuota_lbl}</b>", value_emphasis_style),
                 Paragraph("", label_style),
                 Paragraph("", value_style),
             ]
         )
 
     _info_style = [
-        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#cbd5e1")),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f8fafc")),
-        ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#f8fafc")),
-        ("BACKGROUND", (0, 4), (-1, 4), colors.HexColor("#f8fafc")),
+        ("BOX", (0, 0), (-1, -1), 1, _c["border_strong"]),
+        ("ROUNDEDCORNERS", [6, 6, 6, 6]),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [_c["row_white"], _c["row_alt"]]),
+        ("GRID", (0, 0), (-1, -1), 0.35, _c["border"]),
+        ("SPAN", (1, 3), (3, 3)),
+        ("SPAN", (1, 4), (3, 4)),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
     ]
     if estado_cuota_lbl:
         _info_style.append(
@@ -213,7 +445,7 @@ def generar_recibo_pago_reportado(
     table.setStyle(TableStyle(_info_style))
 
     story.append(table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 18))
 
     # Tabla de saldos si hay cuota
     if numero_cuota:
@@ -222,45 +454,49 @@ def generar_recibo_pago_reportado(
         saldos_table = Table(
             [
                 [
-                    Paragraph("Cuota", label_style),
-                    Paragraph("Saldo Inicial", label_style),
-                    Paragraph("Abono", label_style),
-                    Paragraph("Fecha de Pago", label_style),
-                    Paragraph("Saldo Final", label_style),
-                    Paragraph("Estado", label_style),
+                    Paragraph("CUOTA", saldo_head_style),
+                    Paragraph("SALDO INICIAL", saldo_head_style),
+                    Paragraph("ABONO", saldo_head_style),
+                    Paragraph("FECHA PAGO", saldo_head_style),
+                    Paragraph("SALDO FINAL", saldo_head_style),
+                    Paragraph("ESTADO", saldo_head_style),
                 ],
                 [
-                    Paragraph(f"<b>{cuota_num_display}</b>", value_style),
-                    Paragraph(f"{saldo_init_display} {moneda_symbol}" if saldo_init_display != "-" else "-", value_style),
-                    Paragraph(f"<b>{monto_abono} {moneda_symbol}</b>" if monto_abono != "-" else "-", value_style),
-                    Paragraph(fecha_pago_col, value_style),
-                    Paragraph(f"{saldo_fin_display} {moneda_symbol}" if saldo_fin_display != "-" else "-", value_style),
-                    Paragraph(_estado_cell, value_style),
+                    Paragraph(f"<b>{cuota_num_display}</b>", saldo_cell_center_style),
+                    Paragraph(_celda_monto_con_simbolo(saldo_init_display, moneda_symbol), saldo_cell_style),
+                    Paragraph(
+                        f"<b>{monto_display}</b>" if monto_display != "-" else "-",
+                        saldo_cell_style,
+                    ),
+                    Paragraph(fecha_pago_col, saldo_cell_center_style),
+                    Paragraph(_celda_monto_con_simbolo(saldo_fin_display, moneda_symbol), saldo_cell_style),
+                    Paragraph(_estado_cell, saldo_cell_center_style),
                 ],
             ],
-            colWidths=[0.65 * inch, 1.05 * inch, 1.0 * inch, 1.05 * inch, 1.05 * inch, 1.15 * inch],
+            colWidths=[0.62 * inch, 1.02 * inch, 1.02 * inch, 1.0 * inch, 1.02 * inch, 1.12 * inch],
         )
         saldos_table.setStyle(
             TableStyle([
-                ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#cbd5e1")),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f8fafc")),
+                ("BOX", (0, 0), (-1, -1), 1, _c["border_strong"]),
+                ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+                ("BACKGROUND", (0, 0), (-1, 0), _c["table_head"]),
+                ("ROWBACKGROUNDS", (0, 1), (-1, 1), [_c["row_white"]]),
+                ("GRID", (0, 0), (-1, -1), 0.35, _c["border"]),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (0, 0), (0, -1), "CENTER"),
-                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
             ])
         )
-        story.append(Paragraph("<b>Desglose del abono</b>", value_style))
-        story.append(Spacer(1, 6))
+        story.append(Paragraph("Desglose del abono", section_style))
+        story.append(Spacer(1, 4))
         story.append(saldos_table)
-        story.append(Spacer(1, 12))
+        story.append(Spacer(1, 18))
 
     moneda_u = (moneda or "").strip().upper()
+    if not moneda_u and moneda_sym == "Bs.":
+        moneda_u = "BS"
 
     if banco_valido:
         cuerpo = (
@@ -286,16 +522,47 @@ def generar_recibo_pago_reportado(
             " Monto indicado en <b>USD</b> (dolares estadounidenses)."
         )
     elif moneda_u == "BS" and tasa_cambio is not None:
+        tasa_txt = _formato_decimal_ve(float(tasa_cambio))
         cuerpo += (
             f" Monto en <b>bolivares (Bs.)</b>. Tasa de cambio oficial para la fecha de pago "
-            f"(<b>{fecha_pago_str}</b>): <b>{tasa_cambio:,.2f}</b> Bs. por 1 USD."
+            f"(<b>{fecha_pago_str}</b>): <b>{tasa_txt}</b> Bs. por 1 USD."
         )
-    story.append(Paragraph(cuerpo, body_style))
-    story.append(Spacer(1, 18))
+    _narrative = Table([[Paragraph(cuerpo, body_style)]], colWidths=[_content_w])
+    _narrative.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), _c["panel"]),
+                ("BOX", (0, 0), (-1, -1), 0.75, _c["border"]),
+                ("ROUNDEDCORNERS", [5, 5, 5, 5]),
+                ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+                ("TOPPADDING", (0, 0), (-1, -1), 12),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+            ]
+        )
+    )
+    story.append(_narrative)
+    story.append(Spacer(1, 22))
 
-    story.append(Paragraph("<b>Contacto de cobranza</b>", value_style))
-    story.append(Paragraph(f"Email: {CONTACTO_COBRANZA}", footer_style))
-    story.append(Paragraph(f'WhatsApp: <a href="{WHATSAPP_LINK}">{WHATSAPP_DISPLAY}</a>', footer_style))
+    _foot = Table(
+        [
+            [Paragraph("Contacto de cobranza", footer_title_style)],
+            [Paragraph(f"Correo: <a color='#0d9488' href='mailto:{CONTACTO_COBRANZA}'>{CONTACTO_COBRANZA}</a>", footer_style)],
+            [Paragraph(f'WhatsApp: <a color="#0d9488" href="{WHATSAPP_LINK}">{WHATSAPP_DISPLAY}</a>', footer_style)],
+        ],
+        colWidths=[_content_w],
+    )
+    _foot.setStyle(
+        TableStyle(
+            [
+                ("LINEABOVE", (0, 0), (-1, 0), 1.5, _c["accent"]),
+                ("TOPPADDING", (0, 0), (-1, 0), 12),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(_foot)
 
     doc.build(story)
     return buf.getvalue()
