@@ -1,4 +1,4 @@
-﻿"""
+"""
 Generacion del recibo PDF para reportes de pago (modulo Cobros).
 Diseno profesional con encabezado, resumen estructurado y bloque narrativo.
 """
@@ -6,6 +6,8 @@ import io
 from datetime import date
 from pathlib import Path
 from typing import Optional
+
+from app.services.tasa_cambio_service import fecha_hoy_caracas
 
 WHATSAPP_LINK = "https://wa.me/584244579934"
 WHATSAPP_DISPLAY = "424-4579934"
@@ -69,7 +71,7 @@ def generar_recibo_pago_reportado(
     from reportlab.lib.units import inch
     from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-    del fecha_recepcion  # No se usa: la emision del recibo es la fecha actual.
+    del fecha_recepcion  # No se usa; fecha de emision = hoy en America/Caracas.
 
     # Saldos del abono
     saldo_init_display = (saldo_inicial or "").strip() or "-"
@@ -77,7 +79,7 @@ def generar_recibo_pago_reportado(
     monto_abono = (monto or "").strip() or "-"
     cuota_num_display = f"Cuota {numero_cuota}" if numero_cuota else "-"
 
-    fecha_emision_str = date.today().strftime("%d/%m/%Y")
+    fecha_emision_str = fecha_hoy_caracas().strftime("%d/%m/%Y")
     fecha_pago_str = fecha_pago.strftime("%d/%m/%Y") if fecha_pago else "-"
 
     nombre_completo = f"{(nombres or '').strip()} {(apellidos or '').strip()}".strip()
