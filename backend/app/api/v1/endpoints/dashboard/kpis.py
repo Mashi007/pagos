@@ -379,7 +379,7 @@ def _compute_dashboard_admin(
                 if fin_mes.tzinfo is None:
                     fin_mes = fin_mes.replace(tzinfo=timezone.utc)
                 inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
-            # CARTERA: Cuotas programadas (vencimiento) en este mes = INDEPENDIENTE DE SI FUERON PAGADAS
+            # CARTERA: Cuotas programadas (vencimiento) en este mes
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
@@ -392,25 +392,8 @@ def _compute_dashboard_admin(
                 )
             ) or 0
             
-            # COBRADO: Cuotas que FUERON PAGADAS en este mes (basándose en fecha_pago de la cuota, NO del pago reportado)
+            # COBRADO: Cuotas CON FECHA_VENCIMIENTO EN ESTE MES que fueron pagadas (sin importar cuándo se pagaron)
             cobrado = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_pago >= inicio_d,
-                    Cuota.fecha_pago <= fin_d,
-                    Cuota.fecha_pago.isnot(None),
-                )
-            ) or 0
-            
-            cartera_f = _safe_float(cartera)
-            cobrado_f = _safe_float(cobrado)
-            
-            # MOROSIDAD: Cuotas que vencieron en este mes Y NO FUERON PAGADAS (aún vencidas)
-            morosidad_f = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -419,22 +402,26 @@ def _compute_dashboard_admin(
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_vencimiento >= inicio_d,
                     Cuota.fecha_vencimiento <= fin_d,
-                    Cuota.fecha_vencimiento < hoy_date,
-                    Cuota.fecha_pago.is_(None),
+                    Cuota.fecha_pago.isnot(None),
                 )
             ) or 0
-            morosidad_f = _safe_float(morosidad_f)
+            
+            cartera_f = _safe_float(cartera)
+            cobrado_f = _safe_float(cobrado)
+            
+            # CUENTAS POR COBRAR: Lo que falta cobrar de este mes = Cartera - Cobrado
+            cuentas_por_cobrar_f = cartera_f - cobrado_f
             evolucion.append({
                 "mes": m["mes"],
                 "cartera": cartera_f,
                 "cobrado": cobrado_f,
-                "morosidad": morosidad_f,
+                "cuentas_por_cobrar": cuentas_por_cobrar_f,
             })
         origen = "bd"
     except Exception as e:
         logger.exception("Error en dashboard admin (evolucion desde cuotas): %s", e)
         evolucion = [
-            {"mes": m["mes"], "cartera": 0.0, "cobrado": 0.0, "morosidad": 0.0}
+            {"mes": m["mes"], "cartera": 0.0, "cobrado": 0.0, "cuentas_por_cobrar": 0.0}
             for m in meses
         ]
         origen = "bd"

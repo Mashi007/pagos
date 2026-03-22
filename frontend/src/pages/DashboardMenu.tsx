@@ -1227,10 +1227,10 @@ export function DashboardMenu() {
 
                             <Line
                               type="monotone"
-                              dataKey="morosidad"
+                              dataKey="cuentas_por_cobrar"
                               stroke="#ef4444"
                               strokeWidth={2}
-                              name="Pago vencido"
+                              name="Cuentas por Cobrar"
                               dot={{ r: 4 }}
                             />
                           </ComposedChart>

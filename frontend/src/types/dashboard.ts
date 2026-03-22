@@ -61,7 +61,7 @@ export interface EvolucionMensualItem {
 
   cobrado: number
 
-  morosidad: number
+  cuentas_por_cobrar: number
 }
 
 export interface DashboardAdminResponse {
