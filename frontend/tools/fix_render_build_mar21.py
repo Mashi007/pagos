@@ -77,15 +77,16 @@ export function parsePrestamoIdFromNumeroCredito(val: unknown): number | null {
     cpt = cp.read_text(encoding="utf-8")
     idx = cpt.find("const handleDescargarPagosTablaTemporalExcel")
     if idx < 0:
-        raise SystemExit("Cobros: handler not found")
-    start = cpt.rfind("} catch (e: any)", 0, idx)
-    if start < 0:
-        raise SystemExit("Cobros: catch not found")
-    end = cpt.find("  return (", idx)
-    if end < 0:
-        raise SystemExit("Cobros: return not found")
+        print("CobrosPagosReportadosPage: sin handler tabla temporal (refactor OK), skip")
+    else:
+        start = cpt.rfind("} catch (e: any)", 0, idx)
+        if start < 0:
+            raise SystemExit("Cobros: catch not found")
+        end = cpt.find("  return (", idx)
+        if end < 0:
+            raise SystemExit("Cobros: return not found")
 
-    new_block = """} catch (e: any) {
+        new_block = """} catch (e: any) {
       toast.error(
         e?.message ||
           'Se descargo el Excel, pero fallo el marcado de exportados. Recargue e intente de nuevo.'
@@ -93,28 +94,10 @@ export function parsePrestamoIdFromNumeroCredito(val: unknown): number | null {
     }
   }
 
-  const handleDescargarPagosTablaTemporalExcel = async () => {
-    setDescargandoTabla(true)
-
-    try {
-      await descargarPagosAprobadosExcel()
-
-      toast.success(
-        'Excel descargado. Los pagos han sido eliminados de la tabla temporal.'
-      )
-
-      await load({ page: 1 })
-    } catch (e: any) {
-      toast.error(e?.message || 'Error al descargar el Excel.')
-    } finally {
-      setDescargandoTabla(false)
-    }
-  }
-
 """
-    cpt2 = cpt[:start] + new_block + cpt[end:]
-    cp.write_text(cpt2, encoding="utf-8")
-    print("CobrosPagosReportadosPage: fixed handler scope")
+        cpt2 = cpt[:start] + new_block + cpt[end:]
+        cp.write_text(cpt2, encoding="utf-8")
+        print("CobrosPagosReportadosPage: fixed handler scope (quitado bloque temporal)")
 
     print("done")
 

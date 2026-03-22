@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, and_, case
+from sqlalchemy import select, func, or_, and_, case, delete
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
 from app.core.database import get_db
@@ -651,11 +651,8 @@ def aprobar_pago_reportado(
     pr.motivo_rechazo = None
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    from app.services.cobros.pagos_pendiente_descargar_service import agregar_a_pendiente_descargar
-
     try:
         _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
-        agregar_a_pendiente_descargar(db, pr.id)
         db.commit()
     except HTTPException:
         db.rollback()
@@ -667,7 +664,7 @@ def aprobar_pago_reportado(
             status_code=503,
             detail=(
                 "No se pudo guardar la aprobación. Suele deberse a una migración pendiente en el servidor "
-                "(ej. tabla pagos_pendiente_descargar). Ejecute: alembic upgrade head"
+                "(migración o esquema de BD pendiente). Ejecute: alembic upgrade head"
             ),
         )
     except Exception as e:
@@ -1046,11 +1043,8 @@ def cambiar_estado_pago(
     rechazo_correo_enviado: Optional[bool] = None
     rechazo_correo_error: Optional[str] = None
     if body.estado == "aprobado":
-        from app.services.cobros.pagos_pendiente_descargar_service import agregar_a_pendiente_descargar
-
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
-            agregar_a_pendiente_descargar(db, pr.id)
             db.commit()
         except HTTPException:
             db.rollback()
@@ -1067,7 +1061,7 @@ def cambiar_estado_pago(
                 status_code=503,
                 detail=(
                     "No se pudo guardar la aprobación. Suele deberse a una migración pendiente en el servidor "
-                    "(ej. tabla pagos_pendiente_descargar). Ejecute: alembic upgrade head"
+                    "(migración o esquema de BD pendiente). Ejecute: alembic upgrade head"
                 ),
             )
         except (IntegrityError, Exception) as e:
@@ -1210,13 +1204,23 @@ def marcar_pagos_reportados_exportados(
 
     if nuevos:
         db.add_all(nuevos)
-        db.commit()
+
+    # Quitar de la cola temporal (pagos_pendiente_descargar) los mismos IDs exportados
+    res_cola = db.execute(
+        delete(PagoPendienteDescargar).where(
+            PagoPendienteDescargar.pago_reportado_id.in_(ids)
+        )
+    )
+    quitados_cola_temporal = int(res_cola.rowcount or 0)
+
+    db.commit()
 
     return {
         "ok": True,
         "marcados": len(nuevos),
         "ya_exportados": len(ya_exportados),
         "total_solicitados": len(ids),
+        "quitados_cola_temporal": quitados_cola_temporal,
     }
 
 
@@ -1228,7 +1232,6 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
     """
     from io import BytesIO
     from openpyxl import Workbook
-    from fastapi.responses import StreamingResponse
     from datetime import datetime
     
     # Obtener pagos pendientes de descargar
@@ -1289,19 +1292,22 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
     ws.column_dimensions["I"].width = 25
     ws.column_dimensions["J"].width = 26
     
-    # Generar bytes
+    # Bytes completos en memoria (StreamingResponse+BytesIO a veces entrega archivos corruptos al cliente)
     output = BytesIO()
     wb.save(output)
-    output.seek(0)
-    
+    excel_bytes = output.getvalue()
+
     # Vaciar tabla después de generar el Excel
-    cantidad_vaciada = vaciar_tabla_pendiente_descargar(db)
-    
+    vaciar_tabla_pendiente_descargar(db)
+
     fecha = datetime.now().strftime("%Y%m%d")
     filename = f"pagos_aprobados_{fecha}.xlsx"
-    
-    return StreamingResponse(
-        output,
+
+    return Response(
+        content=excel_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(excel_bytes)),
+        },
     )

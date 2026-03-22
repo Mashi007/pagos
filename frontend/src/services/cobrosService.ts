@@ -40,6 +40,8 @@
 
  */
 
+import axios from 'axios'
+
 import { apiClient } from './api'
 
 import { env } from '../config/env'
@@ -631,12 +633,14 @@ export async function markPagosReportadosExportados(
   marcados: number
   ya_exportados: number
   total_solicitados: number
+  quitados_cola_temporal?: number
 }> {
   const data = await apiClient.post<{
     ok: boolean
     marcados: number
     ya_exportados: number
     total_solicitados: number
+    quitados_cola_temporal?: number
   }>(
     `${BASE_COBROS}/pagos-reportados/marcar-exportados`,
 
@@ -646,30 +650,101 @@ export async function markPagosReportadosExportados(
   return data
 }
 
+/** Los .xlsx son ZIP; deben empezar por PK (evita guardar HTML/JSON como .xlsx corrupto). */
+
+function _esContenidoXlsxValido(buf: Uint8Array): boolean {
+  return (
+    buf.length >= 4 &&
+    buf[0] === 0x50 &&
+    buf[1] === 0x4b &&
+    (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07) &&
+    (buf[3] === 0x04 || buf[3] === 0x06 || buf[3] === 0x08)
+  )
+}
+
 export async function descargarPagosAprobadosExcel(): Promise<void> {
   const url = `${BASE_COBROS}/descargar-pagos-aprobados-excel`
-  const token =
-    typeof localStorage !== 'undefined'
-      ? localStorage.getItem('access_token')
-      : null
-  const response = await fetch(url, {
-    method: 'GET',
-    credentials: 'same-origin',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
 
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(error || 'Error descargando Excel')
+  try {
+    const response = await apiClient.getAxiosInstance().get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      // Solo 200: 401/403/404 no deben guardarse como .xlsx
+      validateStatus: status => status === 200,
+    })
+
+    const raw = new Uint8Array(response.data)
+
+    if (!_esContenidoXlsxValido(raw)) {
+      const head = new TextDecoder().decode(raw.slice(0, 800))
+      let msg =
+        'El archivo no es un Excel válido (suele ser HTML de login o error del proxy). ' +
+        'Revise VITE_API_URL, la sesión y que haya filas en la tabla temporal.'
+
+      try {
+        const j = JSON.parse(head) as { detail?: string; message?: string }
+
+        if (j.detail || j.message) msg = String(j.detail || j.message)
+      } catch {
+        /* mantener msg */
+      }
+
+      throw new Error(msg)
+    }
+
+    const blob = new Blob([raw], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+
+    const cd = response.headers['content-disposition'] as string | undefined
+
+    let name = 'pagos_aprobados.xlsx'
+
+    if (cd) {
+      const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(cd)
+
+      if (m?.[1]) name = decodeURIComponent(m[1].trim())
+    }
+
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = name
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(objectUrl)
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err)) {
+      const st = err.response?.status
+      const data = err.response?.data as ArrayBuffer | undefined
+
+      if (st === 401 || st === 403) {
+        throw new Error('Sesión expirada o sin permiso. Vuelva a iniciar sesión.')
+      }
+
+      if (data instanceof ArrayBuffer && data.byteLength > 0) {
+        const text = new TextDecoder()
+          .decode(new Uint8Array(data).slice(0, 2000))
+          .trim()
+
+        if (text.startsWith('{')) {
+          try {
+            const j = JSON.parse(text) as { detail?: string }
+
+            if (typeof j.detail === 'string') throw new Error(j.detail)
+          } catch (e) {
+            if (!(e instanceof SyntaxError)) throw e
+          }
+        }
+      }
+
+      throw new Error(
+        err.response?.statusText || err.message || 'Error descargando Excel'
+      )
+    }
+
+    if (err instanceof Error) throw err
+
+    throw new Error('Error descargando Excel')
   }
-
-  const blob = await response.blob()
-  const objectUrl = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = objectUrl
-  link.download = 'pagos_aprobados_.xlsx'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(objectUrl)
 }

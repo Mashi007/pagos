@@ -32,7 +32,6 @@ import {
   eliminarPagoReportado,
   markPagosReportadosExportados,
   type PagoReportadoItem,
-  descargarPagosAprobadosExcel,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
   type CambiarEstadoPagoResponse,
@@ -226,8 +225,6 @@ export default function CobrosPagosReportadosPage() {
   }>({ open: false, row: null })
 
   const [motivoRechazo, setMotivoRechazo] = useState('')
-
-  const [descargandoTabla, setDescargandoTabla] = useState(false)
 
   const [descargandoExcelAprobados, setDescargandoExcelAprobados] =
     useState(false)
@@ -467,12 +464,19 @@ export default function CobrosPagosReportadosPage() {
 
       const markResult = await markPagosReportadosExportados(idsAprobados)
 
+      const qCola =
+        markResult.quitados_cola_temporal != null
+          ? markResult.quitados_cola_temporal
+          : 0
+
       toast.success(
-        'Excel generado con ' +
+        'Excel con ' +
           String(rows.length) +
-          ' pago(s) aprobado(s). Marcados exportados: ' +
+          ' aprobado(s). Marcados exportados: ' +
           String(markResult.marcados) +
-          '.'
+          '. Cola temporal: quitados ' +
+          String(qCola) +
+          ' registro(s).'
       )
 
       await load({ page: 1 })
@@ -483,24 +487,6 @@ export default function CobrosPagosReportadosPage() {
       )
     } finally {
       setDescargandoExcelAprobados(false)
-    }
-  }
-
-  const handleDescargarPagosTablaTemporalExcel = async () => {
-    setDescargandoTabla(true)
-
-    try {
-      await descargarPagosAprobadosExcel()
-
-      toast.success(
-        'Excel descargado. Los pagos han sido eliminados de la tabla temporal.'
-      )
-
-      await load({ page: 1 })
-    } catch (e: any) {
-      toast.error(e?.message || 'Error al descargar el Excel.')
-    } finally {
-      setDescargandoTabla(false)
     }
   }
 
@@ -592,51 +578,26 @@ export default function CobrosPagosReportadosPage() {
             Descargar Excel Aprobados
           </Button>
 
-          <Button
-            variant="outline"
-            onClick={handleDescargarPagosTablaTemporalExcel}
-            disabled={descargandoTabla}
-            title="Cola temporal para el banco: descarga y vacía esa cola."
-          >
-            {descargandoTabla ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <FileText className="mr-2 h-4 w-4" />
-            )}
-            Descargar de Tabla Temporal
-          </Button>
-
           <div className="basis-full w-full space-y-2 rounded-md border border-dashed border-muted-foreground/30 bg-muted/25 p-3 text-sm">
             <p className="text-foreground">
               <span className="font-semibold">
-                1) Descargar Excel Aprobados —{' '}
+                Descargar Excel Aprobados —{' '}
               </span>
-              Lista los pagos que ya están{' '}
-              <strong>aprobados</strong> y que todavía no has bajado en Excel.
-              Al terminar, el sistema los marca como exportados para no
-              repetirlos. Las fechas de arriba no aplican a este botón; sí
-              aplican cédula e institución si las escribiste.
-            </p>
-
-            <p className="text-foreground">
-              <span className="font-semibold">
-                2) Descargar de Tabla Temporal —{' '}
-              </span>
-              Es otro flujo: baja lo que está en la{' '}
-              <strong>cola temporal</strong> (para llevar al banco). Al
-              descargar, ese Excel se genera y la cola temporal se vacía.
+              Solo pagos en estado <strong>aprobado</strong> que aún no se han
+              exportado con este botón. Las fechas del filtro no aplican; sí
+              cédula e institución si las escribiste. Al descargar: genera el
+              Excel, marca como exportados y <strong>quita esos pagos de la cola</strong>{' '}
+              temporal en base de datos (si estaban ahí).
             </p>
 
             <p className="text-muted-foreground">
               <span className="font-semibold text-foreground">
                 Columnas de tasa en el Excel —{' '}
               </span>
-              Ambos archivos incluyen <strong>Tasa cambio (Bs/USD)</strong> (oficial
-              del día de la <em>fecha de pago</em>) y <strong>Bs a USD (equiv.)</strong>{' '}
-              (bolívares ÷ tasa). Al final va <strong>Monto en USD (solo dólares)</strong>{' '}
-              con el mismo valor en dólares para sumar en Excel. Si falta tasa para
-              una fecha en Bs, tasa y equivalentes quedan vacíos (registre la tasa
-              en admin).
+              Incluye <strong>Tasa cambio (Bs/USD)</strong> (oficial del día de la{' '}
+              <em>fecha de pago</em>), <strong>Bs a USD (equiv.)</strong> y al final{' '}
+              <strong>Monto en USD (solo dólares)</strong>. Si falta tasa para una
+              fecha en Bs, esas celdas quedan vacías.
             </p>
           </div>
         </CardContent>
