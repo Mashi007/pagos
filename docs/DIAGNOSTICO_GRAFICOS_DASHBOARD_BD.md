@@ -48,7 +48,7 @@ Cada bloque visual del dashboard (KPIs, gráficos) está conectado a un endpoint
 
 ---
 
-### 2. Evolución mensual (Cartera, Cobrado, Morosidad por mes)
+### 2. Evolución mensual (Cartera, Cobrado, Cuentas por Cobrar por mes)
 
 - **Frontend:** `queryKey: ['dashboard-menu', periodoEvolucion, filtros]` → `GET /api/v1/dashboard/admin?…`
 - **Endpoint:** `GET /api/v1/dashboard/admin` → `get_dashboard_admin(...)` → `_compute_dashboard_admin(db, fecha_inicio, fecha_fin)`
@@ -56,11 +56,13 @@ Cada bloque visual del dashboard (KPIs, gráficos) está conectado a un endpoint
 - **Tablas:**
   - **cuotas**: Por cada mes del rango, **independientemente**:
     1. **Cartera**: SUM(monto) WHERE fecha_vencimiento en el mes (cuotas programadas, sin importar si fueron pagadas)
-    2. **Cobrado**: SUM(monto) WHERE fecha_pago en el mes AND fecha_pago IS NOT NULL (cuotas realmente pagadas en ese mes)
-    3. **Morosidad**: SUM(monto) WHERE fecha_vencimiento en el mes AND fecha_pago IS NULL AND fecha_vencimiento < hoy (cuotas vencidas en ese mes que aún no fueron pagadas)
+    2. **Cobrado**: SUM(monto) WHERE fecha_vencimiento en el mes AND fecha_pago IS NOT NULL (cuotas de ese mes que fueron pagadas - sin importar cuándo)
+    3. **Cuentas por Cobrar**: Cartera - Cobrado (lo que falta cobrar de ese mes)
   
-  **IMPORTANTE**: Morosidad ≠ Cartera - Cobrado. Cada métrica es independiente porque Cobrado puede incluir cuotas de meses anteriores pagadas después de su vencimiento.
-  No usa tabla **prestamos** en esta vista (no filtra por analista/concesionario/modelo en admin).
+  **IMPORTANTE**: Cuentas por Cobrar = Cartera - Cobrado (reemplaza el concepto anterior de Morosidad).
+  - Cobrado SOLO incluye cuotas con fecha_vencimiento EN ese mes (NO pagos de cuotas de otros meses)
+  - Cuentas por Cobrar siempre será >= 0 (no negativo)
+  - No usa tabla **prestamos** en esta vista (no filtra por analista/concesionario/modelo en admin)
 
 ---
 
