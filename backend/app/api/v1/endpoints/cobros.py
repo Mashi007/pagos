@@ -34,6 +34,7 @@ from app.services.cobros.cedula_reportar_bs_service import (
     load_autorizados_bs_claves,
     cedula_coincide_autorizados_bs,
 )
+from app.services.tasa_cambio_service import obtener_tasa_por_fecha, convertir_bs_a_usd
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -546,7 +547,38 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
         logger.info("[COBROS] Aprobar ref=%s: ya existe pago con documento %s; omitir creacion (idempotente).", pr.referencia_interna, num_doc)
         return
     fecha_ts = datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now()
-    monto = Decimal(str(round(float(pr.monto), 2)))
+    moneda_pr = ((getattr(pr, "moneda", None) or "USD") or "").strip().upper()
+    if moneda_pr == "USDT":
+        moneda_pr = "USD"
+    monto_float = float(pr.monto or 0)
+    monto_bs_original: Optional[float] = None
+    tasa_aplicada: Optional[float] = None
+    fecha_tasa_ref: Optional[date] = None
+    if moneda_pr == "BS":
+        if not pr.fecha_pago:
+            raise HTTPException(
+                status_code=400,
+                detail="Fecha de pago requerida para convertir bolivares a USD al aplicar a cuotas.",
+            )
+        tasa_obj = obtener_tasa_por_fecha(db, pr.fecha_pago)
+        if tasa_obj is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No hay tasa de cambio oficial registrada para la fecha de pago "
+                    f"{pr.fecha_pago.isoformat()}. Registre la tasa antes de aprobar pagos en bolívares."
+                ),
+            )
+        tasa_aplicada = float(tasa_obj.tasa_oficial)
+        monto_bs_original = monto_float
+        try:
+            monto_float = convertir_bs_a_usd(monto_bs_original, tasa_aplicada)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        fecha_tasa_ref = pr.fecha_pago
+    elif moneda_pr != "USD":
+        raise HTTPException(status_code=400, detail=f"Moneda no soportada al importar desde cobros: {moneda_pr}")
+    monto = Decimal(str(round(monto_float, 2)))
     if monto <= 0:
         raise HTTPException(status_code=400, detail="El monto del reporte debe ser mayor que cero.")
     row = Pago(
@@ -562,6 +594,10 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
         conciliado=True,
         fecha_conciliacion=datetime.now(),
         verificado_concordancia="SI",
+        moneda_registro=moneda_pr,
+        monto_bs_original=Decimal(str(round(monto_bs_original, 2))) if monto_bs_original is not None else None,
+        tasa_cambio_bs_usd=Decimal(str(tasa_aplicada)) if tasa_aplicada is not None else None,
+        fecha_tasa_referencia=fecha_tasa_ref,
     )
     db.add(row)
     db.flush()

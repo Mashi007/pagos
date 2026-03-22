@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints para administrar tasas de cambio oficial (admin).
 """
 from datetime import date, datetime
@@ -18,6 +18,7 @@ from app.services.tasa_cambio_service import (
     obtener_tasa_hoy,
     obtener_tasa_por_fecha,
     guardar_tasa_diaria,
+    guardar_tasa_para_fecha,
     debe_ingresar_tasa,
 )
 
@@ -48,6 +49,13 @@ class TasaCambioResponse(BaseModel):
 
 class GuardarTasaRequest(BaseModel):
     tasa_oficial: float = Field(..., gt=0, description="Tasa oficial BS/USD, ej: 2850.50")
+
+
+class GuardarTasaPorFechaRequest(BaseModel):
+    """Backfill: tasa para una fecha de pago (no aplica ventana 01:00 de guardar/hoy)."""
+
+    fecha: date = Field(..., description="Fecha calendario YYYY-MM-DD (fecha_pago del reporte)")
+    tasa_oficial: float = Field(..., gt=0, description="Bs. por 1 USD")
 
 
 @router.get("/hoy", response_model=Optional[TasaCambioResponse])
@@ -110,6 +118,33 @@ def guardar_tasa(
         usuario_email=usuario_email,
     )
 
+    return tasa
+
+
+@router.post("/guardar-por-fecha", response_model=TasaCambioResponse)
+def guardar_tasa_por_fecha_endpoint(
+    req: GuardarTasaPorFechaRequest,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Inserta o actualiza la tasa oficial para una fecha arbitraria.
+    Administradores: útil para registrar tasas faltantes al corregir pagos BS históricos.
+    """
+    if not user_is_administrator(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+
+    db_user = db.query(User).filter(User.email == current_user.email).first()
+    usuario_id = db_user.id if db_user else None
+    usuario_email = current_user.email
+
+    tasa = guardar_tasa_para_fecha(
+        db=db,
+        fecha=req.fecha,
+        tasa_oficial=req.tasa_oficial,
+        usuario_id=usuario_id,
+        usuario_email=usuario_email,
+    )
     return tasa
 
 

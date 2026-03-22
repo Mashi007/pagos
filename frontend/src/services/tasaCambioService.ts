@@ -71,6 +71,22 @@ export async function guardarTasa(
   }
 }
 
+/** Tasa para una fecha concreta (ej. fecha de pago de reporte en Bs.). Solo admin. */
+export async function guardarTasaPorFecha(
+  fecha: string,
+  tasa_oficial: number
+): Promise<TasaCambioResponse> {
+  try {
+    return await apiClient.post<TasaCambioResponse>(
+      ADMIN_TASAS + '/guardar-por-fecha',
+      { fecha, tasa_oficial }
+    )
+  } catch (e) {
+    console.error('Error guardando tasa por fecha:', e)
+    throwFromAxios(e, 'Error al guardar la tasa para la fecha')
+  }
+}
+
 export async function getTasaPorFecha(
   fecha: string
 ): Promise<TasaCambioResponse | null> {

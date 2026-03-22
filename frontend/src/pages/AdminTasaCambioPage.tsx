@@ -7,9 +7,11 @@ import { TasaCambioModal } from '../components/TasaCambioModal'
 import {
   getTasaHoy,
   guardarTasa,
+  guardarTasaPorFecha,
   getHistorialTasas,
   TasaCambioHistorial,
 } from '../services/tasaCambioService'
+import { toast } from 'sonner'
 
 export const AdminTasaCambioPage: React.FC = () => {
   const [tasaHoy, setTasaHoy] = useState<number | null>(null)
@@ -17,6 +19,12 @@ export const AdminTasaCambioPage: React.FC = () => {
   const [historial, setHistorial] = useState<TasaCambioHistorial[]>([])
 
   const [mostrarModal, setMostrarModal] = useState(false)
+
+  const [fechaTasaPago, setFechaTasaPago] = useState('')
+
+  const [tasaParaFecha, setTasaParaFecha] = useState('')
+
+  const [guardandoFecha, setGuardandoFecha] = useState(false)
 
   const [loading, setLoading] = useState(true)
 
@@ -61,6 +69,30 @@ export const AdminTasaCambioPage: React.FC = () => {
       setHistorial(hist)
     } catch (err: any) {
       throw err
+    }
+  }
+
+  const handleGuardarTasaPorFechaPago = async () => {
+    if (!fechaTasaPago.trim()) {
+      toast.error('Seleccione la fecha de pago')
+      return
+    }
+    const tasaNum = parseFloat(tasaParaFecha.replace(',', '.'))
+    if (Number.isNaN(tasaNum) || tasaNum <= 0) {
+      toast.error('Ingrese la tasa oficial (Bs. por 1 USD), mayor que cero')
+      return
+    }
+    setGuardandoFecha(true)
+    try {
+      await guardarTasaPorFecha(fechaTasaPago.trim(), tasaNum)
+      toast.success(`Tasa guardada para ${fechaTasaPago}`)
+      setTasaParaFecha('')
+      const hist = await getHistorialTasas(60)
+      setHistorial(hist)
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo guardar la tasa')
+    } finally {
+      setGuardandoFecha(false)
     }
   }
 
@@ -137,6 +169,54 @@ export const AdminTasaCambioPage: React.FC = () => {
                 {tasaHoy ? 'Actualizar Tasa' : 'Ingresar Tasa'}
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Tasa por fecha de pago (bolívares / backfill) */}
+
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/80 p-6 shadow-sm">
+          <h2 className="mb-1 text-lg font-bold text-gray-900">
+            Tasa para una fecha de pago (pagos en Bs.)
+          </h2>
+          <p className="mb-4 text-sm text-gray-700">
+            Use la <strong>fecha de pago</strong> del reporte o del comprobante. Es la misma tasa
+            oficial Bs./USD que usa el sistema para convertir bolívares a cartera en dólares. No
+            reemplaza el ingreso de &quot;tasa de hoy&quot; arriba; sirve para días pasados o
+            faltantes.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Fecha de pago
+              </label>
+              <input
+                type="date"
+                value={fechaTasaPago}
+                onChange={e => setFechaTasaPago(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Tasa oficial (Bs. por 1 USD)
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="ej. 3105.75"
+                value={tasaParaFecha}
+                onChange={e => setTasaParaFecha(e.target.value)}
+                className="w-44 rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={guardandoFecha}
+              onClick={() => void handleGuardarTasaPorFechaPago()}
+              className="rounded-lg bg-amber-700 px-4 py-2 font-semibold text-white transition hover:bg-amber-800 disabled:opacity-50"
+            >
+              {guardandoFecha ? 'Guardando…' : 'Guardar para esa fecha'}
+            </button>
           </div>
         </div>
 

@@ -70,6 +70,43 @@ def guardar_tasa_diaria(
     return existente
 
 
+def guardar_tasa_para_fecha(
+    db: Session,
+    fecha: date,
+    tasa_oficial: float,
+    usuario_id: Optional[int] = None,
+    usuario_email: Optional[str] = None,
+) -> TasaCambioDiaria:
+    """
+    Inserta o actualiza la tasa oficial para una fecha calendario concreta.
+    Usada para backfill (pagos BS con fecha_pago pasada) sin regla de hora 01:00.
+    """
+    if tasa_oficial <= 0:
+        raise ValueError("La tasa de cambio debe ser mayor a 0")
+
+    existente = db.execute(
+        select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
+    ).scalars().first()
+
+    if existente:
+        existente.tasa_oficial = tasa_oficial
+        existente.usuario_id = usuario_id
+        existente.usuario_email = usuario_email
+        existente.updated_at = datetime.now()
+    else:
+        existente = TasaCambioDiaria(
+            fecha=fecha,
+            tasa_oficial=tasa_oficial,
+            usuario_id=usuario_id,
+            usuario_email=usuario_email,
+        )
+        db.add(existente)
+
+    db.commit()
+    db.refresh(existente)
+    return existente
+
+
 def convertir_bs_a_usd(monto_bs: float, tasa: float) -> float:
     """Convierte Bolivares a Dolares usando la tasa oficial (Bs por 1 USD)."""
     if tasa <= 0:
