@@ -59,6 +59,41 @@ def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
 NOMBRE_PDF_CARTA_VARIABLE = "Carta_Cobranza.pdf"
 
 
+def _cfg_incluir_pdf_anexo(tipo_cfg: dict) -> bool:
+    """
+    Pestaña 2 (PDF carta): activo por defecto, igual que ConfiguracionNotificaciones.tsx
+    (incluir_pdf_anexo !== false). Si la clave falta en JSON antiguo, antes el backend usaba
+    False y no adjuntaba ni en modo estricto bloqueaba el envío.
+    """
+    if not isinstance(tipo_cfg, dict):
+        return True
+    if "incluir_pdf_anexo" not in tipo_cfg:
+        return True
+    v = tipo_cfg["incluir_pdf_anexo"]
+    if v is None or v is True:
+        return True
+    if v is False:
+        return False
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if s in ("0", "false", "no", "off", ""):
+            return False
+        if s in ("1", "true", "yes", "si", "sí"):
+            return True
+        return bool(s)
+    return bool(v)
+
+
+def _parse_plantilla_id_desde_config(raw) -> Optional[int]:
+    """Acepta int, str '42', float desde JSON; None si inválido."""
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(float(str(raw).strip()))
+    except (TypeError, ValueError):
+        return None
+
+
 def _bytes_son_pdf_valido(data: Optional[bytes]) -> bool:
     if not data or len(data) < 4:
         return False
@@ -160,11 +195,7 @@ def _enviar_correos_items(
         if tipo_cfg.get("habilitado", True) is False:
             omitidos_config += 1
             continue
-        raw_id = tipo_cfg.get("plantilla_id")
-        try:
-            plantilla_id = int(raw_id) if raw_id is not None else None
-        except (TypeError, ValueError):
-            plantilla_id = None
+        plantilla_id = _parse_plantilla_id_desde_config(tipo_cfg.get("plantilla_id"))
 
         if paquete_estricto and db:
             ok_plant, mot_plant = _validar_plantilla_email_estricta(db, plantilla_id)
@@ -172,9 +203,9 @@ def _enviar_correos_items(
                 log_envio_paquete_incompleto(item_id_log, mot_plant, tipo)
                 omitidos_paquete_incompleto += 1
                 continue
-            if tipo_cfg.get("incluir_pdf_anexo", False) is not True:
+            if not _cfg_incluir_pdf_anexo(tipo_cfg):
                 log_envio_paquete_incompleto(
-                    item_id_log, "incluir_pdf_anexo_debe_estar_activo", tipo
+                    item_id_log, "incluir_pdf_anexo_desactivado_en_config", tipo
                 )
                 omitidos_paquete_incompleto += 1
                 continue
@@ -197,7 +228,7 @@ def _enviar_correos_items(
             plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
             need_ctx = paquete_estricto or (
                 (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
-                or (tipo_cfg.get("incluir_pdf_anexo", False) is True)
+                or _cfg_incluir_pdf_anexo(tipo_cfg)
                 or (plantilla and plantilla_usa_variables_cobranza(plantilla))
             )
             if need_ctx:
@@ -231,7 +262,7 @@ def _enviar_correos_items(
             incluir_pdf_anexo = True
             incluir_adjuntos_fijos = True
         else:
-            incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo", False) is True
+            incluir_pdf_anexo = _cfg_incluir_pdf_anexo(tipo_cfg)
             incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
             try:
