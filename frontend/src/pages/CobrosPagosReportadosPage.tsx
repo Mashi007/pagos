@@ -388,11 +388,20 @@ export default function CobrosPagosReportadosPage() {
     }
 
     const rows = aprobados.map(row => {
+      const mNum =
+        row.monto != null && row.monto !== ''
+          ? Number(row.monto)
+          : Number.NaN
+      const montoStr =
+        Number.isFinite(mNum) && mNum >= 0
+          ? `${mNum.toFixed(2)} ${row.moneda ?? ''}`.trim()
+          : ''
+
       return {
         Nombre: String(row.nombres) + ' ' + String(row.apellidos),
         Cedula: row.cedula_display,
         Banco: row.institucion_financiera,
-        Monto: String(row.monto) + ' ' + String(row.moneda),
+        Monto: montoStr,
         'Fecha pago': row.fecha_pago,
         'Numero operacion': row.numero_operacion,
         'Fecha reporte': row.fecha_reporte

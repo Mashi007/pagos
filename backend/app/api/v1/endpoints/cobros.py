@@ -1207,7 +1207,7 @@ def marcar_pagos_reportados_exportados(
 def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
     """
     Descarga los pagos aprobados pendientes en Excel y luego vacía la tabla temporal.
-    Columnas: Cédula, Fecha, Comentario, Número de Documento.
+    Columnas: Cédula, Fecha, Monto, Moneda, Banco, Comentario, Número de Documento.
     """
     from io import BytesIO
     from openpyxl import Workbook
@@ -1229,23 +1229,39 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
     ws.title = "Pagos Aprobados"
     
     # Encabezados
-    headers = ["Cedula", "Fecha", "Comentario", "Numero de Documento"]
+    headers = [
+        "Cedula",
+        "Fecha",
+        "Monto",
+        "Moneda",
+        "Banco",
+        "Comentario",
+        "Numero de Documento",
+    ]
     ws.append(headers)
-    
+
     # Datos
     for row in datos:
-        ws.append([
-            row["Cedula"],
-            row["Fecha"],
-            row["Comentario"],
-            row["Numero de Documento"],
-        ])
-    
+        ws.append(
+            [
+                row["Cedula"],
+                row["Fecha"],
+                row["Monto"],
+                row["Moneda"],
+                row["Banco"],
+                row["Comentario"],
+                row["Numero de Documento"],
+            ]
+        )
+
     # Ajustar ancho de columnas
     ws.column_dimensions["A"].width = 15
     ws.column_dimensions["B"].width = 12
-    ws.column_dimensions["C"].width = 30
-    ws.column_dimensions["D"].width = 25
+    ws.column_dimensions["C"].width = 14
+    ws.column_dimensions["D"].width = 10
+    ws.column_dimensions["E"].width = 22
+    ws.column_dimensions["F"].width = 30
+    ws.column_dimensions["G"].width = 25
     
     # Generar bytes
     output = BytesIO()

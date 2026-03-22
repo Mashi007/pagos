@@ -64,19 +64,29 @@ def vaciar_tabla_pendiente_descargar(db: Session) -> int:
 def obtener_datos_excel(pagos: List[PagoReportado]) -> List[Dict[str, Any]]:
     """
     Convierte pagos a filas para exportar a Excel.
-    Columnas: Cédula, Fecha, Comentario, Número de Documento
+    Columnas: Cédula, Fecha, Monto, Moneda, Banco, Comentario, Número de Documento
     """
     rows = []
-    
+
     for pago in pagos:
         fecha_str = pago.fecha_pago.strftime("%d/%m/%Y") if pago.fecha_pago else ""
-        cedula = f"{pago.tipo_cedula}{pago.numero_cedula}" if pago.tipo_cedula and pago.numero_cedula else pago.numero_cedula or ""
-        
-        rows.append({
-            "Cedula": cedula,
-            "Fecha": fecha_str,
-            "Comentario": pago.observacion or "",
-            "Numero de Documento": pago.numero_operacion or "",
-        })
-    
+        cedula = (
+            f"{pago.tipo_cedula}{pago.numero_cedula}"
+            if pago.tipo_cedula and pago.numero_cedula
+            else pago.numero_cedula or ""
+        )
+        monto_val = float(pago.monto) if pago.monto is not None else 0.0
+
+        rows.append(
+            {
+                "Cedula": cedula,
+                "Fecha": fecha_str,
+                "Monto": monto_val,
+                "Moneda": (pago.moneda or "BS").strip(),
+                "Banco": (pago.institucion_financiera or "").strip(),
+                "Comentario": pago.observacion or "",
+                "Numero de Documento": pago.numero_operacion or "",
+            }
+        )
+
     return rows
