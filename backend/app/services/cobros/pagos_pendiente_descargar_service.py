@@ -90,12 +90,10 @@ def obtener_datos_excel(db: Session, pagos: List[PagoReportado]) -> List[Dict[st
                 "Monto": monto_val,
                 "Moneda": (pago.moneda or "BS").strip(),
                 "Tasa cambio (Bs/USD)": tasa_bs_usd,
-                "Bs a USD (equiv.)": equiv_usd,
                 "Banco": (pago.institucion_financiera or "").strip(),
                 "Comentario": pago.observacion or "",
                 "Numero de Documento": pago.numero_operacion or "",
-                # Última columna: referencia única en dólares (mismo valor que Bs a USD cuando aplica)
-                "Monto en USD (solo dólares)": equiv_usd,
+                "Monto USD": equiv_usd,
             }
         )
 

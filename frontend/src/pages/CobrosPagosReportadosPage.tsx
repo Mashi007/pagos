@@ -30,7 +30,7 @@ import {
   cambiarEstadoPago,
   openComprobanteInNewTab,
   eliminarPagoReportado,
-  markPagosReportadosExportados,
+  exportarPagosReportadosAprobadosExcel,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
@@ -81,8 +81,6 @@ import {
 } from 'lucide-react'
 
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
-
-import { createAndDownloadExcel } from '../types/exceljs'
 
 import {
   Dialog,
@@ -374,117 +372,32 @@ export default function CobrosPagosReportadosPage() {
   }
 
   const handleDescargarExcelAprobados = async () => {
-    // Pedir estado=aprobado por API (el listado en pantalla suele ocultar aprobados).
-    // No enviamos fecha_desde/fecha_hasta: en backend filtran por created_at del reporte
-    // y suelen dejar 0 filas aunque haya muchos aprobados. Cédula/institución sí acotan si las llenaste.
+    // Servidor: solo aprobados no exportados; mismo criterio de cédula/institución; sin fechas.
+    // El Excel y el marcado en BD son atómicos (un solo request).
     setDescargandoExcelAprobados(true)
 
-    const perPage = 300
-    const allAprobados: PagoReportadoItem[] = []
-    let total = 0
-    let pageNum = 1
-    const maxPages = 50
-
     try {
-      while (pageNum <= maxPages) {
-        const res = await listPagosReportados({
-          page: pageNum,
-          per_page: perPage,
-          estado: 'aprobado',
-          cedula: cedula.trim() || undefined,
-          institucion: institucion.trim() || undefined,
-        })
-
-        total = res.total
-        allAprobados.push(...res.items)
-
-        if (res.items.length < perPage || allAprobados.length >= total) {
-          break
-        }
-
-        pageNum++
-      }
-
-      if (!allAprobados.length) {
-        toast(
-          'No hay pagos aprobados pendientes de exportar. ' +
-            'Si ya los exportó antes, dejan de listarse; use la tabla temporal o revise filtros de fecha/cédula.'
-        )
-
-        return
-      }
-
-      const rows = allAprobados.map(row => {
-        const mNum = row.monto != null ? Number(row.monto) : Number.NaN
-        const montoVal =
-          Number.isFinite(mNum) && mNum >= 0 ? mNum.toFixed(2) : ''
-
-        const tasaStr =
-          row.tasa_cambio_bs_usd != null &&
-          Number.isFinite(Number(row.tasa_cambio_bs_usd))
-            ? Number(row.tasa_cambio_bs_usd).toFixed(4)
-            : ''
-        const usdStr =
-          row.equivalente_usd != null && Number.isFinite(Number(row.equivalente_usd))
-            ? Number(row.equivalente_usd).toFixed(2)
-            : ''
-
-        return {
-          Referencia: row.referencia_interna,
-          Nombre: `${row.nombres} ${row.apellidos}`.trim(),
-          Cedula: row.cedula_display,
-          Banco: row.institucion_financiera,
-          Monto: montoVal,
-          Moneda: row.moneda ?? '',
-          'Tasa cambio (Bs/USD)': tasaStr,
-          'Bs a USD (equiv.)': usdStr,
-          'Fecha pago': row.fecha_pago,
-          'Numero operacion': row.numero_operacion,
-          'Fecha reporte': row.fecha_reporte
-            ? new Date(row.fecha_reporte).toLocaleDateString()
-            : '',
-          Observacion: row.observacion ?? '',
-          Estado:
-            ESTADO_CONFIG[normalizeEstadoValue(row.estado)]?.label ??
-            row.estado,
-          // Última columna: mismo cálculo que "Bs a USD (equiv.)", siempre en dólares para totales
-          'Monto en USD (solo dólares)': usdStr,
-        }
+      const stats = await exportarPagosReportadosAprobadosExcel({
+        cedula: cedula.trim() || undefined,
+        institucion: institucion.trim() || undefined,
       })
-
-      const fecha = new Date().toISOString().slice(0, 10)
-
-      await createAndDownloadExcel(
-        rows,
-        'Pagos Aprobados',
-        'pagos_reportados_aprobados_' + fecha + '.xlsx'
-      )
-
-      const idsAprobados = allAprobados.map(row => row.id)
-
-      const markResult = await markPagosReportadosExportados(idsAprobados)
-
-      const qCola =
-        markResult.quitados_cola_temporal != null
-          ? markResult.quitados_cola_temporal
-          : 0
 
       toast.success(
         'Excel con ' +
-          String(rows.length) +
-          ' aprobado(s). Marcados exportados: ' +
-          String(markResult.marcados) +
+          String(stats.totalFilas) +
+          ' aprobado(s). Nuevos exportados: ' +
+          String(stats.marcados) +
+          (stats.yaExportados > 0
+            ? ' (ya constaban ' + String(stats.yaExportados) + ')'
+            : '') +
           '. Cola temporal: quitados ' +
-          String(qCola) +
+          String(stats.quitadosCola) +
           ' registro(s).'
       )
 
       await load({ page: 1 })
     } catch (e: any) {
-      toast.error(
-        e?.message ||
-          'Se descargo el Excel, pero fallo el marcado de exportados. Recargue e intente de nuevo.'
-      )
+      toast.error(e?.message || 'No se pudo exportar el Excel de aprobados.')
     } finally {
       setDescargandoExcelAprobados(false)
     }
@@ -583,21 +496,20 @@ export default function CobrosPagosReportadosPage() {
               <span className="font-semibold">
                 Descargar Excel Aprobados —{' '}
               </span>
-              Solo pagos en estado <strong>aprobado</strong> que aún no se han
-              exportado con este botón. Las fechas del filtro no aplican; sí
-              cédula e institución si las escribiste. Al descargar: genera el
-              Excel, marca como exportados y <strong>quita esos pagos de la cola</strong>{' '}
-              temporal en base de datos (si estaban ahí).
+              Solo <strong>aprobados</strong> aún no exportados. Las fechas del
+              filtro no aplican; sí cédula e institución si las escribiste. El
+              servidor genera el Excel y en la <strong>misma operación</strong>{' '}
+              marca exportados y limpia la cola temporal.
             </p>
 
             <p className="text-muted-foreground">
               <span className="font-semibold text-foreground">
-                Columnas de tasa en el Excel —{' '}
+                Columnas del Excel —{' '}
               </span>
-              Incluye <strong>Tasa cambio (Bs/USD)</strong> (oficial del día de la{' '}
-              <em>fecha de pago</em>), <strong>Bs a USD (equiv.)</strong> y al final{' '}
-              <strong>Monto en USD (solo dólares)</strong>. Si falta tasa para una
-              fecha en Bs, esas celdas quedan vacías.
+              Referencia, Nombre, Cédula, Banco, Monto, Moneda,{' '}
+              <strong>Tasa cambio (Bs/USD)</strong>, Fecha pago, Nº operación,
+              Fecha reporte, Observación, Estado y al final{' '}
+              <strong>Monto USD</strong> (equivalente en dólares para sumar).
             </p>
           </div>
         </CardContent>

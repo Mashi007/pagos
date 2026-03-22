@@ -285,6 +285,154 @@ def _observacion_reglas_carga(
     return result
 
 
+def _pago_reportado_list_items_from_rows(
+    db: Session, rows: List[PagoReportado]
+) -> List[PagoReportadoListItem]:
+    """Misma lógica de observaciones / tasa que el listado paginado."""
+    if not rows:
+        return []
+    cedula_norms = [
+        _normalize_cedula_for_client_lookup(
+            ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        )
+        for r in rows
+    ]
+    cedulas_en_clientes = _cedulas_en_clientes_set(db)
+    logger.debug(
+        "[COBROS] pagos-reportados: cedulas_en_clientes set_size=%s V20149164_in_set=%s",
+        len(cedulas_en_clientes),
+        "V20149164" in cedulas_en_clientes,
+    )
+
+    cedulas_bolivares = load_autorizados_bs_claves(db)
+
+    num_ops_raw = list({(r.numero_operacion or "").strip() for r in rows if (r.numero_operacion or "").strip()})
+    norms_for_query = {n for o in num_ops_raw for n in [normalize_documento(o)] if n}
+    numeros_doc_en_pagos = set()
+    if norms_for_query:
+        existing_docs = db.execute(
+            select(Pago.numero_documento).where(Pago.numero_documento.in_(list(norms_for_query)))
+        ).scalars().all()
+        numeros_doc_en_pagos = {str(d) for d in existing_docs if d}
+
+    partes_por_fila = _observacion_reglas_carga(
+        db, rows, cedulas_en_clientes, cedulas_bolivares, numeros_doc_en_pagos
+    )
+
+    items: List[PagoReportadoListItem] = []
+    for i, r in enumerate(rows):
+        obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
+        partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
+        partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
+        observacion = " / ".join(partes_final) if partes_final else None
+        tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
+            db, r.fecha_pago, float(r.monto), r.moneda
+        )
+        items.append(PagoReportadoListItem(
+            id=r.id,
+            referencia_interna=r.referencia_interna,
+            nombres=r.nombres,
+            apellidos=r.apellidos,
+            cedula_display=f"{r.tipo_cedula}{r.numero_cedula}",
+            institucion_financiera=r.institucion_financiera,
+            monto=float(r.monto),
+            moneda=r.moneda or "BS",
+            tasa_cambio_bs_usd=tasa_x,
+            equivalente_usd=eq_usd,
+            fecha_pago=r.fecha_pago,
+            numero_operacion=r.numero_operacion,
+            fecha_reporte=r.created_at,
+            estado=r.estado,
+            gemini_coincide_exacto=r.gemini_coincide_exacto,
+            observacion=observacion,
+            correo_enviado_a=r.correo_enviado_a,
+            tiene_recibo_pdf=bool(r.recibo_pdf),
+        ))
+    return items
+
+
+def _query_aprobados_pendientes_exportar(
+    db: Session,
+    cedula: Optional[str],
+    institucion: Optional[str],
+) -> List[PagoReportado]:
+    """Aprobados aún no marcados como exportados; sin filtro por fechas (igual que export en frontend)."""
+    exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
+    q = select(PagoReportado).where(PagoReportado.estado == "aprobado")
+    q = q.where(~PagoReportado.id.in_(exportados_subq))
+    if cedula:
+        ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
+        cond_cedula = or_(
+            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula).like(f"%{ced_clean}%"),
+            PagoReportado.numero_cedula.like(f"%{ced_clean}%"),
+            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula) == ced_clean,
+            PagoReportado.numero_cedula == ced_clean,
+        )
+        if len(ced_clean) >= 1 and ced_clean[0:1] in ("V", "E", "J") and ced_clean[1:].isdigit():
+            cond_cedula = or_(
+                cond_cedula,
+                and_(PagoReportado.tipo_cedula == ced_clean[0:1], PagoReportado.numero_cedula == ced_clean[1:]),
+            )
+        q = q.where(cond_cedula)
+    if institucion:
+        ins = (institucion or "").strip()
+        if ins:
+            q = q.where(PagoReportado.institucion_financiera.ilike(f"%{ins}%"))
+    q = q.order_by(PagoReportado.created_at.asc())
+    return list(db.execute(q).scalars().all())
+
+
+def _estado_label_excel(estado: str) -> str:
+    m = {
+        "pendiente": "Pendiente",
+        "en_revision": "En revisión (manual)",
+        "aprobado": "Aprobado",
+        "rechazado": "Rechazado",
+        "importado": "Importado a Pagos",
+    }
+    return m.get((estado or "").strip(), estado or "")
+
+
+def _persist_marcar_exportados_y_cola(db: Session, ids: List[int]) -> dict:
+    """
+    Inserta exportados + quita de pagos_pendiente_descargar y hace commit.
+    El llamador debe validar que los ids existen y están en estado aprobado.
+    """
+    ya_exportados = set(
+        db.execute(
+            select(PagoReportadoExportado.pago_reportado_id).where(
+                PagoReportadoExportado.pago_reportado_id.in_(ids)
+            )
+        ).scalars().all()
+    )
+
+    nuevos = [
+        PagoReportadoExportado(pago_reportado_id=pid)
+        for pid in ids
+        if pid not in ya_exportados
+    ]
+
+    if nuevos:
+        db.add_all(nuevos)
+
+    res_cola = db.execute(
+        delete(PagoPendienteDescargar).where(
+            PagoPendienteDescargar.pago_reportado_id.in_(ids)
+        )
+    )
+    quitados_cola_temporal = int(res_cola.rowcount or 0)
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "marcados": len(nuevos),
+        "ya_exportados": len(ya_exportados),
+        "total_solicitados": len(ids),
+        "quitados_cola_temporal": quitados_cola_temporal,
+    }
+
+
 @router.get("/pagos-reportados", response_model=dict)
 def list_pagos_reportados(
     db: Session = Depends(get_db),
@@ -345,69 +493,7 @@ def list_pagos_reportados(
         PagoReportado.created_at.asc(),
     ).offset((page - 1) * per_page).limit(per_page)
     rows = db.execute(q).scalars().all()
-
-    # Conjuntos para reglas de observación al cargar (cédula en clientes, lista Bs, duplicado en pagos).
-    # Normalizar cédula igual que en clientes: sin guión/espacios y sin ceros a la izquierda (V08752971 = V8752971).
-    cedula_norms = [
-        _normalize_cedula_for_client_lookup(
-            ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
-        )
-        for r in rows
-    ]
-    unique_cedulas = set(c for c in cedula_norms if c)
-    # Conjunto de cédulas que existen en clientes (incluye variante V+numero si en BD está solo el número)
-    cedulas_en_clientes = _cedulas_en_clientes_set(db)
-    logger.debug(
-        "[COBROS] pagos-reportados: cedulas_en_clientes set_size=%s V20149164_in_set=%s",
-        len(cedulas_en_clientes),
-        "V20149164" in cedulas_en_clientes,
-    )
-
-    cedulas_bolivares = load_autorizados_bs_claves(db)
-
-    num_ops_raw = list({(r.numero_operacion or "").strip() for r in rows if (r.numero_operacion or "").strip()})
-    norms_for_query = {n for o in num_ops_raw for n in [normalize_documento(o)] if n}
-    numeros_doc_en_pagos = set()
-    if norms_for_query:
-        existing_docs = db.execute(
-            select(Pago.numero_documento).where(Pago.numero_documento.in_(list(norms_for_query)))
-        ).scalars().all()
-        numeros_doc_en_pagos = {str(d) for d in existing_docs if d}
-
-    partes_por_fila = _observacion_reglas_carga(
-        db, rows, cedulas_en_clientes, cedulas_bolivares, numeros_doc_en_pagos
-    )
-
-    items = []
-    for i, r in enumerate(rows):
-        obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
-        partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
-        # Orden estándar: reglas (NO CLIENTES, DUPLICADO DOC, Monto...) primero; luego divergencias Gemini (columnas). Un solo separador " / ".
-        partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
-        observacion = " / ".join(partes_final) if partes_final else None
-        tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
-            db, r.fecha_pago, float(r.monto), r.moneda
-        )
-        items.append(PagoReportadoListItem(
-            id=r.id,
-            referencia_interna=r.referencia_interna,
-            nombres=r.nombres,
-            apellidos=r.apellidos,
-            cedula_display=f"{r.tipo_cedula}{r.numero_cedula}",
-            institucion_financiera=r.institucion_financiera,
-            monto=float(r.monto),
-            moneda=r.moneda or "BS",
-            tasa_cambio_bs_usd=tasa_x,
-            equivalente_usd=eq_usd,
-            fecha_pago=r.fecha_pago,
-            numero_operacion=r.numero_operacion,
-            fecha_reporte=r.created_at,
-            estado=r.estado,
-            gemini_coincide_exacto=r.gemini_coincide_exacto,
-            observacion=observacion,
-            correo_enviado_a=r.correo_enviado_a,
-            tiene_recibo_pdf=bool(r.recibo_pdf),
-        ))
+    items = _pago_reportado_list_items_from_rows(db, rows)
     return {"items": items, "total": total, "page": page, "per_page": per_page}
 
 
@@ -449,6 +535,101 @@ def kpis_pagos_reportados(
             counts[row.estado] = row.cnt
     counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado", "importado"))
     return counts
+
+
+@router.get("/pagos-reportados/exportar-aprobados-excel")
+def exportar_pagos_aprobados_excel(
+    db: Session = Depends(get_db),
+    cedula: Optional[str] = Query(None),
+    institucion: Optional[str] = Query(None),
+):
+    """
+    Genera Excel de aprobados pendientes de exportar y en la misma transacción marca exportados y limpia cola.
+    Mismos filtros opcionales que el listado (cédula, institución); sin fechas.
+    """
+    from io import BytesIO
+    from openpyxl import Workbook
+    from datetime import datetime
+
+    rows = _query_aprobados_pendientes_exportar(
+        db,
+        cedula=(cedula or "").strip() or None,
+        institucion=(institucion or "").strip() or None,
+    )
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay pagos aprobados pendientes de exportar (o ya fueron marcados como exportados).",
+        )
+
+    items = _pago_reportado_list_items_from_rows(db, rows)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Pagos Aprobados"
+
+    headers = [
+        "Referencia",
+        "Nombre",
+        "Cedula",
+        "Banco",
+        "Monto",
+        "Moneda",
+        "Tasa cambio (Bs/USD)",
+        "Fecha pago",
+        "Numero operacion",
+        "Fecha reporte",
+        "Observacion",
+        "Estado",
+        "Monto USD",
+    ]
+    ws.append(headers)
+
+    for it in items:
+        monto_val = float(it.monto)
+        tasa_c = it.tasa_cambio_bs_usd
+        eq_u = it.equivalente_usd
+        fr = it.fecha_reporte
+        ws.append(
+            [
+                it.referencia_interna,
+                f"{(it.nombres or '').strip()} {(it.apellidos or '').strip()}".strip(),
+                it.cedula_display,
+                it.institucion_financiera,
+                round(monto_val, 2),
+                it.moneda or "BS",
+                round(tasa_c, 4) if tasa_c is not None else None,
+                it.fecha_pago.isoformat() if it.fecha_pago else "",
+                it.numero_operacion or "",
+                fr.strftime("%d/%m/%Y %H:%M") if fr else "",
+                it.observacion or "",
+                _estado_label_excel(it.estado),
+                round(eq_u, 2) if eq_u is not None else None,
+            ]
+        )
+
+    buf = BytesIO()
+    wb.save(buf)
+    excel_bytes = buf.getvalue()
+
+    ids = [it.id for it in items]
+    stats = _persist_marcar_exportados_y_cola(db, ids)
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"pagos_reportados_aprobados_{ts}.xlsx"
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(excel_bytes)),
+            "X-Export-Marcados": str(stats["marcados"]),
+            "X-Export-Ya-Exportados": str(stats["ya_exportados"]),
+            "X-Export-Quitados-Cola": str(stats["quitados_cola_temporal"]),
+            "X-Export-Total-Filas": str(len(items)),
+        },
+    )
 
 
 @router.get("/pagos-reportados/{pago_id}", response_model=PagoReportadoDetalle)
@@ -1190,45 +1371,14 @@ def marcar_pagos_reportados_exportados(
             detail=f"Solo se pueden marcar exportados pagos en estado aprobado. IDs inválidos: {no_aprobados}",
         )
 
-    ya_exportados = set(
-        db.execute(
-            select(PagoReportadoExportado.pago_reportado_id).where(PagoReportadoExportado.pago_reportado_id.in_(ids))
-        ).scalars().all()
-    )
-
-    nuevos = [
-        PagoReportadoExportado(pago_reportado_id=pid)
-        for pid in ids
-        if pid not in ya_exportados
-    ]
-
-    if nuevos:
-        db.add_all(nuevos)
-
-    # Quitar de la cola temporal (pagos_pendiente_descargar) los mismos IDs exportados
-    res_cola = db.execute(
-        delete(PagoPendienteDescargar).where(
-            PagoPendienteDescargar.pago_reportado_id.in_(ids)
-        )
-    )
-    quitados_cola_temporal = int(res_cola.rowcount or 0)
-
-    db.commit()
-
-    return {
-        "ok": True,
-        "marcados": len(nuevos),
-        "ya_exportados": len(ya_exportados),
-        "total_solicitados": len(ids),
-        "quitados_cola_temporal": quitados_cola_temporal,
-    }
+    return _persist_marcar_exportados_y_cola(db, ids)
 
 
 @router.get("/descargar-pagos-aprobados-excel")
 def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
     """
-    Descarga los pagos aprobados pendientes en Excel y luego vacía la tabla temporal.
-    Incluye tasa Bs/USD (día fecha de pago) y columna equivalente USD para Bs.
+    [Deprecado] Descarga desde cola temporal y vacía toda la tabla.
+    Preferir GET /pagos-reportados/exportar-aprobados-excel (un solo flujo de aprobados).
     """
     from io import BytesIO
     from openpyxl import Workbook
@@ -1255,11 +1405,10 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
         "Monto",
         "Moneda",
         "Tasa cambio (Bs/USD)",
-        "Bs a USD (equiv.)",
         "Banco",
         "Comentario",
         "Numero de Documento",
-        "Monto en USD (solo dólares)",
+        "Monto USD",
     ]
     ws.append(headers)
 
@@ -1272,11 +1421,10 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
                 row["Monto"],
                 row["Moneda"],
                 row["Tasa cambio (Bs/USD)"],
-                row["Bs a USD (equiv.)"],
                 row["Banco"],
                 row["Comentario"],
                 row["Numero de Documento"],
-                row["Monto en USD (solo dólares)"],
+                row["Monto USD"],
             ]
         )
 
@@ -1286,11 +1434,10 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
     ws.column_dimensions["C"].width = 14
     ws.column_dimensions["D"].width = 10
     ws.column_dimensions["E"].width = 22
-    ws.column_dimensions["F"].width = 18
-    ws.column_dimensions["G"].width = 22
-    ws.column_dimensions["H"].width = 30
-    ws.column_dimensions["I"].width = 25
-    ws.column_dimensions["J"].width = 26
+    ws.column_dimensions["F"].width = 22
+    ws.column_dimensions["G"].width = 30
+    ws.column_dimensions["H"].width = 25
+    ws.column_dimensions["I"].width = 14
     
     # Bytes completos en memoria (StreamingResponse+BytesIO a veces entrega archivos corruptos al cliente)
     output = BytesIO()
@@ -1309,5 +1456,7 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(excel_bytes)),
+            "Deprecation": "true",
+            "Warning": '299 - "Use GET /pagos-reportados/exportar-aprobados-excel"',
         },
     )
