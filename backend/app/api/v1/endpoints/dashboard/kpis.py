@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, SessionLocal
@@ -36,6 +36,19 @@ from .utils import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _monto_pago_usd_sql():
+    """Expresión SQL: USD de cartera. Si el registro es BS con tasa y monto en Bs., usa conversión (evita picos por monto_pagado mal cargado)."""
+    moneda_bs = func.lower(func.trim(Pago.moneda_registro)) == "bs"
+    tasa_ok = and_(
+        Pago.tasa_cambio_bs_usd.isnot(None),
+        Pago.tasa_cambio_bs_usd > 0,
+    )
+    return case(
+        (and_(moneda_bs, Pago.monto_bs_original.isnot(None), tasa_ok), Pago.monto_bs_original / Pago.tasa_cambio_bs_usd),
+        else_=Pago.monto_pagado,
+    )
 
 
 def _compute_kpis_principales(
@@ -377,12 +390,14 @@ def _compute_dashboard_admin(
                     Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
+            monto_usd = _monto_pago_usd_sql()
             cobrado = db.scalar(
-                select(func.coalesce(func.sum(Pago.monto_pagado), 0))
+                select(func.coalesce(func.sum(monto_usd), 0))
                 .select_from(Pago)
                 .join(Prestamo, Pago.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
+                    or_(Pago.conciliado.is_(True), Pago.verificado_concordancia == "SI"),
                     func.date(Pago.fecha_pago) >= inicio_d,
                     func.date(Pago.fecha_pago) <= fin_d,
                 )
