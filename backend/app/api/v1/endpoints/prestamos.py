@@ -26,7 +26,7 @@ from fastapi.responses import Response
 
 from pydantic import BaseModel, field_validator
 
-from sqlalchemy import cast, delete, exists, func, or_, select, text
+from sqlalchemy import cast, delete, exists, func, or_, select, text, update
 
 from sqlalchemy.exc import IntegrityError
 
@@ -51,6 +51,8 @@ from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
 
 from app.models.pago import Pago
+
+from app.models.pago_con_error import PagoConError
 
 from app.models.prestamo import Prestamo
 
@@ -3506,6 +3508,22 @@ def delete_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     if not row:
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    db.execute(
+        delete(RevisionManualPrestamo).where(
+            RevisionManualPrestamo.prestamo_id == prestamo_id
+        )
+    )
+
+    db.execute(
+        update(Pago).where(Pago.prestamo_id == prestamo_id).values(prestamo_id=None)
+    )
+
+    db.execute(
+        update(PagoConError)
+        .where(PagoConError.prestamo_id == prestamo_id)
+        .values(prestamo_id=None)
+    )
 
     db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
 
