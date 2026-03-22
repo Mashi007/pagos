@@ -11,6 +11,7 @@ rearticular_prestamo(2526)  # sustituir por el prestamo_id
 "
 O desde backend con PYTHONPATH=.:
   python scripts/rearticular_prestamo_fifo.py 2526
+  python scripts/rearticular_prestamo_fifo.py 2735 1672 3200   # varios préstamos
 """
 from __future__ import annotations
 
@@ -124,16 +125,21 @@ def rearticular_prestamo(prestamo_id: int, db=None):
 
 def main():
     if len(sys.argv) < 2:
-        print("Uso: python rearticular_prestamo_fifo.py <prestamo_id>")
+        print("Uso: python rearticular_prestamo_fifo.py <prestamo_id> [prestamo_id ...]")
         sys.exit(1)
-    try:
-        pid = int(sys.argv[1])
-    except ValueError:
-        print("prestamo_id debe ser un número entero")
-        sys.exit(1)
-    result = rearticular_prestamo(pid)
-    print(result["message"])
-    sys.exit(0 if result.get("ok") else 1)
+    failed = 0
+    for arg in sys.argv[1:]:
+        try:
+            pid = int(arg)
+        except ValueError:
+            print(f"prestamo_id invalido: {arg}")
+            failed += 1
+            continue
+        result = rearticular_prestamo(pid)
+        print(f"[{pid}] {result['message']}")
+        if not result.get("ok"):
+            failed += 1
+    sys.exit(0 if failed == 0 else 1)
 
 
 if __name__ == "__main__":
