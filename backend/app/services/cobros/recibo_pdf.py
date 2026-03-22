@@ -13,6 +13,9 @@ WHATSAPP_LINK = "https://wa.me/584244579934"
 WHATSAPP_DISPLAY = "424-4579934"
 CONTACTO_COBRANZA = "cobranza@rapicreditca.com"
 
+# Texto para cliente cuando aun no hay cuota(s) aplicada(s) al abono (PDF y API publica)
+RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE = "Revisando Pago"
+
 _LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "logo.png"
 
 
@@ -202,7 +205,7 @@ def generar_recibo_pago_reportado(
     banco = (institucion_financiera or "").strip()
     banco_valido = "" if _is_placeholder_text(banco) else banco
     numero_op = (numero_operacion or "").strip()
-    cuotas_txt = (aplicado_a_cuotas or "").strip() or "Pendiente de aplicar"
+    cuotas_txt = (aplicado_a_cuotas or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE
     estado_cuota_lbl = ((estado_cuota or "").strip() or None)
 
     monto_ve, moneda_sym = _monto_tabla_y_cuerpo(monto, moneda)
@@ -441,7 +444,14 @@ def generar_recibo_pago_reportado(
             ("BACKGROUND", (0, 5), (-1, 5), colors.HexColor("#f8fafc")),
         )
 
-    table = Table(info, colWidths=[1.45 * inch, 2.0 * inch, 1.2 * inch, 1.45 * inch])
+    # Ancho total = area util; ultima columna mas ancha para IDs de operacion largos sin partir en 2 lineas
+    _info_col_w = [
+        _content_w * 0.12,
+        _content_w * 0.30,
+        _content_w * 0.12,
+        _content_w * 0.46,
+    ]
+    table = Table(info, colWidths=_info_col_w)
     table.setStyle(TableStyle(_info_style))
 
     story.append(table)
@@ -516,6 +526,11 @@ def generar_recibo_pago_reportado(
         cuerpo += (
             f" Este comprobante corresponde al abono registrado a <b>{(aplicado_a_cuotas or '').strip()}</b> "
             "del credito, segun la tabla de amortizacion."
+        )
+    else:
+        cuerpo += (
+            f" <b>{RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE}</b>: el pago fue recibido y esta en proceso de "
+            "verificacion y conciliacion antes de aplicarse a la tabla de amortizacion."
         )
     if moneda_u == "USD":
         cuerpo += (

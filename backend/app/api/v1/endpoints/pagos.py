@@ -95,6 +95,16 @@ from app.services.tasa_cambio_service import (
 
 )
 
+from app.services.cobros.cedula_reportar_bs_service import (
+
+    normalize_cedula_para_almacenar_lista_bs,
+
+    load_autorizados_bs_claves,
+
+    cedula_coincide_autorizados_bs,
+
+)
+
 
 
 class MoverRevisarPagosBody(BaseModel):
@@ -4810,39 +4820,7 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
 
 
 # --- Cédulas permitidas para reportar en Bs (rapicredit-cobros / infopagos) ---
-
-
-
-def _normalize_cedula_bs(cedula: str) -> str | None:
-
-    """Normaliza cédula para la lista: V/E/J/G + dígitos, sin guiones. Retorna None si inválida."""
-
-    if not cedula or not isinstance(cedula, str):
-
-        return None
-
-    s = cedula.strip().upper().replace("-", "").replace(" ", "").replace(".", "")
-
-    if not s:
-
-        return None
-
-    # Solo dígitos -> anteponer V
-
-    if s.isdigit() and 6 <= len(s) <= 11:
-
-        return "V" + s
-
-    # Letra + dígitos
-
-    if len(s) >= 2 and s[0] in ("V", "E", "J", "G") and s[1:].isdigit() and 6 <= len(s[1:]) <= 11:
-
-        return s
-
-    return None
-
-
-
+# Normalización canónica: app.services.cobros.cedula_reportar_bs_service
 
 
 @router.get("/cedulas-reportar-bs", response_model=dict)
@@ -4885,7 +4863,7 @@ def agregar_cedula_reportar_bs(
 
     """
 
-    cedula_norm = _normalize_cedula_bs(payload.cedula)
+    cedula_norm = normalize_cedula_para_almacenar_lista_bs(payload.cedula)
 
     if not cedula_norm:
 
@@ -4897,13 +4875,9 @@ def agregar_cedula_reportar_bs(
 
         )
 
-    existente = db.execute(
+    claves_actuales = load_autorizados_bs_claves(db)
 
-        select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_norm).limit(1)
-
-    ).scalars().first()
-
-    if existente:
+    if cedula_coincide_autorizados_bs(cedula_norm, claves_actuales):
 
         total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
 
@@ -5029,7 +5003,7 @@ def upload_cedulas_reportar_bs(
 
         val = row[col_cedula]
 
-        cedula_norm = _normalize_cedula_bs(str(val).strip() if val is not None else "")
+        cedula_norm = normalize_cedula_para_almacenar_lista_bs(str(val).strip() if val is not None else "")
 
         if cedula_norm:
 

@@ -517,7 +517,8 @@ export default function ReportePagoPage({
         return
       }
 
-      const puedeBs = res.puede_reportar_bs ?? true
+      // Si el backend no envía el flag, no asumir Bs autorizado (seguridad)
+      const puedeBs = res.puede_reportar_bs === true
 
       setPuedeReportarBs(puedeBs)
 

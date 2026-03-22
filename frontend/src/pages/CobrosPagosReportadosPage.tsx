@@ -732,8 +732,8 @@ export default function CobrosPagosReportadosPage() {
                             ? 'NO CLIENTES: la cédula del reporte (' +
                               row.cedula_display +
                               ') no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.'
-                            : /solo Bs|Bolívares/i.test(row.observacion || '')
-                              ? 'Monto en Bs: solo está permitido si la cédula está en la lista de autorizadas para Bolívares (tabla cedulas_reportar_bs). Si no está, use USD o agregue la cédula a la lista en Configuración.'
+                            : /No pag Bs|solo Bs|Bolívares/i.test(row.observacion || '')
+                              ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
                               : (row.observacion ?? '')
                         }
                       >
@@ -819,7 +819,8 @@ export default function CobrosPagosReportadosPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 shrink-0"
-                            title="Ver comprobante (imagen)"
+                            title="Ver comprobante"
+                            aria-label="Ver comprobante adjunto"
                             onClick={() => handleVerComprobante(row.id)}
                             disabled={viewingComprobanteId === row.id}
                           >

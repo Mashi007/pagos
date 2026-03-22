@@ -19,7 +19,6 @@ from app.core.deps import get_current_user
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.pago_reportado_exportado import PagoReportadoExportado
 from app.models.pago_pendiente_descargar import PagoPendienteDescargar
-from app.models.cedula_reportar_bs import CedulaReportarBs
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
@@ -30,6 +29,10 @@ from app.core.email_config_holder import get_email_activo_servicio
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
 from app.services.cobros.pagos_pendiente_descargar_service import obtener_pagos_aprobados_pendientes, vaciar_tabla_pendiente_descargar, obtener_datos_excel
+from app.services.cobros.cedula_reportar_bs_service import (
+    load_autorizados_bs_claves,
+    cedula_coincide_autorizados_bs,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -235,7 +238,7 @@ def _observacion_reglas_carga(
     db: Session,
     rows: list,
     cedulas_en_clientes: set,
-    cedulas_bolivares: set,
+    cedulas_bolivares: frozenset,
     numeros_doc_en_pagos: set,
 ) -> list:
     """Para cada fila de pagos_reportados, devuelve lista de observaciones por reglas: NO CLIENTES, Monto (Bs no autorizado), DUPLICADO DOC. Cédula normalizada igual que en clientes (sin ceros a la izquierda)."""
@@ -258,8 +261,8 @@ def _observacion_reglas_carga(
                 "V20149164" in cedulas_en_clientes,
             )
         moneda = (r.moneda or "BS").strip().upper()
-        if moneda == "BS" and cedula_norm and cedula_norm not in cedulas_bolivares:
-            partes.append("Monto: solo Bs si está en lista Bolívares")
+        if moneda == "BS" and cedula_norm and not cedula_coincide_autorizados_bs(cedula_norm, cedulas_bolivares):
+            partes.append("No pag Bs.")
         num_op = (r.numero_operacion or "").strip()
         n_doc = normalize_documento(num_op) if num_op else None
         if n_doc and n_doc in numeros_doc_en_pagos:
@@ -346,13 +349,7 @@ def list_pagos_reportados(
         "V20149164" in cedulas_en_clientes,
     )
 
-    # scalars().all() devuelve list[str] (cada ítem es la cédula completa). No usar row[0]: sería solo el 1er carácter.
-    list_bs = db.execute(select(CedulaReportarBs.cedula)).scalars().all()
-    cedulas_bolivares = {
-        _normalize_cedula_for_client_lookup((c or "").strip().upper().replace("-", "").replace(" ", ""))
-        for c in list_bs
-        if c
-    }
+    cedulas_bolivares = load_autorizados_bs_claves(db)
 
     num_ops_raw = list({(r.numero_operacion or "").strip() for r in rows if (r.numero_operacion or "").strip()})
     norms_for_query = {n for o in num_ops_raw for n in [normalize_documento(o)] if n}
@@ -664,6 +661,9 @@ def rechazar_pago_reportado(
 
     to_email = _email_cliente_pago_reportado(db, pr)
     notif_activo = get_email_activo_servicio("notificaciones")
+    rechazo_correo_enviado: Optional[bool] = None
+    rechazo_correo_error: Optional[str] = None
+    mensaje_final = "Pago rechazado."
     logger.info(
         "[COBROS] Rechazar ref=%s: destino=%s servicio_notificaciones_activo=%s.",
         pr.referencia_interna, to_email or "sin correo", notif_activo,
@@ -692,19 +692,36 @@ def rechazar_pago_reportado(
             respetar_destinos_manuales=True,
         )
         if ok_mail:
+            rechazo_correo_enviado = True
+            mensaje_final = (
+                "Pago rechazado. Correo enviado al cliente desde notificaciones@rapicreditca.com "
+                "(motivo y comprobante si aplica)."
+            )
             logger.info("[COBROS] Rechazar ref=%s: correo enviado a %s (servicio notificaciones OK).", pr.referencia_interna, to_email)
         else:
+            rechazo_correo_enviado = False
+            rechazo_correo_error = (err_mail or "desconocido")[:500]
+            mensaje_final = "Pago rechazado. El correo al cliente no pudo enviarse; revise logs o configuración SMTP."
             logger.error(
                 "[COBROS] Rechazar ref=%s: correo NO enviado a %s. Error: %s.",
                 pr.referencia_interna, to_email, err_mail or "desconocido",
             )
     elif to_email and not notif_activo:
         logger.warning("[COBROS] Rechazar ref=%s: servicio notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
+        mensaje_final = "Pago rechazado. Servicio de correo notificaciones desactivado; no se envió correo."
     elif not to_email:
         logger.info("[COBROS] Rechazar ref=%s: no hay correo del cliente, no se envió notificación.", pr.referencia_interna)
+        mensaje_final = "Pago rechazado. No hay correo del cliente en el sistema; no se envió notificación."
     _registrar_historial(db, pago_id, estado_anterior, "rechazado", usuario_email, pr.motivo_rechazo)
     db.commit()
-    return {"ok": True, "mensaje": "Pago rechazado y cliente notificado."}
+    out = {
+        "ok": True,
+        "mensaje": mensaje_final,
+        "rechazo_correo_enviado": rechazo_correo_enviado,
+    }
+    if rechazo_correo_error:
+        out["rechazo_correo_error"] = rechazo_correo_error
+    return out
 
 
 @router.delete("/pagos-reportados/{pago_id}")
@@ -925,13 +942,8 @@ def editar_pago_reportado(
         raw_cedula = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
         cedula_norm = _normalize_cedula_for_client_lookup(raw_cedula)
         if cedula_norm:
-            list_bs_all = db.execute(select(CedulaReportarBs.cedula)).scalars().all()
-            cedulas_bs_norm = {
-                _normalize_cedula_for_client_lookup((c or "").strip().upper().replace("-", "").replace(" ", ""))
-                for c in list_bs_all
-                if c
-            }
-            permitido_bs = cedula_norm in cedulas_bs_norm
+            autorizados_bs = load_autorizados_bs_claves(db)
+            permitido_bs = cedula_coincide_autorizados_bs(cedula_norm, autorizados_bs)
             if not permitido_bs:
                 raise HTTPException(
                     status_code=400,
@@ -969,6 +981,8 @@ def cambiar_estado_pago(
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
 
     mensaje = f"Estado actualizado a {body.estado}."
+    rechazo_correo_enviado: Optional[bool] = None
+    rechazo_correo_error: Optional[str] = None
     if body.estado == "aprobado":
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)

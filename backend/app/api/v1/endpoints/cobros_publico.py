@@ -56,15 +56,19 @@ from app.models.prestamo import Prestamo
 
 from app.models.pago_reportado import PagoReportado
 
-from app.models.cedula_reportar_bs import CedulaReportarBs
-
 from app.api.v1.endpoints.validadores import validate_cedula
+
+from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_para_bs
 
 # Servicio Gemini del sistema (mismo GEMINI_API_KEY y GEMINI_MODEL que Pagos Gmail / health)
 
 from app.services.pagos_gmail.gemini_service import compare_form_with_image
 
-from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK
+from app.services.cobros.recibo_pdf import (
+    generar_recibo_pago_reportado,
+    RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
+    WHATSAPP_LINK,
+)
 from app.services.tasa_cambio_service import (
     obtener_tasa_por_fecha,
     fecha_hoy_caracas,
@@ -699,11 +703,7 @@ def validar_cedula_publico(
 
     # ¿Puede reportar en Bs? (lista cargada desde Excel en /pagos/pagos)
 
-    puede_bs = db.execute(
-
-        select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
-
-    ).scalars().first() is not None
+    puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
 
     nombre = (cliente.nombres or "").strip()
 
@@ -845,13 +845,7 @@ async def enviar_reporte_publico(
 
     if moneda_upper == "BS":
 
-        permitido_bs = db.execute(
-
-            select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
-
-        ).scalars().first() is not None
-
-        if not permitido_bs:
+        if not cedula_autorizada_para_bs(db, cedula_lookup):
 
             return EnviarReporteResponse(ok=False, error=ERROR_BS_NO_AUTORIZADO)
 
@@ -1335,13 +1329,7 @@ async def enviar_reporte_infopagos(
 
     if moneda_upper == "BS":
 
-        permitido_bs = db.execute(
-
-            select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
-
-        ).scalars().first() is not None
-
-        if not permitido_bs:
+        if not cedula_autorizada_para_bs(db, cedula_lookup):
 
             return EnviarReporteInfopagosResponse(ok=False, error=ERROR_BS_NO_AUTORIZADO)
 
@@ -1587,7 +1575,7 @@ async def enviar_reporte_infopagos(
 
             pago_id=pr.id,
 
-            aplicado_a_cuotas=cuotas_display,
+            aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
 
         )
 
