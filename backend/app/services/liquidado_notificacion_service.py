@@ -10,6 +10,7 @@ El envio NO es el mismo dia del cambio a LIQUIDADO: lo programa el job diario
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import List, Optional, Tuple
 
 from sqlalchemy import text
@@ -18,8 +19,10 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.core.email import mask_email_for_log, send_email
 from app.models.envio_notificacion import EnvioNotificacion
-from app.services.cuota_estado import estado_cuota_para_mostrar, hoy_negocio
-from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
+from app.services.estado_cuenta_pdf import (
+    generar_pdf_estado_cuenta,
+    obtener_datos_estado_cuenta_prestamo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +131,8 @@ class LiquidadoNotificacionService:
             )
             pdf_bytes: Optional[bytes] = None
             try:
-                pdf_bytes = LiquidadoNotificacionService._generar_pdf_estado_cuenta(
-                    db, cliente_id
+                pdf_bytes = LiquidadoNotificacionService._generar_pdf_estado_cuenta_prestamo(
+                    db, prestamo_id
                 )
             except Exception as e:
                 logger.error("[LIQUIDADO_NOTIF] Error generando PDF: %s", e)
@@ -228,94 +231,31 @@ Equipo RapiCredit"""
             return False
 
     @staticmethod
-    def _generar_pdf_estado_cuenta(db: Session, cliente_id: int) -> Optional[bytes]:
+    def _generar_pdf_estado_cuenta_prestamo(db: Session, prestamo_id: int) -> Optional[bytes]:
+        """
+        Mismo origen de datos que GET /prestamos/{id}/estado-cuenta/pdf (obtener_datos_estado_cuenta_prestamo):
+        un solo prestamo, compatibilidad sin columna fecha_liquidado, amortizacion si aplica.
+        """
         try:
-            result_cliente = db.execute(
-                text(
-                    "SELECT cedula, nombres, email FROM clientes WHERE id = :cliente_id"
-                ),
-                {"cliente_id": cliente_id},
-            ).fetchone()
-
-            if not result_cliente:
+            datos = obtener_datos_estado_cuenta_prestamo(db, prestamo_id)
+            if not datos:
+                logger.warning(
+                    "[LIQUIDADO_NOTIF] Sin datos estado cuenta prestamo_id=%s", prestamo_id
+                )
                 return None
-
-            cedula, nombre, _email = result_cliente
-
-            result_prestamos = db.execute(
-                text(
-                    """
-                SELECT id, producto, total_financiamiento, estado
-                FROM prestamos
-                WHERE cliente_id = :cliente_id
-                ORDER BY id DESC
-            """
-                ),
-                {"cliente_id": cliente_id},
-            ).fetchall()
-
-            prestamos_data = []
-            for row in result_prestamos:
-                prestamos_data.append(
-                    {
-                        "id": row[0],
-                        "producto": row[1] or "Préstamo",
-                        "total_financiamiento": float(row[2] or 0),
-                        "estado": row[3],
-                    }
-                )
-
-            result_cuotas = db.execute(
-                text(
-                    """
-                SELECT c.prestamo_id, c.numero_cuota, c.fecha_vencimiento,
-                       COALESCE(c.monto_cuota, 0), COALESCE(c.total_pagado, 0)
-                FROM cuotas c
-                INNER JOIN prestamos p ON c.prestamo_id = p.id
-                WHERE p.cliente_id = :cliente_id
-                  AND COALESCE(c.total_pagado, 0) < COALESCE(c.monto_cuota, 0) - 0.01
-                ORDER BY c.prestamo_id, c.numero_cuota
-            """
-                ),
-                {"cliente_id": cliente_id},
-            ).fetchall()
-
-            cuotas_data = []
-            total_pendiente = 0.0
-            hoy_ref = hoy_negocio()
-            for row in result_cuotas:
-                fv = row[2]
-                fv_d = fv.date() if fv and hasattr(fv, "date") else fv
-                monto_c = float(row[3] or 0)
-                total_p = float(row[4] or 0)
-                estado_str = estado_cuota_para_mostrar(
-                    total_p, monto_c, fv_d, hoy_ref
-                )
-                pend = max(0.0, monto_c - total_p)
-                cuotas_data.append(
-                    {
-                        "prestamo_id": row[0],
-                        "numero_cuota": row[1],
-                        "fecha_vencimiento": row[2].isoformat() if row[2] else "",
-                        "monto": pend,
-                        "estado": estado_str,
-                    }
-                )
-                total_pendiente += pend
-
-            corte = hoy_negocio()
             return generar_pdf_estado_cuenta(
-                cedula=cedula or "",
-                nombre=nombre or "",
-                prestamos=prestamos_data,
-                cuotas_pendientes=cuotas_data,
-                total_pendiente=total_pendiente,
-                fecha_corte=corte,
+                cedula=datos.get("cedula_display") or "",
+                nombre=datos.get("nombre") or "",
+                prestamos=datos.get("prestamos_list") or [],
+                cuotas_pendientes=datos.get("cuotas_pendientes") or [],
+                total_pendiente=float(datos.get("total_pendiente") or 0),
+                fecha_corte=datos.get("fecha_corte") or date.today(),
+                amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
             )
-
         except Exception as e:
             logger.error(
-                "[LIQUIDADO_NOTIF] Error en _generar_pdf_estado_cuenta: %s",
+                "[LIQUIDADO_NOTIF] Error en _generar_pdf_estado_cuenta_prestamo prestamo_id=%s: %s",
+                prestamo_id,
                 e,
                 exc_info=True,
             )

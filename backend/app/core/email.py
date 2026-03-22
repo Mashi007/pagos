@@ -48,6 +48,51 @@ def mask_email_for_log(addr: str) -> str:
     return f"{local[:2]}***@{domain}"
 
 
+def _normalize_attachments_for_smtp(
+    attachments: Optional[List[AttachmentType]],
+) -> List[AttachmentType]:
+    """
+    Valida y convierte adjuntos a (nombre, bytes). Omite vacios o tipos invalidos.
+    Evita enviar multipart/mixed sin partes utiles y mejora compatibilidad con clientes SMTP.
+    """
+    out: List[AttachmentType] = []
+    if not attachments:
+        return out
+    for idx, item in enumerate(attachments):
+        if not isinstance(item, (tuple, list)) or len(item) != 2:
+            logger.warning("[SMTP_ENVIO] adjunto #%s ignorado: se esperaba (nombre, bytes)", idx)
+            continue
+        filename, content = item[0], item[1]
+        if filename is None or not str(filename).strip():
+            logger.warning("[SMTP_ENVIO] adjunto #%s ignorado: nombre vacio", idx)
+            continue
+        name = str(filename).strip().replace("\r", "").replace("\n", "")
+        if content is None:
+            logger.warning("[SMTP_ENVIO] adjunto ignorado contenido None filename=%s", name)
+            continue
+        if isinstance(content, memoryview):
+            raw = content.tobytes()
+        elif isinstance(content, bytearray):
+            raw = bytes(content)
+        elif isinstance(content, bytes):
+            raw = content
+        else:
+            try:
+                raw = bytes(content)
+            except Exception:
+                logger.warning(
+                    "[SMTP_ENVIO] adjunto ignorado tipo no binario filename=%s tipo=%s",
+                    name,
+                    type(content).__name__,
+                )
+                continue
+        if len(raw) == 0:
+            logger.warning("[SMTP_ENVIO] adjunto vacio (0 bytes) omitido filename=%s", name)
+            continue
+        out.append((name, raw))
+    return out
+
+
 def _strip_html_to_plain(html: str, max_len: int = 8000) -> str:
     '''Quita tags y data URLs para usar como parte text/plain cuando el cuerpo es HTML.'''
     if not html or not html.strip():
@@ -305,7 +350,13 @@ def send_email(
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
 
-    has_attachments = bool(attachments)
+    attachments_norm = _normalize_attachments_for_smtp(attachments)
+    has_attachments = len(attachments_norm) > 0
+    if attachments and not attachments_norm:
+        logger.warning(
+            "[SMTP_ENVIO] se recibieron %s adjuntos pero ninguno es valido (nombre/contenido)",
+            len(attachments),
+        )
     cfg = get_smtp_config(servicio=servicio, tipo_tab=tipo_tab)
     if not cfg.get("smtp_host") or not cfg.get("smtp_user"):
         log_phase(logger, FASE_SMTP_CONFIG, False, "falta smtp_host o smtp_user")
@@ -331,9 +382,10 @@ def send_email(
 
     solicitados_mask = [mask_email_for_log(x) for x in dest_solicitados_originales]
     efectivos_para_smtp = list(to_emails) + cc_list + bcc_list
+    adjuntos_log = [(n, len(b)) for n, b in attachments_norm]
     logger.info(
         "[SMTP_ENVIO] intento modo_pruebas=%s redirigido_modo_pruebas=%s servicio=%s tipo_tab=%s "
-        "respetar_destinos_manuales=%s solicitados_MASK=%s efectivos_smtp=%s asunto=%s adjuntos=%s smtp_host=%s",
+        "respetar_destinos_manuales=%s solicitados_MASK=%s efectivos_smtp=%s asunto=%s adjuntos_n=%s adjuntos_bytes=%s smtp_host=%s",
         modo_pruebas,
         redirigido_modo_pruebas,
         servicio or "",
@@ -342,16 +394,18 @@ def send_email(
         solicitados_mask,
         efectivos_para_smtp,
         (subject or "")[:200],
-        len(attachments or []),
+        len(attachments_norm),
+        adjuntos_log,
         cfg.get("smtp_host") or "",
     )
 
     try:
         import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.base import MIMEBase
         from email import encoders
+        from email.mime.application import MIMEApplication
+        from email.mime.base import MIMEBase
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
 
         # Asegurar body_text y body_html son str y UTF-8 validos
         if body_text is None:
@@ -416,12 +470,14 @@ def send_email(
             msg["Bcc"] = ", ".join(bcc_list)
 
         if has_attachments:
-            for filename, content in attachments:
-                if not filename or content is None:
-                    continue
-                part = MIMEBase("application", "octet-stream")
-                part.set_payload(content)
-                encoders.encode_base64(part)
+            for filename, content in attachments_norm:
+                fn_lower = filename.lower()
+                if fn_lower.endswith(".pdf"):
+                    part = MIMEApplication(content, _subtype="pdf")
+                else:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(content)
+                    encoders.encode_base64(part)
                 part.add_header("Content-Disposition", "attachment", filename=filename)
                 msg.attach(part)
 

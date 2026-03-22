@@ -203,19 +203,27 @@ def _generar_recibo_desde_pago(db: Session, pr: PagoReportado) -> bytes:
 
 def _prestamos_aprobados_del_cliente(db: Session, cliente_id: int) -> list:
 
-    """Misma regla que importar reportados a pagos: solo préstamos en estado APROBADO."""
+    """
+    Misma regla que importar reportados a pagos: solo préstamos en estado APROBADO.
 
-    rows = db.execute(
+    Usa solo la columna id vía Core (Prestamo.__table__) para no disparar SELECT del mapper
+    completo; si en BD no existe prestamos.fecha_liquidado (migracion pendiente), ORM fallaria.
+    Los llamadores solo usan len() de la lista.
+    """
 
-        select(Prestamo)
+    t = Prestamo.__table__
 
-        .where(Prestamo.cliente_id == cliente_id, Prestamo.estado == "APROBADO")
+    stmt = (
 
-        .order_by(Prestamo.id)
+        select(t.c.id)
 
-    ).scalars().all()
+        .where(t.c.cliente_id == cliente_id, t.c.estado == "APROBADO")
 
-    return [p for p in rows if p is not None]
+        .order_by(t.c.id)
+
+    )
+
+    return [row[0] for row in db.execute(stmt).all()]
 
 
 
