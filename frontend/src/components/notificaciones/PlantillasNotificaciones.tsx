@@ -190,8 +190,6 @@ export function PlantillasNotificaciones({
 
     prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
 
-    mora61: [{ valor: 'MORA_90', label: '90+ d?as de mora (moroso)' }],
-
     cobranza: [{ valor: 'COBRANZA', label: 'Carta de cobranza' }],
   }
 
@@ -205,7 +203,6 @@ export function PlantillasNotificaciones({
     'PAGO_3_DIAS_ATRASADO',
     'PAGO_5_DIAS_ATRASADO',
     'PREJUDICIAL',
-    'MORA_90',
     'COBRANZA',
   ]
 
@@ -217,8 +214,6 @@ export function PlantillasNotificaciones({
     ...tiposPorCategoria.retraso,
 
     ...tiposPorCategoria.prejudicial,
-
-    ...tiposPorCategoria.mora61,
 
     ...(tiposPorCategoria.cobranza || []),
   ]
@@ -1598,8 +1593,6 @@ export function PlantillasNotificaciones({
 
     PREJUDICIAL: { categoria: 'Prejudicial', caso: 'Prejudicial' },
 
-    MORA_90: { categoria: 'Mora 90+', caso: '90+ d?as de mora (moroso)' },
-
     COBRANZA: { categoria: 'Cobranza', caso: 'Carta de cobranza' },
   }
 
@@ -1648,12 +1641,6 @@ export function PlantillasNotificaciones({
       tipo: 'PREJUDICIAL',
       label: 'Prejudicial',
       borderColor: 'border-red-500',
-    },
-
-    {
-      tipo: 'MORA_90',
-      label: '90+ d?as de mora (moroso)',
-      borderColor: 'border-slate-500',
     },
 
     {
@@ -1709,13 +1696,6 @@ export function PlantillasNotificaciones({
       key: 'Prejudicial',
       color: 'red',
       borderColor: 'border-red-500',
-      icon: '?',
-    },
-
-    {
-      key: 'Mora 90+',
-      color: 'slate',
-      borderColor: 'border-slate-500',
       icon: '?',
     },
   ]
@@ -2040,34 +2020,6 @@ export function PlantillasNotificaciones({
                   ))}
                 </div>
               </div>
-
-              {/* Mora 90+ */}
-
-              {tiposPorCategoria.mora61 && (
-                <div>
-                  <h4 className="mb-2 text-sm font-semibold text-slate-700">
-                    90+ d?as de mora (moroso)
-                  </h4>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    {tiposPorCategoria.mora61.map(t => (
-                      <label
-                        key={t.valor}
-                        className="flex cursor-pointer items-center gap-2 rounded border p-2 hover:bg-white"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={tiposSeleccionados.includes(t.valor)}
-                          onChange={() => toggleTipo(t.valor)}
-                          className="rounded"
-                        />
-
-                        <span className="text-sm">{t.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex items-center gap-2">

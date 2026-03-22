@@ -109,12 +109,6 @@ export interface ClientesRetrasadosResponse {
 
   dias_30_atraso?: ClienteRetrasadoItem[]
 
-  mora_90: {
-    cuotas: ClienteRetrasadoItem[]
-
-    total_cuotas: number
-  }
-
   liquidados?: LiquidadoItem[]
 }
 
@@ -136,8 +130,6 @@ export interface EstadisticasPorTab {
   /** Envíos del caso "1 día de retraso" (tipo_tab en BD). */
 
   dias_1_retraso: EstadisticasTabItem
-
-  mora_90: EstadisticasTabItem
 }
 
 export interface RebotadoItem {
@@ -354,7 +346,7 @@ class NotificacionService {
     )
   }
 
-  /** Clientes retrasados por reglas: 5 días, 3 días, 1 día, hoy, mora 90+. Datos reales desde BD. */
+  /** Clientes retrasados por reglas (previas, hoy, atrasos, liquidados). Datos reales desde BD. */
 
   async getClientesRetrasados(): Promise<ClientesRetrasadosResponse> {
     return await apiClient.get<ClientesRetrasadosResponse>(
@@ -365,7 +357,7 @@ class NotificacionService {
     )
   }
 
-  /** KPIs por pestaña: enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_90). */
+  /** KPIs por pestaña: enviados y rebotados (dias_5, dias_3, dias_1, hoy, dias_1_retraso). */
 
   async getEstadisticasPorTab(): Promise<EstadisticasPorTab> {
     return await apiClient.get<EstadisticasPorTab>(
@@ -711,54 +703,11 @@ class NotificacionService {
     )
   }
 
-  /** Envía correos a clientes con 90+ días de mora (moroso, email desde tabla clientes). */
-
-  async enviarNotificacionesMora61(): Promise<{
-    mensaje: string
-    enviados: number
-    sin_email: number
-    fallidos: number
-  }> {
-    return await apiClient.post<{
-      mensaje: string
-      enviados: number
-      sin_email: number
-      fallidos: number
-    }>(
-      `${API_V1}/notificaciones-mora-90/enviar`,
-
-      {},
-
-      { timeout: 120000 }
-    )
-  }
-
   /**
-
-
-
-
-
    * Inicia el envío de todas las notificaciones en segundo plano.
-
-
-
-
-
    * El servidor responde 202 de inmediato; el envío continúa en background (evita timeout).
-
-
-
-
-
    * Respeta modo_pruebas: si está activo, todos los correos van al correo de pruebas.
-
-
-
-
-
    */
-
   async enviarTodasNotificaciones(): Promise<{
     mensaje?: string
 

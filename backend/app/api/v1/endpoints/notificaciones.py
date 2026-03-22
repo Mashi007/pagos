@@ -312,7 +312,7 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_5_DIAS_ANTES", "PAGO_3_DIAS_ANTES", "PAGO_1_DIA_ANTES",
     "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO",
-    "PREJUDICIAL", "MORA_61", "MORA_90",  # MORA_61 legacy; MORA_90 = moroso 90+ dÃƒÂ­as
+    "PREJUDICIAL", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
 ])
 
@@ -663,14 +663,14 @@ def update_adjunto_fijo_cobranza(payload: dict = Body(...), db: Session = Depend
 
 @router.get("/adjuntos-fijos-cobranza")
 def get_adjuntos_fijos_cobranza(db: Session = Depends(get_db)):
-    """Lista de documentos PDF anexos por caso (todas las pestaÃƒÂ±as: previas, dÃƒÂ­a pago, retrasadas, prejudicial, mora_90)."""
+    """Lista de documentos PDF anexos por caso (previas, dÃƒÂ­a pago, retrasadas, prejudicial)."""
     from app.services.adjunto_fijo_cobranza import _get_adjuntos_por_caso_raw
     return _get_adjuntos_por_caso_raw(db)
 
 
 @router.post("/adjuntos-fijos-cobranza/upload")
 def upload_adjunto_fijo_cobranza(
-    tipo_caso: str = Query(..., description="Caso: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, mora_90"),
+    tipo_caso: str = Query(..., description="Caso: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -684,7 +684,7 @@ def upload_adjunto_fijo_cobranza(
     if tipo_caso not in TIPOS_CASO_VALIDOS:
         raise HTTPException(
             status_code=400,
-            detail="tipo_caso debe ser uno de: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, mora_90",
+            detail="tipo_caso debe ser uno de: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial",
         )
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se permiten documentos PDF")
@@ -1076,7 +1076,7 @@ def get_notificaciones_resumen(db: Session = Depends(get_db)):
 @router.get("/estadisticas-por-tab", response_model=dict)
 def get_estadisticas_por_tab(db: Session = Depends(get_db)):
     """
-    KPIs por pestaÃƒÂ±a: correos enviados y rebotados (dias_5, dias_3, dias_1, hoy, dias_1_retraso, mora_90).
+    KPIs por pestaÃƒÂ±a: correos enviados y rebotados (dias_5, dias_3, dias_1, hoy, dias_1_retraso).
     Datos desde tabla envios_notificacion (persistidos al enviar desde notificaciones_tabs).
     """
     result = {
@@ -1085,10 +1085,9 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "dias_1": {"enviados": 0, "rebotados": 0},
         "hoy": {"enviados": 0, "rebotados": 0},
         "dias_1_retraso": {"enviados": 0, "rebotados": 0},
-        "mora_90": {"enviados": 0, "rebotados": 0},
     }
     try:
-        for tipo in ("dias_5", "dias_3", "dias_1", "hoy", "dias_1_retraso", "mora_90"):
+        for tipo in ("dias_5", "dias_3", "dias_1", "hoy", "dias_1_retraso"):
             env = db.scalar(
                 select(func.count(EnvioNotificacion.id)).where(
                     EnvioNotificacion.tipo_tab == tipo,
@@ -1107,7 +1106,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
     return result
 
 
-TIPOS_TAB_NOTIFICACIONES = ("dias_5", "dias_3", "dias_1", "hoy", "dias_1_retraso", "mora_90")
+TIPOS_TAB_NOTIFICACIONES = ("dias_5", "dias_3", "dias_1", "hoy", "dias_1_retraso")
 
 
 def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
@@ -1146,7 +1145,7 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 
 @router.get("/rebotados-por-tab", response_model=dict)
 def get_rebotados_por_tab(
-    tipo: str = Query(..., description="Tipo de pestaÃƒÂ±a: dias_5, dias_3, dias_1, hoy, mora_90"),
+    tipo: str = Query(..., description="Tipo de pestaÃƒÂ±a: dias_5, dias_3, dias_1, hoy, dias_1_retraso"),
     db: Session = Depends(get_db),
 ):
     """Lista de correos no entregados (rebotados) para la pestaÃƒÂ±a. Para generar informe Excel en frontend o descargar Excel."""
@@ -1179,7 +1178,7 @@ def _generar_excel_rebotados(items: List[dict], tipo: str) -> bytes:
 
 @router.get("/rebotados-por-tab/excel")
 def get_rebotados_por_tab_excel(
-    tipo: str = Query(..., description="Tipo de pestaÃƒÂ±a: dias_5, dias_3, dias_1, hoy, mora_90"),
+    tipo: str = Query(..., description="Tipo de pestaÃƒÂ±a: dias_5, dias_3, dias_1, hoy, dias_1_retraso"),
     db: Session = Depends(get_db),
 ):
     """Descarga informe Excel de correos no entregados (rebotados) para la pestaÃƒÂ±a."""
@@ -1360,8 +1359,7 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     5. 1 dÃƒÂ­a atrasado (cuota vencida hace 1 dÃƒÂ­a)
     6. 5 dÃƒÂ­as atrasado (cuota vencida hace 5 dÃƒÂ­as)
     7. 30 dÃƒÂ­as atrasado (cuota vencida hace 30 dÃƒÂ­as)
-    8. 90+ dÃƒÂ­as de mora (moroso): cada cuota atrasada una a una.
-    9. CrÃƒÂ©dito pagado (liquidados): prestamo.total_financiamiento = SUM(cuotas.total_pagado).
+    8. CrÃƒÂ©dito pagado (liquidados): prestamo.total_financiamiento = SUM(cuotas.total_pagado).
     Datos desde BD: get_cuotas_pendientes_con_cliente y tabla prestamos/cuotas.
     """
     hoy = date.today()
@@ -1374,7 +1372,6 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     dias_1_atraso: List[dict] = []   # 1 dÃƒÂ­a atrasado (cuota vencida ayer)
     dias_5_atraso: List[dict] = []   # 5 dÃƒÂ­as atrasado (cuota vencida hace 5 dÃƒÂ­as)
     dias_30_atraso: List[dict] = []  # 30 dÃƒÂ­as atrasado (cuota vencida hace 30 dÃƒÂ­as)
-    mora_90_cuotas: List[dict] = []  # cada cuota 90+ dÃƒÂ­as atrasada (moroso)
 
     for (cuota, cliente) in rows:
         fv = cuota.fecha_vencimiento
@@ -1398,11 +1395,6 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
                 dias_5_atraso.append(_item(cliente, cuota, dias_atraso=5))
             elif dias_atraso == 30:
                 dias_30_atraso.append(_item(cliente, cuota, dias_atraso=30))
-            elif dias_atraso >= 90:
-                mora_90_cuotas.append(_item(cliente, cuota, dias_atraso=dias_atraso))
-
-    # Ordenar mora_90 por dias_atraso desc, luego por cliente
-    mora_90_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
 
     # Liquidados: prÃƒÂ©stamos donde Total financiamiento = total abonos (SUM total_pagado por prÃƒÂ©stamo)
     subq = (
@@ -1436,10 +1428,6 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
         "dias_1_atraso": dias_1_atraso,
         "dias_5_atraso": dias_5_atraso,
         "dias_30_atraso": dias_30_atraso,
-        "mora_90": {
-            "cuotas": mora_90_cuotas,
-            "total_cuotas": len(mora_90_cuotas),
-        },
         "liquidados": liquidados,
     }
 
@@ -1480,7 +1468,6 @@ def get_notificaciones_tabs_data(db: Session):
     dias_1_retraso: List[dict] = []
     dias_3_retraso: List[dict] = []
     dias_5_retraso: List[dict] = []
-    mora_90_cuotas: List[dict] = []
 
     for (cuota, cliente) in rows:
         fv = cuota.fecha_vencimiento
@@ -1504,10 +1491,6 @@ def get_notificaciones_tabs_data(db: Session):
                 dias_3_retraso.append(_item_tab(cliente, cuota, dias_atraso=3))
             elif dias_atraso == 5:
                 dias_5_retraso.append(_item_tab(cliente, cuota, dias_atraso=5))
-            elif dias_atraso >= 90:
-                mora_90_cuotas.append(_item_tab(cliente, cuota, dias_atraso=dias_atraso))
-
-    mora_90_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
 
     # Prejudicial: clientes con 3 o mÃƒÂ¡s cuotas atrasadas (fecha_vencimiento < hoy, no pagado)
     # Solo cuotas con cliente_id no nulo para poder resolver Cliente
@@ -1549,7 +1532,6 @@ def get_notificaciones_tabs_data(db: Session):
         "dias_1_retraso": dias_1_retraso,
         "dias_3_retraso": dias_3_retraso,
         "dias_5_retraso": dias_5_retraso,
-        "mora_90": mora_90_cuotas,
         "prejudicial": prejudicial,
     }
 

@@ -30,8 +30,6 @@ const TIPO_LABEL: Record<string, string> = {
 
   PREJUDICIAL: 'Prejudicial',
 
-  MORA_90: '90+ mora',
-
   COBRANZA: 'Cobranza',
 }
 

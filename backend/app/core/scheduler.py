@@ -9,7 +9,7 @@ ActualizaciÃ³n periÃ³dica de informes y reportes:
 - 13:00  Informe de pagos por email.
 - 16:00  CachÃ© dashboard (hilo aparte en main: 1:00, 13:00).
 - 16:30  Informe de pagos por email.
-- 23:00  EnvÃ­o automÃ¡tico de notificaciones (previas, dÃ­a pago, retrasadas, prejudicial, mora 90).
+- 23:00  EnvÃ­o automÃ¡tico de notificaciones (previas, dÃ­a pago, retrasadas, prejudicial).
 
 Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
 se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.

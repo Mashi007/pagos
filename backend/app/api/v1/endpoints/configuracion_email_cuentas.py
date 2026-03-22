@@ -329,9 +329,20 @@ def post_email_enviar_prueba(db: Session = Depends(get_db)):
 
     total_ok = len(enviados)
     total_err = len(errores)
+    logger.info(
+        "enviar-prueba fin: aceptados_smtp=%d fallos=%d destinatarios_config=%s detalle_enviados=%s",
+        total_ok,
+        total_err,
+        destinatarios,
+        enviados,
+    )
     return {
-        "success": total_err == 0,
+        "success": total_err == 0 and total_ok > 0,
         "enviados": enviados,
         "errores": errores,
         "mensaje": "Enviados: %d. Errores: %d (por cuenta/destino)." % (total_ok, total_err),
+        "nota_smtp": (
+            "Cada envio OK significa que el servidor SMTP acepto el mensaje (sin rechazo inmediato). "
+            "La llegada a la bandeja la confirma el cliente de correo (revisar spam)."
+        ),
     }

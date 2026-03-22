@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 CLAVE_ADJUNTO_FIJO_COBRANZA = "adjunto_fijo_cobranza"
 CLAVE_ADJUNTOS_FIJOS_POR_CASO = "adjuntos_fijos_por_caso"
 
-# Todas las pestañas de notificaciones: previas, día pago, retrasadas, prejudicial, mora 90
+# Casos de notificaciones: previas, día pago, retrasadas, prejudicial
 TIPOS_CASO_VALIDOS = frozenset([
     "dias_5", "dias_3", "dias_1", "hoy",
     "dias_1_retraso", "dias_3_retraso", "dias_5_retraso",
-    "prejudicial", "mora_90",
+    "prejudicial",
 ])
 
 # Evitar repetir el mismo WARNING por cada ítem del batch (Render: disco efímero, archivos no existen)

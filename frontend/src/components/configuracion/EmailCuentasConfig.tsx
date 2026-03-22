@@ -250,10 +250,23 @@ export function EmailCuentasConfig() {
           ...new Set((res.enviados || []).map(e => e.cuenta)),
         ].sort((a, b) => a - b)
 
+        const lineasDetalle = (res.enviados || [])
+          .map(e => `Cuenta ${e.cuenta} -> ${e.email}`)
+          .join('\n')
+
         toast.success(
-          cuentasOk.length
-            ? `Pruebas OK: Cuentas ${cuentasOk.join(', ')}. ${res.mensaje}`
-            : res.mensaje
+          `SMTP acepto el envio (${res.enviados?.length ?? 0} aceptado(s) por el servidor)`,
+          {
+            description: [
+              cuentasOk.length ? `Cuentas probadas: ${cuentasOk.join(', ')}.` : '',
+              res.mensaje,
+              res.nota_smtp,
+              lineasDetalle ? `Detalle por cuenta:\n${lineasDetalle}` : '',
+            ]
+              .filter(Boolean)
+              .join('\n'),
+            duration: 14000,
+          }
         )
       } else {
         const errMsg = res.errores?.length

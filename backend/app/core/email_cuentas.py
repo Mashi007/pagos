@@ -28,7 +28,6 @@ ASIGNACION_DEFAULT = {
         "dias_3_retraso": 3,
         "dias_5_retraso": 3,
         "prejudicial": 3,
-        "mora_90": 3,
     },
 }
 

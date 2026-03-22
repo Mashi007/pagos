@@ -240,18 +240,6 @@ api_router.include_router(
 
 )
 
-api_router.include_router(
-
-    notificaciones_tabs.router_mora_90,
-
-    prefix="/notificaciones-mora-90",
-
-    tags=["notificaciones-mora-90"],
-
-)
-
-
-
 # Dashboard (KPIs, graficos, filtros; datos reales BD + caches programadas en dashboard/__init__.py)
 
 api_router.include_router(

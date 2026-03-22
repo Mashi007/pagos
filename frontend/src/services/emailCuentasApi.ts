@@ -110,6 +110,7 @@ export const emailCuentasApi = {
     enviados: { cuenta: number; email: string }[]
     errores: { cuenta: number; email: string; mensaje: string }[]
     mensaje: string
+    nota_smtp?: string
   }> {
     return apiClient.post(`${BASE}/email/enviar-prueba`, {}, { timeout: 30000 })
   },
@@ -145,6 +146,4 @@ export const NOTIF_TABS = [
   { id: 'dias_5_retraso', label: '5 días retraso' },
 
   { id: 'prejudicial', label: 'Prejudicial' },
-
-  { id: 'mora_90', label: 'Mora 90+' },
 ] as const

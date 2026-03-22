@@ -30,8 +30,6 @@ export const TIPOS_CASO_DOCS: { value: string; label: string }[] = [
   { value: 'dias_5_retraso', label: '5 días retraso' },
 
   { value: 'prejudicial', label: 'Prejudicial' },
-
-  { value: 'mora_90', label: '90+ mora' },
 ]
 
 type AdjuntoItem = { id: string; nombre_archivo: string; ruta: string }

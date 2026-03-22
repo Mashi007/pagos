@@ -17,7 +17,5 @@ export const TIPOS_NOTIFICACION: { tipo: string; label: string }[] = [
 
   { tipo: 'PREJUDICIAL', label: 'Prejudicial' },
 
-  { tipo: 'MORA_90', label: '90+ días de mora (moroso)' },
-
   { tipo: 'COBRANZA', label: 'Carta de cobranza' },
 ]

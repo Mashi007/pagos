@@ -47,7 +47,6 @@ type TabId =
   | 'dias_1_atraso'
   | 'dias_5_atraso'
   | 'dias_30_atraso'
-  | 'mora_90'
   | 'liquidados'
   | 'configuracion'
 
@@ -65,8 +64,6 @@ const TABS: { id: TabId; label: string; icon: typeof Calendar }[] = [
   { id: 'dias_5_atraso', label: '5 días atrasado', icon: Clock },
 
   { id: 'dias_30_atraso', label: '30 días atrasado', icon: Clock },
-
-  { id: 'mora_90', label: '90+ días de mora (moroso)', icon: FileText },
 
   { id: 'liquidados', label: 'Crédito pagado', icon: FileText },
 
@@ -90,9 +87,6 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
 
     case 'hoy':
       return 'hoy'
-
-    case 'mora_90':
-      return 'mora_90'
 
     case 'dias_1_atraso':
       return 'dias_1_retraso'
@@ -118,8 +112,6 @@ const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
   dias_5_atraso: [],
 
   dias_30_atraso: [],
-
-  mora_90: { cuotas: [], total_cuotas: 0 },
 
   liquidados: [],
 }
@@ -185,8 +177,6 @@ export function Notificaciones() {
       hoy: { enviados: 0, rebotados: 0 },
 
       dias_1_retraso: { enviados: 0, rebotados: 0 },
-
-      mora_90: { enviados: 0, rebotados: 0 },
     } as EstadisticasPorTab,
   })
 
@@ -271,9 +261,6 @@ export function Notificaciones() {
       case 'dias_30_atraso':
         return data.dias_30_atraso ?? []
 
-      case 'mora_90':
-        return data.mora_90?.cuotas ?? []
-
       case 'liquidados':
         return []
 
@@ -294,7 +281,7 @@ export function Notificaciones() {
       row.monto != null
   )
 
-  const mostrarTablaCuotas = activeTab === 'mora_90' || hasColumnasCuota
+  const mostrarTablaCuotas = hasColumnasCuota
 
   if (activeTab === 'configuracion') {
     return (
@@ -345,9 +332,9 @@ export function Notificaciones() {
           <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
 
           <p className="mt-1 text-gray-600">
-            Recordatorios (Faltan 5, 3, 1), vence hoy, atrasos (1, 5 y 30 días),
-            mora 90+ y crédito pagado. Datos desde BD. Se recomienda actualizar
-            a las 2:00.
+            Recordatorios (Faltan 5, 3, 1), vence hoy, atrasos (1, 5 y 30 días)
+            y crédito pagado. Datos desde BD. Se recomienda actualizar a las
+            2:00.
           </p>
 
           {data?.actualizado_en && (
@@ -386,11 +373,13 @@ export function Notificaciones() {
                       ? (data?.hoy?.length ?? 0)
                       : tab.id === 'dias_1_atraso'
                         ? (data?.dias_1_atraso?.length ?? 0)
-                        : tab.id === 'mora_90'
-                          ? (data?.mora_90?.total_cuotas ?? 0)
-                          : tab.id === 'liquidados'
-                            ? (data?.liquidados?.length ?? 0)
-                            : 0
+                        : tab.id === 'dias_5_atraso'
+                          ? (data?.dias_5_atraso?.length ?? 0)
+                          : tab.id === 'dias_30_atraso'
+                            ? (data?.dias_30_atraso?.length ?? 0)
+                            : tab.id === 'liquidados'
+                              ? (data?.liquidados?.length ?? 0)
+                              : 0
 
             return (
               <button
@@ -439,29 +428,25 @@ export function Notificaciones() {
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
 
-              {activeTab === 'mora_90'
-                ? 'Informe: cuotas con 90 o más días de mora - moroso (una a una)'
-                : activeTab === 'liquidados'
-                  ? 'Crédito pagado (Total financiamiento = Total abonos)'
-                  : activeTab === 'dias_1_atraso'
-                    ? 'Cuotas con 1 día de atraso'
-                    : activeTab === 'dias_5_atraso'
-                      ? 'Cuotas con 5 días de atraso'
-                      : activeTab === 'dias_30_atraso'
-                        ? 'Cuotas con 30 días de atraso'
-                        : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 días' : activeTab === 'dias_3' ? 'y faltan 3 días' : activeTab === 'dias_1' ? 'y falta 1 día' : 'y vence hoy'}`}
+              {activeTab === 'liquidados'
+                ? 'Crédito pagado (Total financiamiento = Total abonos)'
+                : activeTab === 'dias_1_atraso'
+                  ? 'Cuotas con 1 día de atraso'
+                  : activeTab === 'dias_5_atraso'
+                    ? 'Cuotas con 5 días de atraso'
+                    : activeTab === 'dias_30_atraso'
+                      ? 'Cuotas con 30 días de atraso'
+                      : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 días' : activeTab === 'dias_3' ? 'y faltan 3 días' : activeTab === 'dias_1' ? 'y falta 1 día' : 'y vence hoy'}`}
             </CardTitle>
 
             <CardDescription>
-              {activeTab === 'mora_90'
-                ? 'Listado de cada cuota atrasada 90+ días (moroso) con nombre, cédula, número de cuota, fecha de vencimiento, días de atraso y monto.'
-                : activeTab === 'liquidados'
-                  ? 'Préstamos donde total financiamiento (tabla préstamo) menos total abonos (tabla cuotas) es cero. Por cédula/cliente.'
-                  : activeTab === 'dias_1_atraso' ||
-                      activeTab === 'dias_5_atraso' ||
-                      activeTab === 'dias_30_atraso'
-                    ? 'Cuotas vencidas no pagadas con 1, 5 o 30 días de atraso (nombre, cédula, nº cuota, fecha venc., días atraso, monto).'
-                    : 'Nombre y cédula de clientes a notificar.'}
+              {activeTab === 'liquidados'
+                ? 'Préstamos donde total financiamiento (tabla préstamo) menos total abonos (tabla cuotas) es cero. Por cédula/cliente.'
+                : activeTab === 'dias_1_atraso' ||
+                    activeTab === 'dias_5_atraso' ||
+                    activeTab === 'dias_30_atraso'
+                  ? 'Cuotas vencidas no pagadas con 1, 5 o 30 días de atraso (nombre, cédula, nº cuota, fecha venc., días atraso, monto).'
+                  : 'Nombre y cédula de clientes a notificar.'}
             </CardDescription>
           </CardHeader>
 
@@ -666,9 +651,7 @@ export function Notificaciones() {
                           colSpan={7}
                           className="py-8 text-center text-gray-500"
                         >
-                          {activeTab === 'mora_90'
-                            ? 'No hay cuotas con 90+ días de mora (moroso).'
-                            : 'Ningún registro en este criterio.'}
+                          Ningún registro en este criterio.
                         </td>
                       </tr>
                     ) : (

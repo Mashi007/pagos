@@ -147,13 +147,6 @@ export const CRITERIOS: {
   },
 
   {
-    tipo: 'MORA_90',
-    label: '90+ días de mora (moroso)',
-    categoria: 'Mora 90+',
-    color: 'slate',
-  },
-
-  {
     tipo: 'COBRANZA',
     label: 'Carta de cobranza',
     categoria: 'Cobranza',
