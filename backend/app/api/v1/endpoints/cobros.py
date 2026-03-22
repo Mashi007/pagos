@@ -346,11 +346,12 @@ def list_pagos_reportados(
         "V20149164" in cedulas_en_clientes,
     )
 
-    cedulas_bolivares = set()
+    # scalars().all() devuelve list[str] (cada ítem es la cédula completa). No usar row[0]: sería solo el 1er carácter.
     list_bs = db.execute(select(CedulaReportarBs.cedula)).scalars().all()
     cedulas_bolivares = {
-        _normalize_cedula_for_client_lookup((row[0] or "").strip().upper().replace("-", "").replace(" ", ""))
-        for row in list_bs if row[0]
+        _normalize_cedula_for_client_lookup((c or "").strip().upper().replace("-", "").replace(" ", ""))
+        for c in list_bs
+        if c
     }
 
     num_ops_raw = list({(r.numero_operacion or "").strip() for r in rows if (r.numero_operacion or "").strip()})
@@ -926,8 +927,9 @@ def editar_pago_reportado(
         if cedula_norm:
             list_bs_all = db.execute(select(CedulaReportarBs.cedula)).scalars().all()
             cedulas_bs_norm = {
-                _normalize_cedula_for_client_lookup((r[0] or "").strip().upper().replace("-", "").replace(" ", ""))
-                for r in list_bs_all if r[0]
+                _normalize_cedula_for_client_lookup((c or "").strip().upper().replace("-", "").replace(" ", ""))
+                for c in list_bs_all
+                if c
             }
             permitido_bs = cedula_norm in cedulas_bs_norm
             if not permitido_bs:
