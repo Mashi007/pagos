@@ -388,10 +388,7 @@ export default function CobrosPagosReportadosPage() {
     }
 
     const rows = aprobados.map(row => {
-      const mNum =
-        row.monto != null && row.monto !== ''
-          ? Number(row.monto)
-          : Number.NaN
+      const mNum = row.monto != null ? Number(row.monto) : Number.NaN
       const montoStr =
         Number.isFinite(mNum) && mNum >= 0
           ? `${mNum.toFixed(2)} ${row.moneda ?? ''}`.trim()
