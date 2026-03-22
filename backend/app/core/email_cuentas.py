@@ -20,10 +20,6 @@ ASIGNACION_DEFAULT = {
     "cobros": 1,
     "estado_cuenta": 2,
     "notificaciones_tab": {
-        "dias_5": 3,
-        "dias_3": 3,
-        "dias_1": 3,
-        "hoy": 3,
         "dias_1_retraso": 3,
         "dias_3_retraso": 3,
         "dias_5_retraso": 3,

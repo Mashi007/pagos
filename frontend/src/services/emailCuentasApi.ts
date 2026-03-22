@@ -71,7 +71,29 @@ export interface EmailCuentasResponse {
 
   email_activo_cobros?: string
 
+  email_activo_informe_pagos?: string
+
+  email_activo_campanas?: string
+
+  email_activo_tickets?: string
+
+  modo_pruebas_notificaciones?: string
+
+  modo_pruebas_informe_pagos?: string
+
+  modo_pruebas_estado_cuenta?: string
+
+  modo_pruebas_cobros?: string
+
+  modo_pruebas_campanas?: string
+
+  modo_pruebas_tickets?: string
+
   tickets_notify_emails?: string
+
+  /** Lista opcional de correos de prueba (config avanzada). */
+
+  emails_pruebas?: string[]
 }
 
 const BASE = '/api/v1/configuracion'
@@ -131,15 +153,7 @@ export const SERVICIO_POR_CUENTA: Record<number, string> = {
 /** Pestañas de notificaciones que pueden usar cuenta 3 o 4. */
 
 export const NOTIF_TABS = [
-  { id: 'dias_5', label: 'Faltan 5 días' },
-
-  { id: 'dias_3', label: 'Faltan 3 días' },
-
-  { id: 'dias_1', label: 'Faltan 1 día' },
-
-  { id: 'hoy', label: 'Vence hoy' },
-
-  { id: 'dias_1_retraso', label: '1 día retraso' },
+  { id: 'dias_1_retraso', label: 'Día siguiente al venc.' },
 
   { id: 'dias_3_retraso', label: '3 días retraso' },
 

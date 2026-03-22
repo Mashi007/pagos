@@ -72,23 +72,20 @@ export function EditorPlantillaHTML({
   // Tipos disponibles
 
   const tiposPorCategoria = {
-    antes: [
-      { valor: 'PAGO_5_DIAS_ANTES', label: '5 das antes' },
-
-      { valor: 'PAGO_3_DIAS_ANTES', label: '3 das antes' },
-
-      { valor: 'PAGO_1_DIA_ANTES', label: '1 da antes' },
-    ],
-
-    diaPago: [{ valor: 'PAGO_DIA_0', label: 'Da de pago' }],
-
     retraso: [
-      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 da de retraso' },
+      {
+        valor: 'PAGO_1_DIA_ATRASADO',
+        label: 'Día siguiente al vencimiento (1 día después)',
+      },
 
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 das de retraso' },
+      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
 
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 das de retraso' },
+      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso' },
     ],
+
+    prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
+
+    cobranza: [{ valor: 'COBRANZA', label: 'Carta de cobranza' }],
   }
 
   const allTipos = Object.values(tiposPorCategoria).flat()

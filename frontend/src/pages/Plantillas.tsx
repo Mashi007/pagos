@@ -92,8 +92,10 @@ export function Plantillas() {
           <h1 className="text-xl font-bold">Plantillas de notificaciones</h1>
 
           <p className="text-sm text-gray-500">
-            Plantilla de email, plantilla PDF anexo y documentos PDF fijos
-            asignables a cualquier pestaña de notificación.
+            Tres piezas para cada envío: plantilla de email (pestaña 1), PDF
+            variable carta de cobranza (pestaña 2) y al menos un PDF fijo por
+            caso (pestaña 3). El servidor no envía si falta alguna (salvo
+            emergencia con NOTIFICACIONES_PAQUETE_ESTRICTO=false).
           </p>
 
           <div className="mt-3 overflow-hidden rounded-lg border border-blue-100 bg-blue-50/50 text-sm text-gray-700">
@@ -118,8 +120,9 @@ export function Plantillas() {
             {resumenAbierto && (
               <div className="border-t border-blue-100 px-3 pb-3 pt-0">
                 <p className="mt-2 text-gray-600 md:hidden">
-                  Al enviar el correo se usa: 1) Cuerpo email. 2) PDF variable
-                  (carta cobranza). 3) PDF(s) fijos opcionales.
+                  Cada correo debe llevar: 1) Cuerpo email. 2) PDF variable
+                  (Carta_Cobranza). 3) Al menos un PDF fijo (pestaña 3 + adjunto
+                  global si aplica).
                 </p>
 
                 <ol className="mt-2 hidden list-inside list-decimal space-y-0.5 text-gray-600 md:block">
@@ -137,9 +140,10 @@ export function Plantillas() {
 
                   <li>
                     <strong>Documentos PDF anexos</strong> - PDFs fijos que se
-                    cargan aquí y se asignan a la pestaña que elijas (Faltan 5,
-                    Hoy vence, Retrasadas, Prejudicial, 90+ mora, etc.). Se
-                    envían con la notificación de esa pestaña.
+                    suben aquí y se vinculan a cada caso (día siguiente al
+                    venc., 3 o 5 días de retraso, prejudicial). Junto con el PDF
+                    global de cobranza (si está configurado) cumplen el
+                    requisito de documento fijo del paquete.
                   </li>
                 </ol>
               </div>
@@ -214,7 +218,13 @@ export function Plantillas() {
 
           <PlantillaAnexoPdf />
 
-          <div className="mt-6">
+          <p className="mt-6 text-sm text-gray-600">
+            Los PDF fijos se suben en la pestaña «Documentos PDF anexos». El
+            bloque siguiente resume qué archivos hay por caso para comprobar la
+            vinculación sin salir de esta vista.
+          </p>
+
+          <div className="mt-3">
             <DocumentosAlmacenadosPorPestana
               permitirEliminar={true}
               titulo="Documentos almacenados por pestaña (confirmar vinculación)"

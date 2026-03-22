@@ -3,13 +3,13 @@ Scheduler para tareas programadas (zona America/Caracas).
 
 ActualizaciÃ³n periÃ³dica de informes y reportes:
 - 01:00  Reportes cobranzas (resumen + diagnÃ³stico).
-- 02:00  Notificaciones (actualizar mora / datos para seguimiento).
+- 00:50  Notificaciones (actualizar mora / datos; antes del envio de la 01:00).
 - 06:00  Informe de pagos por email (link Google Sheet).
 - 13:00  Reportes cobranzas.
 - 13:00  Informe de pagos por email.
 - 16:00  CachÃ© dashboard (hilo aparte en main: 1:00, 13:00).
 - 16:30  Informe de pagos por email.
-- 23:00  EnvÃ­o automÃ¡tico de notificaciones (previas, dÃ­a pago, retrasadas, prejudicial).
+- 01:00  Envio automatico de notificaciones (email con paquete completo; America/Caracas).
 
 Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
 se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.
@@ -37,7 +37,7 @@ _scheduler: Optional[BackgroundScheduler] = None
 
 
 def _job_actualizar_notificaciones() -> None:
-    """Job 2:00. ActualizaciÃ³n de notificaciones (mora desde cuotas)."""
+    """Job 00:50. Actualizacion de notificaciones (mora desde cuotas), antes del envio 01:00."""
     db = SessionLocal()
     try:
         result = notificaciones.ejecutar_actualizacion_notificaciones(db)
@@ -51,26 +51,27 @@ def _job_actualizar_notificaciones() -> None:
         db.close()
 
 
-def _job_envio_notificaciones_23() -> None:
-    """Job 23:00. EnvÃ­o automÃ¡tico de todas las notificaciones solo en producciÃ³n. En modo pruebas el envÃ­o es solo manual."""
+def _job_envio_notificaciones_1am() -> None:
+    """Job 01:00. Envio automatico de notificaciones solo en produccion. En modo pruebas el envio es solo manual."""
     db = SessionLocal()
     try:
         config = notificaciones.get_notificaciones_envios_config(db)
         if config.get("modo_pruebas") is True:
-            logger.info("EnvÃ­o notificaciones 23:00: omitido (modo pruebas activo; envÃ­o solo manual).")
+            logger.info("Envio notificaciones 01:00: omitido (modo pruebas activo; envio solo manual).")
             return
         result = notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
         logger.info(
-            "EnvÃ­o notificaciones 23:00: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s whatsapp_ok=%s whatsapp_fail=%s",
+            "Envio notificaciones 01:00: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s omitidos_paquete=%s whatsapp_ok=%s whatsapp_fail=%s",
             result.get("enviados", 0),
             result.get("fallidos", 0),
             result.get("sin_email", 0),
             result.get("omitidos_config", 0),
+            result.get("omitidos_paquete_incompleto", 0),
             result.get("enviados_whatsapp", 0),
             result.get("fallidos_whatsapp", 0),
         )
     except Exception as e:
-        logger.exception("Error en job envio_notificaciones_23: %s", e)
+        logger.exception("Error en job envio_notificaciones_1am: %s", e)
     finally:
         db.close()
 
@@ -154,25 +155,25 @@ def _job_pagos_gmail_pipeline() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: notificaciones 2:00; envÃ­o notificaciones 23:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
+    """Inicia el scheduler: actualizacion notificaciones 00:50; envio notificaciones 01:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
         return
     _scheduler = BackgroundScheduler(timezone=SCHEDULER_TZ)
-    # 2:00 - Actualizar datos de notificaciones (mora desde cuotas)
+    # 00:50 - Actualizar datos de notificaciones (mora desde cuotas), antes del envio 01:00
     _scheduler.add_job(
         _job_actualizar_notificaciones,
-        CronTrigger(hour=2, minute=0, timezone=SCHEDULER_TZ),
-        id="notificaciones_2am",
-        name="Actualizar notificaciones 2:00",
+        CronTrigger(hour=0, minute=50, timezone=SCHEDULER_TZ),
+        id="notificaciones_0050",
+        name="Actualizar notificaciones 00:50",
     )
-    # 23:00 - EnvÃ­o automÃ¡tico de notificaciones (emails/WhatsApp por tipo)
+    # 01:00 - Envio automatico de notificaciones (emails/WhatsApp por tipo)
     _scheduler.add_job(
-        _job_envio_notificaciones_23,
-        CronTrigger(hour=23, minute=0, timezone=SCHEDULER_TZ),
-        id="envio_notificaciones_11pm",
-        name="EnvÃ­o notificaciones 23:00",
+        _job_envio_notificaciones_1am,
+        CronTrigger(hour=1, minute=0, timezone=SCHEDULER_TZ),
+        id="envio_notificaciones_1am",
+        name="Envio notificaciones 01:00",
     )
     # 1:00 y 13:00 - Reportes cobranzas (actualizaciÃ³n automÃ¡tica de informes)
     _scheduler.add_job(
@@ -232,7 +233,7 @@ def start_scheduler() -> None:
 
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: notificaciones 2:00; envÃ­o notificaciones 23:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
+        "Scheduler iniciado: notificaciones 00:50; envio notificaciones 01:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
         SCHEDULER_TZ,
     )
 

@@ -670,7 +670,7 @@ def get_adjuntos_fijos_cobranza(db: Session = Depends(get_db)):
 
 @router.post("/adjuntos-fijos-cobranza/upload")
 def upload_adjunto_fijo_cobranza(
-    tipo_caso: str = Query(..., description="Caso: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial"),
+    tipo_caso: str = Query(..., description="Caso: dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -684,7 +684,7 @@ def upload_adjunto_fijo_cobranza(
     if tipo_caso not in TIPOS_CASO_VALIDOS:
         raise HTTPException(
             status_code=400,
-            detail="tipo_caso debe ser uno de: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial",
+            detail="tipo_caso debe ser uno de: dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial",
         )
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se permiten documentos PDF")
@@ -1351,15 +1351,14 @@ def get_comprobante_envio(
 @router.get("/clientes-retrasados", response_model=dict)
 def get_clientes_retrasados(db: Session = Depends(get_db)):
     """
-    Clientes a notificar por cuotas no pagadas, agrupados por reglas:
-    1. Faltan 5 dÃƒÂ­as para fecha_vencimiento (no pagado)
-    2. Faltan 3 dÃƒÂ­as para fecha_vencimiento (no pagado)
-    3. Falta 1 dÃƒÂ­a para fecha_vencimiento (no pagado)
-    4. Hoy = fecha_vencimiento (no pagado)
-    5. 1 dÃƒÂ­a atrasado (cuota vencida hace 1 dÃƒÂ­a)
-    6. 5 dÃƒÂ­as atrasado (cuota vencida hace 5 dÃƒÂ­as)
-    7. 30 dÃƒÂ­as atrasado (cuota vencida hace 30 dÃƒÂ­as)
-    8. CrÃƒÂ©dito pagado (liquidados): prestamo.total_financiamiento = SUM(cuotas.total_pagado).
+    Clientes a notificar por cuotas no pagadas, agrupados por reglas.
+    Politica: no se listan avisos antes del vencimiento ni el dia del vencimiento;
+    el primer seguimiento es el dia calendario siguiente (ej. vence 22 -> entra el 23).
+    1. 1 dia despues del vencimiento (ayer fue la fecha de vencimiento)
+    2. 5 dias despues del vencimiento
+    3. 30 dias despues del vencimiento
+    4. Credito pagado (liquidados): prestamo.total_financiamiento = SUM(cuotas.total_pagado).
+    Claves dias_5, dias_3, dias_1, hoy se devuelven vacias (compatibilidad API).
     Datos desde BD: get_cuotas_pendientes_con_cliente y tabla prestamos/cuotas.
     """
     hoy = date.today()
@@ -1379,15 +1378,8 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
             continue
         delta = (fv - hoy).days
 
-        if delta == 5:
-            dias_5.append(_item(cliente, cuota))
-        elif delta == 3:
-            dias_3.append(_item(cliente, cuota))
-        elif delta == 1:
-            dias_1.append(_item(cliente, cuota))
-        elif delta == 0:
-            hoy_list.append(_item(cliente, cuota))
-        elif delta < 0:
+        # No notificar antes ni el dia del vencimiento; solo desde el dia siguiente.
+        if delta < 0:
             dias_atraso = -delta
             if dias_atraso == 1:
                 dias_1_atraso.append(_item(cliente, cuota, dias_atraso=1))
@@ -1451,10 +1443,10 @@ def actualizar_notificaciones(db: Session = Depends(get_db)):
 
 def get_notificaciones_tabs_data(db: Session):
     """
-    Datos para las pestaÃƒÂ±as de Notificaciones (previas, dÃƒÂ­a pago, retrasadas, prejudicial).
-    Cada item tiene forma para el frontend: nombre, cedula, correo, telefono, estado, etc.
-    Incluye retraso 1/3/5 dÃƒÂ­as y clientes con 3+ cuotas atrasadas (prejudicial).
-    Datos desde get_cuotas_pendientes_con_cliente (fuente ÃƒÂºnica).
+    Datos para envio de notificaciones (retrasadas, prejudicial).
+    Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1/3/5 dias de atraso)
+    y prejudicial. Claves dias_5, dias_3, dias_1, hoy van vacias (compat API).
+    Datos desde get_cuotas_pendientes_con_cliente (fuente unica).
     """
     from sqlalchemy import func
 
@@ -1475,15 +1467,7 @@ def get_notificaciones_tabs_data(db: Session):
             continue
         delta = (fv - hoy).days
 
-        if delta == 5:
-            dias_5.append(_item_tab(cliente, cuota, dias_antes=5))
-        elif delta == 3:
-            dias_3.append(_item_tab(cliente, cuota, dias_antes=3))
-        elif delta == 1:
-            dias_1.append(_item_tab(cliente, cuota, dias_antes=1))
-        elif delta == 0:
-            hoy_list.append(_item_tab(cliente, cuota))
-        elif delta < 0:
+        if delta < 0:
             dias_atraso = -delta
             if dias_atraso == 1:
                 dias_1_retraso.append(_item_tab(cliente, cuota, dias_atraso=1))

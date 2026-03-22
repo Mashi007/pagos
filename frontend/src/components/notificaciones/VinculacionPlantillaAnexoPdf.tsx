@@ -36,7 +36,7 @@ const CLAVES_GLOBALES = [
 
 
 
- * (tipos con incluir_pdf_anexo === true en la configuración de envíos).
+ * (tipos con incluir_pdf_anexo activo; distinto de false en configuracion).
 
 
 
@@ -68,7 +68,11 @@ export function VinculacionPlantillaAnexoPdf() {
 
       const item = raw[key] as ConfigEnvioItem | undefined
 
-      if (item && typeof item === 'object' && item.incluir_pdf_anexo === true) {
+      if (
+        item &&
+        typeof item === 'object' &&
+        item.incluir_pdf_anexo !== false
+      ) {
         const label = tipoToLabel.get(key) ?? key
 
         conPdf.push({ tipo: key, label })

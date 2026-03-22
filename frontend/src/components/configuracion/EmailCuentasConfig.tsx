@@ -32,6 +32,8 @@
 
 import { useState, useEffect } from 'react'
 
+import { useQueryClient } from '@tanstack/react-query'
+
 import { Mail, Save, AlertCircle, CheckCircle } from 'lucide-react'
 
 import {
@@ -57,6 +59,8 @@ import {
   type EmailCuentasResponse,
   type CuentaEmailItem,
 } from '../../services/emailCuentasApi'
+
+import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
 const CUENTAS_COUNT = 4
 
@@ -87,6 +91,8 @@ const emptyCuenta = (): CuentaEmailItem => ({
 })
 
 export function EmailCuentasConfig() {
+  const queryClient = useQueryClient()
+
   const [data, setData] = useState<EmailCuentasResponse | null>(null)
 
   const [loading, setLoading] = useState(true)
@@ -225,6 +231,10 @@ export function EmailCuentasConfig() {
 
       toast.success('ConfiguraciÃ³n de 4 cuentas guardada')
 
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICACIONES_QUERY_KEYS.emailEstado,
+      })
+
       await load()
     } catch (e: unknown) {
       const msg =
@@ -258,7 +268,9 @@ export function EmailCuentasConfig() {
           `SMTP acepto el envio (${res.enviados?.length ?? 0} aceptado(s) por el servidor)`,
           {
             description: [
-              cuentasOk.length ? `Cuentas probadas: ${cuentasOk.join(', ')}.` : '',
+              cuentasOk.length
+                ? `Cuentas probadas: ${cuentasOk.join(', ')}.`
+                : '',
               res.mensaje,
               res.nota_smtp,
               lineasDetalle ? `Detalle por cuenta:\n${lineasDetalle}` : '',
@@ -311,12 +323,56 @@ export function EmailCuentasConfig() {
           </CardTitle>
 
           <CardDescription>
-            Active o desactive el envÃ­o de correo por servicio. Cada uno usa la
-            cuenta indicada (Cuenta 1, 2 o 3/4).
+            La configuración se guarda en la base de datos (tabla{' '}
+            <code className="rounded bg-muted px-1 text-xs">configuracion</code>
+            , clave{' '}
+            <code className="rounded bg-muted px-1 text-xs">email_config</code>
+            ): sobrevive reinicios y despliegues. Las contraseñas SMTP/IMAP se
+            guardan cifradas cuando el servidor define clave de cifrado.{' '}
+            <span className="block pt-2 text-foreground/90">
+              Active o desactive el envío por servicio (cuenta 1, 2 o 3/4).
+              Cobros: recibo al aprobar y &quot;Enviar recibo&quot;. Rechazo de
+              pagos reportados: Notificaciones (cuenta 3/4).
+            </span>
           </CardDescription>
         </CardHeader>
 
         <CardContent>
+          <div className="mb-4 flex flex-col justify-between gap-2 rounded border border-primary/25 bg-muted/30 p-3 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-sm font-medium">
+                Correo electrónico (maestro)
+              </p>
+
+              <p className="text-xs text-muted-foreground">
+                Si está inactivo, no se envía ningún e-mail (anula los
+                interruptores de abajo).
+              </p>
+            </div>
+
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                checked={(data?.email_activo ?? 'true') === 'true'}
+                onChange={e =>
+                  setServicioActivo(
+                    'email_activo',
+                    e.target.checked ? 'true' : 'false'
+                  )
+                }
+                className="peer sr-only"
+              />
+
+              <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:border-gray-600 dark:bg-gray-700" />
+
+              <span className="ml-2 text-sm">
+                {(data?.email_activo ?? 'true') === 'true'
+                  ? 'Activo'
+                  : 'Inactivo'}
+              </span>
+            </label>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             {SERVICIOS_DISPONIBLES.map(({ key, label, cuenta }) => (
               <div
@@ -444,10 +500,11 @@ export function EmailCuentasConfig() {
 
           <CardDescription>
             Configure hasta 4 cuentas. Cada servicio usa una cuenta:{' '}
-            <strong>Cuenta 1</strong> = Cobros (formulario pÃºblico),
+            <strong>Cuenta 1</strong> = Cobros (formulario público, recibos al
+            aprobar pagos reportados),
             <strong> Cuenta 2</strong> = Estado de cuenta,{' '}
             <strong>Cuentas 3 y 4</strong> = Notificaciones (puede elegir por
-            pestaÃ±a).
+            pestaña; también rechazo de pagos reportados).
           </CardDescription>
         </CardHeader>
       </Card>
@@ -460,7 +517,8 @@ export function EmailCuentasConfig() {
             </CardTitle>
 
             <CardDescription>
-              {i === 0 && 'Usada en: rapicredit-cobros (reporte de pago).'}
+              {i === 0 &&
+                'Usada en: Cobros (reporte público, recibo al aprobar y envío manual de recibo).'}
 
               {i === 1 &&
                 'Usada en: rapicredit-estadocuenta (consulta y envÃ­o de PDF).'}

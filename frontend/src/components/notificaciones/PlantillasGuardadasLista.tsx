@@ -22,7 +22,7 @@ const TIPO_LABEL: Record<string, string> = {
 
   PAGO_DIA_0: 'Hoy vence',
 
-  PAGO_1_DIA_ATRASADO: '1 día retraso',
+  PAGO_1_DIA_ATRASADO: 'Día siguiente al vencimiento',
 
   PAGO_3_DIAS_ATRASADO: '3 días retraso',
 

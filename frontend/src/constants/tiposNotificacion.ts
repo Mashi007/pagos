@@ -1,15 +1,10 @@
 /** Tipos de notificación (casos) para configurar envíos, PDF anexo y adjuntos fijos */
 
 export const TIPOS_NOTIFICACION: { tipo: string; label: string }[] = [
-  { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5' },
-
-  { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3' },
-
-  { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1' },
-
-  { tipo: 'PAGO_DIA_0', label: 'Hoy vence' },
-
-  { tipo: 'PAGO_1_DIA_ATRASADO', label: '1 día de retraso' },
+  {
+    tipo: 'PAGO_1_DIA_ATRASADO',
+    label: 'Día siguiente al vencimiento (1 día después)',
+  },
 
   { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
 

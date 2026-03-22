@@ -862,8 +862,13 @@ def aprobar_pago_reportado(
     to_email = _email_cliente_pago_reportado(db, pr)
     if not pr.correo_enviado_a and to_email:
         pr.correo_enviado_a = to_email
-    mensaje_final = "Pago aprobado y recibo enviado por correo."
-    if to_email:
+    mensaje_final = (
+        "Pago aprobado. No hay correo del cliente registrado; no se envió recibo."
+        if not to_email
+        else "Pago aprobado y recibo enviado por correo."
+    )
+    cobros_correo_activo = get_email_activo_servicio("cobros")
+    if to_email and cobros_correo_activo:
         body = f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
         ok_mail, err_mail = send_email([to_email], f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)], servicio="cobros", respetar_destinos_manuales=True)
         if ok_mail:
@@ -874,6 +879,16 @@ def aprobar_pago_reportado(
                 pr.referencia_interna, to_email, err_mail or "desconocido",
             )
             mensaje_final = "Pago aprobado. El recibo no pudo enviarse por correo; use 'Enviar recibo por correo' desde el detalle."
+    elif to_email and not cobros_correo_activo:
+        logger.warning(
+            "[COBROS] Aprobar ref=%s: servicio correo Cobros desactivado, no se envió recibo a %s.",
+            pr.referencia_interna,
+            to_email,
+        )
+        mensaje_final = (
+            "Pago aprobado. El envío de correo para Cobros está desactivado en Configuración > Email; "
+            "no se envió el recibo. Actívelo o use 'Enviar recibo por correo' cuando lo active."
+        )
     _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
     db.commit()
     return {"ok": True, "mensaje": mensaje_final}
@@ -1056,6 +1071,14 @@ def enviar_recibo_manual(
     to_email = _email_cliente_pago_reportado(db, pr)
     if not to_email:
         raise HTTPException(status_code=400, detail="No hay correo del cliente para este pago. Registre el correo en el detalle del pago o en la ficha del cliente.")
+    if not get_email_activo_servicio("cobros"):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "El envío de correo para Cobros está desactivado en Configuración > Email (servicio Cobros). "
+                "Actívelo para poder enviar el recibo."
+            ),
+        )
     pdf_bytes = _generar_recibo_desde_pago(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
@@ -1063,7 +1086,26 @@ def enviar_recibo_manual(
         f"Recibo de reporte de pago. Número de referencia: {_referencia_display(pr.referencia_interna)}.\n\n"
         "Adjunto encontrará el recibo.\n\nRapiCredit C.A."
     )
-    send_email([to_email], f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes))], servicio="cobros", respetar_destinos_manuales=True)
+    ok_mail, err_mail = send_email(
+        [to_email],
+        f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}",
+        body,
+        attachments=[(f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes))],
+        servicio="cobros",
+        respetar_destinos_manuales=True,
+    )
+    if not ok_mail:
+        logger.error(
+            "[COBROS] enviar-recibo ref=%s: correo NO enviado a %s. Error: %s.",
+            pr.referencia_interna,
+            to_email,
+            err_mail or "desconocido",
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=(err_mail or "No se pudo enviar el correo. Revise SMTP de la Cuenta 1 (Cobros) en Configuración > Email.")[:500],
+        )
+    logger.info("[COBROS] enviar-recibo ref=%s: recibo enviado a %s.", pr.referencia_interna, to_email)
     return {"ok": True, "mensaje": "Recibo enviado por correo."}
 
 
@@ -1264,7 +1306,8 @@ def cambiar_estado_pago(
         to_email = _email_cliente_pago_reportado(db, pr)
         if not pr.correo_enviado_a and to_email:
             pr.correo_enviado_a = to_email
-        if to_email:
+        cobros_correo_activo = get_email_activo_servicio("cobros")
+        if to_email and cobros_correo_activo:
             body_mail = f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
             ok_mail, err_mail = send_email(
                 [to_email],
@@ -1283,6 +1326,16 @@ def cambiar_estado_pago(
                     pr.referencia_interna, to_email, err_mail or "desconocido",
                 )
                 mensaje = "Estado actualizado a aprobado. El recibo no pudo enviarse por correo."
+        elif to_email and not cobros_correo_activo:
+            logger.warning(
+                "[COBROS] PATCH estado=aprobado ref=%s: servicio correo Cobros desactivado, no se envió recibo a %s.",
+                pr.referencia_interna,
+                to_email,
+            )
+            mensaje = (
+                "Estado actualizado a aprobado. El envío de correo para Cobros está desactivado en Configuración > Email; "
+                "no se envió el recibo."
+            )
         else:
             mensaje = "Estado actualizado a aprobado. No hay correo registrado para este pago (no se envió recibo)."
 

@@ -18,9 +18,8 @@ logger = logging.getLogger(__name__)
 CLAVE_ADJUNTO_FIJO_COBRANZA = "adjunto_fijo_cobranza"
 CLAVE_ADJUNTOS_FIJOS_POR_CASO = "adjuntos_fijos_por_caso"
 
-# Casos de notificaciones: previas, día pago, retrasadas, prejudicial
+# Casos de notificaciones: retrasadas (desde dia siguiente al venc.), prejudicial
 TIPOS_CASO_VALIDOS = frozenset([
-    "dias_5", "dias_3", "dias_1", "hoy",
     "dias_1_retraso", "dias_3_retraso", "dias_5_retraso",
     "prejudicial",
 ])

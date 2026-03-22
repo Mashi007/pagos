@@ -170,22 +170,15 @@ export function PlantillasNotificaciones({
   // Tipos organizados por categor?as
 
   const tiposPorCategoria = {
-    antes: [
-      { valor: 'PAGO_5_DIAS_ANTES', label: '5 d?as antes' },
-
-      { valor: 'PAGO_3_DIAS_ANTES', label: '3 d?as antes' },
-
-      { valor: 'PAGO_1_DIA_ANTES', label: '1 d?a antes' },
-    ],
-
-    diaPago: [{ valor: 'PAGO_DIA_0', label: 'D?a de pago' }],
-
     retraso: [
-      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 d?a de retraso' },
+      {
+        valor: 'PAGO_1_DIA_ATRASADO',
+        label: 'Día siguiente al vencimiento (1 día después)',
+      },
 
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 d?as de retraso' },
+      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
 
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 d?as de retraso' },
+      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso' },
     ],
 
     prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
@@ -194,11 +187,6 @@ export function PlantillasNotificaciones({
   }
 
   const tiposSugeridos = [
-    'PAGO_5_DIAS_ANTES',
-    'PAGO_3_DIAS_ANTES',
-    'PAGO_1_DIA_ANTES',
-    'PAGO_DIA_0',
-
     'PAGO_1_DIA_ATRASADO',
     'PAGO_3_DIAS_ATRASADO',
     'PAGO_5_DIAS_ATRASADO',
@@ -207,10 +195,6 @@ export function PlantillasNotificaciones({
   ]
 
   const todosLosTipos = [
-    ...tiposPorCategoria.antes,
-
-    ...tiposPorCategoria.diaPago,
-
     ...tiposPorCategoria.retraso,
 
     ...tiposPorCategoria.prejudicial,
@@ -1563,32 +1547,38 @@ export function PlantillasNotificaciones({
 
   const mapeoTipos = {
     PAGO_5_DIAS_ANTES: {
-      categoria: 'Notificaci?n Previa',
-      caso: '5 d?as antes',
+      categoria: 'Notificación previa (heredada)',
+      caso: '5 días antes',
     },
 
     PAGO_3_DIAS_ANTES: {
-      categoria: 'Notificaci?n Previa',
-      caso: '3 d?as antes',
+      categoria: 'Notificación previa (heredada)',
+      caso: '3 días antes',
     },
 
-    PAGO_1_DIA_ANTES: { categoria: 'Notificaci?n Previa', caso: '1 d?a antes' },
+    PAGO_1_DIA_ANTES: {
+      categoria: 'Notificación previa (heredada)',
+      caso: '1 día antes',
+    },
 
-    PAGO_DIA_0: { categoria: 'D?a de Pago', caso: 'D?a de pago' },
+    PAGO_DIA_0: {
+      categoria: 'Día de pago (heredado)',
+      caso: 'Día de pago',
+    },
 
     PAGO_1_DIA_ATRASADO: {
-      categoria: 'Notificaci?n Retrasada',
-      caso: '1 d?a de retraso',
+      categoria: 'Notificación retrasada',
+      caso: 'Día siguiente al vencimiento',
     },
 
     PAGO_3_DIAS_ATRASADO: {
-      categoria: 'Notificaci?n Retrasada',
-      caso: '3 d?as de retraso',
+      categoria: 'Notificación retrasada',
+      caso: '3 días de retraso',
     },
 
     PAGO_5_DIAS_ATRASADO: {
-      categoria: 'Notificaci?n Retrasada',
-      caso: '5 d?as de retraso',
+      categoria: 'Notificación retrasada',
+      caso: '5 días de retraso',
     },
 
     PREJUDICIAL: { categoria: 'Prejudicial', caso: 'Prejudicial' },
@@ -1600,40 +1590,20 @@ export function PlantillasNotificaciones({
 
   const ordenCasos: { tipo: string; label: string; borderColor: string }[] = [
     {
-      tipo: 'PAGO_5_DIAS_ANTES',
-      label: 'Faltan 5 d?as',
-      borderColor: 'border-blue-500',
-    },
-
-    {
-      tipo: 'PAGO_3_DIAS_ANTES',
-      label: 'Faltan 3 d?as',
-      borderColor: 'border-blue-400',
-    },
-
-    {
-      tipo: 'PAGO_1_DIA_ANTES',
-      label: 'Falta 1 d?a',
-      borderColor: 'border-blue-300',
-    },
-
-    { tipo: 'PAGO_DIA_0', label: 'Hoy vence', borderColor: 'border-green-500' },
-
-    {
       tipo: 'PAGO_1_DIA_ATRASADO',
-      label: '1 d?a de retraso',
+      label: 'Día siguiente al venc.',
       borderColor: 'border-amber-400',
     },
 
     {
       tipo: 'PAGO_3_DIAS_ATRASADO',
-      label: '3 d?as de retraso',
+      label: '3 días de retraso',
       borderColor: 'border-amber-500',
     },
 
     {
       tipo: 'PAGO_5_DIAS_ATRASADO',
-      label: '5 d?as de retraso',
+      label: '5 días de retraso',
       borderColor: 'border-amber-600',
     },
 
@@ -1672,31 +1642,38 @@ export function PlantillasNotificaciones({
 
   const categoriasOrden = [
     {
-      key: 'Notificaci?n Previa',
-      color: 'blue',
-      borderColor: 'border-blue-500',
-      icon: '?',
-    },
-
-    {
-      key: 'D?a de Pago',
-      color: 'green',
-      borderColor: 'border-green-500',
-      icon: '?',
-    },
-
-    {
-      key: 'Notificaci?n Retrasada',
+      key: 'Notificación retrasada',
       color: 'orange',
       borderColor: 'border-orange-500',
-      icon: '?',
+      icon: '⚠️',
     },
 
     {
       key: 'Prejudicial',
       color: 'red',
       borderColor: 'border-red-500',
-      icon: '?',
+      icon: '🚨',
+    },
+
+    {
+      key: 'Cobranza',
+      color: 'violet',
+      borderColor: 'border-violet-500',
+      icon: '📧',
+    },
+
+    {
+      key: 'Notificación previa (heredada)',
+      color: 'blue',
+      borderColor: 'border-blue-500',
+      icon: '🔔',
+    },
+
+    {
+      key: 'Día de pago (heredado)',
+      color: 'green',
+      borderColor: 'border-green-500',
+      icon: '📅',
     },
   ]
 
@@ -1917,63 +1894,11 @@ export function PlantillasNotificaciones({
                 </div>
               </div>
 
-              {/* Antes de vencimiento */}
-
-              <div>
-                <h4 className="mb-2 text-sm font-semibold text-blue-700">
-                  Antes de Fecha de Vencimiento
-                </h4>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {tiposPorCategoria.antes.map(t => (
-                    <label
-                      key={t.valor}
-                      className="flex cursor-pointer items-center gap-2 rounded border p-2 hover:bg-white"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={tiposSeleccionados.includes(t.valor)}
-                        onChange={() => toggleTipo(t.valor)}
-                        className="rounded"
-                      />
-
-                      <span className="text-sm">{t.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* D?a de pago */}
-
-              <div>
-                <h4 className="mb-2 text-sm font-semibold text-green-700">
-                  D?a de Pago
-                </h4>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {tiposPorCategoria.diaPago.map(t => (
-                    <label
-                      key={t.valor}
-                      className="flex cursor-pointer items-center gap-2 rounded border p-2 hover:bg-white"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={tiposSeleccionados.includes(t.valor)}
-                        onChange={() => toggleTipo(t.valor)}
-                        className="rounded"
-                      />
-
-                      <span className="text-sm">{t.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Retraso */}
+              {/* Desde el día siguiente al vencimiento y más días de retraso */}
 
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-orange-700">
-                  D?as de Retraso
+                  Tras la fecha de vencimiento
                 </h4>
 
                 <div className="grid grid-cols-3 gap-2">

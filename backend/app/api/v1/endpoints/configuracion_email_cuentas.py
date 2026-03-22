@@ -30,6 +30,36 @@ from app.api.v1.endpoints.email_config_validacion import validar_config_email_pa
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Valores por defecto al crear email_config v2 por primera vez (sin fila previa).
+_DEFAULTS_EMAIL_V2_GLOBALS: dict[str, Any] = {
+    "modo_pruebas": "true",
+    "email_pruebas": "",
+    "email_activo": "true",
+    "email_activo_notificaciones": "true",
+    "email_activo_informe_pagos": "true",
+    "email_activo_estado_cuenta": "true",
+    "email_activo_cobros": "true",
+    "email_activo_campanas": "true",
+    "email_activo_tickets": "true",
+    "modo_pruebas_notificaciones": "false",
+    "modo_pruebas_informe_pagos": "false",
+    "modo_pruebas_estado_cuenta": "false",
+    "modo_pruebas_cobros": "false",
+    "modo_pruebas_campanas": "false",
+    "modo_pruebas_tickets": "false",
+    "tickets_notify_emails": "",
+}
+
+
+def _email_v2_globals_for_api(data: dict) -> dict[str, Any]:
+    """Expone en GET /cuentas las mismas claves globales que usa el holder (round-trip al guardar)."""
+    out: dict[str, Any] = {}
+    for k, default in _DEFAULTS_EMAIL_V2_GLOBALS.items():
+        out[k] = data.get(k, default)
+    if data.get("emails_pruebas") is not None:
+        out["emails_pruebas"] = data.get("emails_pruebas")
+    return out
+
 
 def _mask_cuenta(c: dict) -> dict:
     """Copia la cuenta enmascarando contrasenas y sin exponer campos _encriptado."""
@@ -59,6 +89,7 @@ def get_email_cuentas(db: Session = Depends(get_db)):
             "version": 2,
             "cuentas": [cuenta_vacia() for _ in range(NUM_CUENTAS)],
             "asignacion": dict(ASIGNACION_DEFAULT),
+            **_email_v2_globals_for_api({}),
         }
         for c in out["cuentas"]:
             _mask_cuenta(c)
@@ -72,13 +103,7 @@ def get_email_cuentas(db: Session = Depends(get_db)):
             "version": 2,
             "cuentas": cuentas,
             "asignacion": data.get("asignacion") or ASIGNACION_DEFAULT,
-            "modo_pruebas": data.get("modo_pruebas", "true"),
-            "email_pruebas": data.get("email_pruebas", ""),
-            "email_activo": data.get("email_activo", "true"),
-            "email_activo_notificaciones": data.get("email_activo_notificaciones", "true"),
-            "email_activo_estado_cuenta": data.get("email_activo_estado_cuenta", "true"),
-            "email_activo_cobros": data.get("email_activo_cobros", "true"),
-            "tickets_notify_emails": data.get("tickets_notify_emails", ""),
+            **_email_v2_globals_for_api(data),
         }
     migrated = migrar_config_v1_a_v2(data)
     cuentas = list(migrated["cuentas"])
@@ -89,13 +114,7 @@ def get_email_cuentas(db: Session = Depends(get_db)):
         "version": 2,
         "cuentas": cuentas,
         "asignacion": migrated.get("asignacion") or ASIGNACION_DEFAULT,
-        "modo_pruebas": migrated.get("modo_pruebas", "true"),
-        "email_pruebas": migrated.get("email_pruebas", ""),
-        "email_activo": migrated.get("email_activo", "true"),
-        "email_activo_notificaciones": migrated.get("email_activo_notificaciones", "true"),
-        "email_activo_estado_cuenta": migrated.get("email_activo_estado_cuenta", "true"),
-        "email_activo_cobros": migrated.get("email_activo_cobros", "true"),
-        "tickets_notify_emails": migrated.get("tickets_notify_emails", ""),
+        **_email_v2_globals_for_api(migrated if isinstance(migrated, dict) else {}),
     }
 
 
@@ -211,35 +230,51 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
                             stored[enc_key] = existing_cuenta.get(enc_key)
         cuentas_para_bd.append(stored)
 
+    # Persistencia: fusionar con JSON existente para no perder claves que el cliente no envía
+    # (email_activo maestro, informe_pagos, campañas, modo_pruebas_* por servicio, etc.).
+    body = payload.model_dump(exclude_unset=True)
+    if (
+        existing_data
+        and isinstance(existing_data, dict)
+        and existing_data.get("version") == 2
+        and isinstance(existing_data.get("cuentas"), list)
+    ):
+        payload_data: dict[str, Any] = dict(existing_data)
+    else:
+        payload_data = {}
+    for k, v in body.items():
+        if k in ("cuentas", "asignacion"):
+            continue
+        payload_data[k] = v
+    payload_data["version"] = 2
+    payload_data["cuentas"] = cuentas_para_bd
+    payload_data["asignacion"] = asignacion
+    for dk, dv in _DEFAULTS_EMAIL_V2_GLOBALS.items():
+        if dk not in payload_data or payload_data[dk] is None:
+            payload_data[dk] = dv
 
-    payload_data = {
-        "version": 2,
-        "cuentas": cuentas_para_bd,
-        "asignacion": asignacion,
-        "modo_pruebas": payload.modo_pruebas or "true",
-        "email_pruebas": payload.email_pruebas or "",
-        "email_activo": payload.email_activo or "true",
-        "email_activo_notificaciones": payload.email_activo_notificaciones or "true",
-        "email_activo_estado_cuenta": payload.email_activo_estado_cuenta or "true",
-        "email_activo_cobros": payload.email_activo_cobros or "true",
-        "tickets_notify_emails": payload.tickets_notify_emails or "",
-        "modo_pruebas_cobros": payload.modo_pruebas or "true",
-        "modo_pruebas_estado_cuenta": payload.modo_pruebas or "true",
-    }
-    update_from_api({
+    holder_update: dict[str, Any] = {
         "version": 2,
         "cuentas": cuentas_dict,
         "asignacion": asignacion,
-        **{k: v for k, v in payload_data.items() if k not in ("cuentas", "version")},
-    })
+    }
+    for k, v in payload_data.items():
+        if k not in ("version", "cuentas", "asignacion"):
+            holder_update[k] = v
+    update_from_api(holder_update)
     try:
         row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
-        payload_str = json.dumps(payload_data)
+        payload_str = json.dumps(payload_data, ensure_ascii=False)
         if row:
             row.valor = payload_str
         else:
             db.add(Configuracion(clave=CLAVE_EMAIL_CONFIG, valor=payload_str))
         db.commit()
+        logger.info(
+            "email_config persistido en BD (clave=%s, cuentas=%d, utf8=True)",
+            CLAVE_EMAIL_CONFIG,
+            len(cuentas_para_bd),
+        )
     except Exception as e:
         logger.exception("Error guardando cuentas email: %s", e)
         db.rollback()

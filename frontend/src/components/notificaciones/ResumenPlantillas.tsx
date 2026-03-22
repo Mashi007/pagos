@@ -45,37 +45,52 @@ interface ResumenPlantillasProps {
 // Mapeo de tipos a categorías y casos
 
 const mapeoTipos = {
-  PAGO_5_DIAS_ANTES: { categoria: 'Notificación Previa', caso: '5 días antes' },
+  PAGO_5_DIAS_ANTES: {
+    categoria: 'Notificación previa (heredada)',
+    caso: '5 días antes',
+  },
 
-  PAGO_3_DIAS_ANTES: { categoria: 'Notificación Previa', caso: '3 días antes' },
+  PAGO_3_DIAS_ANTES: {
+    categoria: 'Notificación previa (heredada)',
+    caso: '3 días antes',
+  },
 
-  PAGO_1_DIA_ANTES: { categoria: 'Notificación Previa', caso: '1 día antes' },
+  PAGO_1_DIA_ANTES: {
+    categoria: 'Notificación previa (heredada)',
+    caso: '1 día antes',
+  },
 
-  PAGO_DIA_0: { categoria: 'Día de Pago', caso: 'Día de pago' },
+  PAGO_DIA_0: {
+    categoria: 'Día de pago (heredado)',
+    caso: 'Día de pago',
+  },
 
   PAGO_1_DIA_ATRASADO: {
-    categoria: 'Notificación Retrasada',
-    caso: '1 día de retraso',
+    categoria: 'Notificación retrasada',
+    caso: 'Día siguiente al vencimiento',
   },
 
   PAGO_3_DIAS_ATRASADO: {
-    categoria: 'Notificación Retrasada',
+    categoria: 'Notificación retrasada',
     caso: '3 días de retraso',
   },
 
   PAGO_5_DIAS_ATRASADO: {
-    categoria: 'Notificación Retrasada',
+    categoria: 'Notificación retrasada',
     caso: '5 días de retraso',
   },
 
   PREJUDICIAL: { categoria: 'Prejudicial', caso: 'Prejudicial' },
+
+  COBRANZA: { categoria: 'Cobranza', caso: 'Carta de cobranza' },
 }
 
 const categoriasOrden = [
-  { key: 'Notificación Previa', color: 'blue', icon: '🔔' },
-  { key: 'Día de Pago', color: 'green', icon: '📅' },
-  { key: 'Notificación Retrasada', color: 'orange', icon: '⚠️' },
+  { key: 'Notificación retrasada', color: 'orange', icon: '⚠️' },
   { key: 'Prejudicial', color: 'red', icon: '🚨' },
+  { key: 'Cobranza', color: 'violet', icon: '📧' },
+  { key: 'Notificación previa (heredada)', color: 'blue', icon: '🔔' },
+  { key: 'Día de pago (heredado)', color: 'green', icon: '📅' },
 ]
 
 export function ResumenPlantillas({

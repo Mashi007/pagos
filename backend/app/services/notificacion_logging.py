@@ -13,6 +13,7 @@ FASE_ENVIO_INICIO = "notif_envio_inicio"
 FASE_ENVIO_CONFIG = "notif_envio_config"
 FASE_ENVIO_CONTEXTO_COBRANZA = "notif_envio_contexto_cobranza"
 FASE_ENVIO_ADJUNTOS = "notif_envio_adjuntos"
+FASE_ENVIO_PAQUETE = "notif_envio_paquete"
 FASE_ENVIO_EMAIL = "notif_envio_email"
 FASE_ENVIO_PERSISTENCIA = "notif_envio_persistencia"
 FASE_ENVIO_RESUMEN = "notif_envio_resumen"
@@ -65,6 +66,18 @@ def log_envio_contexto_cobranza(item_id: str, ok: bool, motivo: Optional[str] = 
         ok,
         motivo or "ok",
         extra=_extra(FASE_ENVIO_CONTEXTO_COBRANZA, item_id=item_id, ok=ok, motivo=motivo),
+    )
+
+
+def log_envio_paquete_incompleto(item_id: str, motivo: str, tipo: str = "") -> None:
+    """Paquete obligatorio incompleto (plantilla / PDF variable / PDF fijo). No se envia correo."""
+    logger.warning(
+        "[%s] Paquete incompleto item=%s tipo=%s motivo=%s",
+        FASE_ENVIO_PAQUETE,
+        item_id,
+        tipo,
+        motivo,
+        extra=_extra(FASE_ENVIO_PAQUETE, item_id=item_id, tipo=tipo, motivo=motivo, ok=False),
     )
 
 
@@ -136,15 +149,17 @@ def log_envio_resumen(
     enviados_whatsapp: int,
     fallidos_whatsapp: int,
     modo_pruebas: bool = False,
+    omitidos_paquete_incompleto: int = 0,
 ) -> None:
     """Indicador: resumen del lote (indicadores de funcionamiento). modo_pruebas para compaginar con envíos en prueba."""
     logger.info(
-        "[%s] Resumen: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s whatsapp_ok=%s whatsapp_fallo=%s modo_pruebas=%s",
+        "[%s] Resumen: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s omitidos_paquete=%s whatsapp_ok=%s whatsapp_fallo=%s modo_pruebas=%s",
         FASE_ENVIO_RESUMEN,
         enviados,
         fallidos,
         sin_email,
         omitidos_config,
+        omitidos_paquete_incompleto,
         enviados_whatsapp,
         fallidos_whatsapp,
         modo_pruebas,
@@ -154,6 +169,7 @@ def log_envio_resumen(
             fallidos=fallidos,
             sin_email=sin_email,
             omitidos_config=omitidos_config,
+            omitidos_paquete_incompleto=omitidos_paquete_incompleto,
             enviados_whatsapp=enviados_whatsapp,
             fallidos_whatsapp=fallidos_whatsapp,
             modo_pruebas=modo_pruebas,

@@ -229,31 +229,90 @@ def put_email_configuracion(payload: EmailConfigUpdate = Body(...), db: Session 
     return resp
 
 
+def _cuenta_tiene_smtp_usable(c: Any) -> bool:
+    """True si la cuenta puede enviar: host, usuario y contraseña (texto o smtp_password_encriptado en JSON)."""
+    if not isinstance(c, dict):
+        return False
+    host = (c.get("smtp_host") or "").strip()
+    user = (c.get("smtp_user") or "").strip()
+    if not host or not user:
+        return False
+    pw = (c.get("smtp_password") or "").strip()
+    if pw and pw != "***":
+        return True
+    return bool(c.get("smtp_password_encriptado"))
+
+
+def _smtp_configurada_desde_json_email(data: Optional[dict]) -> tuple[bool, list[str]]:
+    """
+    Considera configuracion version 2 (4 cuentas) ademas del formato legacy plano.
+    Asi GET /estado no marca 'no configurado' cuando solo existe email_config v2 en BD.
+    """
+    if not data or not isinstance(data, dict):
+        return False, ["No hay configuración de email en base de datos"]
+    if data.get("version") == 2 and isinstance(data.get("cuentas"), list):
+        if any(_cuenta_tiene_smtp_usable(c) for c in data["cuentas"]):
+            return True, []
+        return False, [
+            "Ninguna cuenta tiene SMTP completo (servidor, usuario y contraseña). Revise Configuración → Email."
+        ]
+    host = (data.get("smtp_host") or "").strip()
+    user = (data.get("smtp_user") or "").strip()
+    pw = (data.get("smtp_password") or "").strip()
+    has_pw = (pw and pw != "***") or bool(data.get("smtp_password_encriptado"))
+    if host and user and has_pw:
+        return True, []
+    problemas: list[str] = []
+    if not host:
+        problemas.append("Falta servidor SMTP")
+    if not user:
+        problemas.append("Falta email de usuario")
+    if not has_pw:
+        problemas.append(
+            "Falta contraseña (normal o de aplicación; en cuentas corporativas usa la contraseña normal)"
+        )
+    return False, problemas
+
+
 @router.get("/estado")
 def get_email_estado(db: Session = Depends(get_db)):
-    """Estado de la configuracion de email (para el frontend)."""
+    """Estado SMTP para el frontend: soporta email_config version 2 (cuatro cuentas) y legacy."""
     _load_email_config_from_db(db)
     _sync_stub_from_settings()
+    row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
+    raw: Optional[dict] = None
+    if row and row.valor:
+        try:
+            parsed = json.loads(row.valor)
+            if isinstance(parsed, dict):
+                raw = parsed
+        except (json.JSONDecodeError, TypeError):
+            raw = None
+
+    configurada, problemas = _smtp_configurada_desde_json_email(raw)
+
     cfg = _email_config_stub
-    configurada = bool(
-        cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")
-    )
-    problemas = []
-    if not cfg.get("smtp_host"):
-        problemas.append("Falta servidor SMTP")
-    if not cfg.get("smtp_user"):
-        problemas.append("Falta email de usuario")
-    if not cfg.get("smtp_password") or cfg.get("smtp_password") == "***":
-        problemas.append("Falta contraseña (normal o de aplicación; en cuentas corporativas usa la contraseña normal)")
+    if not configurada:
+        stub_pw = cfg.get("smtp_password") or ""
+        stub_ok = bool(
+            (cfg.get("smtp_host") or "").strip()
+            and (cfg.get("smtp_user") or "").strip()
+            and str(stub_pw).strip()
+            and str(stub_pw).strip() != "***"
+        )
+        if stub_ok:
+            configurada = True
+            problemas = []
+
     mensaje_estado = (
-        "Datos completos. Usa 'Enviar Email de Prueba' para verificar la conexion con Gmail."
+        "SMTP configurado (cuentas v2 o legado). Puede enviar correo de prueba."
         if configurada
-        else "Completa SMTP y contraseña (normal o de aplicación)."
+        else "Complete SMTP en Configuración → Email (cuentas 1–4 o formato anterior)."
     )
     return {
         "configurada": configurada,
         "mensaje": mensaje_estado,
-        "problemas": problemas,
+        "problemas": [] if configurada else problemas,
         "conexion_smtp": {
             "success": False,
             "message": "Usa 'Enviar Email de Prueba' para verificar la conexion." if configurada else None,
@@ -285,14 +344,14 @@ def _destino_prueba(cfg: dict[str, Any], payload: ProbarEmailRequest) -> str:
     summary="Envia un email de prueba por SMTP con la configuracion guardada.",
 )
 def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Depends(get_db)):
-    """Envia un correo de prueba por SMTP (usa config persistida en BD). En modo pruebas redirige a email_pruebas."""
+    """Envia un correo de prueba por SMTP (config persistida en BD). Con email_config version 2 usa la cuenta Cobros (Cuenta 1), igual que recibos en pagos reportados."""
     _load_email_config_from_db(db)
     _sync_stub_from_settings()
     from app.core.email_config_holder import sync_from_db, get_smtp_config
     from app.core.email import send_email
 
     sync_from_db()
-    cfg_send = get_smtp_config()
+    cfg_send = get_smtp_config(servicio="cobros")
     if not all([cfg_send.get("smtp_host"), (cfg_send.get("smtp_user") or "").strip()]):
         raise HTTPException(
             status_code=400,
@@ -328,7 +387,13 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
     recipients = [destino]
     if payload.email_cc and (payload.email_cc or "").strip():
         recipients.append(payload.email_cc.strip())
-    ok, error_msg = send_email(to_emails=recipients, subject=subject, body_text=body, respetar_destinos_manuales=True)
+    ok, error_msg = send_email(
+        to_emails=recipients,
+        subject=subject,
+        body_text=body,
+        respetar_destinos_manuales=True,
+        servicio="cobros",
+    )
     if not ok:
         logger.warning("Email de prueba fallo: %s", error_msg)
         return {

@@ -7,7 +7,6 @@ import { motion } from 'framer-motion'
 import {
   RefreshCw,
   Settings,
-  Calendar,
   AlertTriangle,
   FileText,
   Clock,
@@ -40,26 +39,18 @@ import { toast } from 'sonner'
 import { ConfiguracionNotificaciones } from '../components/notificaciones/ConfiguracionNotificaciones'
 
 type TabId =
-  | 'dias_5'
-  | 'dias_3'
-  | 'dias_1'
-  | 'hoy'
   | 'dias_1_atraso'
   | 'dias_5_atraso'
   | 'dias_30_atraso'
   | 'liquidados'
   | 'configuracion'
 
-const TABS: { id: TabId; label: string; icon: typeof Calendar }[] = [
-  { id: 'dias_5', label: 'Faltan 5', icon: Calendar },
-
-  { id: 'dias_3', label: 'Faltan 3', icon: Calendar },
-
-  { id: 'dias_1', label: 'Falta 1', icon: Clock },
-
-  { id: 'hoy', label: 'Hoy vence', icon: AlertTriangle },
-
-  { id: 'dias_1_atraso', label: '1 día atrasado', icon: Clock },
+const TABS: { id: TabId; label: string; icon: typeof Clock }[] = [
+  {
+    id: 'dias_1_atraso',
+    label: 'Día después del venc.',
+    icon: Clock,
+  },
 
   { id: 'dias_5_atraso', label: '5 días atrasado', icon: Clock },
 
@@ -76,18 +67,6 @@ type EstadisticaTabKey = keyof EstadisticasPorTab
 
 function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
   switch (tab) {
-    case 'dias_5':
-      return 'dias_5'
-
-    case 'dias_3':
-      return 'dias_3'
-
-    case 'dias_1':
-      return 'dias_1'
-
-    case 'hoy':
-      return 'hoy'
-
     case 'dias_1_atraso':
       return 'dias_1_retraso'
 
@@ -122,7 +101,7 @@ export function Notificaciones() {
   const tabParam = searchParams.get('tab') as TabId | null
 
   const [activeTab, setActiveTab] = useState<TabId>(() =>
-    tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'dias_5'
+    tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'dias_1_atraso'
   )
 
   useEffect(() => {
@@ -141,7 +120,7 @@ export function Notificaciones() {
     setSearchParams(p => {
       const next = new URLSearchParams(p)
 
-      if (tab === 'dias_5') next.delete('tab')
+      if (tab === 'dias_1_atraso') next.delete('tab')
       else next.set('tab', tab)
 
       return next
@@ -240,18 +219,6 @@ export function Notificaciones() {
     if (!data) return []
 
     switch (activeTab) {
-      case 'dias_5':
-        return data.dias_5
-
-      case 'dias_3':
-        return data.dias_3
-
-      case 'dias_1':
-        return data.dias_1
-
-      case 'hoy':
-        return data.hoy
-
       case 'dias_1_atraso':
         return data.dias_1_atraso ?? []
 
@@ -332,9 +299,10 @@ export function Notificaciones() {
           <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
 
           <p className="mt-1 text-gray-600">
-            Recordatorios (Faltan 5, 3, 1), vence hoy, atrasos (1, 5 y 30 días)
-            y crédito pagado. Datos desde BD. Se recomienda actualizar a las
-            2:00.
+            Politica: no hay avisos antes del vencimiento ni el día del
+            vencimiento. El primer listado es el día calendario siguiente (ej.
+            vence 22 → aparece el 23). También 5 y 30 días de atraso y crédito
+            pagado. Datos desde BD.
           </p>
 
           {data?.actualizado_en && (
@@ -363,23 +331,15 @@ export function Notificaciones() {
         <nav className="flex flex-wrap gap-1">
           {TABS.filter(t => t.id !== 'configuracion').map(tab => {
             const count =
-              tab.id === 'dias_5'
-                ? (data?.dias_5?.length ?? 0)
-                : tab.id === 'dias_3'
-                  ? (data?.dias_3?.length ?? 0)
-                  : tab.id === 'dias_1'
-                    ? (data?.dias_1?.length ?? 0)
-                    : tab.id === 'hoy'
-                      ? (data?.hoy?.length ?? 0)
-                      : tab.id === 'dias_1_atraso'
-                        ? (data?.dias_1_atraso?.length ?? 0)
-                        : tab.id === 'dias_5_atraso'
-                          ? (data?.dias_5_atraso?.length ?? 0)
-                          : tab.id === 'dias_30_atraso'
-                            ? (data?.dias_30_atraso?.length ?? 0)
-                            : tab.id === 'liquidados'
-                              ? (data?.liquidados?.length ?? 0)
-                              : 0
+              tab.id === 'dias_1_atraso'
+                ? (data?.dias_1_atraso?.length ?? 0)
+                : tab.id === 'dias_5_atraso'
+                  ? (data?.dias_5_atraso?.length ?? 0)
+                  : tab.id === 'dias_30_atraso'
+                    ? (data?.dias_30_atraso?.length ?? 0)
+                    : tab.id === 'liquidados'
+                      ? (data?.liquidados?.length ?? 0)
+                      : 0
 
             return (
               <button
@@ -431,22 +391,23 @@ export function Notificaciones() {
               {activeTab === 'liquidados'
                 ? 'Crédito pagado (Total financiamiento = Total abonos)'
                 : activeTab === 'dias_1_atraso'
-                  ? 'Cuotas con 1 día de atraso'
+                  ? 'Día siguiente al vencimiento (1 día de atraso calendario)'
                   : activeTab === 'dias_5_atraso'
                     ? 'Cuotas con 5 días de atraso'
                     : activeTab === 'dias_30_atraso'
                       ? 'Cuotas con 30 días de atraso'
-                      : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 días' : activeTab === 'dias_3' ? 'y faltan 3 días' : activeTab === 'dias_1' ? 'y falta 1 día' : 'y vence hoy'}`}
+                      : ''}
             </CardTitle>
 
             <CardDescription>
               {activeTab === 'liquidados'
                 ? 'Préstamos donde total financiamiento (tabla préstamo) menos total abonos (tabla cuotas) es cero. Por cédula/cliente.'
-                : activeTab === 'dias_1_atraso' ||
-                    activeTab === 'dias_5_atraso' ||
-                    activeTab === 'dias_30_atraso'
-                  ? 'Cuotas vencidas no pagadas con 1, 5 o 30 días de atraso (nombre, cédula, nº cuota, fecha venc., días atraso, monto).'
-                  : 'Nombre y cédula de clientes a notificar.'}
+                : activeTab === 'dias_1_atraso'
+                  ? 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Ej.: vence 22 → entra el 23.'
+                  : activeTab === 'dias_5_atraso' ||
+                      activeTab === 'dias_30_atraso'
+                    ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso (nombre, cédula, nº cuota, fecha venc., días atraso, monto).'
+                    : 'Nombre y cédula de clientes a notificar.'}
             </CardDescription>
           </CardHeader>
 

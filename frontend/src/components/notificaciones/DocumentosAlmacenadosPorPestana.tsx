@@ -15,15 +15,7 @@ import { Loader2, Trash2, FileText } from 'lucide-react'
 import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
 export const TIPOS_CASO_DOCS: { value: string; label: string }[] = [
-  { value: 'dias_5', label: 'Faltan 5' },
-
-  { value: 'dias_3', label: 'Faltan 3' },
-
-  { value: 'dias_1', label: 'Falta 1' },
-
-  { value: 'hoy', label: 'Hoy vence' },
-
-  { value: 'dias_1_retraso', label: '1 día retraso' },
+  { value: 'dias_1_retraso', label: 'Día siguiente al venc.' },
 
   { value: 'dias_3_retraso', label: '3 días retraso' },
 

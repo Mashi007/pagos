@@ -29,15 +29,7 @@ import {
 } from '../ui/select'
 
 const TIPOS_CASO: { value: string; label: string }[] = [
-  { value: 'dias_5', label: 'Faltan 5' },
-
-  { value: 'dias_3', label: 'Faltan 3' },
-
-  { value: 'dias_1', label: 'Falta 1' },
-
-  { value: 'hoy', label: 'Hoy vence' },
-
-  { value: 'dias_1_retraso', label: '1 día retraso' },
+  { value: 'dias_1_retraso', label: 'Día siguiente al venc.' },
 
   { value: 'dias_3_retraso', label: '3 días retraso' },
 
@@ -169,8 +161,8 @@ export function DocumentosPdfAnexos() {
 
           <CardDescription>
             Sube documentos PDF y asígnalos a una, varias o todas las pestañas
-            (Faltan 5, Hoy vence, Retrasadas, Prejudicial). Marca los
-            casos que quieras o «Todos los casos». Solo PDF.
+            (Faltan 5, Hoy vence, Retrasadas, Prejudicial). Marca los casos que
+            quieras o «Todos los casos». Solo PDF.
           </CardDescription>
         </CardHeader>
 

@@ -43,6 +43,10 @@
 export const NOTIFICACIONES_QUERY_KEYS = {
   envios: ['configuracion-notificaciones-envios'] as const,
 
+  /** GET /configuracion/email/estado (SMTP listo: v2 cuentas o legado). */
+
+  emailEstado: ['configuracion', 'email', 'estado'] as const,
+
   plantillas: ['notificaciones-plantillas', { solo_activas: false }] as const,
 
   adjuntosFijos: ['notificaciones-adjuntos-fijos-cobranza'] as const,

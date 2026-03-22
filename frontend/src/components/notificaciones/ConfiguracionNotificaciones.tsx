@@ -91,36 +91,8 @@ export const CRITERIOS: {
   color: 'blue' | 'green' | 'orange' | 'red' | 'slate'
 }[] = [
   {
-    tipo: 'PAGO_5_DIAS_ANTES',
-    label: 'Faltan 5',
-    categoria: 'Notificación previa',
-    color: 'blue',
-  },
-
-  {
-    tipo: 'PAGO_3_DIAS_ANTES',
-    label: 'Faltan 3',
-    categoria: 'Notificación previa',
-    color: 'blue',
-  },
-
-  {
-    tipo: 'PAGO_1_DIA_ANTES',
-    label: 'Falta 1',
-    categoria: 'Notificación previa',
-    color: 'blue',
-  },
-
-  {
-    tipo: 'PAGO_DIA_0',
-    label: 'Hoy vence',
-    categoria: 'Día de pago',
-    color: 'green',
-  },
-
-  {
     tipo: 'PAGO_1_DIA_ATRASADO',
-    label: '1 día de retraso',
+    label: 'Día siguiente al vencimiento',
     categoria: 'Retrasada',
     color: 'orange',
   },
@@ -194,7 +166,13 @@ const COLORES = {
 const HORA_DEFAULT = '04:00'
 
 function defaultEnvio(): ConfigEnvioItem {
-  return { habilitado: true, cco: [], programador: HORA_DEFAULT }
+  return {
+    habilitado: true,
+    cco: [],
+    programador: HORA_DEFAULT,
+    incluir_pdf_anexo: true,
+    incluir_adjuntos_fijos: true,
+  }
 }
 
 /** Normaliza la respuesta de la API en estado listo para el componente (carga única y clara). */
@@ -250,8 +228,6 @@ export function ConfiguracionNotificaciones() {
 
   const [enviandoMasivo, setEnviandoMasivo] = useState(false)
 
-  const [smtpConfigurado, setSmtpConfigurado] = useState<boolean | null>(null)
-
   const guardandoRef = useRef(false)
 
   const queryClient = useQueryClient()
@@ -279,6 +255,36 @@ export function ConfiguracionNotificaciones() {
     placeholderData: [] as NotificacionPlantilla[],
   })
 
+  const {
+    data: estadoEmailSmtp,
+    isPending: cargandoEstadoSmtp,
+    isError: errorEstadoSmtp,
+  } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.emailEstado,
+
+    queryFn: () => emailConfigService.verificarEstadoConfiguracionEmail(),
+
+    enabled: modoPruebas,
+
+    staleTime: 30 * 1000,
+
+    refetchOnWindowFocus: true,
+
+    refetchOnMount: 'always',
+  })
+
+  /** null = pendiente o error de red (no aviso falso); false = SMTP incompleto; true = OK (v2 o legado). */
+
+  const smtpConfigurado: boolean | null = !modoPruebas
+    ? null
+    : errorEstadoSmtp
+      ? null
+      : cargandoEstadoSmtp
+        ? null
+        : estadoEmailSmtp?.configurada === true
+          ? true
+          : false
+
   const cargando = loadingEnvios || loadingPlantillas
 
   useEffect(() => {
@@ -305,19 +311,6 @@ export function ConfiguracionNotificaciones() {
     if (errorEnvios) toast.error('Error al cargar la configuración de envíos')
   }, [errorEnvios])
 
-  useEffect(() => {
-    if (modoPruebas) {
-      emailConfigService
-        .verificarEstadoConfiguracionEmail()
-
-        .then(r => setSmtpConfigurado(r?.configurada ?? false))
-
-        .catch(() => setSmtpConfigurado(false))
-    } else {
-      setSmtpConfigurado(null)
-    }
-  }, [modoPruebas])
-
   const getConfig = (tipo: string): ConfigEnvioItem => {
     const c = configEnvios[tipo]
 
@@ -332,9 +325,9 @@ export function ConfiguracionNotificaciones() {
 
       programador: c.programador ?? HORA_DEFAULT,
 
-      // PDF = Carta_Cobranza (pestaña 2). Por defecto no; marcar para incluir. Adj. = documentos subidos (pestaña 3).
+      // PDF = Carta_Cobranza (pestaña 2). Por defecto sí (requerido con paquete estricto en backend).
 
-      incluir_pdf_anexo: c.incluir_pdf_anexo === true,
+      incluir_pdf_anexo: c.incluir_pdf_anexo !== false,
 
       incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
     }
@@ -395,7 +388,7 @@ export function ConfiguracionNotificaciones() {
         ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
           ...c,
 
-          incluir_pdf_anexo: c.incluir_pdf_anexo === true,
+          incluir_pdf_anexo: c.incluir_pdf_anexo !== false,
 
           incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
         }
@@ -600,11 +593,10 @@ export function ConfiguracionNotificaciones() {
           </CardTitle>
 
           <CardDescription>
-            Asigna una plantilla a cada pestaña, activa el envío y define si
-            incluir PDF anexo (carta cobranza) y documentos PDF fijos. Cuando
-            marques «PDF» (pestaña 2) o «Adj.» (pestaña 3), esos adjuntos se
-            agregan OBLIGATORIAMENTE al email. Los documentos fijos se asignan
-            en Configuración → Plantillas → Documentos PDF anexos.
+            Cada caso con envío activo debe tener plantilla de email (pestaña 1
+            en Plantillas), «PDF» y «Adj.» activos: el backend exige carta
+            variable más al menos un PDF fijo válido. Los fijos se suben en
+            Configuración → Plantillas → Documentos PDF anexos (pestaña 3).
           </CardDescription>
         </CardHeader>
       </Card>
@@ -796,7 +788,7 @@ export function ConfiguracionNotificaciones() {
 
               <th
                 className="w-20 px-4 py-3 text-center font-semibold text-gray-700"
-                title="Incluir Carta_Cobranza.pdf (generada desde Configuración → Plantillas → Plantilla anexo PDF). Desmarca para usar solo tus PDFs subidos en Documentos PDF anexos."
+                title="Pestaña 2: Carta_Cobranza.pdf. Obligatorio para enviar (junto con plantilla email y PDF fijo). Desactivar impide el envío en modo estricto."
                 aria-label="Incluir carta cobranza PDF"
               >
                 PDF
@@ -804,7 +796,7 @@ export function ConfiguracionNotificaciones() {
 
               <th
                 className="w-20 px-4 py-3 text-center font-semibold text-gray-700"
-                title="Incluir documentos PDF fijos asignados a esta pestaña (Configuración → Plantillas → Documentos PDF anexos)"
+                title="Pestaña 3: PDFs fijos por caso + global. Obligatorio para enviar (junto con plantilla y carta PDF)."
                 aria-label="Incluir documentos PDF fijos de esta pestaña"
               >
                 Adj.
@@ -899,14 +891,14 @@ export function ConfiguracionNotificaciones() {
                   <td className="px-4 py-3 text-center">
                     <input
                       type="checkbox"
-                      checked={config.incluir_pdf_anexo === true}
+                      checked={config.incluir_pdf_anexo !== false}
                       onChange={() =>
                         setConfig(tipo, {
                           incluir_pdf_anexo: !config.incluir_pdf_anexo,
                         })
                       }
                       disabled={!config.habilitado}
-                      title="Pestaña 2: agregar OBLIGATORIAMENTE Carta_Cobranza.pdf al email. Desmarca para no incluirla."
+                      title="Carta_Cobranza.pdf (plantilla PDF cobranza). El servidor exige este PDF y un PDF fijo para enviar; debe estar activado."
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>
@@ -923,7 +915,7 @@ export function ConfiguracionNotificaciones() {
                         })
                       }
                       disabled={!config.habilitado}
-                      title="Pestaña 3: agregar OBLIGATORIAMENTE los documentos PDF fijos (Documentos PDF anexos) al email."
+                      title="PDFs fijos (global + por caso). El servidor exige al menos un PDF fijo valido ademas de la carta; no desactivar."
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>

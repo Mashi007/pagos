@@ -1,14 +1,15 @@
 """
-Endpoints para las pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial).
-Datos reales desde BD (cuotas + clientes). Envío por Email (Configuración > Email) y respeto de
-configuración de envíos (habilitado/CCO por tipo) desde BD (notificaciones_envios). get_db en todos los procesos.
+Endpoints para notificaciones por cuota (retrasadas 1/3/5 dias, prejudicial).
+Politica: sin envios "previos" ni el dia del vencimiento; previas/dia-pago devuelven listas vacias.
+Datos reales desde BD. get_db en todos los procesos.
 """
 import logging
-from typing import Callable, List
+from typing import Callable, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.email import send_email
@@ -30,6 +31,7 @@ from app.services.notificacion_logging import (
     log_envio_config,
     log_envio_contexto_cobranza,
     log_envio_adjuntos,
+    log_envio_paquete_incompleto,
     log_envio_email,
     log_envio_persistencia,
     log_envio_resumen,
@@ -54,6 +56,50 @@ def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
     return _CONFIG_TIPO_TO_TAB.get(tipo_config)
 
 
+NOMBRE_PDF_CARTA_VARIABLE = "Carta_Cobranza.pdf"
+
+
+def _bytes_son_pdf_valido(data: Optional[bytes]) -> bool:
+    if not data or len(data) < 4:
+        return False
+    return data[:4] == b"%PDF"
+
+
+def _validar_plantilla_email_estricta(db, plantilla_id: Optional[int]) -> tuple[bool, str]:
+    """Exige plantilla en BD, activa, con asunto y cuerpo no vacios."""
+    if not plantilla_id:
+        return False, "sin_plantilla_id"
+    p = db.get(PlantillaNotificacion, plantilla_id)
+    if not p or not p.activa:
+        return False, "plantilla_inactiva_o_ausente"
+    if not (p.asunto or "").strip() or not (p.cuerpo or "").strip():
+        return False, "plantilla_asunto_o_cuerpo_vacio"
+    return True, ""
+
+
+def _adjuntos_cumplen_paquete_completo(
+    attachments: Optional[List[Tuple[str, bytes]]],
+) -> tuple[bool, str]:
+    """
+    Debe existir el PDF variable (Carta_Cobranza.pdf) valido y al menos un PDF fijo adicional valido.
+    Los fijos son cualquier adjunto distinto del nombre de la carta.
+    """
+    if not attachments:
+        return False, "sin_adjuntos"
+    carta: Optional[bytes] = None
+    otros: List[bytes] = []
+    for nombre, data in attachments:
+        if nombre == NOMBRE_PDF_CARTA_VARIABLE:
+            carta = data
+        else:
+            otros.append(data)
+    if not _bytes_son_pdf_valido(carta):
+        return False, "falta_pdf_variable_o_invalido"
+    if not any(_bytes_son_pdf_valido(d) for d in otros):
+        return False, "falta_pdf_fijo_valido"
+    return True, ""
+
+
 router_previas = APIRouter(dependencies=[Depends(get_current_user)])
 router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
 router_retrasadas = APIRouter(dependencies=[Depends(get_current_user)])
@@ -73,9 +119,14 @@ def _enviar_correos_items(
 
     Modo pruebas: todos los envíos van al email de pruebas; plantillas y PDF usan datos reales.
     Modo producción: envío al correo de cada cliente; plantillas y PDF con datos reales.
+
+    Con NOTIFICACIONES_PAQUETE_ESTRICTO=True (defecto): no se envia correo ni WhatsApp sin
+    plantilla email activa, PDF Carta_Cobranza valido y al menos un PDF fijo adicional.
+    Desactivar solo en emergencia vía .env (NOTIFICACIONES_PAQUETE_ESTRICTO=false).
     """
     sync_email_config_from_db()
     modo_pruebas = config_envios.get("modo_pruebas") is True
+    paquete_estricto = bool(getattr(settings, "NOTIFICACIONES_PAQUETE_ESTRICTO", True))
     log_envio_inicio(len(items), "batch", modo_pruebas=modo_pruebas)
     email_pruebas = (config_envios.get("email_pruebas") or "").strip()
     usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
@@ -96,6 +147,7 @@ def _enviar_correos_items(
     sin_email = 0
     fallidos = 0
     omitidos_config = 0
+    omitidos_paquete_incompleto = 0
     enviados_whatsapp = 0
     fallidos_whatsapp = 0
     registros_envio: List[EnvioNotificacion] = []
@@ -113,11 +165,37 @@ def _enviar_correos_items(
             plantilla_id = int(raw_id) if raw_id is not None else None
         except (TypeError, ValueError):
             plantilla_id = None
+
+        if paquete_estricto and db:
+            ok_plant, mot_plant = _validar_plantilla_email_estricta(db, plantilla_id)
+            if not ok_plant:
+                log_envio_paquete_incompleto(item_id_log, mot_plant, tipo)
+                omitidos_paquete_incompleto += 1
+                continue
+            if tipo_cfg.get("incluir_pdf_anexo", False) is not True:
+                log_envio_paquete_incompleto(
+                    item_id_log, "incluir_pdf_anexo_debe_estar_activo", tipo
+                )
+                omitidos_paquete_incompleto += 1
+                continue
+            if tipo_cfg.get("incluir_adjuntos_fijos", True) is False:
+                log_envio_paquete_incompleto(
+                    item_id_log, "incluir_adjuntos_fijos_no_puede_desactivarse", tipo
+                )
+                omitidos_paquete_incompleto += 1
+                continue
+            if not item.get("prestamo_id"):
+                log_envio_paquete_incompleto(
+                    item_id_log, "sin_prestamo_id_para_pdf_carta", tipo
+                )
+                omitidos_paquete_incompleto += 1
+                continue
+
         # Construir contexto_cobranza cuando haga falta: email COBRANZA, adjunto PDF (Carta_Cobranza) o plantilla con variables cobranza
         # Si "Incluir PDF" está marcado pero no hay plantilla (Texto por defecto), igual se construye contexto para adjuntar Carta_Cobranza.pdf
         if db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
             plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
-            need_ctx = (
+            need_ctx = paquete_estricto or (
                 (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
                 or (tipo_cfg.get("incluir_pdf_anexo", False) is True)
                 or (plantilla and plantilla_usa_variables_cobranza(plantilla))
@@ -133,7 +211,7 @@ def _enviar_correos_items(
         # Siempre datos reales en plantillas; en modo pruebas solo cambia el destinatario (email_pruebas)
         asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base, modo_pruebas=False)
         # Adjuntos disponibles en todas las pestañas según config: PDF con variables (carta cobranza) y PDF(s) fijos
-        attachments = None
+        attachments: Optional[List[Tuple[str, bytes]]] = None
         body_html = None
         if plantilla_id and db:
             plantilla = db.get(PlantillaNotificacion, plantilla_id)
@@ -149,8 +227,12 @@ def _enviar_correos_items(
         # Adjuntos obligatorios cuando están seleccionados en Config (Notificaciones → Envíos):
         # - PDF (pestaña 2): Carta_Cobranza.pdf generada desde Plantilla anexo PDF. Se agrega OBLIGATORIAMENTE si incluir_pdf_anexo=True.
         # - Adj. (pestaña 3): Documentos PDF fijos subidos en Documentos PDF anexos. Se agregan OBLIGATORIAMENTE si incluir_adjuntos_fijos no es False.
-        incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo", False) is True
-        incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
+        if paquete_estricto:
+            incluir_pdf_anexo = True
+            incluir_adjuntos_fijos = True
+        else:
+            incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo", False) is True
+            incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
             try:
                 attachments = []
@@ -158,7 +240,7 @@ def _enviar_correos_items(
                     ctx_pdf = item.get("contexto_cobranza")
                     if ctx_pdf:
                         pdf_bytes = generar_carta_cobranza_pdf(ctx_pdf, db=db)
-                        attachments.append(("Carta_Cobranza.pdf", pdf_bytes))
+                        attachments.append((NOMBRE_PDF_CARTA_VARIABLE, pdf_bytes))
                 if incluir_adjuntos_fijos and db:
                     adjunto_fijo = get_adjunto_fijo_cobranza_bytes(db)
                     if adjunto_fijo:
@@ -175,6 +257,13 @@ def _enviar_correos_items(
                 log_envio_fallo("adjuntos", str(e), exc=e)
                 if not attachments:
                     attachments = None
+        if paquete_estricto:
+            ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(attachments)
+            if not ok_pkg:
+                log_envio_paquete_incompleto(item_id_log, mot_pkg, tipo)
+                omitidos_paquete_incompleto += 1
+                continue
+
         # Los adjuntos construidos se pasan SIEMPRE a send_email (attachments=None o lista no vacía).
         # Destinatario: en modo prueba todos van solo a email_pruebas; en producci�n al correo del cliente (+ CCO si hay)
         if usar_solo_pruebas:
@@ -192,6 +281,7 @@ def _enviar_correos_items(
             cco = tipo_cfg.get("cco") or []
             bcc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()] if isinstance(cco, list) else []
 
+        email_sent_ok = False
         if to_email:
             tipo_tab_envio = _tipo_tab_para_persistencia(tipo)
             ok, msg = send_email(
@@ -205,6 +295,7 @@ def _enviar_correos_items(
                 tipo_tab=tipo_tab_envio,
             )
             log_envio_email(item_id_log, to_email[0], ok, None if ok else msg)
+            email_sent_ok = ok
             if ok:
                 enviados += 1
             else:
@@ -227,9 +318,9 @@ def _enviar_correos_items(
         else:
             if not usar_solo_pruebas:
                 sin_email += 1
-        # WhatsApp (config desde Configuraci�n > WhatsApp; mismo cuerpo que email). En modo prueba no se redirige WhatsApp.
+        # WhatsApp solo si el correo se envio OK (paquete ya validado arriba).
         telefono = (item.get("telefono") or "").strip()
-        if telefono:
+        if telefono and email_sent_ok:
             ok, _ = send_whatsapp_text(telefono, cuerpo)
             if ok:
                 enviados_whatsapp += 1
@@ -253,12 +344,14 @@ def _enviar_correos_items(
         enviados_whatsapp=enviados_whatsapp,
         fallidos_whatsapp=fallidos_whatsapp,
         modo_pruebas=modo_pruebas,
+        omitidos_paquete_incompleto=omitidos_paquete_incompleto,
     )
     return {
         "enviados": enviados,
         "sin_email": sin_email,
         "fallidos": fallidos,
         "omitidos_config": omitidos_config,
+        "omitidos_paquete_incompleto": omitidos_paquete_incompleto,
         "enviados_whatsapp": enviados_whatsapp,
         "fallidos_whatsapp": fallidos_whatsapp,
     }
@@ -417,7 +510,7 @@ def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
 def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     """
     Ejecuta el env�o de todas las notificaciones (previas, d�a pago, retrasadas, prejudicial).
-    Pensado para ser llamado por el scheduler (p. ej. diario a las 23:00).
+    Pensado para ser llamado por el scheduler (p. ej. diario a la 01:00 America/Caracas).
     Respeta configuraci�n de env�os (habilitado/CCO por tipo) desde BD.
     """
     config_envios = get_notificaciones_envios_config(db)
@@ -426,6 +519,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_fallidos = 0
     total_sin_email = 0
     total_omitidos_config = 0
+    total_omitidos_paquete = 0
     total_whatsapp_ok = 0
     total_whatsapp_fail = 0
     detalles = {}
@@ -447,6 +541,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_fallidos += r.get("fallidos", 0)
     total_sin_email += r.get("sin_email", 0)
     total_omitidos_config += r.get("omitidos_config", 0)
+    total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
     total_whatsapp_ok += r.get("enviados_whatsapp", 0)
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["previas"] = r
@@ -468,6 +563,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_fallidos += r.get("fallidos", 0)
     total_sin_email += r.get("sin_email", 0)
     total_omitidos_config += r.get("omitidos_config", 0)
+    total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
     total_whatsapp_ok += r.get("enviados_whatsapp", 0)
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["dia_pago"] = r
@@ -489,6 +585,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_fallidos += r.get("fallidos", 0)
     total_sin_email += r.get("sin_email", 0)
     total_omitidos_config += r.get("omitidos_config", 0)
+    total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
     total_whatsapp_ok += r.get("enviados_whatsapp", 0)
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["retrasadas"] = r
@@ -510,6 +607,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_fallidos += r.get("fallidos", 0)
     total_sin_email += r.get("sin_email", 0)
     total_omitidos_config += r.get("omitidos_config", 0)
+    total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
     total_whatsapp_ok += r.get("enviados_whatsapp", 0)
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["prejudicial"] = r
@@ -519,6 +617,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
         "fallidos": total_fallidos,
         "sin_email": total_sin_email,
         "omitidos_config": total_omitidos_config,
+        "omitidos_paquete_incompleto": total_omitidos_paquete,
         "enviados_whatsapp": total_whatsapp_ok,
         "fallidos_whatsapp": total_whatsapp_fail,
         "detalles": detalles,
