@@ -476,6 +476,18 @@ Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después
 """
 
 
+def _comentario_solo_columna_moneda(comentario: str) -> bool:
+    """True si el comentario de divergencia es únicamente la columna Moneda (p. ej. 'Moneda', 'Moneda, Moneda')."""
+    if not comentario or not str(comentario).strip():
+        return False
+    tokens = []
+    for t in str(comentario).split(","):
+        s = t.strip().lower().rstrip(".;:")
+        if s:
+            tokens.append(s)
+    return bool(tokens) and all(t == "moneda" for t in tokens)
+
+
 def compare_form_with_image(
     form_data: Dict[str, Any],
     image_bytes: bytes,
@@ -554,12 +566,10 @@ def compare_form_with_image(
                     if not coincide and comentario:
                         form_mon = (form_data.get("moneda") or "BS").strip().upper()
                         form_mon_norm = "USD" if form_mon in ("USD", "USDT") else form_mon
-                        if form_mon_norm == "USD":
-                            tokens = [t.strip().lower() for t in comentario.split(",") if t.strip()]
-                            if tokens and all(t == "moneda" for t in tokens):
-                                coincide = True
-                                comentario = ""
-                                logger.info("[COBROS] Gemini: divergencia solo Moneda (USDT=USD); ignorada.")
+                        if form_mon_norm == "USD" and _comentario_solo_columna_moneda(comentario):
+                            coincide = True
+                            comentario = ""
+                            logger.info("[COBROS] Gemini: divergencia solo Moneda (USDT=USD); ignorada.")
                     return {
                         "coincide_exacto": coincide,
                         "requiere_revision_humana": not coincide,

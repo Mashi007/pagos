@@ -12,6 +12,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, and_, case
+from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
 from app.core.database import get_db
 from app.core.documento import normalize_documento
@@ -595,18 +596,27 @@ def aprobar_pago_reportado(
     estado_anterior = pr.estado
     pr.estado = "aprobado"
     pr.motivo_rechazo = None
-    
-    # Agregar a tabla temporal de descargas
-    from app.services.cobros.pagos_pendiente_descargar_service import agregar_a_pendiente_descargar
-    agregar_a_pendiente_descargar(db, pr.id)
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+
+    from app.services.cobros.pagos_pendiente_descargar_service import agregar_a_pendiente_descargar
 
     try:
         _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+        agregar_a_pendiente_descargar(db, pr.id)
         db.commit()
     except HTTPException:
         db.rollback()
         raise
+    except (ProgrammingError, OperationalError) as e:
+        db.rollback()
+        logger.exception("[COBROS] Aprobar ref=%s: error de BD (¿migración pendiente?): %s", pr.referencia_interna, e)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No se pudo guardar la aprobación. Suele deberse a una migración pendiente en el servidor "
+                "(ej. tabla pagos_pendiente_descargar). Ejecute: alembic upgrade head"
+            ),
+        )
     except Exception as e:
         db.rollback()
         logger.exception("[COBROS] Aprobar ref=%s: error al crear pago o aplicar a cuotas: %s", pr.referencia_interna, e)
@@ -984,16 +994,43 @@ def cambiar_estado_pago(
     rechazo_correo_enviado: Optional[bool] = None
     rechazo_correo_error: Optional[str] = None
     if body.estado == "aprobado":
+        from app.services.cobros.pagos_pendiente_descargar_service import agregar_a_pendiente_descargar
+
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+            agregar_a_pendiente_descargar(db, pr.id)
             db.commit()
         except HTTPException:
+            db.rollback()
             raise
-        
-        # Agregar a tabla temporal de descargas
-        from app.services.cobros.pagos_pendiente_descargar_service import agregar_a_pendiente_descargar
-        agregar_a_pendiente_descargar(db, pr.id)
-        
+        except (ProgrammingError, OperationalError) as e:
+            db.rollback()
+            logger.exception(
+                "[COBROS] PATCH estado=aprobado id=%s ref=%s: error de BD (¿migración pendiente?): %s",
+                pago_id,
+                pr.referencia_interna,
+                e,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "No se pudo guardar la aprobación. Suele deberse a una migración pendiente en el servidor "
+                    "(ej. tabla pagos_pendiente_descargar). Ejecute: alembic upgrade head"
+                ),
+            )
+        except (IntegrityError, Exception) as e:
+            db.rollback()
+            logger.exception(
+                "[COBROS] PATCH estado=aprobado id=%s ref=%s: %s",
+                pago_id,
+                pr.referencia_interna,
+                e,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"No se pudo completar la aprobación: {e!s}"[:500],
+            )
+
         db.refresh(pr)
         pdf_bytes = _generar_recibo_desde_pago(db, pr)
         pr.recibo_pdf = pdf_bytes

@@ -12,19 +12,15 @@ from app.models.pago_pendiente_descargar import PagoPendienteDescargar
 def obtener_pagos_aprobados_pendientes(db: Session) -> List[PagoReportado]:
     """
     Obtiene los pagos reportados aprobados que están en la tabla temporal de descargas.
-    Los ordena por fecha de creación (más antiguos primero).
+    Los ordena por fecha en que entraron a la cola (más antiguos primero).
     """
-    subquery = select(PagoPendienteDescargar.pago_reportado_id)
-    
     query = (
         select(PagoReportado)
-        .where(
-            PagoReportado.id.in_(subquery),
-            PagoReportado.estado == "aprobado"
-        )
-        .order_by(PagoPendienteDescargar.created_at)
+        .join(PagoPendienteDescargar, PagoPendienteDescargar.pago_reportado_id == PagoReportado.id)
+        .where(PagoReportado.estado == "aprobado")
+        .order_by(PagoPendienteDescargar.created_at.asc())
     )
-    
+
     return db.execute(query).scalars().all()
 
 
@@ -32,22 +28,19 @@ def agregar_a_pendiente_descargar(db: Session, pago_reportado_id: int) -> bool:
     """
     Agrega un pago a la tabla temporal de descargas si aún no está.
     Retorna True si fue agregado, False si ya existía.
+
+    No hace commit: el llamador debe confirmar la transacción (misma unidad que aprobar / crear pago).
     """
-    # Verificar si ya existe
     existe = db.execute(
         select(PagoPendienteDescargar).where(
             PagoPendienteDescargar.pago_reportado_id == pago_reportado_id
         )
-    ).first()
-    
+    ).scalars().first()
+
     if existe:
         return False
-    
-    # Agregar nuevo registro
-    nuevo = PagoPendienteDescargar(pago_reportado_id=pago_reportado_id)
-    db.add(nuevo)
-    db.commit()
-    
+
+    db.add(PagoPendienteDescargar(pago_reportado_id=pago_reportado_id))
     return True
 
 
