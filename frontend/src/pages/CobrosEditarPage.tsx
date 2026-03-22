@@ -190,9 +190,9 @@ export default function CobrosEditarPage() {
         observacion: form.observacion.trim() || undefined,
       })
 
-      toast.success('Guardado. Datos recargados desde el servidor.')
+      toast.success('Cambios guardados.')
 
-      await load()
+      navigate(`/cobros/pagos-reportados/${id}`)
     } catch (e: any) {
       toast.error(
         e?.response?.data?.detail || e?.message || 'Error al guardar.'
@@ -275,9 +275,9 @@ export default function CobrosEditarPage() {
           </CardTitle>
 
           <p className="text-sm text-muted-foreground">
-            Todos los campos se cargan desde el servidor al abrir la página y al
-            pulsar «Recargar datos». Tras guardar, se vuelven a cargar los valores
-            guardados.
+            Los datos se cargan al abrir la página o con «Recargar datos». Al
+            guardar se pasa al <strong>detalle del reporte</strong> (siguiente
+            paso: aprobar, rechazar o revisar comprobante).
           </p>
         </CardHeader>
 
@@ -520,7 +520,7 @@ export default function CobrosEditarPage() {
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                Guardar y recargar
+                Guardar y continuar
               </Button>
 
               <Button
