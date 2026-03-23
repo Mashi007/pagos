@@ -110,6 +110,8 @@ from app.services.cobros.cedula_reportar_bs_service import (
 
     cedula_coincide_autorizados_bs,
 
+    cedula_autorizada_para_bs,
+
 )
 
 
@@ -5036,6 +5038,43 @@ def get_cedulas_reportar_bs(db: Session = Depends(get_db)):
     total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
 
     return {"total": total}
+
+
+
+
+
+@router.get("/cedulas-reportar-bs/consultar", response_model=dict)
+
+
+def consultar_cedula_reportar_bs(
+
+    cedula: str = Query(..., min_length=1, description="Cedula a verificar"),
+
+    db: Session = Depends(get_db),
+
+):
+
+    """Indica si la cedula esta autorizada para reportar pagos en Bs (lista cedulas_reportar_bs)."""
+
+    total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
+
+    raw = (cedula or "").strip()
+
+    en_lista = cedula_autorizada_para_bs(db, raw)
+
+    ced_norm = normalize_cedula_para_almacenar_lista_bs(raw)
+
+    return {
+
+        "cedula_ingresada": raw,
+
+        "cedula_normalizada": ced_norm,
+
+        "en_lista": en_lista,
+
+        "total_en_lista": int(total),
+
+    }
 
 
 

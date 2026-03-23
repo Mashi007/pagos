@@ -416,6 +416,18 @@ class PagoService {
     return await apiClient.get(`${this.baseUrl}/cedulas-reportar-bs`)
   }
 
+  async consultarCedulaReportarBs(cedula: string): Promise<{
+    cedula_ingresada: string
+    cedula_normalizada: string | null
+    en_lista: boolean
+    total_en_lista: number
+  }> {
+    const q = encodeURIComponent(cedula.trim())
+    return await apiClient.get(
+      `${this.baseUrl}/cedulas-reportar-bs/consultar?cedula=${q}`
+    )
+  }
+
   /** Agrega una cédula a la lista (nuevo cliente que paga en bolívares). */
 
   async addCedulaReportarBs(cedula: string): Promise<{
