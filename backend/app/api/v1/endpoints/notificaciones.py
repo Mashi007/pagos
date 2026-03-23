@@ -1079,15 +1079,18 @@ def get_ultimo_envio_batch_notificaciones(db: Session = Depends(get_db)):
 @router.post("/enviar-todas")
 def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
     """
-    Inicia el envÃƒÂ­o de todas las notificaciones en segundo plano.
-    Responde 202 de inmediato para evitar timeout (el envÃƒÂ­o puede tardar muchos minutos).
-    Respeta la configuraciÃƒÂ³n guardada (modo_pruebas, email_pruebas, habilitado por tipo).
+    Inicia el envio de todas las notificaciones en segundo plano.
+    Responde 202 de inmediato para evitar timeout (el envio puede tardar muchos minutos).
+    Respeta la configuracion guardada (modo_pruebas, email_pruebas, habilitado por tipo).
     """
     background_tasks.add_task(_tarea_envio_todas_notificaciones)
     return JSONResponse(
         status_code=202,
         content={
-            "mensaje": "EnvÃƒÂ­o iniciado en segundo plano. Los correos se enviarÃƒÂ¡n en los prÃƒÂ³ximos minutos. Puedes cerrar esta ventana.",
+            "mensaje": (
+                "Env\u00edo iniciado en segundo plano. Los correos se enviar\u00e1n en los pr\u00f3ximos minutos. "
+                "Puedes cerrar esta ventana."
+            ),
             "en_proceso": True,
         },
     )

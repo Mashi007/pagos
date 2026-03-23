@@ -616,7 +616,7 @@ export function ConfiguracionNotificaciones() {
           })
         }, 8000)
         toast.success(
-          `${res.mensaje} En unos segundos use «Actualizar» en «Último envío masivo» para ver contadores guardados en el servidor.`,
+          `${res.mensaje} En unos segundos use el boton Actualizar en la tarjeta Ultimo envio masivo para ver contadores guardados en el servidor.`,
           { duration: 12000 }
         )
       } else {

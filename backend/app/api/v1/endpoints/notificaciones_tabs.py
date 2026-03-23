@@ -326,7 +326,8 @@ def _enviar_correos_items(
                 continue
 
         # Los adjuntos construidos se pasan SIEMPRE a send_email (attachments=None o lista no vacía).
-        # Destinatario: en modo prueba todos van solo a email_pruebas; en producci�n al correo del cliente (+ CCO si hay)
+        # Modo pruebas: mismo HTML (pestaña 1) y mismos 2 PDFs (pestañas 2 y 3); solo el destinatario es email_pruebas.
+        # Destinatario: en modo prueba todos van solo a email_pruebas; en producción al correo del cliente (+ CCO si hay)
         if usar_solo_pruebas:
             to_email = [email_pruebas]
             bcc_list = None
