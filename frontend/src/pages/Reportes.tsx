@@ -567,6 +567,21 @@ export function Reportes() {
                 size="sm"
                 className="h-11 gap-2"
                 onClick={() =>
+                  copiarEnlaceServicio(REPORTES_PAGE_PATH, 'Centro de Reportes')
+                }
+                title="Copiar enlace: Centro de Reportes (rapicredit.onrender.com/pagos/reportes)"
+                aria-label="Copiar enlace Centro de Reportes"
+              >
+                <Copy className="h-5 w-5" />
+                Centro de Reportes
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11 gap-2"
+                onClick={() =>
                   copiarEnlaceServicio(
                     PUBLIC_REPORTE_PAGO_PATH,
                     'Reporte de pagos'
