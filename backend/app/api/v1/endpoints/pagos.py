@@ -57,6 +57,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 
 from app.core.documento import normalize_documento
+from app.services.pago_numero_documento import numero_documento_ya_registrado
 
 from app.core.serializers import to_float, format_date_iso
 
@@ -142,7 +143,7 @@ class GuardarFilaEditableBody(BaseModel):
 
 class ValidarFilasBatchBody(BaseModel):
 
-    """Batch de cédulas y documentos para validar contra BD."""
+    """Batch: cédulas contra tabla préstamos; documentos contra pagos y pagos_con_errores (unicidad global)."""
 
     cedulas: list[str] = []
 
@@ -1672,7 +1673,7 @@ async def upload_excel_pagos(
 
                     monto_pagado=pce_data["monto"],
 
-                    numero_documento=pce_data["numero_doc"],
+                    numero_documento=normalize_documento(pce_data.get("numero_doc")),
 
                     estado="PENDIENTE",
 
@@ -2718,61 +2719,41 @@ def validar_filas_batch(
 
     """
 
-    Valida en lote:
+    Valida en lote (carga masiva / preview):
 
-    - Cédulas: deben existir en tabla clientes
+    - Cédulas: deben existir en tabla préstamos (al menos un crédito con esa cédula normalizada).
 
-    - Documentos: se verifica en tabla CUOTAS (si existe â†’ confirmado/válido)
+    - Nº documento: clave canónica única global; ya usada en `pagos` o en `pagos_con_errores` → duplicado.
 
-                  Si NO existe en CUOTAS pero SÍ en PAGOS â†’ duplicado sin aplicar
-
-    Retorna cédulas válidas y documentos con estado de confirmación.
+      (Un solo registro por documento; las cuotas referencian ese pago vía pago_id.)
 
     """
 
-    from app.models.cuota import Cuota
+    cedulas_norm = list(
 
-    
+        {
 
-    # Normalizar cédulas (sin guión, uppercase)
+            c.strip().replace("-", "").upper()
 
-    cedulas_norm = list({
+            for c in (body.cedulas or [])
 
-        c.strip().replace("-", "").upper()
+            if c and c.strip()
 
-        for c in (body.cedulas or [])
+        }
 
-        if c and c.strip()
-
-    })
-
-
-
-    # Cédulas que existen en tabla clientes
+    )
 
     cedulas_existentes: set[str] = set()
 
     if cedulas_norm:
 
-        # Búsqueda que acepta cédula con o sin guión en BD
+        pc = func.upper(func.replace(Prestamo.cedula, "-", ""))
 
-        rows = db.execute(
+        rows = db.execute(select(pc).where(pc.in_(cedulas_norm)).distinct()).all()
 
-            select(Cliente.cedula).where(func.replace(Cliente.cedula, "-", "").in_(cedulas_norm))
+        cedulas_existentes = {r[0] for r in rows if r and r[0]}
 
-        ).all()
-
-        cedulas_existentes = {r[0].strip().replace("-", "").upper() for r in rows}
-
-
-
-    # Documentos: verificar contra CUOTAS (si existe â†’ confirmado) y PAGOS (si existe sin cuota â†’ duplicado)
-
-    documentos_confirmados: list[dict] = []  # Documentos encontrados en CUOTAS (pago ya aplicado)
-
-    documentos_duplicados: list[dict] = []   # Documentos en PAGOS pero NO aplicados a CUOTA
-
-    
+    documentos_duplicados: list[dict] = []
 
     docs_norm = [
 
@@ -2786,51 +2767,97 @@ def validar_filas_batch(
 
     docs_norm_limpios = [d for d in docs_norm if d]
 
-    
-
     if docs_norm_limpios:
-
-        # Buscar documentos que YA EXISTEN en tabla PAGOS (sin importar si están en CUOTAS)
-
-        # Si existe en PAGOS = DUPLICADO (rechazar)
 
         rows_pagos = db.execute(
 
-            select(Pago.numero_documento, Pago.id, Pago.cedula_cliente, 
+            select(
 
-                   Pago.fecha_pago, Pago.monto_pagado)
+                Pago.numero_documento,
 
-            .where(Pago.numero_documento.in_(docs_norm_limpios))
+                Pago.id,
+
+                Pago.cedula_cliente,
+
+                Pago.fecha_pago,
+
+                Pago.monto_pagado,
+
+            ).where(Pago.numero_documento.in_(docs_norm_limpios))
 
         ).all()
 
-        
-
         for row in rows_pagos:
 
-            documentos_duplicados.append({
+            documentos_duplicados.append(
 
-                "numero_documento": row[0],
+                {
 
-                "pago_id": row[1],
+                    "numero_documento": row[0],
 
-                "cedula": row[2],
+                    "pago_id": row[1],
 
-                "fecha_pago": row[3].isoformat() if row[3] else None,
+                    "cedula": row[2],
 
-                "monto_pagado": float(row[4]) if row[4] else 0,
+                    "fecha_pago": row[3].isoformat() if row[3] else None,
 
-                "estado": "duplicado",
+                    "monto_pagado": float(row[4]) if row[4] else 0,
 
-            })
+                    "estado": "duplicado",
 
+                    "origen": "pagos",
 
+                }
+
+            )
+
+        rows_pce = db.execute(
+
+            select(
+
+                PagoConError.numero_documento,
+
+                PagoConError.id,
+
+                PagoConError.cedula_cliente,
+
+                PagoConError.fecha_pago,
+
+                PagoConError.monto_pagado,
+
+            ).where(PagoConError.numero_documento.in_(docs_norm_limpios))
+
+        ).all()
+
+        for row in rows_pce:
+
+            documentos_duplicados.append(
+
+                {
+
+                    "numero_documento": row[0],
+
+                    "pago_con_error_id": row[1],
+
+                    "cedula": row[2],
+
+                    "fecha_pago": row[3].isoformat() if row[3] else None,
+
+                    "monto_pagado": float(row[4]) if row[4] else 0,
+
+                    "estado": "duplicado",
+
+                    "origen": "pagos_con_errores",
+
+                }
+
+            )
 
     return {
 
         "cedulas_existentes": list(cedulas_existentes),
 
-        "documentos_duplicados": documentos_duplicados,  # Documentos que YA existen en tabla PAGOS
+        "documentos_duplicados": documentos_duplicados,
 
     }
 
@@ -2912,47 +2939,65 @@ def guardar_fila_editable(
 
 
 
-        # Validar duplicado en BD (documento)
+        # Validar duplicado global (pagos + pagos_con_errores)
 
-        if numero_doc_norm:
+        if numero_doc_norm and numero_documento_ya_registrado(db, numero_doc_norm):
 
-            pago_existente = db.execute(
+            raise HTTPException(
 
-                select(Pago).where(Pago.numero_documento == numero_doc_norm).limit(1)
+                status_code=409,
 
-            ).first()
+                detail=f"Ya existe un registro con este documento: {numero_doc_norm}",
 
-            if pago_existente:
-
-                raise HTTPException(
-
-                    status_code=409,
-
-                    detail=f"Ya existe un pago con este documento: {numero_doc_norm}"
-
-                )
+            )
 
 
 
-        # Si prestamo_id es None, buscar automáticamente
+        # Si prestamo_id es None, buscar por cédula en préstamos (normalizada)
 
         if prestamo_id is None:
 
-            cliente_row = db.execute(
+            ced_norm = (
 
-                select(Prestamo.id)
+                cedula.strip().replace("-", "").upper()
 
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                if cedula
 
-                .where(Cliente.cedula == cedula)
+                else ""
 
-                .limit(1)
+            )
 
-            ).first()
+            if ced_norm:
 
-            if cliente_row:
+                pc = func.upper(func.replace(Prestamo.cedula, "-", ""))
 
-                prestamo_id = cliente_row[0]
+                prest_row = db.execute(
+
+                    select(Prestamo.id)
+
+                    .where(pc == ced_norm)
+
+                    .order_by(Prestamo.id.desc())
+
+                    .limit(1)
+
+                ).first()
+
+                if prest_row:
+
+                    prestamo_id = prest_row[0]
+
+
+
+        if prestamo_id is None:
+
+            raise HTTPException(
+
+                status_code=400,
+
+                detail="La cédula no tiene préstamo asociado; registre el crédito antes de cargar el pago.",
+
+            )
 
 
 
@@ -3862,32 +3907,6 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 
 
 
-def _numero_documento_ya_existe(
-
-    db: Session, numero_documento: Optional[str], exclude_pago_id: Optional[int] = None
-
-) -> bool:
-
-    """Regla general: no duplicados en documentos. Comprueba si ya existe un pago con ese Nº documento."""
-
-    num = normalize_documento(numero_documento)
-
-    if not num:
-
-        return False
-
-    q = select(Pago.id).where(Pago.numero_documento == num)
-
-    if exclude_pago_id is not None:
-
-        q = q.where(Pago.id != exclude_pago_id)
-
-    return db.scalar(q) is not None
-
-
-
-
-
 @router.post("/batch", response_model=dict)
 
 def crear_pagos_batch(
@@ -3930,6 +3949,18 @@ def crear_pagos_batch(
 
             existing_docs = {r for r in rows if r}
 
+            rows_pe = db.execute(
+
+                select(PagoConError.numero_documento).where(
+
+                    PagoConError.numero_documento.in_(docs_no_vacios)
+
+                )
+
+            ).scalars().all()
+
+            existing_docs.update({r for r in rows_pe if r})
+
         # Preload: ids de préstamos válidos (una sola consulta)
 
         prestamo_ids = [p.prestamo_id for p in pagos_list if p.prestamo_id]
@@ -3942,17 +3973,59 @@ def crear_pagos_batch(
 
             valid_prestamo_ids = {r for r in ids_rows if r is not None}
 
-        # Preload: cédulas de clientes que existen (una sola consulta)
+        # Preload: cédulas que tienen al menos un préstamo (normalizadas)
 
-        cedulas_con_prestamo = list({(p.cedula_cliente or "").strip().upper() for p in pagos_list if (p.cedula_cliente or "").strip() and p.prestamo_id})
+        cedulas_payload = list(
+
+            {
+
+                (p.cedula_cliente or "").strip().replace("-", "").upper()
+
+                for p in pagos_list
+
+                if (p.cedula_cliente or "").strip()
+
+            }
+
+        )
+
+        valid_cedulas_prestamo: set[str] = set()
+
+        if cedulas_payload:
+
+            pc = func.upper(func.replace(Prestamo.cedula, "-", ""))
+
+            ced_rows = db.execute(select(pc).where(pc.in_(cedulas_payload)).distinct()).scalars().all()
+
+            valid_cedulas_prestamo = {(r or "").strip().replace("-", "").upper() for r in ced_rows if r}
+
+        # Compat: cliente existe cuando el payload trae prestamo_id explícito
+
+        cedulas_con_prestamo = list(
+
+            {
+
+                (p.cedula_cliente or "").strip().upper()
+
+                for p in pagos_list
+
+                if (p.cedula_cliente or "").strip() and p.prestamo_id
+
+            }
+
+        )
 
         valid_cedulas: set[str] = set()
 
         if cedulas_con_prestamo:
 
-            ced_rows = db.execute(select(Cliente.cedula).where(func.upper(Cliente.cedula).in_(cedulas_con_prestamo))).scalars().all()
+            ced_rows_c = db.execute(
 
-            valid_cedulas = {(r or "").strip().upper() for r in ced_rows if r}
+                select(Cliente.cedula).where(func.upper(Cliente.cedula).in_(cedulas_con_prestamo))
+
+            ).scalars().all()
+
+            valid_cedulas = {(r or "").strip().upper() for r in ced_rows_c if r}
 
         # Fase 1: validacion (sin insertar). Si hay errores, devolver sin commit.
 
@@ -3973,6 +4046,26 @@ def crear_pagos_batch(
             ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
 
             cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
+
+            ced_norm_prest = (payload.cedula_cliente or "").strip().replace("-", "").upper()
+
+            if ced_norm_prest and ced_norm_prest not in valid_cedulas_prestamo:
+
+                validation_errors.append(
+
+                    {
+
+                        "index": idx,
+
+                        "error": f"La cédula no tiene préstamo registrado: {cedula_normalizada}",
+
+                        "status_code": 400,
+
+                    }
+
+                )
+
+                continue
 
             if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
 
@@ -4104,7 +4197,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
     num_doc = normalize_documento(payload.numero_documento)
 
-    if num_doc and _numero_documento_ya_existe(db, num_doc):
+    if num_doc and numero_documento_ya_registrado(db, num_doc):
 
         raise HTTPException(
 
@@ -4292,7 +4385,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
         num_doc = normalize_documento(data["numero_documento"])
 
-        if num_doc and _numero_documento_ya_existe(db, num_doc, exclude_pago_id=pago_id):
+        if num_doc and numero_documento_ya_registrado(db, num_doc, exclude_pago_id=pago_id):
 
             raise HTTPException(
 

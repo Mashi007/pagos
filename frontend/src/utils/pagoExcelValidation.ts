@@ -19,7 +19,7 @@ export const OBSERVACIONES_POR_CAMPO: Record<string, string> = {
 
   fecha_pago: 'Fecha inválida o formato incorrecto (use DD/MM/YYYY)',
 
-  cedula: 'Cédula no existe en clientes',
+  cedula: 'Cédula sin préstamo registrado (no figura en tabla préstamos)',
 
   monto_pagado: 'Monto inválido o ≤ 0',
 
@@ -287,7 +287,7 @@ export function validatePagoField(
       return { isValid: false, message: 'Formato inválido (ej: V12345678)' }
 
     if (options?.cedulasInvalidas?.has(s))
-      return { isValid: false, message: 'Cédula no existe en clientes' }
+      return { isValid: false, message: 'Cédula sin préstamo registrado' }
 
     return { isValid: true }
   }

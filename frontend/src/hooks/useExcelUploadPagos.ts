@@ -766,7 +766,7 @@ export function useExcelUploadPagos({
       if (prestamosActivos.length > 1 && !currentRow.prestamo_id) {
         addToast(
           'error',
-          `Fila ${row._rowIndex}: La Cedula no existe en clientes.`
+          `Fila ${row._rowIndex}: La cédula no tiene préstamo registrado.`
         )
 
         return { ok: false }
@@ -1761,8 +1761,27 @@ export function useExcelUploadPagos({
             prestamo = 4,
             conciliacion = 5
 
+          let cedulaHeaderMatched = false
+
           for (let i = 0; i < Math.max(headerRow.length, 8); i++) {
-            if (match(i, 'cedula', 'cédula', 'dni', 'id')) cedula = i
+            if (
+              !cedulaHeaderMatched &&
+              match(
+                i,
+                'cedula',
+                'cédula',
+                'dni',
+                'identificacion',
+                'identificación',
+                'rif'
+              )
+            ) {
+              cedula = i
+              cedulaHeaderMatched = true
+            } else if (!cedulaHeaderMatched && h(i) === 'id') {
+              cedula = i
+              cedulaHeaderMatched = true
+            }
 
             if (match(i, 'fecha', 'fecha_pago', 'date')) fecha = i
 
