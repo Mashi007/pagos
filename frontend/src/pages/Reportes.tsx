@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { Link } from 'react-router-dom'
+
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
@@ -561,19 +563,15 @@ export function Reportes() {
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-11 gap-2"
-                onClick={() =>
-                  copiarEnlaceServicio(REPORTES_PAGE_PATH, 'Centro de Reportes')
-                }
-                title="Copiar enlace: Centro de Reportes (rapicredit.onrender.com/pagos/reportes)"
-                aria-label="Copiar enlace Centro de Reportes"
-              >
-                <Copy className="h-5 w-5" />
-                Centro de Reportes
+              <Button asChild variant="outline" size="sm" className="h-11 gap-2">
+                <Link
+                  to="/admin/tasas-cambio"
+                  title="Ir a Tasa de cambio (ingreso manual)"
+                  aria-label="Ir a Tasa de cambio"
+                >
+                  <Copy className="h-5 w-5" aria-hidden />
+                  Tasa de cambio
+                </Link>
               </Button>
 
               <Button
