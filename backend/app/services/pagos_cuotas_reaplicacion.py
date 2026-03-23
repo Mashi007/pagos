@@ -12,11 +12,12 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
+from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.reporte_contable_cache import ReporteContableCache
 from app.services.cuota_estado import sincronizar_columna_estado_cuotas
@@ -99,6 +100,36 @@ def integridad_cuotas_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
         "integridad_ok": len(inconsistentes) == 0 and abs(diff_global) <= TOL_INTEGRIDAD,
         "detalle_inconsistencias": inconsistentes[:200],
     }
+
+
+def prestamo_requiere_correccion_cascada(db: Session, prestamo_id: int) -> bool:
+    """True si hace falta reaplicar en cascada: integridad rota u orfano en pagos conciliados sin cuota_pagos."""
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        return False
+    n_cuotas = int(
+        db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
+    )
+    if n_cuotas == 0:
+        return False
+    integ = integridad_cuotas_prestamo(db, prestamo_id)
+    if integ.get("ok") and not integ.get("integridad_ok"):
+        return True
+    subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
+    n_orphans = db.scalar(
+        select(func.count())
+        .select_from(Pago)
+        .where(
+            Pago.prestamo_id == prestamo_id,
+            or_(
+                Pago.conciliado.is_(True),
+                func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
+            ),
+            Pago.monto_pagado > 0,
+            ~Pago.id.in_(subq),
+        )
+    ) or 0
+    return int(n_orphans) > 0
 
 
 def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
