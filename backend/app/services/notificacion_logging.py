@@ -81,7 +81,12 @@ def log_envio_paquete_incompleto(item_id: str, motivo: str, tipo: str = "") -> N
     )
 
 
-def log_envio_adjuntos(item_id: str, cantidad: int, error: Optional[str] = None) -> None:
+def log_envio_adjuntos(
+    item_id: str,
+    cantidad: int,
+    error: Optional[str] = None,
+    nombres: Optional[str] = None,
+) -> None:
     """Indicador: generación de adjuntos (PDF anexo / fijos)."""
     if error:
         logger.warning(
@@ -92,12 +97,20 @@ def log_envio_adjuntos(item_id: str, cantidad: int, error: Optional[str] = None)
             extra=_extra(FASE_ENVIO_ADJUNTOS, item_id=item_id, cantidad=0, error=error),
         )
     else:
+        msg = "[%s] Adjuntos item=%s cantidad=%s"
+        args: list = [FASE_ENVIO_ADJUNTOS, item_id, cantidad]
+        if nombres:
+            msg += " archivos=%s"
+            args.append(nombres)
         logger.info(
-            "[%s] Adjuntos item=%s cantidad=%s",
-            FASE_ENVIO_ADJUNTOS,
-            item_id,
-            cantidad,
-            extra=_extra(FASE_ENVIO_ADJUNTOS, item_id=item_id, cantidad=cantidad),
+            msg,
+            *args,
+            extra=_extra(
+                FASE_ENVIO_ADJUNTOS,
+                item_id=item_id,
+                cantidad=cantidad,
+                archivos=nombres,
+            ),
         )
 
 

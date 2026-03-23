@@ -20,6 +20,7 @@ import {
   X,
   TestTube,
   CheckCircle,
+  RefreshCw,
 } from 'lucide-react'
 
 import { emailConfigService } from '../../services/notificacionService'
@@ -84,7 +85,11 @@ export type ConfigEnvioCompleta = Record<
 
 /** Criterios de notificación (tipo → label). Exportado para uso en Plantillas / vinculación PDF. */
 
-export const CRITERIOS: {
+/**
+ * Casos con envio por pestaña / lote (scheduler). COBRANZA no aplica: la carta PDF se arma
+ * desde plantillas tipo COBRANZA vinculadas a estos casos, no hay fila de envío separada.
+ */
+export const CRITERIOS_ENVIO_PANEL: {
   tipo: string
   label: string
   categoria: string
@@ -117,14 +122,26 @@ export const CRITERIOS: {
     categoria: 'Prejudicial',
     color: 'red',
   },
+]
 
+/** Etiquetas para vinculación PDF + compat; incluye COBRANZA (solo plantilla, sin fila envío). */
+export const CRITERIOS_ETIQUETAS: {
+  tipo: string
+  label: string
+  categoria: string
+  color: 'blue' | 'green' | 'orange' | 'red' | 'slate'
+}[] = [
+  ...CRITERIOS_ENVIO_PANEL,
   {
     tipo: 'COBRANZA',
-    label: 'Carta de cobranza',
+    label: 'Carta de cobranza (plantilla tipo cobranza)',
     categoria: 'Cobranza',
     color: 'red',
   },
 ]
+
+/** @deprecated Usar CRITERIOS_ENVIO_PANEL o CRITERIOS_ETIQUETAS según contexto */
+export const CRITERIOS = CRITERIOS_ETIQUETAS
 
 const COLORES = {
   blue: {
@@ -273,6 +290,18 @@ export function ConfiguracionNotificaciones() {
     refetchOnMount: 'always',
   })
 
+  const {
+    data: ultimoBatchResp,
+    refetch: refetchUltimoBatch,
+    isFetching: cargandoUltimoBatch,
+  } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo,
+
+    queryFn: () => notificacionService.obtenerUltimoEnvioBatch(),
+
+    staleTime: 20 * 1000,
+  })
+
   /** null = pendiente o error de red (no aviso falso); false = SMTP incompleto; true = OK (v2 o legado). */
 
   const smtpConfigurado: boolean | null = !modoPruebas
@@ -367,6 +396,18 @@ export function ConfiguracionNotificaciones() {
   const guardarConfiguracionEnvios = async () => {
     if (guardandoRef.current) return
 
+    if (modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim())) {
+      const mal = [emailsPruebas[0], emailsPruebas[1]]
+        .map(e => (e || '').trim())
+        .filter(e => e && !esEmailValido(e))
+      if (mal.length > 0) {
+        toast.error(
+          `Correo(s) de prueba incompleto(s): ${mal.join(', ')}. Use formato nombre@dominio.com (con punto en el dominio, ej. .com).`
+        )
+        return
+      }
+    }
+
     guardandoRef.current = true
 
     setGuardandoEnvios(true)
@@ -382,7 +423,7 @@ export function ConfiguracionNotificaciones() {
         email_pruebas: emailsPruebas[0]?.trim() || '',
       }
 
-      CRITERIOS.forEach(({ tipo }) => {
+      CRITERIOS_ENVIO_PANEL.forEach(({ tipo }) => {
         const c = getConfig(tipo)
 
         ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
@@ -523,6 +564,27 @@ export function ConfiguracionNotificaciones() {
   const handleEnviosMasivosPrueba = async () => {
     if (!modoPruebas) return
 
+    const primero = (emailsPruebas[0] || '').trim()
+    if (!primero) {
+      toast.error(
+        'Indica al menos Correo pruebas 1 (destino del lote en modo prueba).'
+      )
+      return
+    }
+    if (!esEmailValido(primero)) {
+      toast.error(
+        `Correo pruebas 1 no válido: "${primero}". Debe incluir dominio con punto (ej. notificaciones@rapicreditca.com).`
+      )
+      return
+    }
+    const segundo = (emailsPruebas[1] || '').trim()
+    if (segundo && !esEmailValido(segundo)) {
+      toast.error(
+        `Correo pruebas 2 no válido. Use formato usuario@dominio.com o déjelo vacío.`
+      )
+      return
+    }
+
     try {
       setEnviandoMasivo(true)
 
@@ -545,7 +607,18 @@ export function ConfiguracionNotificaciones() {
       const res = await notificacionService.enviarTodasNotificaciones()
 
       if (res?.en_proceso && res?.mensaje) {
-        toast.success(res.mensaje, { duration: 8000 })
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo,
+        })
+        setTimeout(() => {
+          void queryClient.invalidateQueries({
+            queryKey: NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo,
+          })
+        }, 8000)
+        toast.success(
+          `${res.mensaje} En unos segundos use «Actualizar» en «Último envío masivo» para ver contadores guardados en el servidor.`,
+          { duration: 12000 }
+        )
       } else {
         const { enviados, fallidos, sin_email, omitidos_config } = res ?? {}
 
@@ -593,10 +666,12 @@ export function ConfiguracionNotificaciones() {
           </CardTitle>
 
           <CardDescription>
-            Cada caso con envío activo debe tener plantilla de email (pestaña 1
-            en Plantillas), «PDF» y «Adj.» activos: el backend exige carta
-            variable más al menos un PDF fijo válido. Los fijos se suben en
-            Configuración → Plantillas → Documentos PDF anexos (pestaña 3).
+            Solo aparecen casos con envío por pestaña (retrasadas y
+            prejudicial). Las plantillas tipo «carta de cobranza» (COBRANZA) se
+            crean en Plantillas y se eligen aquí por caso; no hay fila separada
+            de envío para COBRANZA. Cada fila activa requiere plantilla HTML,
+            «PDF» y «Adj.»; el backend exige carta variable más al menos un PDF
+            fijo válido (pestaña 3).
           </CardDescription>
         </CardHeader>
       </Card>
@@ -689,39 +764,71 @@ export function ConfiguracionNotificaciones() {
               Hasta 2 correos que recibirán las notificaciones en modo prueba.
             </p>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
               <label className="w-40 whitespace-nowrap text-sm font-medium text-gray-700">
                 Correo pruebas 1
               </label>
 
-              <Input
-                type="email"
-                placeholder="ejemplo@correo.com"
-                value={emailsPruebas[0]}
-                onChange={e =>
-                  setEmailsPruebas(prev => [e.target.value, prev[1]])
-                }
-                className="h-9 max-w-xs bg-white"
-                maxLength={120}
-              />
+              <div className="flex max-w-md flex-col gap-1">
+                <Input
+                  type="email"
+                  placeholder="ejemplo@correo.com"
+                  value={emailsPruebas[0]}
+                  onChange={e =>
+                    setEmailsPruebas(prev => [e.target.value, prev[1]])
+                  }
+                  className="h-9 max-w-xs bg-white"
+                  maxLength={120}
+                />
+                {modoPruebas &&
+                  emailsPruebas[0]?.trim() &&
+                  !esEmailValido(emailsPruebas[0].trim()) && (
+                    <p className="text-xs text-amber-800">
+                      Falta un dominio válido (debe haber un punto después de @,
+                      ej. .com). Sin eso el servidor no puede entregar el
+                      correo.
+                    </p>
+                  )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
               <label className="w-40 whitespace-nowrap text-sm font-medium text-gray-700">
                 Correo pruebas 2
               </label>
 
-              <Input
-                type="email"
-                placeholder="ejemplo2@correo.com"
-                value={emailsPruebas[1]}
-                onChange={e =>
-                  setEmailsPruebas(prev => [prev[0], e.target.value])
-                }
-                className="h-9 max-w-xs bg-white"
-                maxLength={120}
-              />
+              <div className="flex max-w-md flex-col gap-1">
+                <Input
+                  type="email"
+                  placeholder="ejemplo2@correo.com"
+                  value={emailsPruebas[1]}
+                  onChange={e =>
+                    setEmailsPruebas(prev => [prev[0], e.target.value])
+                  }
+                  className="h-9 max-w-xs bg-white"
+                  maxLength={120}
+                />
+                {modoPruebas &&
+                  emailsPruebas[1]?.trim() &&
+                  !esEmailValido(emailsPruebas[1].trim()) && (
+                    <p className="text-xs text-amber-800">
+                      Dominio incompleto; corrija o deje vacío.
+                    </p>
+                  )}
+              </div>
             </div>
+
+            {modoPruebas && (
+              <p className="text-xs text-gray-600">
+                Pestaña 1 = cuerpo HTML del correo; pestaña 2 = carta PDF;
+                pestaña 3 = PDF fijo por caso (ej. «Día siguiente al venc.» →{' '}
+                <code className="rounded bg-gray-100 px-1">dias_1_retraso</code>
+                ). El panel solo enlaza plantilla y flags: el archivo de la
+                pestaña 3 debe existir en el disco del servidor (si el hosting
+                borra archivos al desplegar, vuelva a subir el PDF o use volumen
+                persistente).
+              </p>
+            )}
           </div>
 
           {/* En modo prueba: envío manual plantilla predeterminada + envíos masivos prueba */}
@@ -770,6 +877,91 @@ export function ConfiguracionNotificaciones() {
         </CardContent>
       </Card>
 
+      <Card className="border-slate-200">
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base">Último envío masivo</CardTitle>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              disabled={cargandoUltimoBatch}
+              onClick={() => void refetchUltimoBatch()}
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${cargandoUltimoBatch ? 'animate-spin' : ''}`}
+              />
+              Actualizar
+            </Button>
+          </div>
+
+          <CardDescription className="text-xs">
+            Resultado del último «Enviar todas» (API) o del programador 01:00
+            (Caracas). Útil cuando la petición masiva responde 202 sin cuerpo.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="text-sm">
+          {(() => {
+            const u = ultimoBatchResp?.ultimo as
+              | Record<string, unknown>
+              | null
+              | undefined
+
+            if (u == null) {
+              return (
+                <p className="text-gray-500">
+                  Aún no hay ningún resultado guardado en el servidor.
+                </p>
+              )
+            }
+
+            if (u.omitido === true) {
+              return (
+                <p className="text-amber-800">
+                  Omitido: {String(u.omitido_motivo ?? '-')} (
+                  {String(u.origen ?? '')})
+                </p>
+              )
+            }
+
+            return (
+              <dl className="grid gap-1 sm:grid-cols-2">
+                <dt className="text-gray-500">Origen</dt>
+                <dd>{String(u.origen ?? '-')}</dd>
+                <dt className="text-gray-500">Fin (UTC)</dt>
+                <dd className="break-all">{String(u.fin_utc ?? '-')}</dd>
+                <dt className="text-gray-500">Enviados</dt>
+                <dd>{String(u.enviados ?? 0)}</dd>
+                <dt className="text-gray-500">Fallidos</dt>
+                <dd>{String(u.fallidos ?? 0)}</dd>
+                <dt className="text-gray-500">Sin email</dt>
+                <dd>{String(u.sin_email ?? 0)}</dd>
+                <dt className="text-gray-500">Omitidos config</dt>
+                <dd>{String(u.omitidos_config ?? 0)}</dd>
+                <dt className="text-gray-500">Omitidos paquete</dt>
+                <dd>{String(u.omitidos_paquete_incompleto ?? 0)}</dd>
+                <dt className="text-gray-500">WhatsApp OK / fallo</dt>
+                <dd>
+                  {String(u.enviados_whatsapp ?? 0)} /{' '}
+                  {String(u.fallidos_whatsapp ?? 0)}
+                </dd>
+                {u.error ? (
+                  <>
+                    <dt className="text-gray-500">Error</dt>
+                    <dd className="col-span-2 break-words text-red-700">
+                      {String(u.error)}
+                    </dd>
+                  </>
+                ) : null}
+              </dl>
+            )
+          })()}
+        </CardContent>
+      </Card>
+
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
         <table className="w-full text-sm">
           <thead>
@@ -809,7 +1001,7 @@ export function ConfiguracionNotificaciones() {
           </thead>
 
           <tbody>
-            {CRITERIOS.map(({ tipo, label, categoria, color }) => {
+            {CRITERIOS_ENVIO_PANEL.map(({ tipo, label, categoria, color }) => {
               const config = getConfig(tipo)
 
               const col = COLORES[color]

@@ -24,6 +24,7 @@ from app.api.v1.endpoints.notificaciones import (
 )
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
+from app.services.notificaciones_envios_store import coerce_modo_pruebas_notificaciones
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
 from app.services.notificacion_logging import (
@@ -131,7 +132,16 @@ def _adjuntos_cumplen_paquete_completo(
     if not _bytes_son_pdf_valido(carta):
         return False, "falta_pdf_variable_o_invalido"
     if not any(_bytes_son_pdf_valido(d) for d in otros):
-        return False, "falta_pdf_fijo_valido"
+        if len(otros) == 0:
+            return (
+                False,
+                "falta_pdf_fijo_solo_Carta_Cobranza: anexar PDF pestaña 3 (caso dias_1_retraso) y/o "
+                "adjunto global configuracion adjunto_fijo_cobranza; en Render el archivo debe existir en disco persistente",
+            )
+        return (
+            False,
+            "falta_pdf_fijo_no_cabecera_PDF: hay archivo extra pero no empieza con %PDF (no es PDF valido o corrupto)",
+        )
     return True, ""
 
 
@@ -160,7 +170,7 @@ def _enviar_correos_items(
     Desactivar solo en emergencia vía .env (NOTIFICACIONES_PAQUETE_ESTRICTO=false).
     """
     sync_email_config_from_db()
-    modo_pruebas = config_envios.get("modo_pruebas") is True
+    modo_pruebas = coerce_modo_pruebas_notificaciones(config_envios.get("modo_pruebas"))
     paquete_estricto = bool(getattr(settings, "NOTIFICACIONES_PAQUETE_ESTRICTO", True))
     log_envio_inicio(len(items), "batch", modo_pruebas=modo_pruebas)
     email_pruebas = (config_envios.get("email_pruebas") or "").strip()
@@ -282,9 +292,22 @@ def _enviar_correos_items(
                             attachments.append((nombre, contenido))
                 if not attachments:
                     attachments = None
-                log_envio_adjuntos(item_id_log, len(attachments) if attachments else 0)
+                _nombres_adj = (
+                    ",".join(str(a[0]) for a in attachments if a and len(a) > 0)[:400]
+                    if attachments
+                    else ""
+                )
+                log_envio_adjuntos(
+                    item_id_log,
+                    len(attachments) if attachments else 0,
+                    nombres=_nombres_adj or None,
+                )
             except Exception as e:
-                log_envio_adjuntos(item_id_log, len(attachments) if attachments else 0, error=str(e))
+                log_envio_adjuntos(
+                    item_id_log,
+                    len(attachments) if attachments else 0,
+                    error=str(e),
+                )
                 log_envio_fallo("adjuntos", str(e), exc=e)
                 if not attachments:
                     attachments = None
@@ -377,6 +400,36 @@ def _enviar_correos_items(
         modo_pruebas=modo_pruebas,
         omitidos_paquete_incompleto=omitidos_paquete_incompleto,
     )
+    if enviados == 0 and len(items) > 0:
+        log = logging.getLogger(__name__)
+        if omitidos_paquete_incompleto > 0 and paquete_estricto:
+            log.warning(
+                "[notif_envio_diagnostico] enviados=0: %s items omitidos por paquete incompleto "
+                "(NOTIFICACIONES_PAQUETE_ESTRICTO=true). Se exige Carta_Cobranza.pdf + al menos un PDF fijo "
+                "valido (%%PDF). Configure adjuntos en pestaña 3 por caso y/o adjunto global; en Render use disco "
+                "persistente. Emergencia: NOTIFICACIONES_PAQUETE_ESTRICTO=false en .env.",
+                omitidos_paquete_incompleto,
+            )
+        if omitidos_config > 0 and omitidos_paquete_incompleto == 0 and habilitados == 0:
+            log.warning(
+                "[notif_envio_diagnostico] enviados=0: ningun tipo tiene envio habilitado en "
+                "Configuracion > Notificaciones > Envios (habilitado=false en todos).",
+            )
+        if bloqueo_pruebas_sin_email:
+            log.warning(
+                "[notif_envio_diagnostico] enviados=0: modo pruebas activo pero falta email_pruebas valido en "
+                "notificaciones_envios; no se envia a clientes.",
+            )
+        if fallidos > 0:
+            log.warning(
+                "[notif_envio_diagnostico] enviados=0 pero fallidos=%s: revisar logs [SMTP_ENVIO] (SMTP, contrasena, rechazo).",
+                fallidos,
+            )
+        if sin_email > 0 and not modo_pruebas and omitidos_paquete_incompleto == 0:
+            log.warning(
+                "[notif_envio_diagnostico] %s items sin correo de cliente en datos; no hay destinatario.",
+                sin_email,
+            )
     return {
         "enviados": enviados,
         "sin_email": sin_email,

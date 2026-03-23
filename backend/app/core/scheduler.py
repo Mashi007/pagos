@@ -26,6 +26,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.api.v1.endpoints import cobranzas, notificaciones, notificaciones_tabs
+from app.services.notificaciones_envios_store import coerce_modo_pruebas_notificaciones
+from app.services.notificaciones_envio_batch_resumen import persist_ultimo_envio_batch
 from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running, _last_run_too_recent, _run_pipeline_background
 from app.models.pagos_gmail_sync import PagosGmailSync
 
@@ -77,10 +79,20 @@ def _job_envio_notificaciones_1am() -> None:
     db = SessionLocal()
     try:
         config = notificaciones.get_notificaciones_envios_config(db)
-        if config.get("modo_pruebas") is True:
+        if coerce_modo_pruebas_notificaciones(config.get("modo_pruebas")):
             logger.info("Envio notificaciones 01:00: omitido (modo pruebas activo; envio solo manual).")
+            persist_ultimo_envio_batch(
+                db,
+                resultado={},
+                origen="scheduler_01:00",
+                omitido=True,
+                omitido_motivo="modo_pruebas",
+            )
+            db.commit()
             return
         result = notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
+        persist_ultimo_envio_batch(db, resultado=result, origen="scheduler_01:00")
+        db.commit()
         logger.info(
             "Envio notificaciones 01:00: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s omitidos_paquete=%s whatsapp_ok=%s whatsapp_fail=%s",
             result.get("enviados", 0),
@@ -93,6 +105,12 @@ def _job_envio_notificaciones_1am() -> None:
         )
     except Exception as e:
         logger.exception("Error en job envio_notificaciones_1am: %s", e)
+        try:
+            db.rollback()
+            persist_ultimo_envio_batch(db, resultado={}, origen="scheduler_01:00", error=str(e)[:5000])
+            db.commit()
+        except Exception:
+            db.rollback()
     finally:
         db.close()
 

@@ -118,3 +118,35 @@ def validar_config_email_para_guardar(data: dict[str, Any]) -> Tuple[bool, List[
             errores.append("El usuario IMAP no tiene formato de email válido.")
 
     return (len(errores) == 0, errores)
+
+
+def validar_notificaciones_envios_payload(payload: dict) -> Tuple[bool, List[str]]:
+    """
+    Valida PUT /configuracion/notificaciones/envios antes de persistir.
+    En modo pruebas exige email_pruebas y cada emails_pruebas con formato valido.
+    """
+    from app.services.notificaciones_envios_store import coerce_modo_pruebas_notificaciones
+
+    errores: List[str] = []
+    if not isinstance(payload, dict):
+        return False, ["El cuerpo debe ser un objeto JSON"]
+
+    modo = coerce_modo_pruebas_notificaciones(payload.get("modo_pruebas"))
+    if modo:
+        ep = (payload.get("email_pruebas") or "").strip()
+        if not ep:
+            errores.append("En modo pruebas indique email_pruebas (correo de destino del lote).")
+        elif not _validar_formato_email(ep):
+            errores.append("email_pruebas no tiene formato valido (use usuario@dominio.tld).")
+        raw_list = payload.get("emails_pruebas")
+        if isinstance(raw_list, list):
+            for i, item in enumerate(raw_list):
+                if not item or not isinstance(item, str):
+                    continue
+                s = item.strip()
+                if not s:
+                    continue
+                if not _validar_formato_email(s):
+                    errores.append(f"emails_pruebas[{i}] no tiene formato valido: {s[:40]}")
+
+    return (len(errores) == 0, errores)

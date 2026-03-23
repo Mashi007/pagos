@@ -42,24 +42,17 @@ from app.services.notificacion_logging import (
 
 logger = logging.getLogger(__name__)
 
-CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
+from app.services.notificaciones_envios_store import (
+    coerce_modo_pruebas_notificaciones,
+    get_notificaciones_envios_dict,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def get_notificaciones_envios_config(db: Session) -> dict:
-    """Carga la configuraciÃƒÂ³n de envÃƒÂ­os por tipo (habilitado, cco, plantilla_id, programador) desde BD."""
-    try:
-        row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
-        if row and row.valor:
-            data = json.loads(row.valor)
-            if isinstance(data, dict):
-                return data
-    except json.JSONDecodeError as e:
-        logger.warning("notificaciones_envios: valor en BD no es JSON vÃƒÂ¡lido: %s", e)
-    except Exception as e:
-        logger.exception("get_notificaciones_envios_config: %s", e)
-    return {}
+    """Carga la configuracion de envios por tipo (habilitado, cco, plantilla_id, programador) desde BD."""
+    return get_notificaciones_envios_dict(db)
 
 
 # Las funciones _item e _item_tab estÃƒÂ¡n ahora en app.services.notificacion_service
@@ -320,9 +313,11 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
 @router.post("/plantillas")
 def create_plantilla(payload: dict = Body(...), db: Session = Depends(get_db)):
     """Crea una plantilla. Campos: nombre, tipo, asunto, cuerpo; opcionales: descripcion, variables_disponibles, activa, zona_horaria. tipo debe ser uno de los tipos de notificaciÃƒÂ³n permitidos."""
-    nombre = (payload.get("nombre") or "").strip()
+    from app.utils.texto_utf8 import normalizar_texto_plantilla
+
+    nombre = normalizar_texto_plantilla(payload.get("nombre"))
     tipo = (payload.get("tipo") or "").strip()
-    asunto = (payload.get("asunto") or "").strip()
+    asunto = normalizar_texto_plantilla(payload.get("asunto"))
     cuerpo = payload.get("cuerpo") or ""
     if not nombre or not tipo or not asunto:
         raise HTTPException(status_code=422, detail="nombre, tipo y asunto son obligatorios")
@@ -359,7 +354,9 @@ def update_plantilla(plantilla_id: int, payload: dict = Body(...), db: Session =
     if not p:
         raise HTTPException(status_code=404, detail="Plantilla no encontrada")
     if "nombre" in payload and payload["nombre"] is not None:
-        p.nombre = (payload["nombre"] or "").strip()
+        from app.utils.texto_utf8 import normalizar_texto_plantilla
+
+        p.nombre = normalizar_texto_plantilla(payload.get("nombre"))
     if "descripcion" in payload:
         p.descripcion = payload.get("descripcion")
     if "tipo" in payload and payload["tipo"] is not None:
@@ -371,7 +368,9 @@ def update_plantilla(plantilla_id: int, payload: dict = Body(...), db: Session =
             )
         p.tipo = nuevo_tipo
     if "asunto" in payload and payload["asunto"] is not None:
-        p.asunto = (payload["asunto"] or "").strip()
+        from app.utils.texto_utf8 import normalizar_texto_plantilla
+
+        p.asunto = normalizar_texto_plantilla(payload.get("asunto"))
     if "cuerpo" in payload:
         p.cuerpo = payload.get("cuerpo") or ""
     if "variables_disponibles" in payload:
@@ -1038,16 +1037,43 @@ def get_notificaciones_lista(
 
 
 def _tarea_envio_todas_notificaciones():
-    """Ejecuta el envÃƒÂ­o masivo en segundo plano con su propia sesiÃƒÂ³n de BD (evita timeout HTTP)."""
+    """Ejecuta el envio masivo en segundo plano; persiste resumen en configuracion para GET envio-batch/ultimo."""
+    from datetime import datetime, timezone
+
     from app.core.database import SessionLocal
     from app.api.v1.endpoints import notificaciones_tabs
+    from app.services.notificaciones_envio_batch_resumen import persist_ultimo_envio_batch
+
+    inicio = datetime.now(timezone.utc).isoformat()
     db = SessionLocal()
     try:
-        notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
+        result = notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
+        persist_ultimo_envio_batch(db, resultado=result, origen="api_enviar_todas", inicio_utc=inicio)
+        db.commit()
     except Exception as e:
-        logger.exception("EnvÃƒÂ­o masivo en background: %s", e)
+        logger.exception("Envio masivo en background: %s", e)
+        try:
+            db.rollback()
+            persist_ultimo_envio_batch(
+                db,
+                resultado={},
+                origen="api_enviar_todas",
+                error=str(e)[:5000],
+                inicio_utc=inicio,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
     finally:
         db.close()
+
+
+@router.get("/envio-batch/ultimo")
+def get_ultimo_envio_batch_notificaciones(db: Session = Depends(get_db)):
+    """Ultimo resultado de ejecutar envio masivo (API o scheduler). Null si nunca hubo ejecucion."""
+    from app.services.notificaciones_envio_batch_resumen import get_ultimo_envio_batch_dict
+
+    return {"ultimo": get_ultimo_envio_batch_dict(db)}
 
 
 @router.post("/enviar-todas")

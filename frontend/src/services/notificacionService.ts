@@ -751,6 +751,16 @@ class NotificacionService {
     }>(`${this.baseUrl}/enviar-todas`, {}, { timeout: 20000 })
   }
 
+  /** Ultimo resumen persistido tras enviar-todas o job 01:00 (sin depender solo de logs). */
+
+  async obtenerUltimoEnvioBatch(): Promise<{
+    ultimo: Record<string, unknown> | null
+  }> {
+    return await apiClient.get<{ ultimo: Record<string, unknown> | null }>(
+      `${this.baseUrl}/envio-batch/ultimo`
+    )
+  }
+
   // Variables de notificaciones
 
   async listarVariables(activa?: boolean): Promise<NotificacionVariable[]> {

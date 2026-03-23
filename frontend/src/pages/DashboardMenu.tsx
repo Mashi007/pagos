@@ -582,44 +582,44 @@ export function DashboardMenu() {
       enabled: true,
     })
 
-  const periodoTendenciaCobranza = getPeriodoGrafico('tendencia-cobranza-lineas')
+  const periodoTendenciaCobranza = getPeriodoGrafico(
+    'tendencia-cobranza-lineas'
+  )
 
-  const {
-    data: datosTendenciaCobranza,
-    isLoading: loadingTendenciaCobranza,
-  } = useQuery({
-    queryKey: [
-      'tendencia-programado-total-cobrado',
-      periodoTendenciaCobranza,
-      JSON.stringify(filtros),
-    ],
+  const { data: datosTendenciaCobranza, isLoading: loadingTendenciaCobranza } =
+    useQuery({
+      queryKey: [
+        'tendencia-programado-total-cobrado',
+        periodoTendenciaCobranza,
+        JSON.stringify(filtros),
+      ],
 
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodoTendenciaCobranza)
+      queryFn: async () => {
+        const params = construirFiltrosObject(periodoTendenciaCobranza)
 
-      const queryParams = new URLSearchParams()
+        const queryParams = new URLSearchParams()
 
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
+        Object.entries(params).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value.toString())
+        })
 
-      if (!queryParams.has('periodo') && periodoTendenciaCobranza)
-        queryParams.append('periodo', periodoTendenciaCobranza)
+        if (!queryParams.has('periodo') && periodoTendenciaCobranza)
+          queryParams.append('periodo', periodoTendenciaCobranza)
 
-      const response = await apiClient.get(
-        `/api/v1/dashboard/tendencia-programado-total-cobrado${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
-        { timeout: 60000 }
-      )
+        const response = await apiClient.get(
+          `/api/v1/dashboard/tendencia-programado-total-cobrado${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
+          { timeout: 60000 }
+        )
 
-      return response as TendenciaProgramadoTotalCobradoResponse
-    },
+        return response as TendenciaProgramadoTotalCobradoResponse
+      },
 
-    staleTime: 4 * 60 * 60 * 1000,
+      staleTime: 4 * 60 * 60 * 1000,
 
-    refetchOnWindowFocus: false,
+      refetchOnWindowFocus: false,
 
-    enabled: true,
-  })
+      enabled: true,
+    })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 

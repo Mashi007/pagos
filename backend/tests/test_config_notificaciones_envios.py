@@ -118,6 +118,110 @@ def test_put_notificaciones_envios_cuerpo_no_dict_422(client: TestClient):
     assert r.status_code == 422
 
 
+def test_put_notificaciones_envios_modo_pruebas_email_invalido_422(client: TestClient):
+    """En modo pruebas, email_pruebas debe tener formato valido."""
+    r = client.put(
+        "/api/v1/configuracion/notificaciones/envios",
+        json={"modo_pruebas": True, "email_pruebas": "sin_arroba"},
+    )
+    assert r.status_code == 422
+    assert "email_pruebas" in (r.json().get("detail") or "").lower()
+
+
+def test_put_notificaciones_envios_modo_pruebas_sin_email_422(client: TestClient):
+    """En modo pruebas, email_pruebas no puede quedar vacio."""
+    r = client.put(
+        "/api/v1/configuracion/notificaciones/envios",
+        json={"modo_pruebas": True, "email_pruebas": "   "},
+    )
+    assert r.status_code == 422
+
+
+def test_put_notificaciones_envios_emails_pruebas_item_invalido_422(client: TestClient):
+    """Lista emails_pruebas: cada entrada no vacia debe ser email valido."""
+    r = client.put(
+        "/api/v1/configuracion/notificaciones/envios",
+        json={
+            "modo_pruebas": True,
+            "email_pruebas": "ok@test.local",
+            "emails_pruebas": ["mal@@"],
+        },
+    )
+    assert r.status_code == 422
+    assert "emails_pruebas" in (r.json().get("detail") or "")
+
+
+def test_get_envio_batch_ultimo_sin_ejecucion(client: TestClient, db: Session):
+    """GET ultimo batch sin fila de resumen devuelve ultimo null."""
+    from app.models.configuracion import Configuracion
+    from app.services.notificaciones_envio_batch_resumen import CLAVE_ULTIMO_ENVIO_BATCH
+
+    row = db.get(Configuracion, CLAVE_ULTIMO_ENVIO_BATCH)
+    if row:
+        db.delete(row)
+        db.commit()
+    r = client.get("/api/v1/notificaciones/envio-batch/ultimo")
+    assert r.status_code == 200
+    assert r.json().get("ultimo") is None
+
+
+def test_get_envio_batch_ultimo_tras_persist(client: TestClient, db: Session):
+    """Tras persistir resumen, GET devuelve el JSON guardado."""
+    from app.services.notificaciones_envio_batch_resumen import persist_ultimo_envio_batch
+
+    persist_ultimo_envio_batch(
+        db,
+        resultado={"enviados": 2, "fallidos": 1, "sin_email": 0},
+        origen="test_pytest",
+    )
+    db.commit()
+    r = client.get("/api/v1/notificaciones/envio-batch/ultimo")
+    assert r.status_code == 200
+    u = r.json().get("ultimo")
+    assert u is not None
+    assert u.get("enviados") == 2
+    assert u.get("fallidos") == 1
+    assert u.get("origen") == "test_pytest"
+
+
+def test_validar_notificaciones_envios_payload_modo_false_sin_emails_ok():
+    from app.api.v1.endpoints.email_config_validacion import validar_notificaciones_envios_payload
+
+    ok, errs = validar_notificaciones_envios_payload({"modo_pruebas": False})
+    assert ok is True
+    assert errs == []
+
+
+def test_adjuntos_cumplen_paquete_requiere_cabecera_pdf():
+    from app.api.v1.endpoints.notificaciones_tabs import _adjuntos_cumplen_paquete_completo
+
+    ok, mot = _adjuntos_cumplen_paquete_completo(
+        [("Carta_Cobranza.pdf", b"not-a-pdf"), ("Fijo.pdf", b"%PDF-1.4 x")]
+    )
+    assert ok is False
+    assert "invalido" in mot or "variable" in mot
+
+
+def test_adjuntos_cumplen_paquete_requiere_segundo_pdf_valido():
+    from app.api.v1.endpoints.notificaciones_tabs import _adjuntos_cumplen_paquete_completo
+
+    ok, mot = _adjuntos_cumplen_paquete_completo(
+        [("Carta_Cobranza.pdf", b"%PDF-1.4 carta"), ("Fijo.bin", b"XXXX")]
+    )
+    assert ok is False
+    assert "PDF" in mot
+
+
+def test_adjuntos_cumplen_paquete_dos_pdfs_validos_ok():
+    from app.api.v1.endpoints.notificaciones_tabs import _adjuntos_cumplen_paquete_completo
+
+    ok, mot = _adjuntos_cumplen_paquete_completo(
+        [("Carta_Cobranza.pdf", b"%PDF-1.4 a"), ("Fijo.pdf", b"%PDF-1.4 b")]
+    )
+    assert ok is True
+    assert mot == ""
+
+
 # --- Tests respeto de flags en el envío (incluir_pdf_anexo, incluir_adjuntos_fijos) ---
 
 
@@ -203,6 +307,76 @@ def test_envio_cobranza_respeta_incluir_pdf_anexo_false(
     mock_send_email.assert_called_once()
     call_kw = mock_send_email.call_args[1]
     assert call_kw.get("attachments") is None
+
+
+@patch("app.api.v1.endpoints.notificaciones_tabs.settings")
+@patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
+@patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
+@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjunto_fijo_cobranza_bytes")
+@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjuntos_fijos_por_caso")
+@patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
+def test_paquete_estricto_pdf_carta_sin_cabecera_pdf_no_envia_smtp(
+    mock_sync,
+    mock_adjuntos_caso,
+    mock_adjunto_fijo,
+    mock_pdf,
+    mock_send_email,
+    mock_settings,
+    db: Session,
+):
+    """Con NOTIFICACIONES_PAQUETE_ESTRICTO=True, Carta_Cobranza debe empezar con %PDF o no se envia."""
+    from app.api.v1.endpoints.notificaciones_tabs import _enviar_correos_items
+
+    mock_settings.NOTIFICACIONES_PAQUETE_ESTRICTO = True
+    mock_send_email.return_value = (True, None)
+    mock_pdf.return_value = b"XXXX"
+    mock_adjunto_fijo.return_value = ("Documento.pdf", b"%PDF-1.4 fijo")
+    mock_adjuntos_caso.return_value = []
+
+    items = [
+        {
+            "correo": "cliente@test.com",
+            "nombre": "Test",
+            "cedula": "V123",
+            "prestamo_id": 1,
+            "contexto_cobranza": {"prestamo_id": 1, "cliente_id": 1},
+        }
+    ]
+    config_envios = {
+        "modo_pruebas": False,
+        "COBRANZA": {
+            "habilitado": True,
+            "plantilla_id": 1,
+            "incluir_pdf_anexo": True,
+            "incluir_adjuntos_fijos": True,
+        },
+    }
+
+    def get_tipo(_item):
+        return "COBRANZA"
+
+    with patch(
+        "app.api.v1.endpoints.notificaciones_tabs.get_plantilla_asunto_cuerpo",
+        return_value=("Asunto", "<p>Cuerpo</p>"),
+    ):
+        plantilla = MagicMock()
+        plantilla.tipo = "COBRANZA"
+        plantilla.activa = True
+        plantilla.asunto = "S"
+        plantilla.cuerpo = "C"
+        with patch.object(db, "get", return_value=plantilla):
+            out = _enviar_correos_items(
+                items,
+                "Asunto",
+                "Cuerpo",
+                config_envios,
+                get_tipo,
+                db,
+            )
+
+    assert out["omitidos_paquete_incompleto"] == 1
+    assert out["enviados"] == 0
+    mock_send_email.assert_not_called()
 
 
 @patch("app.api.v1.endpoints.notificaciones_tabs.settings")

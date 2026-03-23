@@ -29,8 +29,13 @@ logger = logging.getLogger(__name__)
 _sync_ttl_seconds = 60
 _last_sync_time = 0.0
 
+
+def invalidate_email_config_cache() -> None:
+    """Fuerza la proxima lectura SMTP desde BD (tras guardar notificaciones_envios o email en otro worker)."""
+    global _last_sync_time
+    _last_sync_time = 0.0
+
 CLAVE_EMAIL_CONFIG = "email_config"
-CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 
 # Campos sensibles que deben encriptarse en BD
 SENSITIVE_FIELDS = {"smtp_password", "imap_password"}
@@ -128,17 +133,14 @@ def sync_from_db() -> None:
 
 
 def _load_notificaciones_envios() -> dict:
-    """Carga la configuraciï¿½n de envï¿½os de notificaciones desde la tabla configuracion (clave notificaciones_envios)."""
+    """Carga notificaciones_envios con la misma logica que GET /configuracion/notificaciones/envios."""
     try:
         from app.core.database import SessionLocal
-        from app.models.configuracion import Configuracion
+        from app.services.notificaciones_envios_store import get_notificaciones_envios_dict
+
         db = SessionLocal()
         try:
-            row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
-            if row and row.valor:
-                data = json.loads(row.valor)
-                if isinstance(data, dict):
-                    return data
+            return get_notificaciones_envios_dict(db)
         finally:
             db.close()
     except Exception:
