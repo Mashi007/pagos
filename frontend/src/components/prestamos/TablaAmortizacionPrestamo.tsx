@@ -34,6 +34,8 @@ import { Prestamo } from '../../types'
 
 import { prestamoService } from '../../services/prestamoService'
 
+import { cuotasPrestamoQueryKey } from '../../constants/queryKeys'
+
 import { useQuery } from '@tanstack/react-query'
 
 import { formatDate } from '../../utils'
@@ -129,7 +131,7 @@ export function TablaAmortizacionPrestamo({
     refetch,
     isFetching,
   } = useQuery({
-    queryKey: ['cuotas-prestamo', prestamo.id],
+    queryKey: cuotasPrestamoQueryKey(prestamo.id),
 
     queryFn: () => prestamoService.getCuotasPrestamo(prestamo.id),
 
@@ -137,7 +139,7 @@ export function TablaAmortizacionPrestamo({
 
     staleTime: 0,
 
-    refetchOnMount: true,
+    refetchOnMount: 'always',
 
     refetchOnWindowFocus: true,
   })

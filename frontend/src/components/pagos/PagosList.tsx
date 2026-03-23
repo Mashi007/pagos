@@ -1668,6 +1668,10 @@ export function PagosList() {
                 queryKey: ['cuotas-prestamo'],
                 exact: false,
               })
+              await queryClient.refetchQueries({
+                queryKey: ['cuotas-prestamo'],
+                exact: false,
+              })
               await queryClient.invalidateQueries({
                 queryKey: ['prestamos'],
                 exact: false,

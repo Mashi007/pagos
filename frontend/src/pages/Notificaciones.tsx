@@ -551,8 +551,10 @@ export function Notificaciones() {
 
             {activeTab === 'dias_30_atraso' && (
               <p className="mb-4 text-xs text-gray-500">
-                Los KPI y el informe Excel corresponden al envio prejudicial (tipo_tab{' '}
-                <code className="rounded bg-gray-100 px-1">prejudicial</code> en la base de datos).
+                Los KPI y el informe Excel corresponden al envio prejudicial
+                (tipo_tab{' '}
+                <code className="rounded bg-gray-100 px-1">prejudicial</code> en
+                la base de datos).
               </p>
             )}
 

@@ -39,7 +39,9 @@ import { prestamoService } from '../../services/prestamoService'
 
 import { toast } from 'sonner'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+
+import { cuotasPrestamoQueryKey } from '../../constants/queryKeys'
 
 interface PrestamoDetalleModalProps {
   prestamo: Prestamo
@@ -51,6 +53,8 @@ export function PrestamoDetalleModal({
   prestamo: prestamoInitial,
   onClose,
 }: PrestamoDetalleModalProps) {
+  const queryClient = useQueryClient()
+
   const [activeTab, setActiveTab] = useState<'detalles' | 'amortizacion'>(
     'detalles'
   )
@@ -219,7 +223,17 @@ export function PrestamoDetalleModal({
               </button>
 
               <button
-                onClick={() => setActiveTab('amortizacion')}
+                type="button"
+                onClick={() => {
+                  const pid = prestamoInitial.id
+                  void queryClient.invalidateQueries({
+                    queryKey: cuotasPrestamoQueryKey(pid),
+                  })
+                  void queryClient.refetchQueries({
+                    queryKey: cuotasPrestamoQueryKey(pid),
+                  })
+                  setActiveTab('amortizacion')
+                }}
                 className={`border-b-2 px-4 py-3 transition-colors ${
                   activeTab === 'amortizacion'
                     ? 'border-blue-600 text-blue-600'

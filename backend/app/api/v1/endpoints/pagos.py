@@ -2496,9 +2496,11 @@ def export_excel_pagos_sin_aplicar_cuotas(
 
         description="todos (default): sin ninguna fila en cuota_pagos (no aplicados a cuotas). "
 
-        "cascada (alias: fifo): ademas monto>0, prestamo_id, no ANULADO_IMPORT (cola del job). "
+        "cascada: ademas monto>0, prestamo_id, no ANULADO_IMPORT (cola del job). "
 
-        "sin_cupo: como cascada (alias fifo) y sin cupo aplicable en cuotas PENDIENTE/MORA/PARCIAL.",
+        "sin_cupo: como cascada y sin cupo aplicable en cuotas PENDIENTE/MORA/PARCIAL. "
+
+        "Nota: fifo es alias legacy de cascada.",
 
     ),
 
@@ -2518,13 +2520,13 @@ def export_excel_pagos_sin_aplicar_cuotas(
 
     c = (cohorte or "todos").strip().lower()
 
-    if c == "cascada":
+    if c == "fifo":
 
-        c = "fifo"
+        c = "cascada"
 
-    if c not in ("todos", "fifo", "sin_cupo"):
+    if c not in ("todos", "cascada", "sin_cupo"):
 
-        raise HTTPException(status_code=400, detail="cohorte debe ser todos, cascada (alias: fifo), o sin_cupo")
+        raise HTTPException(status_code=400, detail="cohorte debe ser todos, cascada o sin_cupo (fifo=alias legacy)")
 
 
 
@@ -4753,7 +4755,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
         if dup and int(dup) > 0:
             logger.warning(
                 "Aplicacion en cascada detenida: ya existe cuota_pagos para cuota_id=%s pago_id=%s. "
-                "Use POST /prestamos/{id}/reaplicar-cascada-aplicacion (o .../reaplicar-fifo-aplicacion) para reconstruir.",
+                "Use POST /prestamos/{id}/reaplicar-cascada-aplicacion (ruta .../reaplicar-fifo-aplicacion es alias legacy) para reconstruir.",
                 c.id,
                 pago.id,
             )

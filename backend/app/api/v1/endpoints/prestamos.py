@@ -3198,6 +3198,9 @@ def reaplicar_cascada_aplicacion_prestamo(
     Reaplicacion integral en cascada para un prestamo: borra cuota_pagos, resetea totales en cuotas
     y vuelve a aplicar todos los pagos conciliados en orden (fecha_pago, id).
 
+    Politica vigente: SOLO CASCADA. La ruta con nombre `.../reaplicar-fifo-aplicacion`
+    se conserva unicamente por compatibilidad historica.
+
     Usar cuando la tabla de amortizacion no refleja los pagos pese a filas en `pagos`
     (articulacion vieja, regeneracion de cuotas, o desalineacion total_pagado vs cuota_pagos).
 
@@ -3243,7 +3246,8 @@ def reaplicar_cascada_aplicacion_masiva(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    Igual que /{prestamo_id}/reaplicar-cascada-aplicacion (ruta legacy ...-fifo-... conservada) pero para varios prestamos.
+    Igual que /{prestamo_id}/reaplicar-cascada-aplicacion pero para varios prestamos.
+    Politica vigente: SOLO CASCADA; `...-fifo-...` queda como alias legacy.
     Solo administrador. Maximo 500 IDs por solicitud.
     """
     if (getattr(current_user, "rol", None) or "").lower() != "administrador":
