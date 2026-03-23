@@ -2421,9 +2421,13 @@ export function useExcelUploadPagos({
               delete (updated as any).tasa_cambio_manual
             }
           } else if (field === 'tasa_cambio_manual') {
-            const n = parseFloat(String(value).replace(',', '.'))
-            ;(updated as any).tasa_cambio_manual =
-              Number.isFinite(n) && n > 0 ? n : undefined
+            if (value === '' || value === null || value === undefined) {
+              delete (updated as any).tasa_cambio_manual
+            } else {
+              const n = parseFloat(String(value).replace(',', '.'))
+              ;(updated as any).tasa_cambio_manual =
+                Number.isFinite(n) && n > 0 ? n : undefined
+            }
           } else {
             ;(updated as any)[field] =
               field === 'monto_pagado' ? Number(value) || 0 : value

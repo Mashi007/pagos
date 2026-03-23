@@ -131,6 +131,84 @@ function normMoneda(v: unknown): 'USD' | 'BS' {
   return s === 'BS' ? 'BS' : 'USD'
 }
 
+/** Entrada de tasa manual (Bs/USD): texto para permitir decimales mientras se escribe. */
+function TasaManualInput({
+  row,
+  onUpdateCell,
+}: {
+  row: PagoExcelRow
+  onUpdateCell: (
+    row: PagoExcelRow,
+    field: string,
+    value: string | number
+  ) => void
+}) {
+  const [text, setText] = useState(() =>
+    row.tasa_cambio_manual != null && typeof row.tasa_cambio_manual === 'number'
+      ? String(row.tasa_cambio_manual)
+      : ''
+  )
+
+  useEffect(() => {
+    const v = row.tasa_cambio_manual
+    if (v != null && typeof v === 'number' && Number.isFinite(v)) {
+      setText(String(v))
+    } else if (v == null || v === undefined) {
+      setText('')
+    }
+  }, [row._rowIndex, row.tasa_cambio_manual])
+
+  return (
+    <div className="space-y-0.5">
+      <input
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        className="w-full rounded border border-amber-300 p-1 text-xs"
+        placeholder="Ej: 526.12"
+        value={text}
+        onChange={e => {
+          let s = e.target.value.trim().replace(',', '.')
+          if (s === '') {
+            setText('')
+            onUpdateCell(row, 'tasa_cambio_manual', '')
+            return
+          }
+          if (!/^\d*\.?\d*$/.test(s)) return
+          setText(s)
+          if (s === '.' || s.endsWith('.')) {
+            return
+          }
+          const n = parseFloat(s)
+          if (Number.isFinite(n) && n > 0) {
+            onUpdateCell(row, 'tasa_cambio_manual', n)
+          }
+        }}
+        onBlur={() => {
+          const s = text.trim().replace(',', '.')
+          if (s === '' || s === '.') {
+            setText('')
+            onUpdateCell(row, 'tasa_cambio_manual', '')
+            return
+          }
+          const n = parseFloat(s)
+          if (Number.isFinite(n) && n > 0) {
+            onUpdateCell(row, 'tasa_cambio_manual', n)
+            setText(String(n))
+          } else {
+            setText('')
+            onUpdateCell(row, 'tasa_cambio_manual', '')
+          }
+        }}
+      />
+      <p className="text-[10px] leading-tight text-amber-900/80">
+        No se guarda en la tabla de tasas diarias; solo aplica a este pago.
+      </p>
+    </div>
+  )
+}
+
+
 function prestamoIdVacio(v: unknown): boolean {
   return (
     v == null ||
@@ -449,7 +527,8 @@ export function TablaEditablePagos({
           <strong>Moneda / tasa:</strong> USD por defecto. Bolívares (Bs) solo si la
           cédula está en la lista autorizada. La tasa se toma de la BD por fecha de
           pago; si no existe, ingrese la tasa manual (Bs por 1 USD) en la columna
-          correspondiente.
+          correspondiente. Esa tasa no se copia a la tabla de tasas diarias (solo queda
+          en el registro del pago); para dejarla en el calendario de tasas use Administracion.
         </p>
       </div>
 
@@ -605,16 +684,7 @@ export function TablaEditablePagos({
                       )
                     }
                     return (
-                      <input
-                        type="number"
-                        step="0.000001"
-                        className="w-full rounded border border-amber-300 p-1 text-xs"
-                        placeholder="Manual"
-                        value={row.tasa_cambio_manual ?? ''}
-                        onChange={e =>
-                          onUpdateCell(row, 'tasa_cambio_manual', e.target.value)
-                        }
-                      />
+                      <TasaManualInput row={row} onUpdateCell={onUpdateCell} />
                     )
                   })()}
                 </td>
