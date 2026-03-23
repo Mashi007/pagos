@@ -57,7 +57,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 
 from app.core.documento import normalize_documento
-from app.utils.cedula_almacenamiento import alinear_cedulas_clientes_existentes
+from app.utils.cedula_almacenamiento import alinear_cedulas_clientes_existentes, normalizar_cedula_almacenamiento
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 
 from app.core.serializers import to_float, format_date_iso
@@ -1598,7 +1598,7 @@ async def upload_excel_pagos(
 
                 p = Pago(
 
-                    cedula_cliente=cedula.strip().upper() if cedula else "",  # Normalize to uppercase
+                    cedula_cliente=cedula.strip().upper() if cedula else "",
 
                     prestamo_id=prestamo_id,
 
@@ -2916,6 +2916,19 @@ def guardar_fila_editable(
 
             raise HTTPException(status_code=400, detail="Cédula inválida (debe ser V/E/J/Z + 6-11 dígitos)")
 
+
+        cedula_norm_in = normalizar_cedula_almacenamiento(cedula)
+        if not cedula_norm_in:
+            raise HTTPException(status_code=400, detail="Cédula requerida")
+        cli_por_cedula = db.execute(
+            select(Cliente.id).where(Cliente.cedula == cedula_norm_in).limit(1)
+        ).first()
+        if not cli_por_cedula:
+            raise HTTPException(
+                status_code=400,
+                detail="La cédula no está registrada en clientes. No se puede guardar el pago.",
+            )
+
         if monto <= 0:
 
             raise HTTPException(status_code=400, detail="Monto debe ser > 0")
@@ -3006,6 +3019,30 @@ def guardar_fila_editable(
 
 
 
+        # Cedula en pagos debe existir en clientes (FK fk_pagos_cedula): usar la del cliente del prestamo.
+        prest = db.get(Prestamo, prestamo_id)
+        if not prest:
+            raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+        cli = db.get(Cliente, prest.cliente_id)
+        if not cli:
+            raise HTTPException(
+                status_code=400,
+                detail="El prestamo no tiene cliente asociado en BD; no se puede registrar el pago.",
+            )
+        cedula_fk = normalizar_cedula_almacenamiento(cli.cedula) or normalizar_cedula_almacenamiento(
+            prest.cedula
+        )
+        if not cedula_fk:
+            raise HTTPException(status_code=400, detail="Cedula del cliente no disponible en BD.")
+        cedula_input = normalizar_cedula_almacenamiento(cedula.strip())
+        if cedula_input and cedula_input != cedula_fk:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La cedula no coincide con la del cliente del prestamo (en BD: {cedula_fk}).",
+            )
+
+
+
         # Crear pago
 
         # [A2] Marcar conciliado=True y verificado_concordancia="SI" desde el momento de la creación,
@@ -3018,7 +3055,7 @@ def guardar_fila_editable(
 
         pago = Pago(
 
-            cedula_cliente=cedula.strip().upper() if cedula else "",  # Normalize to uppercase
+            cedula_cliente=cedula_fk,
 
             prestamo_id=prestamo_id,
 
