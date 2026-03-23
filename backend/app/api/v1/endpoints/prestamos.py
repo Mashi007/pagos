@@ -20,7 +20,7 @@ from typing import List, Optional
 
 
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from fastapi.responses import Response
 
@@ -4487,6 +4487,8 @@ def get_estado_cuenta_prestamo_pdf(
 
     prestamo_id: int,
 
+    request: Request,
+
     db: Session = Depends(get_db),
 
     current_user: UserResponse = Depends(get_current_user),
@@ -4539,6 +4541,30 @@ def get_estado_cuenta_prestamo_pdf(
 
         
 
+        from app.api.v1.endpoints.validadores import validate_cedula
+
+        from app.core.security import create_recibo_token
+
+        cedula_lookup = ""
+
+        if cedula_display:
+
+            vr = validate_cedula(cedula_display.strip())
+
+            if vr.get("valido"):
+
+                vf = (vr.get("valor_formateado") or "").replace("-", "")
+
+                cedula_lookup = vf
+
+        recibo_token = (
+
+            create_recibo_token(cedula_lookup, expire_hours=2) if cedula_lookup else None
+
+        )
+
+        base_url = str(request.base_url).rstrip("/")
+
         pdf_bytes = generar_pdf_estado_cuenta(
 
             cedula=cedula_display,
@@ -4557,9 +4583,9 @@ def get_estado_cuenta_prestamo_pdf(
 
             recibos=None,
 
-            recibo_token=None,
+            recibo_token=recibo_token,
 
-            base_url="",
+            base_url=base_url,
 
         )
 

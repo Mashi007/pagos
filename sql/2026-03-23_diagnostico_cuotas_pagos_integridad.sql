@@ -84,3 +84,4 @@ Interpretacion de diffs negativos grandes:
 Correccion integral: POST /api/v1/prestamos/983/reaplicar-fifo-aplicacion (admin).
 */
 
+-- Ver tambien: sql/diagnostico_prestamo_cascada.sql (resumen: huerfanos, diffs, amerita_reaplicacion_cascada).

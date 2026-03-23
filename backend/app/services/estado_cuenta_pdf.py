@@ -519,9 +519,10 @@ def generar_pdf_estado_cuenta(
 
                 cuota_id = c.get("id")
 
+                # PAGADA: mismo codigo que en cuota_estado / UI (etiqueta Pagado).
                 puede_recibo = (
 
-                    estado_codigo in ("PAGADO", "PAGO_ADELANTADO")
+                    estado_codigo in ("PAGADO", "PAGADA", "PAGO_ADELANTADO")
 
                     and cuota_id
 
