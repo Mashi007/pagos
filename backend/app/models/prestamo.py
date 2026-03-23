@@ -3,9 +3,11 @@ Modelo SQLAlchemy para Préstamo.
 Alineado con la tabla real public.prestamos (columnas confirmadas desde BD).
 """
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Boolean, Text
+from sqlalchemy.orm import validates
 from sqlalchemy.sql import func, text
 
 from app.core.database import Base
+from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
 
 class Prestamo(Base):
@@ -14,6 +16,14 @@ class Prestamo(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False, index=True)
     cedula = Column(String(20), nullable=False)
+
+    @validates("cedula")
+    def _cedula_guardado_mayusculas(self, key, value):
+        if value is None:
+            return None
+        n = normalizar_cedula_almacenamiento(value)
+        return n if n is not None else ""
+
     nombres = Column(String(255), nullable=False)
     total_financiamiento = Column(Numeric(14, 2), nullable=False)
     fecha_requerimiento = Column(Date, nullable=False)

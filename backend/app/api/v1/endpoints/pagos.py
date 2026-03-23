@@ -57,6 +57,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 
 from app.core.documento import normalize_documento
+from app.utils.cedula_almacenamiento import alinear_cedulas_clientes_existentes
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 
 from app.core.serializers import to_float, format_date_iso
@@ -4089,6 +4090,20 @@ def crear_pagos_batch(
 
 
 
+        cedulas_lote = {
+
+            (p.cedula_cliente or "").strip().upper()
+
+            for p in pagos_list
+
+            if (p.cedula_cliente or "").strip()
+
+        }
+
+        alinear_cedulas_clientes_existentes(db, cedulas_lote)
+
+
+
         # Fase 2: transaccion unica. Crear todos los pagos (flush), aplicar a cuotas, un commit al final.
 
         results: list[dict] = []
@@ -4247,7 +4262,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         cliente = db.execute(
 
-            select(Cliente).where(Cliente.cedula == cedula_normalizada)
+            select(Cliente).where(func.upper(Cliente.cedula) == cedula_normalizada)
 
         ).scalars().first()
 
@@ -4272,6 +4287,12 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
     if not es_valido:
 
         raise HTTPException(status_code=400, detail=err_msg)
+
+
+
+    if cedula_normalizada:
+
+        alinear_cedulas_clientes_existentes(db, [cedula_normalizada])
 
 
 
@@ -4617,15 +4638,11 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
             select(Cuota)
 
             .where(
-
                 Cuota.prestamo_id == prestamo_id,
-
-                Cuota.fecha_pago.is_(None),
-
-                or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto),
-
+                # Solo saldo pendiente: no exigir fecha_pago NULL. Si hay fecha_pago pero total_pagado < monto
+                # (carga manual, migración o bug), excluir la cuota bloqueaba el FIFO y los pagos quedaban sin aplicar.
+                or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto - 0.01),
             )
-
             .order_by(Cuota.numero_cuota.asc())  # FIFO: primero las cuotas más antiguas (numero_cuota menor), luego las siguientes
 
         )
@@ -4727,6 +4744,8 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
             cuotas_completadas += 1
 
         else:
+            # Cuota aún abierta: limpiar fecha_pago residual para no bloquear futuras aplicaciones FIFO.
+            c.fecha_pago = None
 
             estado_nuevo = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
 
@@ -4789,25 +4808,17 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
     # Mismo criterio que get_cuotas_prestamo: conciliado O verificado_concordancia SI.
 
     rows = db.execute(
-
-        select(Pago).where(
-
+        select(Pago)
+        .where(
             Pago.prestamo_id == prestamo_id,
-
             or_(
-
                 Pago.conciliado.is_(True),
-
                 func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
-
             ),
-
             Pago.monto_pagado > 0,
-
             ~Pago.id.in_(subq),
-
         )
-
+        .order_by(Pago.fecha_pago.asc().nulls_last(), Pago.id.asc())
     ).scalars().all()
 
     n = 0

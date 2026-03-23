@@ -4,8 +4,10 @@ Columnas exactas de la tabla public.clientes en la BD (sin columnas que no exist
 La tabla clientes NO tiene total_financiamiento ni dias_mora (eso está en prestamos / se calcula desde cuotas).
 """
 from sqlalchemy import Column, Integer, String, Date, DateTime, Text, text
+from sqlalchemy.orm import validates
 
 from app.core.database import Base
+from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
 
 class Cliente(Base):
@@ -24,3 +26,11 @@ class Cliente(Base):
     fecha_actualizacion = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     usuario_registro = Column(String(50), nullable=False)
     notas = Column(Text, nullable=False)
+
+    @validates("cedula")
+    def _cedula_guardado_mayusculas(self, key, value):
+        if value is None:
+            return None
+        n = normalizar_cedula_almacenamiento(value)
+        return n if n is not None else ""
+

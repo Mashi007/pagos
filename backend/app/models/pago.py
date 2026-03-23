@@ -4,9 +4,11 @@ Conectado al frontend /pagos/pagos; lista y CRUD desde BD.
 Columnas alineadas con la tabla real en Render (cedula, fecha_pago timestamp, referencia_pago, etc.).
 """
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, Text, Boolean, ForeignKey, Date
+from sqlalchemy.orm import validates
 from sqlalchemy.sql import func, text
 
 from app.core.database import Base
+from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
 
 class Pago(Base):
@@ -16,6 +18,11 @@ class Pago(Base):
     prestamo_id = Column(Integer, ForeignKey("prestamos.id", ondelete="SET NULL"), nullable=True, index=True)
     # BD tiene columna "cedula"; en Python/API se expone como cedula_cliente
     cedula_cliente = Column("cedula", String(20), nullable=True, index=True)
+
+    @validates("cedula_cliente")
+    def _cedula_cliente_guardado_mayusculas(self, key, value):
+        return normalizar_cedula_almacenamiento(value)
+
     fecha_pago = Column(DateTime(timezone=False), nullable=False)
     # Monto en USD para cartera/cuotas (si el reporte fue en Bs, se convierte con tasa del dia de fecha_pago).
     monto_pagado = Column(Numeric(14, 2), nullable=False)
