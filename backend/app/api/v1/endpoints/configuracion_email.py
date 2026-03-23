@@ -327,6 +327,10 @@ class ProbarEmailRequest(BaseModel):
     email_cc: Optional[str] = None
     subject: Optional[str] = None
     mensaje: Optional[str] = None
+    # Opcional: misma cuenta SMTP que un servicio (p. ej. notificaciones, cuentas 3/4).
+    # Por defecto cobros (Cuenta 1), comportamiento historico.
+    servicio: Optional[str] = None
+    tipo_tab: Optional[str] = None
 
 
 def _destino_prueba(cfg: dict[str, Any], payload: ProbarEmailRequest) -> str:
@@ -344,14 +348,25 @@ def _destino_prueba(cfg: dict[str, Any], payload: ProbarEmailRequest) -> str:
     summary="Envia un email de prueba por SMTP con la configuracion guardada.",
 )
 def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Depends(get_db)):
-    """Envia un correo de prueba por SMTP (config persistida en BD). Con email_config version 2 usa la cuenta Cobros (Cuenta 1), igual que recibos en pagos reportados."""
+    """Envia un correo de prueba por SMTP (config persistida en BD). Con email_config v2 la cuenta depende de servicio/tipo_tab."""
     _load_email_config_from_db(db)
     _sync_stub_from_settings()
     from app.core.email_config_holder import sync_from_db, get_smtp_config
     from app.core.email import send_email
 
     sync_from_db()
-    cfg_send = get_smtp_config(servicio="cobros")
+    raw_svc = (payload.servicio or "cobros").strip().lower()
+    if raw_svc not in (
+        "cobros",
+        "notificaciones",
+        "estado_cuenta",
+        "tickets",
+        "campanas",
+        "informe_pagos",
+    ):
+        raw_svc = "cobros"
+    tipo_tab = (payload.tipo_tab or "").strip() or None
+    cfg_send = get_smtp_config(servicio=raw_svc, tipo_tab=tipo_tab)
     if not all([cfg_send.get("smtp_host"), (cfg_send.get("smtp_user") or "").strip()]):
         raise HTTPException(
             status_code=400,
@@ -392,7 +407,8 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
         subject=subject,
         body_text=body,
         respetar_destinos_manuales=True,
-        servicio="cobros",
+        servicio=raw_svc,
+        tipo_tab=tipo_tab,
     )
     if not ok:
         logger.warning("Email de prueba fallo: %s", error_msg)

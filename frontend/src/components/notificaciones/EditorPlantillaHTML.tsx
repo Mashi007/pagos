@@ -37,6 +37,19 @@ import { Save, Mail, Eye, FileText } from 'lucide-react'
 
 import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
 
+/** Mapeo alineado con backend notificaciones_tabs._CONFIG_TIPO_TO_TAB (cuenta SMTP por pesta\u00f1a). */
+const PLANTILLA_TIPO_A_TIPO_TAB: Record<string, string> = {
+  PAGO_5_DIAS_ANTES: 'dias_5',
+  PAGO_3_DIAS_ANTES: 'dias_3',
+  PAGO_1_DIA_ANTES: 'dias_1',
+  PAGO_DIA_0: 'hoy',
+  PAGO_1_DIA_ATRASADO: 'dias_1_retraso',
+  PAGO_3_DIAS_ATRASADO: 'dias_3_retraso',
+  PAGO_5_DIAS_ATRASADO: 'dias_5_retraso',
+  PREJUDICIAL: 'prejudicial',
+  COBRANZA: 'dias_1_retraso',
+}
+
 interface EditorPlantillaHTMLProps {
   plantilla?: NotificacionPlantilla | null
 
@@ -175,7 +188,12 @@ export function EditorPlantillaHTML({
 
         replaceBase64ImagesWithLogoUrl(cuerpoHTML).trim(),
 
-        undefined
+        undefined,
+
+        {
+          servicio: 'notificaciones',
+          tipo_tab: PLANTILLA_TIPO_A_TIPO_TAB[tipo] || 'dias_1_retraso',
+        }
       )
 
       toast.success(`Email de prueba enviado a ${emailPrueba}`)

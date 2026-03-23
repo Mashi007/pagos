@@ -123,7 +123,6 @@ function CeldaEditable({
   )
 }
 
-
 function normMoneda(v: unknown): 'USD' | 'BS' {
   const s = String(v ?? 'USD')
     .trim()
@@ -207,7 +206,6 @@ function TasaManualInput({
     </div>
   )
 }
-
 
 function prestamoIdVacio(v: unknown): boolean {
   return (
@@ -370,7 +368,10 @@ export function TablaEditablePagos({
   const cedulasFirma = useMemo(() => {
     const lookups = new Set<string>()
     for (const row of rows) {
-      const lk = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
+      const lk = cedulaLookupParaFila(
+        row.cedula || '',
+        row.numero_documento || ''
+      )
         .trim()
         .replace(/-/g, '')
         .toUpperCase()
@@ -455,7 +456,6 @@ export function TablaEditablePagos({
       }
       return next
     })
-
     ;(async () => {
       for (const [iso, idxs] of byIso) {
         if (cancelled) return
@@ -578,11 +578,12 @@ export function TablaEditablePagos({
         </p>
 
         <p className="mt-1 text-xs text-blue-700">
-          <strong>Moneda / tasa:</strong> USD por defecto. Bolívares (Bs) solo si la
-          cédula está en la lista autorizada. La tasa se toma de la BD por fecha de
-          pago; si no existe, ingrese la tasa manual (Bs por 1 USD) en la columna
-          correspondiente. Esa tasa no se copia a la tabla de tasas diarias (solo queda
-          en el registro del pago); para dejarla en el calendario de tasas use Administracion.
+          <strong>Moneda / tasa:</strong> USD por defecto. Bolívares (Bs) solo
+          si la cédula está en la lista autorizada. La tasa se toma de la BD por
+          fecha de pago; si no existe, ingrese la tasa manual (Bs por 1 USD) en
+          la columna correspondiente. Esa tasa no se copia a la tabla de tasas
+          diarias (solo queda en el registro del pago); para dejarla en el
+          calendario de tasas use Administracion.
         </p>
       </div>
 
@@ -690,13 +691,16 @@ export function TablaEditablePagos({
                       .trim()
                       .replace(/-/g, '')
                       .toUpperCase()
-                    const enAuth = lk.length >= 5 ? autorizadoBsPorCedula[lk] : null
+                    const enAuth =
+                      lk.length >= 5 ? autorizadoBsPorCedula[lk] : null
                     const puedeBs = enAuth === true
                     const m = normMoneda(row.moneda_registro)
                     return (
                       <Select
                         value={m}
-                        onValueChange={v => onUpdateCell(row, 'moneda_registro', v)}
+                        onValueChange={v =>
+                          onUpdateCell(row, 'moneda_registro', v)
+                        }
                         disabled={enAuth === null}
                       >
                         <SelectTrigger className="h-8 text-xs">
@@ -728,13 +732,11 @@ export function TablaEditablePagos({
                           <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
                           Tasa...
                         </span>
-                    )
+                      )
                     }
                     if (typeof tb === 'number') {
                       return (
-                        <span className="text-xs text-green-800">
-                          BD: {tb}
-                        </span>
+                        <span className="text-xs text-green-800">BD: {tb}</span>
                       )
                     }
                     return (

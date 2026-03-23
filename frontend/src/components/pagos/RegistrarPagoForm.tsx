@@ -100,7 +100,8 @@ export function RegistrarPagoForm({
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const [monedaRegistro, setMonedaRegistro] = useState<'USD' | 'BS'>(() =>
-    (pagoInicial as { moneda_registro?: string } | undefined)?.moneda_registro === 'BS'
+    (pagoInicial as { moneda_registro?: string } | undefined)
+      ?.moneda_registro === 'BS'
       ? 'BS'
       : 'USD'
   )
@@ -184,7 +185,6 @@ export function RegistrarPagoForm({
     setTasaBdLoading(true)
 
     getTasaPorFecha(fp)
-
       .then(r => setTasaBd(r?.tasa_oficial ?? null))
 
       .catch(() => setTasaBd(null))
@@ -656,14 +656,16 @@ export function RegistrarPagoForm({
                 </Select>
 
                 <p className="text-xs text-gray-600">
-                  La opcion en bolivares solo esta disponible para cedulas autorizadas en la lista
-                  de pagos en bolivares.
+                  La opcion en bolivares solo esta disponible para cedulas
+                  autorizadas en la lista de pagos en bolivares.
                 </p>
               </div>
             )}
 
             {consultandoBs && (
-              <p className="text-xs text-blue-600">Consultando autorizacion bolivares...</p>
+              <p className="text-xs text-blue-600">
+                Consultando autorizacion bolivares...
+              </p>
             )}
 
             {/* Fecha y Monto */}
@@ -699,7 +701,9 @@ export function RegistrarPagoForm({
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
-                  {monedaRegistro === 'BS' ? 'Monto (Bs.)' : 'Monto pagado (USD)'}{' '}
+                  {monedaRegistro === 'BS'
+                    ? 'Monto (Bs.)'
+                    : 'Monto pagado (USD)'}{' '}
                   <span className="text-red-500">*</span>
                 </label>
 
@@ -741,7 +745,9 @@ export function RegistrarPagoForm({
 
                     {!tasaBd && !tasaBdLoading && (
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
-                        <label className="font-medium">Tasa manual (Bs/USD)</label>
+                        <label className="font-medium">
+                          Tasa manual (Bs/USD)
+                        </label>
 
                         <Input
                           type="number"

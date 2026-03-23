@@ -1851,7 +1851,16 @@ export function useExcelUploadPagos({
             if (match(i, 'tasa', 'tasa_cambio', 'tc', 'bcv')) tasaCol = i
           }
 
-          return { cedula, fecha, monto, documento, prestamo, conciliacion, monedaCol, tasaCol }
+          return {
+            cedula,
+            fecha,
+            monto,
+            documento,
+            prestamo,
+            conciliacion,
+            monedaCol,
+            tasaCol,
+          }
         })()
 
         for (let i = 1; i < jsonData.length; i++) {
@@ -1951,7 +1960,9 @@ export function useExcelUploadPagos({
           let tasa_cambio_manual: number | undefined
 
           if (cols.tasaCol >= 0) {
-            const tr = parseFloat(String(row[cols.tasaCol] ?? '').replace(',', '.'))
+            const tr = parseFloat(
+              String(row[cols.tasaCol] ?? '').replace(',', '.')
+            )
 
             if (Number.isFinite(tr) && tr > 0) tasa_cambio_manual = tr
           }

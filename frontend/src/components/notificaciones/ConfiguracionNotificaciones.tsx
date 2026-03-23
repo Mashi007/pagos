@@ -27,6 +27,7 @@ import { emailConfigService } from '../../services/notificacionService'
 
 import {
   notificacionService,
+  type EnvioPruebaPaqueteResponse,
   type NotificacionPlantilla,
 } from '../../services/notificacionService'
 
@@ -203,7 +204,10 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
 } {
   const data = raw || {}
 
-  const modoPruebas = data.modo_pruebas === true
+  const modoPruebas =
+    data.modo_pruebas === true ||
+    data.modo_pruebas === 'true' ||
+    String(data.modo_pruebas || '').toLowerCase() === 'true'
 
   let emailsPruebas: [string, string] = ['', '']
 
@@ -244,6 +248,10 @@ export function ConfiguracionNotificaciones() {
   >(null)
 
   const [enviandoMasivo, setEnviandoMasivo] = useState(false)
+
+  const [tipoPruebaPaquete, setTipoPruebaPaquete] = useState<string>(
+    CRITERIOS_ENVIO_PANEL[0].tipo
+  )
 
   const guardandoRef = useRef(false)
 
@@ -465,12 +473,6 @@ export function ConfiguracionNotificaciones() {
 
   /** En modo prueba el envío usa solo plantilla predeterminada (ejemplo) y envía a correo de pruebas 1 y 2. */
 
-  const ASUNTO_PLANTILLA_PREDETERMINADA =
-    'Notificación de cobranza - RapiCredit (ejemplo)'
-
-  const MENSAJE_PLANTILLA_PREDETERMINADA =
-    'Este es un correo de ejemplo con la plantilla predeterminada. Se envía a los correos de pruebas 1 y 2 para verificar la configuración de notificaciones.'
-
   const handleEnviarNotificacionesPrueba = async () => {
     const destinos = [
       emailsPruebas[0]?.trim(),
@@ -487,7 +489,7 @@ export function ConfiguracionNotificaciones() {
 
     if (invalidos.length > 0) {
       toast.error(
-        `Correo(s) no válido(s): ${invalidos.join(', ')}. Usa formato usuario@dominio.com`
+        `Correo(s) no valido(s): ${invalidos.join(', ')}. Usa formato usuario@dominio.com`
       )
 
       return
@@ -502,10 +504,10 @@ export function ConfiguracionNotificaciones() {
       if (!estadoEmail?.configurada) {
         const problemas =
           estadoEmail?.problemas?.join('. ') ||
-          'servidor SMTP, usuario y contraseña'
+          'servidor SMTP, usuario y contrasena'
 
         toast.error(
-          `Configura el email SMTP antes de enviar pruebas: ${problemas} Ve a Configuración → Email.`,
+          `Configura el email SMTP antes de enviar pruebas: ${problemas} Ve a Configuracion > Email.`,
 
           { duration: 6000 }
         )
@@ -515,35 +517,29 @@ export function ConfiguracionNotificaciones() {
         return
       }
 
-      let enviados = 0
+      const resultado: EnvioPruebaPaqueteResponse =
+        await notificacionService.enviarPruebaPaqueteCompleta({
+          tipo: tipoPruebaPaquete,
+          destinos,
+        })
 
-      for (let i = 0; i < destinos.length; i++) {
-        setEnviandoPruebaIndice(i + 1)
+      const enviados = resultado.enviados ?? 0
+      const fallidos = resultado.fallidos ?? 0
 
-        const resultado = await emailConfigService.probarConfiguracionEmail(
-          destinos[i],
-
-          ASUNTO_PLANTILLA_PREDETERMINADA,
-
-          MENSAJE_PLANTILLA_PREDETERMINADA,
-
-          undefined
-        )
-
-        if (resultado?.success || resultado?.mensaje?.includes('enviado'))
-          enviados++
-      }
-
-      if (enviados === destinos.length) {
+      if (enviados > 0 && fallidos === 0) {
         toast.success(
-          `Notificación de ejemplo enviada a ${destinos.length} correo(s) de pruebas.`
+          resultado.mensaje ||
+            `Prueba enviada: plantilla + Carta PDF + PDFs fijos a ${destinos.length} correo(s).`
         )
       } else if (enviados > 0) {
         toast.warning(
-          `Enviado a ${enviados} de ${destinos.length} correos de pruebas. Revisa los que fallaron.`
+          `Enviado con advertencias (fallidos=${fallidos}). Revise SMTP y adjuntos en pestañas 2 y 3.`
         )
       } else {
-        toast.error('No se pudo enviar a ninguno de los correos de pruebas.')
+        toast.error(
+          resultado.mensaje ||
+            'No se pudo enviar la prueba. Revise que exista un cliente en el criterio y que los PDFs esten configurados.'
+        )
       }
     } catch (error: unknown) {
       const detalle = getErrorDetail(error)
@@ -558,9 +554,6 @@ export function ConfiguracionNotificaciones() {
       setEnviandoPruebaIndice(null)
     }
   }
-
-  /** Envío masivo manual: mismo flujo que las 11PM pero en este momento; si modo prueba está activo, todos los correos van al correo de pruebas. Guarda la config antes de enviar para que el backend use los toggles actuales. */
-
   const handleEnviosMasivosPrueba = async () => {
     if (!modoPruebas) return
 
@@ -839,10 +832,32 @@ export function ConfiguracionNotificaciones() {
             (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
               <div className="space-y-3 border-t border-amber-200 pt-4">
                 <p className="text-sm text-gray-600">
-                  Envía un correo de ejemplo con la{' '}
-                  <strong>plantilla predeterminada</strong> a los correos de
-                  pruebas 1 y 2.
+                  Prueba con el mismo contenido que producción: cuerpo desde la
+                  plantilla vinculada en la tabla (pestaña 1),{' '}
+                  <strong>Carta_Cobranza.pdf</strong> (pestaña 2) y PDF(s) fijos
+                  (pestaña 3). Elija el criterio de caso:
                 </p>
+
+                <div className="flex max-w-md flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-600">
+                    Criterio (tipo de envío)
+                  </label>
+                  <Select
+                    value={tipoPruebaPaquete}
+                    onValueChange={v => setTipoPruebaPaquete(v)}
+                  >
+                    <SelectTrigger className="border-gray-200 bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CRITERIOS_ENVIO_PANEL.map(({ tipo, label }) => (
+                        <SelectItem key={tipo} value={tipo}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 <Button
                   onClick={handleEnviarNotificacionesPrueba}

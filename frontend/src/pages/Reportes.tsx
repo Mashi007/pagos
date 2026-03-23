@@ -563,7 +563,12 @@ export function Reportes() {
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button asChild variant="outline" size="sm" className="h-11 gap-2">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="h-11 gap-2"
+              >
                 <Link
                   to="/admin/tasas-cambio"
                   title="Ir a Tasa de cambio (ingreso manual)"

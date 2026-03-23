@@ -165,6 +165,7 @@ def _enviar_correos_items(
     config_envios: dict,
     get_tipo_for_item: Callable[[dict], str],
     db,
+    forzar_destinos_prueba: Optional[List[str]] = None,
 ) -> dict:
     """
     Envia por Email y/o WhatsApp por cada item.
@@ -176,6 +177,9 @@ def _enviar_correos_items(
     plantilla email activa, PDF Carta_Cobranza valido y al menos un PDF fijo adicional.
     Desactivar solo en emergencia vía .env (NOTIFICACIONES_PAQUETE_ESTRICTO=false).
     """
+    if forzar_destinos_prueba is not None:
+        if len(items) != 1:
+            raise ValueError("forzar_destinos_prueba requiere exactamente un item")
     sync_email_config_from_db()
     modo_pruebas = coerce_modo_pruebas_notificaciones(config_envios.get("modo_pruebas"))
     paquete_estricto = bool(getattr(settings, "NOTIFICACIONES_PAQUETE_ESTRICTO", True))
@@ -325,10 +329,11 @@ def _enviar_correos_items(
                 omitidos_paquete_incompleto += 1
                 continue
 
-        # Los adjuntos construidos se pasan SIEMPRE a send_email (attachments=None o lista no vacía).
-        # Modo pruebas: mismo HTML (pestaña 1) y mismos 2 PDFs (pestañas 2 y 3); solo el destinatario es email_pruebas.
-        # Destinatario: en modo prueba todos van solo a email_pruebas; en producción al correo del cliente (+ CCO si hay)
-        if usar_solo_pruebas:
+        # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
+        if forzar_destinos_prueba is not None:
+            to_email = [e.strip() for e in forzar_destinos_prueba if e and isinstance(e, str) and "@" in e.strip()]
+            bcc_list = None
+        elif usar_solo_pruebas:
             to_email = [email_pruebas]
             bcc_list = None
         elif bloqueo_pruebas_sin_email:
@@ -355,6 +360,7 @@ def _enviar_correos_items(
                 attachments=attachments,
                 servicio="notificaciones",
                 tipo_tab=tipo_tab_envio,
+                respetar_destinos_manuales=bool(forzar_destinos_prueba),
             )
             log_envio_email(item_id_log, to_email[0], ok, None if ok else msg)
             email_sent_ok = ok
@@ -382,7 +388,7 @@ def _enviar_correos_items(
                 sin_email += 1
         # WhatsApp solo si el correo se envio OK (paquete ya validado arriba).
         telefono = (item.get("telefono") or "").strip()
-        if telefono and email_sent_ok:
+        if telefono and email_sent_ok and forzar_destinos_prueba is None:
             ok, _ = send_whatsapp_text(telefono, cuerpo)
             if ok:
                 enviados_whatsapp += 1

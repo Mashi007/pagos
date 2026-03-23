@@ -1635,4 +1635,10 @@ def get_notificaciones_tabs_data(db: Session):
         "prejudicial": prejudicial,
     }
 
+@router.post("/enviar-prueba-paquete")
+def post_enviar_prueba_paquete(payload: dict = Body(...), db: Session = Depends(get_db)):
+    """Delega en servicio unico (evita duplicar logica con el router)."""
+    from app.services.notificaciones_prueba_paquete import ejecutar_enviar_prueba_paquete
+
+    return ejecutar_enviar_prueba_paquete(db, payload)
 

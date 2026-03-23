@@ -1,0 +1,107 @@
+  /** En modo prueba el envío usa solo plantilla predeterminada (ejemplo) y envía a correo de pruebas 1 y 2. */
+
+  const ASUNTO_PLANTILLA_PREDETERMINADA =
+    'Notificación de cobranza - RapiCredit (ejemplo)'
+
+  const MENSAJE_PLANTILLA_PREDETERMINADA =
+    'Este es un correo de ejemplo con la plantilla predeterminada. Se envía a los correos de pruebas 1 y 2 para verificar la configuración de notificaciones.'
+
+  const handleEnviarNotificacionesPrueba = async () => {
+    const destinos = [
+      emailsPruebas[0]?.trim(),
+      emailsPruebas[1]?.trim(),
+    ].filter(Boolean) as string[]
+
+    if (!modoPruebas || destinos.length === 0) {
+      toast.error('Configura al menos un correo de pruebas para enviar.')
+
+      return
+    }
+
+    const invalidos = destinos.filter(e => !esEmailValido(e))
+
+    if (invalidos.length > 0) {
+      toast.error(
+        `Correo(s) no válido(s): ${invalidos.join(', ')}. Usa formato usuario@dominio.com`
+      )
+
+      return
+    }
+
+    try {
+      setEnviandoPruebaIndice(0)
+
+      const estadoEmail =
+        await emailConfigService.verificarEstadoConfiguracionEmail()
+
+      if (!estadoEmail?.configurada) {
+        const problemas =
+          estadoEmail?.problemas?.join('. ') ||
+          'servidor SMTP, usuario y contraseña'
+
+        toast.error(
+          `Configura el email SMTP antes de enviar pruebas: ${problemas} Ve a Configuración → Email.`,
+
+          { duration: 6000 }
+        )
+
+        setEnviandoPruebaIndice(null)
+
+        return
+      }
+
+      let enviados = 0
+
+      for (let i = 0; i < destinos.length; i++) {
+        setEnviandoPruebaIndice(i + 1)
+
+        const resultado = await emailConfigService.probarConfiguracionEmail(
+          destinos[i],
+
+          ASUNTO_PLANTILLA_PREDETERMINADA,
+
+          MENSAJE_PLANTILLA_PREDETERMINADA,
+
+          undefined,
+
+          { servicio: 'notificaciones', tipo_tab: 'dias_1_retraso' }
+        )
+
+        if (resultado?.success || resultado?.mensaje?.includes('enviado'))
+          enviados++
+      }
+
+      if (enviados === destinos.length) {
+        toast.success(
+          `Notificación de ejemplo enviada a ${destinos.length} correo(s) de pruebas.`
+        )
+      } else if (enviados > 0) {
+        toast.warning(
+          `Enviado a ${enviados} de ${destinos.length} correos de pruebas. Revisa los que fallaron.`
+        )
+      } else {
+        toast.error('No se pudo enviar a ninguno de los correos de pruebas.')
+      }
+    } catch (error: unknown) {
+      const detalle = getErrorDetail(error)
+
+      const mensaje =
+        detalle ||
+        (error as Error)?.message ||
+        'Error al enviar el correo de prueba'
+
+      toast.error(mensaje, { duration: 5000 })
+    } finally {
+      setEnviandoPruebaIndice(null)
+    }
+  }
+
+  /** Envío masivo manual: mismo flujo que las 11PM pero en este momento; si modo prueba está activo, todos los correos van al correo de pruebas. Guarda la config antes de enviar para que el backend use los toggles actuales. */
+
+  const handleEnviosMasivosPrueba = async () => {
+    if (!modoPruebas) return
+
+    const primero = (emailsPruebas[0] || '').trim()
+    if (!primero) {
+      toast.error(
+        'Indica al menos Correo pruebas 1 (destino del lote en modo prueba).'

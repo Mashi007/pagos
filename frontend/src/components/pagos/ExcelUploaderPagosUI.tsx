@@ -205,9 +205,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
   const tablaRowsVisibles = useMemo(
     () =>
       excelData.filter(
-        r =>
-          !savedRows.has(r._rowIndex) &&
-          !enviadosRevisar.has(r._rowIndex)
+        r => !savedRows.has(r._rowIndex) && !enviadosRevisar.has(r._rowIndex)
       ),
     [excelData, savedRows, enviadosRevisar]
   )
@@ -353,8 +351,8 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
 
                   <p className="mb-4 text-sm text-gray-600">
                     Columnas: Cédula | Fecha de pago | Monto | Documento | ID
-                    Préstamo (opcional) | Conciliación (Sí/No) | Moneda (USD/BS) |
-                    Tasa (opcional, Bs/USD si no hay tasa en BD). Documentos
+                    Préstamo (opcional) | Conciliación (Sí/No) | Moneda (USD/BS)
+                    | Tasa (opcional, Bs/USD si no hay tasa en BD). Documentos
                     numéricos largos se normalizan automáticamente.
                   </p>
 

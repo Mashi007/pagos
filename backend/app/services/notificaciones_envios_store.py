@@ -49,5 +49,6 @@ def coerce_modo_pruebas_notificaciones(raw) -> bool:
     if raw is True:
         return True
     if isinstance(raw, str):
-        return raw.strip().lower() in ("true", "1", "yes", "si", "sí")
+        s = raw.strip().lower()
+        return s in ("true", "1", "yes", "si", "sí", "on")
     return False

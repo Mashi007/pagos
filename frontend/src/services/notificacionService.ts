@@ -247,6 +247,20 @@ export interface NotificacionVariable {
   fecha_actualizacion?: string
 }
 
+/** Respuesta de POST /notificaciones/enviar-prueba-paquete (mismo shape que resumen de envio + meta). */
+export interface EnvioPruebaPaqueteResponse {
+  mensaje?: string
+  enviados?: number
+  fallidos?: number
+  sin_email?: number
+  omitidos_config?: number
+  omitidos_paquete_incompleto?: number
+  enviados_whatsapp?: number
+  fallidos_whatsapp?: number
+  tipo?: string
+  destinos?: string[]
+}
+
 /** Prefijo API v1; pestañas de notificaciones usan rutas propias (notificaciones-previas, etc.). */
 
 const API_V1 = '/api/v1'
@@ -715,10 +729,19 @@ class NotificacionService {
   }
 
   /**
-   * Inicia el envío de todas las notificaciones en segundo plano.
-   * El servidor responde 202 de inmediato; el envío continúa en background (evita timeout).
-   * Respeta modo_pruebas: si está activo, todos los correos van al correo de pruebas.
+   * Prueba de paquete completo: cuerpo desde plantilla vinculada + Carta PDF + PDFs fijos (mismo flujo que producción).
    */
+  async enviarPruebaPaqueteCompleta(params: {
+    tipo: string
+    destinos: string[]
+  }): Promise<EnvioPruebaPaqueteResponse> {
+    return await apiClient.post<EnvioPruebaPaqueteResponse>(
+      `${this.baseUrl}/enviar-prueba-paquete`,
+      params,
+      { timeout: 120000 }
+    )
+  }
+
   async enviarTodasNotificaciones(): Promise<{
     mensaje?: string
 
@@ -858,9 +881,10 @@ class EmailConfigService {
     emailDestino?: string,
     subject?: string,
     mensaje?: string,
-    emailCC?: string
+    emailCC?: string,
+    opts?: { servicio?: string; tipo_tab?: string }
   ): Promise<any> {
-    const params: any = {}
+    const params: Record<string, string> = {}
 
     if (emailDestino) params.email_destino = emailDestino
 
@@ -869,6 +893,10 @@ class EmailConfigService {
     if (mensaje) params.mensaje = mensaje
 
     if (emailCC) params.email_cc = emailCC
+
+    if (opts?.servicio) params.servicio = opts.servicio
+
+    if (opts?.tipo_tab) params.tipo_tab = opts.tipo_tab
 
     return await apiClient.post(`${this.baseUrl}/email/probar`, params)
   }
