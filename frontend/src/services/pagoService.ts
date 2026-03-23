@@ -29,6 +29,14 @@ export interface Pago {
 
   notas: string | null
 
+  moneda_registro?: string | null
+
+  monto_bs_original?: number | null
+
+  tasa_cambio_bs_usd?: number | null
+
+  fecha_tasa_referencia?: string | null
+
   documento_nombre: string | null
 
   documento_tipo: string | null
@@ -54,6 +62,10 @@ export interface PagoCreate {
   notas?: string | null
 
   conciliado?: boolean
+
+  moneda_registro?: 'USD' | 'BS'
+
+  tasa_cambio_manual?: number | null
 }
 
 export interface ApiResponse<T> {
@@ -481,6 +493,10 @@ class PagoService {
     fecha_pago: string // formato "DD-MM-YYYY"
 
     numero_documento: string | null
+
+    moneda_registro?: 'USD' | 'BS'
+
+    tasa_cambio_manual?: number | null
   }): Promise<{
     success: boolean
 

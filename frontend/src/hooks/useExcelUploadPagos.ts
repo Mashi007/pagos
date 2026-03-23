@@ -842,6 +842,12 @@ export function useExcelUploadPagos({
           notas: null,
 
           conciliado: !!row.conciliado,
+
+          moneda_registro: row.moneda_registro || 'USD',
+
+          ...(row.tasa_cambio_manual
+            ? { tasa_cambio_manual: row.tasa_cambio_manual }
+            : {}),
         }
 
         await pagoService.createPago(pagoData as any)
@@ -1569,6 +1575,12 @@ export function useExcelUploadPagos({
         notas: null,
 
         conciliado: !!row.conciliado,
+
+        moneda_registro: row.moneda_registro || 'USD',
+
+        ...(row.tasa_cambio_manual
+          ? { tasa_cambio_manual: row.tasa_cambio_manual }
+          : {}),
       }
     }
 
@@ -1775,6 +1787,10 @@ export function useExcelUploadPagos({
             prestamo = 4,
             conciliacion = 5
 
+          let monedaCol = -1
+
+          let tasaCol = -1
+
           let cedulaHeaderMatched = false
 
           for (let i = 0; i < Math.max(headerRow.length, 8); i++) {
@@ -1829,9 +1845,13 @@ export function useExcelUploadPagos({
               prestamo = i
 
             if (match(i, 'conciliacion', 'conciliación')) conciliacion = i
+
+            if (match(i, 'moneda', 'currency')) monedaCol = i
+
+            if (match(i, 'tasa', 'tasa_cambio', 'tc', 'bcv')) tasaCol = i
           }
 
-          return { cedula, fecha, monto, documento, prestamo, conciliacion }
+          return { cedula, fecha, monto, documento, prestamo, conciliacion, monedaCol, tasaCol }
         })()
 
         for (let i = 1; i < jsonData.length; i++) {
@@ -1918,6 +1938,24 @@ export function useExcelUploadPagos({
 
           const conciliado = conciliacionRaw === 'NO' ? false : true
 
+          let moneda_registro: 'USD' | 'BS' = 'USD'
+
+          if (cols.monedaCol >= 0) {
+            const raw = String(row[cols.monedaCol] ?? '')
+              .trim()
+              .toUpperCase()
+
+            if (raw === 'BS' || raw.includes('BOLIV')) moneda_registro = 'BS'
+          }
+
+          let tasa_cambio_manual: number | undefined
+
+          if (cols.tasaCol >= 0) {
+            const tr = parseFloat(String(row[cols.tasaCol] ?? '').replace(',', '.'))
+
+            if (Number.isFinite(tr) && tr > 0) tasa_cambio_manual = tr
+          }
+
           const numeroDocStr =
             numeroDoc && numeroDoc !== 'NaN'
               ? (
@@ -1943,6 +1981,10 @@ export function useExcelUploadPagos({
             prestamo_id: Number.isNaN(prestamoId) ? null : prestamoId,
 
             conciliado,
+
+            moneda_registro,
+
+            tasa_cambio_manual,
           }
 
           // Validaciones locales inmediatas (fecha, monto; documentos duplicados se validan despues)
@@ -2372,6 +2414,16 @@ export function useExcelUploadPagos({
           } else if (field === 'conciliado') {
             updated.conciliado =
               value === 'si' || value === 'SI' || String(value) === '1'
+          } else if (field === 'moneda_registro') {
+            const m = String(value).toUpperCase() === 'BS' ? 'BS' : 'USD'
+            ;(updated as any).moneda_registro = m
+            if (m === 'USD') {
+              delete (updated as any).tasa_cambio_manual
+            }
+          } else if (field === 'tasa_cambio_manual') {
+            const n = parseFloat(String(value).replace(',', '.'))
+            ;(updated as any).tasa_cambio_manual =
+              Number.isFinite(n) && n > 0 ? n : undefined
           } else {
             ;(updated as any)[field] =
               field === 'monto_pagado' ? Number(value) || 0 : value

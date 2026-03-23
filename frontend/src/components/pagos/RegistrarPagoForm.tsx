@@ -42,6 +42,8 @@ import { Link } from 'react-router-dom'
 
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 
+import { getTasaPorFecha } from '../../services/tasaCambioService'
+
 import {
   getErrorMessage,
   isAxiosError,
@@ -97,6 +99,22 @@ export function RegistrarPagoForm({
 
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  const [monedaRegistro, setMonedaRegistro] = useState<'USD' | 'BS'>(() =>
+    (pagoInicial as { moneda_registro?: string } | undefined)?.moneda_registro === 'BS'
+      ? 'BS'
+      : 'USD'
+  )
+
+  const [puedePagarBs, setPuedePagarBs] = useState<boolean | null>(null)
+
+  const [consultandoBs, setConsultandoBs] = useState(false)
+
+  const [tasaBd, setTasaBd] = useState<number | null>(null)
+
+  const [tasaBdLoading, setTasaBdLoading] = useState(false)
+
+  const [tasaManual, setTasaManual] = useState('')
+
   // Debounce de la cédula para buscar préstamos
 
   const debouncedCedula = useDebounce(formData.cedula_cliente, 500)
@@ -109,6 +127,70 @@ export function RegistrarPagoForm({
   // Información del préstamo seleccionado (el crédito solo puede ser uno de la lista por cédula)
 
   const { data: prestamoSeleccionado } = usePrestamo(formData.prestamo_id || 0)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const c = debouncedCedula.trim()
+
+    if (c.length < 5) {
+      setPuedePagarBs(null)
+
+      return
+    }
+
+    setConsultandoBs(true)
+
+    pagoService
+
+      .consultarCedulaReportarBs(c)
+
+      .then(res => {
+        if (cancelled) return
+
+        setPuedePagarBs(res.en_lista)
+
+        if (!res.en_lista) setMonedaRegistro('USD')
+      })
+
+      .catch(() => {
+        if (!cancelled) setPuedePagarBs(false)
+      })
+
+      .finally(() => {
+        if (!cancelled) setConsultandoBs(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedCedula])
+
+  useEffect(() => {
+    if (monedaRegistro !== 'BS') {
+      setTasaBd(null)
+
+      return
+    }
+
+    const fp = formData.fecha_pago
+
+    if (!fp) {
+      setTasaBd(null)
+
+      return
+    }
+
+    setTasaBdLoading(true)
+
+    getTasaPorFecha(fp)
+
+      .then(r => setTasaBd(r?.tasa_oficial ?? null))
+
+      .catch(() => setTasaBd(null))
+
+      .finally(() => setTasaBdLoading(false))
+  }, [formData.fecha_pago, monedaRegistro])
 
   // Auto-seleccionar préstamo si hay solo uno disponible
 
@@ -215,6 +297,15 @@ export function RegistrarPagoForm({
       }
     }
 
+    if (monedaRegistro === 'BS') {
+      const tm = parseFloat(String(tasaManual).replace(',', '.'))
+
+      if (!tasaBd && (!Number.isFinite(tm) || tm <= 0)) {
+        newErrors.general =
+          'Bolivares: no hay tasa en BD para esa fecha; ingrese tasa manual (Bs por 1 USD).'
+      }
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
 
@@ -230,6 +321,14 @@ export function RegistrarPagoForm({
         ...formData,
 
         numero_documento: numeroDocumentoNormalizado,
+
+        moneda_registro: monedaRegistro,
+      }
+
+      if (monedaRegistro === 'BS' && !tasaBd) {
+        const tm = parseFloat(String(tasaManual).replace(',', '.'))
+
+        if (Number.isFinite(tm) && tm > 0) datosEnvio.tasa_cambio_manual = tm
       }
 
       // Siempre conciliar cuando hay crédito asignado: así el backend aplica el pago a cuotas
@@ -535,6 +634,38 @@ export function RegistrarPagoForm({
               </div>
             </div>
 
+            {puedePagarBs === true && (
+              <div className="space-y-2 rounded border border-slate-200 bg-slate-50/80 p-3">
+                <label className="text-sm font-medium text-gray-700">
+                  Moneda del pago <span className="text-red-500">*</span>
+                </label>
+
+                <Select
+                  value={monedaRegistro}
+                  onValueChange={v => setMonedaRegistro(v as 'USD' | 'BS')}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Moneda" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="USD">Dolares (USD)</SelectItem>
+
+                    <SelectItem value="BS">Bolivares (Bs.)</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <p className="text-xs text-gray-600">
+                  La opcion en bolivares solo esta disponible para cedulas autorizadas en la lista
+                  de pagos en bolivares.
+                </p>
+              </div>
+            )}
+
+            {consultandoBs && (
+              <p className="text-xs text-blue-600">Consultando autorizacion bolivares...</p>
+            )}
+
             {/* Fecha y Monto */}
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -568,7 +699,8 @@ export function RegistrarPagoForm({
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
-                  Monto Pagado <span className="text-red-500">*</span>
+                  {monedaRegistro === 'BS' ? 'Monto (Bs.)' : 'Monto pagado (USD)'}{' '}
+                  <span className="text-red-500">*</span>
                 </label>
 
                 <div className="relative">
@@ -595,6 +727,32 @@ export function RegistrarPagoForm({
 
                     {errors.monto_pagado}
                   </p>
+                )}
+
+                {monedaRegistro === 'BS' && (
+                  <div className="mt-2 space-y-2 rounded border border-amber-100 bg-amber-50/80 p-2 text-xs text-amber-950">
+                    <p>
+                      {tasaBdLoading
+                        ? 'Consultando tasa en BD para la fecha de pago...'
+                        : tasaBd
+                          ? `Tasa oficial en BD para esta fecha: ${tasaBd} Bs. por 1 USD.`
+                          : 'No hay tasa en BD para esa fecha. Ingrese tasa manual (Bs por 1 USD).'}
+                    </p>
+
+                    {!tasaBd && !tasaBdLoading && (
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
+                        <label className="font-medium">Tasa manual (Bs/USD)</label>
+
+                        <Input
+                          type="number"
+                          step="0.000001"
+                          value={tasaManual}
+                          onChange={e => setTasaManual(e.target.value)}
+                          className="max-w-xs"
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Información sobre cómo se aplicará el pago */}

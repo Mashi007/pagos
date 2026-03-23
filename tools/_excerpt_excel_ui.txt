@@ -1,0 +1,670 @@
+381|                      </span>
+382|                    </div>
+383|                  )}
+384|                </div>
+385|              </CardContent>
+386|            </Card>
+387|          ) : null}
+388|
+389|          {/* RESUMEN FINAL: excelData vacío pero filas ya procesadas */}
+390|
+391|          {excelData.length === 0 &&
+392|            (enviadosRevisar.size > 0 || savedRows.size > 0) && (
+393|              <Card className="border-green-300 bg-green-50">
+394|                <CardContent className="space-y-4 pb-8 pt-8 text-center">
+395|                  <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
+396|
+397|                  <h3 className="text-xl font-bold text-green-800">
+398|                    ¡Procesamiento completado!
+399|                  </h3>
+400|
+401|                  <div className="mt-2 flex flex-wrap justify-center gap-4 text-sm text-gray-700">
+402|                    <span className="rounded-full border border-gray-200 bg-white/80 px-4 py-2">
+403|                      Filas cargadas:{' '}
+404|                      <strong>{savedRows.size + enviadosRevisar.size}</strong>
+405|                    </span>
+406|
+407|                    <span className="rounded-full bg-green-100 px-4 py-2 font-semibold text-green-800">
+408|                      ✓ Guardadas: {savedRows.size}
+409|                    </span>
+410|
+411|                    <span className="rounded-full bg-amber-100 px-4 py-2 font-semibold text-amber-800">
+412|                      ⚠ En Revisar Pagos: {enviadosRevisar.size}
+413|                    </span>
+414|                  </div>
+415|
+416|                  <div className="flex justify-center gap-3 pt-2">
+417|                    <Button
+418|                      variant="outline"
+419|                      onClick={() => {
+420|                        navigate('/pagos?revisar=1')
+421|                        onClose()
+422|                      }}
+423|                      className="border-amber-300 bg-amber-50 text-amber-800"
+424|                    >
+425|                      <Search className="mr-2 h-4 w-4" />
+426|                      Ver Revisar Pagos
+427|                    </Button>
+428|
+429|                    <Button
+430|                      variant="outline"
+431|                      onClick={onClose}
+432|                      className="border-gray-300"
+433|                    >
+434|                      <X className="mr-2 h-4 w-4" />
+435|                      Cerrar
+436|                    </Button>
+437|                  </div>
+438|                </CardContent>
+439|              </Card>
+440|            )}
+441|
+442|          {/* TABLA EDITABLE: solo filas pendientes (guardadas/enviadas a revisar se ocultan en cuanto se guardan) */}
+443|
+444|          {excelData.length > 0 && (
+445|            <div className="space-y-4">
+446|              <TablaEditablePagos
+447|                rows={excelData.filter(
+448|                  r =>
+449|                    !savedRows.has(r._rowIndex) &&
+450|                    !enviadosRevisar.has(r._rowIndex)
+451|                )}
+452|                prestamosPorCedula={prestamosPorCedula}
+453|                onUpdateCell={updateCellValue}
+454|                saveRowIfValid={saveRowIfValid}
+455|                savingProgress={savingProgress}
+456|                serviceStatus={serviceStatus}
+457|                onSendToRevisarPagos={
+458|                  sendToRevisarPagos
+459|                    ? row =>
+460|                        sendToRevisarPagos(row, () =>
+461|                          navigate('/pagos?revisar=1')
+462|                        )
+463|                    : undefined
+464|                }
+465|                isSendingRevisar={isSendingAllRevisar}
+466|              />
+467|              {batchProgress && (
+468|                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+469|                  <div className="mb-1 flex items-center justify-between text-sm font-medium text-blue-800">
+470|                    <span>Enviando a Revisar Pagos...</span>
+471|
+472|                    <span>
+473|                      {batchProgress.sent} / {batchProgress.total}
+474|                    </span>
+475|                  </div>
+476|
+477|                  <div className="h-2 w-full rounded-full bg-blue-200">
+478|                    <div
+479|                      className="h-2 rounded-full bg-blue-600 transition-all duration-200"
+480|                      style={{
+481|                        width: `${Math.round((batchProgress.sent / batchProgress.total) * 100)}%`,
+482|                      }}
+483|                    />
+484|                  </div>
+485|                </div>
+486|              )}
+487|              <Card className="border-green-200 bg-green-50">
+488|                <CardContent className="pt-4">
+489|                  <div className="flex flex-wrap items-center justify-between gap-4">
+490|                    <div className="flex flex-wrap items-center gap-2">
+491|                      <Badge variant="outline" className="font-medium">
+492|                        Filas cargadas: {totalCargadas}
+493|                      </Badge>
+494|
+495|                      <Badge
+496|                        variant="outline"
+497|                        className="border-green-400 text-green-700"
+498|                      >
+499|                        Válidas: {validCount}
+500|                      </Badge>
+501|
+502|                      <Badge
+503|                        variant="outline"
+504|                        className={
+505|                          invalidCount > 0 ? 'border-red-400 text-red-700' : ''
+506|                        }
+507|                      >
+508|                        Inválidas: {invalidCount}
+509|                      </Badge>
+510|
+511|                      <Badge variant="outline">
+512|                        Guardadas: {savedRows.size}
+513|                      </Badge>
+514|
+515|                      {duplicadosPendientesRevisar.size > 0 && (
+516|                        <Badge
+517|                          variant="outline"
+518|                          className="border-amber-300 text-amber-700"
+519|                        >
+520|                          Duplicados: {duplicadosPendientesRevisar.size}
+521|                        </Badge>
+522|                      )}
+523|
+524|                      {duplicadosPendientesRevisar.size > 0 && (
+525|                        <Button
+526|                          variant="outline"
+527|                          size="sm"
+528|                          onClick={() => sendDuplicadosToRevisarPagos()}
+529|                          disabled={
+530|                            isSendingAllRevisar || serviceStatus === 'offline'
+531|                          }
+532|                          className="border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200"
+533|                          title="Enviar solo duplicados a Revisar Pagos (observaciones)"
+534|                        >
+535|                          {isSendingAllRevisar ? (
+536|                            <>
+537|                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+538|                              Enviando...
+539|                            </>
+540|                          ) : (
+541|                            <>
+542|                              <Search className="mr-2 h-4 w-4" />
+543|                              ENVIAR DUPLICADOS (
+544|                              {duplicadosPendientesRevisar.size})
+545|                            </>
+546|                          )}
+547|                        </Button>
+548|                      )}
+549|
+550|                      <Button
+551|                        variant="outline"
+552|                        size="sm"
+553|                        onClick={() => {
+554|                          addToast(
+555|                            'warning',
+556|                            'Se borrará todo y se cargará otro archivo.'
+557|                          )
+558|
+559|                          clearAndShowFileSelect()
+560|                        }}
+561|                      >
+562|                        <X className="mr-2 h-4 w-4" />
+563|                        Cambiar archivo
+564|                      </Button>
+565|
+566|                      <Button
+567|                        variant="outline"
+568|                        size="sm"
+569|                        onClick={() => {
+570|                          navigate('/pagos')
+571|                          onClose()
+572|                        }}
+573|                        className="border-green-300 bg-green-50"
+574|                      >
+575|                        <Eye className="mr-2 h-4 w-4" />
+576|                        Ir a Pagos
+577|                      </Button>
+578|
+579|                      {getRowsToRevisarPagos().length > 0 && (
+580|                        <Button
+581|                          variant="outline"
+582|                          size="sm"
+583|                          onClick={() => sendAllToRevisarPagos()}
+584|                          disabled={
+585|                            isSendingAllRevisar || serviceStatus === 'offline'
+586|                          }
+587|                          className="border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200"
+588|                          title="Enviar TODAS las pendientes a Revisar Pagos: inválidas + duplicados + sin crédito / varios créditos sin elegir"
+589|                        >
+590|                          {isSendingAllRevisar ? (
+591|                            <>
+592|                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+593|                              Enviando...
+594|                            </>
+595|                          ) : (
+596|                            <>
+597|                              <Search className="mr-2 h-4 w-4" />
+598|                              Enviar todas → Revisar Pagos (
+599|                              {getRowsToRevisarPagos().length})
+600|                            </>
+601|                          )}
+602|                        </Button>
+603|                      )}
+604|                    </div>
+605|
+606|                    <Button
+607|                      onClick={saveAllValid}
+608|                      disabled={
+609|                        validCount === 0 ||
+610|                        isSavingIndividual ||
+611|                        serviceStatus === 'offline'
+612|                      }
+613|                      className="bg-green-600 hover:bg-green-700"
+614|                    >
+615|                      {isSavingIndividual ? (
+616|                        <>
+617|                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+618|                          Guardando...
+619|                        </>
+620|                      ) : (
+621|                        <>
+622|                          <Save className="mr-2 h-4 w-4" />
+623|                          Guardar Todos ({validCount})
+624|                        </>
+625|                      )}
+626|                    </Button>
+627|                  </div>
+628|                </CardContent>
+629|              </Card>
+630|              {/* ANTERIOR - TABLA HTML REMOVIDA */}
+631|              {false && (
+632|                <>
+633|                  <Card>
+634|                    <CardHeader>
+635|                      <CardTitle className="flex items-center">
+636|                        <Eye className="mr-2 h-5 w-5" />
+637|                        Previsualización
+638|                      </CardTitle>
+639|                    </CardHeader>
+640|
+641|                    <CardContent>
+642|                      <div className="overflow-x-auto">
+643|                        <table className="w-full min-w-[980px] border-collapse">
+644|                          <thead>
+645|                            <tr className="bg-gray-50">
+646|                              <th className="w-12 border p-2 text-left text-xs font-medium">
+647|                                Fila
+648|                              </th>
+649|
+650|                              <th className="w-24 border p-2 text-left text-xs font-medium">
+651|                                Cédula
+652|                              </th>
+653|
+654|                              <th className="w-24 border p-2 text-left text-xs font-medium">
+655|                                Fecha pago
+656|                              </th>
+657|
+658|                              <th className="w-24 border p-2 text-left text-xs font-medium">
+659|                                Monto
+660|                              </th>
+661|
+662|                              <th className="w-28 border p-2 text-left text-xs font-medium">
+663|                                Documento
+664|                              </th>
+665|
+666|                              <th className="w-32 border p-2 text-left text-xs font-medium">
+667|                                Crédito
+668|                              </th>
+669|
+670|                              <th className="w-24 border p-2 text-left text-xs font-medium">
+671|                                Conciliación
+672|                              </th>
+673|
+674|                              <th className="w-20 border p-2 text-left text-xs font-medium">
+675|                                Acción
+676|                              </th>
+677|                            </tr>
+678|                          </thead>
+679|
+680|                          <tbody>
+681|                            {excelData
+682|
+683|                              .filter(
+684|                                row =>
+685|                                  !enviadosRevisar.has(row._rowIndex) &&
+686|                                  !savedRows.has(row._rowIndex)
+687|                              )
+688|
+689|                              .map(row => {
+690|                                const cedulaLookup = cedulaLookupParaFila(
+691|                                  row.cedula || '',
+692|                                  row.numero_documento || ''
+693|                                )
+694|
+695|                                const cedulaColNorm =
+696|                                  cedulaParaLookup(row.cedula) ||
+697|                                  (row.cedula || '').trim().replace(/-/g, '')
+698|
+699|                                const cedulaSinGuion = cedulaLookup.replace(
+700|                                  /-/g,
+701|                                  ''
+702|                                )
+703|
+704|                                let prestamosActivos =
+705|                                  prestamosPorCedula[cedulaLookup] ||
+706|                                  prestamosPorCedula[cedulaSinGuion] ||
+707|                                  prestamosPorCedula[
+708|                                    cedulaLookup.toUpperCase()
+709|                                  ] ||
+710|                                  prestamosPorCedula[
+711|                                    cedulaLookup.toLowerCase()
+712|                                  ] ||
+713|                                  []
+714|
+715|                                if (
+716|                                  prestamosActivos.length === 0 &&
+717|                                  cedulaColNorm
+718|                                )
+719|                                  prestamosActivos =
+720|                                    prestamosPorCedula[cedulaColNorm] ||
+721|                                    prestamosPorCedula[
+722|                                      cedulaColNorm.toUpperCase()
+723|                                    ] ||
+724|                                    prestamosPorCedula[
+725|                                      cedulaColNorm.toLowerCase()
+726|                                    ] ||
+727|                                    []
+728|
+729|                                if (prestamosActivos.length === 0) {
+730|                                  const keysMap =
+731|                                    Object.keys(prestamosPorCedula)
+732|
+733|                                  if (keysMap.length === 1)
+734|                                    prestamosActivos =
+735|                                      prestamosPorCedula[keysMap[0]] || []
+736|                                }
+737|
+738|                                const tieneCreditos =
+739|                                  prestamosActivos.length >= 1
+740|
+741|                                // Normalizar prestamo_id: acepta numérico o formato VE-96179604, VE/96179604, etc.
+742|
+743|                                const rawId = row.prestamo_id
+744|
+745|                                const idNormalizado =
+746|                                  rawId != null &&
+747|                                  rawId !== 0 &&
+748|                                  String(rawId) !== 'none'
+749|                                    ? typeof rawId === 'number'
+750|                                      ? rawId
+751|                                      : parsePrestamoIdFromNumeroCredito(rawId)
+752|                                    : null
+753|
+754|                                const prestamoIdElegido =
+755|                                  idNormalizado != null
+756|                                    ? String(idNormalizado)
+757|                                    : null
+758|
+759|                                const esValidoEnLista =
+760|                                  prestamoIdElegido != null &&
+761|                                  prestamosActivos.some(
+762|                                    p => p.id === idNormalizado
+763|                                  )
+764|
+765|                                const valorCredito = esValidoEnLista
+766|                                  ? prestamoIdElegido
+767|                                  : prestamosActivos.length === 1
+768|                                    ? String(prestamosActivos[0].id)
+769|                                    : 'none'
+770|
+771|                                return (
+772|                                  <tr
+773|                                    key={row._rowIndex}
+774|                                    className={
+775|                                      row._hasErrors
+776|                                        ? 'bg-red-50'
+777|                                        : 'bg-green-50'
+778|                                    }
+779|                                  >
+780|                                    <td className="border p-2 text-xs">
+781|                                      {row._rowIndex}
+782|                                    </td>
+783|
+784|                                    <td className="border p-2">
+785|                                      <input
+786|                                        type="text"
+787|                                        value={row.cedula}
+788|                                        onChange={e =>
+789|                                          updateCellValue(
+790|                                            row,
+791|                                            'cedula',
+792|                                            e.target.value
+793|                                          )
+794|                                        }
+795|                                        onBlur={() => {
+796|                                          const c =
+797|                                            cedulaLookupParaFila(
+798|                                              row.cedula || '',
+799|                                              row.numero_documento || ''
+800|                                            ) || (row.cedula || '').trim()
+801|
+802|                                          if (c.length >= 5)
+803|                                            fetchSingleCedula(c)
+804|                                        }}
+805|                                        placeholder="Ej: V22546175"
+806|                                        className={inputClass(
+807|                                          row._validation.cedula?.isValid ??
+808|                                            true
+809|                                        )}
+810|                                      />
+811|
+812|                                      {row._validation.cedula?.isValid ===
+813|                                        false && (
+814|                                        <p className="mt-0.5 text-xs text-amber-700">
+815|                                          {OBSERVACIONES_POR_CAMPO.cedula ??
+816|                                            'No cliente'}
+817|                                        </p>
+818|                                      )}
+819|                                    </td>
+820|
+821|                                    <td className="border p-2">
+822|                                      <input
+823|                                        type="text"
+824|                                        value={row.fecha_pago}
+825|                                        onChange={e =>
+826|                                          updateCellValue(
+827|                                            row,
+828|                                            'fecha_pago',
+829|                                            e.target.value
+830|                                          )
+831|                                        }
+832|                                        onBlur={() => {
+833|                                          const c =
+834|                                            cedulaLookupParaFila(
+835|                                              row.cedula || '',
+836|                                              row.numero_documento || ''
+837|                                            ) || (row.cedula || '').trim()
+838|
+839|                                          if (c.length >= 5)
+840|                                            fetchSingleCedula(c)
+841|                                        }}
+842|                                        placeholder="DD/MM/YYYY"
+843|                                        className={inputClass(
+844|                                          row._validation.fecha_pago?.isValid ??
+845|                                            true
+846|                                        )}
+847|                                      />
+848|
+849|                                      {row._validation.fecha_pago?.isValid ===
+850|                                        false && (
+851|                                        <p className="mt-0.5 text-xs text-amber-700">
+852|                                          {OBSERVACIONES_POR_CAMPO.fecha_pago ??
+853|                                            'No Fecha'}
+854|                                        </p>
+855|                                      )}
+856|                                    </td>
+857|
+858|                                    <td className="border p-2">
+859|                                      <input
+860|                                        type="number"
+861|                                        value={row.monto_pagado || ''}
+862|                                        onChange={e =>
+863|                                          updateCellValue(
+864|                                            row,
+865|                                            'monto_pagado',
+866|                                            e.target.value
+867|                                          )
+868|                                        }
+869|                                        className={inputClass(
+870|                                          row._validation.monto_pagado
+871|                                            ?.isValid ?? true
+872|                                        )}
+873|                                      />
+874|
+875|                                      {row._validation.monto_pagado?.isValid ===
+876|                                        false && (
+877|                                        <p className="mt-0.5 text-xs text-amber-700">
+878|                                          {OBSERVACIONES_POR_CAMPO.monto_pagado ??
+879|                                            'Monto inválido'}
+880|                                        </p>
+881|                                      )}
+882|                                    </td>
+883|
+884|                                    <td className="border p-2">
+885|                                      <input
+886|                                        type="text"
+887|                                        value={row.numero_documento}
+888|                                        onChange={e =>
+889|                                          updateCellValue(
+890|                                            row,
+891|                                            'numero_documento',
+892|                                            e.target.value
+893|                                          )
+894|                                        }
+895|                                        className={inputClass(
+896|                                          row._validation.numero_documento
+897|                                            ?.isValid !== false
+898|                                        )}
+899|                                        placeholder="Cualquier formato (ej. 740087…, BS./REF, con € $)"
+900|                                        title="Cualquier formato aceptado. Solo no duplicados."
+901|                                      />
+902|
+903|                                      {row._validation.numero_documento
+904|                                        ?.isValid === false && (
+905|                                        <p className="mt-0.5 text-xs text-amber-700">
+906|                                          {OBSERVACIONES_POR_CAMPO.numero_documento ??
+907|                                            'Duplicado Excel'}
+908|                                        </p>
+909|                                      )}
+910|                                    </td>
+911|
+912|                                    <td className="border p-2">
+913|                                      {tieneCreditos ? (
+914|                                        <>
+915|                                          <Select
+916|                                            key={`credito-${row._rowIndex}-${prestamosActivos.length}-${row.prestamo_id ?? 'n'}`}
+917|                                            value={valorCredito}
+918|                                            onValueChange={v =>
+919|                                              updateCellValue(
+920|                                                row,
+921|                                                'prestamo_id',
+922|                                                v
+923|                                              )
+924|                                            }
+925|                                          >
+926|                                            <SelectTrigger className="h-8 text-xs">
+927|                                              <SelectValue placeholder="Seleccionar crédito" />
+928|                                            </SelectTrigger>
+929|
+930|                                            <SelectContent>
+931|                                              <SelectItem value="none">
+932|                                                - Seleccionar -
+933|                                              </SelectItem>
+934|
+935|                                              {prestamosActivos.map(p => (
+936|                                                <SelectItem
+937|                                                  key={p.id}
+938|                                                  value={String(p.id)}
+939|                                                >
+940|                                                  Crédito #{p.id}
+941|                                                </SelectItem>
+942|                                              ))}
+943|                                            </SelectContent>
+944|                                          </Select>
+945|
+946|                                          {prestamosActivos.length > 1 &&
+947|                                            valorCredito === 'none' && (
+948|                                              <p className="mt-0.5 text-xs text-amber-700">
+949|                                                {OBSERVACIONES_POR_CAMPO.prestamo_id ??
+950|                                                  'Crédito inválido'}
+951|                                              </p>
+952|                                            )}
+953|                                        </>
+954|                                      ) : (
+955|                                        <div className="flex flex-col gap-0.5">
+956|                                          <div className="flex items-center gap-1">
+957|                                            {cedulaLookup &&
+958|                                            cedulasBuscando.has(
+959|                                              cedulaLookup
+960|                                            ) ? (
+961|                                              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+962|                                            ) : cedulaLookup &&
+963|                                              cedulaLookup.length >= 5 ? (
+964|                                              <Button
+965|                                                type="button"
+966|                                                variant="outline"
+967|                                                size="sm"
+968|                                                className="h-7 px-2 text-xs"
+969|                                                onClick={() =>
+970|                                                  fetchSingleCedula(
+971|                                                    cedulaLookup
+972|                                                  )
+973|                                                }
+974|                                                disabled={
+975|                                                  serviceStatus === 'offline'
+976|                                                }
+977|                                              >
+978|                                                <Search className="mr-1 h-3 w-3" />
+979|                                                Buscar
+980|                                              </Button>
+981|                                            ) : null}
+982|
+983|                                            {(!cedulaLookup ||
+984|                                              cedulaLookup.length < 5) && (
+985|                                              <span className="text-xs text-gray-400">
+986|                                                -
+987|                                              </span>
+988|                                            )}
+989|                                          </div>
+990|
+991|                                          {cedulaLookup &&
+992|                                            cedulaLookup.length >= 5 &&
+993|                                            !tieneCreditos && (
+994|                                              <p className="mt-0.5 text-xs text-amber-700">
+995|                                                {OBSERVACIONES_POR_CAMPO.prestamo_id ??
+996|                                                  'Crédito inválido'}
+997|                                              </p>
+998|                                            )}
+999|                                        </div>
+1000|                                      )}
+1001|                                    </td>
+1002|
+1003|                                    <td className="border p-2">
+1004|                                      <Select
+1005|                                        value={row.conciliado ? 'si' : 'no'}
+1006|                                        onValueChange={v =>
+1007|                                          updateCellValue(row, 'conciliado', v)
+1008|                                        }
+1009|                                      >
+1010|                                        <SelectTrigger className="h-8 text-xs">
+1011|                                          <SelectValue />
+1012|                                        </SelectTrigger>
+1013|
+1014|                                        <SelectContent>
+1015|                                          <SelectItem value="no">No</SelectItem>
+1016|
+1017|                                          <SelectItem value="si">Sí</SelectItem>
+1018|                                        </SelectContent>
+1019|                                      </Select>
+1020|
+1021|                                      {row._validation.conciliado?.isValid ===
+1022|                                        false && (
+1023|                                        <p className="mt-0.5 text-xs text-amber-700">
+1024|                                          {OBSERVACIONES_POR_CAMPO.conciliado ??
+1025|                                            'Conciliación inválida'}
+1026|                                        </p>
+1027|                                      )}
+1028|                                    </td>
+1029|
+1030|                                    <td className="border p-2">
+1031|                                      {savedRows.has(row._rowIndex) ? (
+1032|                                        <div className="flex items-center text-sm text-green-600">
+1033|                                          <CheckCircle className="mr-1 h-4 w-4" />
+1034|                                          Guardado
+1035|                                        </div>
+1036|                                      ) : duplicadosPendientesRevisar.has(
+1037|                                          row._rowIndex
+1038|                                        ) ? (
+1039|                                        <div className="flex flex-col gap-1">
+1040|                                          <span className="flex items-center text-xs text-amber-700">
+1041|                                            <AlertTriangle className="mr-1 h-4 w-4" />
+1042|                                            Documento duplicado
+1043|                                          </span>
+1044|
+1045|                                          <Button
+1046|                                            size="sm"
+1047|                                            variant="outline"
+1048|                                            onClick={() =>
+1049|                                              sendToRevisarPagos(row, () =>
+1050|                                                navigate('/pagos?revisar=1')

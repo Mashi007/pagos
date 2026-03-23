@@ -1,0 +1,140 @@
+-- Reparacion en CASCADA — prestamo_id = 1278 (PostgreSQL).
+-- Misma logica que POST /api/v1/prestamos/1278/reaplicar-cascada-aplicacion
+--
+-- Ejecutar el archivo COMPLETO en DBeaver (Ctrl+Enter sobre todo el script o Execute script).
+-- Si usas auto-commit OFF: al final debe ejecutarse COMMIT.
+
+BEGIN;
+
+DO $$
+DECLARE
+  v_prestamo_id integer := 1278;
+  v_cuotas integer;
+BEGIN
+  SELECT COUNT(*) INTO v_cuotas FROM cuotas WHERE prestamo_id = v_prestamo_id;
+  IF v_cuotas = 0 THEN
+    RAISE EXCEPTION 'Prestamo % no tiene cuotas, abortando', v_prestamo_id;
+  END IF;
+END $$;
+
+DELETE FROM cuota_pagos cp
+USING cuotas c
+WHERE cp.cuota_id = c.id
+  AND c.prestamo_id = 1278;
+
+UPDATE cuotas
+SET
+  total_pagado = 0,
+  fecha_pago = NULL,
+  pago_id = NULL,
+  dias_mora = NULL
+WHERE prestamo_id = 1278;
+
+DO $$
+DECLARE
+  v_prestamo_id integer := 1278;
+
+  r_pago record;
+  r_cuota record;
+
+  v_monto_restante numeric(14, 2);
+  v_monto_necesario numeric(14, 2);
+  v_aplicar numeric(14, 2);
+  v_nuevo_total numeric(14, 2);
+  v_orden integer;
+BEGIN
+  FOR r_pago IN
+    SELECT
+      p.id,
+      p.fecha_pago::date AS fecha_pago,
+      COALESCE(p.monto_pagado, 0)::numeric(14, 2) AS monto_pagado
+    FROM pagos p
+    WHERE p.prestamo_id = v_prestamo_id
+      AND COALESCE(p.monto_pagado, 0) > 0
+      AND (
+        p.conciliado = TRUE
+        OR UPPER(TRIM(COALESCE(p.verificado_concordancia, ''))) = 'SI'
+      )
+    ORDER BY p.fecha_pago NULLS LAST, p.id
+  LOOP
+    v_monto_restante := r_pago.monto_pagado;
+    v_orden := 0;
+
+    FOR r_cuota IN
+      SELECT
+        c.id,
+        c.numero_cuota,
+        COALESCE(c.monto_cuota, 0)::numeric(14, 2) AS monto_cuota,
+        COALESCE(c.total_pagado, 0)::numeric(14, 2) AS total_pagado
+      FROM cuotas c
+      WHERE c.prestamo_id = v_prestamo_id
+        AND COALESCE(c.total_pagado, 0) < COALESCE(c.monto_cuota, 0) - 0.01
+      ORDER BY c.numero_cuota
+      FOR UPDATE
+    LOOP
+      EXIT WHEN v_monto_restante <= 0;
+
+      v_monto_necesario := GREATEST(0, r_cuota.monto_cuota - r_cuota.total_pagado);
+      CONTINUE WHEN v_monto_necesario <= 0;
+
+      v_aplicar := LEAST(v_monto_restante, v_monto_necesario);
+      CONTINUE WHEN v_aplicar <= 0;
+
+      UPDATE cuotas c
+      SET
+        total_pagado = ROUND(COALESCE(c.total_pagado, 0) + v_aplicar, 2),
+        pago_id = r_pago.id,
+        fecha_pago = CASE
+          WHEN ROUND(COALESCE(c.total_pagado, 0) + v_aplicar, 2) >= COALESCE(c.monto_cuota, 0) - 0.01
+          THEN r_pago.fecha_pago
+          ELSE c.fecha_pago
+        END
+      WHERE c.id = r_cuota.id
+      RETURNING COALESCE(total_pagado, 0)::numeric(14, 2)
+      INTO v_nuevo_total;
+
+      INSERT INTO cuota_pagos (
+        cuota_id,
+        pago_id,
+        monto_aplicado,
+        fecha_aplicacion,
+        orden_aplicacion,
+        es_pago_completo
+      )
+      VALUES (
+        r_cuota.id,
+        r_pago.id,
+        ROUND(v_aplicar, 2),
+        NOW(),
+        v_orden,
+        (v_nuevo_total >= r_cuota.monto_cuota - 0.01)
+      );
+
+      v_monto_restante := ROUND(v_monto_restante - v_aplicar, 2);
+      v_orden := v_orden + 1;
+    END LOOP;
+  END LOOP;
+END $$;
+
+UPDATE cuotas c
+SET estado = CASE
+  WHEN COALESCE(c.monto_cuota, 0) > 0
+       AND COALESCE(c.total_pagado, 0) >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
+    CASE
+      WHEN c.fecha_vencimiento::date > CURRENT_DATE THEN 'PAGO_ADELANTADO'
+      ELSE 'PAGADO'
+    END
+  WHEN GREATEST(0, (CURRENT_DATE - c.fecha_vencimiento::date)) = 0 THEN
+    CASE
+      WHEN COALESCE(c.total_pagado, 0) > 0.001 THEN 'PARCIAL'
+      ELSE 'PENDIENTE'
+    END
+  WHEN GREATEST(0, (CURRENT_DATE - c.fecha_vencimiento::date)) >= 92 THEN 'MORA'
+  ELSE 'VENCIDO'
+END
+WHERE c.prestamo_id = 1278;
+
+COMMIT;
+
+-- Verificacion:
+-- SELECT numero_cuota, monto_cuota, total_pagado, estado FROM cuotas WHERE prestamo_id = 1278 ORDER BY numero_cuota;

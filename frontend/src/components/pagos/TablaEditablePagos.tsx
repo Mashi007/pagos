@@ -30,7 +30,14 @@ import { Save, Loader2, Search } from 'lucide-react'
 
 import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
 
-import { cedulaLookupParaFila } from '../../utils/pagoExcelValidation'
+import {
+  cedulaLookupParaFila,
+  convertirFechaParaBackendPago,
+} from '../../utils/pagoExcelValidation'
+
+import { pagoService } from '../../services/pagoService'
+
+import { getTasaPorFecha } from '../../services/tasaCambioService'
 
 import {
   Select,
@@ -114,6 +121,14 @@ function CeldaEditable({
       )}
     </div>
   )
+}
+
+
+function normMoneda(v: unknown): 'USD' | 'BS' {
+  const s = String(v ?? 'USD')
+    .trim()
+    .toUpperCase()
+  return s === 'BS' ? 'BS' : 'USD'
 }
 
 function prestamoIdVacio(v: unknown): boolean {
@@ -264,6 +279,78 @@ export function TablaEditablePagos({
 
   const [localSaving, setLocalSaving] = useState<Set<number>>(new Set())
 
+  const [autorizadoBsPorCedula, setAutorizadoBsPorCedula] = useState<
+    Record<string, boolean | null>
+  >({})
+
+  const [tasaBdPorFila, setTasaBdPorFila] = useState<
+    Record<number, number | null | undefined>
+  >({})
+
+  useEffect(() => {
+    let cancelled = false
+    const lookups = new Set<string>()
+    for (const row of rows) {
+      const lk = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
+        .trim()
+        .replace(/-/g, '')
+        .toUpperCase()
+      if (lk.length >= 5) lookups.add(lk)
+    }
+    ;(async () => {
+      for (const lk of lookups) {
+        if (cancelled) return
+        try {
+          const res = await pagoService.consultarCedulaReportarBs(lk)
+          if (cancelled) return
+          setAutorizadoBsPorCedula(prev => ({ ...prev, [lk]: res.en_lista }))
+        } catch {
+          if (cancelled) return
+          setAutorizadoBsPorCedula(prev => ({ ...prev, [lk]: false }))
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [rows])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      for (const row of rows) {
+        if (normMoneda(row.moneda_registro) !== 'BS') {
+          setTasaBdPorFila(prev => {
+            const next = { ...prev }
+            delete next[row._rowIndex]
+            return next
+          })
+          continue
+        }
+        const iso = convertirFechaParaBackendPago(row.fecha_pago || '')
+        if (!iso) {
+          setTasaBdPorFila(prev => ({ ...prev, [row._rowIndex]: null }))
+          continue
+        }
+        setTasaBdPorFila(prev => ({ ...prev, [row._rowIndex]: undefined }))
+        try {
+          const t = await getTasaPorFecha(iso)
+          if (cancelled) return
+          setTasaBdPorFila(prev => ({
+            ...prev,
+            [row._rowIndex]: t?.tasa_oficial ?? null,
+          }))
+        } catch {
+          if (cancelled) return
+          setTasaBdPorFila(prev => ({ ...prev, [row._rowIndex]: null }))
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [rows])
+
   const isSaving = (rowIndex: number) =>
     !!savingProgress[rowIndex] || localSaving.has(rowIndex)
 
@@ -357,6 +444,13 @@ export function TablaEditablePagos({
           &quot;Sin crédito&quot; aplica cuando el cliente está registrado pero
           no tiene créditos activos (si no hay cliente, la cédula marca error).
         </p>
+
+        <p className="mt-1 text-xs text-blue-700">
+          <strong>Moneda / tasa:</strong> USD por defecto. Bolívares (Bs) solo si la
+          cédula está en la lista autorizada. La tasa se toma de la BD por fecha de
+          pago; si no existe, ingrese la tasa manual (Bs por 1 USD) en la columna
+          correspondiente.
+        </p>
       </div>
 
       {/* Tabla */}
@@ -377,6 +471,14 @@ export function TablaEditablePagos({
 
               <th className="min-w-[120px] border-r p-2 text-left font-semibold">
                 Monto
+              </th>
+
+              <th className="min-w-[100px] border-r p-2 text-left font-semibold">
+                Moneda
+              </th>
+
+              <th className="min-w-[120px] border-r p-2 text-left font-semibold">
+                Tasa (Bs/USD)
               </th>
 
               <th className="min-w-[160px] border-r p-2 text-left font-semibold">
@@ -444,6 +546,79 @@ export function TablaEditablePagos({
                   />
                 </td>
 
+                {/* Moneda */}
+
+                <td className="border-r p-2">
+                  {(() => {
+                    const lk = cedulaLookupParaFila(
+                      row.cedula || '',
+                      row.numero_documento || ''
+                    )
+                      .trim()
+                      .replace(/-/g, '')
+                      .toUpperCase()
+                    const enAuth = lk.length >= 5 ? autorizadoBsPorCedula[lk] : null
+                    const puedeBs = enAuth === true
+                    const m = normMoneda(row.moneda_registro)
+                    return (
+                      <Select
+                        value={m}
+                        onValueChange={v => onUpdateCell(row, 'moneda_registro', v)}
+                        disabled={enAuth === null}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="USD">USD</SelectItem>
+                          <SelectItem value="BS" disabled={!puedeBs}>
+                            Bs
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )
+                  })()}
+                </td>
+
+                {/* Tasa manual si BS y no hay en BD */}
+
+                <td className="border-r p-2">
+                  {(() => {
+                    const m = normMoneda(row.moneda_registro)
+                    if (m !== 'BS') {
+                      return <span className="text-xs text-gray-400">-</span>
+                    }
+                    const tb = tasaBdPorFila[row._rowIndex]
+                    if (tb === undefined) {
+                      return (
+                        <span className="text-xs text-blue-600">
+                          <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                          Tasa...
+                        </span>
+                    )
+                    }
+                    if (typeof tb === 'number') {
+                      return (
+                        <span className="text-xs text-green-800">
+                          BD: {tb}
+                        </span>
+                      )
+                    }
+                    return (
+                      <input
+                        type="number"
+                        step="0.000001"
+                        className="w-full rounded border border-amber-300 p-1 text-xs"
+                        placeholder="Manual"
+                        value={row.tasa_cambio_manual ?? ''}
+                        onChange={e =>
+                          onUpdateCell(row, 'tasa_cambio_manual', e.target.value)
+                        }
+                      />
+                    )
+                  })()}
+                </td>
+
                 {/* Documento */}
 
                 <td className="border-r p-2">
@@ -490,10 +665,30 @@ export function TablaEditablePagos({
 
                       const sinCreditosActivos = prestamos.length === 0
 
+                      const lkBs = cedulaLookupParaFila(
+                        row.cedula || '',
+                        row.numero_documento || ''
+                      )
+                        .trim()
+                        .replace(/-/g, '')
+                        .toUpperCase()
+                      const enListaBs =
+                        lkBs.length >= 5 ? autorizadoBsPorCedula[lkBs] : null
+                      const monedaF = normMoneda(row.moneda_registro)
+                      const tasaBd = tasaBdPorFila[row._rowIndex]
+                      const tasaMan = row.tasa_cambio_manual
+                      const bsBloqueado =
+                        monedaF === 'BS' &&
+                        (enListaBs !== true ||
+                          tasaBd === undefined ||
+                          (tasaBd === null &&
+                            !(typeof tasaMan === 'number' && tasaMan > 0)))
+
                       const noPuedeGuardar =
                         row._hasErrors ||
                         sinCreditoElegido ||
-                        sinCreditosActivos
+                        sinCreditosActivos ||
+                        bsBloqueado
 
                       const title = row._hasErrors
                         ? 'Corrija los errores de la fila para poder guardar'

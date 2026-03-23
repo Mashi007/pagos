@@ -53,6 +53,12 @@ export interface PagoExcelRow {
   prestamo_id: number | null
 
   conciliado: boolean
+
+  /** Opcional: columnas moneda / tasa en plantilla Excel */
+
+  moneda_registro?: 'USD' | 'BS'
+
+  tasa_cambio_manual?: number
 }
 
 export function convertirFechaExcelPago(val: unknown): string {

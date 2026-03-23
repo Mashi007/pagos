@@ -102,6 +102,11 @@ from app.services.tasa_cambio_service import (
 
 )
 
+from app.services.pago_registro_moneda import (
+    resolver_monto_registro_pago,
+    preload_autorizados_bs,
+)
+
 from app.services.cobros.cedula_reportar_bs_service import (
 
     normalize_cedula_para_almacenar_lista_bs,
@@ -139,6 +144,10 @@ class GuardarFilaEditableBody(BaseModel):
     fecha_pago: str  # formato "DD-MM-YYYY"
 
     numero_documento: Optional[str] = None
+
+    moneda_registro: Optional[str] = "USD"
+
+    tasa_cambio_manual: Optional[float] = None
 
 
 
@@ -1970,6 +1979,18 @@ def importar_un_pago_reportado_a_pagos(
 
     if moneda_pr == "BS":
 
+        if not cedula_autorizada_para_bs(db, cedula_raw):
+
+            return _err_con_pce(
+
+                "Cedula no autorizada para pagos en bolivares",
+
+                cedula_cliente=cedula_raw,
+
+                prestamo_id=prestamo_id,
+
+            )
+
         if not pr.fecha_pago:
 
             return _err_con_pce(
@@ -3066,6 +3087,30 @@ def guardar_fila_editable(
 
         ahora_conciliacion = datetime.now(ZoneInfo(TZ_NEGOCIO))
 
+        moneda_r = (body.moneda_registro or "USD").strip().upper()
+
+        tasa_man_dec = None
+
+        if body.tasa_cambio_manual is not None:
+
+            tasa_man_dec = Decimal(str(body.tasa_cambio_manual))
+
+        monto_usd_g, moneda_fin_g, monto_bs_g, tasa_g, fecha_tasa_g = resolver_monto_registro_pago(
+
+            db,
+
+            cedula_normalizada=(cedula_fk or "").strip().upper(),
+
+            fecha_pago=fecha_pago,
+
+            monto_pagado=Decimal(str(round(monto, 2))),
+
+            moneda_registro=moneda_r,
+
+            tasa_cambio_manual=tasa_man_dec,
+
+        )
+
         pago = Pago(
 
             cedula_cliente=cedula_fk,
@@ -3074,7 +3119,7 @@ def guardar_fila_editable(
 
             fecha_pago=datetime.combine(fecha_pago, dt_time.min),
 
-            monto_pagado=Decimal(str(round(monto, 2))),
+            monto_pagado=monto_usd_g,
 
             numero_documento=numero_doc_norm,
 
@@ -3090,6 +3135,14 @@ def guardar_fila_editable(
 
             usuario_registro=usuario_registro,
 
+            moneda_registro=moneda_fin_g,
+
+            monto_bs_original=monto_bs_g,
+
+            tasa_cambio_bs_usd=tasa_g,
+
+            fecha_tasa_referencia=fecha_tasa_g,
+
         )
 
         db.add(pago)
@@ -3104,7 +3157,7 @@ def guardar_fila_editable(
 
         cuotas_parciales = 0
 
-        if pago.prestamo_id and monto > 0:
+        if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
 
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
 
@@ -4162,6 +4215,8 @@ def crear_pagos_batch(
 
         try:
 
+            autorizados_bs = preload_autorizados_bs(db)
+
             for idx, payload in enumerate(pagos_list):
 
                 num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
@@ -4196,6 +4251,38 @@ def crear_pagos_batch(
 
                 cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
 
+                es_valido_b, monto_val_b, err_msg_b = _validar_monto(payload.monto_pagado)
+
+                if not es_valido_b:
+
+                    raise HTTPException(status_code=400, detail=f"Lote fila {idx + 1}: {err_msg_b}")
+
+                try:
+
+                    monto_usd_b, moneda_fin_b, monto_bs_b, tasa_b, fecha_tasa_b = resolver_monto_registro_pago(
+
+                        db,
+
+                        cedula_normalizada=cedula_normalizada,
+
+                        fecha_pago=payload.fecha_pago,
+
+                        monto_pagado=Decimal(str(round(monto_val_b, 2))),
+
+                        moneda_registro=payload.moneda_registro or "USD",
+
+                        tasa_cambio_manual=payload.tasa_cambio_manual,
+
+                        autorizados_bs=autorizados_bs,
+
+                    )
+
+                except HTTPException as e:
+
+                    d = e.detail if isinstance(e.detail, str) else str(e.detail)
+
+                    raise HTTPException(status_code=e.status_code, detail=f"Lote fila {idx + 1}: {d}") from e
+
                 row = Pago(
 
                     cedula_cliente=cedula_normalizada,
@@ -4204,7 +4291,7 @@ def crear_pagos_batch(
 
                     fecha_pago=fecha_pago_ts,
 
-                    monto_pagado=payload.monto_pagado,
+                    monto_pagado=monto_usd_b,
 
                     numero_documento=num_doc,
 
@@ -4223,6 +4310,14 @@ def crear_pagos_batch(
                     verificado_concordancia="SI" if conciliado else "",
 
                     usuario_registro=usuario_registro,
+
+                    moneda_registro=moneda_fin_b,
+
+                    monto_bs_original=monto_bs_b,
+
+                    tasa_cambio_bs_usd=tasa_b,
+
+                    fecha_tasa_referencia=fecha_tasa_b,
 
                 )
 
@@ -4249,6 +4344,12 @@ def crear_pagos_batch(
             fail_count = len(results) - ok_count
 
             return {"results": results, "ok_count": ok_count, "fail_count": fail_count}
+
+        except HTTPException:
+
+            db.rollback()
+
+            raise
 
         except Exception as e:
 
@@ -4378,6 +4479,22 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
     try:
 
+        monto_usd, moneda_fin, monto_bs_o, tasa_o, fecha_tasa_o = resolver_monto_registro_pago(
+
+            db,
+
+            cedula_normalizada=cedula_normalizada,
+
+            fecha_pago=payload.fecha_pago,
+
+            monto_pagado=Decimal(str(round(monto_val, 2))),
+
+            moneda_registro=payload.moneda_registro or "USD",
+
+            tasa_cambio_manual=payload.tasa_cambio_manual,
+
+        )
+
         row = Pago(
 
             cedula_cliente=cedula_normalizada,
@@ -4386,7 +4503,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             fecha_pago=fecha_pago_ts,
 
-            monto_pagado=Decimal(str(round(monto_val, 2))),
+            monto_pagado=monto_usd,
 
             numero_documento=num_doc,
 
@@ -4405,6 +4522,14 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             verificado_concordancia="SI" if conciliado else "",  # Legacy: sync con conciliado
 
             usuario_registro=usuario_registro,  # [MEJORADO] Usuario real desde JWT
+
+            moneda_registro=moneda_fin,
+
+            monto_bs_original=monto_bs_o,
+
+            tasa_cambio_bs_usd=tasa_o,
+
+            fecha_tasa_referencia=fecha_tasa_o,
 
         )
 

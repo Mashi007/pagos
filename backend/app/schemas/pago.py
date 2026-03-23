@@ -20,6 +20,9 @@ class PagoCreate(BaseModel):
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None  # Sí/No en carga masiva
+    # USD (defecto): monto_pagado en dolares. BS: monto_pagado en bolivares; requiere autorizacion lista Bs + tasa (BD o manual).
+    moneda_registro: Optional[str] = "USD"
+    tasa_cambio_manual: Optional[Decimal] = None  # Solo si no hay tasa en BD para fecha_pago
 
     @field_validator("numero_documento", mode="before")
     @classmethod
@@ -42,6 +45,14 @@ class PagoCreate(BaseModel):
         return v
 
 
+
+    @field_validator("moneda_registro", mode="before")
+    @classmethod
+    def moneda_registro_opcional(cls, v: object) -> Optional[str]:
+        if v is None or v == "":
+            return "USD"
+        return str(v).strip().upper()
+
 class PagoUpdate(BaseModel):
     cedula_cliente: Optional[str] = None
     prestamo_id: Optional[int] = None
@@ -52,6 +63,8 @@ class PagoUpdate(BaseModel):
     notas: Optional[str] = None
     conciliado: Optional[bool] = None
     verificado_concordancia: Optional[str] = None  # SI / NO
+    moneda_registro: Optional[str] = None
+    tasa_cambio_manual: Optional[Decimal] = None
 
     @field_validator("numero_documento", mode="before")
     @classmethod
