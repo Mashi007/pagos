@@ -655,17 +655,17 @@ def generar_pdf_estado_cuenta(
 
             monto = f"{float(r.get('monto') or 0):,.2f} {r.get('moneda') or 'BS'}"
 
-            aplicado = r.get("aplicado_a_cuotas", False)
+            pago_id = r.get("id", "")
 
-            if aplicado and base_url:
+            if base_url and pago_id:
 
                 if recibo_token:
 
-                    url = f"{base_url}/api/v1/cobros/public/recibo?token={recibo_token}&pago_id={r.get('id', '')}"
+                    url = f"{base_url}/api/v1/cobros/public/recibo?token={recibo_token}&pago_id={pago_id}"
 
                 else:
 
-                    url = f"{base_url}/api/v1/cobros/pagos-reportados/{r.get('id', '')}/recibo.pdf"
+                    url = f"{base_url}/api/v1/cobros/pagos-reportados/{pago_id}/recibo.pdf"
 
                 link_cell = Paragraph(f'<a href="{url}" color="{COLOR_HEADER}">Ver recibo</a>', style_link)
 
