@@ -208,3 +208,168 @@ def verificar_ruta_adjunto_fijo(db) -> Tuple[bool, Optional[str]]:
     except Exception as e:
         logger.exception("verificar_ruta_adjunto_fijo: %s", e)
         return False, str(e)
+
+
+def _bytes_es_pdf_valido(data: Optional[bytes]) -> bool:
+    if not data or len(data) < 4:
+        return False
+    return data[:4] == b"%PDF"
+
+
+def _diagnostico_archivo_en_disco(path: Optional[str]) -> dict:
+    """Estado de un archivo: existe, tamano, cabecera PDF."""
+    out: Dict[str, Any] = {
+        "path_resuelto": path,
+        "existe": False,
+        "tamano_bytes": None,
+        "cabecera_pdf": False,
+    }
+    if not path:
+        out["motivo"] = "sin_ruta"
+        return out
+    try:
+        if not os.path.isfile(path):
+            out["motivo"] = "archivo_no_encontrado"
+            return out
+        out["existe"] = True
+        out["tamano_bytes"] = int(os.path.getsize(path))
+        with open(path, "rb") as f:
+            head = f.read(16)
+        out["cabecera_pdf"] = _bytes_es_pdf_valido(head)
+        if not out["cabecera_pdf"]:
+            out["motivo"] = "no_es_pdf_valido_o_vacio"
+    except Exception as e:
+        out["motivo"] = "error_lectura"
+        out["error"] = str(e)
+    return out
+
+
+def diagnostico_adjuntos_notificaciones_cobranza(db) -> dict:
+    """
+    Diagnostico en una sola respuesta: adjunto global + PDFs fijos por caso (pestaña 3).
+    Sirve para Render: rutas resueltas, existencia, tamano, cabecera %PDF.
+    """
+    from app.core.config import settings
+
+    base_dir_por_caso = _get_base_dir_adjuntos()
+    adj_base = getattr(settings, "ADJUNTO_FIJO_COBRANZA_BASE_DIR", None)
+    cwd = os.getcwd()
+    paquete_estricto = bool(getattr(settings, "NOTIFICACIONES_PAQUETE_ESTRICTO", True))
+
+    global_diag: Dict[str, Any] = {
+        "clave_configuracion": CLAVE_ADJUNTO_FIJO_COBRANZA,
+        "configurado_en_bd": False,
+        "ruta_relativa_config": None,
+        "nombre_archivo_config": None,
+        "archivo": {},
+    }
+    try:
+        from app.models.configuracion import Configuracion
+
+        row_g = db.get(Configuracion, CLAVE_ADJUNTO_FIJO_COBRANZA) if db is not None else None
+        if row_g and row_g.valor:
+            global_diag["configurado_en_bd"] = True
+            data_g = json.loads(row_g.valor)
+            if isinstance(data_g, dict):
+                global_diag["ruta_relativa_config"] = (data_g.get("ruta") or "").strip() or None
+                global_diag["nombre_archivo_config"] = (data_g.get("nombre_archivo") or "").strip() or None
+                ruta = global_diag["ruta_relativa_config"] or ""
+                path_g = _resolve_path(ruta) if ruta else None
+                global_diag["archivo"] = _diagnostico_archivo_en_disco(path_g)
+    except json.JSONDecodeError:
+        global_diag["error"] = "json_invalido_adjunto_global"
+    except Exception as e:
+        global_diag["error"] = str(e)
+
+    bytes_global = None
+    try:
+        tup = get_adjunto_fijo_cobranza_bytes(db)
+        if tup:
+            bytes_global = tup[1]
+    except Exception:
+        pass
+    global_diag["carga_ok_servicio"] = bytes_global is not None and _bytes_es_pdf_valido(bytes_global)
+
+    por_caso: Dict[str, Any] = {}
+    raw_full: Dict[str, Any] = {}
+    try:
+        from app.models.configuracion import Configuracion
+
+        row_c = db.get(Configuracion, CLAVE_ADJUNTOS_FIJOS_POR_CASO) if db is not None else None
+        if row_c and row_c.valor:
+            data_c = json.loads(row_c.valor)
+            if isinstance(data_c, dict):
+                raw_full = data_c
+    except Exception:
+        raw_full = {}
+
+    for tipo_caso in sorted(TIPOS_CASO_VALIDOS):
+        base_dir = base_dir_por_caso
+        lista = raw_full.get(tipo_caso)
+        if not isinstance(lista, list):
+            lista = []
+        entradas = []
+        cargables = 0
+        for item in lista:
+            if not isinstance(item, dict):
+                entradas.append({"error": "item_no_es_objeto"})
+                continue
+            ruta_rel = (item.get("ruta") or "").strip()
+            nombre = (item.get("nombre_archivo") or "").strip() or "documento.pdf"
+            _id = item.get("id")
+            valido_cfg = bool(_id and item.get("nombre_archivo") and item.get("ruta"))
+            path_abs = None
+            motivo_path = None
+            if not ruta_rel:
+                motivo_path = "ruta_vacia"
+            else:
+                path_abs = os.path.normpath(os.path.join(base_dir, ruta_rel))
+                if not path_abs.startswith(base_dir) or ".." in ruta_rel:
+                    path_abs = None
+                    motivo_path = "ruta_no_permitida_o_traversal"
+            diag = _diagnostico_archivo_en_disco(path_abs)
+            if motivo_path:
+                diag["motivo_resolucion"] = motivo_path
+            pdf_ok = False
+            if diag.get("existe") and diag.get("tamano_bytes", 0) and diag.get("cabecera_pdf"):
+                pdf_ok = True
+                cargables += 1
+            entradas.append(
+                {
+                    "id": _id,
+                    "nombre_archivo": nombre,
+                    "ruta_relativa": ruta_rel or None,
+                    "valido_para_envio": valido_cfg,
+                    "detalle": diag,
+                    "pdf_valido": pdf_ok,
+                }
+            )
+        loaded = get_adjuntos_fijos_por_caso(db, tipo_caso) if db is not None else []
+        por_caso[tipo_caso] = {
+            "base_dir_adjuntos": base_dir,
+            "entradas_en_bd": len(lista),
+            "entradas": entradas,
+            "archivos_cargables_count": cargables,
+            "archivos_cargados_por_servicio": len(loaded),
+        }
+
+    loaded_d1 = get_adjuntos_fijos_por_caso(db, "dias_1_retraso") if db is not None else []
+    segundo_pdf_d1 = bool(global_diag.get("carga_ok_servicio")) or any(
+        _bytes_es_pdf_valido(b) for _, b in loaded_d1
+    )
+
+    return {
+        "notificaciones_paquete_estricto": paquete_estricto,
+        "directorio_trabajo_cwd": cwd,
+        "adjunto_fijo_cobranza_base_dir_env": (adj_base or "").strip() or None,
+        "base_dir_adjuntos_por_caso": base_dir_por_caso,
+        "adjunto_global_cobranza": global_diag,
+        "adjuntos_fijos_por_caso": por_caso,
+        "resumen": {
+            "segundo_pdf_disponible_para_dias_1_retraso": segundo_pdf_d1,
+            "texto": (
+                "Con NOTIFICACIONES_PAQUETE_ESTRICTO=true hace falta Carta_Cobranza.pdf + al menos un PDF fijo valido. "
+                "Ese segundo PDF puede venir del adjunto global o de la pestaña 3 para dias_1_retraso; deben existir en disco (Render: volumen persistente)."
+            ),
+        },
+    }

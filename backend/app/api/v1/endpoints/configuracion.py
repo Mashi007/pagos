@@ -325,6 +325,19 @@ def put_notificaciones_envios(payload: dict = Body(...), db: Session = Depends(g
     return {"message": "Configuración de envíos actualizada", "configuracion": payload}
 
 
+
+
+@router.get("/notificaciones/envios/diagnostico-adjuntos")
+def get_notificaciones_envios_diagnostico_adjuntos(db: Session = Depends(get_db)):
+    """
+    Diagnostico en una respuesta: adjunto global (adjunto_fijo_cobranza) y PDFs por caso (pestaña 3).
+    Para cada archivo: ruta resuelta, existe, tamano, cabecera %PDF. Incluye resumen para dias_1_retraso.
+    """
+    from app.services.adjunto_fijo_cobranza import diagnostico_adjuntos_notificaciones_cobranza
+
+    return diagnostico_adjuntos_notificaciones_cobranza(db)
+
+
 @router.post("/validadores/probar")
 def post_validadores_probar(payload: dict = Body(...), db: Session = Depends(get_db)):
     """

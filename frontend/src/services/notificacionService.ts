@@ -887,6 +887,14 @@ class EmailConfigService {
     return await apiClient.put(`${this.baseUrl}/notificaciones/envios`, config)
   }
 
+  /** Diagnostico PDF fijos (global + pestaña 3 por caso). */
+
+  async obtenerDiagnosticoAdjuntosEnvios(): Promise<Record<string, unknown>> {
+    return await apiClient.get<Record<string, unknown>>(
+      `${API_V1}/configuracion/notificaciones/envios/diagnostico-adjuntos`
+    )
+  }
+
   async verificarEstadoConfiguracionEmail(): Promise<{
     configurada: boolean
 
