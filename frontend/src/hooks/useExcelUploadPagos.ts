@@ -728,11 +728,22 @@ export function useExcelUploadPagos({
 
         return true
       } catch (err: any) {
+        const detail = err?.response?.data?.detail
+
+        const msg = Array.isArray(detail)
+          ? detail.map((d: any) => d.msg || d.message).join(' ')
+          : detail || err?.message || 'Error al guardar'
+
+        addToast(
+          'error',
+          typeof msg === 'string' ? msg : 'Error al guardar la fila'
+        )
+
         return false
       }
     },
 
-    [prestamosPorCedula, refreshPagos]
+    [prestamosPorCedula, refreshPagos, addToast, excelData]
   )
 
   const saveIndividualPago = useCallback(

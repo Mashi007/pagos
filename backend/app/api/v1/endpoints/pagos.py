@@ -2726,7 +2726,7 @@ def validar_filas_batch(
 
     Valida en lote (carga masiva / preview):
 
-    - Cédulas: deben existir en tabla préstamos (al menos un crédito con esa cédula normalizada).
+    - Cédulas: deben existir en tabla clientes (misma clave que FK fk_pagos_cedula al guardar pagos).
 
     - Nº documento: clave canónica única global; ya usada en `pagos` o en `pagos_con_errores` → duplicado.
 
@@ -2752,9 +2752,9 @@ def validar_filas_batch(
 
     if cedulas_norm:
 
-        pc = func.upper(func.replace(Prestamo.cedula, "-", ""))
+        cc = func.upper(func.replace(Cliente.cedula, "-", ""))
 
-        rows = db.execute(select(pc).where(pc.in_(cedulas_norm)).distinct()).all()
+        rows = db.execute(select(cc).where(cc.in_(cedulas_norm)).distinct()).all()
 
         cedulas_existentes = {r[0] for r in rows if r and r[0]}
 
