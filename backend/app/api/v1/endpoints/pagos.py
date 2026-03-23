@@ -2920,8 +2920,10 @@ def guardar_fila_editable(
         cedula_norm_in = normalizar_cedula_almacenamiento(cedula)
         if not cedula_norm_in:
             raise HTTPException(status_code=400, detail="Cédula requerida")
+        cn_in = cedula_norm_in.replace("-", "").upper()
+        cc_cli = func.upper(func.replace(Cliente.cedula, "-", ""))
         cli_por_cedula = db.execute(
-            select(Cliente.id).where(Cliente.cedula == cedula_norm_in).limit(1)
+            select(Cliente.id).where(cc_cli == cn_in).limit(1)
         ).first()
         if not cli_por_cedula:
             raise HTTPException(
@@ -3029,13 +3031,20 @@ def guardar_fila_editable(
                 status_code=400,
                 detail="El prestamo no tiene cliente asociado en BD; no se puede registrar el pago.",
             )
+        # Datos legacy: clientes.cedula en minusculas; FK pagos.cedula debe coincidir con clientes.cedula
+        ced_norm_cli = normalizar_cedula_almacenamiento(cli.cedula)
+        if ced_norm_cli and ced_norm_cli != (cli.cedula or ""):
+            cli.cedula = ced_norm_cli
+            db.flush()
         cedula_fk = normalizar_cedula_almacenamiento(cli.cedula) or normalizar_cedula_almacenamiento(
             prest.cedula
         )
         if not cedula_fk:
             raise HTTPException(status_code=400, detail="Cedula del cliente no disponible en BD.")
         cedula_input = normalizar_cedula_almacenamiento(cedula.strip())
-        if cedula_input and cedula_input != cedula_fk:
+        cn_body = (cedula_input or "").replace("-", "").upper()
+        cn_fk = (cedula_fk or "").replace("-", "").upper()
+        if cedula_input and cn_body != cn_fk:
             raise HTTPException(
                 status_code=400,
                 detail=f"La cedula no coincide con la del cliente del prestamo (en BD: {cedula_fk}).",
