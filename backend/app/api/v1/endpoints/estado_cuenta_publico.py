@@ -92,6 +92,7 @@ from app.services.cuota_estado import (
 )
 
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
+from app.services.cobros.recibo_cuota_moneda import contexto_moneda_montos_recibo_cuota
 
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 
@@ -723,8 +724,6 @@ def get_recibo_cuota_publico(
 
     referencia = f"Cuota-{cuota.numero_cuota}-Prestamo-{prestamo_id}"
 
-    monto_str = f"{total_pagado:.2f}" if total_pagado > 0 else f"{monto_cuota:.2f}"
-
     institucion = "N/A"
 
     numero_operacion = referencia
@@ -732,6 +731,8 @@ def get_recibo_cuota_publico(
     fecha_recep = None
 
     fecha_pago_date = None
+
+    pago = None
 
     if cuota.pago_id:
 
@@ -755,25 +756,9 @@ def get_recibo_cuota_publico(
 
         fecha_pago_date = cuota.fecha_pago
 
-    saldo_inicial_display = f"{float(cuota.saldo_capital_inicial or 0):,.2f} Bs." if cuota.saldo_capital_inicial else "-"
-
-    saldo_final_display = f"{float(cuota.saldo_capital_final or 0):,.2f} Bs." if cuota.saldo_capital_final else "-"
-
     fecha_pago_display = fecha_pago_date.strftime("%d/%m/%Y") if fecha_pago_date else "-"
 
-    tasa_hoy = None
-
-    try:
-
-        from app.services.tasa_cambio_service import obtener_tasa_hoy
-
-        tasa_obj = obtener_tasa_hoy(db)
-
-        tasa_hoy = float(tasa_obj.tasa_oficial) if tasa_obj else None
-
-    except Exception:
-
-        pass
+    ctx = contexto_moneda_montos_recibo_cuota(db, prestamo, cuota, pago)
 
     pdf_bytes = generar_recibo_cuota_amortizacion(
 
@@ -785,7 +770,7 @@ def get_recibo_cuota_publico(
 
         institucion_financiera=institucion,
 
-        monto=monto_str + " Bs.",
+        monto=ctx.monto_str,
 
         numero_operacion=numero_operacion,
 
@@ -795,17 +780,17 @@ def get_recibo_cuota_publico(
 
         aplicado_a_cuotas=f"Cuota {cuota.numero_cuota}",
 
-        saldo_inicial=saldo_inicial_display,
+        saldo_inicial=ctx.saldo_inicial,
 
-        saldo_final=saldo_final_display,
+        saldo_final=ctx.saldo_final,
 
         numero_cuota=cuota.numero_cuota,
 
         fecha_pago_display=fecha_pago_display,
 
-        moneda="BS",
+        moneda=ctx.moneda,
 
-        tasa_cambio=tasa_hoy,
+        tasa_cambio=ctx.tasa_cambio,
 
     )
 

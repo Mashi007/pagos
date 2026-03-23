@@ -81,6 +81,7 @@ from app.services.pagos_cuotas_reaplicacion import (
 )
 
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
+from app.services.cobros.recibo_cuota_moneda import contexto_moneda_montos_recibo_cuota
 
 from app.services.cuota_estado import (
     estado_cuota_para_mostrar,
@@ -1847,8 +1848,6 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
     referencia = f"Cuota-{cuota.numero_cuota}-Prestamo-{prestamo_id}"
 
-    monto_str = f"{total_pagado:.2f}" if total_pagado > 0 else f"{monto_cuota:.2f}"
-
     institucion = "N/A"
 
     numero_operacion = referencia
@@ -1856,6 +1855,8 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
     fecha_recep = None
 
     fecha_pago_date = None
+
+    pago = None
 
     if cuota.pago_id:
 
@@ -1897,15 +1898,13 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
     estado_cuota_lbl = etiqueta_estado_cuota(estado_codigo)
 
-    saldo_ini_s = f"{float(cuota.saldo_capital_inicial or 0):.2f}" if cuota.saldo_capital_inicial is not None else "-"
-
-    saldo_fin_s = f"{float(cuota.saldo_capital_final or 0):.2f}" if cuota.saldo_capital_final is not None else "-"
-
     fpd = "-"
 
     if fecha_pago_date:
 
         fpd = fecha_pago_date.strftime("%d/%m/%Y")
+
+    ctx = contexto_moneda_montos_recibo_cuota(db, prestamo, cuota, pago)
 
     pdf_bytes = generar_recibo_cuota_amortizacion(
 
@@ -1917,7 +1916,7 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
         institucion_financiera=institucion,
 
-        monto=monto_str,
+        monto=ctx.monto_str,
 
         numero_operacion=numero_operacion,
 
@@ -1925,13 +1924,15 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
         fecha_pago=fecha_pago_date,
 
-        moneda="Bs.",
+        moneda=ctx.moneda,
+
+        tasa_cambio=ctx.tasa_cambio,
 
         aplicado_a_cuotas=f"Cuota {cuota.numero_cuota}",
 
-        saldo_inicial=saldo_ini_s,
+        saldo_inicial=ctx.saldo_inicial,
 
-        saldo_final=saldo_fin_s,
+        saldo_final=ctx.saldo_final,
 
         numero_cuota=cuota.numero_cuota,
 
