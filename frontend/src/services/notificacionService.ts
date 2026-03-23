@@ -758,7 +758,8 @@ class NotificacionService {
   ): Promise<DiagnosticoPaquetePruebaResponse> {
     const params = new URLSearchParams({ tipo })
     return await apiClient.get<DiagnosticoPaquetePruebaResponse>(
-      `${this.baseUrl}/diagnostico-paquete-prueba?${params}`
+      `${this.baseUrl}/diagnostico-paquete-prueba?${params}`,
+      { timeout: 180000 }
     )
   }
 

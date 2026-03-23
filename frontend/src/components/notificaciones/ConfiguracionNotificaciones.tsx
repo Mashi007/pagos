@@ -257,6 +257,8 @@ export function ConfiguracionNotificaciones() {
   const [diagnosticoPaquete, setDiagnosticoPaquete] =
     useState<DiagnosticoPaquetePruebaResponse | null>(null)
 
+  const [diagnosticoCargando, setDiagnosticoCargando] = useState(false)
+
   const guardandoRef = useRef(false)
 
   const queryClient = useQueryClient()
@@ -569,6 +571,7 @@ export function ConfiguracionNotificaciones() {
 
   const handleDiagnosticoPaquete = async () => {
     try {
+      setDiagnosticoCargando(true)
       const d =
         await notificacionService.diagnosticoPaquetePrueba(tipoPruebaPaquete)
       setDiagnosticoPaquete(d)
@@ -586,6 +589,8 @@ export function ConfiguracionNotificaciones() {
     } catch (e: unknown) {
       const detalle = getErrorDetail(e)
       toast.error(detalle || 'Error al ejecutar diagnostico')
+    } finally {
+      setDiagnosticoCargando(false)
     }
   }
 
@@ -898,9 +903,17 @@ export function ConfiguracionNotificaciones() {
                   type="button"
                   variant="outline"
                   onClick={() => void handleDiagnosticoPaquete()}
+                  disabled={
+                    diagnosticoCargando ||
+                    enviandoPruebaIndice !== null ||
+                    enviandoMasivo ||
+                    smtpConfigurado === false
+                  }
                   className="flex h-auto w-full items-center justify-center gap-2 rounded-lg py-2"
                 >
-                  Diagnosticar paquete (sin enviar correo)
+                  {diagnosticoCargando
+                    ? 'Diagnosticando...'
+                    : 'Diagnosticar paquete (sin enviar correo)'}
                 </Button>
 
                 {diagnosticoPaquete && (
@@ -912,7 +925,9 @@ export function ConfiguracionNotificaciones() {
                 <Button
                   onClick={handleEnviarNotificacionesPrueba}
                   disabled={
-                    enviandoPruebaIndice !== null || smtpConfigurado === false
+                    diagnosticoCargando ||
+                    enviandoPruebaIndice !== null ||
+                    smtpConfigurado === false
                   }
                   className="flex h-auto w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 py-2 font-semibold text-white transition-all hover:from-green-600 hover:to-emerald-700 disabled:opacity-50"
                 >
@@ -924,14 +939,18 @@ export function ConfiguracionNotificaciones() {
                 </Button>
 
                 <p className="mt-2 text-sm text-gray-600">
-                  Envíos masivos: envía ahora un correo por cada cliente que
-                  requiera notificación; todos van al correo de pruebas (no a
-                  clientes).
+                  Un correo de prueba a los destinos configurados arriba, con la
+                  plantilla, la carta en PDF y los PDFs fijos del criterio
+                  elegido (no recorre todos los clientes).
                 </p>
 
                 <Button
                   onClick={handleEnviosMasivosPrueba}
-                  disabled={enviandoMasivo || smtpConfigurado === false}
+                  disabled={
+                    enviandoMasivo ||
+                    smtpConfigurado === false ||
+                    diagnosticoCargando
+                  }
                   variant="outline"
                   className="flex h-auto w-full items-center justify-center gap-2 rounded-lg border-amber-400 bg-amber-50 py-2 font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
                 >
@@ -939,6 +958,12 @@ export function ConfiguracionNotificaciones() {
 
                   {enviandoMasivo ? 'Enviando...' : 'Envíos masivos prueba'}
                 </Button>
+
+                <p className="mt-2 text-sm text-gray-600">
+                  Envíos masivos: envía ahora un correo por cada cliente que
+                  requiera notificación; todos van al correo de pruebas (no a
+                  clientes).
+                </p>
               </div>
             )}
         </CardContent>

@@ -823,6 +823,12 @@ class ApiClient {
 
     const tablasCamposTimeout = 90000 // 90 segundos para consulta de estructura completa de BD
 
+    const isDiagnosticoPaquetePrueba = url.includes(
+      'diagnostico-paquete-prueba'
+    )
+
+    const diagnosticoPaqueteTimeout = 180000
+
     let defaultTimeout = DEFAULT_TIMEOUT_MS
 
     if (isRevisionManual) {
@@ -831,6 +837,8 @@ class ApiClient {
       defaultTimeout = reportesDashboardTimeout
     } else if (isClientesAtrasados) {
       defaultTimeout = verySlowTimeout
+    } else if (isDiagnosticoPaquetePrueba) {
+      defaultTimeout = diagnosticoPaqueteTimeout
     } else if (isTablasCampos) {
       defaultTimeout = tablasCamposTimeout
     } else if (isSlowEndpoint) {
