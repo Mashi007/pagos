@@ -155,6 +155,14 @@ class Settings(BaseSettings):
         default=True,
         description="Exige plantilla + PDF variable (carta) + PDF fijo antes de enviar notificaciones por pestaña",
     )
+    # Si True: solo con destinos forzados (prueba de paquete) permite enviar aunque falte PDF fijo.
+    NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO: bool = Field(
+        default=False,
+        description=(
+            'Relaja validacion de paquete solo para POST /enviar-prueba-paquete (destinos forzados). '
+            'Los envios masivos reales siguen sujetos a NOTIFICACIONES_PAQUETE_ESTRICTO.'
+        ),
+    )
     # Dias calendario (Caracas) despues de prestamos.fecha_liquidado para enviar correo con PDF estado de cuenta.
     # Ej. "1,2" = primer correo al dia siguiente de la fecha_liquidado, segundo al segundo dia. Un correo por cliente por oleada.
     NOTIFICACIONES_LIQUIDADO_DIAS_ENVIO: str = Field(

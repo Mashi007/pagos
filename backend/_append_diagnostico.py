@@ -1,151 +1,13 @@
 # -*- coding: utf-8 -*-
-"""
-Prueba de envio completo (plantilla + Carta PDF + PDFs fijos).
-Una sola implementacion: el router solo delega aqui (evita dobles vias con logica duplicada).
-"""
-from __future__ import annotations
+from pathlib import Path
 
-from typing import Any, Dict, List, Optional
+p = Path(__file__).resolve().parent / "app" / "services" / "notificaciones_prueba_paquete.py"
+t = p.read_text(encoding="utf-8")
+if "def ejecutar_diagnostico_paquete_prueba" in t:
+    print("diagnostico already present")
+    raise SystemExit(0)
 
-from fastapi import HTTPException
-from sqlalchemy.orm import Session
-
-TIPOS_PRUEBA_PAQUETE = frozenset(
-    {
-        "PAGO_1_DIA_ATRASADO",
-        "PAGO_3_DIAS_ATRASADO",
-        "PAGO_5_DIAS_ATRASADO",
-        "PREJUDICIAL",
-    }
-)
-
-
-def primer_item_ejemplo_por_tipo(data: dict, tipo: str) -> Optional[dict]:
-    """Primer registro real por criterio (misma fuente que listados de envio)."""
-    if tipo == "PAGO_1_DIA_ATRASADO":
-        return data["dias_1_retraso"][0] if data.get("dias_1_retraso") else None
-    if tipo == "PAGO_3_DIAS_ATRASADO":
-        return data["dias_3_retraso"][0] if data.get("dias_3_retraso") else None
-    if tipo == "PAGO_5_DIAS_ATRASADO":
-        return data["dias_5_retraso"][0] if data.get("dias_5_retraso") else None
-    if tipo == "PREJUDICIAL":
-        return data["prejudicial"][0] if data.get("prejudicial") else None
-    return None
-
-
-def parse_destinos_prueba(payload: dict) -> List[str]:
-    raw = payload.get("destinos") or payload.get("emails") or []
-    if isinstance(raw, str):
-        out = [raw]
-    elif isinstance(raw, list):
-        out = [str(x).strip() for x in raw if x]
-    else:
-        out = [str(raw).strip()] if raw else []
-    return [d for d in out if d and "@" in d]
-
-
-def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]:
-    from app.api.v1.endpoints import notificaciones_tabs as nt
-    from app.api.v1.endpoints.notificaciones import (
-        get_notificaciones_envios_config,
-        get_notificaciones_tabs_data,
-    )
-
-    tipo = (payload.get("tipo") or "PAGO_1_DIA_ATRASADO").strip()
-    if tipo not in TIPOS_PRUEBA_PAQUETE:
-        raise HTTPException(
-            status_code=422,
-            detail=f"tipo debe ser uno de: {', '.join(sorted(TIPOS_PRUEBA_PAQUETE))}",
-        )
-    destinos = parse_destinos_prueba(payload)
-    if not destinos:
-        raise HTTPException(
-            status_code=422,
-            detail="Indique al menos un destino en destinos (lista de emails).",
-        )
-
-    data = get_notificaciones_tabs_data(db)
-    item = primer_item_ejemplo_por_tipo(data, tipo)
-    if not item:
-        raise HTTPException(
-            status_code=404,
-            detail="No hay datos de ejemplo en BD para este criterio. Debe existir al menos un cliente en la lista correspondiente.",
-        )
-
-    config_envios = get_notificaciones_envios_config(db)
-
-    if tipo in ("PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO"):
-        get_tipo = nt._tipo_retrasadas
-        asunto = "Cuenta con cuota atrasada - Rapicredit"
-        cuerpo = (
-            "Estimado/a {nombre} (cedula {cedula}),\n\n"
-            "Le recordamos que tiene una cuota en mora.\n"
-            "Fecha de vencimiento: {fecha_vencimiento}\n"
-            "Numero de cuota: {numero_cuota}\n"
-            "Monto: {monto}\n\n"
-            "Por favor regularice su pago lo antes posible.\n\n"
-            "Saludos,\nRapicredit"
-        )
-    else:
-        get_tipo = nt._tipo_prejudicial
-        asunto = "Aviso prejudicial - Rapicredit"
-        cuerpo = (
-            "Estimado/a {nombre} (cedula {cedula}),\n\n"
-            "Le informamos que su cuenta presenta varias cuotas en mora.\n"
-            "Fecha de vencimiento de referencia: {fecha_vencimiento}\n"
-            "Cuota de referencia: {numero_cuota}\n"
-            "Monto de referencia: {monto}\n\n"
-            "Por favor contacte a la entidad para regularizar su situacion.\n\n"
-            "Saludos,\nRapicredit"
-        )
-
-    try:
-        res = nt._enviar_correos_items(
-            [item],
-            asunto,
-            cuerpo,
-            config_envios,
-            get_tipo,
-            db,
-            forzar_destinos_prueba=destinos,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    out = dict(res)
-    enviados = int(out.get("enviados") or 0)
-    if enviados == 0:
-        omit_pkg = int(out.get("omitidos_paquete_incompleto") or 0)
-        omit_cfg = int(out.get("omitidos_config") or 0)
-        if omit_pkg > 0:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "Paquete incompleto (NOTIFICACIONES_PAQUETE_ESTRICTO): se exige Carta_Cobranza.pdf "
-                    "valido (%PDF) y al menos un PDF fijo adicional (pestana 3 o adjunto global "
-                    "adjunto_fijo_cobranza). En Render el archivo debe existir en disco persistente. "
-                    "Alternativa solo prueba forzada: NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO=true en .env. Emergencia global: NOTIFICACIONES_PAQUETE_ESTRICTO=false."
-                ),
-            )
-        if omit_cfg > 0:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Ningun envio para este criterio: el tipo esta con envio desactivado en "
-                    f"Configuracion > Notificaciones (omitidos_config={omit_cfg}). Active Envio en la pestana del caso."
-                ),
-            )
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "No se envio la prueba de paquete. Revise plantilla activa, SMTP de notificaciones y destinos."
-            ),
-        )
-
-    out["mensaje"] = "Prueba de paquete completo enviada (plantilla + PDF carta + PDFs fijos)."
-    out["tipo"] = tipo
-    out["destinos"] = destinos
-    return out
+append = '''
 
 def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any]:
     """
@@ -321,3 +183,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     else:
         out["motivo"] = "listo_para_envio_estricto"
     return out
+'''
+
+p.write_text(t.rstrip() + append, encoding="utf-8")
+print("appended diagnostico")

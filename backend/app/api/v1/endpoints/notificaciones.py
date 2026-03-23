@@ -1635,6 +1635,17 @@ def get_notificaciones_tabs_data(db: Session):
         "prejudicial": prejudicial,
     }
 
+@router.get("/diagnostico-paquete-prueba")
+def get_diagnostico_paquete_prueba(
+    tipo: str = Query("PAGO_1_DIA_ATRASADO"),
+    db: Session = Depends(get_db),
+):
+    """Sin enviar correo: revisa plantilla, adjuntos y paquete estricto para el criterio."""
+    from app.services.notificaciones_prueba_paquete import ejecutar_diagnostico_paquete_prueba
+
+    return ejecutar_diagnostico_paquete_prueba(db, tipo)
+
+
 @router.post("/enviar-prueba-paquete")
 def post_enviar_prueba_paquete(payload: dict = Body(...), db: Session = Depends(get_db)):
     """Delega en servicio unico (evita duplicar logica con el router)."""

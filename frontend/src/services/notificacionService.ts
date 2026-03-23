@@ -261,6 +261,27 @@ export interface EnvioPruebaPaqueteResponse {
   destinos?: string[]
 }
 
+export interface DiagnosticoPaquetePruebaResponse {
+  ok?: boolean
+  motivo?: string
+  tipo_solicitado?: string
+  tipo_config?: string
+  habilitado_envio?: boolean
+  plantilla_id?: number | null
+  plantilla_ok?: boolean
+  plantilla_motivo?: string | null
+  paquete_estricto?: boolean
+  relax_solo_prueba_destino?: boolean
+  paquete_completo?: boolean
+  paquete_motivo?: string | null
+  adjuntos_previstos?: Array<{
+    nombre: string
+    bytes: number
+    cabecera_pdf: boolean
+  }>
+  error_adjuntos?: string
+}
+
 /** Prefijo API v1; pestañas de notificaciones usan rutas propias (notificaciones-previas, etc.). */
 
 const API_V1 = '/api/v1'
@@ -731,6 +752,16 @@ class NotificacionService {
   /**
    * Prueba de paquete completo: cuerpo desde plantilla vinculada + Carta PDF + PDFs fijos (mismo flujo que producción).
    */
+
+  async diagnosticoPaquetePrueba(
+    tipo: string
+  ): Promise<DiagnosticoPaquetePruebaResponse> {
+    const params = new URLSearchParams({ tipo })
+    return await apiClient.get<DiagnosticoPaquetePruebaResponse>(
+      `${this.baseUrl}/diagnostico-paquete-prueba?${params}`
+    )
+  }
+
   async enviarPruebaPaqueteCompleta(params: {
     tipo: string
     destinos: string[]

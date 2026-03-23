@@ -28,6 +28,7 @@ import { emailConfigService } from '../../services/notificacionService'
 import {
   notificacionService,
   type EnvioPruebaPaqueteResponse,
+  type DiagnosticoPaquetePruebaResponse,
   type NotificacionPlantilla,
 } from '../../services/notificacionService'
 
@@ -252,6 +253,9 @@ export function ConfiguracionNotificaciones() {
   const [tipoPruebaPaquete, setTipoPruebaPaquete] = useState<string>(
     CRITERIOS_ENVIO_PANEL[0].tipo
   )
+
+  const [diagnosticoPaquete, setDiagnosticoPaquete] =
+    useState<DiagnosticoPaquetePruebaResponse | null>(null)
 
   const guardandoRef = useRef(false)
 
@@ -536,10 +540,18 @@ export function ConfiguracionNotificaciones() {
           `Enviado con advertencias (fallidos=${fallidos}). Revise SMTP y adjuntos en pestañas 2 y 3.`
         )
       } else {
-        toast.error(
+        const op = resultado.omitidos_paquete_incompleto ?? 0
+        const oc = resultado.omitidos_config ?? 0
+        let msg =
           resultado.mensaje ||
-            'No se pudo enviar la prueba. Revise que exista un cliente en el criterio y que los PDFs esten configurados.'
-        )
+          'No se pudo enviar la prueba. Revise que exista un cliente en el criterio y que los PDFs esten configurados.'
+        if (op > 0) {
+          msg =
+            'Paquete incompleto: falta Carta PDF valida y/o PDF fijo (pestana 3 o adjunto global). En Render use disco persistente. Emergencia: NOTIFICACIONES_PAQUETE_ESTRICTO=false.'
+        } else if (oc > 0) {
+          msg = `Ningun envio: active Envio en la pestana del caso (${oc} omitidos por configuracion).`
+        }
+        toast.error(msg, { duration: 10000 })
       }
     } catch (error: unknown) {
       const detalle = getErrorDetail(error)
@@ -554,6 +566,29 @@ export function ConfiguracionNotificaciones() {
       setEnviandoPruebaIndice(null)
     }
   }
+
+  const handleDiagnosticoPaquete = async () => {
+    try {
+      const d =
+        await notificacionService.diagnosticoPaquetePrueba(tipoPruebaPaquete)
+      setDiagnosticoPaquete(d)
+      if (d.ok && d.paquete_completo) {
+        toast.success(
+          'Diagnostico: paquete listo (plantilla + Carta PDF + PDFs fijos). Puede enviar la prueba con confianza.',
+          { duration: 8000 }
+        )
+      } else {
+        toast.warning(
+          `Diagnostico: no listo (${d.motivo || d.paquete_motivo || 'revisar'}). Revise PDFs en pestanas 2 y 3 y volumen en Render. Opcional: NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO=true solo para prueba forzada.`,
+          { duration: 14000 }
+        )
+      }
+    } catch (e: unknown) {
+      const detalle = getErrorDetail(e)
+      toast.error(detalle || 'Error al ejecutar diagnostico')
+    }
+  }
+
   const handleEnviosMasivosPrueba = async () => {
     if (!modoPruebas) return
 
@@ -609,8 +644,8 @@ export function ConfiguracionNotificaciones() {
           })
         }, 8000)
         toast.success(
-          `${res.mensaje} En unos segundos use el boton Actualizar en la tarjeta Ultimo envio masivo para ver contadores guardados en el servidor.`,
-          { duration: 12000 }
+          `${res.mensaje} En unos segundos use Actualizar en Ultimo envio masivo para ver enviados y omitidos por paquete. Si enviados=0, revise PDFs en pestana 3 y disco persistente en Render.`,
+          { duration: 14000 }
         )
       } else {
         const { enviados, fallidos, sin_email, omitidos_config } = res ?? {}
@@ -858,6 +893,21 @@ export function ConfiguracionNotificaciones() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleDiagnosticoPaquete()}
+                  className="flex h-auto w-full items-center justify-center gap-2 rounded-lg py-2"
+                >
+                  Diagnosticar paquete (sin enviar correo)
+                </Button>
+
+                {diagnosticoPaquete && (
+                  <pre className="mt-2 max-h-48 overflow-auto rounded border border-gray-200 bg-gray-50 p-2 text-left text-xs text-gray-800">
+                    {JSON.stringify(diagnosticoPaquete, null, 2)}
+                  </pre>
+                )}
 
                 <Button
                   onClick={handleEnviarNotificacionesPrueba}
