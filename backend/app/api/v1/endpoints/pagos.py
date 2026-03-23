@@ -4078,9 +4078,9 @@ def crear_pagos_batch(
 
             valid_cedulas = {(r or "").strip().upper() for r in ced_rows_c if r}
 
-        # Fase 1: validacion (sin insertar). Si hay errores, devolver sin commit.
+        # Fase 1: validacion (sin insertar). Errores por indice; las filas validas se insertan en fase 2.
 
-        validation_errors: list[dict] = []
+        errors_by_index: dict[int, dict] = {}
 
         docs_added_in_batch: set[str] = set()
 
@@ -4090,7 +4090,7 @@ def crear_pagos_batch(
 
             if num_doc and (num_doc in existing_docs or num_doc in docs_added_in_batch):
 
-                validation_errors.append({"index": idx, "error": "Ya existe un pago con ese numero de documento.", "status_code": 409})
+                errors_by_index[idx] = {"error": "Ya existe un pago con ese numero de documento.", "status_code": 409}
 
                 continue
 
@@ -4102,11 +4102,7 @@ def crear_pagos_batch(
 
             if ced_norm_prest and ced_norm_prest not in valid_cedulas_prestamo:
 
-                validation_errors.append(
-
-                    {
-
-                        "index": idx,
+                errors_by_index[idx] = {
 
                         "error": f"La cédula no tiene préstamo registrado: {cedula_normalizada}",
 
@@ -4114,19 +4110,17 @@ def crear_pagos_batch(
 
                     }
 
-                )
-
                 continue
 
             if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
 
-                validation_errors.append({"index": idx, "error": f"Credito #{payload.prestamo_id} no existe.", "status_code": 400})
+                errors_by_index[idx] = {"error": f"Credito #{payload.prestamo_id} no existe.", "status_code": 400}
 
                 continue
 
             if cedula_normalizada and payload.prestamo_id and cedula_normalizada not in valid_cedulas:
 
-                validation_errors.append({"index": idx, "error": f"No existe cliente con cedula {cedula_normalizada}", "status_code": 404})
+                errors_by_index[idx] = {"error": f"No existe cliente con cedula {cedula_normalizada}", "status_code": 404}
 
                 continue
 
@@ -4134,27 +4128,31 @@ def crear_pagos_batch(
 
                 docs_added_in_batch.add(num_doc)
 
-        if validation_errors:
+        if len(errors_by_index) == len(pagos_list):
 
-            return {"results": [{"index": e["index"], "success": False, "error": e["error"], "status_code": e["status_code"]} for e in validation_errors], "ok_count": 0, "fail_count": len(validation_errors)}
+            results = [
+                {
+                    "index": i,
+                    "success": False,
+                    "error": errors_by_index[i]["error"],
+                    "status_code": errors_by_index[i]["status_code"],
+                }
+                for i in sorted(errors_by_index)
+            ]
 
-
+            return {"results": results, "ok_count": 0, "fail_count": len(results)}
 
         cedulas_lote = {
-
-            (p.cedula_cliente or "").strip().upper()
-
-            for p in pagos_list
-
-            if (p.cedula_cliente or "").strip()
-
+            (pagos_list[i].cedula_cliente or "").strip().upper()
+            for i in range(len(pagos_list))
+            if i not in errors_by_index and (pagos_list[i].cedula_cliente or "").strip()
         }
 
         alinear_cedulas_clientes_existentes(db, cedulas_lote)
 
 
 
-        # Fase 2: transaccion unica. Crear todos los pagos (flush), aplicar a cuotas, un commit al final.
+        # Fase 2: transaccion unica. Crear pagos validos (flush), aplicar a cuotas, un commit al final.
 
         results: list[dict] = []
 
@@ -4163,6 +4161,28 @@ def crear_pagos_batch(
             for idx, payload in enumerate(pagos_list):
 
                 num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
+
+                if idx in errors_by_index:
+
+                    err = errors_by_index[idx]
+
+                    results.append(
+
+                        {
+
+                            "index": idx,
+
+                            "success": False,
+
+                            "error": err["error"],
+
+                            "status_code": err["status_code"],
+
+                        }
+
+                    )
+
+                    continue
 
                 ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
 
@@ -4218,7 +4238,13 @@ def crear_pagos_batch(
 
             db.commit()
 
-            return {"results": results, "ok_count": len(results), "fail_count": 0}
+            results.sort(key=lambda r: r["index"])
+
+            ok_count = sum(1 for r in results if r.get("success"))
+
+            fail_count = len(results) - ok_count
+
+            return {"results": results, "ok_count": ok_count, "fail_count": fail_count}
 
         except Exception as e:
 

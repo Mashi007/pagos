@@ -1607,6 +1607,9 @@ export function useExcelUploadPagos({
             }
           }
         }
+
+        if (typeof batchRes.ok_count === 'number') ok = batchRes.ok_count
+        if (typeof batchRes.fail_count === 'number') fail = batchRes.fail_count
       } catch {
         for (const row of toSave) {
           const result = await saveIndividualPago(row, {
