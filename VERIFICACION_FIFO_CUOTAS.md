@@ -1,8 +1,8 @@
-# VERIFICACIÓN: Integración de Pagos a Cuotas con FIFO
+# VERIFICACIÓN: Integración de Pagos a Cuotas con Cascada
 
 ## Objetivo
 
-Verificar que los **pagos verificados y conciliados** se aplican correctamente a las **cuotas más antiguas primero (FIFO)** de manera óptima y eficiente.
+Verificar que los **pagos verificados y conciliados** se aplican correctamente a las **cuotas más antiguas primero (Cascada)** de manera óptima y eficiente.
 
 ---
 
@@ -15,12 +15,12 @@ Verificar que los **pagos verificados y conciliados** se aplican correctamente a
 ```
 Aplica el monto del pago a cuotas del préstamo.
 Crea registros en cuota_pagos para historial completo.
-Reglas de negocio: FIFO (First In First Out).
+Reglas de negocio: Cascada (First In First Out).
 ```
 
 ---
 
-## 🔍 FLUJO DEL ALGORITMO FIFO
+## 🔍 FLUJO DEL ALGORITMO Cascada
 
 ### PASO 1: Obtener Cuotas Pendientes (Ordenadas por Antigüedad)
 
@@ -34,31 +34,31 @@ cuotas_pendientes = (
             Cuota.fecha_pago.is_(None),  # No ha sido pagada
             or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto),  # No está completa
         )
-        .order_by(Cuota.numero_cuota)  # ← ORDEN FIFO: Por número de cuota (antiguas primero)
+        .order_by(Cuota.numero_cuota)  # ← ORDEN Cascada: Por número de cuota (antiguas primero)
     )
 ).scalars().all()
 ```
 
-**Análisis FIFO**:
+**Análisis Cascada**:
 ✅ **`.order_by(Cuota.numero_cuota)`** - Ordena por número de cuota (1, 2, 3, ...)  
 ✅ **Cuota 1 es la más antigua** → Se procesa primero  
 ✅ **Cuota 2 se procesa después** si queda monto  
-✅ **Garantiza aplicación FIFO** - Cuotas antiguas primero  
+✅ **Garantiza aplicación Cascada** - Cuotas antiguas primero  
 
 **Complejidad**: O(n) donde n = número de cuotas
 
 ---
 
-### PASO 2: Iterar y Aplicar Monto (FIFO)
+### PASO 2: Iterar y Aplicar Monto (Cascada)
 
 ```python
 # Línea 1592-1642
 monto_restante = float(pago.monto_pagado)
 cuotas_completadas = 0
 cuotas_parciales = 0
-orden_aplicacion = 0  # Secuencia FIFO
+orden_aplicacion = 0  # Secuencia Cascada
 
-for c in cuotas_pendientes:  # ← Iteración en orden FIFO
+for c in cuotas_pendientes:  # ← Iteración en orden Cascada
     monto_cuota = float(c.monto)
     total_pagado_actual = float(c.total_pagado or 0)
     monto_necesario = monto_cuota - total_pagado_actual
@@ -80,7 +80,7 @@ for c in cuotas_pendientes:  # ← Iteración en orden FIFO
         pago_id=pago.id,
         monto_aplicado=Decimal(str(round(a_aplicar, 2))),
         fecha_aplicacion=datetime.now(),
-        orden_aplicacion=orden_aplicacion,  # ← SECUENCIA FIFO
+        orden_aplicacion=orden_aplicacion,  # ← SECUENCIA Cascada
         es_pago_completo=es_pago_completo,
     )
     db.add(cuota_pago)
@@ -98,10 +98,10 @@ for c in cuotas_pendientes:  # ← Iteración en orden FIFO
     monto_restante -= a_aplicar
 ```
 
-**Análisis FIFO**:
+**Análisis Cascada**:
 ✅ **Itera en orden**: Cuota 1, 2, 3, ...  
 ✅ **min(monto_restante, monto_necesario)**: No sobreaplicar  
-✅ **order_aplicacion += 1**: Rastrea secuencia FIFO  
+✅ **order_aplicacion += 1**: Rastrea secuencia Cascada  
 ✅ **monto_restante -= a_aplicar**: Descuenta aplicado  
 ✅ **break cuando monto_restante <= 0**: Detiene cuando no hay más monto  
 
@@ -109,7 +109,7 @@ for c in cuotas_pendientes:  # ← Iteración en orden FIFO
 
 ---
 
-## 📊 CASOS DE USO - VERIFICACIÓN FIFO
+## 📊 CASOS DE USO - VERIFICACIÓN Cascada
 
 ### Caso 1: Pago que cubre 1.5 cuotas
 
@@ -123,9 +123,9 @@ Cuotas:
 
 Pago: 150.00
 
-FLUJO FIFO:
+FLUJO Cascada:
 ┌─────────────────────────────────────────────────────┐
-│ ITERACIÓN 1 - Cuota 1 (FIFO primero)               │
+│ ITERACIÓN 1 - Cuota 1 (Cascada primero)               │
 ├─────────────────────────────────────────────────────┤
 │ monto_restante = 150.00                             │
 │ monto_necesario = 100.00 - 0 = 100.00               │
@@ -138,7 +138,7 @@ FLUJO FIFO:
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐
-│ ITERACIÓN 2 - Cuota 2 (FIFO siguiente)             │
+│ ITERACIÓN 2 - Cuota 2 (Cascada siguiente)             │
 ├─────────────────────────────────────────────────────┤
 │ monto_restante = 50.00                              │
 │ monto_necesario = 100.00 - 0 = 100.00               │
@@ -158,11 +158,11 @@ FLUJO FIFO:
 │ Cuota 3: 0.00 PENDIENTE                             │
 │ Cuota 4: 0.00 PENDIENTE                             │
 │                                                      │
-│ ✅ FIFO CORRECTO: Cuotas antiguas primero           │
+│ ✅ Cascada CORRECTO: Cuotas antiguas primero           │
 └─────────────────────────────────────────────────────┘
 ```
 
-**Verificación FIFO**: ✅ CORRECTA
+**Verificación Cascada**: ✅ CORRECTA
 - Cuota 1 (antigua) se pagó primero
 - Cuota 2 se pagó después
 - Cuota 3 y 4 permanecen PENDIENTES
@@ -179,7 +179,7 @@ Cuotas:
 
 Pago: 100.00
 
-FLUJO FIFO:
+FLUJO Cascada:
 ┌─────────────────────────────────────────────────────┐
 │ ITERACIÓN 1 - Cuota 1                              │
 ├─────────────────────────────────────────────────────┤
@@ -198,7 +198,7 @@ RESULTADO:
 Cuota 1: PAGADO
 Cuota 2: PENDIENTE (sin cambios)
 
-✅ FIFO CORRECTO
+✅ Cascada CORRECTO
 ```
 
 ---
@@ -213,7 +213,7 @@ Cuotas:
 
 Pago: 100.00
 
-FLUJO FIFO:
+FLUJO Cascada:
 ┌─────────────────────────────────────────────────────┐
 │ ITERACIÓN 1 - Cuota 1 (antiguo parcial)            │
 ├─────────────────────────────────────────────────────┤
@@ -242,14 +242,14 @@ RESULTADO:
 Cuota 1: COMPLETÓ de 30% a 100% PAGADO ✅
 Cuota 2: COMENZÓ con 0% a 30% ADELANTADO ✅
 
-✅ FIFO CORRECTO: Cuota antigua se completa primero
+✅ Cascada CORRECTO: Cuota antigua se completa primero
 ```
 
 ---
 
 ## 🎯 VERIFICACIÓN DE OPTIMALIDAD
 
-### ✅ 1. Orden Correcto (FIFO)
+### ✅ 1. Orden Correcto (Cascada)
 
 ```python
 .order_by(Cuota.numero_cuota)  # Cuota 1, 2, 3, ...
@@ -259,7 +259,7 @@ Cuota 2: COMENZÓ con 0% a 30% ADELANTADO ✅
 ✅ Ordena por número_cuota  
 ✅ Número menor = más antiguo  
 ✅ Se itera en orden (1, 2, 3, ...)  
-✅ FIFO garantizado  
+✅ Cascada garantizado  
 
 ---
 
@@ -287,7 +287,7 @@ cuota_pago = CuotaPago(
 
 **Análisis**:
 ✅ `orden_aplicacion` secuencial  
-✅ Permite auditar FIFO después  
+✅ Permite auditar Cascada después  
 ✅ Historial completo en `cuota_pagos`  
 
 ---
@@ -383,12 +383,12 @@ cuota_pago = CuotaPago(
 
 ## 📋 VERIFICACIÓN DE REGLAS DE NEGOCIO
 
-### ✅ Regla 1: FIFO (First In First Out)
+### ✅ Regla 1: Cascada (First In First Out)
 
 **Regla**: Aplicar pagos a cuotas antiguas primero
 
 ```python
-.order_by(Cuota.numero_cuota)  # ← FIFO
+.order_by(Cuota.numero_cuota)  # ← Cascada
 ```
 
 **Verificación**: ✅ IMPLEMENTADA
@@ -433,7 +433,7 @@ cuota_pago = CuotaPago(
     cuota_id=c.id,
     pago_id=pago.id,
     monto_aplicado=...,
-    orden_aplicacion=orden_aplicacion,  # ← AUDITORÍA FIFO
+    orden_aplicacion=orden_aplicacion,  # ← AUDITORÍA Cascada
 )
 db.add(cuota_pago)
 ```
@@ -454,14 +454,14 @@ c.total_pagado = Decimal(str(round(nuevo_total, 2)))
 
 ---
 
-## 🧪 TEST MANUAL - Verificar FIFO
+## 🧪 TEST MANUAL - Verificar Cascada
 
-### SQL: Verificar Orden FIFO en BD
+### SQL: Verificar Orden Cascada en BD
 
 ```sql
 -- 1. Crear cliente y prestamo de prueba
 INSERT INTO clientes (cedula, nombres, apellidos, ...)
-VALUES ('V99999999', 'Test FIFO', 'Test', ...);
+VALUES ('V99999999', 'Test Cascada', 'Test', ...);
 
 -- 2. Crear prestamo
 INSERT INTO prestamos (cliente_id, total_financiamiento, numero_cuotas, ...)
@@ -482,18 +482,18 @@ ORDER BY numero_cuota;
 
 -- 4. Crear pago de 150.00
 INSERT INTO pagos (cedula, prestamo_id, monto_pagado, numero_documento, estado, ...)
-VALUES ('V99999999', prestamo_id, 150.00, 'TEST_FIFO_001', 'PENDIENTE', ...);
+VALUES ('V99999999', prestamo_id, 150.00, 'TEST_CASCADA_001', 'PENDIENTE', ...);
 
 -- 5. Aplicar pago
 CALL _aplicar_pago_a_cuotas_interno(pago_id, db);
 
--- 6. Verificar resultado (FIFO)
+-- 6. Verificar resultado (Cascada)
 SELECT id, numero_cuota, monto, total_pagado, estado
 FROM cuotas
 WHERE prestamo_id = prestamo_id
 ORDER BY numero_cuota;
 
--- Resultado esperado (FIFO):
+-- Resultado esperado (Cascada):
 -- id | numero_cuota | monto  | total_pagado | estado
 -- ---|--------------|--------|--------------|-------------------
 -- 1  | 1            | 100.00 | 100.00       | PAGADO           ← Cuota 1 (antigua) completa
@@ -509,8 +509,8 @@ ORDER BY orden_aplicacion;
 -- Resultado esperado:
 -- cuota_id | pago_id | monto_aplicado | orden_aplicacion
 -- ---------|---------|----------------|------------------
--- 1        | pago_id | 100.00         | 0                ← Primera (FIFO)
--- 2        | pago_id | 50.00          | 1                ← Segunda (FIFO)
+-- 1        | pago_id | 100.00         | 0                ← Primera (Cascada)
+-- 2        | pago_id | 50.00          | 1                ← Segunda (Cascada)
 
 -- 8. Verificar que cuota 3 está completamente intacta
 SELECT total_pagado FROM cuotas WHERE id = 3;
@@ -523,7 +523,7 @@ SELECT total_pagado FROM cuotas WHERE id = 3;
 
 | Aspecto | Verificación | Status |
 |---------|-------------|--------|
-| **FIFO Orden** | `.order_by(Cuota.numero_cuota)` | ✅ |
+| **Cascada Orden** | `.order_by(Cuota.numero_cuota)` | ✅ |
 | **No Sobreaplicar** | `min(monto_restante, monto_necesario)` | ✅ |
 | **Transiciones Estado** | PAGADO / PAGO_ADELANTADO / PENDIENTE | ✅ |
 | **Auditoría** | `orden_aplicacion` en `cuota_pagos` | ✅ |
@@ -539,10 +539,10 @@ SELECT total_pagado FROM cuotas WHERE id = 3;
 
 ```
 ┌───────────────────────────────────────────────────┐
-│ INTEGRACIÓN DE PAGOS A CUOTAS - FIFO              │
+│ INTEGRACIÓN DE PAGOS A CUOTAS - Cascada              │
 ├───────────────────────────────────────────────────┤
 │                                                   │
-│ ✅ FIFO CORRECTO: Cuotas antiguas primero        │
+│ ✅ Cascada CORRECTO: Cuotas antiguas primero        │
 │ ✅ ÓPTIMO: O(m log m + n) complejidad            │
 │ ✅ EFICIENTE: 1-10ms por pago                    │
 │ ✅ PRECISO: Decimal + validaciones               │

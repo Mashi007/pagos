@@ -332,7 +332,7 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     cuotas = db.execute(
         select(Cuota)
         .where(Cuota.prestamo_id == prestamo_id)
-        .order_by(Cuota.numero_cuota)  # FIFO
+        .order_by(Cuota.numero_cuota)  # Cascada
     ).scalars().all()
     
     # Retornar con estado de pago, fechas vencimiento, etc.

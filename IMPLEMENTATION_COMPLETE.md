@@ -32,7 +32,7 @@ Cliente → Préstamo → Cuotas (Auto) → Pagos (Excel) → Articulación → 
 
 ### 4. **Articulación de Pagos a Cuotas** ✅
 **Problema**: Pagos no se aplicaban automáticamente  
-**Solución**: Al crear pago con prestamo_id, aplica FIFO  
+**Solución**: Al crear pago con prestamo_id, aplica Cascada  
 **Mejora**: Tracking de `pagos_articulados` en respuesta  
 **Commit**: `06bc4028`
 
@@ -77,7 +77,7 @@ Cliente → Préstamo → Cuotas (Auto) → Pagos (Excel) → Articulación → 
 ### Phase 4: Pago ✅
 - Pago creado sin error 500
 - Cédula normalizada
-- Aplicado a cuota (FIFO)
+- Aplicado a cuota (Cascada)
 
 ### Phase 5: Carga Masiva ✅
 - 3 pagos cargados
@@ -107,7 +107,7 @@ ac55a6f5 - fix: Normalize cedula in crear_pago
 |---------|-------|---------|-----------|
 | Error 500 | ❌ Frecuente | ✅ Ninguno | Confiable |
 | Cuotas | ❌ Manual | ✅ Auto | UX mejorada |
-| Pagos | ❌ No articulan | ✅ FIFO automático | Consistencia |
+| Pagos | ❌ No articulan | ✅ Cascada automático | Consistencia |
 | Carga Excel | ❌ Sin tracking | ✅ Completo | Transparencia |
 | Data integrity | ⚠️ Manual | ✅ Automático | Confiable |
 
@@ -128,7 +128,7 @@ ac55a6f5 - fix: Normalize cedula in crear_pago
    ↓ (cédulas normalizadas a UPPERCASE)
 5. Validación: cédula existe en clientes
    ↓
-6. Pago se articula a cuota más antigua (FIFO)
+6. Pago se articula a cuota más antigua (Cascada)
    ↓ (usando cuota_pagos join table)
 7. Cuota se marca como PAGADO
    ↓
@@ -173,7 +173,7 @@ ac55a6f5 - fix: Normalize cedula in crear_pago
 
 3. **Join Tables for History**
    - `cuota_pagos` permite rastrear toda aplicación
-   - `orden_aplicacion` valida FIFO
+   - `orden_aplicacion` valida Cascada
    - Auditable y debuggable
 
 4. **Testing Completo**

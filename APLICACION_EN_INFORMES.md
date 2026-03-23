@@ -136,7 +136,7 @@ Frontend: download & save PDF
 
 ### Antes de Mostrar Estados
 Backend ejecuta: `sincronizar_pagos_pendientes_a_prestamos()`
-- Aplica pagos pendientes a cuotas (FIFO)
+- Aplica pagos pendientes a cuotas (Cascada)
 - Recalcula estados
 - Asegura que datos mostrados son actuales
 

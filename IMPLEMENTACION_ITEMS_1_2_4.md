@@ -13,7 +13,7 @@ v_alert_duplicados_numero_cuota         -- Duplicados de numero_cuota/prestamo
 v_alert_cuotas_estado_invalido          -- Estados NULL o inválidos
 v_alert_cuotas_sin_fecha_aprobacion     -- Cuotas sin origen en fecha_aprobacion
 v_alert_inconsistencia_estado_pago      -- Estado vs total_pagado inconsistente
-v_alert_fifo_violacion                  -- Cuota posterior pagada sin pagar anterior
+v_alert_cascada_violacion               -- (hist. v_alert_fifo_violacion) Cuota posterior pagada sin pagar anterior
 v_alert_resumen                         -- Dashboard de alertas activas
 ```
 

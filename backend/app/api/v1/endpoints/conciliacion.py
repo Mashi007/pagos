@@ -19,7 +19,7 @@ async def asignar_pagos_automatico(
     usuario = Depends(get_current_user)
 ):
     """
-    Asigna automáticamente pagos sin cuotas a cuotas pendientes (FIFO).
+    Asigna automáticamente pagos sin cuotas a cuotas pendientes (cascada).
     Requiere: Token de administrador
     """
     try:

@@ -2116,7 +2116,7 @@ def importar_reportados_aprobados_a_pagos(
 
     Los que no cumplen se guardan en datos_importados_conerrores; descargar Excel desde el frontend.
 
-    Los pagos válidos se aplican a cuotas del préstamo (FIFO) en el mismo request.
+    Los pagos válidos se aplican a cuotas del préstamo (asignación en cascada) en el mismo request.
 
     """
 
@@ -2246,7 +2246,7 @@ def importar_reportados_aprobados_a_pagos(
 
             cc, cp = _aplicar_pago_a_cuotas_interno(p, db)
 
-            p.estado = _estado_pago_tras_aplicar_fifo(cc, cp)
+            p.estado = _estado_pago_tras_aplicar_cascada(cc, cp)
 
             if cc > 0 or cp > 0:
 
@@ -2496,9 +2496,9 @@ def export_excel_pagos_sin_aplicar_cuotas(
 
         description="todos (default): sin ninguna fila en cuota_pagos (no aplicados a cuotas). "
 
-        "fifo: ademas monto>0, prestamo_id, no ANULADO_IMPORT (cola del job). "
+        "cascada (alias: fifo): ademas monto>0, prestamo_id, no ANULADO_IMPORT (cola del job). "
 
-        "sin_cupo: como fifo y sin cupo aplicable en cuotas PENDIENTE/MORA/PARCIAL.",
+        "sin_cupo: como cascada (alias fifo) y sin cupo aplicable en cuotas PENDIENTE/MORA/PARCIAL.",
 
     ),
 
@@ -2518,9 +2518,13 @@ def export_excel_pagos_sin_aplicar_cuotas(
 
     c = (cohorte or "todos").strip().lower()
 
+    if c == "cascada":
+
+        c = "fifo"
+
     if c not in ("todos", "fifo", "sin_cupo"):
 
-        raise HTTPException(status_code=400, detail="cohorte debe ser todos, fifo o sin_cupo")
+        raise HTTPException(status_code=400, detail="cohorte debe ser todos, cascada (alias: fifo), o sin_cupo")
 
 
 
@@ -3054,7 +3058,7 @@ def guardar_fila_editable(
 
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
 
-        pago.estado = _estado_pago_tras_aplicar_fifo(cuotas_completadas, cuotas_parciales)
+        pago.estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
 
 
 
@@ -4162,7 +4166,7 @@ def crear_pagos_batch(
 
                     cc_b, cp_b = _aplicar_pago_a_cuotas_interno(row, db)
 
-                    row.estado = _estado_pago_tras_aplicar_fifo(cc_b, cp_b)
+                    row.estado = _estado_pago_tras_aplicar_cascada(cc_b, cp_b)
 
                 results.append({"index": idx, "success": True, "pago": _pago_to_response(row)})
 
@@ -4334,13 +4338,13 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         db.refresh(row)
 
-        # [C3] Aplicar FIFO a cuotas en la misma transacción para que préstamos y estado de cuenta se actualicen
+        # [C3] Aplicar cascada a cuotas en la misma transacción para que préstamos y estado de cuenta se actualicen
 
         if row.prestamo_id and float(row.monto_pagado or 0) > 0:
 
             cc_n, cp_n = _aplicar_pago_a_cuotas_interno(row, db)
 
-            row.estado = _estado_pago_tras_aplicar_fifo(cc_n, cp_n)
+            row.estado = _estado_pago_tras_aplicar_cascada(cc_n, cp_n)
 
         db.commit()
 
@@ -4500,7 +4504,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
 
-            row.estado = _estado_pago_tras_aplicar_fifo(cuotas_completadas, cuotas_parciales)
+            row.estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
 
             db.commit()
 
@@ -4581,7 +4585,7 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
 
 
 
-def _estado_pago_tras_aplicar_fifo(cuotas_completadas: int, cuotas_parciales: int) -> str:
+def _estado_pago_tras_aplicar_cascada(cuotas_completadas: int, cuotas_parciales: int) -> str:
 
     """
 
@@ -4589,7 +4593,7 @@ def _estado_pago_tras_aplicar_fifo(cuotas_completadas: int, cuotas_parciales: in
 
     Solo PAGADO si hubo aplicación (al menos un registro en cuota_pagos).
 
-    Evita marcar PAGADO sin cuota_pagos (inconsistencia y bloqueo del job FIFO).
+    Evita marcar PAGADO sin cuota_pagos (inconsistencia y bloqueo del job en cascada).
 
     """
 
@@ -4640,10 +4644,10 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
             .where(
                 Cuota.prestamo_id == prestamo_id,
                 # Solo saldo pendiente: no exigir fecha_pago NULL. Si hay fecha_pago pero total_pagado < monto
-                # (carga manual, migración o bug), excluir la cuota bloqueaba el FIFO y los pagos quedaban sin aplicar.
+                # (carga manual, migración o bug), excluir la cuota bloqueaba la cascada y los pagos quedaban sin aplicar.
                 or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto - 0.01),
             )
-            .order_by(Cuota.numero_cuota.asc())  # FIFO: primero las cuotas más antiguas (numero_cuota menor), luego las siguientes
+            .order_by(Cuota.numero_cuota.asc())  # Cascada: primero las cuotas más antiguas (numero_cuota menor), luego las siguientes
 
         )
 
@@ -4667,6 +4671,20 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
 
         if monto_restante <= 0 or monto_cuota <= 0:
 
+            break
+
+        dup = db.scalar(
+            select(func.count())
+            .select_from(CuotaPago)
+            .where(CuotaPago.cuota_id == c.id, CuotaPago.pago_id == pago.id)
+        )
+        if dup and int(dup) > 0:
+            logger.warning(
+                "Aplicacion en cascada detenida: ya existe cuota_pagos para cuota_id=%s pago_id=%s. "
+                "Use POST /prestamos/{id}/reaplicar-cascada-aplicacion (o .../reaplicar-fifo-aplicacion) para reconstruir.",
+                c.id,
+                pago.id,
+            )
             break
 
         a_aplicar = min(monto_restante, monto_necesario)
@@ -4744,7 +4762,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
             cuotas_completadas += 1
 
         else:
-            # Cuota aún abierta: limpiar fecha_pago residual para no bloquear futuras aplicaciones FIFO.
+            # Cuota aún abierta: limpiar fecha_pago residual para no bloquear futuras aplicaciones en cascada.
             c.fecha_pago = None
 
             estado_nuevo = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
@@ -4893,7 +4911,7 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
 
         cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
 
-        pago.estado = _estado_pago_tras_aplicar_fifo(cuotas_completadas, cuotas_parciales)
+        pago.estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
 
         db.commit()
 
@@ -5151,9 +5169,5 @@ def upload_cedulas_reportar_bs(
 
     }
 
-
-
-
-
-
-
+# Compat: nombre historico
+_estado_pago_tras_aplicar_fifo = _estado_pago_tras_aplicar_cascada

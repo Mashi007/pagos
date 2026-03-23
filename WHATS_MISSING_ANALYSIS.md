@@ -15,7 +15,7 @@
 
 ### 2. **Completar E2E Test (Fases 4-8)** ⏳
 - Phase 4: Crear Pago → ❌ Error 500
-- Phase 5: Verificar aplicación FIFO → ⏳ Pendiente
+- Phase 5: Verificar aplicación Cascada → ⏳ Pendiente
 - Phase 6: Validar auditoría → ⏳ Pendiente  
 - Phase 7: Reconciliación → ⏳ Pendiente
 - Phase 8: Verificación final → ⏳ Pendiente
@@ -28,7 +28,7 @@
 - Estados esperados: PENDIENTE → PAGADO → PAGO_ADELANTADO, VENCIDO, MORA
 - Transiciones: ¿Se validan correctamente?
 
-### 4. **Aplicación FIFO de Pagos** ⏳
+### 4. **Aplicación Cascada de Pagos** ⏳
 - ✅ Implementado código
 - ⏳ **No probado en E2E**
 - ¿Se aplican a cuota más antigua primero?
@@ -96,7 +96,7 @@ Error 500 [CRÍTICO]
     ↓
     ├─→ Phase 4: Pago [BLOQUEADO]
     │     ↓
-    │     ├─→ Phase 5: Aplicación FIFO [DEPENDE]
+    │     ├─→ Phase 5: Aplicación Cascada [DEPENDE]
     │     ├─→ Phase 6: Auditoría [DEPENDE]
     │     └─→ Phase 7: Reconciliación [DEPENDE]
     │
@@ -120,7 +120,7 @@ Error 500 [CRÍTICO]
 - ✅ usuario_proponente en préstamos
 - ✅ usuario_registro en pagos
 - ✅ Estados y transiciones codificados
-- ✅ FIFO logic implementado
+- ✅ Cascada logic implementado
 
 ### Testing
 - ✅ Test scripts (PS + Bash)
@@ -140,7 +140,7 @@ Error 500 [CRÍTICO]
 ### Session Siguiente:
 1. **URGENTE**: Debuggear Error 500
 2. **CRÍTICO**: Completar E2E test (Fases 4-8)
-3. **ALTO**: Validar FIFO payment application
+3. **ALTO**: Validar Cascada payment application
 4. **ALTO**: Verificar auditoría funciona
 
 ### 2 Sesiones Después:

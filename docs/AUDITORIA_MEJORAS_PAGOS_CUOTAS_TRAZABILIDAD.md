@@ -36,10 +36,10 @@
 
 ---
 
-### 1.3 Trazabilidad: tabla `cuota_pagos` y orden FIFO
+### 1.3 Trazabilidad: tabla `cuota_pagos` y orden Cascada
 
 - **Tabla:** `cuota_pagos` (cuota_id, pago_id, monto_aplicado, fecha_aplicacion, orden_aplicacion, es_pago_completo). ✅
-- **Orden:** FIFO por `numero_cuota`; `orden_aplicacion` 0, 1, 2… por pago. ✅
+- **Orden:** Cascada por `numero_cuota`; `orden_aplicacion` 0, 1, 2… por pago. ✅
 - **Verificaciones SQL:** `sql/verificar_trazabilidad_pagos_cuotas_prestamos.sql` (resumen, integridad pago/cuota, orden, cadena, por préstamo). ✅
 
 ---
@@ -50,7 +50,7 @@
 |---------|-----------|
 | `sql/verificar_pagos_conciliados.sql` | Total conciliados / no conciliados |
 | `sql/verificar_pagos_integrados_cuotas.sql` | Pagos con préstamo y monto: cuántos tienen al menos una fila en `cuota_pagos`; listado no integrados; desfase monto; por préstamo |
-| `sql/verificar_trazabilidad_pagos_cuotas_prestamos.sql` | Resumen trazabilidad, integridad pago/cuota, orden FIFO, cadena pago→cuota→préstamo, por préstamo |
+| `sql/verificar_trazabilidad_pagos_cuotas_prestamos.sql` | Resumen trazabilidad, integridad pago/cuota, orden Cascada, cadena pago→cuota→préstamo, por préstamo |
 | `sql/backfill_cuota_pagos.sql` | Conteo e INSERT para rellenar `cuota_pagos` desde cuotas legacy (total_pagado + pago_id). ✅ Ejecutado: 2050 filas insertadas |
 
 ---
@@ -91,6 +91,6 @@
 
 ## 3. Resumen
 
-- **Implementado y verificado:** Autoconciliación en todos los flujos de carga, integración a cuotas (en request + al abrir préstamo + endpoint masivo), trazabilidad en `cuota_pagos` con FIFO, SQL de verificación y backfill ejecutado (2050 filas).
+- **Implementado y verificado:** Autoconciliación en todos los flujos de carga, integración a cuotas (en request + al abrir préstamo + endpoint masivo), trazabilidad en `cuota_pagos` con Cascada, SQL de verificación y backfill ejecutado (2050 filas).
 - **Pendiente recomendado:** Corrección de los 2 pagos con doble asignación (31440, 31698); completar `fecha_conciliacion`/`verificado_concordancia` al mover desde pagos_con_errores cuando conciliado=True.
 - **Opcional:** Indicador de trazabilidad en health, job diario de integración, scripts SQL en cron/alertas, origen de creación, runbook.

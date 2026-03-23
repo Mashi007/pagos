@@ -1,0 +1,340 @@
+/**
+
+
+
+
+
+ * Consulta PÚBLICA de estado de cuenta por cédula.
+
+
+
+
+
+ * Flujo: bienvenida → ingresar cédula → bienvenida con nombre → PDF + envío al email.
+
+
+
+
+
+ * Sin login. Misma lógica y seguridades que rapicredit-cobros (rate limit, validación).
+
+
+
+
+
+ * Marca sesión para que, si intentan ir a login/sistema, vean "Acceso prohibido" y puedan volver aquí.
+
+
+
+
+
+ */
+
+import React, { useState, useEffect, useRef } from 'react'
+
+import { useLocation } from 'react-router-dom'
+
+import {
+  validarCedulaEstadoCuenta,
+  solicitarCodigo,
+  verificarCodigo,
+  solicitarEstadoCuenta,
+  type ReciboCuotaItem,
+} from '../services/estadoCuentaService'
+
+import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
+
+import { Button } from '../components/ui/button'
+
+import { Input } from '../components/ui/input'
+
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+
+const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
+
+/** Normaliza para validar: quita espacios, guiones y puntos. Si solo 6-11 dígitos, al procesar se antepone V. No acepta puntos ni signos intermedios. */
+
+function normalizarCedulaParaProcesar(val: string): {
+  valido: boolean
+  valorParaEnviar?: string
+  error?: string
+} {
+  const s = val
+    .trim()
+    .toUpperCase()
+    .replace(/[\s.\-]/g, '')
+
+  if (!s) return { valido: false, error: 'Ingrese el número de cédula.' }
+
+  if (!/^[VEGJ]?\d+$/.test(s)) {
+    return {
+      valido: false,
+      error:
+        'No use puntos ni signos intermedios. Solo letra (V, E, G o J) y dígitos.',
+    }
+  }
+
+  if (/^\d{6,11}$/.test(s)) return { valido: true, valorParaEnviar: 'V' + s }
+
+  if (CEDULA_REGEX.test(s)) return { valido: true, valorParaEnviar: s }
+
+  return {
+    valido: false,
+    error: 'Cédula inválida. Use letra V, E, G o J seguida de 6 a 11 dígitos.',
+  }
+}
+
+type NotificationState = { type: 'error' | 'success'; message: string } | null
+
+function NotificationBanner({
+  notification,
+
+  onDismiss,
+}: {
+  notification: NotificationState
+
+  onDismiss: () => void
+}) {
+  if (!notification) return null
+
+  const isError = notification.type === 'error'
+
+  return (
+    <div
+      role="alert"
+      className={`flex w-full min-w-0 max-w-md items-center gap-3 rounded-2xl border-2 px-4 py-4 shadow-xl backdrop-blur-sm sm:px-5 ${
+        isError
+          ? 'border-red-700 bg-red-600/95 text-white'
+          : 'border-emerald-700 bg-emerald-600/95 text-white'
+      }`}
+    >
+      <span
+        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white/20 sm:h-10 sm:w-10"
+        aria-hidden
+      >
+        {isError ? (
+          <svg
+            className="h-6 w-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        ) : (
+          <svg
+            className="h-6 w-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        )}
+      </span>
+
+      <p className="min-w-0 flex-1 break-words text-sm font-semibold leading-snug sm:text-base">
+        {notification.message}
+      </p>
+
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="flex min-h-[44px] min-w-[44px] flex-shrink-0 touch-manipulation items-center justify-center rounded-md p-2 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/50"
+        aria-label="Cerrar notificación"
+      >
+        <svg
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
+export default function EstadoCuentaPublicoPage() {
+  const [step, setStep] = useState(0)
+
+  const [cedula, setCedula] = useState('')
+
+  const [codigo, setCodigo] = useState('')
+
+  const [loading, setLoading] = useState(false)
+
+  const [loadingPdf, setLoadingPdf] = useState(false)
+
+  const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null)
+
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
+
+  const [mensajeEnvio, setMensajeEnvio] = useState('')
+
+  const [expiraEn, setExpiraEn] = useState<string | null>(null) // ISO 8601 para "Código válido hasta las HH:MM"
+
+  const [notification, setNotification] = useState<NotificationState>(null)
+
+  const [reenviarCooldown, setReenviarCooldown] = useState(0)
+
+  const [reenviarLoading, setReenviarLoading] = useState(false)
+
+  const [recibosCuotas, setRecibosCuotas] = useState<ReciboCuotaItem[] | null>(
+    null
+  )
+
+  const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
+
+  useEffect(() => {
+    return () => {
+      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
+    }
+  }, [pdfBlobUrl])
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimeoutRef.current)
+        clearTimeout(notificationTimeoutRef.current)
+    }
+  }, [])
+
+  const showNotification = (type: 'error' | 'success', message: string) => {
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current)
+
+      notificationTimeoutRef.current = null
+    }
+
+    setNotification({ type, message })
+
+    notificationTimeoutRef.current = setTimeout(() => {
+      notificationTimeoutRef.current = null
+
+      setNotification(null)
+    }, 10000)
+  }
+
+  const dismissNotification = () => setNotification(null)
+
+  const resetForm = (irAStep: number) => {
+    setNotification(null)
+
+    setExpiraEn(null)
+
+    setReenviarCooldown(0)
+
+    setRecibosCuotas(null)
+
+    if (pdfBlobUrl) {
+      URL.revokeObjectURL(pdfBlobUrl)
+      setPdfBlobUrl(null)
+    }
+
+    setCedula('')
+
+    setCodigo('')
+
+    setPdfDataUrl(null)
+
+    setMensajeEnvio('')
+
+    setStep(irAStep)
+  }
+
+  /** Formatea expira_en ISO a "HH:MM" (hora local) para mostrar "Código válido hasta las HH:MM" */
+
+  const formatExpiraEn = (iso: string | null | undefined): string | null => {
+    if (!iso) return null
+
+    try {
+      const d = new Date(iso)
+
+      if (Number.isNaN(d.getTime())) return null
+
+      return d.toLocaleTimeString('es-VE', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    } catch {
+      return null
+    }
+  }
+
+  const goToStep = (newStep: number) => {
+    setNotification(null)
+
+    setStep(newStep)
+  }
+
+  // Cooldown de reenviar código: baja 1 cada segundo cuando estamos en paso 2
+
+  const REENVIAR_COOLDOWN_SEC = 60
+
+  useEffect(() => {
+    if (step !== 2 || reenviarCooldown <= 0) return
+
+    const t = setInterval(() => {
+      setReenviarCooldown(s => (s <= 1 ? 0 : s - 1))
+    }, 1000)
+
+    return () => clearInterval(t)
+  }, [step, reenviarCooldown])
+
+  const handleReenviarCodigo = async () => {
+    if (!cedula || reenviarCooldown > 0 || reenviarLoading) return
+
+    setReenviarLoading(true)
+
+    try {
+      const res = await solicitarCodigo(cedula)
+
+      if (!res.ok) {
+        showNotification('error', res.error || 'No se pudo reenviar el código.')
+
+        return
+      }
+
+      setReenviarCooldown(REENVIAR_COOLDOWN_SEC)
+
+      setExpiraEn(res.expira_en ?? null)
+
+      setMensajeEnvio(
+        res.mensaje ??
+          'Si la cédula está registrada, recibirás un nuevo código en tu correo.'
+      )
+
+      showNotification(
+        'success',
+        'Código reenviado. Revisa tu correo (y carpeta de spam).'
+      )
+    } catch (e: unknown) {
+      showNotification(
+        'error',
+        (e as Error)?.message || 'Error al reenviar el código.'
+      )
+    } finally {
+      setReenviarLoading(false)
+    }
+  }
+
+  const stepAnnouncements: Recor

@@ -19,7 +19,7 @@ Ejecuté **auditoría en 4 etapas paralelas** usando agentes especializados:
 1. **[Cliente]** Validación, reglas, trazabilidad
 2. **[Préstamo]** Estados, transiciones, usuario_proponente
 3. **[Cuota]** Generación, mora, persistencia
-4. **[Pago]** Aplicación FIFO, _hoy_local(), pago_id
+4. **[Pago]** Aplicación Cascada, _hoy_local(), pago_id
 
 Cada agente proporcionó análisis detallado → Síntesis en matriz de coherencia
 
@@ -112,7 +112,7 @@ Cada agente proporcionó análisis detallado → Síntesis en matriz de coherenc
 └─────────────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ PAGO APLICADO A CUOTAS (FIFO)                                       │
+│ PAGO APLICADO A CUOTAS (Cascada)                                       │
 ├─────────────────────────────────────────────────────────────────────┤
 │ _aplicar_pago_a_cuotas_interno(pago):                               │
 │                                                                     │
@@ -127,7 +127,7 @@ Cada agente proporcionó análisis detallado → Síntesis en matriz de coherenc
 │    │   ├─ cuota_pagos.cuota_id = cuota.id                          │
 │    │   ├─ cuota_pagos.pago_id = pago.id                            │
 │    │   ├─ cuota_pagos.monto_aplicado = a_aplicar                   │
-│    │   ├─ cuota_pagos.orden_aplicacion = N (FIFO)                 │
+│    │   ├─ cuota_pagos.orden_aplicacion = N (Cascada)                 │
 │    │   └─ cuota_pagos.es_pago_completo = (100%)                   │
 │    │                                                               │
 │    ├─ Si 100% covered:                                             │

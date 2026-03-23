@@ -28,7 +28,7 @@ Ambas salidas usan **los mismos datos de BD**: tablas `cuotas` y `prestamos`. Si
 - **Al crear un pago:**
   1. Se inserta un registro en la tabla **`pagos`**.
   2. Si el pago tiene `prestamo_id` y `monto_pagado > 0`, se llama a **`_aplicar_pago_a_cuotas_interno`** en `pagos.py`.
-  3. Esa función aplica el monto a las cuotas del préstamo (FIFO), actualiza **`cuotas`** (total_pagado, estado, fecha_pago, etc.) y **`cuota_pagos`**.
+  3. Esa función aplica el monto a las cuotas del préstamo (Cascada), actualiza **`cuotas`** (total_pagado, estado, fecha_pago, etc.) y **`cuota_pagos`**.
 - **Resultado:** Las pantallas de préstamos y estado de cuenta se actualizan de inmediato porque leen las mismas tablas.
 
 ### Entrada B: `/rapicredit-cobros`
@@ -45,7 +45,7 @@ Ambas salidas usan **los mismos datos de BD**: tablas `cuotas` y `prestamos`. Si
 
 ## Conclusión de la verificación
 
-| Entrada              | ¿Crea fila en `pagos`? | ¿Aplica a cuotas (FIFO)? | ¿Prestamos y estado cuenta actualizados? |
+| Entrada              | ¿Crea fila en `pagos`? | ¿Aplica a cuotas (Cascada)? | ¿Prestamos y estado cuenta actualizados? |
 |----------------------|------------------------|--------------------------|------------------------------------------|
 | **A** (/pagos/pagos) | Sí                     | Sí                       | Sí                                       |
 | **B** (cobros aprob.) | No (antes del fix)     | No                       | No                                       |
@@ -61,7 +61,7 @@ Para que **cualquier camino de entrada** actualice las salidas por igual:
 1. **Al aprobar un pago reportado** en cobros:
    - Resolver **prestamo_id** a partir de la cédula del reporte (cliente con préstamo APROBADO con cuotas pendientes; criterio: por ejemplo el más reciente).
    - Crear un registro en la tabla **`pagos`** con los mismos datos (cédula, monto, fecha, número de operación como documento, prestamo_id).
-   - Llamar a la **misma lógica de aplicación a cuotas** que usa `/pagos/pagos` (`_aplicar_pago_a_cuotas_interno` o servicio compartido), para mantener FIFO y estados coherentes.
+   - Llamar a la **misma lógica de aplicación a cuotas** que usa `/pagos/pagos` (`_aplicar_pago_a_cuotas_interno` o servicio compartido), para mantener Cascada y estados coherentes.
 
 2. **Unificación:** Tanto la creación desde `/pagos/pagos` como la aprobación desde `/rapicredit-cobros` terminan:
    - Escribiendo en `pagos`,

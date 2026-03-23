@@ -209,7 +209,7 @@ WHERE pr.referencia_interna IN (
 */
 
 -- E2) Corregir solo esos pagos (ejecutar SOLO si E1 muestra tasa_oficial en todas las filas)
---     Luego re-articular cada prestamo_id afectado (FIFO).
+--     Luego re-articular cada prestamo_id afectado (Cascada).
 /*
 UPDATE pagos p
 SET

@@ -54,7 +54,7 @@ SELECT COUNT(*) as total_registros FROM public.cuota_pagos;
 
 ## 📝 CONTEXTO TÉCNICO
 
-- **orden_aplicacion**: Secuencia FIFO de pagos aplicados a una cuota
+- **orden_aplicacion**: Secuencia Cascada de pagos aplicados a una cuota
 - **Datos legacy**: Cada cuota tenía solo 1 pago (guardado en `pago_id`)
 - **Valor correcto**: Todos los datos históricos tienen `orden_aplicacion = 1`
 - **Futuros pagos**: Serán incrementales (1, 2, 3, ...) según orden de aplicación

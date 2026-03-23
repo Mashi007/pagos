@@ -13,7 +13,7 @@
 - [x] Auditoría de Cliente (creación, validación, trazabilidad)
 - [x] Auditoría de Préstamo (estados, transiciones, usuario tracking)
 - [x] Auditoría de Cuota (generación, mora, persistencia)
-- [x] Auditoría de Pago (aplicación FIFO, _hoy_local, pago_id)
+- [x] Auditoría de Pago (aplicación Cascada, _hoy_local, pago_id)
 - [x] Matriz de coherencia documentada
 - [x] 15 preguntas de diseño clarificadas
 - [x] Hallazgos por severidad (crítico, alto, medio, bajo)
@@ -83,7 +83,7 @@
 - [x] Persistencia: ⚠️ Estados calculados, no stored
 
 ### Pago → Cuota (Aplicación)
-- [x] FIFO: ✓ (orden_by numero_cuota)
+- [x] Cascada: ✓ (orden_by numero_cuota)
 - [x] Historial: ✅ (tabla cuota_pagos)
 - [x] pago_id: ✓ (último pago guardado)
 - [x] monto_aplicado: ✅ (guardado en cuota_pagos)
@@ -109,7 +109,7 @@
 - ✓ Cliente creación + validación
 - ✓ Préstamo aprobación + transiciones
 - ✓ Cuota generación + mora
-- ✓ Pago creación + aplicación FIFO
+- ✓ Pago creación + aplicación Cascada
 - ✓ Historial completo preservado
 
 ### Trazabilidad: 🟡 MEJORADA (~70%)

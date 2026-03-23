@@ -41,12 +41,12 @@ Pago (N) ───────────┘  [prestamo_id, cedula_cliente]
 
 **Lógica:**
 1. Cuotas pendientes: `fecha_pago IS NULL` y `total_pagado < monto`
-2. Orden: `numero_cuota` ascendente (FIFO por cuota)
+2. Orden: `numero_cuota` ascendente (Cascada por cuota)
 3. Distribución: aplica el monto del pago a cuotas en orden hasta agotar
 4. Actualiza: `total_pagado`, `pago_id`, `fecha_pago`, `estado` en cada cuota
 5. Estados de cuota: `PAGADO` (100% cubierta), `PAGO_ADELANTADO` o `PENDIENTE` (parcial)
 
-**Criterio:** FIFO por préstamo (primera cuota pendiente primero). No usa cédula explícitamente; la cédula se usa para identificar cliente/préstamo.
+**Criterio:** Cascada por préstamo (primera cuota pendiente primero). No usa cédula explícitamente; la cédula se usa para identificar cliente/préstamo.
 
 ### 3.2 Dónde se invocan las reglas
 
@@ -152,7 +152,7 @@ Pago (N) ───────────┘  [prestamo_id, cedula_cliente]
    - Si el cliente tiene varios préstamos y el pago no trae `prestamo_id`, definir regla (ej. préstamo con cuota más antigua vencida, menor saldo, etc.)
 
 5. **Script de asignación masiva**  
-   - Usar el SQL FIFO por `prestamo_id` y `fecha_pago` para los 43 pagos con `prestamo_id` sin asignar
+   - Usar el SQL Cascada por `prestamo_id` y `fecha_pago` para los 43 pagos con `prestamo_id` sin asignar
 
 ### 7.3 Prioridad baja
 
@@ -163,7 +163,7 @@ Pago (N) ───────────┘  [prestamo_id, cedula_cliente]
 
 ## 8. Conclusión
 
-**¿Existen reglas de negocio?** Sí, en `_aplicar_pago_a_cuotas_interno` (FIFO por cuota dentro del préstamo).
+**¿Existen reglas de negocio?** Sí, en `_aplicar_pago_a_cuotas_interno` (Cascada por cuota dentro del préstamo).
 
 **¿Se aplican en carga masiva?**  
 - Frontend (guardado individual): **sí**, si `conciliado=true` y `prestamo_id`  

@@ -265,7 +265,7 @@ Para clientes específicos:
 ```
 - Query 10: Cuotas con saldo_restante < 0 (sobre-pago)
 - Query 9: Duplicados en cuota_pagos
-- Acción: Auditar aplicación de pagos, posibles errores FIFO
+- Acción: Auditar aplicación de pagos, posibles errores Cascada
 ```
 
 ---

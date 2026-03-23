@@ -1,4 +1,4 @@
-# Corrección masiva: `PAGADO` sin `cuota_pagos` (cola FIFO bloqueada)
+# Corrección masiva: `PAGADO` sin `cuota_pagos` (cola Cascada bloqueada)
 
 ## Hallazgo de causa raíz (código)
 
@@ -6,11 +6,11 @@ Varios endpoints en `backend/app/api/v1/endpoints/pagos.py` marcaban **`pago.est
 
 | Flujo | Comportamiento anterior (incorrecto) |
 |--------|----------------------------------------|
-| `POST /pagos/guardar-fila-editable` | Insertaba el pago ya como **`PAGADO`** y luego aplicaba FIFO. |
-| `POST` creación de pago, `PUT` actualización, lote JSON batch | Tras FIFO, **`PAGADO` siempre** si había `prestamo_id`, aunque **cc=cp=0**. |
+| `POST /pagos/guardar-fila-editable` | Insertaba el pago ya como **`PAGADO`** y luego aplicaba Cascada. |
+| `POST` creación de pago, `PUT` actualización, lote JSON batch | Tras Cascada, **`PAGADO` siempre** si había `prestamo_id`, aunque **cc=cp=0**. |
 | `POST /pagos/{id}/aplicar-cuotas` | Comentario explícito: PAGADO “aunque no hubiera cuotas pendientes”. |
 
-**Corrección implementada:** función `_estado_pago_tras_aplicar_fifo(cc, cp)` — solo **`PAGADO`** si `cuotas_completadas > 0` o `cuotas_parciales > 0`; en caso contrario **`PENDIENTE`**.
+**Corrección implementada:** función `_estado_pago_tras_aplicar_cascada(cc, cp)` — solo **`PAGADO`** si `cuotas_completadas > 0` o `cuotas_parciales > 0`; en caso contrario **`PENDIENTE`**.
 
 Así se alinea el estado del pago con la existencia real de articulación en **`cuota_pagos`** y se reduce la cola “fantasma” que satura el job de 200 filas.
 
@@ -84,7 +84,7 @@ Ver `sql/correccion_pagos_pagado_sin_aplicacion_template.sql`.
 
 ## Seguimiento
 
-1. Desplegar backend con `_estado_pago_tras_aplicar_fifo`.
+1. Desplegar backend con `_estado_pago_tras_aplicar_cascada`.
 2. **usuario_registro:** en pagos.py, _usuario_registro_desde_current_user guarda email JWT o import-masivo@sistema.rapicredit.com / user_id:{id}@... si falta email (nuevas cargas MER/BNC trazables).
 
 2. Corregir histórico con criterio A/B y respaldo.

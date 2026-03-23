@@ -19,7 +19,7 @@
 -- =============================================================================
 --
 -- =============================================================================
--- PROCEDIMIENTO DE REGENERACIÓN ALINEADO CON FIFO (plan operativo — actualizado)
+-- PROCEDIMIENTO DE REGENERACIÓN ALINEADO CON Cascada (plan operativo — actualizado)
 -- =============================================================================
 --
 -- Objetivo: reconstruir el plan de cuotas según la fecha de aprobación y la
@@ -28,7 +28,7 @@
 --
 -- | Paso | Acción |
 -- |------|--------|
--- | **0** | **Análisis integral:** alinear políticas de producto (fechas, tasas por defecto 0 %, FIFO por número de cuota, estados) con lo que muestra y permite el sistema; checklist back/front antes de tocar datos. |
+-- | **0** | **Análisis integral:** alinear políticas de producto (fechas, tasas por defecto 0 %, Cascada por número de cuota, estados) con lo que muestra y permite el sistema; checklist back/front antes de tocar datos. |
 -- | **1** | **Backup:** copia de seguridad de la BD completa o, como mínimo, tablas `cuotas` y `cuota_pagos`, más snapshot de conteos por préstamo/cuota. |
 -- | **2** | **Pre-chequeos:** detectar desalineación de la cuota 1 respecto a `fecha_aprobacion` (consultas de este script); verificar integridad `pagos` ↔ `cuota_pagos` (p. ej. `sql/verificar_trazabilidad_pagos_cuotas_prestamos.sql`). |
 -- | **3** | **Regenerar cuotas:** `DELETE` del conjunto objetivo en `cuotas` (CASCADE borra `cuota_pagos`); luego `INSERT` del plan nuevo con la misma lógica que el backend (secciones E preview y F). Los `pagos` permanecen en tabla `pagos`. |
@@ -53,7 +53,7 @@
 -- - Generación de cuotas: `prestamos.py` → `_generar_cuotas_amortizacion`,
 --   `_resolver_monto_cuota` (cuota plana si tasa 0 % por defecto; sistema francés
 --   solo si la tasa anual es mayor que cero).
--- - Aplicación de pagos: FIFO por `numero_cuota` ASC; historial en `cuota_pagos`;
+-- - Aplicación de pagos: Cascada por `numero_cuota` ASC; historial en `cuota_pagos`;
 --   re-aplicación tras regenerar vía `aplicar_pagos_pendientes_prestamo` /
 --   `conciliar-amortizacion-masiva`.
 -- - Estados de cuota (PENDIENTE, PAGADO, mora/vencido según reglas actuales) y

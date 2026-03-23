@@ -51,7 +51,7 @@ if cedula_normalizada and payload.prestamo_id:
 
 **Next Step**: Re-ejecutar test con nuevos fixes
 
-### Phase 3: Validar FIFO Payment Application
+### Phase 3: Validar Cascada Payment Application
 
 **Implementación Existente**: 
 - Función `_aplicar_pago_a_cuotas_interno` lista
@@ -86,7 +86,7 @@ if cedula_normalizada and payload.prestamo_id:
 
 ### 2. Performance (Low Priority)
 - [ ] Índices en cedula (ya existen)
-- [ ] Query optimization en FIFO
+- [ ] Query optimization en Cascada
 - [ ] Caching de clientes
 
 ### 3. Validación (Low Priority)
@@ -110,7 +110,7 @@ if cedula_normalizada and payload.prestamo_id:
 | Validar cedula ante de guardar | ✅ DONE | 🔴 CRÍTICO |
 | Completar E2E Phase 4 | ⏳ READY | 🔴 CRÍTICO |
 | Completar E2E Phases 5-8 | ⏳ READY | 🟡 ALTO |
-| Validar FIFO application | ⏳ READY | 🟡 ALTO |
+| Validar Cascada application | ⏳ READY | 🟡 ALTO |
 | Verificar auditoría | ⏳ READY | 🟡 ALTO |
 | Load testing | ⏳ PLANNED | 🟡 ALTO |
 | API docs (Swagger) | ⏳ PLANNED | 🟡 ALTO |

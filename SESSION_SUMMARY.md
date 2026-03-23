@@ -153,7 +153,7 @@ ab50a05d - docs: Add testing summary for 2026-03-04 session - 86% e2e completion
 4. **usuario_proponente** tracking works for loans
 5. **usuario_registro** tracking implemented for payments
 6. **State machine** properly validates transitions
-7. **FIFO payment application** implemented via join table
+7. **Cascada payment application** implemented via join table
 
 ---
 

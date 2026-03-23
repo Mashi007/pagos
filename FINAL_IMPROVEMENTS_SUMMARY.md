@@ -25,7 +25,7 @@ Implementar todas las mejoras necesarias para completar el ciclo E2E de negocio 
 - ✅ Endpoints CRUD funcionando
 - ✅ Auditoría middleware activo
 - ✅ FK constraints enforced
-- ✅ FIFO payment application ready
+- ✅ Cascada payment application ready
 - ✅ usuario_proponente tracking
 - ✅ usuario_registro tracking
 
@@ -66,7 +66,7 @@ Implementar todas las mejoras necesarias para completar el ciclo E2E de negocio 
 | 2: Cliente | ✅ Pass | ID 17833 creado |
 | 3: Préstamo | ✅ Pass | ID 4760 creado |
 | 4: Pago | ✅ Ready | Error 500 **RESUELTO** |
-| 5: Aplicación FIFO | ⏳ Pending | Listo para ejecutar |
+| 5: Aplicación Cascada | ⏳ Pending | Listo para ejecutar |
 | 6: Auditoría | ⏳ Pending | Listo para validar |
 | 7: Reconciliación | ⏳ Pending | Listo para probar |
 | 8: Verificación | ⏳ Pending | Listo para completar |
@@ -137,7 +137,7 @@ if cedula_normalizada and payload.prestamo_id:
 
 ### Corto Plazo (Próxima sesión):
 1. Completar E2E 100%
-2. Validar FIFO payment application
+2. Validar Cascada payment application
 3. Verificar auditoría funciona
 
 ### Mediano Plazo (2-3 sesiones):

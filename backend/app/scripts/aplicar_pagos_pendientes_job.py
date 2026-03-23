@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Aplicacion masiva de pagos pendientes a cuotas (FIFO por prestamo).
+Aplicacion masiva de pagos pendientes a cuotas (cascada por prestamo).
 
 Ya no se programa en el scheduler: la conciliacion con cuotas se hace en otros
 flujos (p. ej. aplicar_pagos_pendientes_prestamo al operar un prestamo).
@@ -90,7 +90,7 @@ def aplicar_pagos_pendientes():
                     sin_cuotas += 1
                     continue
 
-                # Aplicar FIFO (exito real = al menos una fila en cuota_pagos)
+                # Aplicar cascada (exito real = al menos una fila en cuota_pagos)
                 hubo_aplicacion = False
                 for cuota in cuotas:
                     if saldo_pago <= Decimal("0.01"):

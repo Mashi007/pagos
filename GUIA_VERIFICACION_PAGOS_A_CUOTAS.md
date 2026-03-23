@@ -133,7 +133,7 @@ WHERE NOT EXISTS (SELECT 1 FROM cuota_pagos cp WHERE cp.pago_id = pg.id);
 
 **Causas posibles:**
 - Cuotas no suficientes para aplicar todo el pago
-- Error en la lógica de aplicación FIFO
+- Error en la lógica de aplicación Cascada
 
 **Solución:**
 ```sql

@@ -233,7 +233,7 @@ CREATE
 ├─ Estado: PENDIENTE (o PAGADO si entrada manual)
 ├─ conciliado: FALSE
 ├─ Si prestamo_id && monto > 0:
-│  └─ Aplicar a cuotas (FIFO por numero_cuota)
+│  └─ Aplicar a cuotas (Cascada por numero_cuota)
 │     └─ Si alguna cuota procesada: estado = PAGADO
 │
 UPDATE /pagos/{id}
@@ -251,14 +251,14 @@ CONCILIACION
 
 ---
 
-### **ETAPA 5: APLICACIÓN FIFO A CUOTAS**
+### **ETAPA 5: APLICACIÓN Cascada A CUOTAS**
 
 #### ✅ Qué SÍ funciona:
 ```
 _aplicar_pago_a_cuotas_interno(pago, db):
 ├─ Requiere: prestamo_id && monto > 0 ✓
 ├─ Query: SELECT cuotas WHERE fecha_pago IS NULL AND total_pagado < monto
-│         ORDER BY numero_cuota ASC ✓ (FIFO)
+│         ORDER BY numero_cuota ASC ✓ (Cascada)
 └─ Para cada cuota:
    ├─ remaining = min(monto - aplicado, monto_cuota - total_pagado)
    ├─ cuota.total_pagado += remaining
@@ -402,7 +402,7 @@ def _clasificar_nivel_mora(dias_mora: int, total_pagado: float, monto_cuota: flo
 │ ├─ usuario_registro: NULL ⚠️ (quién lo creó?)                       │
 │ ├─ estado: PENDIENTE → PAGADO ✓ (tras aplicación)                  │
 │ ├─ conciliado: FALSE → TRUE (via reconciliacion) ✓                  │
-│ ├─ APLICACIÓN FIFO:                                                 │
+│ ├─ APLICACIÓN Cascada:                                                 │
 │ │  ├─ Cuota #1: total_pagado=0 → 100 (completa)                   │
 │ │  │ ├─ pago_id = 9001 ✓                                           │
 │ │  │ ├─ dias_mora = ??? ❌ (_hoy_local crash)                       │

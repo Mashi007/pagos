@@ -126,7 +126,7 @@ Remove-Item $xlsxPath -Force -ErrorAction SilentlyContinue
 - ✅ Cuotas aplicadas: 4
 - ✅ Estados: Cuotas 1-4 = PAGADO
 - ✅ Articulación en cuota_pagos: orden_aplicacion incrementa
-- ✅ FIFO: Se aplican a cuota más antigua primero
+- ✅ Cascada: Se aplican a cuota más antigua primero
 
 ## Status
 

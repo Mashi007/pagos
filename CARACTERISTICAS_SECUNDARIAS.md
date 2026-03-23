@@ -3,10 +3,10 @@
 ## 1. Automatizar Asignación de Pagos No Conciliados
 
 ### Descripción
-Sistema automático que asigna pagos sin cuotas a cuotas pendientes usando FIFO (First In, First Out). Valida en cada paso para evitar sobre-aplicaciones.
+Sistema automático que asigna pagos sin cuotas a cuotas pendientes usando Cascada (First In, First Out). Valida en cada paso para evitar sobre-aplicaciones.
 
 ### Características
-- **FIFO**: Los pagos se asignan a cuotas en orden de fecha de pago
+- **Cascada**: Los pagos se asignan a cuotas en orden de fecha de pago
 - **Validación**: Cada asignación se valida antes de aplicar
 - **Auditoría**: Cada asignación se registra en tabla de auditoría
 - **Tolerancia**: 0.01 para diferencias de redondeo
@@ -163,7 +163,8 @@ Columnas:
 - \monto_asignado\: Cantidad aplicada
 - \	ipo_asignacion\: MANUAL o AUTOMATICA
 - \motivo\: Razón de la asignación (opcional)
-- \esultado\: EXITOSA o FALLIDA
+- \
+esultado\: EXITOSA o FALLIDA
 - \echa_asignacion\: Timestamp de la operación
 - \creado_en\ / \ctualizado_en\: Trazabilidad
 

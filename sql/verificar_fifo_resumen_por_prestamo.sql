@@ -1,4 +1,4 @@
--- Resumen por préstamo de violaciones FIFO (para priorizar corrección)
+-- Resumen por préstamo de violaciones Cascada (para priorizar corrección)
 -- Una fila por préstamo: primera cuota no completada y lista de cuotas posteriores con pago
 
 SELECT

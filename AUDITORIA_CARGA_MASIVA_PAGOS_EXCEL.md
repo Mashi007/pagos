@@ -98,7 +98,7 @@ La opción de la imagen **"Pagos (Excel)"** corresponde al flujo **ExcelUploader
 |-------|----------------------|
 | **pagos** | Inserción de cada pago válido (upload o createPago). FK `prestamo_id` (opcional). |
 | **pagos_con_errores** | Filas con error de validación (upload) o filas enviadas a “Revisar Pagos” (duplicados/422 desde el frontend). |
-| **cuotas** / **cuota_pagos** | Tras insertar pago con `prestamo_id`, `_aplicar_pago_a_cuotas_interno` aplica el monto a cuotas (FIFO) y crea/actualiza `cuota_pagos`. |
+| **cuotas** / **cuota_pagos** | Tras insertar pago con `prestamo_id`, `_aplicar_pago_a_cuotas_interno` aplica el monto a cuotas (Cascada) y crea/actualiza `cuota_pagos`. |
 | **clientes** | Solo lectura: validar que la cédula exista (validar-filas-batch y lógica de préstamos por cédula). |
 | **prestamos** | Solo lectura: contar préstamos por cédula (upload) y listar créditos activos para el selector (flujo A). |
 

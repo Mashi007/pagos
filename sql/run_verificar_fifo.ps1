@@ -1,13 +1,13 @@
-# Ejecuta la verificación FIFO solo después de escribir "fin"
+# Ejecuta la verificación Cascada solo después de escribir "fin"
 # Uso: .\run_verificar_fifo.ps1
 # Requiere: variable de entorno DATABASE_URL o archivo .env en backend/
 
 $palabra = ""
 while ($palabra -ne "fin") {
-    $palabra = Read-Host "Escriba 'fin' para ejecutar la verificación FIFO"
+    $palabra = Read-Host "Escriba 'fin' para ejecutar la verificación Cascada"
     $palabra = $palabra.Trim().ToLowerInvariant()
 }
-Write-Host "Ejecutando verificación FIFO..." -ForegroundColor Green
+Write-Host "Ejecutando verificación Cascada..." -ForegroundColor Green
 
 $backendDir = Join-Path $PSScriptRoot ".." "backend"
 $envFile = Join-Path $backendDir ".env"

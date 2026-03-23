@@ -13,7 +13,7 @@ Estado: **COMPLETADO**
 - Endpoint: \pp/api/v1/endpoints/conciliacion.py\
 
 **Características Implementadas**:
-- FIFO automático: Pagos se asignan a cuotas en orden de fecha
+- Cascada automático: Pagos se asignan a cuotas en orden de fecha
 - Validación pre-aplicación: Evita sobre-aplicaciones antes de ocurrir
 - Auditoría automática: Cada asignación se registra
 - Tolerancia de 0.01: Para diferencias de redondeo
@@ -253,7 +253,7 @@ curl "https://rapicredit.onrender.com/api/v1/auditoria/conciliacion/resumen-diar
 ## ✨ Características Destacadas
 
 ### 🔄 Automático
-- Asignación FIFO automática sin intervención manual
+- Asignación Cascada automática sin intervención manual
 - Validaciones en tiempo real antes de aplicar
 - Auditoría automática de todas operaciones
 

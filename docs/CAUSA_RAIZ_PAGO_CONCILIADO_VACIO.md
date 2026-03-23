@@ -27,7 +27,7 @@ por tanto, si el pago no se aplicó a cuotas, la tabla muestra "—".
 En **`GET /api/v1/prestamos/{prestamo_id}/cuotas`** (endpoint que alimenta la Tabla de Amortización):
 
 1. **Antes** de construir la respuesta, se llama a **`aplicar_pagos_pendientes_prestamo(prestamo_id, db)`**.
-2. Esa función busca pagos del préstamo con `conciliado = true`, `monto_pagado > 0` y **sin** filas en `cuota_pagos`, y les aplica el monto a las cuotas (FIFO), actualizando `cuotas.total_pagado`, `cuotas.pago_id`, `cuota_pagos`, etc.
+2. Esa función busca pagos del préstamo con `conciliado = true`, `monto_pagado > 0` y **sin** filas en `cuota_pagos`, y les aplica el monto a las cuotas (Cascada), actualizando `cuotas.total_pagado`, `cuotas.pago_id`, `cuota_pagos`, etc.
 3. Si se aplicó al menos un pago, se hace **commit** y se **vuelven a cargar las cuotas** para devolver datos ya actualizados.
 
 Efecto: al abrir o refrescar la Tabla de Amortización, cualquier pago conciliado que aún no estuviera aplicado se aplica y la tabla muestra de inmediato el "Pago conciliado" y el enlace "Ver recibo" cuando corresponda.

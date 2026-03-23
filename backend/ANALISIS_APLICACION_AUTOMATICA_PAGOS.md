@@ -35,7 +35,7 @@ class ConciliacionAutomaticaService:
     def asignar_pagos_no_conciliados(db, prestamo_id=None, cliente_id=None):
         """
         - Busca pagos sin cuota_pagos
-        - Aplica FIFO a cuotas pendientes
+        - Aplica Cascada a cuotas pendientes
         - Valida sobre-aplicación
         """
 ```
@@ -274,7 +274,7 @@ const handleUpload = async (file) => {
 ## 🚨 Consideraciones
 
 1. **Validación**: `ConciliacionAutomaticaService` ya valida sobre-aplicación
-2. **FIFO**: Aplica pagos en orden por fecha (correcto)
+2. **Cascada**: Aplica pagos en orden por fecha (correcto)
 3. **Transacciones**: Usar en misma transacción que INSERT
 4. **Errores**: Si aplicación falla, ¿mantener pago o rollback?
 5. **Performance**: Con 9,500 pagos, puede ser lento en primer run

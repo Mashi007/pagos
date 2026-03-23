@@ -1,0 +1,190 @@
+def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
+
+    """
+
+    Aplica el monto del pago a cuotas del préstamo. Reglas de negocio.
+
+    Crea registros en cuota_pagos para historial completo (no solo sobrescribe pago_id).
+
+    Retorna (cuotas_completadas, cuotas_parciales). No hace commit.
+
+    """
+
+    prestamo_id = pago.prestamo_id
+
+    if not prestamo_id:
+
+        return 0, 0
+
+    monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
+
+    if monto_restante <= 0:
+
+        return 0, 0
+
+    fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") and pago.fecha_pago else date.today()
+
+    hoy = _hoy_local()
+
+    cuotas_pendientes = (
+
+        db.execute(
+
+            select(Cuota)
+
+            .where(
+                Cuota.prestamo_id == prestamo_id,
+                # Solo saldo pendiente: no exigir fecha_pago NULL. Si hay fecha_pago pero total_pagado < monto
+                # (carga manual, migración o bug), excluir la cuota bloqueaba el Cascada y los pagos quedaban sin aplicar.
+                or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto - 0.01),
+            )
+            .order_by(Cuota.numero_cuota.asc())  # Cascada: primero las cuotas más antiguas (numero_cuota menor), luego las siguientes
+
+        )
+
+    ).scalars().all()
+
+    cuotas_completadas = 0
+
+    cuotas_parciales = 0
+
+    orden_aplicacion = 0  # Secuencia de aplicación (de atrás hacia delante) en cuota_pagos
+
+    
+
+    for c in cuotas_pendientes:
+
+        monto_cuota = float(c.monto) if c.monto is not None else 0
+
+        total_pagado_actual = float(c.total_pagado or 0)
+
+        monto_necesario = monto_cuota - total_pagado_actual
+
+        if monto_restante <= 0 or monto_cuota <= 0:
+
+            break
+
+        a_aplicar = min(monto_restante, monto_necesario)
+
+        if a_aplicar <= 0:
+
+            continue
+
+        nuevo_total = total_pagado_actual + a_aplicar
+
+        c.total_pagado = Decimal(str(round(nuevo_total, 2)))
+
+        c.pago_id = pago.id
+
+        
+
+        # NUEVO: Registrar en cuota_pagos para historial completo
+
+        es_pago_completo = nuevo_total >= monto_cuota - 0.01
+
+        cuota_pago = CuotaPago(
+
+            cuota_id=c.id,
+
+            pago_id=pago.id,
+
+            monto_aplicado=Decimal(str(round(a_aplicar, 2))),
+
+            fecha_aplicacion=datetime.now(),
+
+            orden_aplicacion=orden_aplicacion,
+
+            es_pago_completo=es_pago_completo,
+
+        )
+
+        db.add(cuota_pago)
+
+        orden_aplicacion += 1
+
+        
+
+        fecha_venc = c.fecha_vencimiento
+
+        if fecha_venc is not None and hasattr(fecha_venc, "date"):
+
+            fecha_venc = fecha_venc.date()
+
+        fecha_venc = fecha_venc or hoy
+
+        if nuevo_total >= monto_cuota - 0.01:
+
+            c.fecha_pago = fecha_pago_date
+
+            if isinstance(fecha_venc, date) and fecha_venc > hoy:
+
+                estado_nuevo = "PAGO_ADELANTADO"
+
+            else:
+
+                estado_nuevo = "PAGADO"
+
+            if not _validar_transicion_estado_cuota(c.estado, estado_nuevo):  # [validar_transiciones]
+
+                logger.warning(f"Transición de estado inválida en cuota {c.id}: {c.estado} â†’ {estado_nuevo}")
+
+                c.estado = estado_nuevo  # Forzar transición igualmente (log informativo)
+
+            else:
+
+                c.estado = estado_nuevo
+
+            c.dias_mora = 0  # [M5] Sin mora si está pagada
+
+            cuotas_completadas += 1
+
+        else:
+            # Cuota aún abierta: limpiar fecha_pago residual para no bloquear futuras aplicaciones Cascada.
+            c.fecha_pago = None
+
+            estado_nuevo = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
+
+            if not _validar_transicion_estado_cuota(c.estado, estado_nuevo):  # [validar_transiciones]
+
+                logger.warning(f"Transición de estado inválida en cuota {c.id}: {c.estado} â†’ {estado_nuevo}")
+
+            c.estado = estado_nuevo
+
+            c.dias_mora = _calcular_dias_mora(fecha_venc)  # [M5] Calcular mora
+
+            cuotas_parciales += 1
+
+        monto_restante -= a_aplicar
+
+    _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+
+    # Advertencia si no se aplicó nada pero el préstamo sí tiene cuotas (p. ej. cuotas creadas después del pago)
+
+    if cuotas_completadas == 0 and cuotas_parciales == 0:
+
+        num_cuotas = db.scalar(
+
+            select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)
+
+        ) or 0
+
+        if num_cuotas > 0:
+
+            logger.warning(
+
+                "Pago id=%s (prestamo_id=%s): no se aplicó a ninguna cuota; el préstamo tiene %s cuotas. "
+
+                "Puede deberse a que las cuotas se generaron después del pago; use aplicar-cuotas o generar cuotas (aplica pendientes automático).",
+
+                pago.id, prestamo_id, num_cuotas,
+
+            )
+
+    return cuotas_completadas, cuotas_parciales
+
+
+
+
+
+def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
+

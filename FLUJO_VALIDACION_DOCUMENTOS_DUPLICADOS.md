@@ -39,7 +39,7 @@ POST /api/v1/pagos
 │                                         │
 ├─ db.add() + db.commit()                 │
 │                                         │
-├─ Aplicar FIFO a cuotas (si aplica)      │
+├─ Aplicar Cascada a cuotas (si aplica)      │
 │                                         │
 └─ RESPUESTA: 201 Created ✅              │
                                           │
@@ -196,7 +196,7 @@ FASE 2: VALIDACIÓN + CREACIÓN
 │
 │
 ├─ ════════════════════════════════════════
-│  APLICAR PAGOS A CUOTAS (FIFO)
+│  APLICAR PAGOS A CUOTAS (Cascada)
 │  ════════════════════════════════════════
 │
 ├─ FOR cada p en pagos_con_prestamo:

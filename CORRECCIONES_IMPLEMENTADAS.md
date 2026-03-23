@@ -42,7 +42,7 @@ def _hoy_local() -> date:
 **Solución**: Tabla join `cuota_pagos` que registra:
 - `cuota_id` + `pago_id` = qué pago tocó qué cuota
 - `monto_aplicado` = cuánto se aplicó
-- `orden_aplicacion` = secuencia FIFO
+- `orden_aplicacion` = secuencia Cascada
 - `es_pago_completo` = si completó la cuota
 
 **Decisión**: B - Tabla join para historial completo
@@ -90,7 +90,7 @@ def create_prestamo(
 **Cambio**: Función `_aplicar_pago_a_cuotas_interno()` ahora:
 1. Importa modelo `CuotaPago`
 2. Crea registro en `cuota_pagos` cada vez que aplica monto
-3. Guarda `orden_aplicacion` para secuencia FIFO
+3. Guarda `orden_aplicacion` para secuencia Cascada
 4. Marca `es_pago_completo` si completó cuota
 
 **Código**:
@@ -151,7 +151,7 @@ db.add(cuota_pago)
 
 ### Sin romper:
 - ✓ Campo `pago_id` en cuota sigue siendo útil (último pago)
-- ✓ Lógica FIFO de aplicación
+- ✓ Lógica Cascada de aplicación
 - ✓ Estados de mora (PENDIENTE/VENCIDO/MORA)
 - ✓ Transiciones de estados
 
@@ -182,7 +182,7 @@ class CuotaPago(Base):
     cuota_id = Column(Integer, FK)  # Cuota pagada
     pago_id = Column(Integer, FK)   # Pago aplicado
     monto_aplicado = Column(Numeric)  # Cuánto aplicado
-    orden_aplicacion = Column(Integer)  # Secuencia FIFO
+    orden_aplicacion = Column(Integer)  # Secuencia Cascada
     es_pago_completo = Column(Boolean)  # ¿Completó?
 ```
 - Unique index: `(cuota_id, pago_id)` → previene duplicados

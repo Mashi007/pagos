@@ -10,7 +10,7 @@ Garantizar que **cualquier** medio de ingreso de pagos actualice de forma unifor
 Ambas pantallas leen de las tablas **`cuotas`** y **`prestamos`**. Para que un pago se refleje en estado de cuenta y amortización, es necesario:
 
 1. Insertar (o tener) un registro en **`pagos`** con `prestamo_id` y `monto_pagado > 0`.
-2. Llamar a **`_aplicar_pago_a_cuotas_interno`**, que aplica el monto a las cuotas del préstamo (FIFO), actualizando `cuotas` (total_pagado, estado, fecha_pago, pago_id) y `cuota_pagos`.
+2. Llamar a **`_aplicar_pago_a_cuotas_interno`**, que aplica el monto a las cuotas del préstamo (Cascada), actualizando `cuotas` (total_pagado, estado, fecha_pago, pago_id) y `cuota_pagos`.
 
 ---
 

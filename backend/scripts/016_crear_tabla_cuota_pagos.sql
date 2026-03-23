@@ -1,7 +1,7 @@
 -- Migration: 016_crear_tabla_cuota_pagos.sql
 -- Propósito: Crear tabla join cuota_pagos para historial completo de pagos por cuota
 -- Razón: Actual pago_id en cuota solo guarda el ÚLTIMO pago; se pierden pagos parciales
--- Solución: cuota_pagos registra TODOS los pagos aplicados a cada cuota con monto y orden FIFO
+-- Solución: cuota_pagos registra TODOS los pagos aplicados a cada cuota con monto y orden Cascada
 
 BEGIN;
 
@@ -36,7 +36,7 @@ SELECT
     c.pago_id,
     c.total_pagado as monto_aplicado,
     COALESCE(c.fecha_pago, CURRENT_TIMESTAMP) as fecha_aplicacion,
-    1 as orden_aplicacion,  # [FIXED] Orden FIFO (solo un pago por cuota en datos legacy)
+    1 as orden_aplicacion,  # [FIXED] Orden Cascada (solo un pago por cuota en datos legacy)
     (c.total_pagado >= c.monto_cuota - 0.01) as es_pago_completo,
     COALESCE(c.creado_en, CURRENT_TIMESTAMP) as creado_en
 FROM public.cuotas c

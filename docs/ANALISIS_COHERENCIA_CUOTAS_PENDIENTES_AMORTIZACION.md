@@ -20,7 +20,7 @@
 |--------|-------------------|------------------------|
 | **estado_cuenta_publico.py** | `_obtener_datos_pdf()` y flujo solicitar/verificar: `Cuota.fecha_pago.is_(None)`; suma `total_pendiente += monto` (monto completo); estado = `getattr(c, "estado", None) or "PENDIENTE"` | `_obtener_amortizacion_prestamo()`: todas las cuotas del préstamo; saldo = `saldo_capital_final` (cronograma); pago conc. = `total_pagado`; estado = de BD |
 | **prestamos.py** | — | `get_cuotas_prestamo()`: lista cuotas con `saldo_capital_*`, `total_pagado`, `estado` de BD |
-| **pagos.py** (aplicar pago) | “Cuotas pendientes” para FIFO: `fecha_pago.is_(None)` **y** `(total_pagado.is_(None) or total_pagado < monto)` | — |
+| **pagos.py** (aplicar pago) | “Cuotas pendientes” para Cascada: `fecha_pago.is_(None)` **y** `(total_pagado.is_(None) or total_pagado < monto)` | — |
 
 ### 1.3 Reglas de negocio ya implementadas (pagos.py)
 

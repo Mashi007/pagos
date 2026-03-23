@@ -219,7 +219,7 @@ HAVING COUNT(*) > 1;
    - Verificar que `total_pagado` sube
    - Verificar que `estado` pasa a "PARCIALMENTE_PAGADO" o equivalente
 
-3. **Verificar FIFO:**
+3. **Verificar Cascada:**
    - No permitir pago en cuota 3 sin pagar primero cuotas 1 y 2
    - Verificar que aplicación respeta orden
 

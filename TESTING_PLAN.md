@@ -21,7 +21,7 @@ This test covers the complete business cycle:
 1. ✅ Client Creation
 2. ✅ Loan Creation  
 3. ✅ Payment Registration (multiple)
-4. ✅ Payment Application to Installments (FIFO)
+4. ✅ Payment Application to Installments (Cascada)
 5. ✅ Reconciliation Verification
 6. ✅ Audit Trail Logging
 7. ✅ User Attribution (usuario_proponente, usuario_registro)
@@ -86,7 +86,7 @@ Endpoint: `POST /pagos`
 **Verificar**:
 - ✅ Pago creado con `estado = 'PAGADO'`
 - ✅ `usuario_registro = current_user.email` (auditoría)
-- ✅ Pago aplicado automáticamente a cuota más antigua (FIFO)
+- ✅ Pago aplicado automáticamente a cuota más antigua (Cascada)
 - ✅ Entrada en tabla `cuota_pagos` con `orden_aplicacion = 1`
 
 ---
@@ -166,7 +166,7 @@ ORDER BY fecha_hora DESC LIMIT 10;
 
 1. **Auditoría**: Todos los cambios deben estar registrados en `public.auditoria`
 2. **Usuario**: El campo `usuario_registro` (pagos) y `usuario_proponente` (prestamos) deben tener el email actual
-3. **FIFO**: Los pagos se aplican a la cuota más antigua sin pagar
+3. **Cascada**: Los pagos se aplican a la cuota más antigua sin pagar
 4. **Transiciones de estado**: Revisar que sean correctas según la lógica de negocio
 5. **BD limpia**: Solo 29 tablas necesarias, sin backups ni temporales
 

@@ -1,0 +1,11 @@
+-- Opcional (PostgreSQL): evita filas duplicadas (mismo pago aplicado dos veces a la misma cuota).
+-- NO ejecutar si ya existen duplicados: primero reconstruir cascada (reaplicar-fifo) o deduplicar manualmente.
+--
+-- CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_cuota_pagos_cuota_pago
+--   ON cuota_pagos (cuota_id, pago_id)
+--   WHERE pago_id IS NOT NULL;
+
+-- Version sin CONCURRENTLY (transaccion normal; bloquea escrituras brevemente):
+-- CREATE UNIQUE INDEX IF NOT EXISTS uq_cuota_pagos_cuota_pago
+--   ON cuota_pagos (cuota_id, pago_id)
+--   WHERE pago_id IS NOT NULL;

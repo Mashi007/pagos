@@ -844,6 +844,13 @@ export default function EstadoCuentaPublicoPage() {
                   Los datos reflejan el estado al momento de esta consulta. Cada
                   nueva consulta muestra los pagos más recientes.
                 </p>
+                <p className="pb-2 text-center text-xs text-slate-500">
+                  Los pagos a cuotas se muestran según{' '}
+                  <span className="font-semibold text-slate-600">
+                    asignación en cascada
+                  </span>
+                  : se aplican en orden por número de cuota.
+                </p>
               </>
             )}
 

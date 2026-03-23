@@ -27,7 +27,7 @@ psql $DATABASE_URL < backend/scripts/016_crear_tabla_cuota_pagos.sql
 -- ============================================================
 -- Propósito: Crear tabla join cuota_pagos para historial completo de pagos por cuota
 -- Razón: Actual pago_id en cuota solo guarda el ÚLTIMO pago; se pierden pagos parciales
--- Solución: cuota_pagos registra TODOS los pagos aplicados a cada cuota con monto y orden FIFO
+-- Solución: cuota_pagos registra TODOS los pagos aplicados a cada cuota con monto y orden Cascada
 
 BEGIN;
 
@@ -212,7 +212,7 @@ JOIN public.pagos p ON cp.pago_id = p.id
 WHERE cp.cuota_id = 1
 ORDER BY cp.orden_aplicacion ASC;
 
--- Resultado: Lista TODOS los pagos que tocaron esa cuota (en orden FIFO)
+-- Resultado: Lista TODOS los pagos que tocaron esa cuota (en orden Cascada)
 ```
 
 ### Query 2: Ver suma de pagos por cuota (debe coincidir con total_pagado)

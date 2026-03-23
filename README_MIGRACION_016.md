@@ -195,7 +195,7 @@ SELECT COUNT(*) FROM public.cuota_pagos;
 **Respuesta**: 
 - `cuota_id` + `pago_id`: Relación (qué pago tocó qué cuota)
 - `monto_aplicado`: Cuánto se aplicó
-- `orden_aplicacion`: Secuencia FIFO
+- `orden_aplicacion`: Secuencia Cascada
 - `es_pago_completo`: Si completó 100% la cuota
 - `fecha_aplicacion`: Cuándo se aplicó
 - Timestamps: Para auditoría

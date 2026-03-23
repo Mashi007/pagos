@@ -47,7 +47,7 @@ En la BD existe (o existió) restricción **fk_pagos_cedula**: `pagos.cedula` de
 
 - **Carga masiva (Excel)**: se envía cédula (y opcionalmente crédito/prestamo_id). Si no se envía préstamo y la cédula tiene **un solo crédito activo** (APROBADO/DESEMBOLSADO), el backend asigna `prestamo_id` automáticamente.
 - **Crear pago (POST)**: se envía `cedula_cliente` y opcionalmente `prestamo_id`. Si se envía `prestamo_id`, el pago queda ligado a ese préstamo.
-- **Conciliación**: se marcan pagos por `numero_documento` y se les asigna préstamo cuando aplica; luego se aplica el pago a cuotas (FIFO) de ese préstamo.
+- **Conciliación**: se marcan pagos por `numero_documento` y se les asigna préstamo cuando aplica; luego se aplica el pago a cuotas (Cascada) de ese préstamo.
 
 La “referencia cédula” en el pago es, por tanto, **pagos.cedula_cliente** (columna `cedula` en BD).
 
@@ -136,7 +136,7 @@ Si se implementa un endpoint de trazabilidad, estas reglas pueden ser el núcleo
 - La **referencia cédula** al cargar un pago es **pagos.cedula_cliente** (columna `cedula` en BD).
 - La **única línea de conexión** deseada es: **Cliente** (por cédula) → **Préstamo** (por prestamo_id) → **Cuota** (por prestamo_id) → **Pago** (por id) y **CuotaPago** (detalle de aplicación).
 - Para que sea **solvente**: la cédula del pago debe coincidir con el cliente del préstamo, y las cuotas/cuota_pagos deben ser solo del mismo préstamo y del mismo pago.
-- Hoy la consistencia se asegura con FKs, validaciones en endpoints y la lógica FIFO de aplicación a cuotas; **no existe aún un punto único que “devuelva y valide” toda la cadena**.
+- Hoy la consistencia se asegura con FKs, validaciones en endpoints y la lógica Cascada de aplicación a cuotas; **no existe aún un punto único que “devuelva y valide” toda la cadena**.
 - La **trazabilidad verificable** se consigue con un **endpoint de trazabilidad** (por pago_id o numero_documento, y opcionalmente por cedula) que devuelva la cadena y un indicador de si es única y solvente según las reglas anteriores.
 
 Si quieres, el siguiente paso puede ser bajar esto a un **especificación de endpoint** (verb, path, request/response) y a **consultas SQL o servicios** concretos en el backend para implementarlo.

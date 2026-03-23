@@ -3,7 +3,7 @@
 Servicio de conciliaciÃ³n automÃ¡tica de pagos no conciliados.
 
 CaracterÃ­sticas:
-1. Asigna automÃ¡ticamente pagos sin cuotas a cuotas pendientes (FIFO)
+1. Asigna automÃ¡ticamente pagos sin cuotas a cuotas pendientes (cascada)
 2. Valida en tiempo real para evitar sobre-aplicaciones
 3. Registra auditorÃ­a de cada asignaciÃ³n
 4. Genera alertas de pagos problemÃ¡ticos

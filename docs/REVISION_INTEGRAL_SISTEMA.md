@@ -93,7 +93,7 @@
 ### 4.3 Préstamos y cuotas
 
 - **Prestamos:** FK a clientes; estados (DRAFT, APROBADO, DESEMBOLSADO, etc.); filtros por analista, concesionario, modelo.
-- **Cuotas:** FK a prestamos, pagos, clientes; aplicación de pagos vía `cuota_pagos` con orden FIFO; reglas de mora y estados.
+- **Cuotas:** FK a prestamos, pagos, clientes; aplicación de pagos vía `cuota_pagos` con orden Cascada; reglas de mora y estados.
 
 ### 4.4 Cobros (pagos_reportados)
 

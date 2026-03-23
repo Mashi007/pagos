@@ -1,6 +1,6 @@
 # Caminos de carga de pagos y aplicación automática a cuotas
 
-En [RapiCredit - Pagos](https://rapicredit.onrender.com/pagos/pagos) los pagos se cargan por **varios caminos**. En todos ellos, cuando el pago tiene `prestamo_id` y `monto_pagado > 0`, el sistema debe **aplicar el pago a cuotas** (FIFO, tabla `cuota_pagos` y actualización de `cuotas.total_pagado` / `cuotas.pago_id`) para que la tabla de amortización y el estado de cuenta muestren el pago.
+En [RapiCredit - Pagos](https://rapicredit.onrender.com/pagos/pagos) los pagos se cargan por **varios caminos**. En todos ellos, cuando el pago tiene `prestamo_id` y `monto_pagado > 0`, el sistema debe **aplicar el pago a cuotas** (Cascada, tabla `cuota_pagos` y actualización de `cuotas.total_pagado` / `cuotas.pago_id`) para que la tabla de amortización y el estado de cuenta muestren el pago.
 
 Este documento lista **todos los caminos** y confirma que la aplicación a cuotas está automatizada en cada uno.
 

@@ -1,14 +1,14 @@
-# ✅ VERIFICACIÓN COMPLETA: Integración FIFO de Pagos a Cuotas
+# ✅ VERIFICACIÓN COMPLETA: Integración Cascada de Pagos a Cuotas
 
 ## Status: VERIFICADO Y FUNCIONAL
 
-He completado una verificación exhaustiva de cómo los **pagos verificados y conciliados** se integran en las **cuotas más antiguas primero (FIFO)**.
+He completado una verificación exhaustiva de cómo los **pagos verificados y conciliados** se integran en las **cuotas más antiguas primero (Cascada)**.
 
 ---
 
 ## 🎯 Resumen de Hallazgos
 
-### ✅ 1. Algoritmo FIFO Correcto
+### ✅ 1. Algoritmo Cascada Correcto
 
 **Ubicación**: `pagos.py` línea 1587
 
@@ -16,7 +16,7 @@ He completado una verificación exhaustiva de cómo los **pagos verificados y co
 .order_by(Cuota.numero_cuota)  # Cuota 1, 2, 3, ...
 ```
 
-**Resultado**: ✅ **FIFO garantizado**
+**Resultado**: ✅ **Cascada garantizado**
 - Cuota 1 (más antigua) se procesa primero
 - Cuota 2 se procesa si hay monto restante
 - Cuota 3 se procesa si aún hay monto
@@ -51,9 +51,9 @@ cuota_pago = CuotaPago(
 )
 ```
 
-**Resultado**: ✅ **Historial FIFO registrado**
+**Resultado**: ✅ **Historial Cascada registrado**
 - `orden_aplicacion` secuencial
-- Permite verificar FIFO después
+- Permite verificar Cascada después
 - 100% trazable
 
 ---
@@ -97,16 +97,16 @@ else:
 Préstamo: 3 cuotas de $100 c/u
 Pago: $150
 
-FIFO APLICACIÓN:
+Cascada APLICACIÓN:
 ┌─────────────────────────┐
-│ Cuota 1: $100 PAGADO    │ ← 1era (FIFO)
+│ Cuota 1: $100 PAGADO    │ ← 1era (Cascada)
 ├─────────────────────────┤
-│ Cuota 2: $50 PARCIAL    │ ← 2da (FIFO)
+│ Cuota 2: $50 PARCIAL    │ ← 2da (Cascada)
 ├─────────────────────────┤
 │ Cuota 3: $0 PENDIENTE   │ ← 3era (sin cambios)
 └─────────────────────────┘
 
-✅ FIFO CORRECTO: Cuotas antiguas primero
+✅ Cascada CORRECTO: Cuotas antiguas primero
 ```
 
 ---
@@ -117,14 +117,14 @@ FIFO APLICACIÓN:
 Préstamo: 2 cuotas de $100 c/u
 Pago: $100
 
-FIFO APLICACIÓN:
+Cascada APLICACIÓN:
 ┌─────────────────────────┐
-│ Cuota 1: $100 PAGADO    │ ← Completa (FIFO)
+│ Cuota 1: $100 PAGADO    │ ← Completa (Cascada)
 ├─────────────────────────┤
 │ Cuota 2: $0 PENDIENTE   │ ← Sin cambios
 └─────────────────────────┘
 
-✅ FIFO CORRECTO: Cuota antigua completa, siguiente sin cambios
+✅ Cascada CORRECTO: Cuota antigua completa, siguiente sin cambios
 ```
 
 ---
@@ -135,16 +135,16 @@ FIFO APLICACIÓN:
 Préstamo: 3 cuotas de $100 c/u
 
 Pago 1: $150
-→ Cuota 1: $100 PAGADO (FIFO 1)
-→ Cuota 2: $50 PARCIAL (FIFO 2)
+→ Cuota 1: $100 PAGADO (Cascada 1)
+→ Cuota 2: $50 PARCIAL (Cascada 2)
 
 Pago 2: $75
-→ Cuota 2: $50 + $50 = $100 PAGADO (FIFO continua)
-→ Cuota 3: $25 PARCIAL (FIFO 3)
+→ Cuota 2: $50 + $50 = $100 PAGADO (Cascada continua)
+→ Cuota 3: $25 PARCIAL (Cascada 3)
 
-Total: $225 aplicados en orden FIFO
+Total: $225 aplicados en orden Cascada
 
-✅ FIFO CORRECTO: Orden mantenido entre múltiples pagos
+✅ Cascada CORRECTO: Orden mantenido entre múltiples pagos
 ```
 
 ---
@@ -161,20 +161,20 @@ select(Cuota)
         Cuota.fecha_pago.is_(None),
         or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto)
     )
-    .order_by(Cuota.numero_cuota)  # ← FIFO ORDER
+    .order_by(Cuota.numero_cuota)  # ← Cascada ORDER
 ```
 
 **Verificación**:
 ✅ WHERE filtra cuotas PENDIENTES  
-✅ ORDER BY número_cuota = FIFO  
+✅ ORDER BY número_cuota = Cascada  
 ✅ Eficiente: O(m) filtrado, O(m log m) ordenado
 
 ---
 
-### ✅ Loop FIFO
+### ✅ Loop Cascada
 
 ```python
-for c in cuotas_pendientes:  # Iteración en orden FIFO
+for c in cuotas_pendientes:  # Iteración en orden Cascada
     monto_necesario = monto_cuota - total_pagado_actual
     a_aplicar = min(monto_restante, monto_necesario)
     
@@ -189,7 +189,7 @@ for c in cuotas_pendientes:  # Iteración en orden FIFO
 ```
 
 **Verificación**:
-✅ Iteración en orden (FIFO)  
+✅ Iteración en orden (Cascada)  
 ✅ Cálculos correctos  
 ✅ Detiene cuando no hay monto  
 ✅ O(n) donde n = cuotas procesadas
@@ -216,7 +216,7 @@ cuota_pago = CuotaPago(
 
 | Componente | Línea | Verificación | Status |
 |-----------|-------|-------------|--------|
-| **Query FIFO** | 1587 | `.order_by(Cuota.numero_cuota)` | ✅ |
+| **Query Cascada** | 1587 | `.order_by(Cuota.numero_cuota)` | ✅ |
 | **No Sobreaplicar** | 1600 | `min(monto_restante, monto_necesario)` | ✅ |
 | **Auditoría** | 1614 | `orden_aplicacion` | ✅ |
 | **Estados** | 1626 | PAGADO / PAGO_ADELANTADO / PENDIENTE | ✅ |
@@ -229,17 +229,17 @@ cuota_pago = CuotaPago(
 
 ## 🚀 Archivos de Verificación
 
-### 1. **VERIFICACION_FIFO_CUOTAS.md**
+### 1. **VERIFICACION_FIFO_CUOTAS.md** (verificacion en cascada)
 - Análisis completo del algoritmo
 - 3 casos de uso con resultados esperados
 - Análisis de complejidad
 - Verificación de reglas de negocio
 
-### 2. **test_fifo_verificacion.py**
+### 2. **test_fifo_verificacion.py** (script de prueba; nombre historico; verificacion en cascada)
 - Test automatizado end-to-end
 - Crea cliente, préstamo, cuotas
 - 2 tests con pagos secuenciales
-- Verifica FIFO orden
+- Verifica Cascada orden
 - Salida coloreada
 
 ---
@@ -248,10 +248,10 @@ cuota_pago = CuotaPago(
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│ INTEGRACIÓN PAGOS → CUOTAS (FIFO)                   │
+│ INTEGRACIÓN PAGOS → CUOTAS (Cascada)                   │
 ├──────────────────────────────────────────────────────┤
 │                                                      │
-│ ✅ ORDEN: Cuotas antiguas primero (FIFO)            │
+│ ✅ ORDEN: Cuotas antiguas primero (Cascada)            │
 │ ✅ PRECISIÓN: No sobreaplicación de montos          │
 │ ✅ AUDITORÍA: Completo historial en BD              │
 │ ✅ ESTADOS: Transiciones correctas                  │
@@ -268,7 +268,7 @@ cuota_pago = CuotaPago(
 
 ## 🎯 Recomendaciones
 
-1. ✅ **Sistema FIFO está listo** para producción
+1. ✅ **Sistema Cascada está listo** para producción
 2. ✅ **Rendimiento es optimal** (1-10ms)
 3. ✅ **Trazabilidad es completa** (100% auditable)
 4. ✅ **Reglas de negocio** se aplican correctamente
@@ -277,13 +277,13 @@ cuota_pago = CuotaPago(
 
 ## 📝 Próximos Pasos Opcionales
 
-- 📊 Agregar reportes de FIFO por préstamo
+- 📊 Agregar reportes de Cascada por préstamo
 - 📈 Visualizar historial cuota_pagos en API
-- 🔔 Alertas cuando FIFO se rompe (debugging)
-- 📱 Mobile app para ver FIFO en tiempo real
+- 🔔 Alertas cuando Cascada se rompe (debugging)
+- 📱 Mobile app para ver Cascada en tiempo real
 
 ---
 
-**Status Final**: ✅ **INTEGRACIÓN FIFO VERIFICADA Y OPTIMIZADA**
+**Status Final**: ✅ **INTEGRACIÓN Cascada VERIFICADA Y OPTIMIZADA**
 
 **Puede proceder a producción con confianza** 🚀

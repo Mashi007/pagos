@@ -149,7 +149,7 @@ Query 3 resultado: 200 cuotas sin pagos
 ### 🚨 Escenario 4: Inconsistencias (CRÍTICO)
 ```
 Query 10 resultado: Montos inconsistentes
-→ Posibles sobre-pagos o errores FIFO
+→ Posibles sobre-pagos o errores Cascada
 → Acción: Auditoría manual de duplicados
 → Query para ver duplicados: Query 9 de SQL_VERIFICACION_PAGOS_EN_CUOTAS.sql
 ```

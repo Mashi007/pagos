@@ -20,7 +20,7 @@
 ## 2. Lógica única: aplicar pago a cuotas
 
 - **Función central:** `_aplicar_pago_a_cuotas_interno(pago, db)` en `backend/app/api/v1/endpoints/pagos.py`.
-- **Comportamiento:** Aplica el `monto` del pago a las cuotas del mismo `prestamo_id` en orden **FIFO** (por `numero_cuota`). Actualiza `Cuota.total_pagado`, `fecha_pago`, `estado`; crea registros en `CuotaPago`; marca el préstamo como **LIQUIDADO** cuando todas las cuotas quedan pagadas. No hace `commit` (lo hace quien llama).
+- **Comportamiento:** Aplica el `monto` del pago a las cuotas del mismo `prestamo_id` en orden **Cascada** (por `numero_cuota`). Actualiza `Cuota.total_pagado`, `fecha_pago`, `estado`; crea registros en `CuotaPago`; marca el préstamo como **LIQUIDADO** cuando todas las cuotas quedan pagadas. No hace `commit` (lo hace quien llama).
 - **Endpoint público:** `POST /pagos/{pago_id}/aplicar-cuotas` también usa esta función y hace commit.
 
 No existe otra implementación paralela de “aplicar a cuotas”; toda la asignación pasa por esta función.

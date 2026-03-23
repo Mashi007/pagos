@@ -35,7 +35,7 @@ cuota_id             Integer        FOREIGN KEY a cuotas
 pago_id              Integer        FOREIGN KEY a pagos
 monto_aplicado       Numeric(14,2)  ← USAR ESTA (no "monto_cuota")
 fecha_aplicacion     DateTime       Cuando se aplicó el pago
-orden_aplicacion     Integer        Secuencia FIFO
+orden_aplicacion     Integer        Secuencia Cascada
 es_pago_completo     Boolean        ¿Completó la cuota?
 creado_en            DateTime
 actualizado_en       DateTime

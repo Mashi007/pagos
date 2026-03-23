@@ -75,6 +75,10 @@ from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdat
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
+from app.services.pagos_cuotas_reaplicacion import (
+    integridad_cuotas_prestamo,
+    reset_y_reaplicar_cascada_prestamo,
+)
 
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
 
@@ -3145,6 +3149,141 @@ def generar_cuotas_aprobados_sin_cuotas(
 
 
 
+
+
+
+
+class ReaplicarCascadaMasivaBody(BaseModel):
+    """Lista de prestamo_id a reaplicar en cascada (reset cuota_pagos + aplicar de nuevo). Maximo 500."""
+
+    prestamo_ids: List[int]
+
+
+# Compat: nombre historico del body (OpenAPI / clientes antiguos).
+ReaplicarFifoMasivaBody = ReaplicarCascadaMasivaBody
+
+
+
+
+@router.get("/{prestamo_id}/integridad-cuotas", response_model=dict)
+def get_integridad_cuotas_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Diagnostico: total_pagado vs SUM(cuota_pagos) por cuota (y diff global).
+    Solo administrador. No modifica datos.
+    """
+    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administracion puede consultar integridad de cuotas.",
+        )
+    r = integridad_cuotas_prestamo(db, prestamo_id)
+    if not r.get("ok"):
+        raise HTTPException(status_code=404, detail=r.get("error") or "Prestamo no encontrado")
+    return r
+
+
+@router.post("/{prestamo_id}/reaplicar-fifo-aplicacion", response_model=dict)
+@router.post("/{prestamo_id}/reaplicar-cascada-aplicacion", response_model=dict)
+def reaplicar_cascada_aplicacion_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Reaplicacion integral en cascada para un prestamo: borra cuota_pagos, resetea totales en cuotas
+    y vuelve a aplicar todos los pagos conciliados en orden (fecha_pago, id).
+
+    Usar cuando la tabla de amortizacion no refleja los pagos pese a filas en `pagos`
+    (articulacion vieja, regeneracion de cuotas, o desalineacion total_pagado vs cuota_pagos).
+
+    Solo administrador.
+    """
+    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administracion puede reaplicar la cascada sobre cuotas.",
+        )
+    try:
+        integridad_antes = integridad_cuotas_prestamo(db, prestamo_id)
+        r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id)
+        if not r.get("ok"):
+            raise HTTPException(status_code=404, detail=r.get("error") or "No se pudo reaplicar")
+        db.commit()
+        db.expire_all()
+        integridad_despues = integridad_cuotas_prestamo(db, prestamo_id)
+        return {
+            **r,
+            "integridad_antes": integridad_antes,
+            "integridad_despues": integridad_despues,
+            "mensaje": "Cascada reaplicada: cuota_pagos reiniciado y pagos conciliados aplicados de nuevo.",
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("reaplicar-cascada-aplicacion prestamo_id=%s: %s", prestamo_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Compat: nombre de handler historico (importaciones / tests).
+reaplicar_fifo_aplicacion_prestamo = reaplicar_cascada_aplicacion_prestamo
+
+
+@router.post("/reaplicar-fifo-aplicacion-masiva", response_model=dict)
+@router.post("/reaplicar-cascada-aplicacion-masiva", response_model=dict)
+def reaplicar_cascada_aplicacion_masiva(
+    body: ReaplicarCascadaMasivaBody,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Igual que /{prestamo_id}/reaplicar-cascada-aplicacion (ruta legacy ...-fifo-... conservada) pero para varios prestamos.
+    Solo administrador. Maximo 500 IDs por solicitud.
+    """
+    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administracion puede reaplicar cascada masivo.",
+        )
+    ids = [int(x) for x in (body.prestamo_ids or []) if x is not None]
+    if not ids:
+        raise HTTPException(status_code=400, detail="prestamo_ids requerido")
+    if len(ids) > 500:
+        raise HTTPException(status_code=400, detail="Maximo 500 prestamo_ids por solicitud")
+    ok: list[dict] = []
+    errores: list[dict] = []
+    for pid in ids:
+        try:
+            r = reset_y_reaplicar_cascada_prestamo(db, pid)
+            if r.get("ok"):
+                ok.append(r)
+                db.commit()
+            else:
+                db.rollback()
+                errores.append({"prestamo_id": pid, "error": r.get("error") or "fallo"})
+        except HTTPException as he:
+            db.rollback()
+            errores.append({"prestamo_id": pid, "error": he.detail})
+        except Exception as e:
+            db.rollback()
+            logger.exception("reaplicar-cascada-masiva prestamo_id=%s: %s", pid, e)
+            errores.append({"prestamo_id": pid, "error": str(e)})
+    return {
+        "procesados": len(ids),
+        "exitosos": len(ok),
+        "resultados": ok,
+        "errores": errores,
+        "mensaje": f"Cascada masiva: {len(ok)} ok, {len(errores)} error(es).",
+    }
+
+
+# Compat: nombre de handler historico.
+reaplicar_fifo_aplicacion_masiva = reaplicar_cascada_aplicacion_masiva
 
 
 class ConciliarAmortizacionMasivaBody(BaseModel):

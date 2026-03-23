@@ -39,7 +39,7 @@ SELECT cedula FROM public.pagos WHERE numero_documento = 'BNC-20260304-001';
 
 ### 2. ⚠️ **Error en _aplicar_pago_a_cuotas_interno no capturado** (MEDIA PROBABILIDAD)
 
-**Síntoma**: Error durante aplicación FIFO de pagos
+**Síntoma**: Error durante aplicación Cascada de pagos
 
 **Causa**:
 ```python

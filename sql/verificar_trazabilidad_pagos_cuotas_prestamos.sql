@@ -6,7 +6,7 @@
 -- Trazabilidad en BD:
 --   - Tabla cuota_pagos: cada fila = aplicación de un pago a una cuota
 --     (cuota_id, pago_id, monto_aplicado, fecha_aplicacion, orden_aplicacion, es_pago_completo).
---   - Orden de aplicación: FIFO por numero_cuota (cuotas más antiguas primero);
+--   - Orden de aplicación: Cascada por numero_cuota (cuotas más antiguas primero);
 --     orden_aplicacion en cuota_pagos indica la secuencia dentro de un mismo pago.
 -- =============================================================================
 
@@ -72,7 +72,7 @@ ORDER BY c.prestamo_id, c.numero_cuota;
 -- Si devuelve 0 filas → integridad cuota ↔ cuota_pagos OK.
 
 -- =============================================================================
--- 4. Orden FIFO por pago: secuencia orden_aplicacion debe ser 0, 1, 2, ...
+-- 4. Orden Cascada por pago: secuencia orden_aplicacion debe ser 0, 1, 2, ...
 --    y cuotas aplicadas en orden de numero_cuota creciente
 -- =============================================================================
 -- 4a. Pagos con registros en cuota_pagos donde orden_aplicacion no es consecutivo (posible inconsistencia)
@@ -93,7 +93,7 @@ FROM ord
 WHERE prev_orden IS NOT NULL AND orden_aplicacion <> prev_orden + 1
 ORDER BY pago_id, orden_aplicacion;
 
--- 4b. Por cada pago: cuotas tocadas en orden de numero_cuota (debe ser creciente si FIFO correcto)
+-- 4b. Por cada pago: cuotas tocadas en orden de numero_cuota (debe ser creciente si Cascada correcto)
 WITH secuencia AS (
     SELECT
         cp.pago_id,
@@ -115,7 +115,7 @@ FROM secuencia
 WHERE numero_cuota_anterior IS NOT NULL AND numero_cuota < numero_cuota_anterior
 ORDER BY pago_id, orden_aplicacion;
 
--- Si ambas 4a y 4b devuelven 0 filas → orden de trazabilidad consistente con FIFO.
+-- Si ambas 4a y 4b devuelven 0 filas → orden de trazabilidad consistente con Cascada.
 
 -- =============================================================================
 -- 5. Cadena completa pago → cuota_pagos → cuota → préstamo (muestra de trazabilidad)

@@ -96,7 +96,7 @@ En **Subir y procesar todo** el backend hace todo: detección de formato, parseo
 |-------|---------------------|
 | **pagos** | Filas que pasan validadores (upload o guardar-fila-editable). `numero_documento` normalizado, único. |
 | **pagos_con_errores** | Filas rechazadas en upload (FASE 1 y FASE 2) y filas enviadas a "Revisar Pagos" desde previsualizar. |
-| **cuotas** / **cuota_pago** | Tras insertar en `pagos`, si tiene `prestamo_id` y monto > 0 se aplica pago a cuotas (FIFO). |
+| **cuotas** / **cuota_pago** | Tras insertar en `pagos`, si tiene `prestamo_id` y monto > 0 se aplica pago a cuotas (Cascada). |
 
 - Duplicados de documento: comparación siempre con **valor normalizado** (`normalize_documento` en `app/core/documento.py`); en BD se guarda y compara ese valor en `pagos.numero_documento`.
 

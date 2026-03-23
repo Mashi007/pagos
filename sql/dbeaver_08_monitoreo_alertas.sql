@@ -122,9 +122,9 @@ WHERE
   OR (COALESCE(total_pagado, 0) < 0);
 
 -- ============================================================================
--- Alert 7: Violación FIFO (cuota posterior pagada, anterior impaga)
+-- Alert 7: Violación Cascada (cuota posterior pagada, anterior impaga)
 -- ============================================================================
--- Si resultado > 0: aplicación de pagos no respeta FIFO
+-- Si resultado > 0: aplicación de pagos no respeta Cascada
 CREATE OR REPLACE VIEW v_alert_fifo_violacion AS
 WITH q AS (
   SELECT
@@ -149,7 +149,7 @@ SELECT
   q.numero_cuota AS cuota_posterior_pagada,
   q.total_pagado,
   q.monto_cuota,
-  'ALERTA: Violación FIFO' AS alerta
+  'ALERTA: Violación Cascada' AS alerta
 FROM q
 JOIN primera_impaga pi ON pi.prestamo_id = q.prestamo_id
 WHERE q.numero_cuota > pi.primera_impaga AND q.total_pagado > 0;
@@ -172,7 +172,7 @@ SELECT 'Cuotas Sin Fecha_Aprobacion', (SELECT COUNT(*) FROM v_alert_cuotas_sin_f
 UNION ALL
 SELECT 'Inconsistencia Estado/Pago', (SELECT COUNT(*) FROM v_alert_inconsistencia_estado_pago)
 UNION ALL
-SELECT 'Violación FIFO', (SELECT COUNT(*) FROM v_alert_fifo_violacion)
+SELECT 'Violación Cascada', (SELECT COUNT(*) FROM v_alert_fifo_violacion)
 ORDER BY cantidad DESC;
 
 -- ============================================================================

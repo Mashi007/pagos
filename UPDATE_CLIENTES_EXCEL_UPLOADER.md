@@ -62,7 +62,7 @@ import { ExcelUploaderUI } from './ExcelUploaderUI'  // ← Nuevo
 ## Technical Stack
 
 - **Frontend:** React, TypeScript, Framer Motion, shadcn/ui
-- **Hook:** `useExcelUpload` con validaciones FIFO
+- **Hook:** `useExcelUpload` con validaciones Cascada
 - **Backend:** `POST /api/v1/clientes/upload-excel`
 - **Database:** PostgreSQL con tabla `clientes_con_errores`
 

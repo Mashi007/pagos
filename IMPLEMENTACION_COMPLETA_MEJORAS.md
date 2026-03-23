@@ -285,7 +285,7 @@ WHERE conname = 'ck_prestamos_estado_valido';
 - ✅ Seguro (FK, validaciones)
 - ✅ Trazable (auditoría, usuario)
 - ✅ Resiliente (middleware no rompe)
-- ✅ Escalable (índices, FIFO)
+- ✅ Escalable (índices, Cascada)
 
 **Status**: 🟢 **LISTO PARA PRODUCCIÓN**
 

@@ -86,7 +86,7 @@ Ejecutar un test end-to-end completo que cubra: Creación de Cliente → Présta
 
 **Posibles causas:**
 1. Mismatch entre cédula del cliente y cédula del pago (case sensitivity)
-2. Problema en aplicación FIFO de pagos
+2. Problema en aplicación Cascada de pagos
 3. Falta de sincronización entre nuevos campos (usuario_registro, cuota_pagos)
 
 ---
@@ -170,7 +170,7 @@ $env:ADMIN_PASSWORD = "51290debb83a53b1b1c3bd476311fccc"
 ### Corto Plazo (Crítico):
 1. ✅ Resolver error 500 en POST /pagos
 2. ✅ Completar Phase 4 (Pagos)
-3. ✅ Verificar aplicación FIFO de pagos
+3. ✅ Verificar aplicación Cascada de pagos
 4. ✅ Confirmar auditoría para pagos
 
 ### Mediano Plazo:
@@ -192,7 +192,7 @@ $env:ADMIN_PASSWORD = "51290debb83a53b1b1c3bd476311fccc"
 ### Decisiones Técnicas:
 1. **Max cuotas**: 12 (límite en esquema `PrestamoCreate`)
 2. **Usuario actual**: Se obtiene de JWT (current_user.email)
-3. **FIFO payment application**: Implementado en `_aplicar_pago_a_cuotas_interno`
+3. **Cascada payment application**: Implementado en `_aplicar_pago_a_cuotas_interno`
 4. **Auditoría**: Middleware automático para POST/PUT/DELETE/PATCH
 5. **Cédula normalización**: Pendiente en endpoint de pagos
 

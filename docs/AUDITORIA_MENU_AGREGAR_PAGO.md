@@ -50,7 +50,7 @@ Referencia para preguntas específicas. Cada función del dropdown está auditad
 - Actualizar (pago con error): `PUT /api/v1/pagos/con-errores/{id}`.
 - Lectura: `GET /api/v1/prestamos/cedula/{cedula}` (hook usePrestamosByCedula), `GET /api/v1/prestamos/{id}` (usePrestamo).
 
-**Backend crear/actualizar:** `backend/app/api/v1/endpoints/pagos.py` — `crear_pago`, `actualizar_pago`. Validación de monto con `_validar_monto`, duplicados por `numero_documento` (409), existencia de préstamo y cliente; si `conciliado=true` y hay `prestamo_id` se aplica pago a cuotas (FIFO).
+**Backend crear/actualizar:** `backend/app/api/v1/endpoints/pagos.py` — `crear_pago`, `actualizar_pago`. Validación de monto con `_validar_monto`, duplicados por `numero_documento` (409), existencia de préstamo y cliente; si `conciliado=true` y hay `prestamo_id` se aplica pago a cuotas (Cascada).
 
 ---
 

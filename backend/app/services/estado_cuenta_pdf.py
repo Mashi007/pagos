@@ -250,7 +250,14 @@ def generar_pdf_estado_cuenta(
 
     story.append(Spacer(1, 12))
 
-
+    story.append(
+        Paragraph(
+            "Asignación en cascada: los pagos conciliados se aplican a las cuotas "
+            "en orden por número de cuota.",
+            styles["InfoText"],
+        )
+    )
+    story.append(Spacer(1, 8))
 
     # ----- Tabla Préstamos -----
 

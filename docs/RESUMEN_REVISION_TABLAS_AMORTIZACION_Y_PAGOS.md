@@ -26,7 +26,7 @@ Se revisaron **ambos**:
 
 | Ubicación | Qué hace | Revisión |
 |-----------|----------|----------|
-| **pagos.py** – `_aplicar_pago_a_cuotas_interno()` | Aplica el monto del pago a las cuotas del préstamo (FIFO de atrás hacia delante). | ✅ Orden **DESC** por `numero_cuota` (última cuota no cubierta al 100% primero). Criterio: `fecha_pago is None` y `(total_pagado is None or total_pagado < monto)`. Actualiza `total_pagado`, `fecha_pago`, `estado`, `dias_mora` y registra en `cuota_pagos`. |
+| **pagos.py** – `_aplicar_pago_a_cuotas_interno()` | Aplica el monto del pago a las cuotas del préstamo (Cascada de atrás hacia delante). | ✅ Orden **DESC** por `numero_cuota` (última cuota no cubierta al 100% primero). Criterio: `fecha_pago is None` y `(total_pagado is None or total_pagado < monto)`. Actualiza `total_pagado`, `fecha_pago`, `estado`, `dias_mora` y registra en `cuota_pagos`. |
 
 Este es el **único lugar** donde se aplican pagos a cuotas. Se llama desde:
 

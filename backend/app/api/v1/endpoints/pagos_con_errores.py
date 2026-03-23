@@ -556,7 +556,7 @@ def mover_a_pagos_normales(
 
 ):
 
-    """Mueve pagos corregidos de pagos_con_errores a pagos (y los elimina de con_errores). Aplica cada pago a cuotas (FIFO) para que préstamos y estado de cuenta se actualicen."""
+    """Mueve pagos corregidos de pagos_con_errores a pagos (y los elimina de con_errores). Aplica cada pago a cuotas (cascada) para que préstamos y estado de cuenta se actualicen."""
 
     ids = payload.get("ids", [])
 

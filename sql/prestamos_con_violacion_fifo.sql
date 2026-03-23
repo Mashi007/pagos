@@ -1,4 +1,4 @@
--- Préstamos con posible violación FIFO (cuota posterior pagada y anterior no)
+-- Préstamos con posible violación Cascada (cuota posterior pagada y anterior no)
 -- Una cuota "cubierta" = COALESCE(total_pagado,0) >= monto_cuota - 0.01
 -- Violación: existe cuota N no cubierta y cuota N+1 cubierta (mismo préstamo)
 
