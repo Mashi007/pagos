@@ -32,6 +32,8 @@ from app.core.deps import get_current_user
 
 from app.models.pago_con_error import PagoConError
 
+from app.core.documento import normalize_documento
+from app.services.pago_numero_documento import numero_documento_ya_registrado
 
 
 logger = logging.getLogger(__name__)

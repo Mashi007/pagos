@@ -93,6 +93,8 @@ import {
   type ExcelUploaderPagosProps,
 } from '../../hooks/useExcelUploadPagos'
 
+import { useMemo } from 'react'
+
 import { PagosConErroresSection } from './PagosConErroresSection'
 
 import { TablaEditablePagos } from './TablaEditablePagos'
@@ -199,6 +201,16 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
   const validCount = getValidRows().length
 
   const invalidCount = excelData.filter(r => r._hasErrors).length
+
+  const tablaRowsVisibles = useMemo(
+    () =>
+      excelData.filter(
+        r =>
+          !savedRows.has(r._rowIndex) &&
+          !enviadosRevisar.has(r._rowIndex)
+      ),
+    [excelData, savedRows, enviadosRevisar]
+  )
 
   return (
     <motion.div
@@ -445,11 +457,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
           {excelData.length > 0 && (
             <div className="space-y-4">
               <TablaEditablePagos
-                rows={excelData.filter(
-                  r =>
-                    !savedRows.has(r._rowIndex) &&
-                    !enviadosRevisar.has(r._rowIndex)
-                )}
+                rows={tablaRowsVisibles}
                 prestamosPorCedula={prestamosPorCedula}
                 onUpdateCell={updateCellValue}
                 saveRowIfValid={saveRowIfValid}
