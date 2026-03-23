@@ -82,6 +82,7 @@ export function useGmailPipeline({
     }
 
     abortedRef.current = true
+    setLoading(false)
   }, [])
 
   const _pollStatus = useCallback(

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-import { Upload, FileSpreadsheet, ChevronDown, Mail } from 'lucide-react'
+import { Upload, FileSpreadsheet, ChevronDown, Mail, X } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
 
@@ -54,6 +54,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
     gmailStatus,
     setGmailStatus,
     run: runGmail,
+    stopPolling: stopGmailPolling,
   } = useGmailPipeline({
     onStatusUpdate: s => {
       setGmailStatus(s)
@@ -103,6 +104,20 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
       .then(setGmailStatus)
       .catch(() => setGmailStatus(null))
   }, [isOpen])
+
+  useEffect(() => {
+    return () => {
+      stopGmailPolling()
+    }
+  }, [stopGmailPolling])
+
+  function handleDetenerSeguimientoGmail() {
+    stopGmailPolling()
+    toast(
+      'Seguimiento en pantalla detenido. El servidor puede seguir procesando el pipeline en segundo plano.',
+      { duration: 5000 }
+    )
+  }
 
   async function handleGenerarExcelDesdeGmail() {
     setIsOpen(false)
@@ -195,6 +210,17 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
 
               {loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}
             </button>
+
+            {loadingGmail && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-amber-800 transition-colors hover:bg-amber-50"
+                onClick={handleDetenerSeguimientoGmail}
+              >
+                <X className="h-4 w-4 shrink-0" />
+                Detener seguimiento (deja de consultar el estado)
+              </button>
+            )}
 
             <p className="mt-1 border-t border-gray-100 px-2 py-1 text-xs text-gray-500">
               {scanFilter === 'unread'

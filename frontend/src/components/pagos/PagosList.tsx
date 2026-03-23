@@ -172,6 +172,7 @@ export function PagosList() {
     gmailStatus,
     setGmailStatus,
     run: runGmail,
+    stopPolling: stopGmailPolling,
   } = useGmailPipeline({
     onStatusUpdate: s => setGmailStatus(s),
   })
@@ -197,6 +198,19 @@ export function PagosList() {
       .then(r => setCedulasReportarBsTotal(r.total))
       .catch(() => setCedulasReportarBsTotal(0))
   }, [])
+
+  useEffect(() => {
+    return () => {
+      stopGmailPolling()
+    }
+  }, [stopGmailPolling])
+
+  const handleDetenerSeguimientoGmail = () => {
+    stopGmailPolling()
+    toast.info(
+      'Seguimiento en pantalla detenido. El servidor puede seguir procesando el pipeline en segundo plano.'
+    )
+  }
 
   const handleGenerarExcelDesdeGmail = () => {
     setAgregarPagoOpen(false)
@@ -894,6 +908,18 @@ export function PagosList() {
                         Gmail
                       </span>
                     </button>
+                    {loadingGmail && (
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-amber-800 hover:bg-amber-50"
+                        onClick={handleDetenerSeguimientoGmail}
+                      >
+                        <X className="h-4 w-4 shrink-0" />
+                        <span>
+                          Detener seguimiento (deja de consultar el estado)
+                        </span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-blue-50 disabled:opacity-50"
