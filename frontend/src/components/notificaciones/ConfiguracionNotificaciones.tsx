@@ -666,12 +666,14 @@ export function ConfiguracionNotificaciones() {
           </CardTitle>
 
           <CardDescription>
-            Solo aparecen casos con envío por pestaña (retrasadas y
-            prejudicial). Las plantillas tipo «carta de cobranza» (COBRANZA) se
-            crean en Plantillas y se eligen aquí por caso; no hay fila separada
-            de envío para COBRANZA. Cada fila activa requiere plantilla HTML,
-            «PDF» y «Adj.»; el backend exige carta variable más al menos un PDF
-            fijo válido (pestaña 3).
+            Cada correo al cliente (modo estricto) combina tres piezas: (1)
+            plantilla de correo HTML con variables; (2) PDF de carta con
+            variables (Carta_Cobranza.pdf); (3) PDFs fijos de anexos, siempre
+            junto al PDF variable. Solo aparecen casos con envio por pestaña
+            (retrasadas y prejudicial). Las plantillas tipo carta de cobranza
+            (COBRANZA) se crean en Plantillas y se eligen aqui por caso. El
+            backend exige plantilla activa, PDF variable valido y al menos un
+            PDF fijo adicional (pestaña Documentos PDF anexos / adjunto global).
           </CardDescription>
         </CardHeader>
       </Card>

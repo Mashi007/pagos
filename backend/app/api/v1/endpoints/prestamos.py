@@ -28,7 +28,7 @@ from pydantic import BaseModel, field_validator
 
 from sqlalchemy import cast, delete, exists, func, or_, select, text, update
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from sqlalchemy.orm import Session
 
@@ -601,15 +601,27 @@ def listar_prestamos(
 
     if prestamo_ids:
 
-        rev_q = select(RevisionManualPrestamo.prestamo_id, RevisionManualPrestamo.estado_revision).where(
+        try:
 
-            RevisionManualPrestamo.prestamo_id.in_(prestamo_ids)
+            rev_q = select(RevisionManualPrestamo.prestamo_id, RevisionManualPrestamo.estado_revision).where(
 
-        )
+                RevisionManualPrestamo.prestamo_id.in_(prestamo_ids)
 
-        for pid, estado in db.execute(rev_q).all():
+            )
 
-            revision_manual_estados[pid] = estado
+            for pid, estado in db.execute(rev_q).all():
+
+                revision_manual_estados[pid] = estado
+
+        except (ProgrammingError, OperationalError) as e:
+
+            logger.warning(
+
+                "revision_manual_prestamos no disponible o error de BD al listar prestamos: %s",
+
+                e,
+
+            )
 
     
 
@@ -629,15 +641,15 @@ def listar_prestamos(
 
             cliente_id=p.cliente_id,
 
-            total_financiamiento=p.total_financiamiento,
+            total_financiamiento=(p.total_financiamiento if p.total_financiamiento is not None else Decimal("0")),
 
-            estado=p.estado,
+            estado=p.estado or "DRAFT",
 
             concesionario=p.concesionario,
 
             modelo=p.modelo,
 
-            analista=p.analista,
+            analista=p.analista or "",
 
             fecha_creacion=p.fecha_creacion,
 

@@ -24,7 +24,7 @@ import {
 
 import { Button } from '../components/ui/button'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   notificacionService,
@@ -71,6 +71,15 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
   switch (tab) {
     case 'dias_1_atraso':
       return 'dias_1_retraso'
+
+    case 'dias_5_atraso':
+      return 'dias_5_retraso'
+
+    case 'dias_30_atraso':
+      return 'prejudicial'
+
+    case 'liquidados':
+      return 'liquidados'
 
     default:
       return null
@@ -164,8 +173,20 @@ export function Notificaciones() {
       hoy: { enviados: 0, rebotados: 0 },
 
       dias_1_retraso: { enviados: 0, rebotados: 0 },
+
+      dias_3_retraso: { enviados: 0, rebotados: 0 },
+
+      dias_5_retraso: { enviados: 0, rebotados: 0 },
+
+      prejudicial: { enviados: 0, rebotados: 0 },
+
+      liquidados: { enviados: 0, rebotados: 0 },
     } as EstadisticasPorTab,
   })
+
+  const queryClient = useQueryClient()
+
+  const [actualizandoListas, setActualizandoListas] = useState(false)
 
   const [descargandoExcel, setDescargandoExcel] = useState(false)
 
@@ -217,12 +238,25 @@ export function Notificaciones() {
     )
   }
 
-  const handleRefresh = () => {
-    refetch()
-
-    toast.success(
-      'Datos actualizados. Se recomienda ejecutar actualización a las 2am (cron).'
-    )
+  const handleRefresh = async () => {
+    setActualizandoListas(true)
+    try {
+      await notificacionService.actualizarNotificaciones()
+      await queryClient.invalidateQueries({
+        queryKey: ['notificaciones-estadisticas-por-tab'],
+      })
+      await refetch()
+      toast.success(
+        'Listas y mora actualizadas. El servidor tambien recalcula automaticamente a las 00:50 (America/Caracas), antes del envio programado 01:00.'
+      )
+    } catch (e) {
+      console.error(e)
+      toast.error(
+        'No se pudo recalcular la mora en el servidor. Puede reintentar o revisar conexion y permisos.'
+      )
+    } finally {
+      setActualizandoListas(false)
+    }
   }
 
   const handleDescargarInformeRebotados = async () => {
@@ -362,6 +396,14 @@ export function Notificaciones() {
             el PDF de estado de cuenta del préstamo. Datos desde BD.
           </p>
 
+          <p className="mt-2 text-sm text-gray-600">
+            Envio por lotes (paquete estricto): (1) plantilla de correo HTML con
+            variables del cliente; (2) PDF de carta con variables
+            (Carta_Cobranza.pdf); (3) al menos un PDF fijo adicional, siempre
+            anexado junto al PDF variable. Configuracion en esta pagina
+            (Configuracion) y en Plantillas.
+          </p>
+
           {data?.actualizado_en && (
             <p className="mt-1 text-xs text-gray-500">
               Última actualización:{' '}
@@ -373,11 +415,11 @@ export function Notificaciones() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={handleRefresh}
-            disabled={isFetching}
+            onClick={() => void handleRefresh()}
+            disabled={isFetching || actualizandoListas}
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`}
+              className={`mr-2 h-4 w-4 ${isFetching || actualizandoListas ? 'animate-spin' : ''}`}
             />
             Actualizar
           </Button>
@@ -471,43 +513,48 @@ export function Notificaciones() {
           <CardContent>
             {/* KPIs por pestaña: correos enviados y rebotados */}
 
-            {(activeTab as TabId) !== 'configuracion' &&
-              (activeTab as TabId) !== 'liquidados' &&
-              estadisticasPorTab && (
-                <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-2">
-                  <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
-                    <Mail className="h-8 w-8 text-green-600" />
+            {(activeTab as TabId) !== 'configuracion' && estadisticasPorTab && (
+              <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-2">
+                <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                  <Mail className="h-8 w-8 text-green-600" />
 
-                    <div>
-                      <p className="text-2xl font-bold text-green-800">
-                        {statTabKey
-                          ? (estadisticasPorTab[statTabKey]?.enviados ?? 0)
-                          : 0}
-                      </p>
+                  <div>
+                    <p className="text-2xl font-bold text-green-800">
+                      {statTabKey
+                        ? (estadisticasPorTab[statTabKey]?.enviados ?? 0)
+                        : 0}
+                    </p>
 
-                      <p className="text-xs font-medium text-green-700">
-                        Correos enviados
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
-                    <AlertTriangle className="h-8 w-8 text-red-600" />
-
-                    <div>
-                      <p className="text-2xl font-bold text-red-800">
-                        {statTabKey
-                          ? (estadisticasPorTab[statTabKey]?.rebotados ?? 0)
-                          : 0}
-                      </p>
-
-                      <p className="text-xs font-medium text-red-700">
-                        Correos rebotados
-                      </p>
-                    </div>
+                    <p className="text-xs font-medium text-green-700">
+                      Correos enviados
+                    </p>
                   </div>
                 </div>
-              )}
+
+                <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+                  <AlertTriangle className="h-8 w-8 text-red-600" />
+
+                  <div>
+                    <p className="text-2xl font-bold text-red-800">
+                      {statTabKey
+                        ? (estadisticasPorTab[statTabKey]?.rebotados ?? 0)
+                        : 0}
+                    </p>
+
+                    <p className="text-xs font-medium text-red-700">
+                      Correos rebotados
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'dias_30_atraso' && (
+              <p className="mb-4 text-xs text-gray-500">
+                Los KPI y el informe Excel corresponden al envio prejudicial (tipo_tab{' '}
+                <code className="rounded bg-gray-100 px-1">prejudicial</code> en la base de datos).
+              </p>
+            )}
 
             {/* Botón descargar informe Excel de no entregados (rebotados) */}
 

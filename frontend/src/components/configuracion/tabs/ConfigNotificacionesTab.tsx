@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { Link } from 'react-router-dom'
+
 import { Input } from '../../ui/input'
 
 import {
@@ -45,6 +47,25 @@ export function ConfigNotificacionesTab() {
 
   return (
     <div className="space-y-6">
+      <div
+        className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+        role="status"
+      >
+        <p className="font-medium">Aviso</p>
+        <p className="mt-1">
+          Esta seccion no guarda SMTP ni envios reales. La configuracion
+          operativa de notificaciones (plantillas HTML, PDF variable, PDFs fijos
+          y envio por caso) esta en{' '}
+          <Link
+            className="font-medium text-amber-950 underline"
+            to="/notificaciones?tab=configuracion"
+          >
+            Notificaciones {'>'} Configuracion
+          </Link>{' '}
+          y el servidor de correo en Configuracion {'>'} Email.
+        </p>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="flex items-center space-x-2">
           <input

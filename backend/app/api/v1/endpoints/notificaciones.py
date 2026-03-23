@@ -9,7 +9,7 @@ import json
 import os
 import uuid
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query, File, UploadFile, BackgroundTasks
@@ -1095,15 +1095,42 @@ def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
 
 @router.get("/estadisticas/resumen")
 def get_notificaciones_resumen(db: Session = Depends(get_db)):
-    """Resumen para sidebar. El frontend espera: no_leidas, total. get_db inyectado para consistencia."""
-    return {"no_leidas": 0, "total": 0}
+    """
+    Resumen para sidebar: total de envios registrados y fallidos en ventana reciente.
+    no_leidas = envios con exito=False (atencion / rebotados) en los ultimos 30 dias.
+    total = todos los registros de envios_notificacion en los ultimos 30 dias.
+    """
+    desde = datetime.utcnow() - timedelta(days=30)
+    try:
+        total = (
+            db.scalar(
+                select(func.count(EnvioNotificacion.id)).where(
+                    EnvioNotificacion.fecha_envio >= desde
+                )
+            )
+            or 0
+        )
+        fallidos = (
+            db.scalar(
+                select(func.count(EnvioNotificacion.id)).where(
+                    EnvioNotificacion.fecha_envio >= desde,
+                    EnvioNotificacion.exito.is_(False),
+                )
+            )
+            or 0
+        )
+        return {"no_leidas": int(fallidos), "total": int(total)}
+    except Exception as e:
+        logger.warning("get_notificaciones_resumen: %s", e)
+        return {"no_leidas": 0, "total": 0}
 
 
 @router.get("/estadisticas-por-tab", response_model=dict)
 def get_estadisticas_por_tab(db: Session = Depends(get_db)):
     """
-    KPIs por pestaÃƒÂ±a: correos enviados y rebotados (dias_5, dias_3, dias_1, hoy, dias_1_retraso).
-    Datos desde tabla envios_notificacion (persistidos al enviar desde notificaciones_tabs).
+    KPIs por pestaña / tipo_tab: correos enviados y rebotados.
+    Incluye previas (dias_5, dias_3, dias_1, hoy), retrasadas (dias_*_retraso),
+    prejudicial y credito pagado (liquidados). Datos desde envios_notificacion.
     """
     result = {
         "dias_5": {"enviados": 0, "rebotados": 0},
@@ -1111,9 +1138,23 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "dias_1": {"enviados": 0, "rebotados": 0},
         "hoy": {"enviados": 0, "rebotados": 0},
         "dias_1_retraso": {"enviados": 0, "rebotados": 0},
+        "dias_3_retraso": {"enviados": 0, "rebotados": 0},
+        "dias_5_retraso": {"enviados": 0, "rebotados": 0},
+        "prejudicial": {"enviados": 0, "rebotados": 0},
+        "liquidados": {"enviados": 0, "rebotados": 0},
     }
     try:
-        for tipo in ("dias_5", "dias_3", "dias_1", "hoy", "dias_1_retraso"):
+        for tipo in (
+            "dias_5",
+            "dias_3",
+            "dias_1",
+            "hoy",
+            "dias_1_retraso",
+            "dias_3_retraso",
+            "dias_5_retraso",
+            "prejudicial",
+            "liquidados",
+        ):
             env = db.scalar(
                 select(func.count(EnvioNotificacion.id)).where(
                     EnvioNotificacion.tipo_tab == tipo,
@@ -1132,7 +1173,17 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
     return result
 
 
-TIPOS_TAB_NOTIFICACIONES = ("dias_5", "dias_3", "dias_1", "hoy", "dias_1_retraso")
+TIPOS_TAB_NOTIFICACIONES = (
+    "dias_5",
+    "dias_3",
+    "dias_1",
+    "hoy",
+    "dias_1_retraso",
+    "dias_3_retraso",
+    "dias_5_retraso",
+    "prejudicial",
+    "liquidados",
+)
 
 
 def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
@@ -1171,7 +1222,10 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 
 @router.get("/rebotados-por-tab", response_model=dict)
 def get_rebotados_por_tab(
-    tipo: str = Query(..., description="Tipo de pestaÃƒÂ±a: dias_5, dias_3, dias_1, hoy, dias_1_retraso"),
+    tipo: str = Query(
+        ...,
+        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, liquidados",
+    ),
     db: Session = Depends(get_db),
 ):
     """Lista de correos no entregados (rebotados) para la pestaÃƒÂ±a. Para generar informe Excel en frontend o descargar Excel."""

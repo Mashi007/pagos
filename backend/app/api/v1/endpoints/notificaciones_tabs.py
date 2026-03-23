@@ -1,7 +1,14 @@
 """
 Endpoints para notificaciones por cuota (retrasadas 1/3/5 dias, prejudicial).
+
 Politica: sin envios "previos" ni el dia del vencimiento; previas/dia-pago devuelven listas vacias.
 Datos reales desde BD. get_db en todos los procesos.
+
+Paquete de correo al cliente (NOTIFICACIONES_PAQUETE_ESTRICTO=True por defecto):
+1) Plantilla de correo: HTML/texto con variables sustituidas por datos del cliente/cuota.
+2) PDF variable Carta_Cobranza.pdf: generado con variables de cobranza (plantilla PDF / contexto).
+3) Al menos un PDF fijo adicional: documentos de pestaña "Documentos PDF anexos" y/o adjunto global;
+   siempre se envia junto al PDF variable cuando el paquete es estricto.
 """
 import logging
 from typing import Callable, List, Optional, Tuple

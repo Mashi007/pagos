@@ -130,9 +130,17 @@ export interface EstadisticasPorTab {
 
   hoy: EstadisticasTabItem
 
-  /** Envíos del caso "1 día de retraso" (tipo_tab en BD). */
+  /** Envios del caso "1 dia de retraso" (tipo_tab en BD). */
 
   dias_1_retraso: EstadisticasTabItem
+
+  dias_3_retraso: EstadisticasTabItem
+
+  dias_5_retraso: EstadisticasTabItem
+
+  prejudicial: EstadisticasTabItem
+
+  liquidados: EstadisticasTabItem
 }
 
 export interface RebotadoItem {
