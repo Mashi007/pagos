@@ -67,6 +67,9 @@ interface MenuItem {
   children?: MenuItem[]
 
   isSubmenu?: boolean
+
+  /** Solo visible si el usuario es administrador (p. ej. Finiquito gestión). */
+  adminOnly?: boolean
 }
 
 export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
@@ -223,9 +226,10 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         },
 
         {
-          title: 'Finiquito',
-          href: '/finiquitos',
+          title: 'Finiquito (gestión)',
+          href: '/finiquitos/gestion',
           icon: FileText,
+          adminOnly: true,
         },
       ],
     },
@@ -304,9 +308,15 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   useEffect(() => {
     const pathname = location.pathname
 
+    const isAdmin = (user?.rol || 'operativo') === 'administrador'
+
     menuItems.forEach(item => {
       if (item.isSubmenu && item.children) {
-        const hasActiveChild = item.children.some(child => {
+        const visibleChildren = item.children.filter(
+          child => !child.adminOnly || isAdmin
+        )
+
+        const hasActiveChild = visibleChildren.some(child => {
           if (!child.href) return false
 
           if (child.href.includes('?')) {
@@ -330,7 +340,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         }
       }
     })
-  }, [location.pathname, location.search])
+  }, [location.pathname, location.search, user?.rol])
 
   // Operativo: no ve Configuración (ni auditoría); solo Administrador puede acceder a esos módulos
 
@@ -718,48 +728,55 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                 isCompact ? 'ml-0' : 'ml-6'
                               )}
                             >
-                              {item.children.map(child => (
-                                <NavLink
-                                  key={child.href}
-                                  to={child.href!}
-                                  onClick={() => {
-                                    if (window.innerWidth < 1024) {
-                                      onClose()
+                              {item.children
+                                .filter(
+                                  child =>
+                                    !child.adminOnly ||
+                                    (user?.rol || 'operativo') ===
+                                      'administrador'
+                                )
+                                .map(child => (
+                                  <NavLink
+                                    key={child.href}
+                                    to={child.href!}
+                                    onClick={() => {
+                                      if (window.innerWidth < 1024) {
+                                        onClose()
+                                      }
+                                    }}
+                                    className={() =>
+                                      cn(
+                                        'flex items-center rounded-lg text-sm font-medium transition-all duration-200',
+
+                                        isActiveRoute(child.href!)
+                                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                                          : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
+
+                                        isCompact
+                                          ? 'justify-center px-2 py-2'
+                                          : 'space-x-3 px-3 py-2'
+                                      )
                                     }
-                                  }}
-                                  className={() =>
-                                    cn(
-                                      'flex items-center rounded-lg text-sm font-medium transition-all duration-200',
+                                    title={isCompact ? child.title : undefined}
+                                  >
+                                    <child.icon className="h-4 w-4" />
 
-                                      isActiveRoute(child.href!)
-                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
-                                        : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
+                                    {!isCompact && (
+                                      <>
+                                        <span>{child.title}</span>
 
-                                      isCompact
-                                        ? 'justify-center px-2 py-2'
-                                        : 'space-x-3 px-3 py-2'
-                                    )
-                                  }
-                                  title={isCompact ? child.title : undefined}
-                                >
-                                  <child.icon className="h-4 w-4" />
-
-                                  {!isCompact && (
-                                    <>
-                                      <span>{child.title}</span>
-
-                                      {child.badge && (
-                                        <Badge
-                                          variant="destructive"
-                                          className="ml-auto flex h-5 min-w-[20px] items-center justify-center px-1.5 text-xs"
-                                        >
-                                          {child.badge}
-                                        </Badge>
-                                      )}
-                                    </>
-                                  )}
-                                </NavLink>
-                              ))}
+                                        {child.badge && (
+                                          <Badge
+                                            variant="destructive"
+                                            className="ml-auto flex h-5 min-w-[20px] items-center justify-center px-1.5 text-xs"
+                                          >
+                                            {child.badge}
+                                          </Badge>
+                                        )}
+                                      </>
+                                    )}
+                                  </NavLink>
+                                ))}
                             </div>
                           </motion.div>
                         )}

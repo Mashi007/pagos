@@ -105,7 +105,7 @@ export function FiniquitoRevisionDialog({ open, casoId, onOpenChange }: Props) {
       <DialogContent className="flex max-h-[90vh] max-w-[min(96rem,calc(100vw-2rem))] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-4 py-3 sm:px-6">
           <DialogTitle className="text-left text-lg text-[#1e3a5f]">
-            Revision de caso — misma informacion que Préstamos y Pagos
+            Revision de caso - misma informacion que Préstamos y Pagos
           </DialogTitle>
           <DialogDescription className="text-left text-sm">
             Cédula:{' '}
@@ -156,14 +156,20 @@ export function FiniquitoRevisionDialog({ open, casoId, onOpenChange }: Props) {
                       <TableHead>Modalidad</TableHead>
                       <TableHead>Cuotas</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead className="whitespace-nowrap">Fecha aprob.</TableHead>
+                      <TableHead className="whitespace-nowrap">
+                        Fecha aprob.
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {prestamosItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-slate-500">
-                          Sin préstamos para esta cédula (mismo criterio que /prestamos).
+                        <TableCell
+                          colSpan={7}
+                          className="text-center text-slate-500"
+                        >
+                          Sin préstamos para esta cédula (mismo criterio que
+                          /prestamos).
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -189,9 +195,13 @@ export function FiniquitoRevisionDialog({ open, casoId, onOpenChange }: Props) {
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell>{modalidadLabel(p.modalidad_pago)}</TableCell>
                           <TableCell>
-                            {p.numero_cuotas != null ? String(p.numero_cuotas) : '-'}
+                            {modalidadLabel(p.modalidad_pago)}
+                          </TableCell>
+                          <TableCell>
+                            {p.numero_cuotas != null
+                              ? String(p.numero_cuotas)
+                              : '-'}
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -228,7 +238,9 @@ export function FiniquitoRevisionDialog({ open, casoId, onOpenChange }: Props) {
                       <TableHead>Cédula</TableHead>
                       <TableHead>Crédito</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead className="max-w-[200px]">Observaciones</TableHead>
+                      <TableHead className="max-w-[200px]">
+                        Observaciones
+                      </TableHead>
                       <TableHead>Monto</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Nº Doc.</TableHead>
@@ -238,9 +250,12 @@ export function FiniquitoRevisionDialog({ open, casoId, onOpenChange }: Props) {
                   <TableBody>
                     {pagosItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center text-slate-500">
-                          Sin pagos conciliados para esta cédula (mismo filtro por
-                          defecto que /pagos: conciliado = sí).
+                        <TableCell
+                          colSpan={9}
+                          className="text-center text-slate-500"
+                        >
+                          Sin pagos conciliados para esta cédula (mismo filtro
+                          por defecto que /pagos: conciliado = sí).
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -249,9 +264,13 @@ export function FiniquitoRevisionDialog({ open, casoId, onOpenChange }: Props) {
                           <TableCell className="font-mono text-xs">
                             {String(p.id ?? '')}
                           </TableCell>
-                          <TableCell>{String(p.cedula_cliente ?? '')}</TableCell>
                           <TableCell>
-                            {p.prestamo_id != null ? String(p.prestamo_id) : '-'}
+                            {String(p.cedula_cliente ?? '')}
+                          </TableCell>
+                          <TableCell>
+                            {p.prestamo_id != null
+                              ? String(p.prestamo_id)
+                              : '-'}
                           </TableCell>
                           <TableCell>{String(p.estado ?? '')}</TableCell>
                           <TableCell
@@ -285,7 +304,11 @@ export function FiniquitoRevisionDialog({ open, casoId, onOpenChange }: Props) {
         </div>
 
         <div className="flex shrink-0 justify-end border-t px-4 py-3 sm:px-6">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cerrar
           </Button>
         </div>

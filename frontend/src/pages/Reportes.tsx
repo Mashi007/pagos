@@ -70,6 +70,10 @@ const INFORMES_PATH = 'informes'
 
 const INFOPAGOS_PATH = 'infopagos'
 
+/** Portal público Finiquito (colaboradores: código por correo). */
+
+const PUBLIC_FINIQUITO_PATH = 'finiquitos'
+
 /** Ruta relativa de esta pagina (compartir URL del Centro de Reportes). */
 
 const REPORTES_PAGE_PATH = 'reportes'
@@ -612,7 +616,7 @@ export function Reportes() {
           <CardContent className="py-4">
             <p className="mb-4 text-sm text-gray-500">
               Copie el enlace y compártalo con clientes o equipos para consulta
-              de reporte de pagos o estado de cuenta.
+              de reporte de pagos, estado de cuenta o finiquito (colaboradores).
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -681,6 +685,21 @@ export function Reportes() {
               >
                 <Building2 className="h-5 w-5" />
                 Infopagos
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11 gap-2"
+                onClick={() =>
+                  copiarEnlaceServicio(PUBLIC_FINIQUITO_PATH, 'Finiquitos')
+                }
+                title="Copiar enlace: Finiquitos (acceso colaboradores con código por correo)"
+                aria-label="Copiar enlace Finiquitos"
+              >
+                <CheckCircle2 className="h-5 w-5" aria-hidden />
+                Finiquitos
               </Button>
             </div>
           </CardContent>

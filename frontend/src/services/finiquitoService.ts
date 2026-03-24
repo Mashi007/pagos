@@ -70,10 +70,13 @@ export async function finiquitoRegistro(cedula: string, email: string) {
 }
 
 export async function finiquitoSolicitarCodigo(cedula: string, email: string) {
-  const { data } = await finiquitoAxios.post(`${BASE}/public/solicitar-codigo`, {
-    cedula,
-    email,
-  })
+  const { data } = await finiquitoAxios.post(
+    `${BASE}/public/solicitar-codigo`,
+    {
+      cedula,
+      email,
+    }
+  )
   return data as { ok: boolean; message: string }
 }
 
@@ -82,11 +85,14 @@ export async function finiquitoVerificarCodigo(
   email: string,
   codigo: string
 ) {
-  const { data } = await finiquitoAxios.post(`${BASE}/public/verificar-codigo`, {
-    cedula,
-    email,
-    codigo,
-  })
+  const { data } = await finiquitoAxios.post(
+    `${BASE}/public/verificar-codigo`,
+    {
+      cedula,
+      email,
+      codigo,
+    }
+  )
   return data as {
     ok: boolean
     access_token?: string
@@ -120,7 +126,10 @@ export async function finiquitoListarCasos(
   return data as { items: FiniquitoCasoItem[] }
 }
 
-export async function finiquitoPatchEstadoPublic(casoId: number, estado: string) {
+export async function finiquitoPatchEstadoPublic(
+  casoId: number,
+  estado: string
+) {
   const { data, status } = await finiquitoAxios.patch(
     `${BASE}/public/casos/${casoId}/estado`,
     { estado }
@@ -192,13 +201,19 @@ export async function finiquitoAdminListar(estado?: string) {
   )
 }
 
-export async function finiquitoAdminPatchEstado(casoId: number, estado: string) {
-  return apiClient.patch<{ ok: boolean; caso?: FiniquitoCasoItem; error?: string }>(
-    `${BASE}/admin/casos/${casoId}/estado`,
-    { estado }
-  )
+export async function finiquitoAdminPatchEstado(
+  casoId: number,
+  estado: string
+) {
+  return apiClient.patch<{
+    ok: boolean
+    caso?: FiniquitoCasoItem
+    error?: string
+  }>(`${BASE}/admin/casos/${casoId}/estado`, { estado })
 }
 
 export async function finiquitoAdminRefreshMaterializado() {
-  return apiClient.post<Record<string, number>>(`${BASE}/admin/refresh-materializado`)
+  return apiClient.post<Record<string, number>>(
+    `${BASE}/admin/refresh-materializado`
+  )
 }

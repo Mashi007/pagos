@@ -35,12 +35,17 @@ import {
   setFiniquitoAccessToken,
 } from '../services/finiquitoService'
 
+import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
+
 function etiquetaEstadoFiniquito(estado: string) {
   const e = (estado || '').toUpperCase()
-  if (e === 'REVISION') return { label: 'Revisión', className: 'bg-amber-100 text-amber-900' }
-  if (e === 'ACEPTADO') return { label: 'Aceptado', className: 'bg-emerald-100 text-emerald-900' }
-  if (e === 'RECHAZADO') return { label: 'Rechazado', className: 'bg-red-100 text-red-900' }
-  return { label: estado || '—', className: 'bg-slate-100 text-slate-800' }
+  if (e === 'REVISION')
+    return { label: 'Revisión', className: 'bg-amber-100 text-amber-900' }
+  if (e === 'ACEPTADO')
+    return { label: 'Aceptado', className: 'bg-emerald-100 text-emerald-900' }
+  if (e === 'RECHAZADO')
+    return { label: 'Rechazado', className: 'bg-red-100 text-red-900' }
+  return { label: estado || '-', className: 'bg-slate-100 text-slate-800' }
 }
 
 export function FiniquitoPanelPage() {
@@ -52,7 +57,7 @@ export function FiniquitoPanelPage() {
 
   const salir = useCallback(() => {
     setFiniquitoAccessToken(null)
-    navigate('/finiquitos/acceso', { replace: true })
+    navigate('/finiquitos', { replace: true })
   }, [navigate])
 
   const cargar = useCallback(async () => {
@@ -78,6 +83,14 @@ export function FiniquitoPanelPage() {
   useEffect(() => {
     cargar()
   }, [cargar])
+
+  useEffect(() => {
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
+    sessionStorage.setItem(
+      PUBLIC_FLOW_SESSION_KEY + '_path',
+      'finiquitos/panel'
+    )
+  }, [])
 
   const abrirRevision = (casoId: number) => {
     setRevisionCasoId(casoId)
@@ -119,9 +132,9 @@ export function FiniquitoPanelPage() {
           <div>
             <h1 className="text-2xl font-bold text-[#1e3a5f]">Finiquito</h1>
             <p className="text-sm text-slate-600">
-              Préstamos con financiamiento = suma de abonos. El ojo abre la misma
-              información que las pantallas Préstamos y Pagos (por cédula). En
-              Revisión puede aceptar o rechazar.
+              Préstamos con financiamiento = suma de abonos. El ojo abre la
+              misma información que las pantallas Préstamos y Pagos (por
+              cédula). En Revisión puede aceptar o rechazar.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -137,10 +150,13 @@ export function FiniquitoPanelPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Casos listos para finiquito</CardTitle>
+            <CardTitle className="text-lg">
+              Casos listos para finiquito
+            </CardTitle>
             <CardDescription>
-              Cada fila cumple total financiamiento = total abonos. Solo en estado
-              Revisión puede aceptar (desk) o rechazar (revisión administrador).
+              Cada fila cumple total financiamiento = total abonos. Solo en
+              estado Revisión puede aceptar (desk) o rechazar (revisión
+              administrador).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -150,8 +166,9 @@ export function FiniquitoPanelPage() {
               </div>
             ) : items.length === 0 ? (
               <p className="py-8 text-center text-sm text-slate-500">
-                No hay casos materializados. El listado se actualiza en el servidor
-                (p. ej. 02:00) cuando existan préstamos con la regla cumplida.
+                No hay casos materializados. El listado se actualiza en el
+                servidor (p. ej. 02:00) cuando existan préstamos con la regla
+                cumplida.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -169,7 +186,9 @@ export function FiniquitoPanelPage() {
                   <TableBody>
                     {items.map(row => (
                       <TableRow key={row.id}>
-                        <TableCell className="font-medium">{row.cedula}</TableCell>
+                        <TableCell className="font-medium">
+                          {row.cedula}
+                        </TableCell>
                         <TableCell>{row.prestamo_id}</TableCell>
                         <TableCell>{row.total_financiamiento}</TableCell>
                         <TableCell>{row.sum_total_pagado}</TableCell>
@@ -202,7 +221,10 @@ export function FiniquitoPanelPage() {
                                   title="Aceptar"
                                   onClick={() => aceptar(row.id)}
                                 >
-                                  <CheckCircle2 className="h-4 w-4" aria-hidden />
+                                  <CheckCircle2
+                                    className="h-4 w-4"
+                                    aria-hidden
+                                  />
                                 </Button>
                                 <Button
                                   size="icon"

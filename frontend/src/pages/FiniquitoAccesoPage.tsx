@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Link, useNavigate } from 'react-router-dom'
 
@@ -24,12 +24,24 @@ import {
   setFiniquitoAccessToken,
 } from '../services/finiquitoService'
 
+import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
+
 export function FiniquitoAccesoPage() {
   const navigate = useNavigate()
   const [cedula, setCedula] = useState('')
   const [email, setEmail] = useState('')
   const [codigo, setCodigo] = useState('')
   const [loading, setLoading] = useState<string | null>(null)
+
+  const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
+
+  useEffect(() => {
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
+    sessionStorage.setItem(
+      PUBLIC_FLOW_SESSION_KEY + '_path',
+      'finiquitos/acceso'
+    )
+  }, [])
 
   const onRegistro = async () => {
     if (!cedula.trim() || !email.trim()) {
@@ -93,17 +105,32 @@ export function FiniquitoAccesoPage() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-4 sm:p-6">
+    <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-100 via-[#e0eaf2] to-[#c9d6e8] p-4 sm:p-6">
       <div className="mb-4 w-full max-w-md">
-        <Button variant="ghost" size="sm" className="gap-2" asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-2 text-slate-700"
+          asChild
+        >
           <Link to="/finiquitos">
             <ChevronLeft className="h-4 w-4" aria-hidden />
-            Volver a opciones de ingreso
+            Volver al inicio
           </Link>
         </Button>
       </div>
 
-      <Card className="w-full max-w-md border-slate-200 shadow-xl">
+      <Card className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200/90 shadow-2xl shadow-slate-300/40 ring-1 ring-slate-200/50">
+        <div className="border-b border-slate-100 bg-gradient-to-b from-white to-slate-50/80 px-6 py-4 text-center">
+          <img
+            src={LOGO_PUBLIC_SRC}
+            alt="RapiCredit"
+            className="mx-auto h-14 object-contain drop-shadow-sm sm:h-16"
+          />
+          <p className="mt-2 text-xs font-semibold tracking-wide text-[#b8954a]">
+            Finiquito - colaboradores
+          </p>
+        </div>
         <CardHeader>
           <CardTitle className="text-xl text-[#1e3a5f]">
             Acceso encargado Finiquito
