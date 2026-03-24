@@ -19,7 +19,8 @@ from app.core.deps import (
     get_finiquito_usuario_acceso,
     require_administrador,
 )
-from app.core.email import send_email
+from app.core.email import mask_email_for_log, send_email
+from app.core.email_config_holder import get_email_activo_servicio
 from app.core.security import create_access_token
 from app.models.cuota import Cuota
 from app.models.finiquito import (
@@ -92,6 +93,144 @@ def _registrar_historial(
     )
 
 
+def _num_str(v: Any) -> Optional[str]:
+    if v is None:
+        return None
+    return str(v)
+
+
+def _dt_iso(v: Any) -> Optional[str]:
+    if v is None:
+        return None
+    if hasattr(v, "isoformat"):
+        try:
+            return v.isoformat()
+        except Exception:
+            return str(v)
+    return str(v)
+
+
+def _prestamo_caso_completo(p: Prestamo) -> dict[str, Any]:
+    """Campos ampliados del préstamo vinculado al caso (lectura finiquito)."""
+    return {
+        "id": p.id,
+        "cliente_id": p.cliente_id,
+        "cedula": p.cedula,
+        "nombres": p.nombres,
+        "total_financiamiento": _num_str(p.total_financiamiento),
+        "fecha_requerimiento": _dt_iso(p.fecha_requerimiento),
+        "modalidad_pago": p.modalidad_pago,
+        "numero_cuotas": p.numero_cuotas,
+        "cuota_periodo": _num_str(p.cuota_periodo),
+        "tasa_interes": _num_str(p.tasa_interes),
+        "fecha_base_calculo": _dt_iso(p.fecha_base_calculo),
+        "producto": p.producto,
+        "estado": p.estado,
+        "fecha_liquidado": _dt_iso(p.fecha_liquidado),
+        "usuario_proponente": p.usuario_proponente,
+        "usuario_aprobador": p.usuario_aprobador,
+        "observaciones": p.observaciones,
+        "fecha_registro": _dt_iso(p.fecha_registro),
+        "fecha_aprobacion": _dt_iso(p.fecha_aprobacion),
+        "fecha_actualizacion": _dt_iso(p.fecha_actualizacion),
+        "concesionario": p.concesionario,
+        "analista": p.analista,
+        "modelo_vehiculo": p.modelo_vehiculo,
+        "usuario_autoriza": p.usuario_autoriza,
+        "valor_activo": _num_str(p.valor_activo),
+        "requiere_revision": bool(p.requiere_revision)
+        if p.requiere_revision is not None
+        else False,
+        "concesionario_id": p.concesionario_id,
+        "analista_id": p.analista_id,
+        "modelo_vehiculo_id": p.modelo_vehiculo_id,
+    }
+
+
+def _cuota_to_dict(cu: Cuota) -> dict[str, Any]:
+    return {
+        "id": cu.id,
+        "prestamo_id": cu.prestamo_id,
+        "numero_cuota": cu.numero_cuota,
+        "fecha_vencimiento": _dt_iso(cu.fecha_vencimiento),
+        "fecha_pago": _dt_iso(cu.fecha_pago),
+        "monto_cuota": _num_str(cu.monto),
+        "saldo_capital_inicial": _num_str(cu.saldo_capital_inicial),
+        "saldo_capital_final": _num_str(cu.saldo_capital_final),
+        "monto_capital": _num_str(cu.monto_capital),
+        "monto_interes": _num_str(cu.monto_interes),
+        "total_pagado": _num_str(cu.total_pagado),
+        "dias_mora": cu.dias_mora,
+        "dias_morosidad": cu.dias_morosidad,
+        "estado": cu.estado,
+        "observaciones": cu.observaciones,
+        "pago_id": cu.pago_id,
+        "es_cuota_especial": cu.es_cuota_especial,
+        "cliente_id": cu.cliente_id,
+    }
+
+
+def _build_revision_datos_payload(db: Session, caso: FiniquitoCaso) -> dict[str, Any]:
+    """
+    Datos de revisión: préstamo del caso (completo), plan de cuotas, listados
+    /prestamos y /pagos por cédula; pagos sin filtrar por conciliado (tope API 100).
+    """
+    from app.api.v1.endpoints.pagos import listar_pagos
+    from app.api.v1.endpoints.prestamos import listar_prestamos
+
+    cedula = (caso.cedula or "").strip()
+    prestamos_payload = listar_prestamos(
+        page=1,
+        per_page=100,
+        cliente_id=None,
+        estado=None,
+        analista=None,
+        concesionario=None,
+        cedula=cedula,
+        fecha_inicio=None,
+        fecha_fin=None,
+        requiere_revision=None,
+        modelo=None,
+        search=None,
+        db=db,
+    )
+    pagos_payload = listar_pagos(
+        page=1,
+        per_page=100,
+        cedula=cedula,
+        estado=None,
+        fecha_desde=None,
+        fecha_hasta=None,
+        analista=None,
+        conciliado=None,
+        sin_prestamo=None,
+        db=db,
+    )
+
+    prestamo_caso: Optional[dict[str, Any]] = None
+    cuotas_caso: List[dict[str, Any]] = []
+    p = db.query(Prestamo).filter(Prestamo.id == caso.prestamo_id).first()
+    if p:
+        prestamo_caso = _prestamo_caso_completo(p)
+        cuotas = (
+            db.query(Cuota)
+            .filter(Cuota.prestamo_id == caso.prestamo_id)
+            .order_by(Cuota.numero_cuota.asc())
+            .all()
+        )
+        cuotas_caso = [_cuota_to_dict(cu) for cu in cuotas]
+
+    return {
+        "caso_id": caso.id,
+        "prestamo_id_finiquito": caso.prestamo_id,
+        "cedula": cedula,
+        "prestamo_caso": prestamo_caso,
+        "cuotas_caso": cuotas_caso,
+        "prestamos": prestamos_payload,
+        "pagos": pagos_payload,
+    }
+
+
 @router.post("/public/registro", response_model=FiniquitoRegistroResponse)
 def finiquito_public_registro(body: FiniquitoRegistroRequest, db: Session = Depends(get_db)):
     """Primera vez: cedula + email unicos en el modulo Finiquito."""
@@ -158,7 +297,6 @@ def finiquito_public_solicitar_codigo(
             creado_en=now_utc,
         )
     )
-    db.commit()
 
     asunto = "[RapiCredit] Codigo de acceso Finiquito"
     cuerpo = (
@@ -166,10 +304,44 @@ def finiquito_public_solicitar_codigo(
         f"Valido por {CODIGO_EXPIRA_MINUTES} minutos.\n"
         "Si usted no solicito este codigo, ignore este mensaje."
     )
-    ok_send, err_send = send_email([email], asunto, cuerpo)
-    if not ok_send:
-        logger.warning("finiquito solicitar-codigo: no enviado a %s: %s", email, err_send)
 
+    # Misma cuenta SMTP y flags que estado de cuenta publico: sin esto, modo pruebas
+    # redirige el OTP al correo de pruebas y el colaborador no recibe nada.
+    if not get_email_activo_servicio("estado_cuenta"):
+        db.rollback()
+        logger.warning(
+            "finiquito solicitar-codigo: no enviado (email_activo master off o "
+            "servicio 'Estado de cuenta' desactivado en Configuracion > Email)."
+        )
+        return FiniquitoSolicitarCodigoResponse(
+            ok=True,
+            message="Si los datos son correctos, recibira un codigo en su correo.",
+        )
+
+    ok_send, err_send = send_email(
+        [email],
+        asunto,
+        cuerpo,
+        servicio="estado_cuenta",
+        respetar_destinos_manuales=True,
+    )
+    if not ok_send:
+        db.rollback()
+        logger.warning(
+            "finiquito solicitar-codigo: SMTP fallo para %s: %s",
+            mask_email_for_log(email),
+            err_send or "send_email devolvio False",
+        )
+        return FiniquitoSolicitarCodigoResponse(
+            ok=True,
+            message="Si los datos son correctos, recibira un codigo en su correo.",
+        )
+
+    db.commit()
+    logger.info(
+        "finiquito solicitar-codigo: enviado ok dest=%s",
+        mask_email_for_log(email),
+    )
     return FiniquitoSolicitarCodigoResponse(
         ok=True,
         message="Si los datos son correctos, recibira un codigo en su correo.",
@@ -276,27 +448,8 @@ def finiquito_public_detalle(
     )
     prestamo_d: Optional[dict[str, Any]] = None
     if prestamo:
-        prestamo_d = {
-            "id": prestamo.id,
-            "cedula": prestamo.cedula,
-            "nombres": prestamo.nombres,
-            "total_financiamiento": str(prestamo.total_financiamiento),
-            "estado": prestamo.estado,
-            "producto": prestamo.producto,
-            "numero_cuotas": prestamo.numero_cuotas,
-        }
-    cuotas_l: List[dict[str, Any]] = []
-    for cu in cuotas:
-        cuotas_l.append(
-            {
-                "id": cu.id,
-                "numero_cuota": cu.numero_cuota,
-                "fecha_vencimiento": cu.fecha_vencimiento.isoformat() if cu.fecha_vencimiento else None,
-                "monto_cuota": str(cu.monto) if cu.monto is not None else None,
-                "total_pagado": str(cu.total_pagado) if cu.total_pagado is not None else None,
-                "estado": cu.estado,
-            }
-        )
+        prestamo_d = _prestamo_caso_completo(prestamo)
+    cuotas_l = [_cuota_to_dict(cu) for cu in cuotas]
     return FiniquitoDetalleResponse(caso=_caso_to_out(caso), prestamo=prestamo_d, cuotas=cuotas_l)
 
 
@@ -307,8 +460,8 @@ def finiquito_public_revision_datos(
     _: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
 ):
     """
-    Misma data que GET /prestamos (filtro cedula) y GET /pagos (cedula + conciliado=si,
-    como la pantalla Pagos por defecto), para revision desde el ojo en Finiquito.
+    Detalle del caso: préstamo vinculado (campos ampliados), plan de cuotas,
+    listado /prestamos por cédula y /pagos por cédula (todos los pagos, tope 100 por API).
     """
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
     if not caso:
@@ -316,45 +469,7 @@ def finiquito_public_revision_datos(
     cedula = (caso.cedula or "").strip()
     if not cedula:
         raise HTTPException(status_code=400, detail="Caso sin cedula")
-
-    from app.api.v1.endpoints.pagos import listar_pagos
-    from app.api.v1.endpoints.prestamos import listar_prestamos
-
-    prestamos_payload = listar_prestamos(
-        page=1,
-        per_page=100,
-        cliente_id=None,
-        estado=None,
-        analista=None,
-        concesionario=None,
-        cedula=cedula,
-        fecha_inicio=None,
-        fecha_fin=None,
-        requiere_revision=None,
-        modelo=None,
-        search=None,
-        db=db,
-    )
-    pagos_payload = listar_pagos(
-        page=1,
-        per_page=100,
-        cedula=cedula,
-        estado=None,
-        fecha_desde=None,
-        fecha_hasta=None,
-        analista=None,
-        conciliado="si",
-        sin_prestamo=None,
-        db=db,
-    )
-    return jsonable_encoder(
-        {
-            "caso_id": caso_id,
-            "cedula": cedula,
-            "prestamos": prestamos_payload,
-            "pagos": pagos_payload,
-        }
-    )
+    return jsonable_encoder(_build_revision_datos_payload(db, caso))
 
 
 @router.patch("/public/casos/{caso_id}/estado", response_model=FiniquitoPatchEstadoResponse)
@@ -408,6 +523,22 @@ def finiquito_admin_listar(
         q = q.filter(FiniquitoCaso.estado == e)
     items = [_caso_to_out(c) for c in q.order_by(FiniquitoCaso.id.desc()).all()]
     return FiniquitoCasoListaResponse(items=items)
+
+
+@router.get("/admin/casos/{caso_id}/revision-datos")
+def finiquito_admin_revision_datos(
+    caso_id: int,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_administrador),
+):
+    """Misma carga que GET public/revision-datos (préstamo caso, cuotas, préstamos/pagos por cédula)."""
+    caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
+    if not caso:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+    cedula = (caso.cedula or "").strip()
+    if not cedula:
+        raise HTTPException(status_code=400, detail="Caso sin cedula")
+    return jsonable_encoder(_build_revision_datos_payload(db, caso))
 
 
 @router.patch("/admin/casos/{caso_id}/estado", response_model=FiniquitoPatchEstadoResponse)

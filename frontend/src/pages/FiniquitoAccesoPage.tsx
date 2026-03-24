@@ -137,7 +137,8 @@ export function FiniquitoAccesoPage() {
           </CardTitle>
           <CardDescription>
             Regístrese la primera vez con su cédula y correo. Luego solicite el
-            código y escríbalo para entrar.
+            código y escríbalo para entrar. El mensaje sale por el mismo correo
+            del sistema que Estado de cuenta; revise spam o promociones.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

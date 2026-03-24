@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Eye, Loader2, RefreshCw } from 'lucide-react'
 
 import { toast } from 'sonner'
 
@@ -28,6 +28,8 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
+
+import { FiniquitoRevisionDialog } from '../components/finiquito/FiniquitoRevisionDialog'
 
 import {
   type FiniquitoCasoItem,
@@ -64,16 +66,19 @@ function textoToastRefresco(r: FiniquitoRefreshStats): {
     titulo: `Refresco: ${elg} elegibles · ${ins} nuevos · ${act} actualizados`,
     descripcion:
       ins === 0 && elg > 0
-        ? 'Insertados 0 es normal si esos préstamos ya estaban en finiquito. La lista de abajo depende del filtro de bandeja (Rechazados solo muestra estado RECHAZADO).'
+        ? 'Insertados 0 es normal si esos préstamos ya estaban en finiquito. Los saldados suelen verse en la bandeja Revisión (no en Rechazados).'
         : `Quitados del listado (ya no califican): ${eli}. Revise el filtro de bandeja si no ve filas.`,
   }
 }
 
 export function FiniquitoGestionPage() {
-  const [filtro, setFiltro] = useState<FiltroEstado>('RECHAZADO')
+  /** Revisión = préstamos saldados (liquidados en cuotas) pendientes de proceso finiquito. Rechazados es bandeja aparte. */
+  const [filtro, setFiltro] = useState<FiltroEstado>('REVISION')
   const [items, setItems] = useState<FiniquitoCasoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [revisionOpen, setRevisionOpen] = useState(false)
+  const [revisionCasoId, setRevisionCasoId] = useState<number | null>(null)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -128,9 +133,10 @@ export function FiniquitoGestionPage() {
             Finiquito - Administración
           </h1>
           <p className="text-sm text-gray-500">
-            Vista inferior: casos rechazados. Puede mover a cualquier estado.
-            Los colaboradores entran por la URL pública de finiquito (no por
-            este menú).
+            Aquí aparecen los préstamos que el refresco marca como saldados
+            (suma de cuotas = financiamiento), alineados con liquidación en
+            sistema. Por defecto ve la bandeja Revisión; use Rechazados solo
+            para excepciones. Los colaboradores entran por la URL pública.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -155,10 +161,10 @@ export function FiniquitoGestionPage() {
         <CardHeader>
           <CardTitle>Filtro</CardTitle>
           <CardDescription>
-            Por defecto muestra rechazados. Puede ver todos o filtrar por
-            estado. «Elegibles» en el refresco = préstamos cuya suma de cuotas
-            pagadas iguala el financiamiento; no es el conteo de filas de esta
-            tabla ni de rechazados.
+            Por defecto muestra Revisión: casos saldados pendientes (equivalente
+            operativo a préstamos liquidados en cuotas). Rechazados es otra
+            bandeja. «Elegibles» en el refresco = préstamos que cumplen esa
+            suma; no es el número de filas rechazadas.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-4">
@@ -172,11 +178,13 @@ export function FiniquitoGestionPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="REVISION">
+                  Revisión (saldados / pendientes)
+                </SelectItem>
+                <SelectItem value="ACEPTADO">Aceptados</SelectItem>
                 <SelectItem value="RECHAZADO">
                   Rechazados (vista inferior)
                 </SelectItem>
-                <SelectItem value="REVISION">Revisión</SelectItem>
-                <SelectItem value="ACEPTADO">Aceptados</SelectItem>
                 <SelectItem value="TODOS">Todos</SelectItem>
               </SelectContent>
             </Select>
@@ -206,7 +214,7 @@ export function FiniquitoGestionPage() {
                     <TableHead>Cédula</TableHead>
                     <TableHead>Préstamo</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Nuevo estado</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -217,16 +225,32 @@ export function FiniquitoGestionPage() {
                       <TableCell>{row.prestamo_id}</TableCell>
                       <TableCell>{row.estado}</TableCell>
                       <TableCell className="text-right">
-                        <Select onValueChange={v => cambiarEstado(row.id, v)}>
-                          <SelectTrigger className="ml-auto w-[160px]">
-                            <SelectValue placeholder="Cambiar..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="REVISION">Revisión</SelectItem>
-                            <SelectItem value="ACEPTADO">Aceptado</SelectItem>
-                            <SelectItem value="RECHAZADO">Rechazado</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            title="Ver préstamo, cuotas y pagos"
+                            onClick={() => {
+                              setRevisionCasoId(row.id)
+                              setRevisionOpen(true)
+                            }}
+                          >
+                            <Eye className="h-4 w-4" aria-hidden />
+                          </Button>
+                          <Select onValueChange={v => cambiarEstado(row.id, v)}>
+                            <SelectTrigger className="w-[160px]">
+                              <SelectValue placeholder="Cambiar estado..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="REVISION">Revisión</SelectItem>
+                              <SelectItem value="ACEPTADO">Aceptado</SelectItem>
+                              <SelectItem value="RECHAZADO">
+                                Rechazado
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -236,6 +260,16 @@ export function FiniquitoGestionPage() {
           )}
         </CardContent>
       </Card>
+
+      <FiniquitoRevisionDialog
+        open={revisionOpen}
+        casoId={revisionCasoId}
+        mode="admin"
+        onOpenChange={open => {
+          setRevisionOpen(open)
+          if (!open) setRevisionCasoId(null)
+        }}
+      />
     </div>
   )
 }

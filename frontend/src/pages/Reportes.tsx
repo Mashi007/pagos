@@ -630,7 +630,6 @@ export function Reportes() {
                   title="Abrir portal Finiquito (colaboradores, código por correo)"
                   aria-label="Abrir Finiquito en nueva pestaña"
                 >
-                  <CheckCircle2 className="h-5 w-5" aria-hidden />
                   Abrir Finiquito
                 </Link>
               </Button>
@@ -644,10 +643,10 @@ export function Reportes() {
                   copiarEnlaceServicio(PUBLIC_FINIQUITO_PATH, 'Finiquito')
                 }
                 title="Copiar enlace: Finiquito (acceso colaboradores con código por correo)"
-                aria-label="Copiar enlace Finiquito"
+                aria-label="Copiar enlace de Finiquito"
               >
                 <Copy className="h-5 w-5" aria-hidden />
-                Copiar enlace Finiquito
+                Finiquito
               </Button>
 
               <Button

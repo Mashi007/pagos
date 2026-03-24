@@ -161,7 +161,10 @@ export async function finiquitoDetalle(casoId: number) {
 
 export type FiniquitoRevisionDatosResponse = {
   caso_id: number
+  prestamo_id_finiquito?: number
   cedula: string
+  prestamo_caso?: Record<string, unknown> | null
+  cuotas_caso?: Record<string, unknown>[]
   prestamos: {
     prestamos: Record<string, unknown>[]
     total: number
@@ -178,7 +181,7 @@ export type FiniquitoRevisionDatosResponse = {
   }
 }
 
-/** Misma data que listados /prestamos y /pagos por cédula del caso (revision). */
+/** Detalle del caso: préstamo, cuotas, listados préstamos/pagos por cédula (portal colaborador). */
 export async function finiquitoRevisionDatos(casoId: number) {
   const { data, status } = await finiquitoAxios.get(
     `${BASE}/public/revision-datos/${casoId}`
@@ -192,6 +195,13 @@ export async function finiquitoRevisionDatos(casoId: number) {
     throw new Error(msg)
   }
   return data as FiniquitoRevisionDatosResponse
+}
+
+/** Igual que finiquitoRevisionDatos; usa sesión administrador del panel. */
+export async function finiquitoAdminRevisionDatos(casoId: number) {
+  return apiClient.get<FiniquitoRevisionDatosResponse>(
+    `${BASE}/admin/casos/${casoId}/revision-datos`
+  )
 }
 
 export async function finiquitoAdminListar(estado?: string) {

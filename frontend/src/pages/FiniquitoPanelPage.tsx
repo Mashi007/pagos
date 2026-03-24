@@ -132,9 +132,9 @@ export function FiniquitoPanelPage() {
           <div>
             <h1 className="text-2xl font-bold text-[#1e3a5f]">Finiquito</h1>
             <p className="text-sm text-slate-600">
-              Préstamos con financiamiento = suma de abonos. El ojo abre la
-              misma información que las pantallas Préstamos y Pagos (por
-              cédula). En Revisión puede aceptar o rechazar.
+              Préstamos con financiamiento = suma de abonos. El ojo abre el
+              detalle del crédito: préstamo completo, plan de cuotas, préstamos
+              y pagos por cédula. En Revisión puede aceptar o rechazar.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
