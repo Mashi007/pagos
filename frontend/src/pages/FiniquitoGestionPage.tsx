@@ -34,9 +34,40 @@ import {
   finiquitoAdminListar,
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
+  type FiniquitoRefreshStats,
 } from '../services/finiquitoService'
 
 type FiltroEstado = 'TODOS' | 'REVISION' | 'ACEPTADO' | 'RECHAZADO'
+
+function mensajeListaVacia(filtro: FiltroEstado): string {
+  if (filtro === 'RECHAZADO') {
+    return 'No hay casos con estado Rechazado. El refresco puede indicar muchos «elegibles» y «insertados 0»: son préstamos que ya tenían fila en finiquito (se actualizaron, no se crearon nuevas). Cambie el filtro a Revisión o Todos para ver el resto.'
+  }
+  if (filtro === 'REVISION') {
+    return 'No hay casos en Revisión. Pruebe Todos o ejecute «Refrescar materializado» si acaba de cargar datos.'
+  }
+  if (filtro === 'ACEPTADO') {
+    return 'No hay casos aceptados con el filtro actual. Pruebe Todos o Revisión.'
+  }
+  return 'No hay casos en la tabla materializada. Ejecute «Refrescar materializado» o verifique préstamos saldados en el sistema.'
+}
+
+function textoToastRefresco(r: FiniquitoRefreshStats): {
+  titulo: string
+  descripcion: string
+} {
+  const ins = r.insertados ?? 0
+  const act = r.actualizados ?? 0
+  const eli = r.eliminados ?? 0
+  const elg = r.elegibles ?? 0
+  return {
+    titulo: `Refresco: ${elg} elegibles · ${ins} nuevos · ${act} actualizados`,
+    descripcion:
+      ins === 0 && elg > 0
+        ? 'Insertados 0 es normal si esos préstamos ya estaban en finiquito. La lista de abajo depende del filtro de bandeja (Rechazados solo muestra estado RECHAZADO).'
+        : `Quitados del listado (ya no califican): ${eli}. Revise el filtro de bandeja si no ve filas.`,
+  }
+}
 
 export function FiniquitoGestionPage() {
   const [filtro, setFiltro] = useState<FiltroEstado>('RECHAZADO')
@@ -65,9 +96,8 @@ export function FiniquitoGestionPage() {
     setRefreshing(true)
     try {
       const r = await finiquitoAdminRefreshMaterializado()
-      toast.success(
-        `Refresco listo: elegibles ${r.elegibles ?? 0}, insertados ${r.insertados ?? 0}`
-      )
+      const { titulo, descripcion } = textoToastRefresco(r)
+      toast.success(titulo, { description: descripcion })
       cargar()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al refrescar')
@@ -126,7 +156,9 @@ export function FiniquitoGestionPage() {
           <CardTitle>Filtro</CardTitle>
           <CardDescription>
             Por defecto muestra rechazados. Puede ver todos o filtrar por
-            estado.
+            estado. «Elegibles» en el refresco = préstamos cuya suma de cuotas
+            pagadas iguala el financiamiento; no es el conteo de filas de esta
+            tabla ni de rechazados.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-4">
@@ -162,8 +194,8 @@ export function FiniquitoGestionPage() {
               <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
             </div>
           ) : items.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">
-              Sin registros.
+            <p className="mx-auto max-w-xl py-8 text-center text-sm leading-relaxed text-slate-500">
+              {mensajeListaVacia(filtro)}
             </p>
           ) : (
             <div className="overflow-x-auto">

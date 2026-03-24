@@ -212,8 +212,15 @@ export async function finiquitoAdminPatchEstado(
   }>(`${BASE}/admin/casos/${casoId}/estado`, { estado })
 }
 
+export type FiniquitoRefreshStats = {
+  elegibles: number
+  insertados: number
+  actualizados: number
+  eliminados: number
+}
+
 export async function finiquitoAdminRefreshMaterializado() {
-  return apiClient.post<Record<string, number>>(
+  return apiClient.post<FiniquitoRefreshStats>(
     `${BASE}/admin/refresh-materializado`
   )
 }
