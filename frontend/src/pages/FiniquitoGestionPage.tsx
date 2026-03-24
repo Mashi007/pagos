@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { Eye, Loader2, RefreshCw } from 'lucide-react'
+import { Download, Eye, Loader2, RefreshCw } from 'lucide-react'
 
 import { toast } from 'sonner'
 
@@ -38,6 +38,7 @@ import {
   finiquitoAdminRefreshMaterializado,
   type FiniquitoRefreshStats,
 } from '../services/finiquitoService'
+import { prestamoService } from '../services/prestamoService'
 
 type FiltroEstado = 'TODOS' | 'REVISION' | 'ACEPTADO' | 'RECHAZADO'
 
@@ -79,6 +80,10 @@ export function FiniquitoGestionPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [revisionOpen, setRevisionOpen] = useState(false)
   const [revisionCasoId, setRevisionCasoId] = useState<number | null>(null)
+  const [
+    descargandoEstadoCuentaPrestamoId,
+    setDescargandoEstadoCuentaPrestamoId,
+  ] = useState<number | null>(null)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -108,6 +113,20 @@ export function FiniquitoGestionPage() {
       toast.error(e instanceof Error ? e.message : 'Error al refrescar')
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  const descargarEstadoCuenta = async (prestamoId: number) => {
+    setDescargandoEstadoCuentaPrestamoId(prestamoId)
+    try {
+      await prestamoService.descargarEstadoCuentaPDF(prestamoId)
+      toast.success('Estado de cuenta descargado')
+    } catch (e: unknown) {
+      toast.error(
+        e instanceof Error ? e.message : 'Error al descargar estado de cuenta'
+      )
+    } finally {
+      setDescargandoEstadoCuentaPrestamoId(null)
     }
   }
 
@@ -237,6 +256,32 @@ export function FiniquitoGestionPage() {
                             }}
                           >
                             <Eye className="h-4 w-4" aria-hidden />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            title="Descargar estado de cuenta (PDF)"
+                            disabled={
+                              descargandoEstadoCuentaPrestamoId ===
+                              row.prestamo_id
+                            }
+                            onClick={() =>
+                              descargarEstadoCuenta(row.prestamo_id)
+                            }
+                          >
+                            {descargandoEstadoCuentaPrestamoId ===
+                            row.prestamo_id ? (
+                              <Loader2
+                                className="h-4 w-4 animate-spin"
+                                aria-hidden
+                              />
+                            ) : (
+                              <Download className="h-4 w-4" aria-hidden />
+                            )}
+                            <span className="sr-only">
+                              Descargar estado de cuenta PDF
+                            </span>
                           </Button>
                           <Select onValueChange={v => cambiarEstado(row.id, v)}>
                             <SelectTrigger className="w-[160px]">

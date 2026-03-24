@@ -33,6 +33,17 @@ function createFiniquitoClient(): AxiosInstance {
 
 const finiquitoAxios = createFiniquitoClient()
 
+/** Axios no lanza en 4xx (validateStatus menor que 500); unificar error legible. */
+function throwIfFiniquitoHttpError(status: number, data: unknown): void {
+  if (status < 400) return
+  const d = data as { detail?: string; message?: string }
+  const msg =
+    (typeof d?.detail === 'string' && d.detail) ||
+    (typeof d?.message === 'string' && d.message) ||
+    'Solicitud no procesada'
+  throw new Error(msg)
+}
+
 export function setFiniquitoAccessToken(token: string | null): void {
   try {
     if (token) sessionStorage.setItem(FINIQUITO_ACCESS_TOKEN_KEY, token)
@@ -62,21 +73,26 @@ export type FiniquitoCasoItem = {
 }
 
 export async function finiquitoRegistro(cedula: string, email: string) {
-  const { data } = await finiquitoAxios.post(`${BASE}/public/registro`, {
-    cedula,
-    email,
-  })
+  const { data, status } = await finiquitoAxios.post(
+    `${BASE}/public/registro`,
+    {
+      cedula,
+      email,
+    }
+  )
+  throwIfFiniquitoHttpError(status, data)
   return data as { ok: boolean; message: string }
 }
 
 export async function finiquitoSolicitarCodigo(cedula: string, email: string) {
-  const { data } = await finiquitoAxios.post(
+  const { data, status } = await finiquitoAxios.post(
     `${BASE}/public/solicitar-codigo`,
     {
       cedula,
       email,
     }
   )
+  throwIfFiniquitoHttpError(status, data)
   return data as { ok: boolean; message: string }
 }
 
@@ -85,7 +101,7 @@ export async function finiquitoVerificarCodigo(
   email: string,
   codigo: string
 ) {
-  const { data } = await finiquitoAxios.post(
+  const { data, status } = await finiquitoAxios.post(
     `${BASE}/public/verificar-codigo`,
     {
       cedula,
@@ -93,6 +109,7 @@ export async function finiquitoVerificarCodigo(
       codigo,
     }
   )
+  throwIfFiniquitoHttpError(status, data)
   return data as {
     ok: boolean
     access_token?: string

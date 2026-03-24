@@ -51,7 +51,9 @@ export function FiniquitoAccesoPage() {
     setLoading('registro')
     try {
       const r = await finiquitoRegistro(cedula.trim(), email.trim())
-      toast.success(r.message || 'Registro guardado.')
+      toast.success(r.message || 'Registro guardado.', {
+        description: 'Ahora pulse «Enviar código» y revise su bandeja.',
+      })
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error al registrar'
       toast.error(msg)
@@ -136,9 +138,12 @@ export function FiniquitoAccesoPage() {
             Acceso encargado Finiquito
           </CardTitle>
           <CardDescription>
-            Regístrese la primera vez con su cédula y correo. Luego solicite el
-            código y escríbalo para entrar. El mensaje sale por el mismo correo
-            del sistema que Estado de cuenta; revise spam o promociones.
+            Primera vez: pulse <strong>Registrarme</strong>. Los siguientes
+            ingresos: mismo cédula y correo y pulse{' '}
+            <strong>Enviar código</strong> (no use otro correo: el sistema
+            rechaza el registro y no enviará código si la pareja no coincide).
+            El correo del código es el mismo flujo que Estado de cuenta; revise
+            spam.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

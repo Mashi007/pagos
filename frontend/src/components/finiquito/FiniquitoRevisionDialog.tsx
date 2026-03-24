@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { Calendar, DollarSign, Loader2 } from 'lucide-react'
+import { Calendar, Loader2 } from 'lucide-react'
 
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -21,13 +21,49 @@ import {
 } from '../ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 
-import { formatCurrency, formatDate } from '../../utils'
+import { cn, formatCurrency, formatDate } from '../../utils'
 
 import {
   finiquitoAdminRevisionDatos,
   finiquitoRevisionDatos,
   type FiniquitoRevisionDatosResponse,
 } from '../../services/finiquitoService'
+
+/** Contenedor del área de datos bajo pestañas (flex consume alto del modal). */
+const PANEL_SCROLL =
+  'flex min-h-0 flex-1 flex-col overflow-hidden sm:min-h-[min(58vh,520px)]'
+
+/** Tabla densa tipo back-office; cabecera oscura fija al hacer scroll. */
+const TABLE_SHELL =
+  'min-h-0 flex-1 overflow-auto rounded-md border border-slate-300 bg-white shadow-sm'
+
+const thFin =
+  'h-7 whitespace-nowrap bg-slate-800 px-2 py-0.5 text-left text-[11px] font-semibold uppercase tracking-wide text-white'
+
+const tdFin = 'px-2 py-1 align-middle text-[11px] text-slate-900 tabular-nums'
+
+const trFinEven = 'border-b border-slate-200 bg-white hover:bg-slate-100/90'
+
+const trFinOdd =
+  'border-b border-slate-200 bg-slate-50/90 hover:bg-slate-100/90'
+
+/**
+ * Pestaña Descripción: solo los bloques acordados (resumen visual 1 + cédula + ID préstamo).
+ * Orden: cédula, ID préstamo, luego el resto como en la referencia de negocio.
+ */
+const DESCRIPCION_CAMPOS_ORDEN = [
+  'cedula',
+  'id',
+  'analista',
+  'cliente_id',
+  'cuota_periodo',
+  'fecha_aprobacion',
+  'fecha_registro',
+  'modalidad_pago',
+  'nombres',
+  'producto',
+  'total_financiamiento',
+] as const
 
 const PRESTAMO_CAMPO_LABEL: Record<string, string> = {
   id: 'ID préstamo',
@@ -124,14 +160,9 @@ type Props = {
   open: boolean
   casoId: number | null
   onOpenChange: (open: boolean) => void
-  /** public = token finiquito; admin = sesión del panel */
   mode?: 'public' | 'admin'
 }
 
-/**
- * Detalle del caso finiquito: préstamo del crédito, plan de cuotas, préstamos
- * y pagos por cédula (API revision-datos).
- */
 export function FiniquitoRevisionDialog({
   open,
   casoId,
@@ -141,13 +172,13 @@ export function FiniquitoRevisionDialog({
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<FiniquitoRevisionDatosResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tabRevision, setTabRevision] = useState('prestamo-caso')
+  const [tabRevision, setTabRevision] = useState('descripcion')
 
   useEffect(() => {
     if (!open || casoId == null) {
       setData(null)
       setError(null)
-      setTabRevision('prestamo-caso')
+      setTabRevision('descripcion')
       return
     }
     let cancelled = false
@@ -177,46 +208,52 @@ export function FiniquitoRevisionDialog({
   const pagosItems = data?.pagos?.pagos ?? []
   const cuotasItems = data?.cuotas_caso ?? []
   const prestamoCaso = data?.prestamo_caso
-  const prestamoCamposOrdenados = prestamoCaso
-    ? Object.keys(prestamoCaso).sort((a, b) => a.localeCompare(b))
-    : []
+  const cedulaDescripcion = (
+    (data?.cedula ?? prestamoCaso?.cedula ?? '') as string
+  ).trim()
 
   const pagosTotal = data?.pagos?.total ?? 0
   const pagosPerPage = data?.pagos?.per_page ?? 100
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-[min(96rem,calc(100vw-2rem))] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 border-b px-4 py-3 sm:px-6">
-          <DialogTitle className="text-left text-lg text-[#1e3a5f]">
-            Detalle del caso - préstamo, cuotas, préstamos y pagos
+      <DialogContent
+        className={cn(
+          'flex !h-[92vh] !max-h-[92vh] w-[min(96rem,calc(100vw-0.75rem))] !max-w-[min(96rem,calc(100vw-0.75rem))] flex-col gap-0 overflow-hidden !p-0 shadow-xl',
+          'rounded-lg border border-slate-300 bg-white'
+        )}
+      >
+        <DialogHeader className="mb-0 shrink-0 border-b border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 px-4 py-2.5 sm:px-5">
+          <DialogTitle className="text-left text-base font-bold tracking-tight text-[#1e3a5f]">
+            Detalle del caso - préstamo, cuotas, movimientos
           </DialogTitle>
-          <DialogDescription className="text-left text-sm">
-            Cédula:{' '}
-            <span className="font-semibold text-slate-800">
+          <DialogDescription className="text-left text-xs leading-relaxed text-slate-800">
+            <span className="font-mono font-semibold text-slate-900">
               {data?.cedula ?? '…'}
             </span>
             {data?.prestamo_id_finiquito != null && (
               <>
                 {' '}
-                · Préstamo caso:{' '}
-                <span className="font-semibold text-slate-800">
+                <span className="text-slate-500">|</span> Crédito{' '}
+                <span className="font-mono font-semibold text-slate-900">
                   #{data.prestamo_id_finiquito}
                 </span>
               </>
             )}
-            . Solo lectura.
+            <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
+              Solo lectura
+            </span>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-hidden px-2 pb-3 pt-2 sm:px-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-100/60 px-2 pb-2 pt-1.5 sm:px-3">
           {loading && (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-10 w-10 animate-spin text-slate-400" />
+            <div className="flex flex-1 items-center justify-center py-12">
+              <Loader2 className="h-9 w-9 animate-spin text-slate-500" />
             </div>
           )}
           {!loading && error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <div className="m-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900">
               {error}
             </div>
           )}
@@ -224,335 +261,416 @@ export function FiniquitoRevisionDialog({
             <Tabs
               value={tabRevision}
               onValueChange={setTabRevision}
-              className="flex h-full min-h-0 flex-col"
+              className="flex min-h-0 flex-1 flex-col"
             >
-              <TabsList className="mb-2 flex h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
-                <TabsTrigger value="prestamo-caso">
-                  Préstamo (crédito)
+              <TabsList className="mb-1.5 h-auto shrink-0 flex-wrap justify-start gap-0.5 rounded-md border border-slate-300 bg-slate-200/90 p-0.5 sm:h-9 sm:flex-nowrap">
+                <TabsTrigger
+                  value="descripcion"
+                  className="rounded px-2.5 py-1 text-xs font-semibold"
+                >
+                  Descripción
                 </TabsTrigger>
-                <TabsTrigger value="cuotas">
-                  Cuotas ({cuotasItems.length})
+                <TabsTrigger
+                  value="prestamos"
+                  className="rounded px-2.5 py-1 text-xs font-semibold"
+                >
+                  Resumen Préstamo
                 </TabsTrigger>
-                <TabsTrigger value="prestamos">
-                  Préstamos cédula (
-                  {data.prestamos?.total ?? prestamosItems.length})
+                <TabsTrigger
+                  value="cuotas"
+                  className="rounded px-2.5 py-1 text-xs font-semibold"
+                >
+                  Cuotas
                 </TabsTrigger>
-                <TabsTrigger value="pagos">
-                  Pagos cédula ({data.pagos?.total ?? pagosItems.length})
+                <TabsTrigger
+                  value="pagos"
+                  className="rounded px-2.5 py-1 text-xs font-semibold"
+                >
+                  Pagos
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent
-                value="prestamo-caso"
-                className="mt-0 min-h-0 flex-1 overflow-auto rounded-md border border-slate-200 p-3 sm:p-4"
+                value="descripcion"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:outline-none"
               >
-                {!prestamoCaso ? (
-                  <p className="text-sm text-slate-500">
-                    No hay préstamo asociado a este caso.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                    {prestamoCamposOrdenados.map(key => {
-                      const raw = prestamoCaso[key]
-                      const label = PRESTAMO_CAMPO_LABEL[key] ?? key
-                      const isEstado = key === 'estado'
-                      return (
-                        <div
-                          key={key}
-                          className="flex flex-col border-b border-slate-100 pb-2 sm:border-0"
-                        >
-                          <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                            {label}
-                          </span>
-                          {isEstado ? (
-                            <Badge
-                              className={`mt-1 w-fit border-0 ${estadoPrestamoBadgeClass(String(raw ?? ''))}`}
-                            >
-                              {estadoPrestamoLabel(String(raw ?? ''))}
-                            </Badge>
-                          ) : (
-                            <span className="mt-0.5 break-words text-slate-900">
-                              {formatearValorPrestamoCampo(key, raw)}
+                <div
+                  className={cn(
+                    PANEL_SCROLL,
+                    'rounded-md border border-slate-300 bg-white p-3'
+                  )}
+                >
+                  {!prestamoCaso && !cedulaDescripcion ? (
+                    <p className="text-xs text-slate-600">
+                      No hay préstamo asociado a este caso.
+                    </p>
+                  ) : (
+                    <div className="grid min-h-0 auto-rows-min grid-cols-1 gap-x-6 gap-y-2 overflow-y-auto text-xs sm:grid-cols-2 lg:grid-cols-3">
+                      {DESCRIPCION_CAMPOS_ORDEN.map(key => {
+                        const raw =
+                          key === 'cedula'
+                            ? cedulaDescripcion || null
+                            : prestamoCaso
+                              ? prestamoCaso[key as string]
+                              : undefined
+                        const label = PRESTAMO_CAMPO_LABEL[key] ?? key
+                        const empty =
+                          raw === null ||
+                          raw === undefined ||
+                          (typeof raw === 'string' && raw.trim() === '')
+                        if (key !== 'cedula' && !prestamoCaso) {
+                          return null
+                        }
+                        return (
+                          <div
+                            key={key}
+                            className="flex flex-col border-b border-slate-200/80 pb-2 sm:border-0 sm:pb-0"
+                          >
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                              {label}
                             </span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent
-                value="cuotas"
-                className="mt-0 min-h-0 flex-1 overflow-auto rounded-md border border-slate-200"
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50">
-                      <TableHead className="whitespace-nowrap">Nº</TableHead>
-                      <TableHead className="whitespace-nowrap">
-                        Vencimiento
-                      </TableHead>
-                      <TableHead className="whitespace-nowrap">
-                        Fecha pago
-                      </TableHead>
-                      <TableHead className="whitespace-nowrap">
-                        Monto cuota
-                      </TableHead>
-                      <TableHead className="whitespace-nowrap">
-                        Capital
-                      </TableHead>
-                      <TableHead className="whitespace-nowrap">
-                        Interés
-                      </TableHead>
-                      <TableHead className="whitespace-nowrap">
-                        Pagado cuota
-                      </TableHead>
-                      <TableHead className="whitespace-nowrap">
-                        Saldo cap. final
-                      </TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="whitespace-nowrap">Mora</TableHead>
-                      <TableHead className="whitespace-nowrap">
-                        Pago ID
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cuotasItems.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={11}
-                          className="text-center text-slate-500"
-                        >
-                          Sin cuotas para el préstamo del caso.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      cuotasItems.map((c: Record<string, unknown>) => (
-                        <TableRow key={`cu-${String(c.id)}`}>
-                          <TableCell className="font-medium">
-                            {String(c.numero_cuota ?? '')}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {c.fecha_vencimiento
-                              ? formatDate(String(c.fecha_vencimiento))
-                              : '-'}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {c.fecha_pago
-                              ? formatDate(String(c.fecha_pago))
-                              : '-'}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {formatCurrency(Number(c.monto_cuota ?? 0))}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {formatCurrency(Number(c.monto_capital ?? 0))}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {formatCurrency(Number(c.monto_interes ?? 0))}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {formatCurrency(Number(c.total_pagado ?? 0))}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {formatCurrency(Number(c.saldo_capital_final ?? 0))}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {String(c.estado ?? '')}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {c.dias_mora != null
-                              ? String(c.dias_mora)
-                              : c.dias_morosidad != null
-                                ? String(c.dias_morosidad)
-                                : '-'}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {c.pago_id != null ? String(c.pago_id) : '-'}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                            <span
+                              className={cn(
+                                'mt-0.5 break-words font-medium text-slate-900',
+                                (key === 'cedula' || key === 'id') &&
+                                  'font-mono text-sm'
+                              )}
+                            >
+                              {empty
+                                ? '-'
+                                : formatearValorPrestamoCampo(key, raw)}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </TabsContent>
 
               <TabsContent
                 value="prestamos"
-                className="mt-0 min-h-0 flex-1 overflow-auto rounded-md border border-slate-200"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:outline-none"
               >
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50">
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Cédula</TableHead>
-                      <TableHead>Monto</TableHead>
-                      <TableHead>Modalidad</TableHead>
-                      <TableHead>Cuotas</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="whitespace-nowrap">
-                        Fecha aprob.
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {prestamosItems.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={7}
-                          className="text-center text-slate-500"
-                        >
-                          Sin préstamos para esta cédula (mismo criterio que
-                          /prestamos).
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      prestamosItems.map((p: Record<string, unknown>) => (
-                        <TableRow key={`p-${String(p.id)}`}>
-                          <TableCell className="font-medium">
-                            {String(
-                              p.nombres ??
-                                p.nombre_cliente ??
-                                `Cliente #${p.cliente_id ?? '-'}`
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {String(p.cedula ?? p.cedula_cliente ?? '-')}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="h-4 w-4 shrink-0 text-green-600" />
-                              <span className="font-semibold text-green-700">
-                                {formatCurrency(
-                                  Number(p.total_financiamiento ?? 0)
-                                )}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {modalidadLabel(p.modalidad_pago)}
-                          </TableCell>
-                          <TableCell>
-                            {p.numero_cuotas != null
-                              ? String(p.numero_cuotas)
-                              : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={estadoPrestamoBadgeClass(
-                                String(p.estado ?? '')
-                              )}
-                            >
-                              {estadoPrestamoLabel(String(p.estado ?? ''))}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1 text-sm text-gray-600">
-                              <Calendar className="h-4 w-4 shrink-0" />
-                              {p.fecha_aprobacion
-                                ? formatDate(String(p.fecha_aprobacion))
-                                : '-'}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TabsContent>
-
-              <TabsContent
-                value="pagos"
-                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-slate-200"
-              >
-                <div className="min-h-0 flex-1 overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-slate-50">
-                        <TableHead>ID</TableHead>
-                        <TableHead>Cédula</TableHead>
-                        <TableHead>Crédito</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead className="max-w-[200px]">
-                          Observaciones
-                        </TableHead>
-                        <TableHead>Monto</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Nº Doc.</TableHead>
-                        <TableHead>Conciliado</TableHead>
+                <div className={TABLE_SHELL}>
+                  <Table className="text-xs">
+                    <TableHeader className="sticky top-0 z-20 shadow-sm">
+                      <TableRow className="border-0 hover:bg-transparent">
+                        <TableHead className={thFin}>Cliente</TableHead>
+                        <TableHead className={thFin}>Cédula</TableHead>
+                        <TableHead className={thFin}>Monto</TableHead>
+                        <TableHead className={thFin}>Modal.</TableHead>
+                        <TableHead className={thFin}>Nº cuot.</TableHead>
+                        <TableHead className={thFin}>Estado</TableHead>
+                        <TableHead className={thFin}>Aprob.</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pagosItems.length === 0 ? (
+                      {prestamosItems.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={9}
-                            className="text-center text-slate-500"
+                            colSpan={7}
+                            className={cn(tdFin, 'text-center text-slate-500')}
                           >
-                            Sin pagos registrados para esta cédula en la primera
-                            página del listado.
+                            Sin préstamos para esta cédula.
                           </TableCell>
                         </TableRow>
                       ) : (
-                        pagosItems.map((p: Record<string, unknown>) => (
-                          <TableRow key={`pay-${String(p.id)}`}>
-                            <TableCell className="font-mono text-xs">
-                              {String(p.id ?? '')}
-                            </TableCell>
-                            <TableCell>
-                              {String(p.cedula_cliente ?? '')}
-                            </TableCell>
-                            <TableCell>
-                              {p.prestamo_id != null
-                                ? String(p.prestamo_id)
-                                : '-'}
-                            </TableCell>
-                            <TableCell>{String(p.estado ?? '')}</TableCell>
-                            <TableCell
-                              className="max-w-[200px] truncate text-sm"
-                              title={String(p.notas ?? '')}
+                        prestamosItems.map(
+                          (p: Record<string, unknown>, idx) => (
+                            <TableRow
+                              key={`p-${String(p.id)}`}
+                              className={idx % 2 === 0 ? trFinEven : trFinOdd}
                             >
-                              {p.notas != null && String(p.notas).trim() !== ''
-                                ? String(p.notas)
+                              <TableCell
+                                className={cn(
+                                  tdFin,
+                                  'max-w-[140px] font-medium'
+                                )}
+                              >
+                                {String(
+                                  p.nombres ??
+                                    p.nombre_cliente ??
+                                    `Cliente #${p.cliente_id ?? '-'}`
+                                )}
+                              </TableCell>
+                              <TableCell
+                                className={cn(tdFin, 'font-mono text-[10px]')}
+                              >
+                                {String(p.cedula ?? p.cedula_cliente ?? '-')}
+                              </TableCell>
+                              <TableCell className={tdFin}>
+                                <span className="font-semibold text-emerald-800">
+                                  {formatCurrency(
+                                    Number(p.total_financiamiento ?? 0)
+                                  )}
+                                </span>
+                              </TableCell>
+                              <TableCell className={tdFin}>
+                                {modalidadLabel(p.modalidad_pago)}
+                              </TableCell>
+                              <TableCell className={tdFin}>
+                                {p.numero_cuotas != null
+                                  ? String(p.numero_cuotas)
+                                  : '-'}
+                              </TableCell>
+                              <TableCell className={tdFin}>
+                                <Badge
+                                  className={cn(
+                                    'border-0 text-[10px]',
+                                    estadoPrestamoBadgeClass(
+                                      String(p.estado ?? '')
+                                    )
+                                  )}
+                                >
+                                  {estadoPrestamoLabel(String(p.estado ?? ''))}
+                                </Badge>
+                              </TableCell>
+                              <TableCell
+                                className={cn(tdFin, 'whitespace-nowrap')}
+                              >
+                                {p.fecha_aprobacion ? (
+                                  <span className="inline-flex items-center gap-0.5">
+                                    <Calendar
+                                      className="h-3 w-3 text-slate-500"
+                                      aria-hidden
+                                    />
+                                    {formatDate(String(p.fecha_aprobacion))}
+                                  </span>
+                                ) : (
+                                  '-'
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        )
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+
+              <TabsContent
+                value="cuotas"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:outline-none"
+              >
+                <div className="mb-1 flex shrink-0 items-center justify-between gap-2 rounded-t-md border border-b-0 border-slate-300 bg-slate-800 px-2 py-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-white">
+                    Plan de cuotas
+                  </span>
+                  <span className="font-mono text-[11px] text-slate-200">
+                    {cuotasItems.length} filas - desplazamiento vertical
+                  </span>
+                </div>
+                <div className={TABLE_SHELL}>
+                  <Table className="text-xs">
+                    <TableHeader className="sticky top-0 z-20 shadow-sm">
+                      <TableRow className="border-0 hover:bg-transparent">
+                        <TableHead className={thFin}>Nº</TableHead>
+                        <TableHead className={thFin}>Venc.</TableHead>
+                        <TableHead className={thFin}>F. pago</TableHead>
+                        <TableHead className={thFin}>Cuota</TableHead>
+                        <TableHead className={thFin}>Capital</TableHead>
+                        <TableHead className={thFin}>Int.</TableHead>
+                        <TableHead className={thFin}>Pagado</TableHead>
+                        <TableHead className={thFin}>Saldo cap.</TableHead>
+                        <TableHead className={thFin}>Estado</TableHead>
+                        <TableHead className={thFin}>Mora</TableHead>
+                        <TableHead className={thFin}>Pago</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cuotasItems.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={11}
+                            className={cn(tdFin, 'text-center text-slate-500')}
+                          >
+                            Sin cuotas para el préstamo del caso.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        cuotasItems.map((c: Record<string, unknown>, idx) => (
+                          <TableRow
+                            key={`cu-${String(c.id)}`}
+                            className={idx % 2 === 0 ? trFinEven : trFinOdd}
+                          >
+                            <TableCell
+                              className={cn(
+                                tdFin,
+                                'font-semibold text-slate-800'
+                              )}
+                            >
+                              {String(c.numero_cuota ?? '')}
+                            </TableCell>
+                            <TableCell
+                              className={cn(tdFin, 'whitespace-nowrap')}
+                            >
+                              {c.fecha_vencimiento
+                                ? formatDate(String(c.fecha_vencimiento))
                                 : '-'}
                             </TableCell>
-                            <TableCell>
-                              {formatCurrency(Number(p.monto_pagado ?? 0))}
-                            </TableCell>
-                            <TableCell>
-                              {p.fecha_pago
-                                ? formatDate(String(p.fecha_pago))
+                            <TableCell
+                              className={cn(tdFin, 'whitespace-nowrap')}
+                            >
+                              {c.fecha_pago
+                                ? formatDate(String(c.fecha_pago))
                                 : '-'}
                             </TableCell>
-                            <TableCell className="text-sm">
-                              {String(p.numero_documento ?? '')}
+                            <TableCell className={tdFin}>
+                              {formatCurrency(Number(c.monto_cuota ?? 0))}
                             </TableCell>
-                            <TableCell>{p.conciliado ? 'Sí' : 'No'}</TableCell>
+                            <TableCell className={tdFin}>
+                              {formatCurrency(Number(c.monto_capital ?? 0))}
+                            </TableCell>
+                            <TableCell className={tdFin}>
+                              {formatCurrency(Number(c.monto_interes ?? 0))}
+                            </TableCell>
+                            <TableCell className={tdFin}>
+                              {formatCurrency(Number(c.total_pagado ?? 0))}
+                            </TableCell>
+                            <TableCell className={tdFin}>
+                              {formatCurrency(
+                                Number(c.saldo_capital_final ?? 0)
+                              )}
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                tdFin,
+                                'font-medium uppercase text-slate-800'
+                              )}
+                            >
+                              {String(c.estado ?? '')}
+                            </TableCell>
+                            <TableCell className={tdFin}>
+                              {c.dias_mora != null
+                                ? String(c.dias_mora)
+                                : c.dias_morosidad != null
+                                  ? String(c.dias_morosidad)
+                                  : '-'}
+                            </TableCell>
+                            <TableCell
+                              className={cn(tdFin, 'font-mono text-[10px]')}
+                            >
+                              {c.pago_id != null ? String(c.pago_id) : '-'}
+                            </TableCell>
                           </TableRow>
                         ))
                       )}
                     </TableBody>
                   </Table>
                 </div>
-                {pagosTotal > pagosPerPage && (
-                  <p className="shrink-0 border-t bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    Hay {pagosTotal} pagos en total para esta cédula; aquí se
-                    muestran hasta {pagosPerPage} (primera página). Para el
-                    histórico completo use el módulo Pagos en el sistema
-                    interno.
-                  </p>
-                )}
+              </TabsContent>
+
+              <TabsContent
+                value="pagos"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:outline-none"
+              >
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm">
+                  <div className="min-h-0 flex-1 overflow-auto">
+                    <Table className="text-xs">
+                      <TableHeader className="sticky top-0 z-20 shadow-sm">
+                        <TableRow className="border-0 hover:bg-transparent">
+                          <TableHead className={thFin}>ID</TableHead>
+                          <TableHead className={thFin}>Cédula</TableHead>
+                          <TableHead className={thFin}>Créd.</TableHead>
+                          <TableHead className={thFin}>Est.</TableHead>
+                          <TableHead className={thFin}>Notas</TableHead>
+                          <TableHead className={thFin}>Monto</TableHead>
+                          <TableHead className={thFin}>Fecha</TableHead>
+                          <TableHead className={thFin}>Doc.</TableHead>
+                          <TableHead className={thFin}>Conc.</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pagosItems.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={9}
+                              className={cn(
+                                tdFin,
+                                'text-center text-slate-500'
+                              )}
+                            >
+                              Sin pagos en esta página.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          pagosItems.map((p: Record<string, unknown>, idx) => (
+                            <TableRow
+                              key={`pay-${String(p.id)}`}
+                              className={idx % 2 === 0 ? trFinEven : trFinOdd}
+                            >
+                              <TableCell
+                                className={cn(tdFin, 'font-mono text-[10px]')}
+                              >
+                                {String(p.id ?? '')}
+                              </TableCell>
+                              <TableCell
+                                className={cn(tdFin, 'font-mono text-[10px]')}
+                              >
+                                {String(p.cedula_cliente ?? '')}
+                              </TableCell>
+                              <TableCell className={tdFin}>
+                                {p.prestamo_id != null
+                                  ? String(p.prestamo_id)
+                                  : '-'}
+                              </TableCell>
+                              <TableCell className={tdFin}>
+                                {String(p.estado ?? '')}
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  tdFin,
+                                  'max-w-[160px] truncate text-left'
+                                )}
+                                title={String(p.notas ?? '')}
+                              >
+                                {p.notas != null &&
+                                String(p.notas).trim() !== ''
+                                  ? String(p.notas)
+                                  : '-'}
+                              </TableCell>
+                              <TableCell className={cn(tdFin, 'font-semibold')}>
+                                {formatCurrency(Number(p.monto_pagado ?? 0))}
+                              </TableCell>
+                              <TableCell
+                                className={cn(tdFin, 'whitespace-nowrap')}
+                              >
+                                {p.fecha_pago
+                                  ? formatDate(String(p.fecha_pago))
+                                  : '-'}
+                              </TableCell>
+                              <TableCell className={tdFin}>
+                                {String(p.numero_documento ?? '')}
+                              </TableCell>
+                              <TableCell className={tdFin}>
+                                {p.conciliado ? 'Sí' : 'No'}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {pagosTotal > pagosPerPage && (
+                    <p className="shrink-0 border-t border-slate-300 bg-slate-100 px-2 py-1.5 text-[10px] text-slate-700">
+                      Total {pagosTotal} pagos; vista limitada a {pagosPerPage}.
+                      Histórico completo en módulo Pagos.
+                    </p>
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
           )}
         </div>
 
-        <div className="flex shrink-0 justify-end border-t px-4 py-3 sm:px-6">
+        <div className="flex shrink-0 justify-end border-t border-slate-300 bg-slate-100 px-4 py-2 sm:px-5">
           <Button
             type="button"
             variant="outline"
+            size="sm"
+            className="border-slate-400 font-semibold text-[#1e3a5f]"
             onClick={() => onOpenChange(false)}
           >
             Cerrar
