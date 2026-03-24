@@ -1798,6 +1798,8 @@ export function useExcelUploadPagos({
 
       let documentosDuplicadosBD = new Set<string>()
 
+      let detalleDuplicadosBD = new Map<string, string>()
+
       if (todasCedulas.length > 0 || todosDocumentos.length > 0) {
         try {
           const resultado = await pagoService.validarFilasBatch({
@@ -1820,10 +1822,37 @@ export function useExcelUploadPagos({
                 normalizarNumeroDocumento(d.numero_documento)
             )
           )
+
+          for (const raw of resultado.documentos_duplicados || []) {
+            const d = raw as {
+              numero_documento?: string
+              origen?: string
+              pago_id?: number
+              pago_con_error_id?: number
+            }
+
+            const key = normalizarNumeroDocumento(d.numero_documento)
+
+            if (!key || detalleDuplicadosBD.has(key)) continue
+
+            let suffix = ''
+
+            if (d.origen === 'pagos' && d.pago_id != null) {
+              suffix = ` (pago id ${d.pago_id})`
+            } else if (
+              d.origen === 'pagos_con_errores' &&
+              d.pago_con_error_id != null
+            ) {
+              suffix = ` (cola errores id ${d.pago_con_error_id})`
+            }
+
+            detalleDuplicadosBD.set(key, suffix)
+          }
         } catch {
           // Igual que carga inicial: sin respuesta del API, validar sin listas de BD
           cedulasExistentesBD = new Set()
           documentosDuplicadosBD = new Set()
+          detalleDuplicadosBD = new Map()
         }
       }
 
@@ -1855,7 +1884,7 @@ export function useExcelUploadPagos({
         } else if (esDuplicadoEnBD) {
           vDoc = {
             isValid: false,
-            message: 'Documento ya existe en la base de datos',
+            message: `Documento ya existe en la base de datos${detalleDuplicadosBD.get(docNorm) || ''}`,
           }
         } else {
           vDoc = validatePagoField('numero_documento', r.numero_documento, {

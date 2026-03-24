@@ -2787,19 +2787,37 @@ def validar_filas_batch(
 
     documentos_duplicados: list[dict] = []
 
-    docs_norm = [
+    docs_norm_limpios: list[str] = []
 
-        normalize_documento(d)
+    for d in body.documentos or []:
 
-        for d in (body.documentos or [])
+        if d is None:
 
-        if d and d.strip()
+            continue
 
-    ]
+        s = str(d).strip() if not isinstance(d, str) else (d or "").strip()
 
-    docs_norm_limpios = [d for d in docs_norm if d]
+        if not s:
+
+            continue
+
+        n = normalize_documento(s)
+
+        if n:
+
+            docs_norm_limpios.append(n)
+
+    docs_norm_limpios = list(dict.fromkeys(docs_norm_limpios))
 
     if docs_norm_limpios:
+
+        doc_match_pagos = or_(
+
+            Pago.numero_documento.in_(docs_norm_limpios),
+
+            func.trim(Pago.numero_documento).in_(docs_norm_limpios),
+
+        )
 
         rows_pagos = db.execute(
 
@@ -2815,11 +2833,31 @@ def validar_filas_batch(
 
                 Pago.monto_pagado,
 
-            ).where(Pago.numero_documento.in_(docs_norm_limpios))
+            )
+
+            .where(doc_match_pagos)
+
+            .where(Pago.numero_documento.isnot(None))
+
+            .distinct()
 
         ).all()
 
+        docs_set = set(docs_norm_limpios)
+
+        seen_pago_ids: set[int] = set()
+
         for row in rows_pagos:
+
+            if normalize_documento(row[0]) not in docs_set:
+
+                continue
+
+            if row[1] in seen_pago_ids:
+
+                continue
+
+            seen_pago_ids.add(int(row[1]))
 
             documentos_duplicados.append(
 
@@ -2843,6 +2881,14 @@ def validar_filas_batch(
 
             )
 
+        doc_match_pce = or_(
+
+            PagoConError.numero_documento.in_(docs_norm_limpios),
+
+            func.trim(PagoConError.numero_documento).in_(docs_norm_limpios),
+
+        )
+
         rows_pce = db.execute(
 
             select(
@@ -2857,11 +2903,29 @@ def validar_filas_batch(
 
                 PagoConError.monto_pagado,
 
-            ).where(PagoConError.numero_documento.in_(docs_norm_limpios))
+            )
+
+            .where(doc_match_pce)
+
+            .where(PagoConError.numero_documento.isnot(None))
+
+            .distinct()
 
         ).all()
 
+        seen_pce_ids: set[int] = set()
+
         for row in rows_pce:
+
+            if normalize_documento(row[0]) not in docs_set:
+
+                continue
+
+            if row[1] in seen_pce_ids:
+
+                continue
+
+            seen_pce_ids.add(int(row[1]))
 
             documentos_duplicados.append(
 
