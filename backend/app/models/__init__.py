@@ -36,6 +36,12 @@ from app.models.crm_campana import CampanaCrm
 from app.models.crm_campana_envio import CampanaEnvioCrm
 from app.models.cedula_reportar_bs import CedulaReportarBs
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
+from app.models.finiquito import (
+    FiniquitoCaso,
+    FiniquitoEstadoHistorial,
+    FiniquitoLoginCodigo,
+    FiniquitoUsuarioAcceso,
+)
 
 __all__ = [
     "Base",
@@ -76,4 +82,8 @@ __all__ = [
     "CampanaEnvioCrm",
     "CedulaReportarBs",
     "TasaCambioDiaria",
+    "FiniquitoCaso",
+    "FiniquitoEstadoHistorial",
+    "FiniquitoLoginCodigo",
+    "FiniquitoUsuarioAcceso",
 ]

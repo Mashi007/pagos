@@ -11,6 +11,7 @@ ActualizaciÃ³n periÃ³dica de informes y reportes:
 - 16:30  Informe de pagos por email.
 - 01:00  Envio automatico de notificaciones (email con paquete completo; America/Caracas).
 - 01:10  Emails credito liquidado: PDF estado de cuenta (dias 1 y 2 despues de fecha_liquidado; America/Caracas).
+- 02:00  Finiquito: refrescar tabla finiquito_casos (total_financiamiento = sum cuotas.total_pagado exacto).
 
 Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
 se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.
@@ -145,6 +146,26 @@ def _job_informe_pagos_email() -> None:
 
 
 
+def _job_finiquito_refresh() -> None:
+    """Job 02:00. Rellena/actualiza finiquito_casos (prestamos con suma total_pagado = total_financiamiento)."""
+    db = SessionLocal()
+    try:
+        from app.services.finiquito_refresh import ejecutar_refresh_finiquito_casos
+
+        res = ejecutar_refresh_finiquito_casos(db)
+        logger.info(
+            "Finiquito refresh: elegibles=%s insertados=%s actualizados=%s eliminados=%s",
+            res.get("elegibles"),
+            res.get("insertados"),
+            res.get("actualizados"),
+            res.get("eliminados"),
+        )
+    except Exception as e:
+        logger.exception("Error en job finiquito_refresh: %s", e)
+    finally:
+        db.close()
+
+
 def _job_limpiar_estado_cuenta_codigos() -> None:
     """Job 4:00. Borra cÃ³digos de estado de cuenta expirados o usados hace mÃ¡s de 24 h."""
     db = SessionLocal()
@@ -220,6 +241,12 @@ def start_scheduler() -> None:
         id="emails_liquidado_diferidos_0110",
         name="Emails liquidado + PDF estado cuenta 01:10",
     )
+    _scheduler.add_job(
+        _job_finiquito_refresh,
+        CronTrigger(hour=2, minute=0, timezone=SCHEDULER_TZ),
+        id="finiquito_refresh_0200",
+        name="Finiquito: refrescar casos 02:00",
+    )
     # 1:00 y 13:00 - Reportes cobranzas (actualizaciÃ³n automÃ¡tica de informes)
     _scheduler.add_job(
         _job_actualizar_reportes_cobranzas,
@@ -278,7 +305,7 @@ def start_scheduler() -> None:
 
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: notificaciones 00:50/01:00; liquidado PDF 01:10; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
+        "Scheduler iniciado: notificaciones 00:50/01:00; liquidado PDF 01:10; finiquito 02:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
         SCHEDULER_TZ,
     )
 

@@ -555,6 +555,59 @@ export function Reportes() {
           Enlaces para compartir
         </h2>
 
+        <Card className="border-l-4 border-gray-200/80 border-l-[#1e3a5f] shadow-sm">
+          <CardContent className="py-4">
+            <h3 className="text-base font-semibold text-gray-900">
+              Informes para colaboradores
+            </h3>
+
+            <p className="mt-2 text-sm text-gray-600">
+              Mismo flujo que{' '}
+              <span className="font-medium text-gray-800">/pagos/informes</span>
+              : ingrese la cédula del cliente y obtenga el PDF al instante, sin
+              código por correo. Use el enlace para abrir la pantalla o cópielo
+              para compartirlo.
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button
+                asChild
+                size="sm"
+                className="h-11 gap-2 bg-[#1e3a5f] text-white hover:bg-[#152a47]"
+              >
+                <Link
+                  to={`/${INFORMES_PATH}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Abrir Informes en una nueva pestaña"
+                  aria-label="Abrir Informes para colaboradores en nueva pestaña"
+                >
+                  <FileText className="h-5 w-5" aria-hidden />
+                  Abrir Informes
+                </Link>
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11 gap-2"
+                onClick={() =>
+                  copiarEnlaceServicio(
+                    INFORMES_PATH,
+                    'Informes (colaboradores)'
+                  )
+                }
+                title="Copiar enlace de Informes"
+                aria-label="Copiar enlace Informes para colaboradores"
+              >
+                <Copy className="h-5 w-5" aria-hidden />
+                Copiar enlace Informes
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="border-gray-200/80 shadow-sm">
           <CardContent className="py-4">
             <p className="mb-4 text-sm text-gray-500">
@@ -613,19 +666,6 @@ export function Reportes() {
               >
                 <FileText className="h-5 w-5" />
                 Estado de cuenta
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-11 gap-2"
-                onClick={() => copiarEnlaceServicio(INFORMES_PATH, 'Informes')}
-                title="Copiar enlace: Informes"
-                aria-label="Copiar enlace informes"
-              >
-                <Download className="h-5 w-5" />
-                Informes
               </Button>
 
               <Button

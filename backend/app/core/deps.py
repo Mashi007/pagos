@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.core.user_utils import user_to_response
+from app.models.finiquito import FiniquitoUsuarioAcceso
 from app.models.user import User
 from app.schemas.auth import UserResponse
 
 security = HTTPBearer(auto_error=True)
+security_optional_bearer = HTTPBearer(auto_error=False)
 
 
 def _fake_user_response(email: str) -> UserResponse:
@@ -54,6 +56,11 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido o expirado",
         )
+    if payload.get("scope") == "finiquito":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Use el token solo en el portal Finiquito",
+        )
     sub = payload.get("sub") or payload.get("email")
     if not sub:
         raise HTTPException(
@@ -73,6 +80,70 @@ def get_current_user(
     return _fake_user_response(email)
 
 
+def require_administrador(
+    current: UserResponse = Depends(get_current_user),
+) -> UserResponse:
+    """Solo rol administrador (portal interno)."""
+    if (current.rol or "").lower() != "administrador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden acceder a este recurso.",
+        )
+    return current
+
+
+def get_finiquito_usuario_acceso(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional_bearer),
+    db: Session = Depends(get_db),
+) -> FiniquitoUsuarioAcceso:
+    """
+    Usuario del portal Finiquito (JWT con scope=finiquito, sub=id en finiquito_usuario_acceso).
+    """
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No se proporcionó token",
+        )
+    payload = decode_token(credentials.credentials)
+    if not payload or payload.get("type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido o expirado",
+        )
+    if payload.get("scope") != "finiquito":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token no válido para el portal Finiquito",
+        )
+    sub = payload.get("sub")
+    if sub is None or str(sub).strip() == "":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+        )
+    try:
+        uid = int(sub)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+        )
+    u = (
+        db.query(FiniquitoUsuarioAcceso)
+        .filter(
+            FiniquitoUsuarioAcceso.id == uid,
+            FiniquitoUsuarioAcceso.is_active.is_(True),
+        )
+        .first()
+    )
+    if not u:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario Finiquito inactivo o inexistente",
+        )
+    return u
+
+
 def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(
         HTTPBearer(auto_error=False)
@@ -86,6 +157,8 @@ def get_current_user_optional(
         return None
     payload = decode_token(credentials.credentials)
     if not payload or payload.get("type") != "access":
+        return None
+    if payload.get("scope") == "finiquito":
         return None
     sub = payload.get("sub") or payload.get("email")
     if not sub:
