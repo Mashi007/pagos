@@ -297,11 +297,11 @@ export function ConfiguracionNotificaciones() {
 
     enabled: modoPruebas,
 
-    staleTime: 30 * 1000,
+    staleTime: 60 * 1000,
 
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
 
-    refetchOnMount: 'always',
+    refetchOnMount: false,
   })
 
   const {

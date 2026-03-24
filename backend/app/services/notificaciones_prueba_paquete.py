@@ -20,18 +20,6 @@ TIPOS_PRUEBA_PAQUETE = frozenset(
 )
 
 
-def primer_item_ejemplo_por_tipo(data: dict, tipo: str) -> Optional[dict]:
-    """Primer registro real por criterio (misma fuente que listados de envio)."""
-    if tipo == "PAGO_1_DIA_ATRASADO":
-        return data["dias_1_retraso"][0] if data.get("dias_1_retraso") else None
-    if tipo == "PAGO_3_DIAS_ATRASADO":
-        return data["dias_3_retraso"][0] if data.get("dias_3_retraso") else None
-    if tipo == "PAGO_5_DIAS_ATRASADO":
-        return data["dias_5_retraso"][0] if data.get("dias_5_retraso") else None
-    if tipo == "PREJUDICIAL":
-        return data["prejudicial"][0] if data.get("prejudicial") else None
-    return None
-
 
 def parse_destinos_prueba(payload: dict) -> List[str]:
     raw = payload.get("destinos") or payload.get("emails") or []
@@ -48,8 +36,8 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
     from app.api.v1.endpoints import notificaciones_tabs as nt
     from app.api.v1.endpoints.notificaciones import (
         get_notificaciones_envios_config,
-        get_notificaciones_tabs_data,
     )
+    from app.services.notificacion_service import get_primer_item_ejemplo_paquete_prueba
 
     tipo = (payload.get("tipo") or "PAGO_1_DIA_ATRASADO").strip()
     if tipo not in TIPOS_PRUEBA_PAQUETE:
@@ -64,8 +52,7 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
             detail="Indique al menos un destino en destinos (lista de emails).",
         )
 
-    data = get_notificaciones_tabs_data(db)
-    item = primer_item_ejemplo_por_tipo(data, tipo)
+    item = get_primer_item_ejemplo_paquete_prueba(db, tipo)
     if not item:
         raise HTTPException(
             status_code=404,
@@ -158,11 +145,11 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     from app.api.v1.endpoints import notificaciones_tabs as nt
     from app.api.v1.endpoints.notificaciones import (
         get_notificaciones_envios_config,
-        get_notificaciones_tabs_data,
         get_plantilla_asunto_cuerpo,
         build_contexto_cobranza_para_item,
         plantilla_usa_variables_cobranza,
     )
+    from app.services.notificacion_service import get_primer_item_ejemplo_paquete_prueba
     from app.models.plantilla_notificacion import PlantillaNotificacion
     from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
     from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
@@ -174,8 +161,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
             detail=f"tipo debe ser uno de: {', '.join(sorted(TIPOS_PRUEBA_PAQUETE))}",
         )
 
-    data = get_notificaciones_tabs_data(db)
-    item = primer_item_ejemplo_por_tipo(data, tipo)
+    item = get_primer_item_ejemplo_paquete_prueba(db, tipo)
     if not item:
         return {
             "ok": False,

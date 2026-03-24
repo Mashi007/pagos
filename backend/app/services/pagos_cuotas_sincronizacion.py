@@ -31,6 +31,7 @@ def sincronizar_pagos_pendientes_a_prestamos(db: Session, prestamo_ids: List[int
     cascadas = 0
     for pid in prestamo_ids:
         n += aplicar_pagos_pendientes_prestamo(pid, db)
+        db.flush()
         if prestamo_requiere_correccion_cascada(db, pid):
             r = reset_y_reaplicar_cascada_prestamo(db, pid)
             if r.get("ok"):

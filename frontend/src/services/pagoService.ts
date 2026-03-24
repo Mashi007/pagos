@@ -440,6 +440,25 @@ class PagoService {
     )
   }
 
+  /** Varias cedulas en una sola peticion (evita N+1). */
+  async consultarCedulasReportarBsBatch(cedulas: string[]): Promise<{
+    total_en_lista: number
+    por_cedula: Record<
+      string,
+      {
+        cedula_ingresada: string
+        cedula_normalizada: string | null
+        en_lista: boolean
+        total_en_lista: number
+      }
+    >
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/cedulas-reportar-bs/consultar-batch`,
+      { cedulas }
+    )
+  }
+
   /** Agrega una cédula a la lista (nuevo cliente que paga en bolívares). */
 
   async addCedulaReportarBs(cedula: string): Promise<{

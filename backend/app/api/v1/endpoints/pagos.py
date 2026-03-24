@@ -111,6 +111,8 @@ from app.services.cobros.cedula_reportar_bs_service import (
 
     normalize_cedula_para_almacenar_lista_bs,
 
+    normalize_cedula_lookup_key,
+
     load_autorizados_bs_claves,
 
     cedula_coincide_autorizados_bs,
@@ -5200,6 +5202,64 @@ def consultar_cedula_reportar_bs(
         "total_en_lista": int(total),
 
     }
+
+
+
+
+
+class ConsultarCedulasReportarBsBatchBody(BaseModel):
+
+    cedulas: list[str]
+
+
+
+
+
+@router.post("/cedulas-reportar-bs/consultar-batch", response_model=dict)
+
+def consultar_cedulas_reportar_bs_batch(
+
+    payload: ConsultarCedulasReportarBsBatchBody,
+
+    db: Session = Depends(get_db),
+
+):
+
+    """Varias cedulas en una sola peticion: carga la lista autorizada una vez (evita N+1)."""
+
+    total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
+
+    claves = load_autorizados_bs_claves(db)
+
+    por_cedula: dict = {}
+
+    for raw in payload.cedulas or []:
+
+        raw = (raw or "").strip()
+
+        if not raw:
+
+            continue
+
+        norm = normalize_cedula_lookup_key(raw)
+
+        en_lista = cedula_coincide_autorizados_bs(norm, claves)
+
+        ced_norm = normalize_cedula_para_almacenar_lista_bs(raw)
+
+        por_cedula[raw] = {
+
+            "cedula_ingresada": raw,
+
+            "cedula_normalizada": ced_norm,
+
+            "en_lista": en_lista,
+
+            "total_en_lista": int(total),
+
+        }
+
+    return {"total_en_lista": int(total), "por_cedula": por_cedula}
 
 
 

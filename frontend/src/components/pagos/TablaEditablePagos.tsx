@@ -385,22 +385,31 @@ export function TablaEditablePagos({
     const lookups = cedulasFirma.split('|').filter(Boolean)
     let cancelled = false
     ;(async () => {
+      const pendientes: string[] = []
       for (const lk of lookups) {
-        if (cancelled) return
         if (cedulaBsCacheRef.current.has(lk)) {
           const cached = cedulaBsCacheRef.current.get(lk)!
           setAutorizadoBsPorCedula(prev =>
             prev[lk] === cached ? prev : { ...prev, [lk]: cached }
           )
-          continue
+        } else {
+          pendientes.push(lk)
         }
-        try {
-          const res = await pagoService.consultarCedulaReportarBs(lk)
-          if (cancelled) return
-          cedulaBsCacheRef.current.set(lk, res.en_lista)
-          setAutorizadoBsPorCedula(prev => ({ ...prev, [lk]: res.en_lista }))
-        } catch {
-          if (cancelled) return
+      }
+      if (pendientes.length === 0) return
+      try {
+        const batch = await pagoService.consultarCedulasReportarBsBatch(pendientes)
+        if (cancelled) return
+        const map = batch.por_cedula || {}
+        for (const lk of pendientes) {
+          const row = map[lk]
+          const ok = row ? row.en_lista : false
+          cedulaBsCacheRef.current.set(lk, ok)
+          setAutorizadoBsPorCedula(prev => ({ ...prev, [lk]: ok }))
+        }
+      } catch {
+        if (cancelled) return
+        for (const lk of pendientes) {
           cedulaBsCacheRef.current.set(lk, false)
           setAutorizadoBsPorCedula(prev => ({ ...prev, [lk]: false }))
         }

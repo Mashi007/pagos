@@ -9,10 +9,11 @@ total_pagado desincronizado, etc.).
 """
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.models.cuota import Cuota
@@ -21,6 +22,8 @@ from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.reporte_contable_cache import ReporteContableCache
 from app.services.cuota_estado import sincronizar_columna_estado_cuotas
+
+logger = logging.getLogger(__name__)
 
 TOL_INTEGRIDAD = 0.02
 
@@ -152,11 +155,14 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
 
     cuota_pagos_eliminadas = -1
     cache_eliminadas = -1
+    subq_cuotas = select(Cuota.id).where(Cuota.prestamo_id == prestamo_id)
+
     if cuota_ids:
-        r1 = db.execute(delete(CuotaPago).where(CuotaPago.cuota_id.in_(cuota_ids)))
+        r1 = db.execute(delete(CuotaPago).where(CuotaPago.cuota_id.in_(subq_cuotas)))
         cuota_pagos_eliminadas = int(getattr(r1, "rowcount", -1) or -1)
         r2 = db.execute(delete(ReporteContableCache).where(ReporteContableCache.cuota_id.in_(cuota_ids)))
         cache_eliminadas = int(getattr(r2, "rowcount", -1) or -1)
+        db.flush()
 
     for c in cuotas:
         c.total_pagado = Decimal("0")
@@ -167,16 +173,38 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
     sincronizar_columna_estado_cuotas(db, list(cuotas), commit=False)
     db.flush()
 
-    if cuota_ids:
-        restantes = db.scalar(
-            select(func.count()).select_from(CuotaPago).where(CuotaPago.cuota_id.in_(cuota_ids))
+    restantes = db.scalar(
+        select(func.count())
+        .select_from(CuotaPago)
+        .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+        .where(Cuota.prestamo_id == prestamo_id)
+    )
+    if restantes and int(restantes) > 0:
+        logger.warning(
+            "reset_cascada: quedan %s filas cuota_pagos tras DELETE ORM; reintento prestamo_id=%s",
+            int(restantes),
+            prestamo_id,
         )
-        if restantes and int(restantes) > 0:
-            return {
-                "ok": False,
-                "error": f"Aun quedan {restantes} filas en cuota_pagos tras DELETE; abortar.",
-                "prestamo_id": prestamo_id,
-            }
+        db.execute(
+            text(
+                "DELETE FROM cuota_pagos WHERE cuota_id IN "
+                "(SELECT id FROM cuotas WHERE prestamo_id = :pid)"
+            ),
+            {"pid": prestamo_id},
+        )
+        db.flush()
+        restantes = db.scalar(
+            select(func.count())
+            .select_from(CuotaPago)
+            .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+            .where(Cuota.prestamo_id == prestamo_id)
+        )
+    if restantes and int(restantes) > 0:
+        return {
+            "ok": False,
+            "error": f"Aun quedan {restantes} filas en cuota_pagos tras DELETE; abortar.",
+            "prestamo_id": prestamo_id,
+        }
 
     pagos_reaplicados = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
 
