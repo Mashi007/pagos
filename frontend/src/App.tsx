@@ -26,6 +26,9 @@ const PUBLIC_PATHS = [
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
   '/informes',
+  '/finiquitos',
+  '/finiquitos/acceso',
+  '/finiquitos/panel',
 ]
 
 /** En rutas pblicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
@@ -130,6 +133,14 @@ import ReportePagoPage from './pages/ReportePagoPage'
 import InfopagosPage from './pages/InfopagosPage'
 
 import EstadoCuentaPublicoPage from './pages/EstadoCuentaPublicoPage'
+
+import { FiniquitoLandingPage } from './pages/FiniquitoLandingPage'
+
+import { FiniquitoAccesoPage } from './pages/FiniquitoAccesoPage'
+
+import { FiniquitoPanelPage } from './pages/FiniquitoPanelPage'
+
+import { FiniquitoGestionPage } from './pages/FiniquitoGestionPage'
 
 import CobrosPagosReportadosPage from './pages/CobrosPagosReportadosPage'
 
@@ -253,6 +264,23 @@ function App() {
             <Route path="informes" element={<EstadoCuentaPublicoPage />} />
 
             <Route path="infopagos" element={<InfopagosPage />} />
+
+            {/* Finiquito: portal publico (OTP) + entrada dual; gestion solo admin con Layout */}
+
+            <Route path="finiquitos" element={<FiniquitoLandingPage />} />
+
+            <Route path="finiquitos/acceso" element={<FiniquitoAccesoPage />} />
+
+            <Route path="finiquitos/panel" element={<FiniquitoPanelPage />} />
+
+            <Route
+              path="finiquitos/gestion"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <FiniquitoGestionPage />
+                </SimpleProtectedRoute>
+              }
+            />
 
             {/* Login: misma pantalla que index cuando no autenticado */}
 

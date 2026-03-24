@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -231,18 +232,28 @@ def finiquito_public_verificar_codigo(
 
 @router.get("/public/casos", response_model=FiniquitoCasoListaResponse)
 def finiquito_public_listar_casos(
-    bandeja: str = Query(..., description="entrada = REVISION, desk = ACEPTADO"),
+    bandeja: Optional[str] = Query(
+        None,
+        description=(
+            "entrada = solo REVISION; desk = solo ACEPTADO; "
+            "todos o omitir = todos los casos (prestamos con suma abonos = financiamiento)"
+        ),
+    ),
     db: Session = Depends(get_db),
     _: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
 ):
     b = (bandeja or "").lower().strip()
-    if b == "entrada":
-        estado_f = "REVISION"
+    if b in ("", "todos", "todas", "all"):
+        q = db.query(FiniquitoCaso).order_by(FiniquitoCaso.id.desc())
+    elif b == "entrada":
+        q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "REVISION").order_by(FiniquitoCaso.id.desc())
     elif b == "desk":
-        estado_f = "ACEPTADO"
+        q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "ACEPTADO").order_by(FiniquitoCaso.id.desc())
     else:
-        raise HTTPException(status_code=400, detail="bandeja debe ser entrada o desk")
-    q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == estado_f).order_by(FiniquitoCaso.id.desc())
+        raise HTTPException(
+            status_code=400,
+            detail="bandeja debe ser entrada, desk, todos u omitirse",
+        )
     items: List[FiniquitoCasoOut] = [_caso_to_out(c) for c in q.all()]
     return FiniquitoCasoListaResponse(items=items)
 
@@ -287,6 +298,63 @@ def finiquito_public_detalle(
             }
         )
     return FiniquitoDetalleResponse(caso=_caso_to_out(caso), prestamo=prestamo_d, cuotas=cuotas_l)
+
+
+@router.get("/public/revision-datos/{caso_id}")
+def finiquito_public_revision_datos(
+    caso_id: int,
+    db: Session = Depends(get_db),
+    _: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
+):
+    """
+    Misma data que GET /prestamos (filtro cedula) y GET /pagos (cedula + conciliado=si,
+    como la pantalla Pagos por defecto), para revision desde el ojo en Finiquito.
+    """
+    caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
+    if not caso:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+    cedula = (caso.cedula or "").strip()
+    if not cedula:
+        raise HTTPException(status_code=400, detail="Caso sin cedula")
+
+    from app.api.v1.endpoints.pagos import listar_pagos
+    from app.api.v1.endpoints.prestamos import listar_prestamos
+
+    prestamos_payload = listar_prestamos(
+        page=1,
+        per_page=100,
+        cliente_id=None,
+        estado=None,
+        analista=None,
+        concesionario=None,
+        cedula=cedula,
+        fecha_inicio=None,
+        fecha_fin=None,
+        requiere_revision=None,
+        modelo=None,
+        search=None,
+        db=db,
+    )
+    pagos_payload = listar_pagos(
+        page=1,
+        per_page=100,
+        cedula=cedula,
+        estado=None,
+        fecha_desde=None,
+        fecha_hasta=None,
+        analista=None,
+        conciliado="si",
+        sin_prestamo=None,
+        db=db,
+    )
+    return jsonable_encoder(
+        {
+            "caso_id": caso_id,
+            "cedula": cedula,
+            "prestamos": prestamos_payload,
+            "pagos": pagos_payload,
+        }
+    )
 
 
 @router.patch("/public/casos/{caso_id}/estado", response_model=FiniquitoPatchEstadoResponse)

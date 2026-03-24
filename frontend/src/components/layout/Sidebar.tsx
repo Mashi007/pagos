@@ -221,6 +221,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           href: '/informes',
           icon: Download,
         },
+
+        {
+          title: 'Finiquito',
+          href: '/finiquitos',
+          icon: FileText,
+        },
       ],
     },
 
