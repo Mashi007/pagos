@@ -1534,15 +1534,19 @@ export function useExcelUploadPagos({
       return
     }
 
-    // Mostrar UNA SOLA notificacion por error
+    // En progreso (no usar success: 200 en batch puede traer ok_count=0 por rechazos por fila)
 
-    addToast('success', `Guardando ${toSave.length} pago(s)...`)
+    addToast('warning', `Guardando ${toSave.length} pago(s)...`)
 
     setIsSavingIndividual(true)
 
     let ok = 0
 
     let fail = 0
+
+    /** Primer mensaje de error del lote (POST /batch devuelve 200 con fallos por fila). */
+
+    let batchFirstError: string | undefined
 
     const indicesGuardadosEstaRonda = new Set<number>()
 
@@ -1608,6 +1612,8 @@ export function useExcelUploadPagos({
         const pagosPayload = toSave.map(buildPagoData)
 
         const batchRes = await pagoService.createPagosBatch(pagosPayload)
+
+        batchFirstError = batchRes.results?.find(r => !r.success)?.error
 
         for (const r of batchRes.results) {
           const row = toSave[r.index]
@@ -1688,7 +1694,18 @@ export function useExcelUploadPagos({
         )
       }
     } else if (fail > 0) {
-      addToast('error', `Error al guardar.`)
+      const hint = batchFirstError
+        ? batchFirstError.length > 220
+          ? `${batchFirstError.slice(0, 217)}...`
+          : batchFirstError
+        : null
+
+      addToast(
+        'error',
+        hint
+          ? `Ningún pago guardado (${fail} rechazado(s)). ${hint}`
+          : `Ningún pago guardado (${fail} rechazado(s)). Revise duplicados, cédula o crédito.`
+      )
     }
 
     if (omitidos > 0) {
