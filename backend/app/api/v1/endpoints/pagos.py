@@ -4860,7 +4860,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
 
     cuotas_parciales = 0
 
-    orden_aplicacion = 0  # Secuencia de aplicación (de atrás hacia delante) en cuota_pagos
+    orden_aplicacion = 0  # Indice secuencial por pago (0 = primera cuota tocada en esta cascada; orden cuota = numero_cuota ASC)
 
     
 

@@ -1,5 +1,5 @@
 -- Opcional (PostgreSQL): evita filas duplicadas (mismo pago aplicado dos veces a la misma cuota).
--- NO ejecutar si ya existen duplicados: primero reconstruir cascada (reaplicar-fifo) o deduplicar manualmente.
+-- NO ejecutar si ya existen duplicados: primero reconstruir cascada (reaplicar_cascada_prestamo.py o POST .../reaplicar-cascada-aplicacion; ruta ...-fifo- es alias) o deduplicar manualmente.
 --
 -- CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_cuota_pagos_cuota_pago
 --   ON cuota_pagos (cuota_id, pago_id)

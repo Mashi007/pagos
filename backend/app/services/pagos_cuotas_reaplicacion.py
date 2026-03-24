@@ -1,6 +1,9 @@
 """
 Reconstruccion en cascada (waterfall) por prestamo.
 
+La aplicacion a cuotas sigue el orden `numero_cuota` ascendente (cuotas mas antiguas primero).
+No es FIFO contable; en API/rutas legacy el nombre "fifo" es solo alias de cascada.
+
 - integridad_cuotas_prestamo: diagnostico total_pagado vs SUM(cuota_pagos).
 - reset_y_reaplicar_cascada_prestamo: borra articulacion, resetea cuotas y vuelve a aplicar pagos conciliados.
 

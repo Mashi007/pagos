@@ -15,7 +15,7 @@ Verificar que los **pagos verificados y conciliados** se aplican correctamente a
 ```
 Aplica el monto del pago a cuotas del préstamo.
 Crea registros en cuota_pagos para historial completo.
-Reglas de negocio: Cascada (First In First Out).
+Reglas de negocio: cascada por numero_cuota ascendente (mas antiguas primero). No es FIFO contable.
 ```
 
 ---
@@ -383,9 +383,9 @@ cuota_pago = CuotaPago(
 
 ## 📋 VERIFICACIÓN DE REGLAS DE NEGOCIO
 
-### ✅ Regla 1: Cascada (First In First Out)
+### ✅ Regla 1: Cascada (orden de cuotas)
 
-**Regla**: Aplicar pagos a cuotas antiguas primero
+**Regla**: Aplicar pagos a cuotas antiguas primero (`numero_cuota` ASC). No confundir con FIFO.
 
 ```python
 .order_by(Cuota.numero_cuota)  # ← Cascada

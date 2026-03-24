@@ -1,10 +1,10 @@
 from pathlib import Path
 
 content = '''"""
-Reconstruccion en cascada (FIFO / waterfall) por prestamo.
+Reconstruccion en cascada (waterfall) por prestamo. No es FIFO; alias legacy "fifo" = cascada.
 
 - integridad_cuotas_prestamo: diagnostico total_pagado vs SUM(cuota_pagos).
-- reset_y_reaplicar_fifo_prestamo: borra articulacion, resetea cuotas y vuelve a aplicar pagos conciliados.
+- reset_y_reaplicar_fifo_prestamo (en repo actual: reset_y_reaplicar_cascada_prestamo): borra articulacion, resetea cuotas y vuelve a aplicar pagos conciliados.
 
 Usar cuando la tabla de amortizacion no refleja los pagos (doble cuota_pagos, migraciones,
 total_pagado desincronizado, etc.).
