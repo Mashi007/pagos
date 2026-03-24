@@ -398,7 +398,8 @@ export function TablaEditablePagos({
       }
       if (pendientes.length === 0) return
       try {
-        const batch = await pagoService.consultarCedulasReportarBsBatch(pendientes)
+        const batch =
+          await pagoService.consultarCedulasReportarBsBatch(pendientes)
         if (cancelled) return
         const map = batch.por_cedula || {}
         for (const lk of pendientes) {
