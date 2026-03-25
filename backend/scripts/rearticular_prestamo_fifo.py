@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Rearticula un préstamo: borra la aplicación de pagos a cuotas y vuelve a aplicar
-todos los pagos del préstamo en orden cronológico con lógica FIFO (primera cuota
-pendiente primero).
+todos los pagos del préstamo en orden cronológico con lógica en cascada (cuota más
+antigua primero, por numero_cuota).
 
 Uso (desde la raíz del repo):
   cd backend && python -c "
@@ -12,7 +12,7 @@ rearticular_prestamo(2526)  # sustituir por el prestamo_id
 O desde backend con PYTHONPATH=.:
   python scripts/rearticular_prestamo_fifo.py 2526
   python scripts/rearticular_prestamo_fifo.py 2735 1672 3200   # varios préstamos
-  python scripts/rearticular_prestamo_fifo.py --verificar-pago=57856 2060  # tras FIFO, imprime suma cuota_pagos vs monto_pagado
+  python scripts/rearticular_prestamo_fifo.py --verificar-pago=57856 2060  # tras cascada, imprime suma cuota_pagos vs monto_pagado
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def rearticular_prestamo(prestamo_id: int, db=None, verificar_pago_id: int | Non
     1. Borra todos los CuotaPago de las cuotas del préstamo.
     2. Resetea total_pagado, pago_id, fecha_pago y estado/dias_mora en esas cuotas.
     3. Obtiene todos los pagos del préstamo ordenados por fecha_pago, id.
-    4. Aplica cada pago a cuotas con la lógica FIFO (usa _aplicar_pago_a_cuotas_interno).
+    4. Aplica cada pago a cuotas en cascada (usa _aplicar_pago_a_cuotas_interno).
     """
     from sqlalchemy import delete, select, text
     from sqlalchemy.orm import Session
@@ -112,7 +112,7 @@ def rearticular_prestamo(prestamo_id: int, db=None, verificar_pago_id: int | Non
             session.commit()
             return {"ok": True, "message": f"Préstamo {prestamo_id}: cuotas reseteadas; no hay pagos para aplicar."}
 
-        # 4) Aplicar cada pago con FIFO
+        # 4) Aplicar cada pago en cascada
         total_cc = 0
         total_cp = 0
         for pago in pagos:
@@ -145,7 +145,7 @@ def rearticular_prestamo(prestamo_id: int, db=None, verificar_pago_id: int | Non
 
         return {
             "ok": True,
-            "message": f"Préstamo {prestamo_id} rearticulado: {len(pagos)} pagos aplicados (FIFO); "
+            "message": f"Préstamo {prestamo_id} rearticulado: {len(pagos)} pagos aplicados (cascada); "
             f"{total_cc} cuotas completadas, {total_cp} parciales.{verif_line}",
             "pagos_aplicados": len(pagos),
             "cuotas_completadas": total_cc,

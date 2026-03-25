@@ -154,6 +154,10 @@ FROM q
 JOIN primera_impaga pi ON pi.prestamo_id = q.prestamo_id
 WHERE q.numero_cuota > pi.primera_impaga AND q.total_pagado > 0;
 
+-- Nombre vigente en monitoreo (mismas filas que v_alert_fifo_violacion; compat historica).
+CREATE OR REPLACE VIEW v_alert_cascada_violacion AS
+SELECT * FROM v_alert_fifo_violacion;
+
 -- ============================================================================
 -- Dashboard: Resumen de Alertas
 -- ============================================================================
@@ -172,7 +176,7 @@ SELECT 'Cuotas Sin Fecha_Aprobacion', (SELECT COUNT(*) FROM v_alert_cuotas_sin_f
 UNION ALL
 SELECT 'Inconsistencia Estado/Pago', (SELECT COUNT(*) FROM v_alert_inconsistencia_estado_pago)
 UNION ALL
-SELECT 'Violación Cascada', (SELECT COUNT(*) FROM v_alert_fifo_violacion)
+SELECT 'Violación Cascada', (SELECT COUNT(*) FROM v_alert_cascada_violacion)
 ORDER BY cantidad DESC;
 
 -- ============================================================================

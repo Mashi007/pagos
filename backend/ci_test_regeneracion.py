@@ -64,6 +64,11 @@ class CITestRegeneracion:
         """Test: Ejecutar todas las vistas de alerta"""
         alerts_ok = True
         try:
+            try:
+                self.db.execute(text("SELECT 1 FROM v_alert_cascada_violacion LIMIT 1"))
+                violacion_view = "v_alert_cascada_violacion"
+            except Exception:
+                violacion_view = "v_alert_fifo_violacion"
             alert_views = [
                 "v_alert_cuota1_desalineada",
                 "v_alert_numero_cuotas_inconsistente",
@@ -71,7 +76,7 @@ class CITestRegeneracion:
                 "v_alert_cuotas_estado_invalido",
                 "v_alert_cuotas_sin_fecha_aprobacion",
                 "v_alert_inconsistencia_estado_pago",
-                "v_alert_fifo_violacion"
+                violacion_view,
             ]
             
             for view_name in alert_views:

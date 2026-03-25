@@ -18,7 +18,7 @@
 -- con documento = referencia).
 --
 -- Tras corregir montos en `pagos`, re-articular préstamos afectados
--- (ej. backend/scripts/rearticular_prestamo_fifo.py).
+-- (ej. backend/scripts/rearticular_prestamo_fifo.py; reaplicacion en cascada).
 --
 -- Si el listado "0" devuelve 0 filas pero usted sabe que hay pagos COB-* en BS
 -- mal cargados, casi seguro falta tasa del día: use el listado "0a" (LEFT JOIN).

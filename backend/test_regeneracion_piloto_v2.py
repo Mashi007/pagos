@@ -6,7 +6,7 @@ Testing E2E: Flujo de pago completo en piloto (prestamos 2, 7, 8)
 Prueba:
   1. Validar que cuotas fueron regeneradas
   2. Simular pagos (si API disponible)
-  3. Verificar FIFO
+  3. Verificar cascada (orden de aplicacion a cuotas)
   4. Validar reporte de amortizacion
 
 Uso:
@@ -116,9 +116,9 @@ class TestRegeneracionPiloto:
         except Exception as e:
             self.results.append((test_name, "FAIL", str(e)))
 
-    def test_4_fifo_validacion(self):
-        """Test 4: FIFO validacion (no hay cuota posterior pagada si anterior impaga)"""
-        test_name = "TEST 4: FIFO Validacion"
+    def test_4_cascada_validacion(self):
+        """Test 4: cascada — no hay cuota posterior pagada si anterior impaga"""
+        test_name = "TEST 4: Cascada (validacion)"
         try:
             for pid in self.PRESTAMO_IDS:
                 cuotas = (
@@ -138,7 +138,7 @@ class TestRegeneracionPiloto:
                             if (siguiente.total_pagado or 0) > 0:
                                 raise AssertionError(
                                     f"Prestamo {pid}: cuota {siguiente.numero_cuota} "
-                                    f"pagada pero {c.numero_cuota} impaga (violacion FIFO)"
+                                    f"pagada pero {c.numero_cuota} impaga (violacion de cascada)"
                                 )
                         break
 
@@ -220,7 +220,7 @@ class TestRegeneracionPiloto:
         self.test_1_cobertura_cuotas()
         self.test_2_sin_duplicados()
         self.test_3_cuota_1_alineada()
-        self.test_4_fifo_validacion()
+        self.test_4_cascada_validacion()
         self.test_5_estado_consistencia()
         self.test_6_montos_coherentes()
 

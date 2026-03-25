@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Revisa todos los préstamos en la BD y lista los que tienen violación FIFO.
+Revisa todos los préstamos en la BD y lista los que tienen violación de cascada.
 Opcionalmente rearticula todos. Incluye reintentos ante caída de conexión (p. ej. Render).
 
 Uso:
@@ -52,10 +52,10 @@ def main():
         db.close()
 
     if not prestamo_ids:
-        print("No hay préstamos con violación FIFO.")
+        print("No hay préstamos con violación de cascada.")
         return 0
 
-    print(f"Préstamos con violación FIFO: {len(prestamo_ids)}")
+    print(f"Préstamos con violación de cascada: {len(prestamo_ids)}")
     print("prestamo_id:", ", ".join(str(p) for p in prestamo_ids))
 
     if not rearticular:

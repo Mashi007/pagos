@@ -110,7 +110,7 @@ SELECT
     cuota_id,
     numero_cuota,
     numero_cuota_anterior,
-    CASE WHEN numero_cuota_anterior IS NOT NULL AND numero_cuota < numero_cuota_anterior THEN 'NO_FIFO' END AS alerta
+    CASE WHEN numero_cuota_anterior IS NOT NULL AND numero_cuota < numero_cuota_anterior THEN 'NO_CASCADA' END AS alerta
 FROM secuencia
 WHERE numero_cuota_anterior IS NOT NULL AND numero_cuota < numero_cuota_anterior
 ORDER BY pago_id, orden_aplicacion;

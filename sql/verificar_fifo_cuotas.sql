@@ -41,17 +41,19 @@ WHERE (c2.total_pagado IS NOT NULL AND c2.total_pagado > 0)
   AND (c1.total_pagado IS NULL OR c1.total_pagado < c1.monto_cuota - 0.01)
 ORDER BY c1.prestamo_id, c1.numero_cuota, c2.numero_cuota;
 
--- 3) Verificación global: 0 = cumple Cascada, >0 = violaciones
+-- 3) Verificación global: cumple o no la regla de cascada
+WITH viola AS (
+  SELECT EXISTS (
+    SELECT 1
+    FROM cuotas c1
+    JOIN cuotas c2
+      ON c1.prestamo_id = c2.prestamo_id
+      AND c1.numero_cuota < c2.numero_cuota
+    WHERE (c2.total_pagado IS NOT NULL AND c2.total_pagado > 0)
+      AND (c1.total_pagado IS NULL OR c1.total_pagado < c1.monto_cuota - 0.01)
+  ) AS hay_violacion
+)
 SELECT
-  CASE
-    WHEN EXISTS (
-      SELECT 1
-      FROM cuotas c1
-      JOIN cuotas c2
-        ON c1.prestamo_id = c2.prestamo_id
-        AND c1.numero_cuota < c2.numero_cuota
-      WHERE (c2.total_pagado IS NOT NULL AND c2.total_pagado > 0)
-        AND (c1.total_pagado IS NULL OR c1.total_pagado < c1.monto_cuota - 0.01)
-    ) THEN 'NO_CUMPLE_FIFO'
-    ELSE 'CUMPLE_FIFO'
-  END AS resultado_fifo;
+  CASE WHEN hay_violacion THEN 'NO_CUMPLE_CASCADA' ELSE 'CUMPLE_CASCADA' END AS resultado_cascada,
+  CASE WHEN hay_violacion THEN 'NO_CUMPLE_FIFO' ELSE 'CUMPLE_FIFO' END AS resultado_fifo
+FROM viola;
