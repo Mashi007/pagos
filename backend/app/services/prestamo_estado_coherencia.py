@@ -14,9 +14,26 @@ from sqlalchemy import and_, case, exists, func, not_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.cuota import Cuota
+from app.models.cuota_pago import CuotaPago
 from app.models.prestamo import Prestamo
 
 _TOL = 0.01
+
+
+def _totales_financiamiento_y_aplicados_cuadran() -> Any:
+    """
+    Expresión SQL: |total_financiamiento - SUM(cuota_pagos.monto_aplicado)| <= tolerancia.
+    Si hay doble aplicación o datos incoherentes, NO se considera liquidación efectiva en UI/filtros.
+    """
+    suma_aplic = (
+        select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
+        .select_from(Cuota)
+        .outerjoin(CuotaPago, CuotaPago.cuota_id == Cuota.id)
+        .where(Cuota.prestamo_id == Prestamo.id)
+        .correlate(Prestamo)
+        .scalar_subquery()
+    )
+    return func.abs(Prestamo.total_financiamiento - suma_aplic) <= _TOL
 
 
 def prestamo_bloquea_insertar_filas_cuota_si_liquidado_bd(p: Prestamo) -> Optional[str]:
@@ -98,7 +115,22 @@ def prestamo_ids_aprobados_todas_cuotas_cubiertas(
         pnum = float(pend) if pend is not None else 0.0
         if pnum < 0.5:
             out.add(int(pid))
-    return out
+    if not out:
+        return set()
+    # Excluir liquidación efectiva si el capital total no cuadra con lo aplicado en cuota_pagos
+    rows_tf = db.execute(
+        select(Prestamo.id, Prestamo.total_financiamiento, func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
+        .select_from(Prestamo)
+        .outerjoin(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .outerjoin(CuotaPago, CuotaPago.cuota_id == Cuota.id)
+        .where(Prestamo.id.in_(list(out)))
+        .group_by(Prestamo.id, Prestamo.total_financiamiento)
+    ).all()
+    consistent: Set[int] = set()
+    for pid, tf, sum_ap in rows_tf:
+        if abs(float(tf or 0) - float(sum_ap or 0)) <= _TOL:
+            consistent.add(int(pid))
+    return consistent
 
 
 def condicion_filtro_estado_prestamo(est: str) -> Optional[Any]:
@@ -128,6 +160,7 @@ def condicion_filtro_estado_prestamo(est: str) -> Optional[Any]:
         Prestamo.estado == "APROBADO",
         tiene_cuotas,
         not_(cuota_incompleta),
+        _totales_financiamiento_y_aplicados_cuadran(),
     )
 
     if est == "LIQUIDADO":
