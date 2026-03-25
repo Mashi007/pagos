@@ -348,15 +348,7 @@ def build_pdf_bytes(
             story.append(logo)
         except Exception as e:
             logger.warning("No se pudo cargar logo para PDF cobranza: %s", e)
-    story.append(Spacer(1, 0.3 * cm))
-
-    story.append(Paragraph(f"{datos.get('ciudad', '')}, {datos.get('fecha_carta', '')}", s_fecha))
-    story.append(Paragraph(f"<b>Notificación N° {datos.get('notificacion_num', '')}</b>", s_notif))
-    story.append(Spacer(1, 0.5 * cm))
-
-    story.append(Paragraph(f"{datos.get('tratamiento', '')} {datos.get('nombre_completo', '')}", s_dest))
-    story.append(Paragraph(datos.get("cedula", ""), s_cedula))
-    story.append(Spacer(1, 0.6 * cm))
+    story.append(Spacer(1, 0.4 * cm))
 
     _default = (
         "Ante todo, queremos extenderle un cordial saludo, por medio del presente instrumento "
