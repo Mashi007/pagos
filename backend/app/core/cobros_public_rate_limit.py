@@ -32,11 +32,16 @@ ESTADO_CUENTA_SOLICITAR_MAX = 5
 ESTADO_CUENTA_VERIFICAR_WINDOW_SEC = 900
 ESTADO_CUENTA_VERIFICAR_MAX = 15
 
+# Finiquito: solicitar código OTP (público, sin auth)
+FINIQUITO_SOLICITAR_CODIGO_WINDOW_SEC = 3600
+FINIQUITO_SOLICITAR_CODIGO_MAX = 15
+
 _validar_attempts: dict[str, list[float]] = defaultdict(list)
 _enviar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_validar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_solicitar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_verificar_attempts: dict[str, list[float]] = defaultdict(list)
+_finiquito_solicitar_codigo_attempts: dict[str, list[float]] = defaultdict(list)
 _lock = Lock()
 
 
@@ -154,5 +159,35 @@ def check_rate_limit_estado_cuenta_solicitar(ip: str) -> None:
             raise HTTPException(
                 status_code=429,
                 detail="Ha alcanzado el límite de consultas por hora. Intente más tarde.",
+            )
+        attempts.append(now)
+
+
+def check_rate_limit_finiquito_solicitar_codigo(ip: str) -> None:
+    """Lanza 429 si se supera el límite de solicitudes de código OTP Finiquito por IP."""
+    if check_rate_limit_redis is not None:
+        try:
+            check_rate_limit_redis(
+                "finiquito_otp",
+                ip,
+                FINIQUITO_SOLICITAR_CODIGO_WINDOW_SEC,
+                FINIQUITO_SOLICITAR_CODIGO_MAX,
+                "Demasiadas solicitudes de codigo. Intente de nuevo en una hora.",
+            )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    with _lock:
+        now = time.time()
+        attempts = _finiquito_solicitar_codigo_attempts[ip]
+        attempts[:] = [
+            t for t in attempts if now - t < FINIQUITO_SOLICITAR_CODIGO_WINDOW_SEC
+        ]
+        if len(attempts) >= FINIQUITO_SOLICITAR_CODIGO_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Demasiadas solicitudes de codigo. Intente de nuevo en una hora.",
             )
         attempts.append(now)

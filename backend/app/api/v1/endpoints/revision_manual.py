@@ -3,8 +3,9 @@ Endpoints para Revisión Manual de Préstamos (post-migración).
 Lista de préstamos con detalles completos, edición de cliente/préstamo/pagos, y marcado como revisado.
 Incluye validaciones y logging para garantizar integridad de datos.
 """
+import logging
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy import select, func, and_, case, literal_column
 from sqlalchemy.orm import Session
@@ -18,10 +19,86 @@ from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
+from app.models.estado_cliente import EstadoCliente
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 from app.services.prestamo_estado_coherencia import prestamo_bloquea_nuevas_cuotas_o_cambio_plazo
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _actor_revision_manual(current_user: Any) -> str:
+    """Identificador seguro para logs (sin tokens ni datos sensibles)."""
+    if current_user is None:
+        return "anonimo"
+    if isinstance(current_user, dict):
+        return str(
+            current_user.get("email")
+            or current_user.get("sub")
+            or current_user.get("preferred_username")
+            or "usuario"
+        )
+    return str(
+        getattr(current_user, "email", None)
+        or getattr(current_user, "id", None)
+        or "usuario"
+    )
+
+
+def _commit_revision_seguro(
+    db: Session,
+    *,
+    operacion: str,
+    actor: str,
+    tabla_principal: str,
+    id_principal: Optional[int],
+    resumen_campos: Optional[List[str]] = None,
+) -> None:
+    """
+    Persiste la transacción; ante fallo hace rollback, deja traza y responde 500.
+    Tras éxito registra INFO para auditoría operativa (tabla e ids).
+    """
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "revision_manual COMMIT_FALLIDO operacion=%s tabla=%s id=%s actor=%s",
+            operacion,
+            tabla_principal,
+            id_principal,
+            actor,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Error al persistir en la base de datos. Los cambios no se aplicaron.",
+        ) from exc
+    logger.info(
+        "revision_manual BD_GUARDADO operacion=%s tabla=%s id=%s actor=%s campos=%s",
+        operacion,
+        tabla_principal,
+        id_principal,
+        actor,
+        resumen_campos or [],
+    )
+
+
+def _forbid_si_prestamo_revision_cerrada(db: Session, prestamo_id: int) -> None:
+    """Evita mutar préstamo/cuotas si la revisión manual ya se cerró como revisado."""
+    rev = db.execute(
+        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
+    ).scalars().first()
+    if rev and (rev.estado_revision or "").strip().lower() == "revisado":
+        logger.warning(
+            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisado_cerrado",
+            prestamo_id,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Este préstamo ya fue revisado y cerrado; no admite más ediciones en revisión manual.",
+        )
+
 
 # ===== SCHEMAS VALIDACION =====
 
@@ -266,6 +343,7 @@ def confirmar_prestamo_revisado(
     current_user = Depends(get_current_user),
 ):
     """Marca un préstamo como revisado (confirma TODO: cliente, préstamo, pagos)."""
+    actor = _actor_revision_manual(current_user)
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
@@ -288,7 +366,14 @@ def confirmar_prestamo_revisado(
         rev_manual.fecha_revision = datetime.now()
     
     _aplicar_saldo_cero_si_corresponde(db, prestamo)
-    db.commit()
+    _commit_revision_seguro(
+        db,
+        operacion="confirmar_prestamo_revisado",
+        actor=actor,
+        tabla_principal="revision_manual_prestamos+prestamos",
+        id_principal=prestamo_id,
+        resumen_campos=["estado_revision=revisado", "saldo_cero_reglas_si_aplica"],
+    )
     return {
         "mensaje": "Usted ha auditado todos los términos de este préstamo por lo que no podrá editar de nuevo",
         "prestamo_id": prestamo_id,
@@ -300,8 +385,10 @@ def confirmar_prestamo_revisado(
 def iniciar_revision_prestamo(
     prestamo_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Inicia edición de un préstamo (cambia estado a 'revisando')."""
+    actor = _actor_revision_manual(current_user)
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
@@ -317,23 +404,54 @@ def iniciar_revision_prestamo(
         )
         db.add(rev_manual)
     else:
+        prev = (rev_manual.estado_revision or "").strip().lower()
+        if prev == "revisado":
+            logger.warning(
+                "revision_manual iniciar_revision rechazado prestamo_id=%s ya_revisado",
+                prestamo_id,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="La revisión de este préstamo ya fue cerrada; no se puede volver a iniciar.",
+            )
         rev_manual.estado_revision = "revisando"
     
-    db.commit()
+    _commit_revision_seguro(
+        db,
+        operacion="iniciar_revision_prestamo",
+        actor=actor,
+        tabla_principal="revision_manual_prestamos",
+        id_principal=prestamo_id,
+        resumen_campos=["estado_revision=revisando"],
+    )
     return {"mensaje": "Iniciada revisión manual", "prestamo_id": prestamo_id, "estado": "revisando"}
 
 
 @router.put("/clientes/{cliente_id}")
 def editar_cliente_revision(
     cliente_id: int,
+    prestamo_id: Optional[int] = Query(
+        None,
+        description="ID del préstamo en contexto (editor revisión manual); valida coherencia y bloqueo si ya revisado",
+    ),
     update_data: ClienteUpdateData = Body(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Edita datos del cliente y actualiza tabla de revisión manual."""
+    actor = _actor_revision_manual(current_user)
     cliente = db.get(Cliente, cliente_id)
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    if prestamo_id is not None:
+        pr = db.get(Prestamo, prestamo_id)
+        if not pr or pr.cliente_id != cliente_id:
+            raise HTTPException(
+                status_code=400,
+                detail="prestamo_id no corresponde a este cliente",
+            )
+        _forbid_si_prestamo_revision_cerrada(db, prestamo_id)
     
     # Registrar cambios antiguos para auditoría
     cambios_dict = {}
@@ -361,6 +479,20 @@ def editar_cliente_revision(
     
     if update_data.estado is not None and update_data.estado.strip():
         estado_val = update_data.estado.strip().upper()
+        try:
+            permitidos = db.execute(select(EstadoCliente.valor)).scalars().all()
+            if permitidos and estado_val not in permitidos:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Estado de cliente no permitido. "
+                        f"Valores en catálogo: {sorted(permitidos)}"
+                    ),
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
         cambios_dict['estado'] = (cliente.estado, estado_val)
         cliente.estado = estado_val
 
@@ -395,7 +527,14 @@ def editar_cliente_revision(
             rev_manual.cliente_editado = True
             rev_manual.actualizado_en = datetime.now()
     
-    db.commit()
+    _commit_revision_seguro(
+        db,
+        operacion="editar_cliente_revision",
+        actor=actor,
+        tabla_principal="clientes",
+        id_principal=cliente_id,
+        resumen_campos=list(cambios_dict.keys()),
+    )
     return {
         "mensaje": "Cliente actualizado exitosamente",
         "cliente_id": cliente_id,
@@ -411,9 +550,12 @@ def editar_prestamo_revision(
     current_user = Depends(get_current_user),
 ):
     """Edita datos del préstamo y actualiza tabla de revisión manual."""
+    actor = _actor_revision_manual(current_user)
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    _forbid_si_prestamo_revision_cerrada(db, prestamo_id)
     
     cambios_dict = {}
     
@@ -542,7 +684,14 @@ def editar_prestamo_revision(
         )
         db.add(rev_manual)
     
-    db.commit()
+    _commit_revision_seguro(
+        db,
+        operacion="editar_prestamo_revision",
+        actor=actor,
+        tabla_principal="prestamos",
+        id_principal=prestamo_id,
+        resumen_campos=list(cambios_dict.keys()),
+    )
     return {
         "mensaje": "Préstamo actualizado exitosamente",
         "prestamo_id": prestamo_id,
@@ -563,6 +712,7 @@ def eliminar_prestamo_revision(
     - Revisión manual
     - Préstamo
     """
+    actor = _actor_revision_manual(current_user)
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
@@ -586,7 +736,16 @@ def eliminar_prestamo_revision(
 
     # 4. Eliminar préstamo
     db.delete(prestamo)
-    db.commit()
+    n_cuotas = len(cuotas)
+    n_pagos = len(pagos)
+    _commit_revision_seguro(
+        db,
+        operacion="eliminar_prestamo_revision",
+        actor=actor,
+        tabla_principal="prestamos",
+        id_principal=prestamo_id,
+        resumen_campos=[f"cuotas_eliminadas={n_cuotas}", f"pagos_eliminados={n_pagos}"],
+    )
 
     return {
         "mensaje": "Préstamo eliminado de la BD (préstamo, cuotas y pagos)",
@@ -637,9 +796,12 @@ def editar_cuota_revision(
     current_user = Depends(get_current_user),
 ):
     """Edita datos de una cuota (fecha_pago, cantidad, estado) y registra en revisión manual."""
+    actor = _actor_revision_manual(current_user)
     cuota = db.get(Cuota, cuota_id)
     if not cuota:
         raise HTTPException(status_code=404, detail="Cuota no encontrada")
+
+    _forbid_si_prestamo_revision_cerrada(db, cuota.prestamo_id)
     
     cambios_dict = {}
     
@@ -715,12 +877,62 @@ def editar_cuota_revision(
         )
         db.add(rev_manual)
     
-    db.commit()
+    _commit_revision_seguro(
+        db,
+        operacion="editar_cuota_revision",
+        actor=actor,
+        tabla_principal="cuotas",
+        id_principal=cuota_id,
+        resumen_campos=list(cambios_dict.keys()),
+    )
     return {
         "mensaje": "Cuota actualizada exitosamente (cambio parcial guardado)",
         "cuota_id": cuota_id,
         "cambios": {k: {"anterior": v[0], "nuevo": v[1]} for k, v in cambios_dict.items()}
     }
+
+
+@router.delete("/prestamos/{prestamo_id}/cuotas/{cuota_id}")
+def eliminar_cuota_revision(
+    prestamo_id: int,
+    cuota_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """Elimina una cuota del préstamo (cuota_pagos y caches relacionados vía ON DELETE CASCADE). Marca revisión manual."""
+    actor = _actor_revision_manual(current_user)
+    cuota = db.get(Cuota, cuota_id)
+    if not cuota or cuota.prestamo_id != prestamo_id:
+        raise HTTPException(status_code=404, detail="Cuota no encontrada")
+
+    _forbid_si_prestamo_revision_cerrada(db, prestamo_id)
+
+    db.delete(cuota)
+
+    rev_manual = db.execute(
+        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
+    ).scalars().first()
+
+    if rev_manual:
+        rev_manual.pagos_editados = True
+        rev_manual.actualizado_en = datetime.now()
+    else:
+        rev_manual = RevisionManualPrestamo(
+            prestamo_id=prestamo_id,
+            estado_revision="revisando",
+            pagos_editados=True,
+        )
+        db.add(rev_manual)
+
+    _commit_revision_seguro(
+        db,
+        operacion="eliminar_cuota_revision",
+        actor=actor,
+        tabla_principal="cuotas",
+        id_principal=cuota_id,
+        resumen_campos=[f"prestamo_id={prestamo_id}"],
+    )
+    return {"mensaje": "Cuota eliminada", "cuota_id": cuota_id}
 
 
 @router.get("/resumen-rapido")
@@ -753,6 +965,20 @@ def get_resumen_rapido_revision(db: Session = Depends(get_db)):
 # Estados de cliente: ver GET /api/v1/clientes/estados (tabla estados_cliente)
 
 
+def _fecha_nacimiento_para_input(val) -> str:
+    """Formato YYYY-MM-DD para input HTML date (evita ISO con componente de hora)."""
+    if val is None:
+        return ""
+    if isinstance(val, datetime):
+        return val.date().isoformat()
+    if isinstance(val, date):
+        return val.isoformat()
+    s = str(val).strip()
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    return s
+
+
 @router.get("/prestamos/{prestamo_id}/detalle")
 def get_detalle_prestamo_revision(
     prestamo_id: int,
@@ -766,12 +992,29 @@ def get_detalle_prestamo_revision(
     cliente = db.get(Cliente, prestamo.cliente_id)
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    rev_row = db.execute(
+        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
+    ).scalars().first()
+    estado_revision = "pendiente"
+    fecha_revision_iso = None
+    usuario_revision_email = None
+    if rev_row:
+        estado_revision = (rev_row.estado_revision or "pendiente").strip().lower()
+        if rev_row.fecha_revision:
+            fecha_revision_iso = rev_row.fecha_revision.isoformat()
+        usuario_revision_email = rev_row.usuario_revision_email
     
     # Obtener cuotas
     cuotas = db.execute(
         select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
     ).scalars().all()
     
+    def _norm_codigo_estado(raw: Optional[str], default: str) -> str:
+        if raw is None or not str(raw).strip():
+            return default
+        return str(raw).strip().upper()
+
     cuotas_data = [
         {
             "cuota_id": c.id,
@@ -780,7 +1023,7 @@ def get_detalle_prestamo_revision(
             "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
             "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
             "total_pagado": float(c.total_pagado) if c.total_pagado else 0.0,
-            "estado": c.estado or "pendiente",
+            "estado": _norm_codigo_estado(c.estado, "PENDIENTE"),
             "observaciones": c.observaciones or "",
             "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial else 0.0,
             "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final else 0.0,
@@ -793,6 +1036,11 @@ def get_detalle_prestamo_revision(
         return format_datetime_iso(dt)
 
     return {
+        "revision": {
+            "estado_revision": estado_revision,
+            "fecha_revision": fecha_revision_iso,
+            "usuario_revision_email": usuario_revision_email,
+        },
         "cliente": {
             "cliente_id": cliente.id,
             "nombres": cliente.nombres,
@@ -801,8 +1049,8 @@ def get_detalle_prestamo_revision(
             "email": cliente.email or "",
             "direccion": cliente.direccion or "",
             "ocupacion": cliente.ocupacion or "",
-            "estado": cliente.estado or "",
-            "fecha_nacimiento": _dt_iso(cliente.fecha_nacimiento),
+            "estado": _norm_codigo_estado(cliente.estado, ""),
+            "fecha_nacimiento": _fecha_nacimiento_para_input(cliente.fecha_nacimiento),
             "notas": cliente.notas or "",
         },
         "prestamo": {
@@ -820,7 +1068,7 @@ def get_detalle_prestamo_revision(
             "cuota_periodo": float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0.0,
             "fecha_base_calculo": _dt_iso(prestamo.fecha_base_calculo),
             "fecha_aprobacion": _dt_iso(prestamo.fecha_aprobacion),
-            "estado": prestamo.estado or "",
+            "estado": _norm_codigo_estado(prestamo.estado, ""),
             "concesionario": prestamo.concesionario or "",
             "analista": prestamo.analista or "",
             "modelo_vehiculo": prestamo.modelo_vehiculo or "",
@@ -839,6 +1087,7 @@ def finalizar_revision_prestamo(
     current_user = Depends(get_current_user),
 ):
     """Finaliza edición (Guardar y Cerrar) → marca como revisado."""
+    actor = _actor_revision_manual(current_user)
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
@@ -861,7 +1110,14 @@ def finalizar_revision_prestamo(
         rev_manual.fecha_revision = datetime.now()
     
     _aplicar_saldo_cero_si_corresponde(db, prestamo)
-    db.commit()
+    _commit_revision_seguro(
+        db,
+        operacion="finalizar_revision_prestamo",
+        actor=actor,
+        tabla_principal="revision_manual_prestamos+prestamos",
+        id_principal=prestamo_id,
+        resumen_campos=["estado_revision=revisado", "saldo_cero_reglas_si_aplica"],
+    )
     return {
         "mensaje": "Usted ha auditado todos los términos de este préstamo por lo que no podrá editar de nuevo",
         "prestamo_id": prestamo_id,

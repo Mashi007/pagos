@@ -21,6 +21,7 @@ from app.core.email_config_holder import (
 from app.core.email_cuentas import (
     NUM_CUENTAS,
     ASIGNACION_DEFAULT,
+    SERVICIO_FINIQUITO,
     cuenta_vacia,
     migrar_config_v1_a_v2,
 )
@@ -38,12 +39,14 @@ _DEFAULTS_EMAIL_V2_GLOBALS: dict[str, Any] = {
     "email_activo_notificaciones": "true",
     "email_activo_informe_pagos": "true",
     "email_activo_estado_cuenta": "true",
+    "email_activo_finiquito": "true",
     "email_activo_cobros": "true",
     "email_activo_campanas": "true",
     "email_activo_tickets": "true",
     "modo_pruebas_notificaciones": "false",
     "modo_pruebas_informe_pagos": "false",
     "modo_pruebas_estado_cuenta": "false",
+    "modo_pruebas_finiquito": "false",
     "modo_pruebas_cobros": "false",
     "modo_pruebas_campanas": "false",
     "modo_pruebas_tickets": "false",
@@ -140,9 +143,21 @@ class EmailCuentasUpdate(BaseModel):
     email_pruebas: Optional[str] = None
     email_activo: Optional[str] = None
     email_activo_notificaciones: Optional[str] = None
+    email_activo_informe_pagos: Optional[str] = None
     email_activo_estado_cuenta: Optional[str] = None
+    email_activo_finiquito: Optional[str] = None
     email_activo_cobros: Optional[str] = None
+    email_activo_campanas: Optional[str] = None
+    email_activo_tickets: Optional[str] = None
     tickets_notify_emails: Optional[str] = None
+    modo_pruebas_notificaciones: Optional[str] = None
+    modo_pruebas_informe_pagos: Optional[str] = None
+    modo_pruebas_estado_cuenta: Optional[str] = None
+    modo_pruebas_finiquito: Optional[str] = None
+    modo_pruebas_cobros: Optional[str] = None
+    modo_pruebas_campanas: Optional[str] = None
+    modo_pruebas_tickets: Optional[str] = None
+    emails_pruebas: Optional[List[str]] = None
 
 
 def _is_password_masked(v: Any) -> bool:
@@ -329,7 +344,12 @@ def post_email_enviar_prueba(db: Session = Depends(get_db)):
     tab_map = asignacion.get("notificaciones_tab") or {}
     tab_para_3 = next((t for t, c in tab_map.items() if c == 3), "dias_5")
     tab_para_4 = next((t for t, c in tab_map.items() if c == 4), None)
-    pares_cuentas = [(1, "cobros", None), (2, "estado_cuenta", None), (3, "notificaciones", tab_para_3)]
+    pares_cuentas = [
+        (1, "cobros", None),
+        (2, "estado_cuenta", None),
+        (2, SERVICIO_FINIQUITO, None),
+        (3, "notificaciones", tab_para_3),
+    ]
     if tab_para_4:
         pares_cuentas.append((4, "notificaciones", tab_para_4))
 
@@ -347,10 +367,19 @@ def post_email_enviar_prueba(db: Session = Depends(get_db)):
             errores.append({"cuenta": num_cuenta, "email": destinatarios[0] if destinatarios else "", "mensaje": "Falta contrasena en la cuenta"})
             continue
         for to in destinatarios:
+            if svc == SERVICIO_FINIQUITO:
+                subject = "Prueba Finiquito (codigo OTP) - RapiCredit"
+                body_txt = (
+                    "Prueba SMTP para el portal Finiquito (servicio finiquito). "
+                    "Usa la misma cuenta que Estado de cuenta. Si recibe esto, el envio de codigos de acceso deberia funcionar."
+                )
+            else:
+                subject = subject_base.format(num_cuenta)
+                body_txt = body_base.format(num_cuenta)
             ok, err_msg = send_email(
                 to_emails=[to],
-                subject=subject_base.format(num_cuenta),
-                body_text=body_base.format(num_cuenta),
+                subject=subject,
+                body_text=body_txt,
                 respetar_destinos_manuales=True,
                 servicio=svc,
                 tipo_tab=tab,

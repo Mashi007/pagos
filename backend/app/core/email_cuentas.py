@@ -14,6 +14,8 @@ NUM_CUENTAS = 4
 SERVICIO_COBROS = "cobros"
 SERVICIO_ESTADO_CUENTA = "estado_cuenta"
 SERVICIO_NOTIFICACIONES = "notificaciones"
+# Portal Finiquito (OTP): misma cuenta SMTP que estado de cuenta salvo que se asigne otro indice en el futuro.
+SERVICIO_FINIQUITO = "finiquito"
 
 # Índices 1-based para la UI (Cuenta 1, 2, 3, 4)
 ASIGNACION_DEFAULT = {
@@ -79,12 +81,14 @@ def migrar_config_v1_a_v2(data: Dict[str, Any]) -> Dict[str, Any]:
         "email_activo_notificaciones": data.get("email_activo_notificaciones", "true"),
         "email_activo_informe_pagos": data.get("email_activo_informe_pagos", "true"),
         "email_activo_estado_cuenta": data.get("email_activo_estado_cuenta", "true"),
+        "email_activo_finiquito": data.get("email_activo_finiquito", "true"),
         "email_activo_cobros": data.get("email_activo_cobros", "true"),
         "email_activo_campanas": data.get("email_activo_campanas", "true"),
         "email_activo_tickets": data.get("email_activo_tickets", "true"),
         "modo_pruebas_notificaciones": data.get("modo_pruebas_notificaciones", "false"),
         "modo_pruebas_informe_pagos": data.get("modo_pruebas_informe_pagos", "false"),
         "modo_pruebas_estado_cuenta": data.get("modo_pruebas_estado_cuenta", "false"),
+        "modo_pruebas_finiquito": data.get("modo_pruebas_finiquito", "false"),
         "modo_pruebas_cobros": data.get("modo_pruebas_cobros", "false"),
         "modo_pruebas_campanas": data.get("modo_pruebas_campanas", "false"),
         "modo_pruebas_tickets": data.get("modo_pruebas_tickets", "false"),
@@ -99,7 +103,7 @@ def obtener_indice_cuenta(servicio: Optional[str], tipo_tab: Optional[str], asig
     """
     if servicio == SERVICIO_COBROS:
         return int(asignacion.get("cobros", 1))
-    if servicio == SERVICIO_ESTADO_CUENTA:
+    if servicio in (SERVICIO_ESTADO_CUENTA, SERVICIO_FINIQUITO):
         return int(asignacion.get("estado_cuenta", 2))
     if servicio == SERVICIO_NOTIFICACIONES and tipo_tab:
         tab_map = asignacion.get("notificaciones_tab") or {}

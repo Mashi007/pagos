@@ -187,6 +187,12 @@ export function EmailCuentasConfig() {
     },
 
     {
+      key: 'email_activo_finiquito',
+      label: 'Finiquito (código OTP portal colaborador)',
+      cuenta: 2,
+    },
+
+    {
       key: 'email_activo_notificaciones',
       label: 'Notificaciones (plantillas a clientes)',
       cuenta: 3,
@@ -218,13 +224,37 @@ export function EmailCuentasConfig() {
 
         email_pruebas: data.email_pruebas,
 
+        emails_pruebas: data.emails_pruebas,
+
         email_activo: data.email_activo,
 
         email_activo_notificaciones: data.email_activo_notificaciones,
 
+        email_activo_informe_pagos: data.email_activo_informe_pagos,
+
         email_activo_estado_cuenta: data.email_activo_estado_cuenta,
 
+        email_activo_finiquito: data.email_activo_finiquito,
+
         email_activo_cobros: data.email_activo_cobros,
+
+        email_activo_campanas: data.email_activo_campanas,
+
+        email_activo_tickets: data.email_activo_tickets,
+
+        modo_pruebas_notificaciones: data.modo_pruebas_notificaciones,
+
+        modo_pruebas_informe_pagos: data.modo_pruebas_informe_pagos,
+
+        modo_pruebas_estado_cuenta: data.modo_pruebas_estado_cuenta,
+
+        modo_pruebas_finiquito: data.modo_pruebas_finiquito,
+
+        modo_pruebas_cobros: data.modo_pruebas_cobros,
+
+        modo_pruebas_campanas: data.modo_pruebas_campanas,
+
+        modo_pruebas_tickets: data.modo_pruebas_tickets,
 
         tickets_notify_emails: data.tickets_notify_emails,
       })
@@ -473,7 +503,40 @@ export function EmailCuentasConfig() {
               placeholder="ejemplo@correo.com"
               className="mt-1"
             />
-          </div>{' '}
+          </div>
+          <div className="space-y-2 border-t border-amber-200/80 pt-3">
+            <p className="text-xs font-medium text-amber-900/90">
+              Modo prueba: PDF de estado de cuenta (cuenta 2)
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Si activa esta opción, los envíos de estado de cuenta pueden ir al
+              correo de pruebas. El código OTP del portal Finiquito siempre se
+              envía al correo del colaborador registrado (no se redirige a
+              pruebas).
+            </p>
+            <label className="flex items-center justify-between gap-2 rounded border border-amber-100 bg-white/60 p-2">
+              <span className="text-sm">Estado de cuenta (PDF) → pruebas</span>
+              <input
+                type="checkbox"
+                checked={
+                  (data?.modo_pruebas_estado_cuenta ?? 'false') === 'true'
+                }
+                onChange={e =>
+                  setData(
+                    data
+                      ? {
+                          ...data,
+                          modo_pruebas_estado_cuenta: e.target.checked
+                            ? 'true'
+                            : 'false',
+                        }
+                      : data
+                  )
+                }
+                className="rounded border-gray-300"
+              />
+            </label>
+          </div>
           <div className="flex justify-end pt-2">
             <Button
               type="button"

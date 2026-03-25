@@ -69,6 +69,8 @@ export interface EmailCuentasResponse {
 
   email_activo_estado_cuenta?: string
 
+  email_activo_finiquito?: string
+
   email_activo_cobros?: string
 
   email_activo_informe_pagos?: string
@@ -82,6 +84,8 @@ export interface EmailCuentasResponse {
   modo_pruebas_informe_pagos?: string
 
   modo_pruebas_estado_cuenta?: string
+
+  modo_pruebas_finiquito?: string
 
   modo_pruebas_cobros?: string
 
@@ -118,9 +122,33 @@ export const emailCuentasApi = {
 
     email_activo_estado_cuenta?: string
 
+    email_activo_finiquito?: string
+
     email_activo_cobros?: string
 
+    email_activo_informe_pagos?: string
+
+    email_activo_campanas?: string
+
+    email_activo_tickets?: string
+
+    modo_pruebas_notificaciones?: string
+
+    modo_pruebas_informe_pagos?: string
+
+    modo_pruebas_estado_cuenta?: string
+
+    modo_pruebas_finiquito?: string
+
+    modo_pruebas_cobros?: string
+
+    modo_pruebas_campanas?: string
+
+    modo_pruebas_tickets?: string
+
     tickets_notify_emails?: string
+
+    emails_pruebas?: string[]
   }): Promise<{ message: string; version: number }> {
     return apiClient.put(`${BASE}/email/cuentas`, payload, { timeout: 60000 })
   },
@@ -143,7 +171,7 @@ export const emailCuentasApi = {
 export const SERVICIO_POR_CUENTA: Record<number, string> = {
   1: 'Cobros (formulario público de reporte de pago)',
 
-  2: 'Estado de cuenta (consulta por cédula + envío PDF)',
+  2: 'Estado de cuenta y Finiquito (OTP + PDF; misma cuenta SMTP)',
 
   3: 'Notificaciones (pestañas asignadas a esta cuenta)',
 

@@ -6,22 +6,35 @@ from __future__ import annotations
 import logging
 import random
 import string
+import time
 from datetime import datetime, timedelta
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.cobros_public_rate_limit import (
+    FINIQUITO_SOLICITAR_CODIGO_MAX,
+    check_rate_limit_finiquito_solicitar_codigo,
+    get_client_ip,
+)
 from app.core.database import get_db
 from app.core.deps import (
     get_finiquito_usuario_acceso,
     require_administrador,
 )
 from app.core.email import mask_email_for_log, send_email
-from app.core.email_config_holder import get_email_activo_servicio
+from app.core.email_cuentas import SERVICIO_FINIQUITO
+from app.core.email_config_holder import (
+    get_email_activo,
+    get_email_activo_servicio,
+    get_modo_pruebas_email,
+    get_smtp_config,
+    sync_from_db,
+)
 from app.core.security import create_access_token
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
@@ -52,6 +65,10 @@ from app.services.finiquito_db_schema import (
     finiquito_casos_has_contacto_para_siguientes,
     finiquito_has_area_trabajo_auditoria_table,
 )
+from app.services.finiquito_otp_metrics import (
+    finiquito_otp_bump,
+    finiquito_otp_snapshot,
+)
 from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
 logger = logging.getLogger(__name__)
@@ -62,6 +79,17 @@ ESTADOS_VALIDOS = frozenset(
     {"REVISION", "ACEPTADO", "RECHAZADO", "EN_PROCESO", "TERMINADO"}
 )
 CODIGO_EXPIRA_MINUTES = 120
+
+
+def _mask_smtp_user_for_log(user: str) -> str:
+    s = (user or "").strip()
+    if not s:
+        return "(vacío)"
+    if "@" in s:
+        return mask_email_for_log(s)
+    if len(s) <= 2:
+        return "**"
+    return f"{s[:2]}***"
 
 
 def _generar_codigo_6() -> str:
@@ -374,6 +402,7 @@ def finiquito_public_registro(body: FiniquitoRegistroRequest, db: Session = Depe
 
 @router.post("/public/solicitar-codigo", response_model=FiniquitoSolicitarCodigoResponse)
 def finiquito_public_solicitar_codigo(
+    request: Request,
     body: FiniquitoSolicitarCodigoRequest,
     db: Session = Depends(get_db),
 ):
@@ -381,6 +410,19 @@ def finiquito_public_solicitar_codigo(
     email = (body.email or "").lower().strip()
     if not cedula or not email:
         raise HTTPException(status_code=400, detail="Cedula y correo son obligatorios.")
+
+    ip = get_client_ip(request)
+    try:
+        check_rate_limit_finiquito_solicitar_codigo(ip)
+    except HTTPException as e:
+        if e.status_code == 429:
+            finiquito_otp_bump("rate_limit_429")
+            logger.info(
+                "finiquito solicitar-codigo: rate limit 429 (max %s por hora por IP)",
+                FINIQUITO_SOLICITAR_CODIGO_MAX,
+            )
+        raise
+    finiquito_otp_bump("solicitudes_recibidas")
 
     u = (
         db.query(FiniquitoUsuarioAcceso)
@@ -392,6 +434,11 @@ def finiquito_public_solicitar_codigo(
         .first()
     )
     if not u:
+        finiquito_otp_bump("usuario_no_encontrado")
+        logger.debug(
+            "finiquito solicitar-codigo: sin usuario activo cedula+email (respuesta generica al cliente). email_MASK=%s",
+            mask_email_for_log(email),
+        )
         return FiniquitoSolicitarCodigoResponse(
             ok=True,
             message="Si los datos son correctos, recibira un codigo en su correo.",
@@ -417,31 +464,63 @@ def finiquito_public_solicitar_codigo(
         "Si usted no solicito este codigo, ignore este mensaje."
     )
 
-    # Misma cuenta SMTP y flags que estado de cuenta publico: sin esto, modo pruebas
-    # redirige el OTP al correo de pruebas y el colaborador no recibe nada.
-    if not get_email_activo_servicio("estado_cuenta"):
+    # SMTP: servicio "finiquito" usa la misma cuenta que "estado_cuenta" (Cuenta 2 por defecto).
+    # respetar_destinos_manuales=True evita redirigir el OTP al correo de pruebas del modo pruebas.
+    sync_from_db()
+    master_on = get_email_activo()
+    finiquito_on = get_email_activo_servicio(SERVICIO_FINIQUITO)
+    modo_pruebas, emails_prueba = get_modo_pruebas_email(servicio=SERVICIO_FINIQUITO)
+    cfg_smtp = get_smtp_config(servicio=SERVICIO_FINIQUITO)
+    smtp_host = (cfg_smtp.get("smtp_host") or "").strip()
+    smtp_user = (cfg_smtp.get("smtp_user") or "").strip()
+    pwd_set = bool((cfg_smtp.get("smtp_password") or "").strip()) and (
+        cfg_smtp.get("smtp_password") or ""
+    ).strip() != "***"
+    logger.info(
+        "finiquito solicitar-codigo: diagnostico pre-envio finiquito_usuario_id=%s dest_MASK=%s "
+        "email_master_activo=%s email_servicio_finiquito=%s modo_pruebas_finiquito=%s "
+        "correos_prueba_configurados=%s smtp_host=%s smtp_user_MASK=%s smtp_password_configurada=%s",
+        u.id,
+        mask_email_for_log(email),
+        master_on,
+        finiquito_on,
+        modo_pruebas,
+        bool(emails_prueba),
+        smtp_host[:120] if smtp_host else "(vacío)",
+        _mask_smtp_user_for_log(smtp_user),
+        pwd_set,
+    )
+
+    if not finiquito_on:
         db.rollback()
+        finiquito_otp_bump("envio_bloqueado_config_email")
         logger.warning(
-            "finiquito solicitar-codigo: no enviado (email_activo master off o "
-            "servicio 'Estado de cuenta' desactivado en Configuracion > Email)."
+            "finiquito solicitar-codigo: no enviado email_master=%s email_finiquito_o_estado_cuenta=%s "
+            "(Configuracion > Email: interruptor general o Finiquito/Estado de cuenta desactivado).",
+            master_on,
+            finiquito_on,
         )
         return FiniquitoSolicitarCodigoResponse(
             ok=True,
             message="Si los datos son correctos, recibira un codigo en su correo.",
         )
 
+    t0 = time.perf_counter()
     ok_send, err_send = send_email(
         [email],
         asunto,
         cuerpo,
-        servicio="estado_cuenta",
+        servicio=SERVICIO_FINIQUITO,
         respetar_destinos_manuales=True,
     )
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
     if not ok_send:
         db.rollback()
+        finiquito_otp_bump("envio_smtp_fallo")
         logger.warning(
-            "finiquito solicitar-codigo: SMTP fallo para %s: %s",
+            "finiquito solicitar-codigo: SMTP fallo dest_MASK=%s duracion_ms=%.0f err=%s",
             mask_email_for_log(email),
+            elapsed_ms,
             err_send or "send_email devolvio False",
         )
         return FiniquitoSolicitarCodigoResponse(
@@ -450,14 +529,28 @@ def finiquito_public_solicitar_codigo(
         )
 
     db.commit()
+    finiquito_otp_bump("envio_smtp_ok")
     logger.info(
-        "finiquito solicitar-codigo: enviado ok dest=%s",
+        "finiquito solicitar-codigo: enviado ok finiquito_usuario_id=%s dest_MASK=%s duracion_ms=%.0f",
+        u.id,
         mask_email_for_log(email),
+        elapsed_ms,
     )
     return FiniquitoSolicitarCodigoResponse(
         ok=True,
         message="Si los datos son correctos, recibira un codigo en su correo.",
     )
+
+
+@router.get("/admin/otp-email-metricas")
+def finiquito_admin_otp_email_metricas(
+    _: UserResponse = Depends(require_administrador),
+):
+    """
+    Contadores en memoria desde el arranque del proceso (solicitudes OTP Finiquito).
+    Se reinician al reiniciar el servidor; con varios workers cada uno tiene su propio contador.
+    """
+    return finiquito_otp_snapshot()
 
 
 @router.post("/public/verificar-codigo", response_model=FiniquitoVerificarCodigoResponse)

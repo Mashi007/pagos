@@ -48,12 +48,14 @@ _email_config_stub: dict[str, Any] = {
     "email_activo_notificaciones": "true",
     "email_activo_informe_pagos": "true",
     "email_activo_estado_cuenta": "true",
+    "email_activo_finiquito": "true",
     "email_activo_cobros": "true",
     "email_activo_campanas": "true",
     "email_activo_tickets": "true",
     "modo_pruebas_notificaciones": "false",
     "modo_pruebas_informe_pagos": "false",
     "modo_pruebas_estado_cuenta": "false",
+    "modo_pruebas_finiquito": "false",
     "modo_pruebas_cobros": "false",
     "modo_pruebas_campanas": "false",
     "modo_pruebas_tickets": "false",
@@ -108,9 +110,9 @@ def _load_email_config_from_db(db: Session) -> None:
 _STUB_GLOBAL_KEYS = (
     "modo_pruebas", "email_pruebas", "emails_pruebas",
     "email_activo", "email_activo_notificaciones", "email_activo_informe_pagos",
-    "email_activo_estado_cuenta", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets",
+    "email_activo_estado_cuenta", "email_activo_finiquito", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets",
     "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta",
-    "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets",
+    "modo_pruebas_finiquito", "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets",
     "tickets_notify_emails",
 )
 
@@ -172,12 +174,14 @@ class EmailConfigUpdate(BaseModel):
     email_activo_notificaciones: Optional[str] = None
     email_activo_informe_pagos: Optional[str] = None
     email_activo_estado_cuenta: Optional[str] = None
+    email_activo_finiquito: Optional[str] = None
     email_activo_cobros: Optional[str] = None
     email_activo_campanas: Optional[str] = None
     email_activo_tickets: Optional[str] = None
     modo_pruebas_notificaciones: Optional[str] = None
     modo_pruebas_informe_pagos: Optional[str] = None
     modo_pruebas_estado_cuenta: Optional[str] = None
+    modo_pruebas_finiquito: Optional[str] = None
     modo_pruebas_cobros: Optional[str] = None
     modo_pruebas_campanas: Optional[str] = None
     modo_pruebas_tickets: Optional[str] = None

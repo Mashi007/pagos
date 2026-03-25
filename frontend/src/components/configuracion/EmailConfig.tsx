@@ -82,6 +82,8 @@ interface EmailConfigData {
 
   email_activo_estado_cuenta?: string
 
+  email_activo_finiquito?: string
+
   email_activo_cobros?: string
 
   email_activo_campanas?: string
@@ -95,6 +97,8 @@ interface EmailConfigData {
   modo_pruebas_informe_pagos?: string
 
   modo_pruebas_estado_cuenta?: string
+
+  modo_pruebas_finiquito?: string
 
   modo_pruebas_cobros?: string
 
@@ -360,6 +364,7 @@ export function EmailConfig() {
         'email_activo_notificaciones',
         'email_activo_informe_pagos',
         'email_activo_estado_cuenta',
+        'email_activo_finiquito',
         'email_activo_cobros',
         'email_activo_campanas',
         'email_activo_tickets',
@@ -373,6 +378,7 @@ export function EmailConfig() {
         'modo_pruebas_notificaciones',
         'modo_pruebas_informe_pagos',
         'modo_pruebas_estado_cuenta',
+        'modo_pruebas_finiquito',
         'modo_pruebas_cobros',
         'modo_pruebas_campanas',
         'modo_pruebas_tickets',
@@ -1101,6 +1107,12 @@ export function EmailConfig() {
                 },
 
                 {
+                  key: 'email_activo_finiquito' as const,
+                  label:
+                    'Finiquito (OTP portal; misma SMTP que estado de cuenta)',
+                },
+
+                {
                   key: 'email_activo_cobros' as const,
                   label: 'Cobros (recibos)',
                 },
@@ -1144,7 +1156,9 @@ export function EmailConfig() {
             <p className="text-xs text-gray-600">
               Para cada tipo de envío puedes elegir Producción (correos reales a
               clientes) o Pruebas (todos los correos de ese tipo van al Email de
-              Pruebas). Así puedes probar uno sin afectar al resto.
+              Pruebas). Así puedes probar uno sin afectar al resto. El OTP del
+              portal Finiquito no se redirige: siempre llega al correo del
+              colaborador.
             </p>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1162,6 +1176,12 @@ export function EmailConfig() {
                 {
                   key: 'modo_pruebas_estado_cuenta' as const,
                   label: 'Estado de cuenta (código y PDF)',
+                },
+
+                {
+                  key: 'modo_pruebas_finiquito' as const,
+                  label:
+                    'Finiquito (config almacenada; OTP portal no redirige)',
                 },
 
                 {

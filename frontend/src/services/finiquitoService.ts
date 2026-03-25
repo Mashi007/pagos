@@ -33,15 +33,44 @@ function createFiniquitoClient(): AxiosInstance {
 
 const finiquitoAxios = createFiniquitoClient()
 
-/** Axios no lanza en 4xx (validateStatus menor que 500); unificar error legible. */
+function detailToString(detail: unknown): string {
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((x: unknown) => {
+        if (typeof x === 'string') return x
+        if (x && typeof x === 'object' && 'msg' in x) {
+          const m = (x as { msg?: string }).msg
+          return typeof m === 'string' ? m : ''
+        }
+        return ''
+      })
+      .filter(Boolean)
+    if (parts.length) return parts.join('; ')
+  }
+  return ''
+}
+
+/** Error HTTP 4xx/5xx del flujo Finiquito (axios no lanza en 4xx con validateStatus). */
+export class FiniquitoHttpError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'FiniquitoHttpError'
+    this.status = status
+  }
+}
+
 function throwIfFiniquitoHttpError(status: number, data: unknown): void {
   if (status < 400) return
-  const d = data as { detail?: string; message?: string }
+  const d = data as { detail?: unknown; message?: string }
+  const fromDetail = detailToString(d?.detail)
   const msg =
-    (typeof d?.detail === 'string' && d.detail) ||
+    fromDetail ||
     (typeof d?.message === 'string' && d.message) ||
     'Solicitud no procesada'
-  throw new Error(msg)
+  throw new FiniquitoHttpError(msg, status)
 }
 
 export function setFiniquitoAccessToken(token: string | null): void {

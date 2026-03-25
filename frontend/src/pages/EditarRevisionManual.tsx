@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '../components/ui/select'
 
-import { Loader2, Save, X, ChevronLeft, Check } from 'lucide-react'
+import { Loader2, Save, X, ChevronLeft, Check, Trash2 } from 'lucide-react'
 
 import { toast } from 'sonner'
 
@@ -31,6 +31,32 @@ import { useConcesionariosActivos } from '../hooks/useConcesionarios'
 import { useAnalistasActivos } from '../hooks/useAnalistas'
 
 import { useModelosVehiculosActivos } from '../hooks/useModelosVehiculos'
+
+import { codigoEstadoCuotaParaUi } from '../utils/cuotaEstadoDisplay'
+
+/** Códigos que acepta PUT /revision-manual/cuotas/{id} (mayúsculas). */
+const OPCIONES_ESTADO_CUOTA_REVISION: { value: string; label: string }[] = [
+  { value: 'PENDIENTE', label: 'Pendiente' },
+  { value: 'PARCIAL', label: 'Parcial' },
+  { value: 'VENCIDO', label: 'Vencido' },
+  { value: 'MORA', label: 'Mora' },
+  { value: 'PAGADO', label: 'Pagado' },
+  { value: 'PAGO_ADELANTADO', label: 'Pago adelantado' },
+  { value: 'CANCELADA', label: 'Cancelada' },
+]
+
+function opcionesSelectCuotaRevision(estadoRaw: string | undefined) {
+  const codigo = codigoEstadoCuotaParaUi(estadoRaw)
+
+  if (codigo && !OPCIONES_ESTADO_CUOTA_REVISION.some(o => o.value === codigo)) {
+    return [
+      { value: codigo, label: `${codigo} (legacy)` },
+      ...OPCIONES_ESTADO_CUOTA_REVISION,
+    ]
+  }
+
+  return OPCIONES_ESTADO_CUOTA_REVISION
+}
 
 interface ClienteData {
   cliente_id: number
@@ -129,6 +155,9 @@ export function EditarRevisionManual() {
 
   const [cuotasData, setCuotasData] = useState<Partial<CuotaData>[]>([])
 
+  /** IDs pendientes de borrar en BD al guardar (parciales o guardar y cerrar). */
+  const [cuotasIdsAEliminar, setCuotasIdsAEliminar] = useState<number[]>([])
+
   const [guardandoParcial, setGuardandoParcial] = useState(false)
 
   const [guardandoFinal, setGuardandoFinal] = useState(false)
@@ -139,17 +168,37 @@ export function EditarRevisionManual() {
     cuotas: false,
   })
 
-  const { isLoading, error } = useQuery({
+  const {
+    data: detalleData,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['revision-editar', prestamoId],
 
     queryFn: async () => {
       if (!prestamoId) throw new Error('ID de préstamo requerido')
 
-      const data = await revisionManualService.getDetallePrestamoRevision(
-        parseInt(prestamoId)
-      )
+      const pid = parseInt(prestamoId, 10)
 
-      setClienteData(data.cliente)
+      let data = await revisionManualService.getDetallePrestamoRevision(pid)
+
+      const estRev = (data.revision?.estado_revision ?? 'pendiente')
+        .toString()
+        .toLowerCase()
+
+      if (estRev === 'pendiente') {
+        await revisionManualService.iniciarRevision(pid)
+        data = await revisionManualService.getDetallePrestamoRevision(pid)
+      }
+
+      const fn = data.cliente?.fecha_nacimiento
+      const fnNorm =
+        typeof fn === 'string' && fn.length >= 10 ? fn.slice(0, 10) : fn
+
+      setClienteData({
+        ...data.cliente,
+        fecha_nacimiento: fnNorm ?? null,
+      })
 
       setPrestamoData(data.prestamo)
 
@@ -161,9 +210,15 @@ export function EditarRevisionManual() {
     enabled: !!prestamoId,
   })
 
+  const estadoRevision = (detalleData?.revision?.estado_revision ?? 'pendiente')
+    .toString()
+    .toLowerCase()
+
+  const soloLectura = estadoRevision === 'revisado'
+
   // Estados de cliente desde BD (tabla estados_cliente)
 
-  const { opciones: opcionesBD } = useEstadosCliente()
+  const { opciones: opcionesBD } = useEstadosCliente({ alwaysFresh: true })
 
   const { data: concesionarios = [] } = useConcesionariosActivos()
 
@@ -200,9 +255,22 @@ export function EditarRevisionManual() {
   const handleGuardarParciales = async () => {
     if (!prestamoId) return
 
+    if (soloLectura) {
+      toast.info(
+        'Este préstamo está en solo lectura (revisión ya cerrada en el sistema).'
+      )
+
+      return
+    }
+
     // Validar si hay cambios
 
-    if (!cambios.cliente && !cambios.prestamo && !cambios.cuotas) {
+    if (
+      !cambios.cliente &&
+      !cambios.prestamo &&
+      !cambios.cuotas &&
+      cuotasIdsAEliminar.length === 0
+    ) {
       toast.info('ℹ️ No hay cambios para guardar')
 
       return
@@ -244,7 +312,8 @@ export function EditarRevisionManual() {
           try {
             await revisionManualService.editarCliente(
               clienteData.cliente_id,
-              clienteUpdate
+              clienteUpdate,
+              { prestamoId: parseInt(prestamoId, 10) }
             )
 
             savedSomething = true
@@ -363,7 +432,38 @@ export function EditarRevisionManual() {
         }
       }
 
-      // Guardar cuotas si hay cambios
+      // Eliminar cuotas marcadas (BD)
+
+      const pid = parseInt(prestamoId, 10)
+
+      let eliminacionesOk = true
+
+      if (cuotasIdsAEliminar.length > 0) {
+        for (const cuotaId of cuotasIdsAEliminar) {
+          try {
+            await revisionManualService.eliminarCuota(pid, cuotaId)
+
+            savedSomething = true
+          } catch (err: any) {
+            eliminacionesOk = false
+
+            errorOccurred = true
+
+            const errorMsg =
+              err?.response?.data?.detail ||
+              err?.message ||
+              'Error al eliminar cuota'
+
+            toast.error(`❌ Error al eliminar cuota: ${errorMsg}`)
+
+            console.error('Error eliminando cuota:', err)
+          }
+        }
+
+        if (eliminacionesOk) setCuotasIdsAEliminar([])
+      }
+
+      // Guardar cuotas si hay cambios en filas restantes
 
       if (cambios.cuotas) {
         for (const cuota of cuotasData) {
@@ -461,6 +561,14 @@ export function EditarRevisionManual() {
   const handleGuardarYCerrar = async () => {
     if (!prestamoId) return
 
+    if (soloLectura) {
+      toast.info(
+        'Este préstamo está en solo lectura (revisión ya cerrada en el sistema).'
+      )
+
+      return
+    }
+
     const confirmar = window.confirm(
       '⚠️ CONFIRMAR FINALIZACIÓN DE REVISIÓN\n\n' +
         '✓ Se guardarán todos los cambios pendientes\n' +
@@ -507,7 +615,8 @@ export function EditarRevisionManual() {
           try {
             await revisionManualService.editarCliente(
               clienteData.cliente_id,
-              clienteUpdate
+              clienteUpdate,
+              { prestamoId: parseInt(prestamoId, 10) }
             )
           } catch (err: any) {
             throw new Error(
@@ -610,6 +719,20 @@ export function EditarRevisionManual() {
         }
       }
 
+      const pidFinal = parseInt(prestamoId, 10)
+
+      for (const cuotaId of cuotasIdsAEliminar) {
+        try {
+          await revisionManualService.eliminarCuota(pidFinal, cuotaId)
+        } catch (err: any) {
+          throw new Error(
+            `Error al eliminar cuota: ${err?.response?.data?.detail || err?.message || 'Error desconocido'}`
+          )
+        }
+      }
+
+      setCuotasIdsAEliminar([])
+
       if (cambios.cuotas) {
         for (const cuota of cuotasData) {
           if (cuota.cuota_id) {
@@ -683,7 +806,7 @@ export function EditarRevisionManual() {
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
 
         setTimeout(() => {
-          navigate('/revision-manual', { state: { fromFinalize: true } })
+          navigate('/prestamos')
         }, 1500)
       } catch (err: any) {
         throw new Error(
@@ -701,10 +824,33 @@ export function EditarRevisionManual() {
     }
   }
 
+  const handleEliminarFilaCuota = (cuotaId: number | undefined) => {
+    if (!cuotaId) return
+
+    if (soloLectura) return
+
+    const ok = window.confirm(
+      'Esta cuota desaparecerá de la tabla. Al pulsar Guardar parciales o Guardar y cerrar se eliminará en la base de datos.'
+    )
+
+    if (!ok) return
+
+    setCuotasIdsAEliminar(prev => [...prev, cuotaId])
+
+    setCuotasData(prev => prev.filter(c => c.cuota_id !== cuotaId))
+
+    setCambios(c => ({ ...c, cuotas: true }))
+  }
+
   const handleCerrar = () => {
     // Si hay cambios sin guardar, advertir
 
-    if (cambios.cliente || cambios.prestamo || cambios.cuotas) {
+    if (
+      cambios.cliente ||
+      cambios.prestamo ||
+      cambios.cuotas ||
+      cuotasIdsAEliminar.length > 0
+    ) {
       const confirmar = window.confirm(
         '⚠️ Tienes cambios sin guardar.\n\n' +
           'Si cierras ahora, se perderán todos los cambios realizados.\n' +
@@ -779,7 +925,9 @@ export function EditarRevisionManual() {
             </h1>
 
             <p className="text-sm text-gray-600">
-              Edita los detalles del préstamo (cambios parciales permitidos)
+              {soloLectura
+                ? 'Solo lectura: la revisión de este préstamo ya fue cerrada.'
+                : 'Edita los detalles del préstamo (cambios parciales permitidos)'}
             </p>
           </div>
         </div>
@@ -788,7 +936,7 @@ export function EditarRevisionManual() {
           <Button
             variant="outline"
             onClick={handleGuardarParciales}
-            disabled={guardandoParcial || guardandoFinal}
+            disabled={soloLectura || guardandoParcial || guardandoFinal}
             className="gap-2"
             title="Guarda los cambios sin finalizar la revisión"
           >
@@ -799,7 +947,7 @@ export function EditarRevisionManual() {
           <Button
             className="gap-2 bg-green-600 text-white hover:bg-green-700"
             onClick={handleGuardarYCerrar}
-            disabled={guardandoParcial || guardandoFinal}
+            disabled={soloLectura || guardandoParcial || guardandoFinal}
             title="Guarda todos los cambios y finaliza la revisión"
           >
             {guardandoFinal ? (
@@ -812,834 +960,920 @@ export function EditarRevisionManual() {
         </div>
       </div>
 
+      {soloLectura && (
+        <div
+          className="-mx-6 border-y border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-950"
+          role="status"
+        >
+          <strong>Solo lectura.</strong> La revisión de este préstamo ya fue
+          cerrada; no se pueden guardar cambios ni eliminar cuotas.
+          {detalleData?.revision?.fecha_revision ? (
+            <span className="ml-2 text-amber-900">
+              Cierre:{' '}
+              {new Date(detalleData.revision.fecha_revision).toLocaleString()}
+            </span>
+          ) : null}
+          {detalleData?.revision?.usuario_revision_email ? (
+            <span className="ml-2">
+              Usuario: {detalleData.revision.usuario_revision_email}
+            </span>
+          ) : null}
+        </div>
+      )}
+
       {/* Secciones */}
 
-      <div className="grid gap-6">
-        {/* Cliente */}
+      <div className="relative">
+        {soloLectura ? (
+          <div
+            className="absolute inset-0 z-20 cursor-not-allowed rounded-lg bg-gray-100/70"
+            aria-hidden
+          />
+        ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              👤 Datos del Cliente
-            </CardTitle>
-          </CardHeader>
+        <div
+          className={
+            soloLectura
+              ? 'pointer-events-none grid select-none gap-6'
+              : 'grid gap-6'
+          }
+        >
+          {/* Cliente */}
 
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium">Nombre</label>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                👤 Datos del Cliente
+              </CardTitle>
+            </CardHeader>
 
-                <input
-                  type="text"
-                  value={clienteData.nombres || ''}
-                  onChange={e => {
-                    setClienteData({ ...clienteData, nombres: e.target.value })
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium">Nombre</label>
 
-                    setCambios({ ...cambios, cliente: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="Ingresa nombre"
-                />
-              </div>
+                  <input
+                    type="text"
+                    value={clienteData.nombres || ''}
+                    onChange={e => {
+                      setClienteData({
+                        ...clienteData,
+                        nombres: e.target.value,
+                      })
 
-              <div>
-                <label className="text-sm font-medium">Cédula</label>
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="Ingresa nombre"
+                  />
+                </div>
 
-                <input
-                  type="text"
-                  value={clienteData.cedula || ''}
-                  className="mt-1 w-full cursor-not-allowed rounded border bg-gray-100 px-3 py-2"
-                  disabled
-                />
-              </div>
+                <div>
+                  <label className="text-sm font-medium">Cédula</label>
 
-              <div>
-                <label className="text-sm font-medium">Teléfono</label>
+                  <input
+                    type="text"
+                    value={clienteData.cedula || ''}
+                    className="mt-1 w-full cursor-not-allowed rounded border bg-gray-100 px-3 py-2"
+                    disabled
+                  />
+                </div>
 
-                <input
-                  type="text"
-                  value={clienteData.telefono || ''}
-                  onChange={e => {
-                    setClienteData({ ...clienteData, telefono: e.target.value })
+                <div>
+                  <label className="text-sm font-medium">Teléfono</label>
 
-                    setCambios({ ...cambios, cliente: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="Ingresa teléfono"
-                />
-              </div>
+                  <input
+                    type="text"
+                    value={clienteData.telefono || ''}
+                    onChange={e => {
+                      setClienteData({
+                        ...clienteData,
+                        telefono: e.target.value,
+                      })
 
-              <div>
-                <label className="text-sm font-medium">Email</label>
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="Ingresa teléfono"
+                  />
+                </div>
 
-                <input
-                  type="email"
-                  value={clienteData.email || ''}
-                  onChange={e => {
-                    setClienteData({ ...clienteData, email: e.target.value })
+                <div>
+                  <label className="text-sm font-medium">Email</label>
 
-                    setCambios({ ...cambios, cliente: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="Ingresa email"
-                />
-              </div>
+                  <input
+                    type="email"
+                    value={clienteData.email || ''}
+                    onChange={e => {
+                      setClienteData({ ...clienteData, email: e.target.value })
 
-              <div className="sm:col-span-2">
-                <label className="text-sm font-medium">Dirección</label>
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="Ingresa email"
+                  />
+                </div>
 
-                <textarea
-                  value={clienteData.direccion || ''}
-                  onChange={e => {
-                    setClienteData({
-                      ...clienteData,
-                      direccion: e.target.value,
-                    })
+                <div className="sm:col-span-2">
+                  <label className="text-sm font-medium">Dirección</label>
 
-                    setCambios({ ...cambios, cliente: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="Ingresa dirección"
-                  rows={2}
-                />
-              </div>
+                  <textarea
+                    value={clienteData.direccion || ''}
+                    onChange={e => {
+                      setClienteData({
+                        ...clienteData,
+                        direccion: e.target.value,
+                      })
 
-              <div>
-                <label className="text-sm font-medium">Ocupación</label>
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="Ingresa dirección"
+                    rows={2}
+                  />
+                </div>
 
-                <input
-                  type="text"
-                  value={clienteData.ocupacion || ''}
-                  onChange={e => {
-                    setClienteData({
-                      ...clienteData,
-                      ocupacion: e.target.value,
-                    })
+                <div>
+                  <label className="text-sm font-medium">Ocupación</label>
 
-                    setCambios({ ...cambios, cliente: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="Ingresa ocupación"
-                />
-              </div>
+                  <input
+                    type="text"
+                    value={clienteData.ocupacion || ''}
+                    onChange={e => {
+                      setClienteData({
+                        ...clienteData,
+                        ocupacion: e.target.value,
+                      })
 
-              <div>
-                <label className="text-sm font-medium">Estado</label>
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="Ingresa ocupación"
+                  />
+                </div>
 
-                <select
-                  value={clienteData.estado || ''}
-                  onChange={e => {
-                    setClienteData({ ...clienteData, estado: e.target.value })
+                <div>
+                  <label className="text-sm font-medium">Estado</label>
 
-                    setCambios({ ...cambios, cliente: true })
-                  }}
-                  className="mt-1 w-full rounded border bg-white px-3 py-2"
-                >
-                  <option value="">Seleccionar estado</option>
+                  <select
+                    value={clienteData.estado || ''}
+                    onChange={e => {
+                      setClienteData({ ...clienteData, estado: e.target.value })
 
-                  {opcionesEstado.map(est => (
-                    <option key={est.value} value={est.value}>
-                      {est.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    className="mt-1 w-full rounded border bg-white px-3 py-2"
+                  >
+                    <option value="">Seleccionar estado</option>
 
-              <div>
-                <label className="text-sm font-medium">Fecha Nacimiento</label>
-
-                <input
-                  type="date"
-                  value={clienteData.fecha_nacimiento || ''}
-                  onChange={e => {
-                    setClienteData({
-                      ...clienteData,
-                      fecha_nacimiento: e.target.value || null,
-                    })
-
-                    setCambios({ ...cambios, cliente: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-sm font-medium">Notas</label>
-
-                <textarea
-                  value={clienteData.notas || ''}
-                  onChange={e => {
-                    setClienteData({ ...clienteData, notas: e.target.value })
-
-                    setCambios({ ...cambios, cliente: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="Notas del cliente"
-                  rows={2}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Préstamo */}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              📋 Datos del Préstamo
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium">
-                  Total Financiamiento
-                </label>
-
-                <input
-                  type="number"
-                  step="0.01"
-                  value={prestamoData.total_financiamiento || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      total_financiamiento: parseFloat(e.target.value) || 0,
-                    })
-
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Número de Cuotas</label>
-
-                <input
-                  type="number"
-                  value={prestamoData.numero_cuotas || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      numero_cuotas: parseInt(e.target.value) || 0,
-                    })
-
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  disabled={prestamoData.estado === 'LIQUIDADO'}
-                  title={
-                    prestamoData.estado === 'LIQUIDADO'
-                      ? 'No se puede modificar el plazo en préstamos liquidados'
-                      : undefined
-                  }
-                  className="mt-1 w-full rounded border px-3 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
-                  placeholder="0"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">
-                  Tasa de Interés (%)
-                </label>
-
-                <input
-                  type="number"
-                  step="0.01"
-                  value={prestamoData.tasa_interes || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      tasa_interes: parseFloat(e.target.value) || 0,
-                    })
-
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Producto</label>
-
-                <Select
-                  value={prestamoData.producto || '-'}
-                  onValueChange={v => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      producto: v === '-' ? '' : v,
-                    })
-
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                >
-                  <SelectTrigger className="mt-1 w-full">
-                    <SelectValue placeholder="-" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="-">-</SelectItem>
-
-                    {prestamoData.producto &&
-                      !modelosVehiculos.some(
-                        (m: any) => m.modelo === prestamoData.producto
-                      ) && (
-                        <SelectItem value={prestamoData.producto}>
-                          {prestamoData.producto}
-                        </SelectItem>
-                      )}
-
-                    {modelosVehiculos.map((m: any) => (
-                      <SelectItem key={m.id} value={m.modelo}>
-                        {m.modelo}
-                      </SelectItem>
+                    {opcionesEstado.map(est => (
+                      <option key={est.value} value={est.value}>
+                        {est.label}
+                      </option>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">
+                    Fecha Nacimiento
+                  </label>
+
+                  <input
+                    type="date"
+                    value={clienteData.fecha_nacimiento || ''}
+                    onChange={e => {
+                      setClienteData({
+                        ...clienteData,
+                        fecha_nacimiento: e.target.value || null,
+                      })
+
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-sm font-medium">Notas</label>
+
+                  <textarea
+                    value={clienteData.notas || ''}
+                    onChange={e => {
+                      setClienteData({ ...clienteData, notas: e.target.value })
+
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="Notas del cliente"
+                    rows={2}
+                  />
+                </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <div>
-                <label className="text-sm font-medium">Cédula (préstamo)</label>
+          {/* Préstamo */}
 
-                <input
-                  type="text"
-                  value={prestamoData.cedula || ''}
-                  onChange={e => {
-                    setPrestamoData({ ...prestamoData, cedula: e.target.value })
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                📋 Datos del Préstamo
+              </CardTitle>
+            </CardHeader>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="Cédula"
-                />
-              </div>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium">
+                    Total Financiamiento
+                  </label>
 
-              <div>
-                <label className="text-sm font-medium">
-                  Nombres (préstamo)
-                </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={prestamoData.total_financiamiento || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        total_financiamiento: parseFloat(e.target.value) || 0,
+                      })
 
-                <input
-                  type="text"
-                  value={prestamoData.nombres || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      nombres: e.target.value,
-                    })
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="0.00"
+                  />
+                </div>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="Nombres"
-                />
-              </div>
+                <div>
+                  <label className="text-sm font-medium">
+                    Número de Cuotas
+                  </label>
 
-              <div>
-                <label className="text-sm font-medium">
-                  Fecha Requerimiento
-                </label>
+                  <input
+                    type="number"
+                    value={prestamoData.numero_cuotas || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        numero_cuotas: parseInt(e.target.value) || 0,
+                      })
 
-                <input
-                  type="date"
-                  value={prestamoData.fecha_requerimiento || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      fecha_requerimiento: e.target.value || null,
-                    })
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    disabled={prestamoData.estado === 'LIQUIDADO'}
+                    title={
+                      prestamoData.estado === 'LIQUIDADO'
+                        ? 'No se puede modificar el plazo en préstamos liquidados'
+                        : undefined
+                    }
+                    className="mt-1 w-full rounded border px-3 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+                    placeholder="0"
+                  />
+                </div>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                />
-              </div>
+                <div>
+                  <label className="text-sm font-medium">
+                    Tasa de Interés (%)
+                  </label>
 
-              <div>
-                <label className="text-sm font-medium">Modalidad Pago</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={prestamoData.tasa_interes || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        tasa_interes: parseFloat(e.target.value) || 0,
+                      })
 
-                <input
-                  type="text"
-                  value={prestamoData.modalidad_pago || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      modalidad_pago: e.target.value,
-                    })
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="0.00"
+                  />
+                </div>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="MENSUAL, QUINCENAL, etc."
-                />
-              </div>
+                <div>
+                  <label className="text-sm font-medium">Producto</label>
 
-              <div>
-                <label className="text-sm font-medium">Cuota Período</label>
+                  <Select
+                    value={prestamoData.producto || '-'}
+                    onValueChange={v => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        producto: v === '-' ? '' : v,
+                      })
 
-                <input
-                  type="number"
-                  step="0.01"
-                  value={prestamoData.cuota_periodo ?? ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      cuota_periodo: parseFloat(e.target.value) || 0,
-                    })
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 w-full">
+                      <SelectValue placeholder="-" />
+                    </SelectTrigger>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="0.00"
-                />
-              </div>
+                    <SelectContent>
+                      <SelectItem value="-">-</SelectItem>
 
-              <div>
-                <label className="text-sm font-medium">
-                  Fecha Base Cálculo
-                </label>
+                      {prestamoData.producto &&
+                        !modelosVehiculos.some(
+                          (m: any) => m.modelo === prestamoData.producto
+                        ) && (
+                          <SelectItem value={prestamoData.producto}>
+                            {prestamoData.producto}
+                          </SelectItem>
+                        )}
 
-                <input
-                  type="date"
-                  value={prestamoData.fecha_base_calculo || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      fecha_base_calculo: e.target.value || null,
-                    })
-
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Fecha Aprobación</label>
-
-                <input
-                  type="date"
-                  value={prestamoData.fecha_aprobacion || ''}
-                  min={prestamoData.fecha_requerimiento || undefined}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      fecha_aprobacion: e.target.value || null,
-                    })
-
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  title={
-                    prestamoData.fecha_requerimiento
-                      ? 'Debe ser igual o posterior a la fecha de requerimiento'
-                      : undefined
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Estado Préstamo</label>
-
-                <input
-                  type="text"
-                  value={prestamoData.estado || ''}
-                  onChange={e => {
-                    setPrestamoData({ ...prestamoData, estado: e.target.value })
-
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="DRAFT, APROBADO, RECHAZADO, etc."
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Concesionario</label>
-
-                <Select
-                  value={prestamoData.concesionario || '-'}
-                  onValueChange={v => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      concesionario: v === '-' ? '' : v,
-                    })
-
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                >
-                  <SelectTrigger className="mt-1 w-full">
-                    <SelectValue placeholder="-" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="-">-</SelectItem>
-
-                    {prestamoData.concesionario &&
-                      !concesionarios.some(
-                        (c: any) => c.nombre === prestamoData.concesionario
-                      ) && (
-                        <SelectItem value={prestamoData.concesionario}>
-                          {prestamoData.concesionario}
+                      {modelosVehiculos.map((m: any) => (
+                        <SelectItem key={m.id} value={m.modelo}>
+                          {m.modelo}
                         </SelectItem>
-                      )}
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                    {concesionarios.map((c: any) => (
-                      <SelectItem key={c.id} value={c.nombre}>
-                        {c.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div>
+                  <label className="text-sm font-medium">
+                    Cédula (préstamo)
+                  </label>
 
-              <div>
-                <label className="text-sm font-medium">Analista</label>
+                  <input
+                    type="text"
+                    value={prestamoData.cedula || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        cedula: e.target.value,
+                      })
 
-                <Select
-                  value={prestamoData.analista || '-'}
-                  onValueChange={v => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      analista: v === '-' ? '' : v,
-                    })
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="Cédula"
+                  />
+                </div>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                >
-                  <SelectTrigger className="mt-1 w-full">
-                    <SelectValue placeholder="-" />
-                  </SelectTrigger>
+                <div>
+                  <label className="text-sm font-medium">
+                    Nombres (préstamo)
+                  </label>
 
-                  <SelectContent>
-                    <SelectItem value="-">-</SelectItem>
+                  <input
+                    type="text"
+                    value={prestamoData.nombres || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        nombres: e.target.value,
+                      })
 
-                    {prestamoData.analista &&
-                      !analistas.some(
-                        (a: any) => a.nombre === prestamoData.analista
-                      ) && (
-                        <SelectItem value={prestamoData.analista}>
-                          {prestamoData.analista}
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="Nombres"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">
+                    Fecha Requerimiento
+                  </label>
+
+                  <input
+                    type="date"
+                    value={prestamoData.fecha_requerimiento || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        fecha_requerimiento: e.target.value || null,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Modalidad Pago</label>
+
+                  <input
+                    type="text"
+                    value={prestamoData.modalidad_pago || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        modalidad_pago: e.target.value,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="MENSUAL, QUINCENAL, etc."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Cuota Período</label>
+
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={prestamoData.cuota_periodo ?? ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        cuota_periodo: parseFloat(e.target.value) || 0,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">
+                    Fecha Base Cálculo
+                  </label>
+
+                  <input
+                    type="date"
+                    value={prestamoData.fecha_base_calculo || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        fecha_base_calculo: e.target.value || null,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">
+                    Fecha Aprobación
+                  </label>
+
+                  <input
+                    type="date"
+                    value={prestamoData.fecha_aprobacion || ''}
+                    min={prestamoData.fecha_requerimiento || undefined}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        fecha_aprobacion: e.target.value || null,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    title={
+                      prestamoData.fecha_requerimiento
+                        ? 'Debe ser igual o posterior a la fecha de requerimiento'
+                        : undefined
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Estado Préstamo</label>
+
+                  <input
+                    type="text"
+                    value={prestamoData.estado || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        estado: e.target.value,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="DRAFT, APROBADO, RECHAZADO, etc."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Concesionario</label>
+
+                  <Select
+                    value={prestamoData.concesionario || '-'}
+                    onValueChange={v => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        concesionario: v === '-' ? '' : v,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 w-full">
+                      <SelectValue placeholder="-" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      <SelectItem value="-">-</SelectItem>
+
+                      {prestamoData.concesionario &&
+                        !concesionarios.some(
+                          (c: any) => c.nombre === prestamoData.concesionario
+                        ) && (
+                          <SelectItem value={prestamoData.concesionario}>
+                            {prestamoData.concesionario}
+                          </SelectItem>
+                        )}
+
+                      {concesionarios.map((c: any) => (
+                        <SelectItem key={c.id} value={c.nombre}>
+                          {c.nombre}
                         </SelectItem>
-                      )}
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                    {analistas.map((a: any) => (
-                      <SelectItem key={a.id} value={a.nombre}>
-                        {a.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div>
+                  <label className="text-sm font-medium">Analista</label>
 
-              <div>
-                <label className="text-sm font-medium">Modelo Vehículo</label>
+                  <Select
+                    value={prestamoData.analista || '-'}
+                    onValueChange={v => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        analista: v === '-' ? '' : v,
+                      })
 
-                <Select
-                  value={prestamoData.modelo_vehiculo || '-'}
-                  onValueChange={v => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      modelo_vehiculo: v === '-' ? '' : v,
-                    })
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 w-full">
+                      <SelectValue placeholder="-" />
+                    </SelectTrigger>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                >
-                  <SelectTrigger className="mt-1 w-full">
-                    <SelectValue placeholder="-" />
-                  </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="-">-</SelectItem>
 
-                  <SelectContent>
-                    <SelectItem value="-">-</SelectItem>
+                      {prestamoData.analista &&
+                        !analistas.some(
+                          (a: any) => a.nombre === prestamoData.analista
+                        ) && (
+                          <SelectItem value={prestamoData.analista}>
+                            {prestamoData.analista}
+                          </SelectItem>
+                        )}
 
-                    {prestamoData.modelo_vehiculo &&
-                      !modelosVehiculos.some(
-                        (m: any) => m.modelo === prestamoData.modelo_vehiculo
-                      ) && (
-                        <SelectItem value={prestamoData.modelo_vehiculo}>
-                          {prestamoData.modelo_vehiculo}
+                      {analistas.map((a: any) => (
+                        <SelectItem key={a.id} value={a.nombre}>
+                          {a.nombre}
                         </SelectItem>
-                      )}
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                    {modelosVehiculos.map((m: any) => (
-                      <SelectItem key={m.id} value={m.modelo}>
-                        {m.modelo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div>
+                  <label className="text-sm font-medium">Modelo Vehículo</label>
+
+                  <Select
+                    value={prestamoData.modelo_vehiculo || '-'}
+                    onValueChange={v => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        modelo_vehiculo: v === '-' ? '' : v,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 w-full">
+                      <SelectValue placeholder="-" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      <SelectItem value="-">-</SelectItem>
+
+                      {prestamoData.modelo_vehiculo &&
+                        !modelosVehiculos.some(
+                          (m: any) => m.modelo === prestamoData.modelo_vehiculo
+                        ) && (
+                          <SelectItem value={prestamoData.modelo_vehiculo}>
+                            {prestamoData.modelo_vehiculo}
+                          </SelectItem>
+                        )}
+
+                      {modelosVehiculos.map((m: any) => (
+                        <SelectItem key={m.id} value={m.modelo}>
+                          {m.modelo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Valor Activo</label>
+
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={prestamoData.valor_activo ?? ''}
+                    onChange={e => {
+                      const v = e.target.value
+
+                      setPrestamoData({
+                        ...prestamoData,
+                        valor_activo: v === '' ? null : parseFloat(v) || 0,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">
+                    Usuario Proponente
+                  </label>
+
+                  <input
+                    type="text"
+                    value={prestamoData.usuario_proponente || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        usuario_proponente: e.target.value,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">
+                    Usuario Aprobador
+                  </label>
+
+                  <input
+                    type="text"
+                    value={prestamoData.usuario_aprobador || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        usuario_aprobador: e.target.value,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-sm font-medium">Observaciones</label>
+
+                  <textarea
+                    value={prestamoData.observaciones || ''}
+                    onChange={e => {
+                      setPrestamoData({
+                        ...prestamoData,
+                        observaciones: e.target.value,
+                      })
+
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    placeholder="Ingresa observaciones"
+                    rows={2}
+                  />
+                </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <div>
-                <label className="text-sm font-medium">Valor Activo</label>
+          {/* Cuotas */}
 
-                <input
-                  type="number"
-                  step="0.01"
-                  value={prestamoData.valor_activo ?? ''}
-                  onChange={e => {
-                    const v = e.target.value
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                💳 Cuotas/Pagos
+              </CardTitle>
+            </CardHeader>
 
-                    setPrestamoData({
-                      ...prestamoData,
-                      valor_activo: v === '' ? null : parseFloat(v) || 0,
-                    })
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Cuota</th>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="0.00"
-                />
-              </div>
+                      <th className="px-4 py-2 text-right">Monto</th>
 
-              <div>
-                <label className="text-sm font-medium">
-                  Usuario Proponente
-                </label>
+                      <th className="px-4 py-2 text-left">Vencimiento</th>
 
-                <input
-                  type="text"
-                  value={prestamoData.usuario_proponente || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      usuario_proponente: e.target.value,
-                    })
+                      <th className="px-4 py-2 text-left">Fecha Pago</th>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                />
-              </div>
+                      <th className="px-4 py-2 text-right">Pagado</th>
 
-              <div>
-                <label className="text-sm font-medium">Usuario Aprobador</label>
+                      <th className="px-4 py-2 text-left">Estado</th>
 
-                <input
-                  type="text"
-                  value={prestamoData.usuario_aprobador || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      usuario_aprobador: e.target.value,
-                    })
+                      <th className="px-4 py-2 text-left">Observaciones</th>
 
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-sm font-medium">Observaciones</label>
-
-                <textarea
-                  value={prestamoData.observaciones || ''}
-                  onChange={e => {
-                    setPrestamoData({
-                      ...prestamoData,
-                      observaciones: e.target.value,
-                    })
-
-                    setCambios({ ...cambios, prestamo: true })
-                  }}
-                  className="mt-1 w-full rounded border px-3 py-2"
-                  placeholder="Ingresa observaciones"
-                  rows={2}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Cuotas */}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              💳 Cuotas/Pagos
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left">Cuota</th>
-
-                    <th className="px-4 py-2 text-right">Monto</th>
-
-                    <th className="px-4 py-2 text-left">Vencimiento</th>
-
-                    <th className="px-4 py-2 text-left">Fecha Pago</th>
-
-                    <th className="px-4 py-2 text-right">Pagado</th>
-
-                    <th className="px-4 py-2 text-left">Estado</th>
-
-                    <th className="px-4 py-2 text-left">Observaciones</th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y">
-                  {cuotasData.map((cuota, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-medium">
-                        {cuota.numero_cuota}
-                      </td>
-
-                      <td className="px-4 py-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={cuota.monto ?? ''}
-                          onChange={e => {
-                            const newCuotas = [...cuotasData]
-
-                            newCuotas[idx] = {
-                              ...cuota,
-                              monto: parseFloat(e.target.value) || 0,
-                            }
-
-                            setCuotasData(newCuotas)
-
-                            setCambios({ ...cambios, cuotas: true })
-                          }}
-                          className="w-20 rounded border px-2 py-1 text-right text-sm"
-                        />
-                      </td>
-
-                      <td className="px-4 py-2">
-                        <input
-                          type="date"
-                          value={
-                            cuota.fecha_vencimiento
-                              ? cuota.fecha_vencimiento.split('T')[0]
-                              : ''
-                          }
-                          onChange={e => {
-                            const newCuotas = [...cuotasData]
-
-                            newCuotas[idx] = {
-                              ...cuota,
-                              fecha_vencimiento: e.target.value
-                                ? `${e.target.value}T00:00:00`
-                                : null,
-                            }
-
-                            setCuotasData(newCuotas)
-
-                            setCambios({ ...cambios, cuotas: true })
-                          }}
-                          className="w-full rounded border px-2 py-1 text-sm"
-                        />
-                      </td>
-
-                      <td className="px-4 py-2">
-                        <input
-                          type="date"
-                          value={
-                            cuota.fecha_pago
-                              ? cuota.fecha_pago.split('T')[0]
-                              : ''
-                          }
-                          onChange={e => {
-                            const newCuotas = [...cuotasData]
-
-                            newCuotas[idx] = {
-                              ...cuota,
-                              fecha_pago: e.target.value
-                                ? `${e.target.value}T00:00:00`
-                                : null,
-                            }
-
-                            setCuotasData(newCuotas)
-
-                            setCambios({ ...cambios, cuotas: true })
-                          }}
-                          className="w-full rounded border px-2 py-1 text-sm"
-                        />
-                      </td>
-
-                      <td className="px-4 py-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={cuota.total_pagado || ''}
-                          onChange={e => {
-                            const newCuotas = [...cuotasData]
-
-                            newCuotas[idx] = {
-                              ...cuota,
-                              total_pagado: parseFloat(e.target.value) || 0,
-                            }
-
-                            setCuotasData(newCuotas)
-
-                            setCambios({ ...cambios, cuotas: true })
-                          }}
-                          className="w-20 rounded border px-2 py-1 text-sm"
-                          placeholder="0.00"
-                        />
-                      </td>
-
-                      <td className="px-4 py-2">
-                        <select
-                          value={cuota.estado || 'pendiente'}
-                          onChange={e => {
-                            const newCuotas = [...cuotasData]
-
-                            newCuotas[idx] = {
-                              ...cuota,
-                              estado: e.target.value,
-                            }
-
-                            setCuotasData(newCuotas)
-
-                            setCambios({ ...cambios, cuotas: true })
-                          }}
-                          className="rounded border px-2 py-1 text-sm"
-                        >
-                          <option value="pendiente">Pendiente</option>
-
-                          <option value="pagado">Pagado</option>
-
-                          <option value="conciliado">Conciliado</option>
-                        </select>
-                      </td>
-
-                      <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          value={cuota.observaciones || ''}
-                          onChange={e => {
-                            const newCuotas = [...cuotasData]
-
-                            newCuotas[idx] = {
-                              ...cuota,
-                              observaciones: e.target.value,
-                            }
-
-                            setCuotasData(newCuotas)
-
-                            setCambios({ ...cambios, cuotas: true })
-                          }}
-                          className="w-32 rounded border px-2 py-1 text-sm"
-                          placeholder="Obs."
-                        />
-                      </td>
+                      <th
+                        className="w-12 px-2 py-2 text-center"
+                        aria-label="Eliminar"
+                      >
+                        {' '}
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  </thead>
+
+                  <tbody className="divide-y">
+                    {cuotasData.map((cuota, idx) => (
+                      <tr
+                        key={cuota.cuota_id ?? `fila-${idx}`}
+                        className="hover:bg-gray-50"
+                      >
+                        <td className="px-4 py-2 font-medium">
+                          {cuota.numero_cuota}
+                        </td>
+
+                        <td className="px-4 py-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={cuota.monto ?? ''}
+                            onChange={e => {
+                              const newCuotas = [...cuotasData]
+
+                              newCuotas[idx] = {
+                                ...cuota,
+                                monto: parseFloat(e.target.value) || 0,
+                              }
+
+                              setCuotasData(newCuotas)
+
+                              setCambios({ ...cambios, cuotas: true })
+                            }}
+                            className="w-20 rounded border px-2 py-1 text-right text-sm"
+                          />
+                        </td>
+
+                        <td className="px-4 py-2">
+                          <input
+                            type="date"
+                            value={
+                              cuota.fecha_vencimiento
+                                ? cuota.fecha_vencimiento.split('T')[0]
+                                : ''
+                            }
+                            onChange={e => {
+                              const newCuotas = [...cuotasData]
+
+                              newCuotas[idx] = {
+                                ...cuota,
+                                fecha_vencimiento: e.target.value
+                                  ? `${e.target.value}T00:00:00`
+                                  : null,
+                              }
+
+                              setCuotasData(newCuotas)
+
+                              setCambios({ ...cambios, cuotas: true })
+                            }}
+                            className="w-full rounded border px-2 py-1 text-sm"
+                          />
+                        </td>
+
+                        <td className="px-4 py-2">
+                          <input
+                            type="date"
+                            value={
+                              cuota.fecha_pago
+                                ? cuota.fecha_pago.split('T')[0]
+                                : ''
+                            }
+                            onChange={e => {
+                              const newCuotas = [...cuotasData]
+
+                              newCuotas[idx] = {
+                                ...cuota,
+                                fecha_pago: e.target.value
+                                  ? `${e.target.value}T00:00:00`
+                                  : null,
+                              }
+
+                              setCuotasData(newCuotas)
+
+                              setCambios({ ...cambios, cuotas: true })
+                            }}
+                            className="w-full rounded border px-2 py-1 text-sm"
+                          />
+                        </td>
+
+                        <td className="px-4 py-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={cuota.total_pagado || ''}
+                            onChange={e => {
+                              const newCuotas = [...cuotasData]
+
+                              newCuotas[idx] = {
+                                ...cuota,
+                                total_pagado: parseFloat(e.target.value) || 0,
+                              }
+
+                              setCuotasData(newCuotas)
+
+                              setCambios({ ...cambios, cuotas: true })
+                            }}
+                            className="w-20 rounded border px-2 py-1 text-sm"
+                            placeholder="0.00"
+                          />
+                        </td>
+
+                        <td className="px-4 py-2">
+                          <select
+                            value={codigoEstadoCuotaParaUi(cuota.estado)}
+                            onChange={e => {
+                              const newCuotas = [...cuotasData]
+
+                              newCuotas[idx] = {
+                                ...cuota,
+                                estado: e.target.value,
+                              }
+
+                              setCuotasData(newCuotas)
+
+                              setCambios({ ...cambios, cuotas: true })
+                            }}
+                            className="rounded border px-2 py-1 text-sm"
+                          >
+                            {opcionesSelectCuotaRevision(cuota.estado).map(
+                              opt => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </td>
+
+                        <td className="px-4 py-2">
+                          <input
+                            type="text"
+                            value={cuota.observaciones || ''}
+                            onChange={e => {
+                              const newCuotas = [...cuotasData]
+
+                              newCuotas[idx] = {
+                                ...cuota,
+                                observaciones: e.target.value,
+                              }
+
+                              setCuotasData(newCuotas)
+
+                              setCambios({ ...cambios, cuotas: true })
+                            }}
+                            className="w-32 rounded border px-2 py-1 text-sm"
+                            placeholder="Obs."
+                          />
+                        </td>
+
+                        <td className="px-2 py-2 text-center align-middle">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-800"
+                            title="Eliminar cuota (se confirma en BD al guardar)"
+                            onClick={() =>
+                              handleEliminarFilaCuota(cuota.cuota_id)
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden />
+                            <span className="sr-only">Eliminar cuota</span>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Botones inferiores sticky */}
@@ -1659,7 +1893,7 @@ export function EditarRevisionManual() {
         <Button
           className="gap-2 bg-green-600 text-white hover:bg-green-700"
           onClick={handleGuardarYCerrar}
-          disabled={guardandoParcial || guardandoFinal}
+          disabled={soloLectura || guardandoParcial || guardandoFinal}
           title="Guarda todos los cambios y finaliza la revisión"
         >
           {guardandoFinal ? (

@@ -27,13 +27,17 @@ export interface EstadoClienteOption {
 
  */
 
-export function useEstadosCliente() {
+export function useEstadosCliente(options?: { alwaysFresh?: boolean }) {
+  const alwaysFresh = options?.alwaysFresh === true
+
   const { data, isLoading } = useQuery({
     queryKey: ['estados-cliente'],
 
     queryFn: () => clienteService.getEstadosCliente(),
 
-    staleTime: 10 * 60 * 1000, // 10 min - los estados cambian poco
+    staleTime: alwaysFresh ? 0 : 10 * 60 * 1000,
+
+    refetchOnMount: alwaysFresh ? 'always' : true,
   })
 
   const opciones: EstadoClienteOption[] = data?.estados ?? []

@@ -59,7 +59,7 @@ class RevisionManualService {
 
    */
 
-  async getPreslamosRevision(
+  async getPrestamosRevision(
     filtro?: 'todos' | 'pendientes' | 'revisados' | 'revisando',
 
     page = 1,
@@ -168,10 +168,22 @@ class RevisionManualService {
 
    */
 
-  async editarCliente(clienteId: number, datos: any): Promise<any> {
-    return await apiClient.put(`${this.baseUrl}/clientes/${clienteId}`, datos, {
-      headers: { 'Content-Type': 'application/json' },
-    })
+  async editarCliente(
+    clienteId: number,
+    datos: any,
+    opts?: { prestamoId: number }
+  ): Promise<any> {
+    const q =
+      opts?.prestamoId != null
+        ? `?prestamo_id=${encodeURIComponent(String(opts.prestamoId))}`
+        : ''
+    return await apiClient.put(
+      `${this.baseUrl}/clientes/${clienteId}${q}`,
+      datos,
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 
   /**
@@ -316,6 +328,12 @@ class RevisionManualService {
     return await apiClient.put(`${this.baseUrl}/cuotas/${cuotaId}`, datos, {
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+
+  async eliminarCuota(prestamoId: number, cuotaId: number): Promise<any> {
+    return await apiClient.delete(
+      `${this.baseUrl}/prestamos/${prestamoId}/cuotas/${cuotaId}`
+    )
   }
 }
 

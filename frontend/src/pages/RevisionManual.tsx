@@ -180,7 +180,7 @@ export function RevisionManual() {
     queryKey: ['revision-manual-prestamos', filtro, page, cedulaBuscar],
 
     queryFn: () =>
-      revisionManualService.getPreslamosRevision(
+      revisionManualService.getPrestamosRevision(
         filtro,
         page,
         PER_PAGE,

@@ -16,7 +16,13 @@ from typing import Any, List, Optional, Tuple
 
 from app.core.config import settings
 from app.core.email_phases import FASE_CONFIG_CARGA, log_phase
-from app.core.email_cuentas import migrar_config_v1_a_v2, obtener_indice_cuenta, NUM_CUENTAS
+from app.core.email_cuentas import (
+    migrar_config_v1_a_v2,
+    obtener_indice_cuenta,
+    NUM_CUENTAS,
+    SERVICIO_ESTADO_CUENTA,
+    SERVICIO_FINIQUITO,
+)
 
 # Config actual: smtp_*, from_email, from_name, tickets_notify_emails (str, emails separados por coma)
 _current: dict[str, Any] = {}
@@ -220,7 +226,15 @@ def get_tickets_notify_emails() -> List[str]:
 
 
 # Servicios que envian email: flag email_activo_<servicio> y modo_pruebas_<servicio>
-EMAIL_SERVICES = ("notificaciones", "informe_pagos", "estado_cuenta", "cobros", "campanas", "tickets")
+EMAIL_SERVICES = (
+    "notificaciones",
+    "informe_pagos",
+    "estado_cuenta",
+    SERVICIO_FINIQUITO,
+    "cobros",
+    "campanas",
+    "tickets",
+)
 MODO_PRUEBAS_SERVICES = tuple("modo_pruebas_" + s for s in EMAIL_SERVICES)
 
 def get_email_activo() -> bool:
@@ -235,6 +249,8 @@ def get_email_activo_servicio(servicio: str) -> bool:
         return False
     key = "email_activo_" + servicio
     if key not in _current or _current[key] is None:
+        if servicio == SERVICIO_FINIQUITO:
+            return get_email_activo_servicio(SERVICIO_ESTADO_CUENTA)
         return True
     return (str(_current[key]).lower() == "true" or _current[key] is True)
 
@@ -253,7 +269,7 @@ def update_from_api(data: dict[str, Any]) -> None:
             for k, v in data["cuentas"][0].items():
                 if k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl", "smtp_use_tls"):
                     _current[k] = v
-        for k in ("modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo", "tickets_notify_emails", "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets", "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta", "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets"):
+        for k in ("modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo", "tickets_notify_emails", "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta", "email_activo_finiquito", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets", "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta", "modo_pruebas_finiquito", "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets"):
             if k in data and data[k] is not None:
                 _current[k] = data[k]
         if _current.get("smtp_port") is not None:
@@ -264,9 +280,9 @@ def update_from_api(data: dict[str, Any]) -> None:
         "smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name",
         "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo",
         "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta",
-        "email_activo_cobros", "email_activo_campanas", "email_activo_tickets",
+        "email_activo_finiquito", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets",
         "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta",
-        "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets",
+        "modo_pruebas_finiquito", "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets",
         "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl",
     )
     for k in keys:
@@ -365,6 +381,8 @@ def get_modo_pruebas_servicio(servicio: str) -> bool:
     if key in _current and _current[key] is not None:
         v = _current[key]
         return (str(v).lower() == "true" or v is True)
+    if servicio == SERVICIO_FINIQUITO:
+        return get_modo_pruebas_servicio(SERVICIO_ESTADO_CUENTA)
     raw = envios.get("modo_pruebas") or _current.get("modo_pruebas") or getattr(settings, "MODO_PRUEBAS_EMAIL", None) or "false"
     return (str(raw).lower() == "true" or raw is True)
 

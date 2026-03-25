@@ -21,6 +21,7 @@ import {
   finiquitoRegistro,
   finiquitoSolicitarCodigo,
   finiquitoVerificarCodigo,
+  FiniquitoHttpError,
   setFiniquitoAccessToken,
 } from '../services/finiquitoService'
 
@@ -72,8 +73,16 @@ export function FiniquitoAccesoPage() {
       const r = await finiquitoSolicitarCodigo(cedula.trim(), email.trim())
       toast.success(r.message || 'Revise su correo.')
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al enviar código'
-      toast.error(msg)
+      if (e instanceof FiniquitoHttpError && e.status === 429) {
+        toast.error(e.message, {
+          duration: 12000,
+          description:
+            'Límite de solicitudes por hora desde su red. Intente más tarde.',
+        })
+      } else {
+        const msg = e instanceof Error ? e.message : 'Error al enviar código'
+        toast.error(msg)
+      }
     } finally {
       setLoading(null)
     }
