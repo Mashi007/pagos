@@ -3683,6 +3683,30 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         row.fecha_aprobacion = payload.fecha_aprobacion
 
+    if payload.cuota_periodo is not None:
+
+        row.cuota_periodo = payload.cuota_periodo
+
+    if payload.producto is not None:
+
+        row.producto = payload.producto
+
+    if payload.valor_activo is not None:
+
+        row.valor_activo = payload.valor_activo
+
+    if payload.observaciones is not None:
+
+        row.observaciones = payload.observaciones
+
+    if payload.fecha_base_calculo is not None:
+
+        row.fecha_base_calculo = payload.fecha_base_calculo
+
+    if payload.tasa_interes is not None:
+
+        row.tasa_interes = payload.tasa_interes
+
     # Coherencia: si hay fecha de aprobación, la fecha de requerimiento no puede ser posterior
 
     if row.fecha_aprobacion and row.fecha_requerimiento:
@@ -3699,9 +3723,17 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
             )
 
-    db.commit()
+    try:
 
-    db.refresh(row)
+        db.commit()
+
+        db.refresh(row)
+
+    except Exception:
+
+        db.rollback()
+
+        raise
 
     # Si quedó en APROBADO y no tiene cuotas, generar tabla de amortización (solo si tiene fecha de aprobación)
 
@@ -3727,9 +3759,17 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
                     aplicar_pagos_pendientes_prestamo(prestamo_id, db)
 
-                    db.commit()
+                    try:
 
-                    db.refresh(row)
+                        db.commit()
+
+                        db.refresh(row)
+
+                    except Exception:
+
+                        db.rollback()
+
+                        raise
 
     return PrestamoResponse.model_validate(row)
 

@@ -160,7 +160,21 @@ class PrestamoService {
   // Obtener préstamo por ID (backend devuelve el objeto directamente, no { data })
 
   async getPrestamo(id: number): Promise<Prestamo> {
-    return await apiClient.get<Prestamo>(`${this.baseUrl}/${id}`)
+    const raw = await apiClient.get<Prestamo & { modelo?: string }>(
+      `${this.baseUrl}/${id}`
+    )
+
+    const mv =
+      raw.modelo_vehiculo != null && String(raw.modelo_vehiculo).trim() !== ''
+        ? String(raw.modelo_vehiculo).trim()
+        : raw.modelo != null && String(raw.modelo).trim() !== ''
+          ? String(raw.modelo).trim()
+          : ''
+
+    return {
+      ...raw,
+      modelo_vehiculo: mv,
+    }
   }
 
   // Crear nuevo préstamo (backend devuelve el préstamo creado directamente)
@@ -264,9 +278,77 @@ class PrestamoService {
 
   async updatePrestamo(
     id: number,
-    data: Partial<PrestamoForm>
+    data: Partial<PrestamoForm> & Record<string, unknown>
   ): Promise<Prestamo> {
-    return await apiClient.put<Prestamo>(`${this.baseUrl}/${id}`, data)
+    const body = this.buildPrestamoUpdatePayload(data)
+
+    return await apiClient.put<Prestamo>(`${this.baseUrl}/${id}`, body)
+  }
+
+  /**
+   * Cuerpo PUT alineado con PrestamoUpdate (FastAPI): sin claves extra, sin cadenas vacías
+   * en fechas (evitan 422) y numéricos finitos.
+   */
+  private buildPrestamoUpdatePayload(
+    raw: Record<string, unknown>
+  ): Record<string, unknown> {
+    const keys = [
+      'cliente_id',
+      'total_financiamiento',
+      'estado',
+      'concesionario',
+      'modelo',
+      'analista',
+      'modalidad_pago',
+      'numero_cuotas',
+      'fecha_requerimiento',
+      'fecha_aprobacion',
+      'cuota_periodo',
+      'producto',
+      'valor_activo',
+      'observaciones',
+      'fecha_base_calculo',
+      'tasa_interes',
+    ] as const
+
+    const dateKeys = new Set<string>([
+      'fecha_requerimiento',
+      'fecha_aprobacion',
+      'fecha_base_calculo',
+    ])
+
+    const numericKeys = new Set<string>([
+      'cliente_id',
+      'numero_cuotas',
+      'total_financiamiento',
+      'cuota_periodo',
+      'tasa_interes',
+      'valor_activo',
+    ])
+
+    const out: Record<string, unknown> = {}
+
+    for (const key of keys) {
+      const v = raw[key]
+
+      if (v === undefined) continue
+
+      if (dateKeys.has(key) && (v === '' || v === null)) continue
+
+      if (numericKeys.has(key)) {
+        const n = typeof v === 'number' ? v : Number(v)
+
+        if (!Number.isFinite(n)) continue
+
+        out[key] = n
+
+        continue
+      }
+
+      out[key] = v
+    }
+
+    return out
   }
 
   // Buscar préstamos por cédula (normaliza: sin guiones, trim)

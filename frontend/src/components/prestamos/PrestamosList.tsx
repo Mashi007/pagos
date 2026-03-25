@@ -93,6 +93,8 @@ import { prestamoService } from '../../services/prestamoService'
 
 import { toast } from 'sonner'
 
+import type { Prestamo } from '../../types'
+
 export function PrestamosList() {
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -211,7 +213,10 @@ export function PrestamosList() {
   const [aprobacionManualPrestamo, setAprobacionManualPrestamo] =
     useState<any>(null)
 
-  const [editingPrestamo, setEditingPrestamo] = useState<any>(null)
+  const [editingPrestamo, setEditingPrestamo] = useState<Prestamo | null>(null)
+
+  const [loadingPrestamoParaEditar, setLoadingPrestamoParaEditar] =
+    useState(false)
 
   const [viewingPrestamo, setViewingPrestamo] = useState<any>(null)
 
@@ -461,10 +466,20 @@ export function PrestamosList() {
     return labels[estado] || estado
   }
 
-  const handleEdit = (prestamo: any) => {
-    setEditingPrestamo(prestamo)
+  const handleEdit = async (prestamo: { id: number }) => {
+    setLoadingPrestamoParaEditar(true)
 
-    setShowCrearPrestamo(true)
+    try {
+      const full = await prestamoService.getPrestamo(prestamo.id)
+
+      setEditingPrestamo(full)
+
+      setShowCrearPrestamo(true)
+    } catch {
+      toast.error('No se pudo cargar el préstamo para editar')
+    } finally {
+      setLoadingPrestamoParaEditar(false)
+    }
   }
 
   const handleAprobarPrestamo = (prestamo: any) => {
@@ -543,7 +558,7 @@ export function PrestamosList() {
   if (showCrearPrestamo) {
     return (
       <CrearPrestamoForm
-        prestamo={editingPrestamo}
+        prestamo={editingPrestamo ?? undefined}
         onClose={() => {
           setShowCrearPrestamo(false)
 
@@ -554,7 +569,7 @@ export function PrestamosList() {
 
           setEditingPrestamo(null)
         }}
-        onAprobarManual={p => {
+        onAprobarManual={(p: Prestamo) => {
           setShowCrearPrestamo(false)
 
           setEditingPrestamo(null)
@@ -582,6 +597,14 @@ export function PrestamosList() {
 
   return (
     <div className="space-y-6">
+      {loadingPrestamoParaEditar ? (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-3 bg-black/40">
+          <Loader2 className="h-10 w-10 animate-spin text-white" />
+
+          <p className="text-sm font-medium text-white">Cargando préstamo...</p>
+        </div>
+      ) : null}
+
       <Dialog
         open={deletePrestamoId !== null}
         onOpenChange={open => !open && setDeletePrestamoId(null)}
@@ -719,7 +742,11 @@ export function PrestamosList() {
 
               <div className="absolute right-0 top-full z-50 mt-2 hidden w-56 rounded-lg border border-gray-200 bg-white shadow-xl group-hover:block">
                 <button
-                  onClick={() => setShowCrearPrestamo(true)}
+                  onClick={() => {
+                    setEditingPrestamo(null)
+
+                    setShowCrearPrestamo(true)
+                  }}
                   className="flex w-full items-center gap-2 border-b border-gray-100 px-4 py-3 text-left text-gray-700 transition-colors first:rounded-t-lg hover:bg-blue-50 hover:text-blue-600"
                 >
                   <Plus className="h-4 w-4" />

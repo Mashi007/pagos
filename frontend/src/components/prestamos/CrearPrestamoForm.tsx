@@ -74,6 +74,15 @@ import { Prestamo, PrestamoForm } from '../../types'
 
 import { ModalValidacionPrestamoExistente } from './ModalValidacionPrestamoExistente'
 
+/** Fecha API (date o ISO) a YYYY-MM-DD para inputs type="date". */
+function fechaInputYmd(v: unknown): string {
+  if (v == null || v === '') return ''
+
+  const s = String(v)
+
+  return s.length >= 10 ? s.slice(0, 10) : s
+}
+
 interface CrearPrestamoFormProps {
   prestamo?: Prestamo // Préstamo existente para edición
 
@@ -114,6 +123,12 @@ export function CrearPrestamoForm({
     return `${year}-${month}-${day}`
   }
 
+  const modeloInicial =
+    prestamo?.modelo_vehiculo != null &&
+    String(prestamo.modelo_vehiculo).trim() !== ''
+      ? String(prestamo.modelo_vehiculo).trim()
+      : ''
+
   const [formData, setFormData] = useState<Partial<PrestamoForm>>({
     cedula: prestamo?.cedula || '',
 
@@ -121,11 +136,22 @@ export function CrearPrestamoForm({
 
     modalidad_pago: prestamo?.modalidad_pago || 'MENSUAL',
 
-    fecha_requerimiento: prestamo?.fecha_requerimiento || '', // Fecha actual por defecto para nuevos préstamos
+    fecha_requerimiento: prestamo
+      ? fechaInputYmd(prestamo.fecha_requerimiento)
+      : '',
 
     fecha_aprobacion: prestamo?.fecha_aprobacion
-      ? String(prestamo.fecha_aprobacion).slice(0, 10)
+      ? fechaInputYmd(prestamo.fecha_aprobacion)
       : undefined,
+
+    fecha_base_calculo: prestamo?.fecha_base_calculo
+      ? fechaInputYmd(prestamo.fecha_base_calculo)
+      : undefined,
+
+    tasa_interes:
+      prestamo?.tasa_interes != null
+        ? Number(prestamo.tasa_interes)
+        : undefined,
 
     producto: prestamo?.producto || '',
 
@@ -133,7 +159,7 @@ export function CrearPrestamoForm({
 
     analista: prestamo?.analista || '',
 
-    modelo_vehiculo: prestamo?.modelo_vehiculo || '',
+    modelo_vehiculo: modeloInicial,
 
     observaciones: prestamo?.observaciones || '',
   })
@@ -233,6 +259,10 @@ export function CrearPrestamoForm({
   // Si se selecciona modelo o llegan modelos desde configuracion, cargar su precio
 
   useEffect(() => {
+    // En edición no pisar el valor activo guardado con el precio del catálogo al abrir el formulario.
+
+    if (prestamo) return
+
     if (
       formData.modelo_vehiculo &&
       modelosVehiculos &&
@@ -253,7 +283,7 @@ export function CrearPrestamoForm({
         }
       }
     }
-  }, [formData.modelo_vehiculo, modelosVehiculos])
+  }, [formData.modelo_vehiculo, modelosVehiculos, prestamo])
 
   // Buscar cliente por cedula con debounce mejorado
 
@@ -455,12 +485,21 @@ export function CrearPrestamoForm({
 
       // Preparar datos con numero_cuotas y cuota_periodo
 
+      const fechaApr = formData.fecha_aprobacion
+        ? String(formData.fecha_aprobacion).trim()
+        : ''
+
       const prestamoData: Record<string, unknown> = {
         ...formData,
 
         modelo: formData.modelo_vehiculo || undefined,
 
-        valor_activo: valorActivo > 0 ? valorActivo : undefined,
+        // Incluir 0 si aplica para que el PUT persista valor_activo en BD (antes se omitía).
+
+        valor_activo:
+          Number.isFinite(valorActivo) && valorActivo >= 0
+            ? valorActivo
+            : undefined,
 
         producto:
           formData.producto && String(formData.producto).trim() !== ''
@@ -478,21 +517,20 @@ export function CrearPrestamoForm({
 
         fecha_base_calculo: formData.fecha_base_calculo,
 
-        ...(prestamo &&
-        formData.fecha_aprobacion &&
-        String(formData.fecha_aprobacion).trim() !== ''
-          ? {
-              fecha_aprobacion:
-                String(formData.fecha_aprobacion).trim() + 'T00:00:00',
-            }
-          : {}),
-
         usuario_autoriza:
           !prestamo && justificacionAutorizacion ? user?.email : undefined,
 
         observaciones: justificacionAutorizacion
           ? `${formData.observaciones || ''}\n\n--- JUSTIFICACIÓN PARA NUEVO PRÉSTAMO ---\n${justificacionAutorizacion}`.trim()
           : formData.observaciones,
+      }
+
+      // No enviar fecha_aprobacion vacía: FastAPI rechaza "" como datetime (422).
+
+      if (fechaApr !== '') {
+        prestamoData.fecha_aprobacion = `${fechaApr}T00:00:00`
+      } else {
+        delete prestamoData.fecha_aprobacion
       }
 
       if (prestamo) {
