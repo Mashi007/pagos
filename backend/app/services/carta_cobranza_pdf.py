@@ -63,6 +63,35 @@ def _format_fecha(value: Any) -> str:
     return str(value)
 
 
+def _format_fecha_larga_es(value: Any) -> str:
+    """Formato largo en español: 23 de marzo de 2026."""
+    meses = {
+        1: "enero",
+        2: "febrero",
+        3: "marzo",
+        4: "abril",
+        5: "mayo",
+        6: "junio",
+        7: "julio",
+        8: "agosto",
+        9: "septiembre",
+        10: "octubre",
+        11: "noviembre",
+        12: "diciembre",
+    }
+    d: Optional[date] = None
+    if isinstance(value, date):
+        d = value
+    elif isinstance(value, str):
+        try:
+            d = date.fromisoformat(value[:10])
+        except Exception:
+            d = None
+    if not d:
+        return _format_fecha(value)
+    return f"{d.day} de {meses.get(d.month, '')} de {d.year}"
+
+
 def _datos_desde_contexto(contexto: dict, plantilla_override: Optional[dict] = None) -> dict:
     """Convierte contexto_cobranza a la estructura DATOS del PDF (ciudad, fecha_carta, etc.)."""
     plantilla_override = plantilla_override or {}
@@ -123,6 +152,7 @@ def _dict_reemplazo_pdf(contexto: dict, datos: dict) -> dict:
     out["PRESTAMOS.ID"] = datos.get("notificacion_num", "") or str(contexto.get("PRESTAMOS.ID", ""))
     out["IDPRESTAMO"] = out["PRESTAMOS.ID"]
     out["FECHA_CARTA"] = datos.get("fecha_carta", "") or _format_fecha(contexto.get("FECHA_CARTA"))
+    out["FECHA_CARTA_LARGA"] = _format_fecha_larga_es(contexto.get("FECHA_CARTA"))
     out["NUMEROCORRELATIVO"] = str(contexto.get("NUMEROCORRELATIVO", ""))
     out["TOTAL_ADEUDADO"] = str(contexto.get("TOTAL_ADEUDADO", ""))
     out["LOGO_URL"] = str(contexto.get("LOGO_URL", ""))
@@ -171,10 +201,10 @@ def _normalizar_encabezado_editable(texto: str) -> str:
     if not texto:
         return ""
     t = texto
-    # Quitar línea ciudad/fecha (con o sin variables).
+    # Convertir línea ciudad/fecha -> solo fecha larga.
     t = re.sub(
         r"(?:\{\{CIUDAD\}\}\s*,\s*)?\{\{FECHA_CARTA\}\}\s*<br\s*/?>",
-        "",
+        "{{FECHA_CARTA_LARGA}}<br/>",
         t,
         flags=re.IGNORECASE,
     )
@@ -191,6 +221,16 @@ def _normalizar_encabezado_editable(texto: str) -> str:
         t,
         flags=re.IGNORECASE,
     )
+    # Asegurar orden: fecha primero y luego saludo.
+    if "{{FECHA_CARTA_LARGA}}" in t and re.search(r"Estimado/a\s+Cliente", t, flags=re.IGNORECASE):
+        # Quitar ocurrencia de la fecha donde esté y reinsertarla antes del saludo.
+        t = re.sub(r"\s*\{\{FECHA_CARTA_LARGA\}\}\s*<br\s*/?>\s*", "", t, flags=re.IGNORECASE)
+        t = re.sub(
+            r"(<b>\s*Estimado/a\s+Cliente\s*</b>\s*<br\s*/?>\s*<br\s*/?>?)",
+            r"{{FECHA_CARTA_LARGA}}<br/><br/>\1",
+            t,
+            flags=re.IGNORECASE,
+        )
     return t
 
 
@@ -556,6 +596,15 @@ def build_pdf_bytes(
     s_dest = ParagraphStyle("dest", fontSize=11, textColor=azul, fontName="Helvetica-Bold", leading=16)
     s_cedula = ParagraphStyle("ced", fontSize=11, textColor=gris, leading=14)
     s_body = ParagraphStyle("body", fontSize=10.5, textColor=gris, leading=16, alignment=TA_JUSTIFY, spaceAfter=8)
+    s_encabezado = ParagraphStyle(
+        "encabezado",
+        fontSize=10.5,
+        textColor=gris,
+        leading=16,
+        alignment=TA_LEFT,
+        leftIndent=10,
+        spaceAfter=6,
+    )
     s_clausula_titulo = ParagraphStyle("ctit", fontSize=10.5, textColor=azul, fontName="Helvetica-Bold", leading=16, alignment=TA_JUSTIFY, spaceAfter=4)
     s_clausula_texto = ParagraphStyle("ctex", fontSize=9.5, textColor=gris, leading=15, alignment=TA_JUSTIFY, leftIndent=40, rightIndent=20)
     s_firma = ParagraphStyle("firma", fontSize=10.5, textColor=azul, fontName="Helvetica-Bold", leading=14)
@@ -579,7 +628,7 @@ def build_pdf_bytes(
     story.append(Spacer(1, 0.4 * cm))
 
     if encabezado_plantilla and encabezado_plantilla.strip():
-        story.append(Paragraph(_sanitize_for_reportlab(encabezado_plantilla.strip()), s_body))
+        story.append(Paragraph(_sanitize_for_reportlab(encabezado_plantilla.strip()), s_encabezado))
         story.append(Spacer(1, 0.2 * cm))
 
     _default = (
