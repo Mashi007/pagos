@@ -378,6 +378,67 @@ def _extraer_logo_remoto_de_plantilla(texto: str) -> Tuple[Optional[str], str]:
     return path, texto_sin_img
 
 
+def _preparar_wordmark_logo(path: Optional[str]) -> Optional[str]:
+    """
+    Convierte el logo a formato wordmark para PDF:
+    - recorta la parte superior (donde suele estar el isotipo/círculo),
+    - deja la marca de texto,
+    - elimina márgenes blancos sobrantes.
+    Retorna ruta temporal de la imagen procesada o None si no se pudo procesar.
+    """
+    if not path:
+        return None
+    try:
+        from PIL import Image as PILImage
+    except Exception:
+        return None
+    try:
+        img = PILImage.open(path).convert("RGBA")
+        w, h = img.size
+        if w < 20 or h < 20:
+            return None
+
+        # Recorte vertical: mantener franja inferior (wordmark) para ocultar círculo superior.
+        y0 = int(h * 0.48)
+        cropped = img.crop((0, y0, w, h))
+
+        # Detectar contenido no blanco para quitar márgenes extra.
+        px = cropped.load()
+        cw, ch = cropped.size
+        min_x, min_y = cw, ch
+        max_x, max_y = 0, 0
+        found = False
+        for y in range(ch):
+            for x in range(cw):
+                r, g, b, a = px[x, y]
+                # Pixel de "contenido": no blanco y visible.
+                if a > 10 and not (r > 245 and g > 245 and b > 245):
+                    found = True
+                    if x < min_x:
+                        min_x = x
+                    if y < min_y:
+                        min_y = y
+                    if x > max_x:
+                        max_x = x
+                    if y > max_y:
+                        max_y = y
+        if found and max_x > min_x and max_y > min_y:
+            pad_x = max(4, int((max_x - min_x + 1) * 0.03))
+            pad_y = max(2, int((max_y - min_y + 1) * 0.10))
+            left = max(0, min_x - pad_x)
+            top = max(0, min_y - pad_y)
+            right = min(cw, max_x + pad_x + 1)
+            bottom = min(ch, max_y + pad_y + 1)
+            cropped = cropped.crop((left, top, right, bottom))
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        cropped.save(tmp.name, format="PNG")
+        tmp.close()
+        return tmp.name
+    except Exception:
+        return None
+
+
 def build_pdf_bytes(
     datos: dict,
     logo_path: Optional[str] = None,
@@ -436,7 +497,8 @@ def build_pdf_bytes(
 
     if logo_path and os.path.exists(logo_path):
         try:
-            logo = Image(logo_path, width=5 * cm, height=1.8 * cm)
+            # Wordmark: ancho ligeramente mayor para balance visual.
+            logo = Image(logo_path, width=6.2 * cm, height=1.2 * cm)
             logo.hAlign = "LEFT"
             story.append(logo)
         except Exception as e:
@@ -613,15 +675,23 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
         except Exception:
             logo_path = None
     try:
+        logo_wordmark_tmp = _preparar_wordmark_logo(logo_path)
+        logo_final_path = logo_wordmark_tmp or logo_path
         return build_pdf_bytes(
             datos,
-            logo_path=logo_path,
+            logo_path=logo_final_path,
             encabezado_plantilla=encabezado or None,
             cuerpo_principal=cuerpo or None,
             clausula_septima=clausula or None,
             firma_plantilla=firma_plantilla or None,
         )
     finally:
+        try:
+            if "logo_wordmark_tmp" in locals() and logo_wordmark_tmp:
+                import os
+                os.unlink(logo_wordmark_tmp)
+        except Exception:
+            pass
         if logo_path_plantilla:
             try:
                 import os
