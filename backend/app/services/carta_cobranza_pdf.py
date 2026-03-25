@@ -208,11 +208,30 @@ def _normalizar_encabezado_editable(texto: str) -> str:
         t,
         flags=re.IGNORECASE,
     )
+    t = re.sub(
+        r"(?:\{\{CIUDAD\}\}\s*,\s*)?\{\{FECHA_CARTA_LARGA\}\}\s*<br\s*/?>",
+        "{{FECHA_CARTA_LARGA}}<br/>",
+        t,
+        flags=re.IGNORECASE,
+    )
     # Convertir línea ya renderizada "Ciudad, 25/03/2026" -> solo fecha larga placeholder
     # (luego FECHA_CARTA_LARGA se sustituye con formato largo en español).
     t = re.sub(
         r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+,\s*\d{1,2}/\d{1,2}/\d{4}\s*<br\s*/?>",
         "{{FECHA_CARTA_LARGA}}<br/>",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+,\s*\d{1,2}\s+de\s+[A-Za-záéíóúñ]+\s+de\s+\d{4}\s*<br\s*/?>",
+        "{{FECHA_CARTA_LARGA}}<br/>",
+        t,
+        flags=re.IGNORECASE,
+    )
+    # Limpiar línea huérfana de ciudad con coma (ej.: "Guacara,").
+    t = re.sub(
+        r"(?:\{\{CIUDAD\}\}|[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+)\s*,\s*<br\s*/?>",
+        "",
         t,
         flags=re.IGNORECASE,
     )
