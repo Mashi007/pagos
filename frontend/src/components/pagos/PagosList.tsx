@@ -80,6 +80,8 @@ import { getErrorMessage } from '../../types/errors'
 import { useSearchParams, Link } from 'react-router-dom'
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
+
+import { invalidateListasNotificacionesMora } from '../../constants/queryKeys'
 import { getTasaHoy } from '../../services/tasaCambioService'
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
@@ -261,6 +263,7 @@ export function PagosList() {
         queryKey: ['pagos-con-errores'],
         exact: false,
       })
+      await invalidateListasNotificacionesMora(queryClient)
       const ops =
         typeof res.operaciones_cuota_total === 'number'
           ? res.operaciones_cuota_total
@@ -1519,6 +1522,9 @@ export function PagosList() {
                                                 exact: false,
                                               }
                                             )
+                                            await invalidateListasNotificacionesMora(
+                                              queryClient
+                                            )
                                           } catch (error) {
                                             toast.error(
                                               'Error al eliminar el pago'
@@ -1653,6 +1659,9 @@ export function PagosList() {
                                                 queryKey: ['prestamos'],
                                                 exact: false,
                                               }
+                                            )
+                                            await invalidateListasNotificacionesMora(
+                                              queryClient
                                             )
                                           } catch (error) {
                                             toast.error(
@@ -1797,6 +1806,7 @@ export function PagosList() {
                 queryKey: ['pagos-por-cedula'],
                 exact: false,
               })
+              await invalidateListasNotificacionesMora(queryClient)
               // Refetch inmediato de KPIs para actualización en tiempo real
               await queryClient.refetchQueries({
                 queryKey: ['pagos-kpis'],
@@ -1853,6 +1863,7 @@ export function PagosList() {
               queryKey: ['pagos-kpis'],
               exact: false,
             })
+            await invalidateListasNotificacionesMora(queryClient)
             toast.success('Datos actualizados correctamente')
           }}
         />

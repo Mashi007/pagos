@@ -13,7 +13,7 @@ Cada bloque visual del dashboard (KPIs, gráficos) está conectado a un endpoint
 | 2 | Evolución mensual (barras + línea) | `GET /api/v1/dashboard/admin` | **cuotas** | ✅ |
 | 3 | Morosidad por día (barras) | `GET /api/v1/dashboard/morosidad-por-dia` | **cuotas** | ✅ |
 | 4 | Monto programado por día (7 días) | `GET /api/v1/dashboard/monto-programado-proxima-semana` | **cuotas** | ✅ |
-| 5 | Distribución por bandas de $200 USD | `GET /api/v1/dashboard/financiamiento-por-rangos` | **prestamos** | ✅ |
+| 5 | Distribución por bandas de $400 USD | `GET /api/v1/dashboard/financiamiento-por-rangos` | **prestamos** | ✅ |
 | 6 | Préstamos aprobados por modelo | `GET /api/v1/dashboard/prestamos-por-modelo` | **prestamos** | ✅ |
 | 7 | Composición de morosidad (USD) | `GET /api/v1/dashboard/composicion-morosidad` | **cuotas** | ✅ |
 | 8 | Cantidad de préstamos en mora por rango | Mismo endpoint que #7 | **cuotas** | ✅ |
@@ -89,13 +89,13 @@ Cada bloque visual del dashboard (KPIs, gráficos) está conectado a un endpoint
 
 ---
 
-### 5. Distribución por bandas de $200 USD (barras horizontales)
+### 5. Distribución por bandas de $400 USD (barras horizontales)
 
 - **Frontend:** `queryKey: ['financiamiento-rangos', ...]` → `GET /api/v1/dashboard/financiamiento-por-rangos?…`
 - **Endpoint:** `GET /api/v1/dashboard/financiamiento-por-rangos` → `_compute_financiamiento_por_rangos(db, ...)`
 - **BD:** Misma PostgreSQL.
 - **Tablas:**
-  - **prestamos**: cuenta de préstamos con `estado = 'APROBADO'` y `total_financiamiento` en cada banda ($0–200, $200–400, …, más de $1,400). Opcionalmente filtrado por analista, concesionario, modelo.
+  - **prestamos**: cuenta de préstamos con `estado = 'APROBADO'` y `total_financiamiento` en cada banda ($0–400, $400–800, …, más de $2,000). Opcionalmente filtrado por analista, concesionario, modelo.
 
 ---
 

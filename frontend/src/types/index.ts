@@ -175,6 +175,8 @@ export interface Prestamo {
 
   analista: string
 
+  analista_id?: number | null
+
   modelo_vehiculo?: string
 
   estado:
@@ -220,6 +222,8 @@ export interface PrestamoForm {
   concesionario?: string
 
   analista: string
+
+  analista_id?: number | null
 
   modelo_vehiculo?: string
 

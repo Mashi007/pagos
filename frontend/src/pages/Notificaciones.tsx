@@ -41,6 +41,11 @@ import { toast } from 'sonner'
 
 import { ConfiguracionNotificaciones } from '../components/notificaciones/ConfiguracionNotificaciones'
 
+import {
+  NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
+  NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+} from '../constants/queryKeys'
+
 type TabId =
   | 'dias_1_atraso'
   | 'dias_5_atraso'
@@ -149,11 +154,11 @@ export function Notificaciones() {
   }
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['notificaciones-clientes-retrasados'],
+    queryKey: NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
 
     queryFn: () => notificacionService.getClientesRetrasados(),
 
-    staleTime: 2 * 60 * 1000,
+    staleTime: 45 * 1000,
 
     refetchOnWindowFocus: true,
 
@@ -165,7 +170,7 @@ export function Notificaciones() {
   })
 
   const { data: estadisticasPorTab } = useQuery({
-    queryKey: ['notificaciones-estadisticas-por-tab'],
+    queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
 
     queryFn: () => notificacionService.getEstadisticasPorTab(),
 
@@ -390,7 +395,7 @@ export function Notificaciones() {
         <ModulePageHeader
           icon={Bell}
           title="Notificaciones"
-          description="Mora y envío masivo desde la pestaña Configuración."
+          description="Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos."
           actions={
             <Button
               variant="outline"

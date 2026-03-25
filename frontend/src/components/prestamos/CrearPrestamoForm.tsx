@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -159,6 +159,9 @@ export function CrearPrestamoForm({
 
     analista: prestamo?.analista || '',
 
+    analista_id:
+      prestamo?.analista_id != null ? Number(prestamo.analista_id) : undefined,
+
     modelo_vehiculo: modeloInicial,
 
     observaciones: prestamo?.observaciones || '',
@@ -170,6 +173,19 @@ export function CrearPrestamoForm({
     useConcesionariosActivos()
 
   const { data: analistas = [], error: errorAnalistas } = useAnalistasActivos()
+
+  const analistaSelectValue = useMemo(() => {
+    if (
+      formData.analista_id != null &&
+      Number.isFinite(Number(formData.analista_id))
+    ) {
+      return String(formData.analista_id)
+    }
+    const match = analistas.find(
+      a => a.nombre === (formData.analista || '').trim()
+    )
+    return match ? String(match.id) : ''
+  }, [formData.analista_id, formData.analista, analistas])
 
   const { data: modelosVehiculos = [], error: errorModelos } =
     useModelosVehiculosActivos()
@@ -510,6 +526,11 @@ export function CrearPrestamoForm({
           formData.analista && String(formData.analista).trim() !== ''
             ? formData.analista
             : '',
+
+        analista_id:
+          formData.analista_id != null && Number.isFinite(Number(formData.analista_id))
+            ? Number(formData.analista_id)
+            : undefined,
 
         numero_cuotas: numeroCuotas,
 
@@ -1287,14 +1308,16 @@ export function CrearPrestamoForm({
                     </label>
 
                     <Select
-                      value={formData.analista ?? ''}
-                      onValueChange={value =>
+                      value={analistaSelectValue}
+                      onValueChange={value => {
+                        const idNum = value ? parseInt(value, 10) : NaN
+                        const row = analistas.find(a => a.id === idNum)
                         setFormData({
                           ...formData,
-
-                          analista: value,
+                          analista_id: row ? row.id : undefined,
+                          analista: row ? row.nombre : '',
                         })
-                      }
+                      }}
                       disabled={isReadOnly}
                     >
                       <SelectTrigger
@@ -1307,7 +1330,10 @@ export function CrearPrestamoForm({
 
                       <SelectContent>
                         {analistas.map(analista => (
-                          <SelectItem key={analista.id} value={analista.nombre}>
+                          <SelectItem
+                            key={analista.id}
+                            value={String(analista.id)}
+                          >
                             {analista.nombre}
                           </SelectItem>
                         ))}

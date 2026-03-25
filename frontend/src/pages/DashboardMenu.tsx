@@ -83,6 +83,8 @@ import type {
   PrestamosPorModeloResponse,
   AnalisisCuentasPorCobrarResponse,
   TendenciaProgramadoTotalCobradoResponse,
+  RecibosPagosMensualUsdResponse,
+  EvolucionMensualItem,
 } from '../types/dashboard'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
@@ -274,50 +276,6 @@ export function DashboardMenu() {
 
     enabled: true,
   })
-
-  // Batch 3: Morosidad por día (desde tabla cuotas). Respeta rango del período (ej. desde 2025).
-
-  const periodoTendencia =
-    getPeriodoGrafico('tendencia') || periodo || 'ultimos_12_meses'
-
-  const diasMorosidad =
-    periodoTendencia === 'dia' || periodoTendencia === 'd\u00EDa'
-      ? 7
-      : periodoTendencia === 'semana'
-        ? 14
-        : periodoTendencia === 'mes'
-          ? 30
-          : 90
-
-  const { data: datosMorosidadPorDia, isLoading: loadingMorosidadPorDia } =
-    useQuery({
-      queryKey: [
-        'morosidad-por-dia',
-        periodoTendencia,
-        diasMorosidad,
-        JSON.stringify(filtros),
-      ],
-
-      queryFn: async () => {
-        const queryParams = new URLSearchParams()
-
-        queryParams.append('dias', String(diasMorosidad))
-
-        // No enviar fecha_inicio/fecha_fin: el backend siempre usa hoy y hacia atrás
-
-        const response = await apiClient.get<{
-          dias: Array<{ fecha: string; dia: string; morosidad: number }>
-        }>(`/api/v1/dashboard/morosidad-por-dia?${queryParams.toString()}`)
-
-        return response.dias ?? []
-      },
-
-      staleTime: 4 * 60 * 60 * 1000, // 4 h: alineado con refresh backend 6/13/16
-
-      enabled: true,
-
-      refetchOnWindowFocus: false,
-    })
 
   // Batch 3: Gráficos secundarios rápidos. Período por gráfico; filtros (fecha_inicio/fecha_fin) se envían siempre.
 
@@ -623,6 +581,42 @@ export function DashboardMenu() {
       enabled: true,
     })
 
+  const periodoRecibosUsd = getPeriodoGrafico('recibos-pagos-usd')
+
+  const { data: datosRecibosUsd, isLoading: loadingRecibosUsd } = useQuery({
+    queryKey: [
+      'recibos-pagos-mensual-usd',
+      periodoRecibosUsd,
+      JSON.stringify(filtros),
+    ],
+
+    queryFn: async () => {
+      const params = construirFiltrosObject(periodoRecibosUsd)
+
+      const queryParams = new URLSearchParams()
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+
+      if (!queryParams.has('periodo') && periodoRecibosUsd)
+        queryParams.append('periodo', periodoRecibosUsd)
+
+      const response = await apiClient.get(
+        `/api/v1/dashboard/recibos-pagos-mensual-usd${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
+        { timeout: 60000 }
+      )
+
+      return response as RecibosPagosMensualUsdResponse
+    },
+
+    staleTime: 4 * 60 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    enabled: true,
+  })
+
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Mostrar toast cuando falla la carga del gráfico principal (auditoría: no fallar en silencio)
@@ -658,11 +652,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['morosidad-por-dia'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
         queryKey: ['financiamiento-rangos'],
         exact: false,
       })
@@ -694,6 +683,11 @@ export function DashboardMenu() {
 
       await queryClient.invalidateQueries({
         queryKey: ['tendencia-programado-total-cobrado'],
+        exact: false,
+      })
+
+      await queryClient.invalidateQueries({
+        queryKey: ['recibos-pagos-mensual-usd'],
         exact: false,
       })
 
@@ -710,11 +704,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['morosidad-por-dia'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
         queryKey: ['financiamiento-rangos'],
         exact: false,
       })
@@ -746,6 +735,11 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['tendencia-programado-total-cobrado'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['recibos-pagos-mensual-usd'],
         exact: false,
       })
 
@@ -878,9 +872,9 @@ export function DashboardMenu() {
     iconSize: 12,
   }
 
-  // Bandas desde backend: $0-$200 ... $1000-$1200, $1200-$1400, Más de $1400 (cantidad de préstamos por banda)
+  // Bandas desde backend: cada $400 hasta $2.000 + cola (cantidad de préstamos por banda)
 
-  const datosBandas200 = useMemo(() => {
+  const datosBandasFinanciamiento = useMemo(() => {
     try {
       if (
         !datosFinanciamientoRangos?.rangos ||
@@ -889,17 +883,15 @@ export function DashboardMenu() {
         return []
       }
 
-      // Orden descendente (mayor banda arriba): Más de $1400, $1200-$1400, $1000-$1200, ...
+      // Orden descendente (mayor banda arriba)
 
       const orden = [
-        'Más de $1,400',
-        '$1,200 - $1,400',
-        '$1,000 - $1,200',
-        '$800 - $1,000',
-        '$600 - $800',
-        '$400 - $600',
-        '$200 - $400',
-        '$0 - $200',
+        'Más de $2,000',
+        '$1,600 - $2,000',
+        '$1,200 - $1,600',
+        '$800 - $1,200',
+        '$400 - $800',
+        '$0 - $400',
       ]
 
       return [...datosFinanciamientoRangos.rangos]
@@ -1187,8 +1179,8 @@ export function DashboardMenu() {
             Number(kpisPrincipales.total_prestamos?.valor_actual ?? 0) === 0 &&
             (!datosDashboard?.evolucion_mensual?.length ||
               datosDashboard.evolucion_mensual.every(
-                (e: { cartera: number; cobrado: number }) =>
-                  !e.cartera && !e.cobrado
+                (e: EvolucionMensualItem) =>
+                  !e.cartera && !e.cobrado && !(e.pagos_atrasos ?? 0)
               )) ? (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -1301,6 +1293,7 @@ export function DashboardMenu() {
                             <Legend {...chartLegendStyle} />
 
                             <Bar
+                              stackId="programado"
                               dataKey="cartera"
                               fill="#3b82f6"
                               name="Pagos programados"
@@ -1308,9 +1301,18 @@ export function DashboardMenu() {
                             />
 
                             <Bar
+                              stackId="cobros"
                               dataKey="cobrado"
                               fill="#10b981"
                               name="Pagos conciliados"
+                              radius={[0, 0, 0, 0]}
+                            />
+
+                            <Bar
+                              stackId="cobros"
+                              dataKey="pagos_atrasos"
+                              fill="#f97316"
+                              name="Pagos de meses anteriores"
                               radius={[4, 4, 0, 0]}
                             />
 
@@ -1420,13 +1422,15 @@ export function DashboardMenu() {
                             <Legend {...chartLegendStyle} />
 
                             <Bar
+                              stackId="cobros-analisis"
                               dataKey="cobrado_mes"
                               fill="#10b981"
                               name="Pagos conciliados"
-                              radius={[4, 4, 0, 0]}
+                              radius={[0, 0, 0, 0]}
                             />
 
                             <Bar
+                              stackId="cobros-analisis"
                               dataKey="pagos_atrasos"
                               fill="#f97316"
                               name="Pagos de meses anteriores"
@@ -1579,57 +1583,56 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-            {/* Pago vencido por día - desde tabla cuotas */}
+            {/* Recibos: pagos en USD vs Bs. en USD (por mes) */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
+              transition={{ delay: 0.32 }}
             >
               <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-red-50/90 to-orange-50/90 pb-3">
+                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-violet-50/90 to-fuchsia-50/90 pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <AlertTriangle className="h-5 w-5 text-red-600" />
+                      <FileText className="h-5 w-5 text-violet-600" />
 
-                      <span>Pago vencido por día</span>
+                      <span>Pagos por recibo (USD)</span>
                     </CardTitle>
 
                     <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="tendencia" />
+                      <SelectorPeriodoGrafico chartId="recibos-pagos-usd" />
 
                       <Badge
                         variant="secondary"
                         className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
                       >
-                        {periodoTendencia === 'dia' ||
-                        periodoTendencia === 'd\u00EDa'
-                          ? '7 d\u00EDas'
-                          : periodoTendencia === 'semana'
-                            ? '14 d\u00EDas'
-                            : periodoTendencia === 'mes'
-                              ? '30 d\u00EDas'
-                              : '90 d\u00EDas'}
+                        Recibos PDF
                       </Badge>
                     </div>
                   </div>
+
+                  <p className="mt-1 text-xs text-gray-600">
+                    Reportes con recibo generado (aprobado o importado). Línea
+                    verde: monto en USD. Línea ámbar: bolívares convertidos a
+                    USD (tasa del pago en tabla pagos o tasa oficial del día).
+                  </p>
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
-                  {loadingMorosidadPorDia ? (
+                  {loadingRecibosUsd ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando pago vencido por día...
+                      Cargando pagos por recibo...
                     </div>
-                  ) : datosMorosidadPorDia &&
-                    datosMorosidadPorDia.length > 0 ? (
+                  ) : datosRecibosUsd?.series &&
+                    datosRecibosUsd.series.length > 0 ? (
                     <ChartWithDateRangeSlider
-                      data={datosMorosidadPorDia}
-                      dataKey="fecha"
-                      chartHeight={400}
+                      data={datosRecibosUsd.series}
+                      dataKey="mes"
+                      chartHeight={360}
                     >
                       {filteredData => (
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart
+                          <RechartsLineChart
                             data={filteredData}
                             margin={{
                               top: 14,
@@ -1640,21 +1643,19 @@ export function DashboardMenu() {
                           >
                             <CartesianGrid {...chartCartesianGrid} />
 
-                            <XAxis
-                              dataKey="dia"
-                              angle={-45}
-                              textAnchor="end"
-                              tick={chartAxisTick}
-                              height={80}
-                            />
+                            <XAxis dataKey="mes" tick={chartAxisTick} />
 
                             <YAxis
                               tick={chartAxisTick}
-                              tickFormatter={value =>
-                                `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`
-                              }
+                              tickFormatter={value => {
+                                if (value >= 1000) {
+                                  return `$${(value / 1000).toFixed(0)}K`
+                                }
+
+                                return `$${value}`
+                              }}
                               label={{
-                                value: 'Pago vencido (USD)',
+                                value: 'Monto (USD)',
                                 angle: -90,
                                 position: 'insideLeft',
                                 style: { fill: '#374151', fontSize: 13 },
@@ -1664,34 +1665,38 @@ export function DashboardMenu() {
                             <Tooltip
                               contentStyle={chartTooltipStyle.contentStyle}
                               labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number) => [
+                              formatter={(value: number, name: string) => [
                                 formatCurrency(value),
-                                'Pago vencido',
+                                name,
                               ]}
-                              labelFormatter={(label, payload) =>
-                                payload?.[0]?.payload?.fecha
-                                  ? `Fecha: ${payload[0].payload.fecha}`
-                                  : label
-                              }
                             />
 
                             <Legend {...chartLegendStyle} />
 
-                            <Bar
-                              dataKey="morosidad"
-                              fill="#ef4444"
-                              name="Pago vencido"
-                              radius={[4, 4, 0, 0]}
-                              maxBarSize={48}
+                            <Line
+                              type="monotone"
+                              dataKey="pagos_usd"
+                              stroke="#059669"
+                              strokeWidth={2}
+                              dot={{ r: 4 }}
+                              name="Pagos recibidos en USD"
                             />
-                          </ComposedChart>
+
+                            <Line
+                              type="monotone"
+                              dataKey="pagos_bs_en_usd"
+                              stroke="#d97706"
+                              strokeWidth={2}
+                              dot={{ r: 4 }}
+                              name="Bolívares en USD (con tasa)"
+                            />
+                          </RechartsLineChart>
                         </ResponsiveContainer>
                       )}
                     </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay datos de pago vencido por día para el período
-                      seleccionado
+                      No hay datos para el período seleccionado
                     </div>
                   )}
                 </CardContent>
@@ -1800,10 +1805,10 @@ export function DashboardMenu() {
           </div>
         ) : null}
 
-        {/* GRÁFICOS: BANDAS DE $200 USD Y COBRANZA PLANIFICADA VS REAL */}
+        {/* GRÁFICOS: BANDAS DE FINANCIAMIENTO Y COBRANZA PLANIFICADA VS REAL */}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* GRÁFICO DE BANDAS DE $200 USD */}
+          {/* GRÁFICO DE BANDAS DE $400 USD */}
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1816,7 +1821,7 @@ export function DashboardMenu() {
                   <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                     <BarChart3 className="h-5 w-5 text-indigo-600" />
 
-                    <span>Distribución por Bandas de $200 USD</span>
+                    <span>Distribución por Bandas de $400 USD</span>
                   </CardTitle>
 
                   <div className="flex items-center gap-2">
@@ -1833,9 +1838,10 @@ export function DashboardMenu() {
               </CardHeader>
 
               <CardContent className="flex-1 p-6">
-                {datosBandas200 && datosBandas200.length > 0 ? (
+                {datosBandasFinanciamiento &&
+                datosBandasFinanciamiento.length > 0 ? (
                   <ChartWithDateRangeSlider
-                    data={datosBandas200}
+                    data={datosBandasFinanciamiento}
                     dataKey="categoriaFormateada"
                     chartHeight={450}
                   >
@@ -1850,7 +1856,7 @@ export function DashboardMenu() {
 
                           <XAxis
                             type="number"
-                            domain={[600, 2000]}
+                            domain={[0, 'dataMax']}
                             tick={chartAxisTick}
                             tickFormatter={value =>
                               value.toLocaleString('es-EC')
@@ -2098,105 +2104,8 @@ export function DashboardMenu() {
 
         {/* GRÁFICOS DE MOROSIDAD */}
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Composición de Pago vencido (monto en USD) */}
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-            className="h-full"
-          >
-            <Card className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-red-50/90 to-rose-50/90 pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                    <BarChart3 className="h-5 w-5 text-red-600" />
-
-                    <span>Composición de Pago vencido (USD)</span>
-                  </CardTitle>
-
-                  <div className="flex items-center gap-2">
-                    <SelectorPeriodoGrafico chartId="composicion-morosidad" />
-
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                      Al día de hoy
-                    </Badge>
-                  </div>
-                </div>
-
-                <p className="mt-1 text-xs text-gray-600">
-                  Cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 d\u00EDas =
-                  Vencido; 90+ d\u00EDas = Moroso (snapshot al día de hoy).
-                </p>
-              </CardHeader>
-
-              <CardContent className="flex-1 p-6">
-                {datosComposicionMorosidad?.puntos?.length ? (
-                  <ChartWithDateRangeSlider
-                    data={datosComposicionMorosidad.puntos}
-                    dataKey="categoria"
-                    chartHeight={400}
-                  >
-                    {filteredData => (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={filteredData}
-                          margin={{ top: 12, right: 24, left: 12, bottom: 12 }}
-                        >
-                          <CartesianGrid {...chartCartesianGrid} />
-
-                          <XAxis dataKey="categoria" tick={chartAxisTick} />
-
-                          <YAxis
-                            tick={chartAxisTick}
-                            tickFormatter={v =>
-                              v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`
-                            }
-                            label={{
-                              value: 'Monto (USD)',
-                              angle: -90,
-                              position: 'insideLeft',
-                              style: { fill: '#374151', fontSize: 12 },
-                            }}
-                          />
-
-                          <Tooltip
-                            contentStyle={chartTooltipStyle.contentStyle}
-                            labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number) => [
-                              typeof value === 'number'
-                                ? `$${value.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                : value,
-                              'Monto (USD)',
-                            ]}
-                          />
-
-                          <Legend {...chartLegendStyle} />
-
-                          <Bar
-                            dataKey="monto"
-                            fill="#ef4444"
-                            name="Monto en Pago vencido (USD)"
-                            radius={[4, 4, 0, 0]}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </ChartWithDateRangeSlider>
-                ) : (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    No hay datos para mostrar
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Cantidad de préstamos en mora por rango de d\u00EDas */}
+        <div className="grid grid-cols-1 gap-6">
+          {/* Cantidad de préstamos en mora por rango de días */}
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -2227,8 +2136,7 @@ export function DashboardMenu() {
 
                 <p className="mt-1 text-xs text-gray-600">
                   Préstamos con cuotas vencidas sin pagar. 1-30, 31-60 y 61-89
-                  d\u00EDas = Vencido; 90+ d\u00EDas = Moroso (snapshot al día
-                  de hoy).
+                  días = Vencido; 90+ días = Moroso (snapshot al día de hoy).
                 </p>
               </CardHeader>
 

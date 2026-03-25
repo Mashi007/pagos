@@ -15,7 +15,10 @@ from app.core.deps import get_current_user
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.modelo_vehiculo import ModeloVehiculo
+from app.models.pago import Pago
+from app.models.pago_reportado import PagoReportado
 from app.models.prestamo import Prestamo
+from app.services.tasa_cambio_service import obtener_tasas_por_fechas
 
 from .utils import (
     _CACHE_COBRANZAS_SEMANALES,
@@ -28,6 +31,7 @@ from .utils import (
     _safe_float,
     _sanitize_filter_string,
     _etiquetas_12_meses,
+    _meses_desde_rango,
     _ultimo_dia_del_mes,
     _parse_fechas_concesionario,
     _rangos_financiamiento,
@@ -117,17 +121,15 @@ def _compute_financiamiento_por_rangos(
                 pass
 
         rangos_def = _rangos_financiamiento()
-        # Una consulta: cuenta por rango con CASE (rango 0..7)
+        # Una consulta: cuenta por rango con CASE (rango 0..5, bandas de $400)
         tf = Prestamo.total_financiamiento
         case_rango = case(
-            (tf < 200, 0),
-            (tf < 400, 1),
-            (tf < 600, 2),
-            (tf < 800, 3),
-            (tf < 1000, 4),
-            (tf < 1200, 5),
-            (tf < 1400, 6),
-            else_=7,
+            (tf < 400, 0),
+            (tf < 800, 1),
+            (tf < 1200, 2),
+            (tf < 1600, 3),
+            (tf < 2000, 4),
+            else_=5,
         )
         q = (
             select(case_rango.label("rango_idx"), func.count().label("n"))
@@ -163,8 +165,12 @@ def _compute_financiamiento_por_rangos(
     except Exception as e:
         logger.exception("Error en financiamiento-por-rangos: %s", e)
         rangos = [
-            ("$0 - $200", 0), ("$200 - $400", 0), ("$400 - $600", 0), ("$600 - $800", 0),
-            ("$800 - $1,000", 0), ("$1,000 - $1,200", 0), ("$1,200 - $1,400", 0), ("Más de $1,400", 0),
+            ("$0 - $400", 0),
+            ("$400 - $800", 0),
+            ("$800 - $1,200", 0),
+            ("$1,200 - $1,600", 0),
+            ("$1,600 - $2,000", 0),
+            ("Más de $2,000", 0),
         ]
         total_p = max(1, sum(r[1] for r in rangos))
         return {
@@ -830,6 +836,133 @@ def get_evolucion_pagos(
         logger.exception("Error en evolucion-pagos: %s", e)
         m = _etiquetas_12_meses()
         return {"meses": [{"mes": x["mes"], "pagos": x.get("pagos", 0), "monto": x.get("monto", 0)} for x in m]}
+
+
+def _norm_moneda_recibo_pago_reportado(m: Optional[str]) -> str:
+    x = ((m or "BS").strip().upper())
+    if x == "USDT":
+        return "USD"
+    return x
+
+
+def _compute_recibos_pagos_mensual_usd(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+) -> dict:
+    """
+    Por mes (fecha_pago del reporte con recibo PDF): montos en USD declarados
+    vs bolívares expresados en USD (prioridad: Pago vinculado COB-{ref}; si no, tasa del día).
+    """
+    if fecha_inicio and fecha_fin:
+        try:
+            inicio = date.fromisoformat(fecha_inicio)
+            fin = date.fromisoformat(fecha_fin)
+            if inicio <= fin:
+                meses = _meses_desde_rango(inicio, fin)
+            else:
+                meses = _etiquetas_12_meses()
+        except ValueError:
+            meses = _etiquetas_12_meses()
+    else:
+        meses = _etiquetas_12_meses()
+
+    min_date: Optional[date] = None
+    max_date: Optional[date] = None
+    for m in meses:
+        y, mo = m["year"], m["month"]
+        id_ = date(y, mo, 1)
+        fd_ = date(y, 12, 31) if mo == 12 else date(y, mo + 1, 1) - timedelta(days=1)
+        min_date = id_ if min_date is None or id_ < min_date else min_date
+        max_date = fd_ if max_date is None or fd_ > max_date else max_date
+
+    buckets: dict[tuple[int, int], dict[str, float]] = {}
+    try:
+        rows = db.execute(
+            select(PagoReportado).where(
+                PagoReportado.recibo_pdf.isnot(None),
+                PagoReportado.estado.in_(("aprobado", "importado")),
+                PagoReportado.fecha_pago >= min_date,
+                PagoReportado.fecha_pago <= max_date,
+            )
+        ).scalars().all()
+
+        doc_keys = list({
+            ("COB-" + (pr.referencia_interna or ""))[:100]
+            for pr in rows
+            if (pr.referencia_interna or "").strip()
+        })
+        pago_by_doc: dict[str, Pago] = {}
+        if doc_keys:
+            pagos = db.execute(
+                select(Pago).where(Pago.numero_documento.in_(doc_keys))
+            ).scalars().all()
+            for p in pagos:
+                if p.numero_documento:
+                    pago_by_doc[p.numero_documento] = p
+
+        fechas_bs_sin_pago: list[date] = []
+        for pr in rows:
+            if _norm_moneda_recibo_pago_reportado(getattr(pr, "moneda", None)) != "BS":
+                continue
+            dk = ("COB-" + (pr.referencia_interna or ""))[:100]
+            p = pago_by_doc.get(dk)
+            if p is None or p.monto_pagado is None:
+                if pr.fecha_pago:
+                    fechas_bs_sin_pago.append(pr.fecha_pago)
+        tasas_map = obtener_tasas_por_fechas(db, fechas_bs_sin_pago)
+
+        for pr in rows:
+            if not pr.fecha_pago:
+                continue
+            key = (pr.fecha_pago.year, pr.fecha_pago.month)
+            if key not in buckets:
+                buckets[key] = {"pagos_usd": 0.0, "pagos_bs_en_usd": 0.0}
+            mon = _norm_moneda_recibo_pago_reportado(getattr(pr, "moneda", None))
+            monto_pr = float(pr.monto or 0)
+            if mon == "USD":
+                buckets[key]["pagos_usd"] += monto_pr
+            elif mon == "BS":
+                dk = ("COB-" + (pr.referencia_interna or ""))[:100]
+                p = pago_by_doc.get(dk)
+                if p is not None and p.monto_pagado is not None:
+                    buckets[key]["pagos_bs_en_usd"] += float(p.monto_pagado)
+                else:
+                    t = tasas_map.get(pr.fecha_pago)
+                    tasa = float(t.tasa_oficial) if t is not None and t.tasa_oficial else 0.0
+                    if tasa > 0:
+                        buckets[key]["pagos_bs_en_usd"] += monto_pr / tasa
+
+        series = []
+        for m in meses:
+            yk, mk = m["year"], m["month"]
+            b = buckets.get((yk, mk), {"pagos_usd": 0.0, "pagos_bs_en_usd": 0.0})
+            series.append({
+                "mes": m["mes"],
+                "pagos_usd": round(b["pagos_usd"], 2),
+                "pagos_bs_en_usd": round(b["pagos_bs_en_usd"], 2),
+            })
+        return {"series": series, "origen": "bd"}
+    except Exception as e:
+        logger.exception("Error en recibos-pagos-mensual-usd: %s", e)
+        return {
+            "series": [
+                {"mes": mm["mes"], "pagos_usd": 0.0, "pagos_bs_en_usd": 0.0}
+                for mm in meses
+            ],
+            "origen": "bd",
+        }
+
+
+@router.get("/recibos-pagos-mensual-usd")
+def get_recibos_pagos_mensual_usd(
+    periodo: Optional[str] = Query(None),
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Pagos por recibo (pagos_reportados con PDF): USD vs Bs. en USD por mes."""
+    return _compute_recibos_pagos_mensual_usd(db, fecha_inicio, fecha_fin)
 
 
 @router.get("/cobranza-por-dia", summary="[Stub] Devuelve dias vacíos hasta tener tabla pagos/cobranzas.")

@@ -32,6 +32,8 @@ import { prestamoService } from '../../services/prestamoService'
 
 import { pagoService } from '../../services/pagoService'
 
+import { invalidateListasNotificacionesMora } from '../../constants/queryKeys'
+
 import { toast } from 'sonner'
 
 export function PagosBuscadorAmortizacion() {
@@ -106,6 +108,7 @@ export function PagosBuscadorAmortizacion() {
         queryClient.invalidateQueries({
           queryKey: ['cuotas-amortizacion-cedula'],
         })
+        void invalidateListasNotificacionesMora(queryClient)
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al reconciliar'

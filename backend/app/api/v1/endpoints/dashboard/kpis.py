@@ -376,7 +376,6 @@ def _compute_dashboard_admin(
         meses = _etiquetas_12_meses()
 
     evolucion = []
-    hoy_date = date.today()
     try:
         for i, m in enumerate(meses):
             if "year" in m and "month" in m:
@@ -418,23 +417,45 @@ def _compute_dashboard_admin(
                     Cuota.fecha_pago.isnot(None),
                 )
             ) or 0
-            
+
+            pagos_atrasos = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < inicio_d,
+                    Cuota.fecha_pago >= inicio_d,
+                    Cuota.fecha_pago <= fin_d,
+                    Cuota.fecha_pago.isnot(None),
+                )
+            ) or 0
+
             cartera_f = _safe_float(cartera)
             cobrado_f = _safe_float(cobrado)
-            
+            pagos_atrasos_f = _safe_float(pagos_atrasos)
+
             # CUENTAS POR COBRAR: Lo que falta cobrar de este mes = Cartera - Cobrado
             cuentas_por_cobrar_f = cartera_f - cobrado_f
             evolucion.append({
                 "mes": m["mes"],
                 "cartera": cartera_f,
                 "cobrado": cobrado_f,
+                "pagos_atrasos": pagos_atrasos_f,
                 "cuentas_por_cobrar": cuentas_por_cobrar_f,
             })
         origen = "bd"
     except Exception as e:
         logger.exception("Error en dashboard admin (evolucion desde cuotas): %s", e)
         evolucion = [
-            {"mes": m["mes"], "cartera": 0.0, "cobrado": 0.0, "cuentas_por_cobrar": 0.0}
+            {
+                "mes": m["mes"],
+                "cartera": 0.0,
+                "cobrado": 0.0,
+                "pagos_atrasos": 0.0,
+                "cuentas_por_cobrar": 0.0,
+            }
             for m in meses
         ]
         origen = "bd"

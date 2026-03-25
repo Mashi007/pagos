@@ -61,6 +61,9 @@ export interface EvolucionMensualItem {
 
   cobrado: number
 
+  /** Cuotas de meses anteriores cobradas en este mes (misma regla que análisis cuentas por cobrar) */
+  pagos_atrasos: number
+
   cuentas_por_cobrar: number
 }
 
@@ -204,6 +207,20 @@ export interface TendenciaProgramadoTotalCobradoItem {
 
 export interface TendenciaProgramadoTotalCobradoResponse {
   series: TendenciaProgramadoTotalCobradoItem[]
+
+  origen: 'demo' | 'bd'
+}
+
+export interface RecibosPagosMensualUsdItem {
+  mes: string
+
+  pagos_usd: number
+
+  pagos_bs_en_usd: number
+}
+
+export interface RecibosPagosMensualUsdResponse {
+  series: RecibosPagosMensualUsdItem[]
 
   origen: 'demo' | 'bd'
 }

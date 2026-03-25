@@ -158,14 +158,12 @@ def _parse_fechas_concesionario(fecha_inicio: Optional[str], fecha_fin: Optional
 
 
 def _rangos_financiamiento():
-    """Bandas por total_financiamiento (tabla prestamos). Incluye $1,200-$1,400 y Más de $1,400."""
+    """Bandas por total_financiamiento (tabla prestamos), cada $400 hasta $2,000 y cola abierta."""
     return [
-        (0, 200, "$0 - $200"),
-        (200, 400, "$200 - $400"),
-        (400, 600, "$400 - $600"),
-        (600, 800, "$600 - $800"),
-        (800, 1000, "$800 - $1,000"),
-        (1000, 1200, "$1,000 - $1,200"),
-        (1200, 1400, "$1,200 - $1,400"),
-        (1400, 999999999, "Más de $1,400"),
+        (0, 400, "$0 - $400"),
+        (400, 800, "$400 - $800"),
+        (800, 1200, "$800 - $1,200"),
+        (1200, 1600, "$1,200 - $1,600"),
+        (1600, 2000, "$1,600 - $2,000"),
+        (2000, 999999999, "Más de $2,000"),
     ]

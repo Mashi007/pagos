@@ -18,7 +18,11 @@ def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]
     """
     Fuente única: cuotas no pagadas (fecha_pago nula) con su cliente vía préstamo.
     Excluye préstamos en estado LIQUIDADO (alineado con tabla prestamos).
-    
+
+    Al registrar pagos que aplican a cuotas y fijan fecha_pago, esas cuotas dejan
+    de aparecer aquí: las listas de notificaciones reflejan el estado actual de la BD
+    en cada lectura (no dependen de un batch nocturno para “quitar” mora pagada).
+
     Usado por get_clientes_retrasados y get_notificaciones_tabs_data para evitar duplicar consulta.
     """
     q = (

@@ -34,6 +34,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
+import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
+
 import { pagoService } from '../services/pagoService'
 
 import {
@@ -630,6 +632,8 @@ export function useExcelUploadPagos({
     queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
 
     queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
+
+    void invalidateListasNotificacionesMora(queryClient)
   }, [queryClient])
 
   const getValidRows = useCallback((): PagoExcelRow[] => {

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Ultimo resultado del envio masivo (ejecutar_envio_todas_notificaciones o scheduler 01:00).
+Ultimo resultado del envio masivo (API «Enviar todas» o scheduler por hora programador).
 Persistido en configuracion para GET /notificaciones/envio-batch/ultimo sin depender de logs.
 """
 import json

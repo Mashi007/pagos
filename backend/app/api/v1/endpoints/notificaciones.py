@@ -1444,6 +1444,8 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
        Se muestran total_financiamiento y suma de abonos en cuotas para referencia.
     Claves dias_5, dias_3, dias_1, hoy se devuelven vacias (compatibilidad API).
     Datos desde BD: get_cuotas_pendientes_con_cliente y tabla prestamos/cuotas.
+    Solo cuotas con fecha_pago nula: si se registra un pago que liquida la cuota,
+    deja de listarse en la siguiente lectura (sin depender de un job de refresco).
     """
     hoy = date.today()
     try:

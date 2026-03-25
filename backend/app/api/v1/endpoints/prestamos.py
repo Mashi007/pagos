@@ -56,6 +56,8 @@ from app.models.pago_con_error import PagoConError
 
 from app.models.prestamo import Prestamo
 
+from app.models.analista import Analista
+
 from app.models.user import User
 
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
@@ -102,6 +104,39 @@ from app.services.prestamo_estado_coherencia import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _resolver_analista_para_prestamo(
+    db: Session,
+    analista: Optional[str],
+    analista_id: Optional[int],
+) -> tuple[str, Optional[int]]:
+    """
+    Catálogo analistas: prioriza analista_id; si solo viene texto y existe en catálogo, enlaza id.
+    Texto sin coincidencia se guarda en prestamos.analista sin id (cargas legacy / Excel).
+    """
+    if analista_id is not None:
+        row_a = db.get(Analista, analista_id)
+        if not row_a:
+            raise HTTPException(status_code=400, detail="analista_id no existe en el catálogo")
+        if not row_a.activo:
+            raise HTTPException(
+                status_code=400,
+                detail="El analista está inactivo; reactívelo en Analistas o elija otro.",
+            )
+        return row_a.nombre, row_a.id
+    if analista is not None and str(analista).strip():
+        n = str(analista).strip()
+        found = db.execute(select(Analista).where(Analista.nombre == n)).scalar_one_or_none()
+        if found:
+            if not found.activo:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El analista está inactivo; reactívelo en Analistas o elija otro.",
+                )
+            return found.nombre, found.id
+        return n, None
+    return "", None
 
 
 class PrestamoIdsCuotasBody(BaseModel):
@@ -3514,6 +3549,10 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
     fecha_aprob = None if es_carga_masiva else datetime.combine(payload.fecha_requerimiento or hoy, time.min)
 
+    analista_nombre, analista_row_id = _resolver_analista_para_prestamo(
+        db, payload.analista, payload.analista_id
+    )
+
     row = Prestamo(
 
         cliente_id=payload.cliente_id,
@@ -3542,7 +3581,9 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
         modelo_vehiculo=payload.modelo,
 
-        analista=payload.analista or "",
+        analista=analista_nombre or (payload.analista or ""),
+
+        analista_id=analista_row_id,
 
         usuario_proponente=usuario_proponente_email,
 
@@ -3656,9 +3697,17 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         row.modelo_vehiculo = payload.modelo
 
-    if payload.analista is not None:
+    if payload.analista_id is not None or payload.analista is not None:
 
-        row.analista = payload.analista
+        an_txt, an_id = _resolver_analista_para_prestamo(
+            db,
+            payload.analista if payload.analista is not None else row.analista,
+            payload.analista_id,
+        )
+
+        row.analista = an_txt or row.analista
+
+        row.analista_id = an_id
 
     if payload.modalidad_pago is not None:
 

@@ -38,6 +38,8 @@ import { Button } from '../../components/ui/button'
 
 import { Input } from '../../components/ui/input'
 
+import { Textarea } from '../../components/ui/textarea'
+
 import {
   Select,
   SelectContent,
@@ -57,6 +59,17 @@ const CLAVES_GLOBALES = [
   'email_pruebas',
   'emails_pruebas',
 ] as const
+
+const CCO_MAX = 3
+
+/** Separa correos por coma, punto y coma o salto de linea (maximo CCO_MAX). */
+function parsearCorreosCco(texto: string): string[] {
+  return texto
+    .split(/[\n,;]+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .slice(0, CCO_MAX)
+}
 
 /** Tipo de configuración por criterio (habilitado, cco, plantilla opcional, programador) */
 
@@ -87,37 +100,90 @@ export type ConfigEnvioCompleta = Record<
 
 /** Criterios de notificación (tipo → label). Exportado para uso en Plantillas / vinculación PDF. */
 
-/**
- * Casos con envio por pestaña / lote (scheduler). COBRANZA no aplica: la carta PDF se arma
- * desde plantillas tipo COBRANZA vinculadas a estos casos, no hay fila de envío separada.
- */
-export const CRITERIOS_ENVIO_PANEL: {
+type CriterioEnvioRow = {
   tipo: string
   label: string
   categoria: string
   color: 'blue' | 'green' | 'orange' | 'red' | 'slate'
-}[] = [
+}
+
+/**
+ * Tabla de envíos / programador: una fila por caso (hora y CCO independientes).
+ * Alineado con los tipos que usa el backend (notificaciones_tabs + programador).
+ */
+export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
+  {
+    tipo: 'PAGO_5_DIAS_ANTES',
+    label: 'Faltan 5 días al vencimiento',
+    categoria: 'Por vencer',
+    color: 'blue',
+  },
+  {
+    tipo: 'PAGO_3_DIAS_ANTES',
+    label: 'Faltan 3 días al vencimiento',
+    categoria: 'Por vencer',
+    color: 'blue',
+  },
+  {
+    tipo: 'PAGO_1_DIA_ANTES',
+    label: 'Falta 1 día al vencimiento',
+    categoria: 'Por vencer',
+    color: 'blue',
+  },
+  {
+    tipo: 'PAGO_DIA_0',
+    label: 'Vence hoy',
+    categoria: 'Día de pago',
+    color: 'green',
+  },
   {
     tipo: 'PAGO_1_DIA_ATRASADO',
     label: 'Día siguiente al vencimiento',
     categoria: 'Retrasada',
     color: 'orange',
   },
-
   {
     tipo: 'PAGO_3_DIAS_ATRASADO',
     label: '3 días de retraso',
     categoria: 'Retrasada',
     color: 'orange',
   },
-
   {
     tipo: 'PAGO_5_DIAS_ATRASADO',
     label: '5 días atrasado',
     categoria: 'Retrasada',
     color: 'orange',
   },
+  {
+    tipo: 'PREJUDICIAL',
+    label: 'Prejudicial',
+    categoria: 'Prejudicial',
+    color: 'red',
+  },
+]
 
+/**
+ * Subconjunto para prueba de paquete (cuotas en mora / prejudicial con datos típicos en BD).
+ */
+export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
+  {
+    tipo: 'PAGO_1_DIA_ATRASADO',
+    label: 'Día siguiente al vencimiento',
+    categoria: 'Retrasada',
+    color: 'orange',
+  },
+  {
+    tipo: 'PAGO_3_DIAS_ATRASADO',
+    label: '3 días de retraso',
+    categoria: 'Retrasada',
+    color: 'orange',
+  },
+  {
+    tipo: 'PAGO_5_DIAS_ATRASADO',
+    label: '5 días atrasado',
+    categoria: 'Retrasada',
+    color: 'orange',
+  },
   {
     tipo: 'PREJUDICIAL',
     label: 'Prejudicial',
@@ -127,13 +193,8 @@ export const CRITERIOS_ENVIO_PANEL: {
 ]
 
 /** Etiquetas para vinculación PDF + compat; incluye COBRANZA (solo plantilla, sin fila envío). */
-export const CRITERIOS_ETIQUETAS: {
-  tipo: string
-  label: string
-  categoria: string
-  color: 'blue' | 'green' | 'orange' | 'red' | 'slate'
-}[] = [
-  ...CRITERIOS_ENVIO_PANEL,
+export const CRITERIOS_ETIQUETAS: CriterioEnvioRow[] = [
+  ...CRITERIOS_ENVIO_TABLA,
   {
     tipo: 'COBRANZA',
     label: 'Carta de cobranza (plantilla tipo cobranza)',
@@ -390,15 +451,8 @@ export function ConfiguracionNotificaciones() {
     setConfig(tipo, { habilitado: !c.habilitado })
   }
 
-  const actualizarCCO = (tipo: string, index: number, email: string) => {
-    const c = getConfig(tipo)
-
-    const nuevosCCO = [...c.cco]
-
-    if (index < nuevosCCO.length) nuevosCCO[index] = email
-    else nuevosCCO.push(email)
-
-    setConfig(tipo, { cco: nuevosCCO.slice(0, 3) })
+  const setCcoDesdeTexto = (tipo: string, texto: string) => {
+    setConfig(tipo, { cco: parsearCorreosCco(texto) })
   }
 
   const eliminarCCO = (tipo: string, index: number) => {
@@ -437,7 +491,7 @@ export function ConfiguracionNotificaciones() {
         email_pruebas: emailsPruebas[0]?.trim() || '',
       }
 
-      CRITERIOS_ENVIO_PANEL.forEach(({ tipo }) => {
+      CRITERIOS_ENVIO_TABLA.forEach(({ tipo }) => {
         const c = getConfig(tipo)
 
         ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
@@ -990,8 +1044,9 @@ export function ConfiguracionNotificaciones() {
           </div>
 
           <CardDescription className="text-xs">
-            Resultado del último «Enviar todas» (API) o del programador 01:00
-            (Caracas). Útil cuando la petición masiva responde 202 sin cuerpo.
+            Resultado del último «Enviar todas» (API) o del envío automático por
+            hora (Caracas). Útil cuando la petición masiva responde 202 sin
+            cuerpo.
           </CardDescription>
         </CardHeader>
 
@@ -1086,14 +1141,14 @@ export function ConfiguracionNotificaciones() {
                 Adj.
               </th>
 
-              <th className="w-32 px-4 py-3 text-left font-semibold text-gray-700">
+              <th className="min-w-[280px] px-4 py-3 text-left font-semibold text-gray-700">
                 Opciones
               </th>
             </tr>
           </thead>
 
           <tbody>
-            {CRITERIOS_ENVIO_PANEL.map(({ tipo, label, categoria, color }) => {
+            {CRITERIOS_ENVIO_TABLA.map(({ tipo, label, categoria, color }) => {
               const config = getConfig(tipo)
 
               const col = COLORES[color]
@@ -1207,58 +1262,124 @@ export function ConfiguracionNotificaciones() {
                   <td className="px-4 py-3">
                     <details className="group">
                       <summary className="cursor-pointer list-none text-xs font-medium text-blue-600 hover:text-blue-800">
-                        Hora y CCO (1-3)
+                        Hora y CCO (hasta {CCO_MAX})
                       </summary>
 
-                      <div className="mt-2 space-y-2 pl-0">
-                        <label className="block text-xs text-gray-500">
-                          Hora envío
-                        </label>
+                      <div className="mt-2 min-w-[260px] space-y-3 pl-0">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Hora envío
+                          </label>
 
-                        <Input
-                          type="time"
-                          value={config.programador || HORA_DEFAULT}
-                          onChange={e =>
-                            setConfig(tipo, { programador: e.target.value })
-                          }
-                          disabled={!config.habilitado}
-                          className="h-8 w-28 bg-white text-xs"
-                        />
+                          <Input
+                            type="time"
+                            value={config.programador || HORA_DEFAULT}
+                            onChange={e =>
+                              setConfig(tipo, { programador: e.target.value })
+                            }
+                            disabled={!config.habilitado}
+                            className="h-9 w-full max-w-[9.5rem] bg-white text-sm"
+                          />
 
-                        <label className="block pt-1 text-xs text-gray-500">
-                          CCO (copia oculta)
-                        </label>
+                          <p className="mt-1.5 text-xs text-gray-600">
+                            Cada <strong>fila</strong> (caso) tiene su propia
+                            hora y CCO. Zona <strong>America/Caracas</strong>:
+                            el servidor revisa cada minuto y envía solo ese caso
+                            cuando coincide la hora (una vez al día por caso).
+                            Si el campo viene vacío en datos antiguos, el
+                            backend usa <strong>01:00</strong> por
+                            compatibilidad.
+                          </p>
+                        </div>
 
-                        {[0, 1, 2].map(i => (
-                          <div key={i} className="flex items-center gap-1">
-                            <span className="w-8 text-xs text-gray-500">
-                              CCO {i + 1}
-                            </span>
-
-                            <Input
-                              type="email"
-                              placeholder={`CCO ${i + 1}`}
-                              value={config.cco[i] || ''}
-                              onChange={e =>
-                                actualizarCCO(tipo, i, e.target.value)
-                              }
-                              className="h-8 flex-1 bg-white text-xs"
-                              disabled={!config.habilitado}
-                            />
-
-                            {config.cco[i] && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 shrink-0"
-                                onClick={() => eliminarCCO(tipo, i)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            )}
+                        <div className="rounded-lg border border-gray-200 bg-slate-50/80 p-3">
+                          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-700">
+                            <Mail className="h-3.5 w-3.5 text-blue-600" />
+                            CCO (copia oculta)
                           </div>
-                        ))}
+
+                          <p className="mb-2 text-xs text-gray-500">
+                            Pegue varios correos aquí:{' '}
+                            <strong>uno por línea</strong>, o separados por{' '}
+                            <strong>coma</strong> o{' '}
+                            <strong>punto y coma</strong>. Máximo {CCO_MAX}. El
+                            servidor solo usa direcciones con formato completo (
+                            <code className="rounded bg-white px-0.5">@</code> y
+                            dominio). En modo pruebas el destino principal es el
+                            de pruebas; CCO sigue aplicando.
+                          </p>
+
+                          <Textarea
+                            value={config.cco.filter(Boolean).join('\n')}
+                            onChange={e =>
+                              setCcoDesdeTexto(tipo, e.target.value)
+                            }
+                            disabled={!config.habilitado}
+                            placeholder={
+                              'ejemplo@empresa.com\notro@empresa.com'
+                            }
+                            rows={4}
+                            autoComplete="off"
+                            spellCheck={false}
+                            className="resize-y bg-white text-sm leading-relaxed placeholder:text-gray-400"
+                            aria-label="Correos en copia oculta"
+                          />
+
+                          {config.cco.some(Boolean) && (
+                            <div className="mt-2">
+                              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                                Activos (pulse la X para quitar)
+                              </p>
+
+                              <ul className="flex flex-col gap-1.5">
+                                {config.cco.map(
+                                  (email, idx) =>
+                                    email?.trim() && (
+                                      <li
+                                        key={`${tipo}-cco-${idx}-${email}`}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <span
+                                          className={`inline-flex min-h-9 max-w-full flex-1 items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs ${
+                                            esEmailValido(email)
+                                              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                                              : 'border-amber-300 bg-amber-50 text-amber-950'
+                                          }`}
+                                        >
+                                          <Mail className="h-3.5 w-3.5 shrink-0 opacity-70" />
+
+                                          <span
+                                            className="min-w-0 flex-1 break-all font-medium"
+                                            title={email.trim()}
+                                          >
+                                            {email.trim()}
+                                          </span>
+
+                                          {!esEmailValido(email) && (
+                                            <span className="shrink-0 text-[10px] text-amber-800">
+                                              Revisar formato
+                                            </span>
+                                          )}
+                                        </span>
+
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 shrink-0 px-2 text-red-700 hover:bg-red-50"
+                                          disabled={!config.habilitado}
+                                          onClick={() => eliminarCCO(tipo, idx)}
+                                          title="Quitar este correo"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </li>
+                                    )
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </details>
                   </td>

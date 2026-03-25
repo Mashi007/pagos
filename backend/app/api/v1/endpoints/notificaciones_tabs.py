@@ -333,7 +333,17 @@ def _enviar_correos_items(
             bcc_list = None
         elif usar_solo_pruebas:
             to_email = [email_pruebas]
-            bcc_list = None
+            cco = tipo_cfg.get("cco") or []
+            bcc_list = (
+                [
+                    e.strip()
+                    for e in cco
+                    if e and isinstance(e, str) and "@" in e.strip()
+                ]
+                if isinstance(cco, list)
+                else []
+            )
+            bcc_list = bcc_list or None
         elif bloqueo_pruebas_sin_email:
             to_email = []  # Modo prueba activo pero sin correo de pruebas: no enviar a nadie
             bcc_list = None

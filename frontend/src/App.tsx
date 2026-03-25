@@ -130,7 +130,7 @@ import InfopagosPage from './pages/InfopagosPage'
 
 import EstadoCuentaPublicoPage from './pages/EstadoCuentaPublicoPage'
 
-import { FiniquitoLandingPage } from './pages/FiniquitoLandingPage'
+import { FiniquitoRootPage } from './pages/FiniquitoRootPage'
 
 import { FiniquitoAccesoPage } from './pages/FiniquitoAccesoPage'
 
@@ -263,7 +263,7 @@ function App() {
 
             {/* Finiquito: portal publico (OTP) + entrada dual; gestion solo admin con Layout */}
 
-            <Route path="finiquitos" element={<FiniquitoLandingPage />} />
+            <Route path="finiquitos" element={<FiniquitoRootPage />} />
 
             <Route path="finiquitos/acceso" element={<FiniquitoAccesoPage />} />
 
