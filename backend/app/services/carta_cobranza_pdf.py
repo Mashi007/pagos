@@ -607,6 +607,7 @@ def build_pdf_bytes(
     from reportlab.lib.units import cm
     from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_JUSTIFY
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+    from reportlab.lib.utils import ImageReader
     import os
 
     azul = colors.HexColor(AZUL)
@@ -651,8 +652,14 @@ def build_pdf_bytes(
 
     if logo_path and os.path.exists(logo_path):
         try:
-            # Wordmark: ancho ligeramente mayor para balance visual.
-            logo = Image(logo_path, width=8.0 * cm, height=1.10 * cm)
+            # Wordmark: ancho mayor, manteniendo proporción para evitar distorsión.
+            logo_width = 8.0 * cm
+            iw, ih = ImageReader(logo_path).getSize()
+            ratio = (float(ih) / float(iw)) if iw else (1.0 / 4.5)
+            logo_height = logo_width * ratio
+            # Limitar altura para no robar espacio vertical en cartas largas.
+            logo_height = min(logo_height, 1.6 * cm)
+            logo = Image(logo_path, width=logo_width, height=logo_height)
             logo.hAlign = "LEFT"
             story.append(logo)
         except Exception as e:
@@ -785,6 +792,8 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
         plantilla.get("cuerpo_principal"), contexto_cobranza, datos
     )
     cuerpo = _normalizar_encabezado_editable(cuerpo)
+    # _normalizar_encabezado_editable puede insertar {{FECHA_CARTA_LARGA}}; volver a sustituir.
+    cuerpo = _reemplazar_variables_plantilla_pdf(cuerpo, contexto_cobranza, datos)
     encabezado_raw = _reemplazar_variables_plantilla_pdf(
         plantilla.get("encabezado")
         or plantilla.get("encabezado_html")
@@ -793,6 +802,8 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
         contexto_cobranza,
         datos,
     )
+    encabezado_raw = _normalizar_encabezado_editable(encabezado_raw)
+    encabezado_raw = _reemplazar_variables_plantilla_pdf(encabezado_raw, contexto_cobranza, datos)
     clausula = _reemplazar_variables_plantilla_pdf(
         plantilla.get("clausula_septima"), contexto_cobranza, datos
     )
