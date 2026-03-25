@@ -212,12 +212,29 @@ def get_clientes_stats(db: Session = Depends(get_db)):
     except Exception as e:
         logger.warning("Error calculando nuevos_este_mes por fecha_registro: %s", e)
         nuevos_este_mes = 0
+
+    # Última actualización real en tabla clientes: max(fecha_actualizacion, fecha_registro).
+    # Nota: estos timestamps suelen ser "naive". Como la conexión fija BUSINESS_TIMEZONE,
+    # adjuntamos esa zona para devolver ISO explícito al frontend.
+    ultima_actualizacion_iso: Optional[str] = None
+    try:
+        ultima_dt = db.scalar(
+            select(func.max(func.coalesce(Cliente.fecha_actualizacion, Cliente.fecha_registro)))
+            .select_from(Cliente)
+        )
+        if isinstance(ultima_dt, datetime):
+            if ultima_dt.tzinfo is None:
+                ultima_dt = ultima_dt.replace(tzinfo=ZoneInfo(BUSINESS_TIMEZONE))
+            ultima_actualizacion_iso = ultima_dt.isoformat()
+    except Exception as e:
+        logger.warning("Error calculando ultima_actualizacion de clientes: %s", e)
     result = {
         "total": int(total),
         "activos": int(activos),
         "inactivos": int(inactivos),
         "finalizados": int(finalizados),
         "nuevos_este_mes": nuevos_este_mes,
+        "ultima_actualizacion": ultima_actualizacion_iso,
     }
     logger.debug("GET /clientes/stats -> %s", result)
     return result

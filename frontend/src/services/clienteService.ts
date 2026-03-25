@@ -316,6 +316,7 @@ class ClienteService {
     inactivos: number
     finalizados: number
     nuevos_este_mes: number
+    ultima_actualizacion?: string | null
   }> {
     const response = await apiClient.get<{
       total: number
@@ -323,6 +324,7 @@ class ClienteService {
       inactivos: number
       finalizados: number
       nuevos_este_mes: number
+      ultima_actualizacion?: string | null
     }>(`${this.baseUrl}/stats`)
 
     return response

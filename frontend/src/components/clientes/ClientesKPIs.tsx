@@ -2,6 +2,8 @@ import { Card, CardContent } from '../../components/ui/card'
 
 import { Badge } from '../../components/ui/badge'
 
+import { formatLastSyncDate } from '../../utils'
+
 import {
   Users,
   UserCheck,
@@ -20,6 +22,8 @@ interface ClientesKPIsProps {
 
   total: number
 
+  ultimaActualizacion?: string | null
+
   isLoading?: boolean
 }
 
@@ -31,6 +35,8 @@ export function ClientesKPIs({
   finalizados,
 
   total,
+
+  ultimaActualizacion,
 
   isLoading = false,
 }: ClientesKPIsProps) {
@@ -147,6 +153,16 @@ export function ClientesKPIs({
             >
               Este mes
             </Badge>
+
+            {ultimaActualizacion ? (
+              <div className="mt-1 text-xs text-orange-700/80">
+                Actualizado: {formatLastSyncDate(ultimaActualizacion)}
+              </div>
+            ) : (
+              <div className="mt-1 text-xs text-orange-700/60">
+                Actualizado: -
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -589,6 +589,7 @@ export function ClientesList() {
         nuevosEsteMes={statsData?.nuevos_este_mes ?? 0}
         finalizados={statsData?.finalizados || 0}
         total={statsData?.total || 0}
+        ultimaActualizacion={statsData?.ultima_actualizacion ?? null}
         isLoading={statsLoading}
       />
 

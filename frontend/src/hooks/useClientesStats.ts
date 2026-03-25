@@ -14,6 +14,9 @@ interface ClientesStats {
 
   /** Altas en `clientes` este mes calendario (fecha_registro, zona America/Caracas). */
   nuevos_este_mes: number
+
+  /** Máxima fecha de registro/actualización en tabla `clientes` (ISO). */
+  ultima_actualizacion?: string | null
 }
 
 export function useClientesStats() {
