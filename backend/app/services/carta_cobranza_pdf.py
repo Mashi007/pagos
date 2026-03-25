@@ -248,7 +248,7 @@ def _normalizar_encabezado_editable(texto: str) -> str:
             )
             t = re.sub(
                 saludo_pat,
-                r"{{CIUDAD}}, {{FECHA_CARTA_LARGA}}<br/><br/>\1",
+                r"{{CIUDAD}}, {{FECHA_CARTA_LARGA}}<br/><b>Notificación N° {{NUMEROCORRELATIVO}}</b><br/><br/>\1",
                 t,
                 flags=re.IGNORECASE,
             )
@@ -562,7 +562,8 @@ def _preparar_wordmark_logo(path: Optional[str]) -> Optional[str]:
                     if y > max_y:
                         max_y = y
         if found and max_x > min_x and max_y > min_y:
-            pad_x = max(4, int((max_x - min_x + 1) * 0.03))
+            # Más margen lateral para no cortar bordes de la "R".
+            pad_x = max(6, int((max_x - min_x + 1) * 0.05))
             pad_y = max(2, int((max_y - min_y + 1) * 0.10))
             left = max(0, min_x - pad_x)
             top = max(0, min_y - pad_y)
@@ -570,17 +571,23 @@ def _preparar_wordmark_logo(path: Optional[str]) -> Optional[str]:
             bottom = min(ch, max_y + pad_y + 1)
             cropped = cropped.crop((left, top, right, bottom))
 
-        # Quitar punto naranja (marca) bajo la R: no es texto, solo color corporativo naranja.
+        # Recorte inteligente por columnas para quitar el punto aislado a la izquierda
+        # sin tocar el trazo de la "R" ni alterar colores del wordmark.
         cw2, ch2 = cropped.size
         px2 = cropped.load()
-        for y in range(ch2):
-            for x in range(cw2):
+        x_inicio_texto = 0
+        for x in range(cw2):
+            tinta_col = 0
+            for y in range(ch2):
                 r, g, b, a = px2[x, y]
-                if a < 30:
-                    continue
-                # Naranja típico logo (#E84C0E y similares), sin tocar azul del texto.
-                if r > 150 and g > 35 and g < 220 and b < 120 and r > g + 25 and r > b + 40:
-                    px2[x, y] = (255, 255, 255, 255)
+                if a > 20 and not (r > 245 and g > 245 and b > 245):
+                    tinta_col += 1
+            # Letras tienen trazo alto en columna; un punto pequeño no supera este umbral.
+            if tinta_col >= max(6, int(ch2 * 0.22)):
+                x_inicio_texto = max(0, x - 2)
+                break
+        if x_inicio_texto > 0:
+            cropped = cropped.crop((x_inicio_texto, 0, cw2, ch2))
 
         tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
         cropped.save(tmp.name, format="PNG")
@@ -674,20 +681,33 @@ def build_pdf_bytes(
 
     if encabezado_plantilla and encabezado_plantilla.strip():
         enc = _sanitize_for_reportlab(encabezado_plantilla.strip())
-        # Si el encabezado trae "Ciudad, fecha", mostrar esa primera línea a la derecha.
+        # Si el encabezado trae "Ciudad, fecha", mostrar esa línea a la derecha
+        # (aunque no venga como primera línea por limpieza de HTML/logo).
         parts = [p.strip() for p in re.split(r"<br\s*/?>", enc, flags=re.IGNORECASE) if p.strip()]
         if parts:
-            primera = parts[0]
-            es_ciudad_fecha = bool(
-                re.search(
+            idx_ciudad_fecha = -1
+            for i, p in enumerate(parts):
+                if re.search(
                     r".+,\s*(\d{1,2}/\d{1,2}/\d{4}|\d{1,2}\s+de\s+[A-Za-záéíóúñ]+\s+de\s+\d{4})$",
-                    primera,
+                    p,
                     flags=re.IGNORECASE,
-                )
-            )
-            if es_ciudad_fecha:
-                story.append(Paragraph(primera, s_fecha))
-                resto = "<br/>".join(parts[1:]).strip()
+                ):
+                    idx_ciudad_fecha = i
+                    break
+            if idx_ciudad_fecha >= 0:
+                linea_derecha = parts[idx_ciudad_fecha]
+                story.append(Paragraph(linea_derecha, s_fecha))
+                # Si la siguiente línea es correlativo, también va a la derecha debajo de la fecha.
+                resto_parts = [p for j, p in enumerate(parts) if j != idx_ciudad_fecha]
+                linea_correlativo = None
+                if idx_ciudad_fecha + 1 < len(parts):
+                    candidata = parts[idx_ciudad_fecha + 1]
+                    if re.search(r"Notificaci[oó]n\s*N[°º]", candidata, flags=re.IGNORECASE):
+                        linea_correlativo = candidata
+                        resto_parts = [p for j, p in enumerate(parts) if j not in (idx_ciudad_fecha, idx_ciudad_fecha + 1)]
+                if linea_correlativo:
+                    story.append(Paragraph(linea_correlativo, s_notif))
+                resto = "<br/>".join(resto_parts).strip()
                 if resto:
                     story.append(Spacer(1, 0.12 * cm))
                     story.append(Paragraph(resto, s_encabezado))
