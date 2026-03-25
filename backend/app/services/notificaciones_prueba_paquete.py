@@ -109,8 +109,7 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
                 status_code=422,
                 detail=(
                     "Paquete incompleto (NOTIFICACIONES_PAQUETE_ESTRICTO): se exige Carta_Cobranza.pdf "
-                    "valido (%PDF) y al menos un PDF fijo adicional (pestana 3 o adjunto global "
-                    "adjunto_fijo_cobranza). En Render el archivo debe existir en disco persistente. "
+                    "valido (%PDF) y plantilla de correo activa/completa. "
                     "Alternativa solo prueba forzada: NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO=true en .env. Emergencia global: NOTIFICACIONES_PAQUETE_ESTRICTO=false."
                 ),
             )

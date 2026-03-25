@@ -124,31 +124,18 @@ def _adjuntos_cumplen_paquete_completo(
     attachments: Optional[List[Tuple[str, bytes]]],
 ) -> tuple[bool, str]:
     """
-    Debe existir el PDF variable (Carta_Cobranza.pdf) valido y al menos un PDF fijo adicional valido.
-    Los fijos son cualquier adjunto distinto del nombre de la carta.
+    Debe existir el PDF variable (Carta_Cobranza.pdf) valido.
+    Ya no se exige un PDF fijo adicional para permitir operación estable en entornos
+    con disco efímero (p. ej. Render sin volumen persistente).
     """
     if not attachments:
         return False, "sin_adjuntos"
     carta: Optional[bytes] = None
-    otros: List[bytes] = []
     for nombre, data in attachments:
         if nombre == NOMBRE_PDF_CARTA_VARIABLE:
             carta = data
-        else:
-            otros.append(data)
     if not _bytes_son_pdf_valido(carta):
         return False, "falta_pdf_variable_o_invalido"
-    if not any(_bytes_son_pdf_valido(d) for d in otros):
-        if len(otros) == 0:
-            return (
-                False,
-                "falta_pdf_fijo_solo_Carta_Cobranza: anexar PDF pestaña 3 (caso dias_1_retraso) y/o "
-                "adjunto global configuracion adjunto_fijo_cobranza; en Render el archivo debe existir en disco persistente",
-            )
-        return (
-            False,
-            "falta_pdf_fijo_no_cabecera_PDF: hay archivo extra pero no empieza con %PDF (no es PDF valido o corrupto)",
-        )
     return True, ""
 
 
@@ -174,7 +161,7 @@ def _enviar_correos_items(
     Modo producción: envío al correo de cada cliente; plantillas y PDF con datos reales.
 
     Con NOTIFICACIONES_PAQUETE_ESTRICTO=True (defecto): no se envia correo ni WhatsApp sin
-    plantilla email activa, PDF Carta_Cobranza valido y al menos un PDF fijo adicional.
+    plantilla email activa y PDF Carta_Cobranza valido.
     Desactivar solo en emergencia vía .env (NOTIFICACIONES_PAQUETE_ESTRICTO=false).
     """
     if forzar_destinos_prueba is not None:
@@ -430,9 +417,8 @@ def _enviar_correos_items(
         if omitidos_paquete_incompleto > 0 and paquete_estricto:
             log.warning(
                 "[notif_envio_diagnostico] enviados=0: %s items omitidos por paquete incompleto "
-                "(NOTIFICACIONES_PAQUETE_ESTRICTO=true). Se exige Carta_Cobranza.pdf + al menos un PDF fijo "
-                "valido (%%PDF). Configure adjuntos en pestaña 3 por caso y/o adjunto global; en Render use disco "
-                "persistente. Emergencia: NOTIFICACIONES_PAQUETE_ESTRICTO=false en .env.",
+                "(NOTIFICACIONES_PAQUETE_ESTRICTO=true). Se exige plantilla activa y Carta_Cobranza.pdf "
+                "valida (%%PDF). Emergencia: NOTIFICACIONES_PAQUETE_ESTRICTO=false en .env.",
                 omitidos_paquete_incompleto,
             )
         if omitidos_config > 0 and omitidos_paquete_incompleto == 0 and habilitados == 0:
