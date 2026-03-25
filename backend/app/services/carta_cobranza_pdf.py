@@ -201,16 +201,10 @@ def _normalizar_encabezado_editable(texto: str) -> str:
     if not texto:
         return ""
     t = texto
-    # Convertir línea ciudad/fecha -> solo fecha larga (con variables).
+    # Normalizar línea ciudad/fecha (con variables) al formato largo.
     t = re.sub(
         r"(?:\{\{CIUDAD\}\}\s*,\s*)?\{\{FECHA_CARTA\}\}\s*<br\s*/?>",
-        "{{FECHA_CARTA_LARGA}}<br/>",
-        t,
-        flags=re.IGNORECASE,
-    )
-    t = re.sub(
-        r"(?:\{\{CIUDAD\}\}\s*,\s*)?\{\{FECHA_CARTA_LARGA\}\}\s*<br\s*/?>",
-        "{{FECHA_CARTA_LARGA}}<br/>",
+        "{{CIUDAD}}, {{FECHA_CARTA_LARGA}}<br/>",
         t,
         flags=re.IGNORECASE,
     )
@@ -218,20 +212,13 @@ def _normalizar_encabezado_editable(texto: str) -> str:
     # (luego FECHA_CARTA_LARGA se sustituye con formato largo en español).
     t = re.sub(
         r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+,\s*\d{1,2}/\d{1,2}/\d{4}\s*<br\s*/?>",
-        "{{FECHA_CARTA_LARGA}}<br/>",
+        "{{CIUDAD}}, {{FECHA_CARTA_LARGA}}<br/>",
         t,
         flags=re.IGNORECASE,
     )
     t = re.sub(
         r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+,\s*\d{1,2}\s+de\s+[A-Za-záéíóúñ]+\s+de\s+\d{4}\s*<br\s*/?>",
-        "{{FECHA_CARTA_LARGA}}<br/>",
-        t,
-        flags=re.IGNORECASE,
-    )
-    # Limpiar línea huérfana de ciudad con coma (ej.: "Guacara,").
-    t = re.sub(
-        r"(?:\{\{CIUDAD\}\}|[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+)\s*,\s*<br\s*/?>",
-        "",
+        "{{CIUDAD}}, {{FECHA_CARTA_LARGA}}<br/>",
         t,
         flags=re.IGNORECASE,
     )
@@ -252,16 +239,16 @@ def _normalizar_encabezado_editable(texto: str) -> str:
     saludo_pat = r"(<b>\s*Estimado/a\s+Cliente\s*</b>\s*<br\s*/?>\s*<br\s*/?>?)"
     if re.search(saludo_pat, t, flags=re.IGNORECASE):
         # Caso placeholder.
-        if "{{FECHA_CARTA_LARGA}}" in t:
+        if "{{FECHA_CARTA_LARGA}}" in t or "{{FECHA_CARTA}}" in t:
             t = re.sub(
-                r"\s*\{\{FECHA_CARTA_LARGA\}\}\s*<br\s*/?>\s*",
+                r"\s*(?:\{\{CIUDAD\}\}\s*,\s*)?(?:\{\{FECHA_CARTA_LARGA\}\}|\{\{FECHA_CARTA\}\})\s*<br\s*/?>\s*",
                 "",
                 t,
                 flags=re.IGNORECASE,
             )
             t = re.sub(
                 saludo_pat,
-                r"{{FECHA_CARTA_LARGA}}<br/><br/>\1",
+                r"{{CIUDAD}}, {{FECHA_CARTA_LARGA}}<br/><br/>\1",
                 t,
                 flags=re.IGNORECASE,
             )
@@ -686,8 +673,31 @@ def build_pdf_bytes(
     story.append(Spacer(1, 0.4 * cm))
 
     if encabezado_plantilla and encabezado_plantilla.strip():
-        story.append(Paragraph(_sanitize_for_reportlab(encabezado_plantilla.strip()), s_encabezado))
-        story.append(Spacer(1, 0.2 * cm))
+        enc = _sanitize_for_reportlab(encabezado_plantilla.strip())
+        # Si el encabezado trae "Ciudad, fecha", mostrar esa primera línea a la derecha.
+        parts = [p.strip() for p in re.split(r"<br\s*/?>", enc, flags=re.IGNORECASE) if p.strip()]
+        if parts:
+            primera = parts[0]
+            es_ciudad_fecha = bool(
+                re.search(
+                    r".+,\s*(\d{1,2}/\d{1,2}/\d{4}|\d{1,2}\s+de\s+[A-Za-záéíóúñ]+\s+de\s+\d{4})$",
+                    primera,
+                    flags=re.IGNORECASE,
+                )
+            )
+            if es_ciudad_fecha:
+                story.append(Paragraph(primera, s_fecha))
+                resto = "<br/>".join(parts[1:]).strip()
+                if resto:
+                    story.append(Spacer(1, 0.12 * cm))
+                    story.append(Paragraph(resto, s_encabezado))
+                story.append(Spacer(1, 0.2 * cm))
+            else:
+                story.append(Paragraph(enc, s_encabezado))
+                story.append(Spacer(1, 0.2 * cm))
+        else:
+            story.append(Paragraph(enc, s_encabezado))
+            story.append(Spacer(1, 0.2 * cm))
 
     _default = (
         "Ante todo, queremos extenderle un cordial saludo, por medio del presente instrumento "
