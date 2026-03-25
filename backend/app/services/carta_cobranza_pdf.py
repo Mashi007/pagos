@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import tempfile
+import urllib.request
 from datetime import date
 from typing import Any, Optional, Tuple
 
@@ -166,6 +167,10 @@ _IMG_BASE64_PATTERN = re.compile(
     r'<img\s+[^>]*?src\s*=\s*["\']data:image/(?:png|jpeg|gif);base64,([A-Za-z0-9+/=]+)["\'][^>]*>',
     re.IGNORECASE | re.DOTALL,
 )
+_IMG_REMOTE_PATTERN = re.compile(
+    r'<img\s+[^>]*?src\s*=\s*["\'](https?://[^"\']+)["\'][^>]*>',
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def _extraer_cuerpo_si_html_completo(texto: str) -> str:
@@ -284,6 +289,60 @@ def _extraer_logo_base64_de_plantilla(texto: str) -> Tuple[Optional[str], str]:
         texto_sin_img = _IMG_BASE64_PATTERN.sub("", texto, count=1)
         return None, texto_sin_img
     texto_sin_img = _IMG_BASE64_PATTERN.sub("", texto, count=1)
+    return path, texto_sin_img
+
+
+def _descargar_logo_remoto_a_temporal(url: str) -> Optional[str]:
+    """
+    Descarga un logo remoto (http/https) a un archivo temporal y devuelve su ruta.
+    Retorna None si falla la descarga o el contenido no parece imagen.
+    """
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "RapiCredit-PDF/1.0",
+                "Accept": "image/*,*/*;q=0.8",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            content_type = (resp.headers.get("Content-Type") or "").lower()
+            raw = resp.read()
+        if not raw:
+            return None
+        # Validación simple: content-type imagen o cabeceras binarias típicas.
+        firma_ok = raw.startswith(b"\x89PNG") or raw.startswith(b"\xff\xd8\xff") or raw.startswith(b"GIF87a") or raw.startswith(b"GIF89a")
+        if ("image/" not in content_type) and not firma_ok:
+            return None
+        suffix = ".img"
+        if "png" in content_type or raw.startswith(b"\x89PNG"):
+            suffix = ".png"
+        elif "jpeg" in content_type or "jpg" in content_type or raw.startswith(b"\xff\xd8\xff"):
+            suffix = ".jpg"
+        elif "gif" in content_type or raw.startswith(b"GIF8"):
+            suffix = ".gif"
+        f = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        f.write(raw)
+        f.close()
+        return f.name
+    except Exception as e:
+        logger.warning("No se pudo descargar logo remoto para PDF: %s", e)
+        return None
+
+
+def _extraer_logo_remoto_de_plantilla(texto: str) -> Tuple[Optional[str], str]:
+    """
+    Si el texto contiene <img src="https://...">, descarga el archivo y lo usa como logo.
+    También elimina la etiqueta <img> del cuerpo para evitar que ReportLab falle en Paragraph.
+    """
+    if not texto:
+        return None, texto
+    match = _IMG_REMOTE_PATTERN.search(texto)
+    if not match:
+        return None, texto
+    url = (match.group(1) or "").strip()
+    path = _descargar_logo_remoto_a_temporal(url) if url else None
+    texto_sin_img = _IMG_REMOTE_PATTERN.sub("", texto, count=1)
     return path, texto_sin_img
 
 
@@ -477,8 +536,11 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
     firma_raw = _reemplazar_variables_plantilla_pdf(
         plantilla.get("firma"), contexto_cobranza, datos
     )
-    # Logo: si la plantilla trae un img base64, usarlo como logo y quitar la etiqueta del texto (ReportLab no la dibuja)
+    # Logo: si la plantilla trae un img base64/remoto, usarlo como logo y quitar la etiqueta del texto
+    # (ReportLab no dibuja <img> dentro de Paragraph).
     logo_path_plantilla, cuerpo = _extraer_logo_base64_de_plantilla(cuerpo or "")
+    if not logo_path_plantilla:
+        logo_path_plantilla, cuerpo = _extraer_logo_remoto_de_plantilla(cuerpo or "")
     # Convertir HTML con div/p/class a formato que ReportLab Paragraph acepta (cuerpo, cláusula y firma)
     cuerpo = _sanitize_for_reportlab(_html_para_reportlab(cuerpo or ""))
     clausula = _sanitize_for_reportlab(_html_para_reportlab(clausula or ""))
