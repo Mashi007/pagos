@@ -6,6 +6,9 @@ Misma logica que POST /prestamos/reaplicar-cascada-aplicacion-masiva (un commit 
 Uso (desde carpeta backend, con DATABASE_URL en .env):
   python scripts/reaplicar_cascada_incoherentes_liquidado.py
   python scripts/reaplicar_cascada_incoherentes_liquidado.py --dry-run
+  python scripts/reaplicar_cascada_incoherentes_liquidado.py --yes   # sin pedir 'fin' (solo automatizacion/CI)
+
+No escribe en la BD hasta que escribas la palabra fin (igual que run_verificar_cascada.py), salvo --dry-run o --yes.
 """
 from __future__ import annotations
 
@@ -30,6 +33,11 @@ PRESTAMO_IDS_INCOHERENTES = [
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Solo listar ids, no tocar BD")
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Ejecutar sin pedir confirmacion 'fin' (usar solo si sabe lo que hace)",
+    )
     args = parser.parse_args()
 
     try:
@@ -49,6 +57,12 @@ def main() -> int:
     if args.dry_run:
         print(ids, flush=True)
         return 0
+
+    if not args.yes:
+        palabra = input("Escriba fin para ejecutar la reaplicacion en cascada en la BD: ").strip().lower()
+        if palabra != "fin":
+            print("Cancelado: no se escribio fin.", flush=True)
+            return 0
 
     from app.core.database import SessionLocal
     from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
