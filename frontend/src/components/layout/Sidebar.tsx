@@ -23,17 +23,17 @@ import {
   CheckCircle,
   Mail,
   MessageSquare,
-  AlertTriangle,
   User,
   LogOut,
   Menu,
   RefreshCw,
   Briefcase,
-  Target,
   DollarSign,
   Clock,
   Download,
-  TrendingUp,
+  BarChart3,
+  Award,
+  Wallet,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -201,17 +201,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: MessageSquare,
         },
 
-        { title: 'Campañas', href: '/crm/campanas', icon: Mail },
-
-        { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
-
         { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
       ],
     },
 
     // Ventas: oculto y en pausa (no afectar otros procesos)
-
-    // { title: 'Ventas', href: '/ventas', icon: Target },
 
     {
       title: 'Préstamos',
@@ -226,7 +220,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       href: '/pagos',
 
-      icon: CreditCard,
+      icon: Wallet,
     },
 
     {
@@ -259,7 +253,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
 
       children: [
-        { title: 'Reportes', href: '/reportes', icon: FileText },
+        { title: 'Reportes', href: '/reportes', icon: BarChart3 },
 
         {
           title: 'Estado de cuenta',
@@ -270,7 +264,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         {
           title: 'Finiquito (gestión)',
           href: '/finiquitos/gestion',
-          icon: FileText,
+          icon: Award,
           adminOnly: true,
         },
       ],

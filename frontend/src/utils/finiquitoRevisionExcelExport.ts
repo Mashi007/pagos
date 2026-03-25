@@ -63,6 +63,10 @@ export async function descargarRevisionPagosExcel(
     Monto: formatCurrency(Number(p.monto_pagado ?? 0)),
     'Fecha pago': p.fecha_pago ? formatDate(String(p.fecha_pago)) : '',
     Documento: String(p.numero_documento ?? ''),
+    Comprobante:
+      p.pago_reportado_id != null && String(p.pago_reportado_id).trim() !== ''
+        ? `Pagos reportados #${p.pago_reportado_id}`
+        : 'No disponible',
     Conciliado: p.conciliado ? 'Sí' : 'No',
   }))
   const cid = opts.casoId != null ? String(opts.casoId) : 'sin_caso'

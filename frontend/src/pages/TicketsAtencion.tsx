@@ -70,6 +70,8 @@ import { Cliente } from '../types'
 
 import { LoadingSpinner } from '../components/ui/loading-spinner'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { useSimpleAuth } from '../store/simpleAuthStore'
 
 import {
@@ -571,27 +573,19 @@ export function TicketsAtencion() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
       >
-        <div>
-          <h1 className="flex items-center gap-2 text-3xl font-bold text-gray-900">
-            <FileText className="h-8 w-8 text-blue-600" />
-            CRM - Centro de tickets
-          </h1>
-
-          <p className="mt-1 text-gray-600">
-            Tickets conectados a la base de clientes. Se notifica por correo al
-            crear o actualizar.
-          </p>
-        </div>
-
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Ticket
-            </Button>
-          </DialogTrigger>
+        <ModulePageHeader
+          icon={FileText}
+          title="CRM - Centro de tickets"
+          description="Tickets conectados a la base de clientes. Se notifica por correo al crear o actualizar."
+          actions={
+            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nuevo Ticket
+                </Button>
+              </DialogTrigger>
 
           <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
             <DialogHeader>
@@ -1030,6 +1024,8 @@ export function TicketsAtencion() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+          }
+        />
       </motion.div>
 
       {/* âœ… Alertas de Tickets Vencidos */}

@@ -16,6 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Input } from '../components/ui/input'
 
 import { Badge } from '../components/ui/badge'
@@ -334,37 +336,32 @@ export function Auditoria() {
     <div className="space-y-6">
       {/* Header */}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Auditoría del Sistema
-          </h1>
+      <ModulePageHeader
+        icon={Shield}
+        title="Auditoría del Sistema"
+        description="Seguimiento completo de todas las acciones realizadas"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => cargarEstadisticas(true)}
+              variant="outline"
+              disabled={loading}
+              title="Actualizar estadísticas"
+            >
+              <Activity className="mr-2 h-4 w-4" />
+              Actualizar KPIs
+            </Button>
 
-          <p className="mt-1 text-gray-500">
-            Seguimiento completo de todas las acciones realizadas
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            onClick={() => cargarEstadisticas(true)}
-            variant="outline"
-            disabled={loading}
-            title="Actualizar estadísticas"
-          >
-            <Activity className="mr-2 h-4 w-4" />
-            Actualizar KPIs
-          </Button>
-
-          <Button
-            onClick={handleExportarExcel}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Exportar Excel
-          </Button>
-        </div>
-      </div>
+            <Button
+              onClick={handleExportarExcel}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Exportar Excel
+            </Button>
+          </div>
+        }
+      />
 
       {/* Stats Dashboard */}
 

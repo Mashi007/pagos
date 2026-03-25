@@ -306,7 +306,10 @@ class ClienteService {
 
   // Obtener estadísticas generales de todos los clientes
 
-  /** finalizados: clientes con estado FINALIZADO o con al menos un préstamo LIQUIDADO (sin duplicar). */
+  /**
+   * finalizados: clientes con estado FINALIZADO o con al menos un préstamo LIQUIDADO (sin duplicar).
+   * nuevos_este_mes: filas en clientes con fecha_registro en el mes actual (calendario America/Caracas).
+   */
   async getStats(): Promise<{
     total: number
     activos: number

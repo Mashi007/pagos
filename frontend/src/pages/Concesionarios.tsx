@@ -20,6 +20,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Input } from '../components/ui/input'
 
 import { Badge } from '../components/ui/badge'
@@ -297,16 +299,11 @@ export function Concesionarios() {
     <div className="space-y-6">
       {/* Header */}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Concesionarios</h1>
-
-          <p className="text-muted-foreground">
-            Gestiona los concesionarios del sistema
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-2">
+      <ModulePageHeader
+        icon={Building}
+        title="Concesionarios"
+        description="Gestiona los concesionarios del sistema"
+        actions={
           <Button
             onClick={() => {
               setEditingConcesionario(null)
@@ -321,8 +318,8 @@ export function Concesionarios() {
             <Plus className="mr-2 h-4 w-4" />
             Nuevo Concesionario
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats Cards */}
 

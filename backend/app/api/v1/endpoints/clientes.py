@@ -19,7 +19,7 @@ from sqlalchemy import select, func, or_, delete, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
-from app.core.database import get_db
+from app.core.database import get_db, BUSINESS_TIMEZONE
 from app.models.cliente import Cliente
 from app.models.estado_cliente import EstadoCliente
 from app.models.prestamo import Prestamo
@@ -178,7 +178,8 @@ def get_clientes_stats(db: Session = Depends(get_db)):
     """
     Estadísticas de clientes: total, activos, inactivos, finalizados, nuevos_este_mes.
     finalizados = clientes distintos con estado FINALIZADO o con al menos un préstamo en LIQUIDADO.
-    nuevos_este_mes = clientes con fecha_registro en el mes actual (calendario).
+    nuevos_este_mes = clientes con fecha_registro en el mes calendario actual (zona America/Caracas),
+    misma noción de alta que el DEFAULT al insertar en clientes.fecha_registro.
     """
     total = db.scalar(select(func.count()).select_from(Cliente)) or 0
     activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
@@ -197,13 +198,14 @@ def get_clientes_stats(db: Session = Depends(get_db)):
         )
         or 0
     )
-    # Nuevos clientes en el mes actual según fecha_registro.
-    # Usamos el mes actual de la BD (misma interpretación que CURRENT_TIMESTAMP al insertar).
+    # Nuevos clientes: fecha_registro (no nulo) en el mes calendario actual en zona negocio.
+    # Comparación explícita AT TIME ZONE: coherente aunque alguna conexión no herede SET timezone.
     try:
-        stmt = text("""
+        stmt = text(f"""
             SELECT count(*)::int FROM clientes
             WHERE fecha_registro IS NOT NULL
-              AND date_trunc('month', fecha_registro) = date_trunc('month', CURRENT_TIMESTAMP)
+              AND date_trunc('month', fecha_registro)
+                  = date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'))
         """)
         nuevos_este_mes = db.execute(stmt).scalar() or 0
         nuevos_este_mes = int(nuevos_este_mes)
@@ -228,15 +230,22 @@ def get_clientes_stats_diagnostico(db: Session = Depends(get_db)):
     mes_actual_bd, total_con_fecha_registro, nuevos_este_mes, ejemplo_fecha_registro.
     """
     try:
-        mes_bd = db.execute(text("SELECT date_trunc('month', CURRENT_TIMESTAMP)")).scalar()
+        mes_bd = db.execute(
+            text(
+                f"SELECT date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'))"
+            )
+        ).scalar()
         total_con_fecha = db.scalar(
             text("SELECT count(*)::int FROM clientes WHERE fecha_registro IS NOT NULL")
         ) or 0
-        nuevos = db.scalar(text("""
+        nuevos = db.scalar(
+            text(f"""
             SELECT count(*)::int FROM clientes
             WHERE fecha_registro IS NOT NULL
-              AND date_trunc('month', fecha_registro) = date_trunc('month', CURRENT_TIMESTAMP)
-        """)) or 0
+              AND date_trunc('month', fecha_registro)
+                  = date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'))
+        """)
+        ) or 0
         ejemplo = db.execute(text("""
             SELECT id, fecha_registro::text
             FROM clientes

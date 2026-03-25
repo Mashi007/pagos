@@ -23,6 +23,8 @@ import {
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Input } from '../components/ui/input'
 
 import {
@@ -632,22 +634,14 @@ export function EmbudoConcesionarios() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
       >
-        <div>
-          <h2 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
-            <Building className="h-6 w-6 text-blue-600" />
-            Seguimiento Concesionarios
-          </h2>
-
-          <p className="mt-1 text-sm text-gray-600">
-            Seguimiento de concesionarios que gestionan ventas en base a
-            créditos
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowConfigDialog(true)}>
+        <ModulePageHeader
+          icon={Building}
+          title="Seguimiento Concesionarios"
+          description="Seguimiento de concesionarios que gestionan ventas en base a créditos"
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setShowConfigDialog(true)}>
             <Settings className="mr-2 h-4 w-4" />
             Configurar Tarjetas
           </Button>
@@ -1031,7 +1025,9 @@ export function EmbudoConcesionarios() {
               </div>
             </DialogContent>
           </Dialog>
-        </div>
+            </div>
+          }
+        />
       </motion.div>
 
       {/* Estadísticas - Deben coincidir exactamente con los embudos */}

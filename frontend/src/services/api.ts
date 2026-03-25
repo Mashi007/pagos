@@ -1059,6 +1059,29 @@ class ApiClient {
       config
     )
 
+    // validateStatus permite 4xx sin lanzar en axios; igual que delete(), fallar aquí
+    if (response.status >= 400 && response.status < 500) {
+      const raw = response.data as any
+      let backendMessage: string =
+        raw?.message || `Request failed with status ${response.status}`
+      const d = raw?.detail
+      if (typeof d === 'string') {
+        backendMessage = d
+      } else if (Array.isArray(d)) {
+        backendMessage = d
+          .map((x: any) => (typeof x?.msg === 'string' ? x.msg : JSON.stringify(x)))
+          .join('; ')
+      } else if (d != null && typeof d === 'object') {
+        backendMessage = JSON.stringify(d)
+      }
+
+      const error = new Error(backendMessage) as any
+      error.response = response
+      error.isAxiosError = true
+      error.code = `ERR_HTTP_${response.status}`
+      throw error
+    }
+
     return response.data
   }
 

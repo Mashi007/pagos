@@ -34,6 +34,8 @@ import { getErrorMessage, getErrorDetail } from '../types/errors'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { formatCurrency } from '../utils'
 
 import { reporteService } from '../services/reporteService'
@@ -517,25 +519,11 @@ export function Reportes() {
     >
       {/* --- Encabezado de página --- */}
 
-      <header className="border-b border-gray-200 pb-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-100">
-              <FileText className="h-7 w-7 text-blue-600" />
-            </div>
-
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
-                Centro de Reportes
-              </h1>
-
-              <p className="mt-1 text-sm text-gray-500 sm:text-base">
-                Descargue reportes en Excel, comparta enlaces y consulte el
-                historial de notificaciones.
-              </p>
-            </div>
-          </div>
-
+      <ModulePageHeader
+        icon={FileText}
+        title="Centro de Reportes"
+        description="Descargue reportes en Excel, comparta enlaces y consulte el historial de notificaciones."
+        actions={
           <Button
             type="button"
             variant="outline"
@@ -549,8 +537,8 @@ export function Reportes() {
           >
             <Copy className="h-5 w-5" aria-hidden />
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       {/* --- Sección: Enlaces para compartir --- */}
 

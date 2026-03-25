@@ -162,8 +162,6 @@ export function ClienteDetalle() {
 
   const comunicédulacionesPath = `${BASE_PATH || ''}/comunicédulaciones`
 
-  const ticketsPath = `${BASE_PATH || ''}/crm/tickets`
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -343,23 +341,10 @@ export function ClienteDetalle() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-slate-900">
-              <FileText className="h-5 w-5" />
-              Tickets ({tickets.length})
-            </CardTitle>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                navigate(`${ticketsPath}?cliente_id=${cédulaiente.id}`)
-              }
-            >
-              Ver en CRM
-              <Link className="ml-1 h-3 w-3" />
-            </Button>
-          </div>
+          <CardTitle className="flex items-center gap-2 text-slate-900">
+            <FileText className="h-5 w-5" />
+            Tickets ({tickets.length})
+          </CardTitle>
         </CardHeader>
 
         <CardContent>
@@ -395,7 +380,7 @@ export function ClienteDetalle() {
 
               {tickets.length > 5 && (
                 <p className="pt-2 text-sm text-slate-500">
-                  +{tickets.length - 5} más. Ver en CRM.
+                  +{tickets.length - 5} tickets más asociados a este cliente.
                 </p>
               )}
             </div>

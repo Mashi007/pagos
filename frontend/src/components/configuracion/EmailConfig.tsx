@@ -1754,14 +1754,8 @@ export function EmailConfig() {
               </h3>
 
               <p className="mb-2 text-sm text-blue-800">
-                Cuando se <strong>crea</strong> un ticket en{' '}
-                <a
-                  href={BASE_PATH + '/crm/tickets'}
-                  className="font-medium underline"
-                >
-                  CRM → Tickets
-                </a>
-                , se envía automáticamente un correo{' '}
+                Cuando se <strong>crea</strong> un ticket (por ejemplo desde
+                comunicaciones), se envía automáticamente un correo{' '}
                 <strong>con un informe en PDF adjunto</strong> a los contactos
                 que indiques aquí. El envío se hace{' '}
                 <strong>desde el email configurado arriba</strong> (remitente

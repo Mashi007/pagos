@@ -22,6 +22,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { useSimpleAuth } from '../store/simpleAuthStore'
 
 import { formatCurrency } from '../utils'
@@ -257,28 +259,22 @@ export function DashboardPagos() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between"
         >
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/dashboard/menu')}
-              className="hover:bg-violet-50"
-            >
-              ← Menú
-            </Button>
-
-            <div>
-              <h1 className="text-4xl font-black uppercase tracking-tight text-gray-900">
-                Pagos
-              </h1>
-
-              <p className="mt-1 text-lg font-medium text-gray-600">
-                Monitoreo Estratégico • {userName}
-              </p>
-            </div>
-          </div>
+          <ModulePageHeader
+            icon={CreditCard}
+            title="Pagos"
+            description={`Monitoreo estratégico · ${userName}`}
+            actions={
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/dashboard/menu')}
+                className="hover:bg-violet-50"
+              >
+                ← Menú
+              </Button>
+            }
+          />
         </motion.div>
 
         {/* BARRA DE FILTROS HORIZONTAL */}

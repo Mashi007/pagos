@@ -2,9 +2,13 @@ import { useState } from 'react'
 
 import { motion } from 'framer-motion'
 
+import { Calculator } from 'lucide-react'
+
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Badge } from '../components/ui/badge'
+
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
 export function AmortizacionPage() {
   const [loading, setLoading] = useState(false)
@@ -18,19 +22,16 @@ export function AmortizacionPage() {
     >
       {/* Header */}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Amortización</h1>
-
-          <p className="text-muted-foreground">
-            Tablas de amortización y cálculos
-          </p>
-        </div>
-
-        <Badge variant="outline" className="text-sm">
-          En Desarrollo
-        </Badge>
-      </div>
+      <ModulePageHeader
+        icon={Calculator}
+        title="Amortización"
+        description="Tablas de amortización y cálculos"
+        actions={
+          <Badge variant="outline" className="text-sm">
+            En Desarrollo
+          </Badge>
+        }
+      />
 
       {/* Contenido Principal */}
 

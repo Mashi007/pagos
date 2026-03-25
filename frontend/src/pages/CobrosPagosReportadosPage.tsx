@@ -64,7 +64,6 @@ function toastAfterRechazoCobros(data: CambiarEstadoPagoResponse) {
 
 import {
   Loader2,
-  Eye,
   FileText,
   Settings,
   Clock,
@@ -76,6 +75,7 @@ import {
   AlertTriangle,
   Edit,
   Mail,
+  Eye,
 } from 'lucide-react'
 
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
@@ -88,6 +88,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from '../components/ui/dialog'
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../components/ui/popover'
 
 const MENSAJE_RECHAZO_POR_DEFECTO = `Buenas tardes
 
@@ -574,27 +580,29 @@ export default function CobrosPagosReportadosPage() {
             <p className="text-gray-500">No hay registros.</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[1000px] table-fixed text-sm">
+              <table className="w-full min-w-[1100px] table-fixed text-sm">
                 <colgroup>
-                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '12%' }} />
 
                   <col style={{ width: '8%' }} />
 
-                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '9%' }} />
 
                   <col style={{ width: '7%' }} />
 
-                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '7%' }} />
+
+                  <col style={{ width: '9%' }} />
+
+                  <col style={{ width: '7%' }} />
+
+                  <col style={{ width: '9%' }} />
 
                   <col style={{ width: '11%' }} />
 
                   <col style={{ width: '7%' }} />
 
-                  <col style={{ width: '12%' }} />
-
-                  <col style={{ width: '8%' }} />
-
-                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '14%' }} />
                 </colgroup>
 
                 <thead>
@@ -623,6 +631,10 @@ export default function CobrosPagosReportadosPage() {
 
                     <th className="px-3 py-3 text-left font-semibold">
                       Fecha reporte
+                    </th>
+
+                    <th className="px-3 py-3 text-center font-semibold">
+                      Comprobante
                     </th>
 
                     <th className="px-3 py-3 text-left font-semibold">
@@ -707,6 +719,42 @@ export default function CobrosPagosReportadosPage() {
 
                       <td className="whitespace-nowrap px-3 py-3 align-top">
                         {new Date(row.fecha_reporte).toLocaleDateString()}
+                      </td>
+
+                      <td className="px-2 py-3 align-middle">
+                        {row.tiene_comprobante ? (
+                          <button
+                            type="button"
+                            onClick={() => handleVerComprobante(row.id)}
+                            disabled={viewingComprobanteId === row.id}
+                            className="flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2 py-2 text-center text-xs font-semibold text-[#1e3a5f] shadow-sm transition-colors hover:border-[#1e3a5f]/30 hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/25 disabled:opacity-60 sm:flex-row sm:text-left"
+                            title="Abrir imagen o PDF del comprobante"
+                          >
+                            {viewingComprobanteId === row.id ? (
+                              <Loader2
+                                className="h-4 w-4 shrink-0 animate-spin"
+                                aria-hidden
+                              />
+                            ) : (
+                              <Eye
+                                className="h-4 w-4 shrink-0 opacity-80"
+                                aria-hidden
+                              />
+                            )}
+                            <span className="leading-tight underline decoration-[#1e3a5f]/35 underline-offset-2">
+                              Ver comprobante
+                            </span>
+                          </button>
+                        ) : (
+                          <div
+                            className="flex min-h-[52px] flex-col items-center justify-center rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20 px-2 py-2 text-center"
+                            title="Sin archivo adjunto en este reporte"
+                          >
+                            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                              No disponible
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       <td
@@ -800,22 +848,6 @@ export default function CobrosPagosReportadosPage() {
                               />
                             )}
                           </span>
-
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0"
-                            title="Ver comprobante"
-                            aria-label="Ver comprobante adjunto"
-                            onClick={() => handleVerComprobante(row.id)}
-                            disabled={viewingComprobanteId === row.id}
-                          >
-                            {viewingComprobanteId === row.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
 
                           <Button
                             variant="ghost"

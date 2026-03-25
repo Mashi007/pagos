@@ -14,6 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Textarea } from '../components/ui/textarea'
 
 import { Badge } from '../components/ui/badge'
@@ -508,42 +510,42 @@ export function ChatAI() {
       {/* Header */}
 
       <div className="mb-6">
-        <div className="mb-2 flex items-center gap-3">
-          <Brain className="h-8 w-8 text-blue-600" />
+        <ModulePageHeader
+          icon={Brain}
+          title="Chat AI"
+          description={
+            <>
+              <p>
+                Consulta información de la base de datos usando inteligencia
+                artificial
+              </p>
 
-          <h1 className="text-3xl font-bold">Chat AI</h1>
-        </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="border-blue-200 bg-blue-50 text-blue-700"
+                >
+                  Solo consultas de base de datos
+                </Badge>
 
-        <div className="space-y-2">
-          <p className="text-gray-600">
-            Consulta información de la base de datos usando inteligencia
-            artificial
-          </p>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={streaming}
+                    onChange={e => setStreaming(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Respuesta en tiempo real (streaming)
+                </label>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant="outline"
-              className="border-blue-200 bg-blue-50 text-blue-700"
-            >
-              Solo consultas de base de datos
-            </Badge>
-
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={streaming}
-                onChange={e => setStreaming(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              Respuesta en tiempo real (streaming)
-            </label>
-
-            <span className="text-xs text-gray-500">
-              Para preguntas generales, usa el Chat de Prueba en Configuración
-              &gt; AI
-            </span>
-          </div>
-        </div>
+                <span className="text-xs text-gray-500">
+                  Para preguntas generales, usa el Chat de Prueba en Configuración
+                  &gt; AI
+                </span>
+              </div>
+            </>
+          }
+        />
       </div>
 
       {/* Estado de configuración */}

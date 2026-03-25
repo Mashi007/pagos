@@ -20,6 +20,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Input } from '../components/ui/input'
 
 import { Badge } from '../components/ui/badge'
@@ -304,19 +306,11 @@ export function ModelosVehiculos() {
     <div className="space-y-6">
       {/* Header */}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Modelos de Vehículos
-          </h1>
-
-          <p className="text-muted-foreground">
-            Gestiona los modelos de vehículos. El precio (USD) se usa como Valor
-            Activo al crear un préstamo.
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-2">
+      <ModulePageHeader
+        icon={Car}
+        title="Modelos de Vehículos"
+        description="Gestiona los modelos de vehículos. El precio (USD) se usa como Valor Activo al crear un préstamo."
+        actions={
           <Button
             onClick={() => {
               setEditingModelo(null)
@@ -336,8 +330,8 @@ export function ModelosVehiculos() {
             <Plus className="mr-2 h-4 w-4" />
             Nuevo Modelo
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats Cards */}
 

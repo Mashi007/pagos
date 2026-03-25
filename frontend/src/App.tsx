@@ -112,8 +112,6 @@ import Solicitudes from './pages/Solicitudes'
 
 import EmbudoClientes from './pages/EmbudoClientes'
 
-import TicketsAtencion from './pages/TicketsAtencion'
-
 import EmbudoConcesionarios from './pages/EmbudoConcesionarios'
 
 import RevisionManual from './pages/RevisionManual'
@@ -125,8 +123,6 @@ import EditarRevisionManual from './pages/EditarRevisionManual'
 import ConversacionesWhatsAppPage from './pages/ConversacionesWhatsApp'
 
 import ComunicacionesPage from './pages/Comunicaciones'
-
-import CampanasPage from './pages/Campanas'
 
 import ReportePagoPage from './pages/ReportePagoPage'
 
@@ -519,9 +515,17 @@ function App() {
 
             <Route path="crm/embudo-clientes" element={<EmbudoClientes />} />
 
-            <Route path="crm/tickets" element={<TicketsAtencion />} />
+            {/* CRM campañas y tickets: ocultos - redirigen a clientes */}
 
-            <Route path="crm/campanas" element={<CampanasPage />} />
+            <Route
+              path="crm/tickets"
+              element={<Navigate to="/clientes" replace />}
+            />
+
+            <Route
+              path="crm/campanas"
+              element={<Navigate to="/clientes" replace />}
+            />
 
             <Route
               path="crm/embudo-concesionarios"

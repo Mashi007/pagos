@@ -13,6 +13,8 @@ import {
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Input } from '../components/ui/input'
@@ -239,34 +241,28 @@ export function VisualizacionBD() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
       >
-        <div>
-          <h1 className="flex items-center space-x-2 text-3xl font-bold text-gray-900">
-            <Database className="h-8 w-8 text-blue-600" />
+        <ModulePageHeader
+          icon={Database}
+          title="Visualización de Base de Datos"
+          description="Explora y gestiona todos los datos de tu sistema RAPICREDIT"
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={cargarDatos} variant="outline">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Actualizar
+              </Button>
 
-            <span>Visualización de Base de Datos</span>
-          </h1>
-
-          <p className="mt-2 text-gray-600">
-            Explora y gestiona todos los datos de tu sistema RAPICREDIT
-          </p>
-        </div>
-
-        <div className="flex space-x-2">
-          <Button onClick={cargarDatos} variant="outline">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Actualizar
-          </Button>
-
-          <Button
-            onClick={exportarDatos}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Exportar CSV
-          </Button>
-        </div>
+              <Button
+                onClick={exportarDatos}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Exportar CSV
+              </Button>
+            </div>
+          }
+        />
       </motion.div>
 
       {/* Estadísticas */}

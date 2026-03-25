@@ -19,9 +19,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
+  ClipboardList,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
+
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
 import { toast } from 'sonner'
 
@@ -348,33 +351,28 @@ export function RevisionManual() {
     >
       {/* Header */}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Revisión Manual de Préstamos
-          </h1>
+      <ModulePageHeader
+        icon={ClipboardList}
+        title="Revisión Manual de Préstamos"
+        description="Verifica y confirma los detalles de cada préstamo post-migración"
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              refetch()
 
-          <p className="text-sm text-gray-600">
-            Verifica y confirma los detalles de cada préstamo post-migración
-          </p>
-        </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            refetch()
-
-            toast.info('Actualizando...')
-          }}
-          disabled={isLoading}
-        >
-          <RefreshCw
-            className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
-          />
-          Actualizar
-        </Button>
-      </div>
+              toast.info('Actualizando...')
+            }}
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
+            />
+            Actualizar
+          </Button>
+        }
+      />
 
       {/* Barra de Progreso */}
 

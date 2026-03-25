@@ -78,6 +78,7 @@ class PagoReportadoListItem(BaseModel):
     observacion: Optional[str] = None
     correo_enviado_a: Optional[str] = None
     tiene_recibo_pdf: bool
+    tiene_comprobante: bool
 
 
 class PagoReportadoDetalle(BaseModel):
@@ -347,6 +348,7 @@ def _pago_reportado_list_items_from_rows(
             observacion=observacion,
             correo_enviado_a=r.correo_enviado_a,
             tiene_recibo_pdf=bool(r.recibo_pdf),
+            tiene_comprobante=bool(r.comprobante),
         ))
     return items
 
@@ -1256,6 +1258,11 @@ def cambiar_estado_pago(
         raise HTTPException(status_code=400, detail="El motivo es obligatorio al rechazar.")
     if body.estado == "aprobado" and pr.estado == "rechazado":
         raise HTTPException(status_code=400, detail="No se puede aprobar un pago rechazado.")
+    if body.estado == "aprobado" and pr.estado == "importado":
+        raise HTTPException(
+            status_code=400,
+            detail="Este reporte ya fue importado a la tabla de pagos; no se vuelve a aprobar desde aquí.",
+        )
     estado_anterior = pr.estado
     pr.estado = body.estado
     pr.motivo_rechazo = (body.motivo or "").strip()[:2000] if body.estado == "rechazado" else None
@@ -1269,7 +1276,20 @@ def cambiar_estado_pago(
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
             db.commit()
-        except HTTPException:
+        except HTTPException as exc:
+            detail_txt = exc.detail if isinstance(exc.detail, str) else repr(exc.detail)
+            logger.warning(
+                "[COBROS] PATCH aprobar fallo id=%s ref=%s cedula=%s%s moneda=%s fecha_pago=%s monto=%s nro_op=%s -> %s",
+                pago_id,
+                getattr(pr, "referencia_interna", None),
+                getattr(pr, "tipo_cedula", "") or "",
+                getattr(pr, "numero_cedula", "") or "",
+                getattr(pr, "moneda", None),
+                getattr(pr, "fecha_pago", None),
+                getattr(pr, "monto", None),
+                ((getattr(pr, "numero_operacion", None) or "")[:40]),
+                detail_txt,
+            )
             db.rollback()
             raise
         except (ProgrammingError, OperationalError) as e:

@@ -4,6 +4,8 @@ import { TrendingUp, Calendar } from 'lucide-react'
 
 import { TasaCambioModal } from '../components/TasaCambioModal'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import {
   getTasaHoy,
   guardarTasa,
@@ -110,19 +112,11 @@ export const AdminTasaCambioPage: React.FC = () => {
         {/* Encabezado */}
 
         <div className="mb-8">
-          <div className="mb-2 flex items-center gap-3">
-            <div className="rounded-lg bg-orange-100 p-3">
-              <TrendingUp className="h-6 w-6 text-orange-600" />
-            </div>
-
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Tasa de Cambio Oficial
-              </h1>
-
-              <p className="text-gray-600">Gestiona las tasas diarias BS/USD</p>
-            </div>
-          </div>
+          <ModulePageHeader
+            icon={TrendingUp}
+            title="Tasa de Cambio Oficial"
+            description="Gestiona las tasas diarias BS/USD"
+          />
         </div>
 
         {/* Error */}

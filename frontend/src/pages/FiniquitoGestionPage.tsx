@@ -9,11 +9,14 @@ import {
   Search,
   X,
   XCircle,
+  FileText,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
 
 import { Button } from '../components/ui/button'
+
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import {
@@ -279,23 +282,17 @@ export function FiniquitoGestionPage() {
   return (
     <div className="min-h-full bg-slate-100/80 pb-10 pt-4 md:pt-6">
       <div className="mx-auto max-w-7xl space-y-5 px-4 md:space-y-6 md:px-6">
-        <header className="overflow-hidden rounded-2xl bg-[#1e3a5f] text-white shadow-lg">
-          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div>
-              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-                Finiquito · Gestión
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-blue-100/95">
-                Bandeja central filtrada solo por cédula (búsqueda parcial).
-                Arriba: aprobados. Abajo: rechazados en área de revisión.
-              </p>
-            </div>
+        <ModulePageHeader
+          icon={FileText}
+          title="Finiquito · Gestión"
+          description="Bandeja central filtrada solo por cédula (búsqueda parcial). Arriba: aprobados. Abajo: rechazados en área de revisión."
+          actions={
             <Button
               size="sm"
-              variant="secondary"
+              variant="outline"
               disabled={refreshing || loading}
               onClick={onRefreshJob}
-              className="shrink-0 gap-2 self-start border-0 bg-white/15 text-white hover:bg-white/25 sm:self-center"
+              className="shrink-0 gap-2"
             >
               {refreshing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -304,8 +301,8 @@ export function FiniquitoGestionPage() {
               )}
               Refrescar materializado
             </Button>
-          </div>
-        </header>
+          }
+        />
 
         {/* Área de trabajo: aprobados */}
         <section

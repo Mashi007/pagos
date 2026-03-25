@@ -2,14 +2,16 @@ import { EmbudoConcesionarios } from './EmbudoConcesionarios'
 
 import { Target } from 'lucide-react'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 export function Ventas() {
   return (
     <div className="space-y-6">
-      <div className="mb-4 flex items-center gap-2">
-        <Target className="h-8 w-8 text-blue-600" />
-
-        <h1 className="text-3xl font-bold text-gray-900">Ventas</h1>
-      </div>
+      <ModulePageHeader
+        icon={Target}
+        title="Ventas"
+        description="Embudo y seguimiento comercial con concesionarios."
+      />
 
       <EmbudoConcesionarios />
     </div>

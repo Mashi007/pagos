@@ -2,28 +2,18 @@ import { CreditCard } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { PagosList } from '../components/pagos/PagosList'
 
 function PagosPage() {
   return (
     <div className="mx-auto max-w-[1600px] space-y-6 p-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25">
-            <CreditCard className="h-6 w-6" />
-          </span>
-
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
-              Pagos
-            </h1>
-
-            <p className="mt-0.5 text-sm text-gray-500">
-              Gestión de cobros y conciliación
-            </p>
-          </div>
-        </div>
-      </header>
+      <ModulePageHeader
+        icon={CreditCard}
+        title="Pagos"
+        description="Gestión de cobros y conciliación"
+      />
 
       <Card className="overflow-hidden rounded-xl border border-blue-100/80 bg-gradient-to-br from-blue-50/80 to-white shadow-sm">
         <CardHeader className="pb-2">

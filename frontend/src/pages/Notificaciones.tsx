@@ -12,6 +12,7 @@ import {
   Clock,
   Mail,
   Download,
+  Bell,
 } from 'lucide-react'
 
 import {
@@ -23,6 +24,8 @@ import {
 } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
+
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -343,15 +346,11 @@ export function Notificaciones() {
   if (activeTab === 'configuracion') {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
-
-            <p className="mt-1 text-gray-600">
-              Clientes retrasados por fecha de vencimiento y mora
-            </p>
-          </div>
-        </div>
+        <ModulePageHeader
+          icon={Bell}
+          title="Notificaciones"
+          description="Clientes retrasados por fecha de vencimiento y mora"
+        />
 
         <div className="border-b border-gray-200">
           <nav className="flex flex-wrap gap-2">
@@ -383,47 +382,24 @@ export function Notificaciones() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-wrap items-center justify-between gap-4"
       >
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
-
-          <p className="mt-1 text-gray-600">
-            Politica: no hay avisos antes del vencimiento ni el día del
-            vencimiento. El primer listado es el día calendario siguiente (ej.
-            vence 22 → aparece el 23). También 5 y 30 días de atraso. Crédito
-            pagado = préstamos en estado LIQUIDADO. En cada tabla puede exportar
-            el PDF de estado de cuenta del préstamo. Datos desde BD.
-          </p>
-
-          <p className="mt-2 text-sm text-gray-600">
-            Envio por lotes (paquete estricto): (1) plantilla de correo HTML con
-            variables del cliente; (2) PDF de carta con variables
-            (Carta_Cobranza.pdf); (3) al menos un PDF fijo adicional, siempre
-            anexado junto al PDF variable. Configuracion en esta pagina
-            (Configuracion) y en Plantillas.
-          </p>
-
-          {data?.actualizado_en && (
-            <p className="mt-1 text-xs text-gray-500">
-              Última actualización:{' '}
-              {new Date(data.actualizado_en).toLocaleString('es-ES')}
-            </p>
-          )}
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => void handleRefresh()}
-            disabled={isFetching || actualizandoListas}
-          >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${isFetching || actualizandoListas ? 'animate-spin' : ''}`}
-            />
-            Actualizar
-          </Button>
-        </div>
+        <ModulePageHeader
+          icon={Bell}
+          title="Notificaciones"
+          description="Mora, liquidados y envío masivo desde la pestaña Configuración."
+          actions={
+            <Button
+              variant="outline"
+              onClick={() => void handleRefresh()}
+              disabled={isFetching || actualizandoListas}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${isFetching || actualizandoListas ? 'animate-spin' : ''}`}
+              />
+              Actualizar
+            </Button>
+          }
+        />
       </motion.div>
 
       <div className="border-b border-gray-200">

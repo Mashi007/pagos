@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 
-import { Link } from 'react-router-dom'
-
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
@@ -1700,13 +1698,6 @@ export function Comunicaciones({
               <p className="mt-2 text-xs text-gray-400">
                 Los tickets aparecerán aquí
               </p>
-
-              <Link
-                to="/crm/tickets"
-                className="mt-3 inline-block text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
-              >
-                Ver todos los tickets en CRM
-              </Link>
             </div>
           </div>
         ) : (
@@ -1719,14 +1710,6 @@ export function Comunicaciones({
                   </div>
                   Tickets
                 </h3>
-
-                <Link
-                  to="/crm/tickets"
-                  className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                  title="Ver todos los tickets en CRM"
-                >
-                  Ver en CRM
-                </Link>
               </div>
 
               {!(conversacionActual?.cliente_id ?? clienteId) && (

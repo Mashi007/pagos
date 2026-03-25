@@ -20,6 +20,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Input } from '../components/ui/input'
 
 import { Badge } from '../components/ui/badge'
@@ -293,16 +295,11 @@ export function Analistas() {
     <div className="space-y-6">
       {/* Header */}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Analistas</h1>
-
-          <p className="text-muted-foreground">
-            Gestiona los analistas del sistema
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-2">
+      <ModulePageHeader
+        icon={Users}
+        title="Analistas"
+        description="Gestiona los analistas del sistema"
+        actions={
           <Button
             onClick={() => {
               setEditingAnalista(null)
@@ -317,8 +314,8 @@ export function Analistas() {
             <Plus className="mr-2 h-4 w-4" />
             Nuevo Analista
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats Cards */}
 

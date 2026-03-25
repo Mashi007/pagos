@@ -24,6 +24,8 @@ import {
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Input } from '../components/ui/input'
 
 import {
@@ -605,26 +607,19 @@ export function EmbudoClientes() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
       >
-        <div>
-          <h2 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
-            <Target className="h-6 w-6 text-blue-600" />
-            Venta Servicios
-          </h2>
+        <ModulePageHeader
+          icon={Target}
+          title="Venta Servicios"
+          description="Gestión de ventas y servicios"
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => navigate('/clientes')}>
+                <Users className="mr-2 h-4 w-4" />
+                Ver Todos los Clientes
+              </Button>
 
-          <p className="mt-1 text-sm text-gray-600">
-            Gestión de ventas y servicios
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/clientes')}>
-            <Users className="mr-2 h-4 w-4" />
-            Ver Todos los Clientes
-          </Button>
-
-          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+              <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -703,7 +698,9 @@ export function EmbudoClientes() {
               </div>
             </DialogContent>
           </Dialog>
-        </div>
+            </div>
+          }
+        />
       </motion.div>
 
       {/* Estadísticas - Deben coincidir exactamente con los embudos */}

@@ -107,6 +107,8 @@ declare module 'lucide-react' {
 
   export const User: any
 
+  export const Wallet: any
+
   export const CreditCard: any
 
   export const AlertCircle: any

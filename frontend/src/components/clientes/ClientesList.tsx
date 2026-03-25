@@ -18,9 +18,12 @@ import {
   Download,
   Loader2,
   X,
+  Users,
 } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
+
+import { ModulePageHeader } from '../../components/ui/ModulePageHeader'
 
 import { Input } from '../../components/ui/input'
 
@@ -476,14 +479,12 @@ export function ClientesList() {
     <div className="space-y-6">
       {/* Titulo primero, luego KPIs */}
 
-      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-
-          <p className="mt-1 text-gray-600">Gestiona tu cartera de clientes</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
+      <ModulePageHeader
+        icon={Users}
+        title="Clientes"
+        description="Gestiona tu cartera de clientes"
+        actions={
+          <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="lg"
@@ -580,7 +581,8 @@ export function ClientesList() {
             </motion.div>
           </div>
         </div>
-      </div>
+          }
+        />
 
       <ClientesKPIs
         activos={statsData?.activos || 0}

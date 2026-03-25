@@ -13,6 +13,8 @@ import { Card, CardContent } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Input } from '../components/ui/input'
 
 import { Badge } from '../components/ui/badge'
@@ -79,15 +81,11 @@ export function Solicitudes() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Solicitudes</h1>
-
-          <p className="mt-1 text-gray-500">
-            Gestión de solicitudes de préstamos
-          </p>
-        </div>
-      </div>
+      <ModulePageHeader
+        icon={FileText}
+        title="Solicitudes"
+        description="Gestión de solicitudes de préstamos"
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

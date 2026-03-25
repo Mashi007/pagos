@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   Download,
   Loader2,
+  Landmark,
 } from 'lucide-react'
 
 import {
@@ -30,6 +31,8 @@ import {
 } from '../../components/ui/card'
 
 import { Button } from '../../components/ui/button'
+
+import { ModulePageHeader } from '../../components/ui/ModulePageHeader'
 
 import { Input } from '../../components/ui/input'
 
@@ -648,16 +651,12 @@ export function PrestamosList() {
 
       {/* Título y botones */}
 
-      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Préstamos</h1>
-
-          <p className="mt-1 text-gray-600">
-            Gestión de préstamos y financiamiento
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
+      <ModulePageHeader
+        icon={Landmark}
+        title="Préstamos"
+        description="Gestión de préstamos y financiamiento"
+        actions={
+          <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="lg"
@@ -738,7 +737,8 @@ export function PrestamosList() {
             </div>
           </div>
         </div>
-      </div>
+          }
+        />
 
       {/* Sección Revisar préstamos (enviados desde carga masiva) */}
 

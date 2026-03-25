@@ -9,6 +9,9 @@ from sqlalchemy.orm import sessionmaker, Session, declarative_base
 
 from app.core.config import settings
 
+# Zona usada en SET timezone por conexión y en SQL explícito (KPIs “mes actual”).
+BUSINESS_TIMEZONE = "America/Caracas"
+
 # Asegurar que la URL use el driver postgresql (Render suele dar postgres://)
 _db_url = settings.DATABASE_URL
 if _db_url.startswith("postgres://"):
@@ -36,7 +39,7 @@ engine = create_engine(
 def _set_timezone_vzla(dbapi_connection, connection_record):
     """Set session timezone to Venezuela (America/Caracas) for every new connection."""
     cursor = dbapi_connection.cursor()
-    cursor.execute("SET timezone = 'America/Caracas'")
+    cursor.execute(f"SET timezone = '{BUSINESS_TIMEZONE}'")
     cursor.close()
 
 

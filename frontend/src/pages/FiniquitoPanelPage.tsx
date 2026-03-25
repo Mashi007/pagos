@@ -2,11 +2,20 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { Link, useNavigate } from 'react-router-dom'
 
-import { Eye, CheckCircle2, XCircle, Loader2, LogOut } from 'lucide-react'
+import {
+  Eye,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  LogOut,
+  FileText,
+} from 'lucide-react'
 
 import { toast } from 'sonner'
 
 import { Button } from '../components/ui/button'
+
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import {
   Card,
   CardContent,
@@ -139,25 +148,27 @@ export function FiniquitoPanelPage() {
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 p-4 sm:p-6">
       <div className="mx-auto max-w-6xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-[#1e3a5f]">Finiquito</h1>
-            <p className="text-sm text-slate-600">
-              Préstamos con financiamiento = suma de abonos. El ojo abre el
-              detalle del crédito: préstamo completo, plan de cuotas, préstamos
-              y pagos por cédula. En Revisión puede aceptar o rechazar.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/finiquitos">Inicio Finiquito</Link>
-            </Button>
-            <Button variant="ghost" size="sm" className="gap-1" onClick={salir}>
-              <LogOut className="h-4 w-4" aria-hidden />
-              Cerrar sesión
-            </Button>
-          </div>
-        </div>
+        <ModulePageHeader
+          icon={FileText}
+          title="Finiquito"
+          description="Préstamos con financiamiento = suma de abonos. El ojo abre el detalle del crédito: préstamo completo, plan de cuotas, préstamos y pagos por cédula. En Revisión puede aceptar o rechazar."
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/finiquitos">Inicio Finiquito</Link>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1"
+                onClick={salir}
+              >
+                <LogOut className="h-4 w-4" aria-hidden />
+                Cerrar sesión
+              </Button>
+            </div>
+          }
+        />
 
         <Card>
           <CardHeader>

@@ -89,6 +89,8 @@ import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosP
 
 import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { ChartWithDateRangeSlider } from '../components/dashboard/ChartWithDateRangeSlider'
 
 import {
@@ -938,30 +940,18 @@ export function DashboardMenu() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="mb-3 text-5xl font-black tracking-tight text-gray-900">
-                <span className="bg-gradient-to-r from-cyan-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  DASHBOARD
-                </span>{' '}
-                <span className="text-gray-800">EJECUTIVO</span>
-              </h1>
-
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></div>
-
-                  <div className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75"></div>
-                </div>
-
-                <p className="text-sm font-semibold tracking-wide text-gray-600">
-                  Bienvenido,{' '}
-                  <span className="font-black text-cyan-600">{userName}</span>{' '}
-                  • Monitoreo Estratégico
+          <ModulePageHeader
+            icon={BarChart3}
+            title="Dashboard ejecutivo"
+            description={
+              <>
+                <p>
+                  Bienvenido, <strong className="font-semibold">{userName}</strong>
+                  . Monitoreo estratégico de KPIs y gráficos.
                 </p>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          />
         </motion.div>
 
         {/* Mensaje de error si hay problemas críticos */}

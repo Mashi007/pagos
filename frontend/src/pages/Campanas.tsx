@@ -8,6 +8,8 @@ import {
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import {
   Dialog,
   DialogContent,
@@ -365,26 +367,26 @@ export function CampanasPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold text-slate-800">
-          <Mail className="h-7 w-7 text-blue-600" />
-          Campañas CRM
-        </h1>
+      <ModulePageHeader
+        icon={Mail}
+        title="Campañas CRM"
+        description="Correos masivos y seguimiento de campañas desde la base de clientes."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+              <RefreshCw
+                className={`mr-1 h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+              />
+              Actualizar
+            </Button>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw
-              className={`mr-1 h-4 w-4 ${loading ? 'animate-spin' : ''}`}
-            />
-            Actualizar
-          </Button>
-
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="mr-1 h-4 w-4" />
-            Nueva campaña
-          </Button>
-        </div>
-      </div>
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus className="mr-1 h-4 w-4" />
+              Nueva campaña
+            </Button>
+          </div>
+        }
+      />
 
       <div className="flex flex-wrap gap-2">
         <select

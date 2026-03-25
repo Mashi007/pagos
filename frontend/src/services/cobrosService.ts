@@ -310,6 +310,10 @@ export interface PagoReportadoItem {
   /** Si tiene recibo PDF generado (enviado o disponible) */
 
   tiene_recibo_pdf?: boolean
+
+  /** Imagen/PDF del comprobante cargado por el cliente */
+
+  tiene_comprobante?: boolean
 }
 
 export interface ListPagosReportadosResponse {

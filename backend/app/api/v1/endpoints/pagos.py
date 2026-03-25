@@ -530,7 +530,27 @@ def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict
     }
 
 
-
+def _enriquecer_pagos_pago_reportado_id(db: Session, items: list) -> None:
+    """
+    Si el Nº documento del pago coincide (normalizado) con referencia_interna de
+    pagos_reportados (import desde Cobros), expone pago_reportado_id para enlazar al detalle/imagen.
+    """
+    if not items:
+        return
+    rows = db.execute(
+        select(PagoReportado.id, PagoReportado.referencia_interna).where(
+            PagoReportado.referencia_interna.isnot(None),
+            PagoReportado.referencia_interna != "",
+        )
+    ).all()
+    by_nd: dict[str, int] = {}
+    for rid, ref in rows:
+        nd = normalize_documento(ref)
+        if nd and nd not in by_nd:
+            by_nd[nd] = int(rid)
+    for it in items:
+        nd = normalize_documento(it.get("numero_documento"))
+        it["pago_reportado_id"] = by_nd.get(nd) if nd else None
 
 
 @router.get("", response_model=dict)
@@ -648,6 +668,8 @@ def listar_pagos(
         rows = db.execute(q).scalars().all()
 
         items = [_pago_to_response(r) for r in rows]
+
+        _enriquecer_pagos_pago_reportado_id(db, items)
 
         total_pages = (total + per_page - 1) // per_page if total else 0
 

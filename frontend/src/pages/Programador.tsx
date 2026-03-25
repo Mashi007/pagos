@@ -44,6 +44,8 @@ import { Badge } from '../components/ui/badge'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Input } from '../components/ui/input'
 
 import {
@@ -216,36 +218,31 @@ export function Programador() {
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Programador de Tareas
-          </h1>
-
-          <p className="text-gray-600">
-            Gestiona las tareas automatizadas y programadas del sistema.
-          </p>
-        </div>
-
-        <Button
-          onClick={() => refetch()}
-          variant="outline"
-          size="sm"
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Cargando...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Actualizar
-            </>
-          )}
-        </Button>
-      </div>
+      <ModulePageHeader
+        icon={Clock}
+        title="Programador de Tareas"
+        description="Gestiona las tareas automatizadas y programadas del sistema."
+        actions={
+          <Button
+            onClick={() => refetch()}
+            variant="outline"
+            size="sm"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Cargando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Actualizar
+              </>
+            )}
+          </Button>
+        }
+      />
 
       {error && (
         <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-red-700">

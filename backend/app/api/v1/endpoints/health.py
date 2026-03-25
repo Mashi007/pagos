@@ -11,7 +11,7 @@ GET /health/integrity               - Integridad préstamos/cuotas/pagos (cédul
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text, inspect
-from app.core.database import get_db, engine
+from app.core.database import get_db, engine, BUSINESS_TIMEZONE
 import logging
 
 logger = logging.getLogger(__name__)
@@ -112,15 +112,22 @@ async def health_clientes_stats_diagnostico(db: Session = Depends(get_db)):
     Para auditar por qué el KPI puede estar en 0.
     """
     try:
-        mes_bd = db.execute(text("SELECT date_trunc('month', CURRENT_TIMESTAMP)")).scalar()
+        mes_bd = db.execute(
+            text(
+                f"SELECT date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'))"
+            )
+        ).scalar()
         total_con_fecha = db.scalar(
             text("SELECT count(*)::int FROM clientes WHERE fecha_registro IS NOT NULL")
         ) or 0
-        nuevos = db.scalar(text("""
+        nuevos = db.scalar(
+            text(f"""
             SELECT count(*)::int FROM clientes
             WHERE fecha_registro IS NOT NULL
-              AND date_trunc('month', fecha_registro) = date_trunc('month', CURRENT_TIMESTAMP)
-        """)) or 0
+              AND date_trunc('month', fecha_registro)
+                  = date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'))
+        """)
+        ) or 0
         ejemplo = db.execute(text("""
             SELECT id, fecha_registro::text
             FROM clientes

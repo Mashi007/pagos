@@ -12,6 +12,7 @@ interface ClientesStats {
   /** Clientes FINALIZADO o con al menos un préstamo LIQUIDADO (conteo único). */
   finalizados: number
 
+  /** Altas en `clientes` este mes calendario (fecha_registro, zona America/Caracas). */
   nuevos_este_mes: number
 }
 

@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
 
+import { ModulePageHeader } from '../components/ui/ModulePageHeader'
+
 import { Input } from '../components/ui/input'
 
 import { Badge } from '../components/ui/badge'
@@ -192,15 +194,11 @@ export function Validadores() {
     <div className="space-y-6">
       {/* Header */}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Validadores</h1>
-
-          <p className="mt-1 text-gray-500">
-            Configuración y prueba de validadores del sistema
-          </p>
-        </div>
-      </div>
+      <ModulePageHeader
+        icon={CheckCircle}
+        title="Validadores"
+        description="Configuración y prueba de validadores del sistema"
+      />
 
       {/* Sección: Probar Validadores */}
 
