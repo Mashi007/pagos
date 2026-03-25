@@ -1050,12 +1050,21 @@ def get_tablas_campos(db: Session = Depends(get_db)):
     El frontend usa tablas_campos, total_tablas y fecha_consulta.
     """
     from datetime import datetime, timezone
-    tablas_campos = _inspector_tablas_campos()
-    return {
-        "tablas_campos": tablas_campos,
-        "total_tablas": len(tablas_campos),
-        "fecha_consulta": datetime.now(timezone.utc).isoformat(),
-    }
+
+    try:
+        tablas_campos = _inspector_tablas_campos()
+        return {
+            "tablas_campos": tablas_campos,
+            "total_tablas": len(tablas_campos),
+            "fecha_consulta": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        logger.exception("tablas-campos: error inspeccionando esquema: %s", e)
+        return {
+            "tablas_campos": {},
+            "total_tablas": 0,
+            "fecha_consulta": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 def _definicion_to_dict(row: DefinicionCampo) -> dict:

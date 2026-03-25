@@ -31,6 +31,7 @@ from app.api.v1.endpoints.notificaciones import (
 )
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
+from app.services.envio_notificacion_snapshot import persistir_snapshot_envio_notificacion
 from app.services.notificaciones_envios_store import coerce_modo_pruebas_notificaciones
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
@@ -193,7 +194,7 @@ def _enviar_correos_items(
     omitidos_paquete_incompleto = 0
     enviados_whatsapp = 0
     fallidos_whatsapp = 0
-    registros_envio: List[EnvioNotificacion] = []
+    registros_envio: List[Tuple[EnvioNotificacion, Optional[List[Tuple[str, bytes]]]]] = []
     correlativos_en_batch = {}
     for idx, item in enumerate(items):
         item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
@@ -378,17 +379,27 @@ def _enviar_correos_items(
                 fallidos += 1
             tipo_tab = _tipo_tab_para_persistencia(tipo)
             if tipo_tab:
+                adj_snapshot: Optional[List[Tuple[str, bytes]]] = None
+                if attachments:
+                    adj_snapshot = [(str(n or f"adjunto_{i}.pdf"), bytes(b)) for i, (n, b) in enumerate(attachments) if b]
+                    if not adj_snapshot:
+                        adj_snapshot = None
                 registros_envio.append(
-                    EnvioNotificacion(
-                        tipo_tab=tipo_tab,
-                        asunto=(asunto or "")[:500] if asunto else None,
-                        email=to_email[0],
-                        nombre=(item.get("nombre") or "")[:255],
-                        cedula=(item.get("cedula") or "")[:50],
-                        exito=ok,
-                        error_mensaje=None if ok else (msg or "")[:5000],
-                        prestamo_id=item.get("prestamo_id"),
-                        correlativo=item.get("_correlativo_envio"),
+                    (
+                        EnvioNotificacion(
+                            tipo_tab=tipo_tab,
+                            asunto=(asunto or "")[:500] if asunto else None,
+                            email=to_email[0],
+                            nombre=(item.get("nombre") or "")[:255],
+                            cedula=(item.get("cedula") or "")[:50],
+                            exito=ok,
+                            error_mensaje=None if ok else (msg or "")[:5000],
+                            prestamo_id=item.get("prestamo_id"),
+                            correlativo=item.get("_correlativo_envio"),
+                            mensaje_html=body_html,
+                            mensaje_texto=cuerpo if cuerpo else None,
+                        ),
+                        adj_snapshot,
                     )
                 )
         else:
@@ -404,8 +415,9 @@ def _enviar_correos_items(
                 fallidos_whatsapp += 1
     if registros_envio:
         try:
-            for r in registros_envio:
-                db.add(r)
+            for envio_row, adjuntos_snap in registros_envio:
+                db.add(envio_row)
+                persistir_snapshot_envio_notificacion(db, envio_row, adjuntos_snap)
             db.commit()
             log_envio_persistencia(len(registros_envio), True)
         except Exception as e:

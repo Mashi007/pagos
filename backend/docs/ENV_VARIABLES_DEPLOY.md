@@ -11,6 +11,16 @@ Referencia de todas las variables usadas por la aplicación (según `app/core/co
 | `DATABASE_URL` | URL PostgreSQL (ej. `postgresql://user:pass@host:5432/db`) |
 | `SECRET_KEY` | Clave JWT (mín. 32 caracteres, aleatoria) |
 
+## Base de datos (pool SQLAlchemy, opcional)
+
+Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en paralelo agotan conexiones (`QueuePool limit ... overflow ... reached`), subir estos valores sin superar `max_connections` de Postgres (aprox. `workers × (DATABASE_POOL_SIZE + DATABASE_MAX_OVERFLOW)`).
+
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `DATABASE_POOL_SIZE` | 10 | Conexiones persistentes por worker |
+| `DATABASE_MAX_OVERFLOW` | 20 | Conexiones extra bajo pico |
+| `DATABASE_POOL_TIMEOUT` | 60 | Segundos esperando conexión libre |
+
 ## General
 
 | Variable | Default | Descripción |

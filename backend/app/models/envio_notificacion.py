@@ -1,10 +1,12 @@
 """
-Registro de envÃ­os de notificaciones por email (Ã©xito/fallo) para estadÃ­sticas y rebotados.
+Registro de envíos de notificaciones por email (éxito/fallo) para estadísticas y rebotados.
 Tabla: envios_notificacion. Usado por GET estadisticas-por-tab y GET rebotados-por-tab.
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, LargeBinary, func
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from app.models.envio_notificacion_adjunto import EnvioNotificacionAdjunto
 
 
 class EnvioNotificacion(Base):
@@ -21,3 +23,13 @@ class EnvioNotificacion(Base):
     error_mensaje = Column(Text, nullable=True)
     prestamo_id = Column(Integer, nullable=True, index=True)  # para COBRANZA
     correlativo = Column(Integer, nullable=True)  # numero correlativo por prestamo
+    mensaje_html = Column(Text, nullable=True)
+    mensaje_texto = Column(Text, nullable=True)
+    comprobante_pdf = Column(LargeBinary, nullable=True)
+
+    adjuntos = relationship(
+        EnvioNotificacionAdjunto,
+        back_populates="envio",
+        cascade="all, delete-orphan",
+        order_by=EnvioNotificacionAdjunto.orden,
+    )

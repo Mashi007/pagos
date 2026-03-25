@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.core.email import mask_email_for_log, send_email
 from app.models.envio_notificacion import EnvioNotificacion
+from app.services.envio_notificacion_snapshot import persistir_snapshot_envio_notificacion
 from app.services.estado_cuenta_pdf import (
     generar_pdf_estado_cuenta,
     obtener_datos_estado_cuenta_prestamo,
@@ -201,19 +202,21 @@ Equipo RapiCredit"""
                     error_msg,
                 )
 
-            db.add(
-                EnvioNotificacion(
-                    tipo_tab="liquidados",
-                    asunto=(asunto or "")[:500],
-                    email=(email or "")[:255],
-                    nombre=(nombre_cliente or "")[:255],
-                    cedula=(cedula or "")[:50],
-                    exito=bool(exito),
-                    error_mensaje=None if exito else (error_msg or "")[:5000],
-                    prestamo_id=prestamo_id,
-                    correlativo=recordatorio_seq,
-                )
+            envio = EnvioNotificacion(
+                tipo_tab="liquidados",
+                asunto=(asunto or "")[:500],
+                email=(email or "")[:255],
+                nombre=(nombre_cliente or "")[:255],
+                cedula=(cedula or "")[:50],
+                exito=bool(exito),
+                error_mensaje=None if exito else (error_msg or "")[:5000],
+                prestamo_id=prestamo_id,
+                correlativo=recordatorio_seq,
+                mensaje_html=None,
+                mensaje_texto=cuerpo_texto,
             )
+            db.add(envio)
+            persistir_snapshot_envio_notificacion(db, envio, adjuntos)
             db.commit()
             return bool(exito)
 

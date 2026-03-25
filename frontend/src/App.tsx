@@ -14,6 +14,8 @@ import { SimpleProtectedRoute } from './components/auth/SimpleProtectedRoute'
 
 import { useSimpleAuth } from './store/simpleAuthStore'
 
+import { getFiniquitoAccessToken } from './services/finiquitoService'
+
 import { BASE_PATH } from './config/env'
 
 import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
@@ -42,7 +44,7 @@ const PUBLIC_PATHS = [
 function RootLayoutWrapper() {
   const location = useLocation()
 
-  const { isAuthenticated, isLoading } = useSimpleAuth()
+  const { isAuthenticated, isLoading, user } = useSimpleAuth()
 
   let pathname = (location.pathname || '').replace(/\/$/, '') || '/'
 
@@ -54,6 +56,33 @@ function RootLayoutWrapper() {
   const isPublic = PUBLIC_PATHS.some(p => pathname === p)
 
   if (isPublic) return <Outlet />
+
+  const esGestionFiniquito = pathname === '/finiquitos/gestion'
+
+  const tokenPortalFiniquito = getFiniquitoAccessToken()?.trim()
+
+  const esAdminPanel =
+    isAuthenticated && (user?.rol || 'operativo') === 'administrador'
+
+  if (esGestionFiniquito && !esAdminPanel) {
+    if (tokenPortalFiniquito) {
+      return <Outlet />
+    }
+
+    if (isLoading) {
+      return (
+        <div className="flex min-h-[100dvh] items-center justify-center bg-slate-100/80">
+          <div
+            className="h-10 w-10 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"
+            aria-label="Cargando"
+            role="status"
+          />
+        </div>
+      )
+    }
+
+    return <Navigate to="/finiquitos/acceso" replace />
+  }
 
   // Sin token activo en ruta no pblica ? pedir usuario y clave (login)
 
@@ -134,9 +163,7 @@ import { FiniquitoRootPage } from './pages/FiniquitoRootPage'
 
 import { FiniquitoAccesoPage } from './pages/FiniquitoAccesoPage'
 
-import { FiniquitoPanelPage } from './pages/FiniquitoPanelPage'
-
-import { FiniquitoGestionPage } from './pages/FiniquitoGestionPage'
+import { FiniquitoGestionGatePage } from './pages/FiniquitoGestionGatePage'
 
 import CobrosPagosReportadosPage from './pages/CobrosPagosReportadosPage'
 
@@ -215,7 +242,11 @@ function App() {
 
   const isPublicPath = PUBLIC_PATHS.some((p: string) => pathname === p)
 
-  if (isLoading && !isPublicPath) {
+  const colaboradorFiniquitoEnGestion =
+    pathname === '/finiquitos/gestion' &&
+    !!getFiniquitoAccessToken()?.trim()
+
+  if (isLoading && !isPublicPath && !colaboradorFiniquitoEnGestion) {
     return <PageLoader />
   }
 
@@ -261,21 +292,20 @@ function App() {
 
             <Route path="infopagos" element={<InfopagosPage />} />
 
-            {/* Finiquito: portal publico (OTP) + entrada dual; gestion solo admin con Layout */}
+            {/* Finiquito: portal OTP y gestion comparten URL /finiquitos/gestion (gate); panel redirige */}
 
             <Route path="finiquitos" element={<FiniquitoRootPage />} />
 
             <Route path="finiquitos/acceso" element={<FiniquitoAccesoPage />} />
 
-            <Route path="finiquitos/panel" element={<FiniquitoPanelPage />} />
+            <Route
+              path="finiquitos/panel"
+              element={<Navigate to="/finiquitos/gestion" replace />}
+            />
 
             <Route
               path="finiquitos/gestion"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <FiniquitoGestionPage />
-                </SimpleProtectedRoute>
-              }
+              element={<FiniquitoGestionGatePage />}
             />
 
             {/* Login: misma pantalla que index cuando no autenticado */}

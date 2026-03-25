@@ -9,6 +9,7 @@ import json
 import os
 import uuid
 import logging
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
@@ -33,6 +34,7 @@ from app.models.configuracion import Configuracion
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.variable_notificacion import VariableNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
+from app.models.envio_notificacion_adjunto import EnvioNotificacionAdjunto
 from app.services.notificacion_logging import (
     log_historial_consulta,
     log_historial_excel,
@@ -1309,6 +1311,18 @@ def get_historial_notificaciones_por_cedula(
         raise
     tiempo_ms = (time.perf_counter() - t0) * 1000
     log_historial_consulta(norm, len(rows), round(tiempo_ms, 2))
+    adj_por_envio: dict = defaultdict(list)
+    ids_rows = [r.id for r in rows]
+    if ids_rows:
+        aq = (
+            select(EnvioNotificacionAdjunto)
+            .where(EnvioNotificacionAdjunto.envio_notificacion_id.in_(ids_rows))
+            .order_by(EnvioNotificacionAdjunto.envio_notificacion_id, EnvioNotificacionAdjunto.orden)
+        )
+        for a in db.execute(aq).scalars().all():
+            adj_por_envio[a.envio_notificacion_id].append(
+                {"id": a.id, "nombre_archivo": a.nombre_archivo or "", "orden": a.orden}
+            )
     items = [
         {
             "id": r.id,
@@ -1323,6 +1337,10 @@ def get_historial_notificaciones_por_cedula(
             "error_mensaje": r.error_mensaje,
             "prestamo_id": r.prestamo_id,
             "correlativo": r.correlativo,
+            "adjuntos": adj_por_envio.get(r.id, []),
+            "tiene_mensaje_html": bool(getattr(r, "mensaje_html", None)),
+            "tiene_mensaje_texto": bool(getattr(r, "mensaje_texto", None)),
+            "tiene_comprobante_pdf": bool(getattr(r, "comprobante_pdf", None)),
         }
         for r in rows
     ]
@@ -1429,6 +1447,100 @@ def get_comprobante_envio(
 </html>"""
     return Response(content=html, media_type="text/html; charset=utf-8",
                     headers={"Content-Disposition": f"inline; filename=comprobante_notificacion_{row.id}.html"})
+
+
+def _safe_download_filename(name: str, fallback: str) -> str:
+    n = (name or "").strip() or fallback
+    for ch in ("\\", "/", ":", "*", "?", '"', "<", ">", "|"):
+        n = n.replace(ch, "_")
+    n = n.strip() or fallback
+    return n[:200] if len(n) > 200 else n
+
+
+@router.get("/historial-por-cedula/{envio_id}/mensaje-html")
+def get_historial_envio_mensaje_html(
+    envio_id: int,
+    db: Session = Depends(get_db),
+):
+    """Cuerpo HTML del correo guardado al enviar (registros nuevos)."""
+    row = db.get(EnvioNotificacion, envio_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Registro de envío no encontrado")
+    if not (row.mensaje_html or "").strip():
+        raise HTTPException(
+            status_code=404,
+            detail="No hay cuerpo HTML almacenado (envíos anteriores a la versión con snapshot).",
+        )
+    body = row.mensaje_html.encode("utf-8")
+    fn = _safe_download_filename(f"mensaje_notificacion_{row.id}.html", f"mensaje_notificacion_{row.id}.html")
+    return Response(
+        content=body,
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{fn}"'},
+    )
+
+
+@router.get("/historial-por-cedula/{envio_id}/mensaje-texto")
+def get_historial_envio_mensaje_texto(
+    envio_id: int,
+    db: Session = Depends(get_db),
+):
+    """Cuerpo en texto plano del correo guardado al enviar."""
+    row = db.get(EnvioNotificacion, envio_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Registro de envío no encontrado")
+    if not (row.mensaje_texto or "").strip():
+        raise HTTPException(
+            status_code=404,
+            detail="No hay cuerpo de texto almacenado (envíos anteriores a la versión con snapshot).",
+        )
+    body = row.mensaje_texto.encode("utf-8")
+    fn = _safe_download_filename(f"mensaje_notificacion_{row.id}.txt", f"mensaje_notificacion_{row.id}.txt")
+    return Response(
+        content=body,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{fn}"'},
+    )
+
+
+@router.get("/historial-por-cedula/{envio_id}/adjunto/{adjunto_id}")
+def get_historial_envio_adjunto(
+    envio_id: int,
+    adjunto_id: int,
+    db: Session = Depends(get_db),
+):
+    """Un adjunto PDF (u otro binario) tal como se envió."""
+    adj = db.get(EnvioNotificacionAdjunto, adjunto_id)
+    if not adj or adj.envio_notificacion_id != envio_id:
+        raise HTTPException(status_code=404, detail="Adjunto no encontrado")
+    fn = _safe_download_filename(adj.nombre_archivo, f"adjunto_{adj.id}.pdf")
+    media = "application/pdf" if fn.lower().endswith(".pdf") else "application/octet-stream"
+    return Response(
+        content=bytes(adj.contenido),
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fn}"'},
+    )
+
+
+@router.get("/historial-por-cedula/{envio_id}/comprobante-pdf")
+def get_historial_envio_comprobante_pdf(
+    envio_id: int,
+    db: Session = Depends(get_db),
+):
+    """Comprobante de envío en PDF (generado al guardar el registro)."""
+    row = db.get(EnvioNotificacion, envio_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Registro de envío no encontrado")
+    if not row.comprobante_pdf:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay comprobante PDF (envíos anteriores a la versión con snapshot o error al generarlo).",
+        )
+    return Response(
+        content=bytes(row.comprobante_pdf),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="comprobante_notificacion_{row.id}.pdf"'},
+    )
 
 
 @router.get("/clientes-retrasados", response_model=dict)

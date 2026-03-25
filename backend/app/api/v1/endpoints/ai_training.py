@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -29,6 +30,41 @@ def _parse_json_array(s: Optional[str]):
         return out if isinstance(out, list) else []
     except Exception:
         return []
+
+
+def _is_conversaciones_ai_table_missing(exc: BaseException) -> bool:
+    """True si el error de BD indica que falta la tabla conversaciones_ai (migración pendiente)."""
+    if not isinstance(exc, (ProgrammingError, OperationalError)):
+        return False
+    msg = str(exc).lower()
+    if "conversaciones_ai" not in msg:
+        return False
+    return any(
+        marker in msg
+        for marker in (
+            "does not exist",
+            "no such table",
+            "undefinedtable",
+            "existiert nicht",
+        )
+    )
+
+
+def _empty_estadisticas_feedback() -> dict[str, Any]:
+    dist = {str(i): 0 for i in range(1, 6)}
+    return {
+        "total_conversaciones": 0,
+        "conversaciones_calificadas": 0,
+        "conversaciones_con_feedback": 0,
+        "distribucion_calificaciones": dist,
+        "analisis_feedback": {"positivo": 0, "negativo": 0, "neutro": 0, "total": 0},
+        "conversaciones_listas_entrenamiento": {
+            "total": 0,
+            "sin_feedback_negativo": 0,
+            "con_feedback_negativo": 0,
+            "puede_preparar": False,
+        },
+    }
 
 
 def _conv_to_dict(row: ConversacionAI) -> dict:
@@ -85,6 +121,11 @@ def _metricas_from_db(db: Session) -> dict[str, Any]:
                 "rag": {"documentos_con_embeddings": 0, "total_embeddings": 0},
                 "ml_riesgo": {"modelos_disponibles": 0},
             }
+    except (ProgrammingError, OperationalError) as e:
+        if _is_conversaciones_ai_table_missing(e):
+            logger.warning("conversaciones_ai no existe (aplique migraciones): %s", e)
+        else:
+            logger.warning("Métricas desde BD (conversaciones_ai): %s", e)
     except Exception as e:
         logger.warning("Métricas desde BD (conversaciones_ai): %s", e)
     return {
@@ -113,26 +154,37 @@ def get_conversaciones(
     fecha_hasta: Optional[str] = None,
 ):
     """Lista conversaciones paginadas. Filtros: con_calificacion, fecha_desde, fecha_hasta."""
-    q = db.query(ConversacionAI)
-    if con_calificacion is not None:
-        if con_calificacion:
-            q = q.filter(ConversacionAI.calificacion.isnot(None))
-        else:
-            q = q.filter(ConversacionAI.calificacion.is_(None))
-    if fecha_desde:
-        q = q.filter(ConversacionAI.creado_en >= fecha_desde)
-    if fecha_hasta:
-        q = q.filter(ConversacionAI.creado_en <= fecha_hasta)
-    total = q.count()
-    offset = (page - 1) * per_page
-    rows = q.order_by(ConversacionAI.creado_en.desc()).offset(offset).limit(per_page).all()
-    total_pages = (total + per_page - 1) // per_page if total else 1
-    return {
-        "conversaciones": [_conv_to_dict(r) for r in rows],
-        "total": total,
-        "page": page,
-        "total_pages": total_pages,
-    }
+    try:
+        q = db.query(ConversacionAI)
+        if con_calificacion is not None:
+            if con_calificacion:
+                q = q.filter(ConversacionAI.calificacion.isnot(None))
+            else:
+                q = q.filter(ConversacionAI.calificacion.is_(None))
+        if fecha_desde:
+            q = q.filter(ConversacionAI.creado_en >= fecha_desde)
+        if fecha_hasta:
+            q = q.filter(ConversacionAI.creado_en <= fecha_hasta)
+        total = q.count()
+        offset = (page - 1) * per_page
+        rows = q.order_by(ConversacionAI.creado_en.desc()).offset(offset).limit(per_page).all()
+        total_pages = (total + per_page - 1) // per_page if total else 1
+        return {
+            "conversaciones": [_conv_to_dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "total_pages": total_pages,
+        }
+    except (ProgrammingError, OperationalError) as e:
+        if _is_conversaciones_ai_table_missing(e):
+            logger.warning("conversaciones_ai no existe (aplique migraciones): %s", e)
+            return {
+                "conversaciones": [],
+                "total": 0,
+                "page": page,
+                "total_pages": 1,
+            }
+        raise
 
 
 class ConversacionCreate(BaseModel):
@@ -220,61 +272,67 @@ def put_conversaciones(
 @router.get("/conversaciones/estadisticas-feedback")
 def get_estadisticas_feedback(db: Session = Depends(get_db)):
     """Estadísticas de feedback para el dashboard de fine-tuning. Consultas optimizadas (2 round-trips + 1 por feedback)."""
-    # Una consulta para totales
-    stmt_totales = select(
-        select(func.count(ConversacionAI.id)).scalar_subquery().label("total"),
-        select(func.count(ConversacionAI.id))
-        .where(ConversacionAI.calificacion.isnot(None))
-        .scalar_subquery()
-        .label("calificadas"),
-        select(func.count(ConversacionAI.id))
-        .where(ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != "")
-        .scalar_subquery()
-        .label("con_feedback"),
-        select(func.count(ConversacionAI.id))
-        .where(ConversacionAI.calificacion >= 4)
-        .scalar_subquery()
-        .label("listas"),
-    )
-    row = db.execute(stmt_totales).first()
-    total = int(row[0] or 0) if row else 0
-    calificadas = int(row[1] or 0) if row else 0
-    con_feedback = int(row[2] or 0) if row else 0
-    listas = int(row[3] or 0) if row else 0
-    # Una consulta para distribución de calificaciones 1-5
-    stmt_dist = (
-        select(ConversacionAI.calificacion, func.count(ConversacionAI.id))
-        .where(ConversacionAI.calificacion.isnot(None))
-        .group_by(ConversacionAI.calificacion)
-    )
-    dist = {str(i): 0 for i in range(1, 6)}
-    for r in db.execute(stmt_dist).all():
-        if r[0] is not None and 1 <= int(r[0]) <= 5:
-            dist[str(int(r[0]))] = int(r[1] or 0)
-    # Solo columnas feedback para análisis negativo (evitar cargar filas completas)
-    neg_words = ["mal", "incorrecto", "error", "no sirve", "malo", "pésimo", "incorrecta"]
-    con_neg = 0
-    for (fb,) in db.execute(
-        select(ConversacionAI.feedback).where(
-            ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != ""
+    try:
+        # Una consulta para totales
+        stmt_totales = select(
+            select(func.count(ConversacionAI.id)).scalar_subquery().label("total"),
+            select(func.count(ConversacionAI.id))
+            .where(ConversacionAI.calificacion.isnot(None))
+            .scalar_subquery()
+            .label("calificadas"),
+            select(func.count(ConversacionAI.id))
+            .where(ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != "")
+            .scalar_subquery()
+            .label("con_feedback"),
+            select(func.count(ConversacionAI.id))
+            .where(ConversacionAI.calificacion >= 4)
+            .scalar_subquery()
+            .label("listas"),
         )
-    ).all():
-        if fb and any(w in (fb or "").lower() for w in neg_words):
-            con_neg += 1
-    sin_neg = max(0, listas - con_neg)
-    return {
-        "total_conversaciones": total,
-        "conversaciones_calificadas": calificadas,
-        "conversaciones_con_feedback": con_feedback,
-        "distribucion_calificaciones": dist,
-        "analisis_feedback": {"positivo": max(0, con_feedback - con_neg), "negativo": con_neg, "neutro": 0, "total": con_feedback},
-        "conversaciones_listas_entrenamiento": {
-            "total": listas,
-            "sin_feedback_negativo": sin_neg,
-            "con_feedback_negativo": con_neg,
-            "puede_preparar": listas >= 10,
-        },
-    }
+        row = db.execute(stmt_totales).first()
+        total = int(row[0] or 0) if row else 0
+        calificadas = int(row[1] or 0) if row else 0
+        con_feedback = int(row[2] or 0) if row else 0
+        listas = int(row[3] or 0) if row else 0
+        # Una consulta para distribución de calificaciones 1-5
+        stmt_dist = (
+            select(ConversacionAI.calificacion, func.count(ConversacionAI.id))
+            .where(ConversacionAI.calificacion.isnot(None))
+            .group_by(ConversacionAI.calificacion)
+        )
+        dist = {str(i): 0 for i in range(1, 6)}
+        for r in db.execute(stmt_dist).all():
+            if r[0] is not None and 1 <= int(r[0]) <= 5:
+                dist[str(int(r[0]))] = int(r[1] or 0)
+        # Solo columnas feedback para análisis negativo (evitar cargar filas completas)
+        neg_words = ["mal", "incorrecto", "error", "no sirve", "malo", "pésimo", "incorrecta"]
+        con_neg = 0
+        for (fb,) in db.execute(
+            select(ConversacionAI.feedback).where(
+                ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != ""
+            )
+        ).all():
+            if fb and any(w in (fb or "").lower() for w in neg_words):
+                con_neg += 1
+        sin_neg = max(0, listas - con_neg)
+        return {
+            "total_conversaciones": total,
+            "conversaciones_calificadas": calificadas,
+            "conversaciones_con_feedback": con_feedback,
+            "distribucion_calificaciones": dist,
+            "analisis_feedback": {"positivo": max(0, con_feedback - con_neg), "negativo": con_neg, "neutro": 0, "total": con_feedback},
+            "conversaciones_listas_entrenamiento": {
+                "total": listas,
+                "sin_feedback_negativo": sin_neg,
+                "con_feedback_negativo": con_neg,
+                "puede_preparar": listas >= 10,
+            },
+        }
+    except (ProgrammingError, OperationalError) as e:
+        if _is_conversaciones_ai_table_missing(e):
+            logger.warning("conversaciones_ai no existe (aplique migraciones): %s", e)
+            return _empty_estadisticas_feedback()
+        raise
 
 
 class RecolectarBody(BaseModel):

@@ -32,6 +32,7 @@ from app.models.pago_pendiente_descargar import PagoPendienteDescargar
 from app.models.datos_importados_conerrores import DatosImportadosConErrores
 from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 from app.models.envio_notificacion import EnvioNotificacion
+from app.models.envio_notificacion_adjunto import EnvioNotificacionAdjunto
 from app.models.crm_campana import CampanaCrm
 from app.models.crm_campana_envio import CampanaEnvioCrm
 from app.models.cedula_reportar_bs import CedulaReportarBs
@@ -80,6 +81,7 @@ __all__ = [
     "DatosImportadosConErrores",
     "EstadoCuentaCodigo",
     "EnvioNotificacion",
+    "EnvioNotificacionAdjunto",
     "CampanaCrm",
     "CampanaEnvioCrm",
     "CedulaReportarBs",

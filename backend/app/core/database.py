@@ -20,10 +20,10 @@ if _db_url.startswith("postgres://"):
 engine = create_engine(
     _db_url,
     pool_pre_ping=True,   # Verifica que la conexión esté viva antes de usarla (reconexión automática)
-    pool_size=5,           # Menos conexiones persistentes (Render free tier; evita SSL closed)
-    max_overflow=10,       # Conexiones adicionales permitidas bajo carga
+    pool_size=settings.DATABASE_POOL_SIZE,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_recycle=300,     # Recicla cada 5 min (Render cierra SSL antes; evita SSL connection closed unexpectedly)
-    pool_timeout=30,       # Tiempo max esperando conexión disponible
+    pool_timeout=settings.DATABASE_POOL_TIMEOUT,
     connect_args={
         "connect_timeout": 15,        # Timeout de conexión inicial (psycopg2)
         "application_name": "rapicredit_backend",

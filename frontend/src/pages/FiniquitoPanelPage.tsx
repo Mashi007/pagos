@@ -105,7 +105,7 @@ export function FiniquitoPanelPage() {
     sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
     sessionStorage.setItem(
       PUBLIC_FLOW_SESSION_KEY + '_path',
-      'finiquitos/panel'
+      'finiquitos/gestion'
     )
   }, [])
 

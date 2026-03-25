@@ -127,7 +127,7 @@ export function FiniquitoAccesoPage() {
 
       toast.success('Sesión iniciada.')
 
-      navigate('/finiquitos/panel', { replace: true })
+      navigate('/finiquitos/gestion', { replace: true })
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error al verificar'
 

@@ -1007,11 +1007,18 @@ class ApiClient {
     })
 
     try {
-      const response: AxiosResponse<T> = await this.client.put(
-        url,
-        data,
-        config
-      )
+      const aiConfigPut =
+        url.includes('/configuracion/ai/configuracion') &&
+        !url.includes('/prompt')
+
+      const putTimeoutMs = aiConfigPut
+        ? Math.max(config?.timeout ?? 0, 60000)
+        : (config?.timeout ?? DEFAULT_TIMEOUT_MS)
+
+      const response: AxiosResponse<T> = await this.client.put(url, data, {
+        ...config,
+        timeout: putTimeoutMs,
+      })
 
       console.log('? [ApiClient] PUT response:', {
         url,
