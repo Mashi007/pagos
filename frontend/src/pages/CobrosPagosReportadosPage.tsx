@@ -26,8 +26,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import {
-  listPagosReportados,
-  getPagosReportadosKpis,
+  listPagosReportadosConKpis,
   cambiarEstadoPago,
   openComprobanteInNewTab,
   eliminarPagoReportado,
@@ -259,23 +258,19 @@ export default function CobrosPagosReportadosPage() {
         institucion: institucion.trim() || undefined,
       }
 
-      const [res, kpisRes] = await Promise.all([
-        listPagosReportados({
-          page: effectivePage,
+      const res = await listPagosReportadosConKpis({
+        page: effectivePage,
 
-          per_page: 20,
+        per_page: 20,
 
-          estado: effectiveEstado || undefined,
+        estado: effectiveEstado || undefined,
 
-          ...filterParams,
-        }),
-
-        getPagosReportadosKpis(filterParams),
-      ])
+        ...filterParams,
+      })
 
       setData(res)
 
-      setKpis(kpisRes)
+      setKpis(res.kpis)
     } catch (e: any) {
       toast.error(e?.message || 'Error al cargar.')
     } finally {
@@ -522,28 +517,6 @@ export default function CobrosPagosReportadosPage() {
             ) : null}
             Descargar Excel Aprobados
           </Button>
-
-          <div className="w-full basis-full space-y-2 rounded-md border border-dashed border-muted-foreground/30 bg-muted/25 p-3 text-sm">
-            <p className="text-foreground">
-              <span className="font-semibold">
-                Descargar Excel Aprobados -{' '}
-              </span>
-              Solo <strong>aprobados</strong> aún no exportados. Las fechas del
-              filtro no aplican; sí cédula e institución si las escribiste. El
-              servidor genera el Excel y en la <strong>misma operación</strong>{' '}
-              marca exportados y limpia la cola temporal.
-            </p>
-
-            <p className="text-muted-foreground">
-              <span className="font-semibold text-foreground">
-                Columnas del Excel -{' '}
-              </span>
-              Referencia, Nombre, Cédula, Banco, Monto, Moneda,{' '}
-              <strong>Tasa cambio (Bs/USD)</strong>, Fecha pago, Nº operación,
-              Fecha reporte, Observación, Estado y al final{' '}
-              <strong>Monto USD</strong> (equivalente en dólares para sumar).
-            </p>
-          </div>
         </CardContent>
       </Card>
 

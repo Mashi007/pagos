@@ -195,7 +195,7 @@ export default function CobrosEditarPage() {
       navigate(`/cobros/pagos-reportados/${id}`)
     } catch (e: any) {
       toast.error(
-        e?.response?.data?.detail || e?.message || 'Error al guardar.'
+        e?.message || e?.response?.data?.detail || 'Error al guardar.'
       )
     } finally {
       setSaving(false)

@@ -2,7 +2,7 @@
 Servicios para gestionar tasas de cambio oficiales.
 """
 from datetime import date, datetime, time
-from typing import Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -37,6 +37,17 @@ def obtener_tasa_por_fecha(db: Session, fecha: date) -> Optional[TasaCambioDiari
     return db.execute(
         select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
     ).scalars().first()
+
+
+def obtener_tasas_por_fechas(db: Session, fechas: Sequence[date]) -> Dict[date, TasaCambioDiaria]:
+    """Una sola consulta para varias fechas (listados / Excel con muchas filas)."""
+    uniq = tuple({f for f in fechas if f is not None})
+    if not uniq:
+        return {}
+    rows = db.execute(
+        select(TasaCambioDiaria).where(TasaCambioDiaria.fecha.in_(uniq))
+    ).scalars().all()
+    return {r.fecha: r for r in rows}
 
 
 def guardar_tasa_diaria(
@@ -119,12 +130,15 @@ def tasa_y_equivalente_usd_excel(
     fecha_pago: date,
     monto: float,
     moneda: Optional[str],
+    tasas_por_fecha: Optional[Dict[date, Optional[TasaCambioDiaria]]] = None,
 ) -> Tuple[Optional[float], Optional[float]]:
     """
     Para exportes (Excel/API): tasa oficial Bs/USD del día fecha_pago y monto en USD.
 
     - Pago en USD: (None, monto) — no aplica tasa Bs; el monto ya es dólares.
     - Pago en Bs: (tasa_oficial, monto_bs/tasa) si existe tasa para fecha_pago; si no, (None, None).
+
+    Si se pasa tasas_por_fecha (prefetch con obtener_tasas_por_fechas), no se consulta BD por fila.
     """
     raw = (moneda or "BS").strip().upper()
     if raw in (
@@ -137,7 +151,10 @@ def tasa_y_equivalente_usd_excel(
         "DÓLARES",
     ):
         return None, round(float(monto), 2)
-    tasa_row = obtener_tasa_por_fecha(db, fecha_pago)
+    if tasas_por_fecha is not None:
+        tasa_row = tasas_por_fecha.get(fecha_pago)
+    else:
+        tasa_row = obtener_tasa_por_fecha(db, fecha_pago)
     if tasa_row is None:
         return None, None
     t = float(tasa_row.tasa_oficial)

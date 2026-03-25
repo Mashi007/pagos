@@ -795,7 +795,8 @@ class ApiClient {
       url.includes('/cobranzas/') ||
       url.includes('/pagos/kpis') ||
       url.includes('/pagos/stats') ||
-      url.includes('/revision-manual/') // Render cold start + consulta pesada
+      url.includes('/revision-manual/') || // Render cold start + consulta pesada
+      url.includes('listado-y-kpis') // Cobros: listado + KPIs en un request (dos consultas BD)
 
     // ? Timeout especial para revision-manual (Render cold start + BD)
 

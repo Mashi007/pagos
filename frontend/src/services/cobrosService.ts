@@ -335,7 +335,17 @@ export interface PagosReportadosKpis {
 
   rechazado: number
 
+  /** Presente en respuesta API (agrupacion por estado) */
+
+  importado?: number
+
   total: number
+}
+
+/** Una sola peticion: listado + KPIs (mismos criterios que GET pagos-reportados + /kpis). */
+
+export interface ListPagosReportadosConKpisResponse extends ListPagosReportadosResponse {
+  kpis: PagosReportadosKpis
 }
 
 export async function getPagosReportadosKpis(
@@ -402,6 +412,75 @@ export async function listPagosReportados(params: {
   )
 
   return data
+}
+
+export async function listPagosReportadosConKpis(params: {
+  estado?: string
+
+  fecha_desde?: string
+
+  fecha_hasta?: string
+
+  cedula?: string
+
+  institucion?: string
+
+  page?: number
+
+  per_page?: number
+}): Promise<ListPagosReportadosConKpisResponse> {
+  const q = new URLSearchParams()
+
+  if (params.estado) q.set('estado', params.estado)
+
+  if (params.fecha_desde) q.set('fecha_desde', params.fecha_desde)
+
+  if (params.fecha_hasta) q.set('fecha_hasta', params.fecha_hasta)
+
+  if (params.cedula) q.set('cedula', params.cedula)
+
+  if (params.institucion) q.set('institucion', params.institucion)
+
+  if (params.page != null) q.set('page', String(params.page))
+
+  if (params.per_page != null) q.set('per_page', String(params.per_page))
+
+  const url = `${BASE_COBROS}/pagos-reportados/listado-y-kpis?${q}`
+
+  try {
+    return await apiClient.get<ListPagosReportadosConKpisResponse>(url)
+  } catch (e: unknown) {
+    const st = (e as { response?: { status?: number } })?.response?.status
+    if (st === 404 || st === 405) {
+      const filterParams = {
+        fecha_desde: params.fecha_desde,
+
+        fecha_hasta: params.fecha_hasta,
+
+        cedula: params.cedula,
+
+        institucion: params.institucion,
+      }
+
+      const [lista, kpis] = await Promise.all([
+        listPagosReportados({
+          estado: params.estado,
+
+          ...filterParams,
+
+          page: params.page,
+
+          per_page: params.per_page,
+        }),
+
+        getPagosReportadosKpis(filterParams),
+      ])
+
+      return { ...lista, kpis }
+    }
+
+    throw e
+  }
 }
 
 export interface PagoReportadoDetalleResponse {

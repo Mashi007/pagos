@@ -3,9 +3,11 @@ Endpoints de administración del módulo Cobros (requieren autenticación).
 Listado de pagos reportados, detalle, aprobar, rechazar, histórico por cédula.
 """
 import logging
+import threading
+import time
 from datetime import date, datetime, time as dt_time
 from decimal import Decimal
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -37,6 +39,7 @@ from app.services.cobros.cedula_reportar_bs_service import (
 from app.services.tasa_cambio_service import (
     obtener_tasa_por_fecha,
     convertir_bs_a_usd,
+    obtener_tasas_por_fechas,
     tasa_y_equivalente_usd_excel,
 )
 
@@ -249,6 +252,40 @@ def _cedulas_en_clientes_set(db: Session) -> set:
     return out
 
 
+# Listado pagos reportados: evitar leer todas las cédulas de clientes en cada request (miles de filas).
+_CEDULAS_CLIENTES_CACHE_TTL_SEC = 120.0
+_cedulas_clientes_cache: Optional[Tuple[float, frozenset]] = None
+_autorizados_bs_cache: Optional[Tuple[float, frozenset]] = None
+_cobros_list_aux_lock = threading.Lock()
+
+
+def _cedulas_en_clientes_set_cached(db: Session) -> frozenset:
+    """Misma semántica que _cedulas_en_clientes_set; cache en proceso ~2 min."""
+    global _cedulas_clientes_cache
+    now = time.monotonic()
+    with _cobros_list_aux_lock:
+        if _cedulas_clientes_cache is not None:
+            ts, data = _cedulas_clientes_cache
+            if now - ts < _CEDULAS_CLIENTES_CACHE_TTL_SEC:
+                return data
+        data = frozenset(_cedulas_en_clientes_set(db))
+        _cedulas_clientes_cache = (now, data)
+        return data
+
+
+def _autorizados_bs_claves_cached(db: Session) -> frozenset:
+    global _autorizados_bs_cache
+    now = time.monotonic()
+    with _cobros_list_aux_lock:
+        if _autorizados_bs_cache is not None:
+            ts, data = _autorizados_bs_cache
+            if now - ts < _CEDULAS_CLIENTES_CACHE_TTL_SEC:
+                return data
+        data = load_autorizados_bs_claves(db)
+        _autorizados_bs_cache = (now, data)
+        return data
+
+
 def _observacion_reglas_carga(
     db: Session,
     rows: list,
@@ -264,16 +301,14 @@ def _observacion_reglas_carga(
         cedula_norm = _normalize_cedula_for_client_lookup(raw_cedula)
         if cedula_norm and cedula_norm not in cedulas_en_clientes:
             partes.append("NO CLIENTES")
-            # Auditoría: log para diagnosticar por qué se marca NO CLIENTES
-            logger.info(
-                "[COBROS] NO CLIENTES: ref=%s tipo_cedula=%r numero_cedula=%r raw=%r cedula_norm=%r | set_size=%s V20149164_in_set=%s",
+            logger.debug(
+                "[COBROS] NO CLIENTES: ref=%s tipo_cedula=%r numero_cedula=%r raw=%r cedula_norm=%r | set_size=%s",
                 getattr(r, "referencia_interna", None),
                 getattr(r, "tipo_cedula", None),
                 getattr(r, "numero_cedula", None),
                 raw_cedula,
                 cedula_norm,
                 len(cedulas_en_clientes),
-                "V20149164" in cedulas_en_clientes,
             )
         moneda = (r.moneda or "BS").strip().upper()
         if moneda == "BS" and cedula_norm and not cedula_coincide_autorizados_bs(cedula_norm, cedulas_bolivares):
@@ -298,14 +333,16 @@ def _pago_reportado_list_items_from_rows(
         )
         for r in rows
     ]
-    cedulas_en_clientes = _cedulas_en_clientes_set(db)
+    cedulas_en_clientes = _cedulas_en_clientes_set_cached(db)
     logger.debug(
-        "[COBROS] pagos-reportados: cedulas_en_clientes set_size=%s V20149164_in_set=%s",
+        "[COBROS] pagos-reportados: cedulas_en_clientes set_size=%s (cache)",
         len(cedulas_en_clientes),
-        "V20149164" in cedulas_en_clientes,
     )
 
-    cedulas_bolivares = load_autorizados_bs_claves(db)
+    cedulas_bolivares = _autorizados_bs_claves_cached(db)
+
+    fechas_tasa = list({r.fecha_pago for r in rows if r.fecha_pago is not None})
+    tasas_por_fecha = obtener_tasas_por_fechas(db, fechas_tasa)
 
     num_ops_raw = list({(r.numero_operacion or "").strip() for r in rows if (r.numero_operacion or "").strip()})
     norms_for_query = {n for o in num_ops_raw for n in [normalize_documento(o)] if n}
@@ -327,7 +364,7 @@ def _pago_reportado_list_items_from_rows(
         partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
         observacion = " / ".join(partes_final) if partes_final else None
         tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
-            db, r.fecha_pago, float(r.monto), r.moneda
+            db, r.fecha_pago, float(r.monto), r.moneda, tasas_por_fecha=tasas_por_fecha
         )
         items.append(PagoReportadoListItem(
             id=r.id,
@@ -435,6 +472,116 @@ def _persist_marcar_exportados_y_cola(db: Session, ids: List[int]) -> dict:
     }
 
 
+def _condicion_cedula_pago_reportado(cedula: Optional[str]) -> Any:
+    """Predicado SQL para búsqueda por cédula (mismo criterio en listado y KPIs)."""
+    if not cedula or not str(cedula).strip():
+        return None
+    ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
+    cond_cedula = or_(
+        func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula).like(f"%{ced_clean}%"),
+        PagoReportado.numero_cedula.like(f"%{ced_clean}%"),
+        func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula) == ced_clean,
+        PagoReportado.numero_cedula == ced_clean,
+    )
+    if len(ced_clean) >= 1 and ced_clean[0:1] in ("V", "E", "J") and ced_clean[1:].isdigit():
+        cond_cedula = or_(
+            cond_cedula,
+            and_(PagoReportado.tipo_cedula == ced_clean[0:1], PagoReportado.numero_cedula == ced_clean[1:]),
+        )
+    return cond_cedula
+
+
+def _filtros_fecha_cedula_institucion_reportados(
+    *,
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+) -> List[Any]:
+    """Fragmentos WHERE compartidos entre listado paginado y agregación KPI (evita divergencia)."""
+    out: List[Any] = []
+    if fecha_desde:
+        out.append(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
+    if fecha_hasta:
+        out.append(PagoReportado.created_at <= datetime.combine(fecha_hasta, datetime.max.time()))
+    ced_pred = _condicion_cedula_pago_reportado(cedula)
+    if ced_pred is not None:
+        out.append(ced_pred)
+    if institucion and institucion.strip():
+        out.append(PagoReportado.institucion_financiera.ilike(f"%{institucion.strip()}%"))
+    return out
+
+
+def _list_pagos_reportados_payload(
+    db: Session,
+    *,
+    estado: Optional[str],
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+    page: int,
+    per_page: int,
+) -> dict:
+    """Misma lógica que GET /pagos-reportados (reutilizada por listado-y-kpis)."""
+    q = select(PagoReportado)
+    count_q = select(func.count(PagoReportado.id))
+    exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
+    if estado:
+        q = q.where(PagoReportado.estado == estado)
+        count_q = count_q.where(PagoReportado.estado == estado)
+    else:
+        q = q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
+        count_q = count_q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
+
+    q = q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
+    count_q = count_q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
+    for w in _filtros_fecha_cedula_institucion_reportados(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+    ):
+        q = q.where(w)
+        count_q = count_q.where(w)
+
+    total = db.execute(count_q).scalar()
+    q = q.order_by(
+        case((PagoReportado.estado == "rechazado", 1), else_=0),
+        PagoReportado.created_at.asc(),
+    ).offset((page - 1) * per_page).limit(per_page)
+    rows = db.execute(q).scalars().all()
+    items = _pago_reportado_list_items_from_rows(db, rows)
+    return {"items": items, "total": total, "page": page, "per_page": per_page}
+
+
+def _kpis_pagos_reportados_payload(
+    db: Session,
+    *,
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+) -> dict:
+    """Misma lógica que GET /pagos-reportados/kpis."""
+    base = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(True)
+    for w in _filtros_fecha_cedula_institucion_reportados(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+    ):
+        base = base.where(w)
+    base = base.group_by(PagoReportado.estado)
+    rows = db.execute(base).all()
+    counts = {"pendiente": 0, "en_revision": 0, "aprobado": 0, "rechazado": 0, "importado": 0}
+    for row in rows:
+        if row.estado in counts:
+            counts[row.estado] = row.cnt
+    counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado", "importado"))
+    return counts
+
+
 @router.get("/pagos-reportados", response_model=dict)
 def list_pagos_reportados(
     db: Session = Depends(get_db),
@@ -447,56 +594,16 @@ def list_pagos_reportados(
     per_page: int = Query(20, ge=1, le=300),
 ):
     """Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados para mostrar solo casos pendientes."""
-    q = select(PagoReportado)
-    count_q = select(func.count(PagoReportado.id))
-    exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
-    if estado:
-        q = q.where(PagoReportado.estado == estado)
-        count_q = count_q.where(PagoReportado.estado == estado)
-    else:
-        # Por defecto ocultar aprobados: solo casos pendientes (revisión, pendiente, rechazado)
-        q = q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
-        count_q = count_q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
-
-    # Ocultar aprobados ya exportados (persistido en BD).
-    q = q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
-    count_q = count_q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
-    if fecha_desde:
-        q = q.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
-        count_q = count_q.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
-    if fecha_hasta:
-        q = q.where(PagoReportado.created_at <= datetime.combine(fecha_hasta, datetime.max.time()))
-        count_q = count_q.where(PagoReportado.created_at <= datetime.combine(fecha_hasta, datetime.max.time()))
-    # Búsqueda por cédula: todas las formas posibles (tipo+numero, solo numero, con/sin guión)
-    if cedula:
-        ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
-        # Coincide: concatenación tipo+numero, o solo numero_cedula, o tipo
-        cond_cedula = or_(
-            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula).like(f"%{ced_clean}%"),
-            PagoReportado.numero_cedula.like(f"%{ced_clean}%"),
-            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula) == ced_clean,
-            PagoReportado.numero_cedula == ced_clean,
-        )
-        if len(ced_clean) >= 1 and ced_clean[0:1] in ("V", "E", "J") and ced_clean[1:].isdigit():
-            cond_cedula = or_(
-                cond_cedula,
-                and_(PagoReportado.tipo_cedula == ced_clean[0:1], PagoReportado.numero_cedula == ced_clean[1:]),
-            )
-        q = q.where(cond_cedula)
-        count_q = count_q.where(cond_cedula)
-    if institucion:
-        q = q.where(PagoReportado.institucion_financiera.ilike(f"%{institucion}%"))
-        count_q = count_q.where(PagoReportado.institucion_financiera.ilike(f"%{institucion}%"))
-
-    total = db.execute(count_q).scalar()
-    # Rechazados al final de la lista; luego por fecha (más viejo primero)
-    q = q.order_by(
-        case((PagoReportado.estado == "rechazado", 1), else_=0),
-        PagoReportado.created_at.asc(),
-    ).offset((page - 1) * per_page).limit(per_page)
-    rows = db.execute(q).scalars().all()
-    items = _pago_reportado_list_items_from_rows(db, rows)
-    return {"items": items, "total": total, "page": page, "per_page": per_page}
+    return _list_pagos_reportados_payload(
+        db,
+        estado=estado,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.get("/pagos-reportados/kpis", response_model=dict)
@@ -507,36 +614,53 @@ def kpis_pagos_reportados(
     cedula: Optional[str] = Query(None),
     institucion: Optional[str] = Query(None),
 ):
-    """Conteos por estado (pendiente, en_revision, aprobado, rechazado) con los mismos filtros opcionales que el listado."""
-    base = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(True)
-    if fecha_desde:
-        base = base.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
-    if fecha_hasta:
-        base = base.where(PagoReportado.created_at <= datetime.combine(fecha_hasta, datetime.max.time()))
-    if cedula:
-        ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
-        cond_cedula = or_(
-            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula).like(f"%{ced_clean}%"),
-            PagoReportado.numero_cedula.like(f"%{ced_clean}%"),
-            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula) == ced_clean,
-            PagoReportado.numero_cedula == ced_clean,
-        )
-        if len(ced_clean) >= 1 and ced_clean[0:1] in ("V", "E", "J") and ced_clean[1:].isdigit():
-            cond_cedula = or_(
-                cond_cedula,
-                and_(PagoReportado.tipo_cedula == ced_clean[0:1], PagoReportado.numero_cedula == ced_clean[1:]),
-            )
-        base = base.where(cond_cedula)
-    if institucion:
-        base = base.where(PagoReportado.institucion_financiera.ilike(f"%{institucion}%"))
-    base = base.group_by(PagoReportado.estado)
-    rows = db.execute(base).all()
-    counts = {"pendiente": 0, "en_revision": 0, "aprobado": 0, "rechazado": 0, "importado": 0}
-    for row in rows:
-        if row.estado in counts:
-            counts[row.estado] = row.cnt
-    counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado", "importado"))
-    return counts
+    """Conteos por estado; filtros fecha/cédula/institución compartidos con el listado (sin filtro de estado del listado)."""
+    return _kpis_pagos_reportados_payload(
+        db,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+    )
+
+
+@router.get("/pagos-reportados/listado-y-kpis", response_model=dict)
+def list_pagos_reportados_y_kpis(
+    db: Session = Depends(get_db),
+    estado: Optional[str] = Query(None),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    cedula: Optional[str] = Query(None),
+    institucion: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=300),
+):
+    """
+    Listado paginado + KPIs en una sola petición (mismos query params que GET /pagos-reportados).
+
+    Nota: los KPIs siguen la semántica de GET /kpis (conteos por estado con filtros fecha/cédula/institución
+    únicamente; sin las exclusiones de estado/exportados del listado por defecto). Eso es intencional en la UI.
+
+    En BD son dos consultas secuenciales en un solo request HTTP (menos latencia de red que dos peticiones).
+    """
+    lista = _list_pagos_reportados_payload(
+        db,
+        estado=estado,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+        page=page,
+        per_page=per_page,
+    )
+    kpis = _kpis_pagos_reportados_payload(
+        db,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+    )
+    return {**lista, "kpis": kpis}
 
 
 @router.get("/pagos-reportados/exportar-aprobados-excel")
@@ -1181,83 +1305,99 @@ def editar_pago_reportado(
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     if pr.estado in ("aprobado", "importado"):
         raise HTTPException(status_code=400, detail="No se puede editar un pago ya aprobado o importado a pagos.")
-    estado_previo = pr.estado
-    usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
-    # rechazado: permitir corregir datos (monto, referencia, etc.) y volver a cola de revisión
+    ref = pr.referencia_interna
+    try:
+        estado_previo = pr.estado
+        usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
+        # rechazado: permitir corregir datos (monto, referencia, etc.) y volver a cola de revisión
 
-    if body.nombres is not None:
-        pr.nombres = (body.nombres or "").strip()[:200] or pr.nombres
-    if body.apellidos is not None:
-        pr.apellidos = (body.apellidos or "").strip()[:200] or pr.apellidos
-    if body.tipo_cedula is not None or body.numero_cedula is not None:
-        t_env = body.tipo_cedula if body.tipo_cedula is not None else pr.tipo_cedula
-        n_env = body.numero_cedula if body.numero_cedula is not None else pr.numero_cedula
-        tipo, numero = _normalizar_cedula_editar(t_env, n_env)
-        if tipo and numero:
-            val = validate_cedula(f"{tipo}{numero}")
-            if not val.get("valido"):
-                raise HTTPException(status_code=400, detail=val.get("error", "Cédula inválida."))
-            pr.tipo_cedula = tipo
-            pr.numero_cedula = numero[:13]
-    if body.fecha_pago is not None:
-        pr.fecha_pago = body.fecha_pago
-    if body.institucion_financiera is not None:
-        pr.institucion_financiera = (body.institucion_financiera or "").strip()[:100] or pr.institucion_financiera
-    if body.numero_operacion is not None:
-        pr.numero_operacion = (body.numero_operacion or "").strip()[:100] or pr.numero_operacion
-    if body.monto is not None:
-        if body.monto < 0:
-            raise HTTPException(status_code=400, detail="El monto no puede ser negativo.")
-        pr.monto = body.monto
-    if body.moneda is not None:
-        m = (body.moneda or "BS").strip().upper()[:10]
-        # USDT = Dólares = USD = $; normalizar a USD
-        if m in ("USD", "USDT"):
-            m = "USD"
-        pr.moneda = m or pr.moneda
-    if body.correo_enviado_a is not None:
-        pr.correo_enviado_a = (body.correo_enviado_a or "").strip()[:255] or None
-    if body.observacion is not None:
-        pr.observacion = (body.observacion or "").strip()[:500] or None
+        if body.nombres is not None:
+            pr.nombres = (body.nombres or "").strip()[:200] or pr.nombres
+        if body.apellidos is not None:
+            pr.apellidos = (body.apellidos or "").strip()[:200] or pr.apellidos
+        if body.tipo_cedula is not None or body.numero_cedula is not None:
+            t_env = body.tipo_cedula if body.tipo_cedula is not None else pr.tipo_cedula
+            n_env = body.numero_cedula if body.numero_cedula is not None else pr.numero_cedula
+            tipo, numero = _normalizar_cedula_editar(t_env, n_env)
+            if tipo and numero:
+                val = validate_cedula(f"{tipo}{numero}")
+                if not val.get("valido"):
+                    raise HTTPException(status_code=400, detail=val.get("error", "Cédula inválida."))
+                pr.tipo_cedula = tipo
+                pr.numero_cedula = numero[:13]
+        if body.fecha_pago is not None:
+            pr.fecha_pago = body.fecha_pago
+        if body.institucion_financiera is not None:
+            pr.institucion_financiera = (body.institucion_financiera or "").strip()[:100] or pr.institucion_financiera
+        if body.numero_operacion is not None:
+            pr.numero_operacion = (body.numero_operacion or "").strip()[:100] or pr.numero_operacion
+        if body.monto is not None:
+            if body.monto < 0:
+                raise HTTPException(status_code=400, detail="El monto no puede ser negativo.")
+            pr.monto = body.monto
+        if body.moneda is not None:
+            m = (body.moneda or "BS").strip().upper()[:10]
+            # USDT = Dólares = USD = $; normalizar a USD
+            if m in ("USD", "USDT"):
+                m = "USD"
+            pr.moneda = m or pr.moneda
+        if body.correo_enviado_a is not None:
+            pr.correo_enviado_a = (body.correo_enviado_a or "").strip()[:255] or None
+        if body.observacion is not None:
+            pr.observacion = (body.observacion or "").strip()[:500] or None
 
-    # Número de operación: nunca permitir duplicado en tabla pagos
-    _rechazar_si_numero_operacion_duplicado(db, pr.numero_operacion)
+        # Número de operación: nunca permitir duplicado en tabla pagos
+        _rechazar_si_numero_operacion_duplicado(db, pr.numero_operacion)
 
-    # Si la moneda queda en BS, la cédula debe estar en la lista de autorizadas para Bolívares (misma normalización que en listado)
-    moneda_final = (pr.moneda or "").strip().upper()
-    if moneda_final == "BS":
-        raw_cedula = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
-        cedula_norm = _normalize_cedula_for_client_lookup(raw_cedula)
-        if cedula_norm:
-            autorizados_bs = load_autorizados_bs_claves(db)
-            permitido_bs = cedula_coincide_autorizados_bs(cedula_norm, autorizados_bs)
-            if not permitido_bs:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Observación: Bolívares. No puede guardar con moneda Bs; la cédula no está en la lista autorizada. Cambie a USD.",
-                )
+        # Si la moneda queda en BS, la cédula debe estar en la lista de autorizadas para Bolívares (misma normalización que en listado)
+        moneda_final = (pr.moneda or "").strip().upper()
+        if moneda_final == "BS":
+            raw_cedula = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+            cedula_norm = _normalize_cedula_for_client_lookup(raw_cedula)
+            if cedula_norm:
+                autorizados_bs = load_autorizados_bs_claves(db)
+                permitido_bs = cedula_coincide_autorizados_bs(cedula_norm, autorizados_bs)
+                if not permitido_bs:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Observación: Bolívares. No puede guardar con moneda Bs; la cédula no está en la lista autorizada. Cambie a USD.",
+                    )
 
-    mensaje = "Datos actualizados. Los cambios cumplen con los validadores."
-    if estado_previo == "rechazado":
-        pr.estado = "pendiente"
-        pr.motivo_rechazo = None
-        _registrar_historial(
-            db,
-            pago_id,
-            "rechazado",
-            "pendiente",
-            usuario_email,
-            "Datos corregidos tras rechazo; vuelve a revisión para aprobar o rechazar.",
-        )
-        mensaje = (
-            "Datos guardados. El reporte pasó a pendiente: ya puede aprobarlo o rechazarlo de nuevo desde el detalle."
-        )
+        mensaje = "Datos actualizados. Los cambios cumplen con los validadores."
+        if estado_previo == "rechazado":
+            pr.estado = "pendiente"
+            pr.motivo_rechazo = None
+            _registrar_historial(
+                db,
+                pago_id,
+                "rechazado",
+                "pendiente",
+                usuario_email,
+                "Datos corregidos tras rechazo; vuelve a revisión para aprobar o rechazar.",
+            )
+            mensaje = (
+                "Datos guardados. El reporte pasó a pendiente: ya puede aprobarlo o rechazarlo de nuevo desde el detalle."
+            )
 
-    if pr.recibo_pdf:
-        pr.recibo_pdf = _generar_recibo_desde_pago(db, pr)
-    db.commit()
-    logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
-    return {"ok": True, "mensaje": mensaje}
+        if pr.recibo_pdf:
+            pr.recibo_pdf = _generar_recibo_desde_pago(db, pr)
+        db.commit()
+        logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
+        return {"ok": True, "mensaje": mensaje}
+    except HTTPException as exc:
+        if exc.status_code == 400:
+            detail_txt = exc.detail if isinstance(exc.detail, str) else repr(exc.detail)
+            logger.warning(
+                "[COBROS] PATCH editar fallo id=%s ref=%s moneda=%s cedula=%s%s nro_op=%s -> %s",
+                pago_id,
+                ref,
+                getattr(pr, "moneda", None),
+                getattr(pr, "tipo_cedula", "") or "",
+                getattr(pr, "numero_cedula", "") or "",
+                ((getattr(pr, "numero_operacion", None) or "")[:50]),
+                detail_txt,
+            )
+        raise
 
 
 @router.patch("/pagos-reportados/{pago_id}/estado")
