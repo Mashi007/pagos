@@ -201,9 +201,17 @@ def _normalizar_encabezado_editable(texto: str) -> str:
     if not texto:
         return ""
     t = texto
-    # Convertir línea ciudad/fecha -> solo fecha larga.
+    # Convertir línea ciudad/fecha -> solo fecha larga (con variables).
     t = re.sub(
         r"(?:\{\{CIUDAD\}\}\s*,\s*)?\{\{FECHA_CARTA\}\}\s*<br\s*/?>",
+        "{{FECHA_CARTA_LARGA}}<br/>",
+        t,
+        flags=re.IGNORECASE,
+    )
+    # Convertir línea ya renderizada "Ciudad, 25/03/2026" -> solo fecha larga placeholder
+    # (luego FECHA_CARTA_LARGA se sustituye con formato largo en español).
+    t = re.sub(
+        r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+,\s*\d{1,2}/\d{1,2}/\d{4}\s*<br\s*/?>",
         "{{FECHA_CARTA_LARGA}}<br/>",
         t,
         flags=re.IGNORECASE,
@@ -221,16 +229,40 @@ def _normalizar_encabezado_editable(texto: str) -> str:
         t,
         flags=re.IGNORECASE,
     )
-    # Asegurar orden: fecha primero y luego saludo.
-    if "{{FECHA_CARTA_LARGA}}" in t and re.search(r"Estimado/a\s+Cliente", t, flags=re.IGNORECASE):
-        # Quitar ocurrencia de la fecha donde esté y reinsertarla antes del saludo.
-        t = re.sub(r"\s*\{\{FECHA_CARTA_LARGA\}\}\s*<br\s*/?>\s*", "", t, flags=re.IGNORECASE)
-        t = re.sub(
-            r"(<b>\s*Estimado/a\s+Cliente\s*</b>\s*<br\s*/?>\s*<br\s*/?>?)",
-            r"{{FECHA_CARTA_LARGA}}<br/><br/>\1",
-            t,
-            flags=re.IGNORECASE,
-        )
+    # Asegurar orden: fecha primero y luego saludo (con variables o ya renderizada).
+    saludo_pat = r"(<b>\s*Estimado/a\s+Cliente\s*</b>\s*<br\s*/?>\s*<br\s*/?>?)"
+    if re.search(saludo_pat, t, flags=re.IGNORECASE):
+        # Caso placeholder.
+        if "{{FECHA_CARTA_LARGA}}" in t:
+            t = re.sub(
+                r"\s*\{\{FECHA_CARTA_LARGA\}\}\s*<br\s*/?>\s*",
+                "",
+                t,
+                flags=re.IGNORECASE,
+            )
+            t = re.sub(
+                saludo_pat,
+                r"{{FECHA_CARTA_LARGA}}<br/><br/>\1",
+                t,
+                flags=re.IGNORECASE,
+            )
+        else:
+            # Caso fecha ya renderizada (si llega como texto final).
+            fecha_match = re.search(
+                r"(\d{1,2}\s+de\s+[A-Za-záéíóúñ]+\s+de\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})",
+                t,
+                flags=re.IGNORECASE,
+            )
+            if fecha_match:
+                fecha_txt = fecha_match.group(1)
+                t = re.sub(re.escape(fecha_txt), "", t, count=1)
+                t = re.sub(
+                    saludo_pat,
+                    f"{fecha_txt}<br/><br/>" + r"\1",
+                    t,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
     return t
 
 
