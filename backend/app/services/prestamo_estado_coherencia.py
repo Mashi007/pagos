@@ -19,6 +19,37 @@ from app.models.prestamo import Prestamo
 _TOL = 0.01
 
 
+def prestamo_bloquea_insertar_filas_cuota_si_liquidado_bd(p: Prestamo) -> Optional[str]:
+    """
+    None si se pueden insertar filas en la tabla cuotas.
+    Solo estado LIQUIDADO en BD (no usar liquidacion efectiva aqui: en la misma transaccion
+    puede haberse hecho DELETE de cuotas antes de regenerar, p. ej. aprobacion manual).
+    """
+    if (p.estado or "").strip().upper() == "LIQUIDADO":
+        return (
+            "El préstamo está liquidado; no se pueden agregar ni regenerar cuotas."
+        )
+    return None
+
+
+def prestamo_bloquea_nuevas_cuotas_o_cambio_plazo(db: Session, p: Prestamo) -> Optional[str]:
+    """
+    None si se permiten cambiar numero_cuotas o generar la primera tabla de amortizacion.
+    Incluye liquidacion en BD y liquidacion efectiva (APROBADO con todas las cuotas cubiertas).
+    """
+    msg_bd = prestamo_bloquea_insertar_filas_cuota_si_liquidado_bd(p)
+    if msg_bd:
+        return (
+            "El préstamo está liquidado; no se pueden agregar cuotas ni modificar el número de cuotas."
+        )
+    if p.id in prestamo_ids_aprobados_todas_cuotas_cubiertas(db, [p.id]):
+        return (
+            "El préstamo está liquidado (todas las cuotas cubiertas); no se pueden agregar cuotas "
+            "ni modificar el número de cuotas."
+        )
+    return None
+
+
 def prestamo_ids_aprobados_todas_cuotas_cubiertas(
     db: Session, prestamo_ids: list[int]
 ) -> Set[int]:

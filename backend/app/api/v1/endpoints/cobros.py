@@ -5,6 +5,7 @@ Listado de pagos reportados, detalle, aprobar, rechazar, histórico por cédula.
 import logging
 import threading
 import time
+from collections import Counter
 from datetime import date, datetime, time as dt_time
 from decimal import Decimal
 from typing import Optional, List, Tuple, Any
@@ -286,14 +287,54 @@ def _autorizados_bs_claves_cached(db: Session) -> frozenset:
         return data
 
 
+_PAGOS_DOC_CANONICOS_CACHE_TTL_SEC = 60.0
+_pagos_doc_canonicos_cache: Optional[Tuple[float, frozenset]] = None
+
+
+def _pagos_documentos_canonicos_uncached(db: Session) -> frozenset:
+    """
+    Claves canónicas (normalize_documento) de todo lo guardado en pagos como documento/referencia.
+    Incluye numero_documento y referencia_pago para alinear con la regla: nunca duplicar el mismo comprobante.
+    """
+    rows = db.execute(select(Pago.numero_documento, Pago.referencia_pago)).all()
+    out: set = set()
+    for nd, ref in rows:
+        for v in (nd, ref):
+            c = normalize_documento(v)
+            if c:
+                out.add(c)
+    return frozenset(out)
+
+
+def _pagos_documentos_canonicos_cached(db: Session) -> frozenset:
+    """Cache corto: el listado cobros no escanea pagos en cada request completo sin límite."""
+    global _pagos_doc_canonicos_cache
+    now = time.monotonic()
+    with _cobros_list_aux_lock:
+        if _pagos_doc_canonicos_cache is not None:
+            ts, data = _pagos_doc_canonicos_cache
+            if now - ts < _PAGOS_DOC_CANONICOS_CACHE_TTL_SEC:
+                return data
+        data = _pagos_documentos_canonicos_uncached(db)
+        _pagos_doc_canonicos_cache = (now, data)
+        return data
+
+
+def _invalidate_pagos_documentos_canonicos_cache() -> None:
+    global _pagos_doc_canonicos_cache
+    with _cobros_list_aux_lock:
+        _pagos_doc_canonicos_cache = None
+
+
 def _observacion_reglas_carga(
     db: Session,
     rows: list,
     cedulas_en_clientes: set,
     cedulas_bolivares: frozenset,
-    numeros_doc_en_pagos: set,
+    claves_doc_en_pagos: frozenset,
+    conteo_norm_en_pagina: Counter,
 ) -> list:
-    """Para cada fila de pagos_reportados, devuelve lista de observaciones por reglas: NO CLIENTES, Monto (Bs no autorizado), DUPLICADO DOC. Cédula normalizada igual que en clientes (sin ceros a la izquierda)."""
+    """Para cada fila: NO CLIENTES, No pag Bs., DUPLICADO (tabla pagos o mismo listado)."""
     result = []
     for r in rows:
         partes = []
@@ -315,8 +356,10 @@ def _observacion_reglas_carga(
             partes.append("No pag Bs.")
         num_op = (r.numero_operacion or "").strip()
         n_doc = normalize_documento(num_op) if num_op else None
-        if n_doc and n_doc in numeros_doc_en_pagos:
-            partes.append("DUPLICADO DOC")
+        dup_pagos = bool(n_doc and n_doc in claves_doc_en_pagos)
+        dup_misma_vista = bool(n_doc and conteo_norm_en_pagina.get(n_doc, 0) > 1)
+        if dup_pagos or dup_misma_vista:
+            partes.append("DUPLICADO")
         result.append(partes)
     return result
 
@@ -344,17 +387,15 @@ def _pago_reportado_list_items_from_rows(
     fechas_tasa = list({r.fecha_pago for r in rows if r.fecha_pago is not None})
     tasas_por_fecha = obtener_tasas_por_fechas(db, fechas_tasa)
 
-    num_ops_raw = list({(r.numero_operacion or "").strip() for r in rows if (r.numero_operacion or "").strip()})
-    norms_for_query = {n for o in num_ops_raw for n in [normalize_documento(o)] if n}
-    numeros_doc_en_pagos = set()
-    if norms_for_query:
-        existing_docs = db.execute(
-            select(Pago.numero_documento).where(Pago.numero_documento.in_(list(norms_for_query)))
-        ).scalars().all()
-        numeros_doc_en_pagos = {str(d) for d in existing_docs if d}
+    claves_doc_en_pagos = _pagos_documentos_canonicos_cached(db)
+    norm_por_fila = []
+    for r in rows:
+        num_op = (r.numero_operacion or "").strip()
+        norm_por_fila.append(normalize_documento(num_op) if num_op else None)
+    conteo_norm_en_pagina = Counter(n for n in norm_por_fila if n)
 
     partes_por_fila = _observacion_reglas_carga(
-        db, rows, cedulas_en_clientes, cedulas_bolivares, numeros_doc_en_pagos
+        db, rows, cedulas_en_clientes, cedulas_bolivares, claves_doc_en_pagos, conteo_norm_en_pagina
     )
 
     items: List[PagoReportadoListItem] = []
@@ -948,6 +989,7 @@ def aprobar_pago_reportado(
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
             db.commit()
+            _invalidate_pagos_documentos_canonicos_cache()
         except HTTPException:
             pass
         return {"ok": True, "mensaje": "Ya estaba aprobado."}
@@ -961,6 +1003,7 @@ def aprobar_pago_reportado(
     try:
         _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
         db.commit()
+        _invalidate_pagos_documentos_canonicos_cache()
     except HTTPException:
         db.rollback()
         raise
@@ -1256,15 +1299,18 @@ class EditarPagoReportadoBody(BaseModel):
 
 
 def _rechazar_si_numero_operacion_duplicado(db: Session, numero_operacion: str) -> None:
-    """Si el número de operación ya existe en tabla pagos (numero_documento), lanza HTTPException 400. Nunca se permite guardar duplicado."""
+    """Si el comprobante/ref. ya existe en pagos (numero_documento o referencia_pago, clave canónica), 400. Sin caché."""
     num_op = (numero_operacion or "").strip()
     if not num_op:
         return
-    existe = db.execute(select(Pago.id).where(Pago.numero_documento == num_op)).scalar() is not None
-    if existe:
+    n_norm = normalize_documento(num_op)
+    if not n_norm:
+        return
+    claves = _pagos_documentos_canonicos_uncached(db)
+    if n_norm in claves:
         raise HTTPException(
             status_code=400,
-            detail="Número de operación duplicado. No se permite guardar. Ya existe un pago con ese documento.",
+            detail="DUPLICADO: ese número de operación / documento / serial ya está registrado en la tabla de pagos (no se permite duplicar).",
         )
 
 
@@ -1435,6 +1481,7 @@ def cambiar_estado_pago(
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
             db.commit()
+            _invalidate_pagos_documentos_canonicos_cache()
         except HTTPException as exc:
             detail_txt = exc.detail if isinstance(exc.detail, str) else repr(exc.detail)
             logger.warning(

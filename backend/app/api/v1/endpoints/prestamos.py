@@ -92,6 +92,8 @@ from app.services.cuota_estado import (
 
 from app.services.prestamo_estado_coherencia import (
     condicion_filtro_estado_prestamo,
+    prestamo_bloquea_insertar_filas_cuota_si_liquidado_bd,
+    prestamo_bloquea_nuevas_cuotas_o_cambio_plazo,
     prestamo_ids_aprobados_todas_cuotas_cubiertas,
 )
 
@@ -1717,6 +1719,12 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
     se derivan en el frontend desde saldo_capital_inicial / saldo_capital_final.
 
     """
+
+    bloqueo_ins = prestamo_bloquea_insertar_filas_cuota_si_liquidado_bd(p)
+
+    if bloqueo_ins:
+
+        raise HTTPException(status_code=400, detail=bloqueo_ins)
 
     modalidad = (p.modalidad_pago or "MENSUAL").upper()
 
@@ -3656,6 +3664,14 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
         row.modalidad_pago = payload.modalidad_pago
 
     if payload.numero_cuotas is not None:
+
+        if payload.numero_cuotas != row.numero_cuotas:
+
+            bloqueo_plazo = prestamo_bloquea_nuevas_cuotas_o_cambio_plazo(db, row)
+
+            if bloqueo_plazo:
+
+                raise HTTPException(status_code=400, detail=bloqueo_plazo)
 
         row.numero_cuotas = payload.numero_cuotas
 

@@ -1029,7 +1029,13 @@ export function EditarRevisionManual() {
 
                     setCambios({ ...cambios, prestamo: true })
                   }}
-                  className="mt-1 w-full rounded border px-3 py-2"
+                  disabled={prestamoData.estado === 'LIQUIDADO'}
+                  title={
+                    prestamoData.estado === 'LIQUIDADO'
+                      ? 'No se puede modificar el plazo en préstamos liquidados'
+                      : undefined
+                  }
+                  className="mt-1 w-full rounded border px-3 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
                   placeholder="0"
                 />
               </div>

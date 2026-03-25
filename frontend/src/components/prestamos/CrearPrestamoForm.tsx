@@ -541,6 +541,9 @@ export function CrearPrestamoForm({
 
   const isReadOnly = prestamo ? !canEditPrestamo(prestamo.estado || '') : false
 
+  const plazoCuotasBloqueadoLiquidado =
+    prestamo != null && prestamo.estado === 'LIQUIDADO'
+
   const canApprove = prestamo ? canApprovePrestamo() : false
 
   return (
@@ -976,11 +979,19 @@ export function CrearPrestamoForm({
 
                         setNumeroCuotas(validValue)
                       }}
-                      disabled={isReadOnly}
+                      disabled={isReadOnly || plazoCuotasBloqueadoLiquidado}
+                      title={
+                        plazoCuotasBloqueadoLiquidado
+                          ? 'No se puede modificar en préstamos liquidados'
+                          : undefined
+                      }
                     />
 
                     <p className="mt-1 text-xs text-gray-500">
                       Entero entre 1 y 50
+                      {plazoCuotasBloqueadoLiquidado
+                        ? ' (bloqueado: préstamo liquidado)'
+                        : ''}
                     </p>
                   </div>
 
@@ -1011,7 +1022,7 @@ export function CrearPrestamoForm({
                         const v = parseFloat(raw)
                         if (!Number.isNaN(v) && v >= 0) setCuotaPeriodo(v)
                       }}
-                      disabled={isReadOnly}
+                      disabled={isReadOnly || plazoCuotasBloqueadoLiquidado}
                       placeholder="Ingrese la cuota por periodo"
                     />
                   </div>

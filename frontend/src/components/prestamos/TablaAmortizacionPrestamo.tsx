@@ -301,30 +301,37 @@ export function TablaAmortizacionPrestamo({
                 No hay tabla de amortización generada para este préstamo.
               </p>
 
-              {prestamo.fecha_base_calculo && (
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      await prestamoService.generarAmortizacion(prestamo.id)
+              {prestamo.fecha_base_calculo &&
+                prestamo.estado !== 'LIQUIDADO' && (
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await prestamoService.generarAmortizacion(prestamo.id)
 
-                      toast.success(
-                        'Tabla de amortización generada exitosamente'
-                      )
+                        toast.success(
+                          'Tabla de amortización generada exitosamente'
+                        )
 
-                      // Refrescar datos
+                        // Refrescar datos
 
-                      window.location.reload()
-                    } catch (error: any) {
-                      toast.error(
-                        error.response?.data?.detail ||
-                          'Error al generar amortización'
-                      )
-                    }
-                  }}
-                >
-                  Generar Tabla
-                </Button>
+                        window.location.reload()
+                      } catch (error: any) {
+                        toast.error(
+                          error.response?.data?.detail ||
+                            'Error al generar amortización'
+                        )
+                      }
+                    }}
+                  >
+                    Generar Tabla
+                  </Button>
+                )}
+              {prestamo.estado === 'LIQUIDADO' && (
+                <p className="mt-2 text-xs text-yellow-900">
+                  Préstamo liquidado: no se puede generar una nueva tabla de
+                  cuotas.
+                </p>
               )}
             </div>
           </div>

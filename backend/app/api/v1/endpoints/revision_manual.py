@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints para Revisión Manual de Préstamos (post-migración).
 Lista de préstamos con detalles completos, edición de cliente/préstamo/pagos, y marcado como revisado.
 Incluye validaciones y logging para garantizar integridad de datos.
@@ -19,6 +19,7 @@ from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
+from app.services.prestamo_estado_coherencia import prestamo_bloquea_nuevas_cuotas_o_cambio_plazo
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -421,6 +422,10 @@ def editar_prestamo_revision(
         prestamo.total_financiamiento = update_data.total_financiamiento
     
     if update_data.numero_cuotas is not None and update_data.numero_cuotas >= 1:
+        if update_data.numero_cuotas != prestamo.numero_cuotas:
+            bloqueo_plazo = prestamo_bloquea_nuevas_cuotas_o_cambio_plazo(db, prestamo)
+            if bloqueo_plazo:
+                raise HTTPException(status_code=400, detail=bloqueo_plazo)
         cambios_dict['numero_cuotas'] = (prestamo.numero_cuotas, update_data.numero_cuotas)
         prestamo.numero_cuotas = update_data.numero_cuotas
     

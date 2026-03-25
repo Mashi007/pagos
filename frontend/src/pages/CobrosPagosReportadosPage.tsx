@@ -712,11 +712,20 @@ export default function CobrosPagosReportadosPage() {
                         {row.fecha_pago}
                       </td>
 
-                      <td className="min-w-0 px-3 py-3 align-top">
-                        <span
-                          className="block truncate font-mono text-xs"
-                          title={row.numero_operacion}
-                        >
+                      <td
+                        className={
+                          'min-w-0 px-3 py-3 align-top ' +
+                          (/DUPLICADO/i.test(row.observacion || '')
+                            ? 'bg-amber-500/15 font-medium text-amber-900 dark:text-amber-100'
+                            : '')
+                        }
+                        title={
+                          /DUPLICADO/i.test(row.observacion || '')
+                            ? 'DUPLICADO: el número de operación / documento coincide con otro registro en pagos o con otro reporte en esta página.'
+                            : row.numero_operacion
+                        }
+                      >
+                        <span className="block truncate font-mono text-xs">
                           {row.numero_operacion}
                         </span>
                       </td>
@@ -768,11 +777,13 @@ export default function CobrosPagosReportadosPage() {
                             ? 'NO CLIENTES: la cédula del reporte (' +
                               row.cedula_display +
                               ') no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.'
-                            : /No pag Bs|solo Bs|Bolívares/i.test(
-                                  row.observacion || ''
-                                )
-                              ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
-                              : (row.observacion ?? '')
+                            : /DUPLICADO/i.test(row.observacion || '')
+                              ? 'DUPLICADO: ya existe en la tabla pagos (documento/referencia normalizado) o hay otro reporte con el mismo número en esta página. No se debe aprobar dos veces el mismo comprobante.'
+                              : /No pag Bs|solo Bs|Bolívares/i.test(
+                                    row.observacion || ''
+                                  )
+                                ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
+                                : (row.observacion ?? '')
                         }
                       >
                         {row.observacion ? (
@@ -781,7 +792,9 @@ export default function CobrosPagosReportadosPage() {
                               'line-clamp-2 text-xs ' +
                               (/NO CLIENTES/i.test(row.observacion || '')
                                 ? 'font-medium text-destructive'
-                                : 'text-muted-foreground')
+                                : /DUPLICADO/i.test(row.observacion || '')
+                                  ? 'font-semibold text-amber-900 dark:text-amber-100'
+                                  : 'text-muted-foreground')
                             }
                           >
                             {row.observacion}
