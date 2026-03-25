@@ -9,6 +9,7 @@
 
 
  * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
+ * Vista por defecto (sin filtro de estado): el API no devuelve aprobados ni importados; al aprobar la fila desaparece y el Excel agrupa aprobados pendientes de exportar.
 
 
 
@@ -292,23 +293,36 @@ export default function CobrosPagosReportadosPage() {
 
   const handleCambiarEstado = async (
     id: number,
-    estado: string,
+    nuevoEstado: string,
     motivo?: string
   ) => {
     setChangingEstadoId(id)
 
     try {
-      const data = await cambiarEstadoPago(id, estado, motivo)
+      const data = await cambiarEstadoPago(id, nuevoEstado, motivo)
 
-      if (estado === 'rechazado') {
+      if (nuevoEstado === 'rechazado') {
         toastAfterRechazoCobros(data)
       } else {
         toast.success(data.mensaje || 'Estado actualizado.')
       }
 
-      load()
+      // Quitar la fila al instante si la vista actual no lista aprobados (coincide con el API por defecto).
+      if (nuevoEstado === 'aprobado' && estado !== 'aprobado') {
+        setData(prev => {
+          if (!prev) return prev
 
-      if (estado === 'rechazado') {
+          return {
+            ...prev,
+            items: prev.items.filter(r => r.id !== id),
+            total: Math.max(0, prev.total - 1),
+          }
+        })
+      }
+
+      await load()
+
+      if (nuevoEstado === 'rechazado') {
         setRechazarModal({ open: false, row: null })
 
         setMotivoRechazo('')
@@ -355,7 +369,7 @@ export default function CobrosPagosReportadosPage() {
 
       toast.success('Pago reportado eliminado.')
 
-      load()
+      await load()
     } catch (e: any) {
       toast.error(e?.message || 'Error al eliminar.')
     } finally {
@@ -433,23 +447,37 @@ export default function CobrosPagosReportadosPage() {
         </CardHeader>
 
         <CardContent className="flex flex-wrap gap-4">
-          <select
-            className="rounded-md border px-3 py-2"
-            value={estado}
-            onChange={e => setEstado(e.target.value)}
-          >
-            <option value="">Todos los estados</option>
+          <div className="flex min-w-[min(100%,280px)] flex-col gap-1">
+            <select
+              className="rounded-md border px-3 py-2"
+              value={estado}
+              onChange={e => setEstado(e.target.value)}
+              aria-label="Filtrar por estado del reporte"
+            >
+              <option value="">
+                Por gestionar (excluye aprobados e importados)
+              </option>
 
-            <option value="pendiente">Pendiente</option>
+              <option value="pendiente">Pendiente</option>
 
-            <option value="en_revision">En revisión</option>
+              <option value="en_revision">En revisión</option>
 
-            <option value="aprobado">Aprobado</option>
+              <option value="aprobado">
+                Aprobado (pendientes de exportar)
+              </option>
 
-            <option value="rechazado">Rechazado</option>
+              <option value="rechazado">Rechazado</option>
 
-            <option value="importado">Importado a Pagos</option>
-          </select>
+              <option value="importado">Importado a Pagos</option>
+            </select>
+
+            <p className="text-xs text-muted-foreground">
+              La opción por defecto coincide con el listado: al aprobar, la fila
+              deja de mostrarse aquí y pasa al Excel &quot;Descargar Excel
+              Aprobados&quot;. Si elige &quot;Aprobado&quot; en el filtro, las
+              filas aprobadas siguen visibles hasta exportarlas.
+            </p>
+          </div>
 
           <Input
             type="date"
@@ -524,6 +552,7 @@ export default function CobrosPagosReportadosPage() {
           <button
             type="button"
             onClick={() => handleKpiClick('')}
+            title="Misma vista que el filtro por defecto: pendiente, en revisión y rechazado (sin aprobados ni importados)."
             className={
               'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
               (estado === ''
@@ -532,10 +561,12 @@ export default function CobrosPagosReportadosPage() {
             }
           >
             <span className="block text-xs uppercase tracking-wide text-muted-foreground">
-              Todos
+              Por gestionar
             </span>
 
-            <span className="text-2xl font-bold">{kpis.total}</span>
+            <span className="text-2xl font-bold">
+              {kpis.pendiente + kpis.en_revision + kpis.rechazado}
+            </span>
           </button>
 
           {(['pendiente', 'en_revision', 'aprobado', 'rechazado'] as const).map(

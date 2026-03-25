@@ -101,6 +101,8 @@ export function ModalValidacionPrestamoExistente({
 
       APROBADO: { label: 'Aprobado', className: 'bg-green-500' },
 
+      LIQUIDADO: { label: 'Liquidado', className: 'bg-gray-500' },
+
       RECHAZADO: { label: 'Rechazado', className: 'bg-red-500' },
     }
 

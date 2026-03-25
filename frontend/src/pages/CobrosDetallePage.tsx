@@ -67,6 +67,8 @@ const ESTADO_BADGE: Record<string, string> = {
   aprobado: 'Aprobado 🟢',
 
   rechazado: 'Rechazado 🔴',
+
+  importado: 'Importado a Pagos 🟢',
 }
 
 const MENSAJE_RECHAZO_POR_DEFECTO = `Buenas tardes
@@ -344,85 +346,87 @@ export default function CobrosDetallePage() {
         </CardContent>
       </Card>
 
-      {detalle.estado !== 'aprobado' && detalle.estado !== 'rechazado' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {detalle.estado === 'en_revision'
-                ? 'Revisión manual'
-                : 'Acciones'}
-            </CardTitle>
+      {detalle.estado !== 'aprobado' &&
+        detalle.estado !== 'rechazado' &&
+        detalle.estado !== 'importado' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {detalle.estado === 'en_revision'
+                  ? 'Revisión manual'
+                  : 'Acciones'}
+              </CardTitle>
 
-            {detalle.estado === 'en_revision' && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                No coincidió 100% con la revisión automática (Gemini). Use los
-                mismos botones: Aprobar (envía recibo) o Rechazar (se notifica
-                al cliente por correo electrónico).
+              {detalle.estado === 'en_revision' && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  No coincidió 100% con la revisión automática (Gemini). Use los
+                  mismos botones: Aprobar (envía recibo) o Rechazar (se notifica
+                  al cliente por correo electrónico).
+                </p>
+              )}
+
+              <p className="text-sm text-muted-foreground">
+                Al rechazar se envía un correo al cliente desde{' '}
+                <strong>notificaciones@rapicreditca.com</strong> con el motivo
+                de rechazo y el comprobante adjunto (misma pantalla).
               </p>
-            )}
+            </CardHeader>
 
-            <p className="text-sm text-muted-foreground">
-              Al rechazar se envía un correo al cliente desde{' '}
-              <strong>notificaciones@rapicreditca.com</strong> con el motivo de
-              rechazo y el comprobante adjunto (misma pantalla).
-            </p>
-          </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Button onClick={handleAprobar} disabled={accion !== 'idle'}>
+                  {accion === 'aprobar' ? 'Procesando...' : 'Aprobar'}
+                </Button>
 
-          <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Button onClick={handleAprobar} disabled={accion !== 'idle'}>
-                {accion === 'aprobar' ? 'Procesando...' : 'Aprobar'}
-              </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setMotivoRechazo(MENSAJE_RECHAZO_POR_DEFECTO)
 
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  setMotivoRechazo(MENSAJE_RECHAZO_POR_DEFECTO)
-
-                  setAccion('rechazar')
-                }}
-                disabled={accion !== 'idle'}
-              >
-                Rechazar
-              </Button>
-            </div>
-
-            {accion === 'rechazar' && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">
-                  Motivo de rechazo (obligatorio)
-                </label>
-
-                <textarea
-                  className="min-h-[80px] w-full rounded-md border px-3 py-2"
-                  value={motivoRechazo}
-                  onChange={e => setMotivoRechazo(e.target.value)}
-                  placeholder="Indique el motivo..."
-                />
-
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setAccion('idle')}
-                  >
-                    Cancelar
-                  </Button>
-
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={handleRechazar}
-                    disabled={!motivoRechazo.trim()}
-                  >
-                    Confirmar rechazo
-                  </Button>
-                </div>
+                    setAccion('rechazar')
+                  }}
+                  disabled={accion !== 'idle'}
+                >
+                  Rechazar
+                </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+
+              {accion === 'rechazar' && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">
+                    Motivo de rechazo (obligatorio)
+                  </label>
+
+                  <textarea
+                    className="min-h-[80px] w-full rounded-md border px-3 py-2"
+                    value={motivoRechazo}
+                    onChange={e => setMotivoRechazo(e.target.value)}
+                    placeholder="Indique el motivo..."
+                  />
+
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setAccion('idle')}
+                    >
+                      Cancelar
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleRechazar}
+                      disabled={!motivoRechazo.trim()}
+                    >
+                      Confirmar rechazo
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
       {detalle.historial?.length > 0 && (
         <Card>

@@ -8,7 +8,6 @@ import {
   RefreshCw,
   Settings,
   AlertTriangle,
-  FileText,
   Clock,
   Mail,
   Download,
@@ -33,7 +32,6 @@ import {
   notificacionService,
   type ClientesRetrasadosResponse,
   type ClienteRetrasadoItem,
-  type LiquidadoItem,
   type EstadisticasPorTab,
 } from '../services/notificacionService'
 
@@ -47,7 +45,6 @@ type TabId =
   | 'dias_1_atraso'
   | 'dias_5_atraso'
   | 'dias_30_atraso'
-  | 'liquidados'
   | 'configuracion'
 
 const TABS: { id: TabId; label: string; icon: typeof Clock }[] = [
@@ -60,8 +57,6 @@ const TABS: { id: TabId; label: string; icon: typeof Clock }[] = [
   { id: 'dias_5_atraso', label: '5 días atrasado', icon: Clock },
 
   { id: 'dias_30_atraso', label: '30 días atrasado', icon: Clock },
-
-  { id: 'liquidados', label: 'Crédito pagado', icon: FileText },
 
   { id: 'configuracion', label: 'Configuración', icon: Settings },
 ]
@@ -80,9 +75,6 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
 
     case 'dias_30_atraso':
       return 'prejudicial'
-
-    case 'liquidados':
-      return 'liquidados'
 
     default:
       return null
@@ -127,6 +119,21 @@ export function Notificaciones() {
       setActiveTab(tabParam)
     }
   }, [tabParam])
+
+  useEffect(() => {
+    if (searchParams.get('tab') === 'liquidados') {
+      setSearchParams(
+        p => {
+          const next = new URLSearchParams(p)
+
+          next.delete('tab')
+
+          return next
+        },
+        { replace: true }
+      )
+    }
+  }, [searchParams, setSearchParams])
 
   const setActiveTabAndUrl = (tab: TabId) => {
     setActiveTab(tab)
@@ -321,9 +328,6 @@ export function Notificaciones() {
       case 'dias_30_atraso':
         return data.dias_30_atraso ?? []
 
-      case 'liquidados':
-        return []
-
       default:
         return []
     }
@@ -386,7 +390,7 @@ export function Notificaciones() {
         <ModulePageHeader
           icon={Bell}
           title="Notificaciones"
-          description="Mora, liquidados y envío masivo desde la pestaña Configuración."
+          description="Mora y envío masivo desde la pestaña Configuración."
           actions={
             <Button
               variant="outline"
@@ -412,9 +416,7 @@ export function Notificaciones() {
                   ? (data?.dias_5_atraso?.length ?? 0)
                   : tab.id === 'dias_30_atraso'
                     ? (data?.dias_30_atraso?.length ?? 0)
-                    : tab.id === 'liquidados'
-                      ? (data?.liquidados?.length ?? 0)
-                      : 0
+                    : 0
 
             return (
               <button
@@ -463,26 +465,22 @@ export function Notificaciones() {
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
 
-              {activeTab === 'liquidados'
-                ? 'Crédito pagado (estado LIQUIDADO en préstamos)'
-                : activeTab === 'dias_1_atraso'
-                  ? 'Día siguiente al vencimiento (1 día de atraso calendario)'
-                  : activeTab === 'dias_5_atraso'
-                    ? 'Cuotas con 5 días de atraso'
-                    : activeTab === 'dias_30_atraso'
-                      ? 'Cuotas con 30 días de atraso'
-                      : ''}
+              {activeTab === 'dias_1_atraso'
+                ? 'Día siguiente al vencimiento (1 día de atraso calendario)'
+                : activeTab === 'dias_5_atraso'
+                  ? 'Cuotas con 5 días de atraso'
+                  : activeTab === 'dias_30_atraso'
+                    ? 'Cuotas con 30 días de atraso'
+                    : ''}
             </CardTitle>
 
             <CardDescription>
-              {activeTab === 'liquidados'
-                ? 'Solo préstamos con estado LIQUIDADO en la tabla préstamos (crédito cerrado en BD). Los totales financiamiento / abonos son referencia frente a cuotas.'
-                : activeTab === 'dias_1_atraso'
-                  ? 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Ej.: vence 22 → entra el 23. Columna Estado de cuenta: mismo PDF que en amortización del préstamo.'
-                  : activeTab === 'dias_5_atraso' ||
-                      activeTab === 'dias_30_atraso'
-                    ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso. Columna Estado de cuenta: mismo PDF que en amortización del préstamo.'
-                    : 'Nombre y cédula de clientes a notificar.'}
+              {activeTab === 'dias_1_atraso'
+                ? 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Ej.: vence 22 → entra el 23. Columna Estado de cuenta: mismo PDF que en amortización del préstamo.'
+                : activeTab === 'dias_5_atraso' ||
+                    activeTab === 'dias_30_atraso'
+                  ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso. Columna Estado de cuenta: mismo PDF que en amortización del préstamo.'
+                  : 'Nombre y cédula de clientes a notificar.'}
             </CardDescription>
           </CardHeader>
 
@@ -583,83 +581,7 @@ export function Notificaciones() {
               </div>
             )}
 
-            {activeTab === 'liquidados' ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        #
-                      </th>
-
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        Nombre
-                      </th>
-
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        Cédula
-                      </th>
-
-                      <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
-                        Total financiamiento
-                      </th>
-
-                      <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
-                        Total abonos
-                      </th>
-
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        Estado de cuenta
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {(data?.liquidados ?? []).length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="py-8 text-center text-gray-500"
-                        >
-                          No hay préstamos en estado LIQUIDADO.
-                        </td>
-                      </tr>
-                    ) : (
-                      (data?.liquidados ?? []).map(
-                        (row: LiquidadoItem, idx: number) => (
-                          <tr
-                            key={`liquidado-${row.prestamo_id}-${idx}`}
-                            className="border-b hover:bg-gray-50"
-                          >
-                            <td className="px-3 py-2">{idx + 1}</td>
-
-                            <td className="px-3 py-2 font-medium">
-                              {row.nombre}
-                            </td>
-
-                            <td className="px-3 py-2">{row.cedula}</td>
-
-                            <td className="px-3 py-2 text-right">
-                              {Number(row.total_financiamiento).toLocaleString(
-                                'es'
-                              )}
-                            </td>
-
-                            <td className="px-3 py-2 text-right">
-                              {Number(row.total_abonos).toLocaleString('es')}
-                            </td>
-
-                            <td className="px-3 py-2">
-                              {estadoCuentaPdfCell(row.prestamo_id)}
-                            </td>
-                          </tr>
-                        )
-                      )
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            ) : mostrarTablaCuotas ? (
+            {mostrarTablaCuotas ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>

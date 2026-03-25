@@ -1173,6 +1173,7 @@ def editar_pago_reportado(
     pago_id: int,
     body: EditarPagoReportadoBody,
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Edita los datos del pago reportado para que cumplan con los validadores (cédula, fecha, monto, etc.). Solo actualiza los campos enviados."""
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
@@ -1180,7 +1181,9 @@ def editar_pago_reportado(
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     if pr.estado in ("aprobado", "importado"):
         raise HTTPException(status_code=400, detail="No se puede editar un pago ya aprobado o importado a pagos.")
-    # rechazado: permitir corregir datos (monto, referencia, etc.) antes de volver a revisión
+    estado_previo = pr.estado
+    usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
+    # rechazado: permitir corregir datos (monto, referencia, etc.) y volver a cola de revisión
 
     if body.nombres is not None:
         pr.nombres = (body.nombres or "").strip()[:200] or pr.nombres
@@ -1234,11 +1237,27 @@ def editar_pago_reportado(
                     detail="Observación: Bolívares. No puede guardar con moneda Bs; la cédula no está en la lista autorizada. Cambie a USD.",
                 )
 
+    mensaje = "Datos actualizados. Los cambios cumplen con los validadores."
+    if estado_previo == "rechazado":
+        pr.estado = "pendiente"
+        pr.motivo_rechazo = None
+        _registrar_historial(
+            db,
+            pago_id,
+            "rechazado",
+            "pendiente",
+            usuario_email,
+            "Datos corregidos tras rechazo; vuelve a revisión para aprobar o rechazar.",
+        )
+        mensaje = (
+            "Datos guardados. El reporte pasó a pendiente: ya puede aprobarlo o rechazarlo de nuevo desde el detalle."
+        )
+
     if pr.recibo_pdf:
         pr.recibo_pdf = _generar_recibo_desde_pago(db, pr)
     db.commit()
     logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
-    return {"ok": True, "mensaje": "Datos actualizados. Los cambios cumplen con los validadores."}
+    return {"ok": True, "mensaje": mensaje}
 
 
 @router.patch("/pagos-reportados/{pago_id}/estado")

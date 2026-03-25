@@ -591,7 +591,26 @@ def listar_prestamos(
 
     total = db.scalar(count_q) or 0
 
-    q = q.order_by(Prestamo.fecha_registro.desc()).offset((page - 1) * per_page).limit(per_page)
+    # Orden alineado con la columna "Fecha" (fecha_aprobacion) en la UI: más reciente primero.
+    # Secundario: fecha_registro e id para empates y préstamos sin fecha de aprobación.
+
+    q = (
+
+        q.order_by(
+
+            Prestamo.fecha_aprobacion.desc().nullslast(),
+
+            Prestamo.fecha_registro.desc().nullslast(),
+
+            Prestamo.id.desc(),
+
+        )
+
+        .offset((page - 1) * per_page)
+
+        .limit(per_page)
+
+    )
 
     rows = db.execute(q).all()
 

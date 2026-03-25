@@ -166,7 +166,7 @@ export default function CobrosEditarPage() {
         return
       }
 
-      await updatePagoReportado(Number(id), {
+      const res = await updatePagoReportado(Number(id), {
         nombres: form.nombres.trim() || undefined,
 
         apellidos: form.apellidos.trim() || undefined,
@@ -190,7 +190,7 @@ export default function CobrosEditarPage() {
         observacion: form.observacion.trim() || undefined,
       })
 
-      toast.success('Cambios guardados.')
+      toast.success(res.mensaje || 'Cambios guardados.')
 
       navigate(`/cobros/pagos-reportados/${id}`)
     } catch (e: any) {
