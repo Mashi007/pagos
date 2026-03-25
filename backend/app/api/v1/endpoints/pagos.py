@@ -4847,7 +4847,18 @@ def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_v
 
 def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> None:
 
-    """Si todas las cuotas del prestamo estan pagadas, actualiza prestamo.estado a LIQUIDADO. No hace commit."""
+    """
+    Alinea prestamos.estado (APROBADO / LIQUIDADO) con la cobertura real de cuotas.
+
+    Criterio: misma tolerancia que cartera (0.01) sobre cuotas.total_pagado vs monto_cuota.
+    Equivale a que la suma aplicada en cuotas cubra el financiamiento; no usa sum(pagos)
+    porque puede haber montos duplicados o sobrantes sin cupo en cuotas.
+
+    - Todas las cuotas cubiertas y estado APROBADO -> LIQUIDADO (+ fecha_liquidado).
+    - Alguna cuota con saldo y estado LIQUIDADO -> APROBADO (fecha_liquidado NULL).
+
+    No hace commit.
+    """
 
     cuotas = db.execute(select(Cuota).where(Cuota.prestamo_id == prestamo_id)).scalars().all()
 
@@ -4857,11 +4868,17 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
 
     pendientes = sum(1 for c in cuotas if (c.total_pagado or 0) < (float(c.monto) if c.monto else 0) - 0.01)
 
+    prestamo = db.execute(select(Prestamo).where(Prestamo.id == prestamo_id)).scalars().first()
+
+    if not prestamo:
+
+        return
+
+    est = (prestamo.estado or "").upper()
+
     if pendientes == 0:
 
-        prestamo = db.execute(select(Prestamo).where(Prestamo.id == prestamo_id)).scalars().first()
-
-        if prestamo and (prestamo.estado or "").upper() == "APROBADO":
+        if est == "APROBADO":
 
             prestamo.estado = "LIQUIDADO"
 
@@ -4869,6 +4886,15 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
                 prestamo.fecha_liquidado = hoy_negocio()
 
             logger.info("Prestamo id=%s marcado como LIQUIDADO (todas las cuotas pagadas).", prestamo_id)
+
+    elif est == "LIQUIDADO":
+
+        prestamo.estado = "APROBADO"
+
+        if prestamos_tiene_columna_fecha_liquidado(db):
+            prestamo.fecha_liquidado = None
+
+        logger.info("Prestamo id=%s vuelto a APROBADO (quedan cuotas con saldo pendiente).", prestamo_id)
 
 
 

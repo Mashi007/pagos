@@ -2,8 +2,9 @@
 Estado del préstamo alineado con cuotas en respuestas API.
 
 Si en BD sigue APROBADO pero todas las cuotas tienen cobertura completa (misma
-tolerancia que _marcar_prestamo_liquidado_si_corresponde en pagos), la lista y
-el detalle exponen LIQUIDADO para que coincida con la realidad de cobranza.
+tolerancia que _marcar_prestamo_liquidado_si_corresponde en pagos, que tambien
+puede pasar LIQUIDADO a APROBADO si queda saldo en cuotas), la lista y el detalle
+pueden exponer estado coherente con cuotas.
 """
 from __future__ import annotations
 
