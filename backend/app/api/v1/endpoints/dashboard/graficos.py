@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, case, distinct, func, or_, select
+from sqlalchemy import Float, and_, case, cast, distinct, extract, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, SessionLocal
@@ -18,7 +18,7 @@ from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.pago import Pago
 from app.models.pago_reportado import PagoReportado
 from app.models.prestamo import Prestamo
-from app.services.tasa_cambio_service import obtener_tasas_por_fechas
+from app.models.tasa_cambio_diaria import TasaCambioDiaria
 
 from .utils import (
     _CACHE_COBRANZAS_SEMANALES,
@@ -838,13 +838,6 @@ def get_evolucion_pagos(
         return {"meses": [{"mes": x["mes"], "pagos": x.get("pagos", 0), "monto": x.get("monto", 0)} for x in m]}
 
 
-def _norm_moneda_recibo_pago_reportado(m: Optional[str]) -> str:
-    x = ((m or "BS").strip().upper())
-    if x == "USDT":
-        return "USD"
-    return x
-
-
 def _compute_recibos_pagos_mensual_usd(
     db: Session,
     fecha_inicio: Optional[str],
@@ -878,60 +871,68 @@ def _compute_recibos_pagos_mensual_usd(
 
     buckets: dict[tuple[int, int], dict[str, float]] = {}
     try:
-        rows = db.execute(
-            select(PagoReportado).where(
+        # Agregación en BD: evita transferir N filas + IN masivo a pagos (timeout ~60s en Render).
+        doc_key = func.substr(
+            func.concat("COB-", func.coalesce(PagoReportado.referencia_interna, "")),
+            1,
+            100,
+        )
+        mon_raw = func.upper(func.trim(func.coalesce(PagoReportado.moneda, "BS")))
+        mon_norm = case((mon_raw == "USDT", literal("USD")), else_=mon_raw)
+
+        usd_part = case(
+            (mon_norm == "USD", cast(PagoReportado.monto, Float)),
+            else_=literal(0.0),
+        )
+        tasa_ok = and_(
+            TasaCambioDiaria.tasa_oficial.isnot(None),
+            TasaCambioDiaria.tasa_oficial > 0,
+        )
+        bs_from_tasa = case(
+            (
+                tasa_ok,
+                cast(PagoReportado.monto, Float) / cast(TasaCambioDiaria.tasa_oficial, Float),
+            ),
+            else_=literal(0.0),
+        )
+        bs_part = case(
+            (
+                mon_norm == "BS",
+                case(
+                    (Pago.monto_pagado.isnot(None), cast(Pago.monto_pagado, Float)),
+                    else_=bs_from_tasa,
+                ),
+            ),
+            else_=literal(0.0),
+        )
+
+        yr = extract("year", PagoReportado.fecha_pago)
+        mo = extract("month", PagoReportado.fecha_pago)
+        q = (
+            select(
+                yr.label("anio"),
+                mo.label("mes_num"),
+                func.coalesce(func.sum(usd_part), 0).label("pagos_usd"),
+                func.coalesce(func.sum(bs_part), 0).label("pagos_bs_en_usd"),
+            )
+            .select_from(PagoReportado)
+            .outerjoin(Pago, Pago.numero_documento == doc_key)
+            .outerjoin(TasaCambioDiaria, TasaCambioDiaria.fecha == PagoReportado.fecha_pago)
+            .where(
                 PagoReportado.recibo_pdf.isnot(None),
                 PagoReportado.estado.in_(("aprobado", "importado")),
                 PagoReportado.fecha_pago >= min_date,
                 PagoReportado.fecha_pago <= max_date,
             )
-        ).scalars().all()
+            .group_by(yr, mo)
+        )
 
-        doc_keys = list({
-            ("COB-" + (pr.referencia_interna or ""))[:100]
-            for pr in rows
-            if (pr.referencia_interna or "").strip()
-        })
-        pago_by_doc: dict[str, Pago] = {}
-        if doc_keys:
-            pagos = db.execute(
-                select(Pago).where(Pago.numero_documento.in_(doc_keys))
-            ).scalars().all()
-            for p in pagos:
-                if p.numero_documento:
-                    pago_by_doc[p.numero_documento] = p
-
-        fechas_bs_sin_pago: list[date] = []
-        for pr in rows:
-            if _norm_moneda_recibo_pago_reportado(getattr(pr, "moneda", None)) != "BS":
-                continue
-            dk = ("COB-" + (pr.referencia_interna or ""))[:100]
-            p = pago_by_doc.get(dk)
-            if p is None or p.monto_pagado is None:
-                if pr.fecha_pago:
-                    fechas_bs_sin_pago.append(pr.fecha_pago)
-        tasas_map = obtener_tasas_por_fechas(db, fechas_bs_sin_pago)
-
-        for pr in rows:
-            if not pr.fecha_pago:
-                continue
-            key = (pr.fecha_pago.year, pr.fecha_pago.month)
-            if key not in buckets:
-                buckets[key] = {"pagos_usd": 0.0, "pagos_bs_en_usd": 0.0}
-            mon = _norm_moneda_recibo_pago_reportado(getattr(pr, "moneda", None))
-            monto_pr = float(pr.monto or 0)
-            if mon == "USD":
-                buckets[key]["pagos_usd"] += monto_pr
-            elif mon == "BS":
-                dk = ("COB-" + (pr.referencia_interna or ""))[:100]
-                p = pago_by_doc.get(dk)
-                if p is not None and p.monto_pagado is not None:
-                    buckets[key]["pagos_bs_en_usd"] += float(p.monto_pagado)
-                else:
-                    t = tasas_map.get(pr.fecha_pago)
-                    tasa = float(t.tasa_oficial) if t is not None and t.tasa_oficial else 0.0
-                    if tasa > 0:
-                        buckets[key]["pagos_bs_en_usd"] += monto_pr / tasa
+        for row in db.execute(q).all():
+            yk, mk = int(row.anio), int(row.mes_num)
+            buckets[(yk, mk)] = {
+                "pagos_usd": float(row.pagos_usd or 0),
+                "pagos_bs_en_usd": float(row.pagos_bs_en_usd or 0),
+            }
 
         series = []
         for m in meses:

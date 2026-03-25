@@ -883,9 +883,9 @@ export function DashboardMenu() {
         return []
       }
 
-      // Orden descendente (mayor banda arriba)
+      // Eje Y: arriba mayor banda, abajo $0-$400 (Recharts: primera fila del data = arriba)
 
-      const orden = [
+      const ordenPrioridadMayorArriba = [
         'Más de $2,000',
         '$1,600 - $2,000',
         '$1,200 - $1,600',
@@ -896,7 +896,11 @@ export function DashboardMenu() {
 
       return [...datosFinanciamientoRangos.rangos]
 
-        .sort((a, b) => orden.indexOf(b.categoria) - orden.indexOf(a.categoria))
+        .sort(
+          (a, b) =>
+            ordenPrioridadMayorArriba.indexOf(a.categoria) -
+            ordenPrioridadMayorArriba.indexOf(b.categoria)
+        )
 
         .map(r => ({
           ...r,
