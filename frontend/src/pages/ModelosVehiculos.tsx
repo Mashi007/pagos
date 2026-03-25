@@ -91,6 +91,8 @@ export function ModelosVehiculos() {
 
     isLoading: loading,
 
+    isFetching,
+
     error,
 
     refetch,
@@ -309,27 +311,41 @@ export function ModelosVehiculos() {
       <ModulePageHeader
         icon={Car}
         title="Modelos de Vehículos"
-        description="Gestiona los modelos de vehículos. El precio (USD) se usa como Valor Activo al crear un préstamo."
+        description="Catálogo maestro: en nuevos préstamos solo se ofrecen los modelos activos definidos aquí. El precio (USD) se usa como Valor Activo al seleccionar el modelo."
         actions={
-          <Button
-            onClick={() => {
-              setEditingModelo(null)
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isFetching}
+              onClick={() => refetch()}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 shrink-0 ${isFetching ? 'animate-spin' : ''}`}
+              />
+              Actualizar lista
+            </Button>
 
-              setFormData({
-                modelo: '',
-                activo: true,
-                precio: undefined,
-                precioInput: '',
-              })
+            <Button
+              onClick={() => {
+                setEditingModelo(null)
 
-              setValidationError('')
+                setFormData({
+                  modelo: '',
+                  activo: true,
+                  precio: undefined,
+                  precioInput: '',
+                })
 
-              setShowCreateForm(true)
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo Modelo
-          </Button>
+                setValidationError('')
+
+                setShowCreateForm(true)
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo Modelo
+            </Button>
+          </div>
         }
       />
 

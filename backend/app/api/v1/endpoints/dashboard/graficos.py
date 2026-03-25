@@ -31,6 +31,7 @@ from .utils import (
     _safe_float,
     _sanitize_filter_string,
     _etiquetas_12_meses,
+    _fechas_iso_desde_periodo_dashboard,
     _meses_desde_rango,
     _ultimo_dia_del_mes,
     _parse_fechas_concesionario,
@@ -844,7 +845,7 @@ def _compute_recibos_pagos_mensual_usd(
     fecha_fin: Optional[str],
 ) -> dict:
     """
-    Por mes (fecha_pago del reporte con recibo PDF): montos en USD declarados
+    Por mes (fecha_pago del reporte con recibo en BD o ruta legacy): montos en USD declarados
     vs bolívares expresados en USD (prioridad: Pago vinculado COB-{ref}; si no, tasa del día).
     """
     if fecha_inicio and fecha_fin:
@@ -908,6 +909,13 @@ def _compute_recibos_pagos_mensual_usd(
 
         yr = extract("year", PagoReportado.fecha_pago)
         mo = extract("month", PagoReportado.fecha_pago)
+        tiene_recibo = or_(
+            PagoReportado.recibo_pdf.isnot(None),
+            and_(
+                PagoReportado.ruta_recibo_pdf.isnot(None),
+                func.trim(PagoReportado.ruta_recibo_pdf) != "",
+            ),
+        )
         q = (
             select(
                 yr.label("anio"),
@@ -919,7 +927,7 @@ def _compute_recibos_pagos_mensual_usd(
             .outerjoin(Pago, Pago.numero_documento == doc_key)
             .outerjoin(TasaCambioDiaria, TasaCambioDiaria.fecha == PagoReportado.fecha_pago)
             .where(
-                PagoReportado.recibo_pdf.isnot(None),
+                tiene_recibo,
                 PagoReportado.estado.in_(("aprobado", "importado")),
                 PagoReportado.fecha_pago >= min_date,
                 PagoReportado.fecha_pago <= max_date,
@@ -963,7 +971,12 @@ def get_recibos_pagos_mensual_usd(
     db: Session = Depends(get_db),
 ):
     """Pagos por recibo (pagos_reportados con PDF): USD vs Bs. en USD por mes."""
-    return _compute_recibos_pagos_mensual_usd(db, fecha_inicio, fecha_fin)
+    fi, ff = fecha_inicio, fecha_fin
+    if not (fi and ff):
+        pfi, pff = _fechas_iso_desde_periodo_dashboard(periodo)
+        if pfi and pff:
+            fi, ff = pfi, pff
+    return _compute_recibos_pagos_mensual_usd(db, fi, ff)
 
 
 @router.get("/cobranza-por-dia", summary="[Stub] Devuelve dias vacíos hasta tener tabla pagos/cobranzas.")

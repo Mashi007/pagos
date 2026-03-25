@@ -1,7 +1,5 @@
 import { useState } from 'react'
 
-import { Link } from 'react-router-dom'
-
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
@@ -650,23 +648,6 @@ export function Reportes() {
                   >
                     <Copy className="h-4 w-4 shrink-0" aria-hidden />
                     Tasa de cambio
-                  </Button>
-
-                  <Button
-                    asChild
-                    variant="outline"
-                    size="sm"
-                    className="h-10 w-full justify-start gap-2 border-violet-300/90 bg-white/90 text-violet-950 hover:bg-white sm:w-auto"
-                  >
-                    <Link
-                      to={`/${PUBLIC_FINIQUITO_PATH}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Abrir portal Finiquito (colaboradores, código por correo)"
-                      aria-label="Abrir Finiquito en nueva pestaña"
-                    >
-                      Abrir Finiquito
-                    </Link>
                   </Button>
 
                   <Button

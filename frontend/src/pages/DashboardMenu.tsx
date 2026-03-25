@@ -583,7 +583,12 @@ export function DashboardMenu() {
 
   const periodoRecibosUsd = getPeriodoGrafico('recibos-pagos-usd')
 
-  const { data: datosRecibosUsd, isLoading: loadingRecibosUsd } = useQuery({
+  const {
+    data: datosRecibosUsd,
+    isLoading: loadingRecibosUsd,
+    isError: errorRecibosUsd,
+    refetch: refetchRecibosUsd,
+  } = useQuery({
     queryKey: [
       'recibos-pagos-mensual-usd',
       periodoRecibosUsd,
@@ -1626,6 +1631,22 @@ export function DashboardMenu() {
                   {loadingRecibosUsd ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">
                       Cargando pagos por recibo...
+                    </div>
+                  ) : errorRecibosUsd ? (
+                    <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-500">
+                      <p className="text-center text-sm">
+                        No se pudieron cargar los datos de este gráfico. Revisa
+                        la conexión o intenta de nuevo.
+                      </p>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void refetchRecibosUsd()}
+                      >
+                        Reintentar
+                      </Button>
                     </div>
                   ) : datosRecibosUsd?.series &&
                     datosRecibosUsd.series.length > 0 ? (

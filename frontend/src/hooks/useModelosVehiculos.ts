@@ -15,8 +15,6 @@ import toast from 'react-hot-toast'
 
 // Constantes de configuración
 
-const STALE_TIME_MEDIUM = 5 * 60 * 1000 // 5 minutos
-
 const STALE_TIME_LONG = 10 * 60 * 1000 // 10 minutos
 
 const RETRY_COUNT = 3
@@ -47,7 +45,10 @@ export function useModelosVehiculos(filters?: any) {
 
     queryFn: () => modeloVehiculoService.listarModelos(filters),
 
-    staleTime: STALE_TIME_MEDIUM,
+    // Lista de catálogo: siempre pedir datos frescos al montar (cambios en BD u otra pestaña)
+    staleTime: 0,
+
+    refetchOnMount: 'always',
 
     retry: RETRY_COUNT,
 

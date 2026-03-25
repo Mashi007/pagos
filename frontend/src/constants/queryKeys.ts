@@ -26,7 +26,7 @@ export const NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY = [
  * (p. ej. tras registrar un pago que marca fecha_pago en la cuota).
  */
 export async function invalidateListasNotificacionesMora(
-  queryClient: QueryClientInvalidate,
+  queryClient: QueryClientInvalidate
 ) {
   await Promise.all([
     queryClient.invalidateQueries({

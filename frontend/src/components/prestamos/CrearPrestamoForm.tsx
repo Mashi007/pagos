@@ -528,7 +528,8 @@ export function CrearPrestamoForm({
             : '',
 
         analista_id:
-          formData.analista_id != null && Number.isFinite(Number(formData.analista_id))
+          formData.analista_id != null &&
+          Number.isFinite(Number(formData.analista_id))
             ? Number(formData.analista_id)
             : undefined,
 

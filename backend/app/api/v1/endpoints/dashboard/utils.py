@@ -1,6 +1,7 @@
 """
 Shared helpers for dashboard endpoints.
 """
+import calendar
 import logging
 import threading
 from datetime import date, datetime, timedelta, timezone
@@ -59,6 +60,60 @@ def _sanitize_filter_string(value: Optional[str]) -> Optional[str]:
 
 def _kpi(valor: float = 0, variacion: float = 0) -> dict:
     return {"valor_actual": valor, "variacion_porcentual": variacion}
+
+
+def _date_minus_months(d: date, months: int) -> date:
+    """Resta meses naturales a una fecha (clamp al último día del mes destino)."""
+    y, m = d.year, d.month - months
+    while m < 1:
+        m += 12
+        y -= 1
+    last_day = calendar.monthrange(y, m)[1]
+    return date(y, m, min(d.day, last_day))
+
+
+def _fechas_iso_desde_periodo_dashboard(periodo: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """
+    Alineado con frontend useDashboardFiltros.calcularFechasPorPeriodo:
+    ultimos_12_meses, día/dia, semana (lun–vie), mes, año/año.
+    Devuelve (fecha_inicio, fecha_fin) como YYYY-MM-DD.
+    """
+    if periodo is None:
+        return None, None
+    raw = str(periodo).strip()
+    if not raw:
+        return None, None
+    key = raw.lower()
+    hoy = date.today()
+
+    def fmt(d: date) -> str:
+        return d.isoformat()
+
+    if key in ("día", "dia"):
+        return fmt(hoy), fmt(hoy)
+
+    if key == "semana":
+        js_dow = (hoy.weekday() + 1) % 7
+        diff = -6 if js_dow == 0 else 1 - js_dow
+        lun = hoy + timedelta(days=diff)
+        vie = lun + timedelta(days=4)
+        return fmt(lun), fmt(vie)
+
+    if key == "mes":
+        inicio = date(hoy.year, hoy.month, 1)
+        if hoy.month == 12:
+            fin = date(hoy.year, 12, 31)
+        else:
+            fin = date(hoy.year, hoy.month + 1, 1) - timedelta(days=1)
+        return fmt(inicio), fmt(fin)
+
+    if key in ("año", "ano"):
+        return fmt(date(hoy.year, 1, 1)), fmt(date(hoy.year, 12, 31))
+
+    if key == "ultimos_12_meses":
+        return fmt(_date_minus_months(hoy, 12)), fmt(hoy)
+
+    return None, None
 
 
 def _etiquetas_12_meses() -> list[dict]:
