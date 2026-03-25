@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     text,
 )
+from sqlalchemy.orm import deferred
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -70,7 +71,8 @@ class FiniquitoCaso(Base):
     total_financiamiento = Column(Numeric(14, 2), nullable=False)
     sum_total_pagado = Column(Numeric(14, 2), nullable=False)
     estado = Column(String(20), nullable=False, server_default=text("'REVISION'"))
-    contacto_para_siguientes = Column(Boolean, nullable=True)
+    # Deferred: la columna puede no existir hasta migracion 025; el SELECT por defecto no la incluye.
+    contacto_para_siguientes = deferred(Column(Boolean, nullable=True))
     ultimo_refresh_utc = Column(DateTime(timezone=False), nullable=True)
     creado_en = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     actualizado_en = Column(

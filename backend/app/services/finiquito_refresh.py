@@ -6,10 +6,11 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import insert, text
 from sqlalchemy.orm import Session
 
 from app.models.finiquito import FiniquitoCaso
+from app.services.finiquito_db_schema import finiquito_casos_has_contacto_para_siguientes
 
 logger = logging.getLogger(__name__)
 
@@ -75,17 +76,30 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
             caso.ultimo_refresh_utc = now
             actualizados += 1
         else:
-            db.add(
-                FiniquitoCaso(
-                    prestamo_id=prestamo_id,
-                    cliente_id=cliente_id,
-                    cedula=cedula,
-                    total_financiamiento=total_fin,
-                    sum_total_pagado=sum_tp,
-                    estado="REVISION",
-                    ultimo_refresh_utc=now,
+            if finiquito_casos_has_contacto_para_siguientes(db):
+                db.add(
+                    FiniquitoCaso(
+                        prestamo_id=prestamo_id,
+                        cliente_id=cliente_id,
+                        cedula=cedula,
+                        total_financiamiento=total_fin,
+                        sum_total_pagado=sum_tp,
+                        estado="REVISION",
+                        ultimo_refresh_utc=now,
+                    )
                 )
-            )
+            else:
+                db.execute(
+                    insert(FiniquitoCaso.__table__).values(
+                        prestamo_id=prestamo_id,
+                        cliente_id=cliente_id,
+                        cedula=cedula,
+                        total_financiamiento=total_fin,
+                        sum_total_pagado=sum_tp,
+                        estado="REVISION",
+                        ultimo_refresh_utc=now,
+                    )
+                )
             insertados += 1
 
     # No borrar casos ya aceptados o en flujo de area de trabajo (evita perder auditoria).

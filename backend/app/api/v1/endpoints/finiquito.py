@@ -48,6 +48,10 @@ from app.schemas.finiquito import (
     FiniquitoVerificarCodigoRequest,
     FiniquitoVerificarCodigoResponse,
 )
+from app.services.finiquito_db_schema import (
+    finiquito_casos_has_contacto_para_siguientes,
+    finiquito_has_area_trabajo_auditoria_table,
+)
 from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
 logger = logging.getLogger(__name__)
@@ -111,7 +115,7 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
     clmap = _map_clientes_por_id(db, [c.cliente_id for c in casos if c.cliente_id])
     items: List[FiniquitoCasoOut] = []
     for c in casos:
-        base = _caso_to_out(c, mp.get(c.prestamo_id))
+        base = _caso_to_out(c, mp.get(c.prestamo_id), db)
         cl = clmap.get(int(c.cliente_id)) if c.cliente_id else None
         items.append(
             base.model_copy(
@@ -125,7 +129,11 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
     return items
 
 
-def _caso_to_out(c: FiniquitoCaso, ultima_fecha_pago: Optional[Any] = None) -> FiniquitoCasoOut:
+def _caso_to_out(
+    c: FiniquitoCaso,
+    ultima_fecha_pago: Optional[Any] = None,
+    db: Optional[Session] = None,
+) -> FiniquitoCasoOut:
     ufp: Optional[str] = None
     if ultima_fecha_pago is not None:
         ufp = (
@@ -133,6 +141,12 @@ def _caso_to_out(c: FiniquitoCaso, ultima_fecha_pago: Optional[Any] = None) -> F
             if hasattr(ultima_fecha_pago, "isoformat")
             else str(ultima_fecha_pago)
         )
+    cps: Optional[bool] = None
+    if db is not None and finiquito_casos_has_contacto_para_siguientes(db):
+        try:
+            cps = c.contacto_para_siguientes
+        except Exception:
+            cps = None
     return FiniquitoCasoOut(
         id=c.id,
         prestamo_id=c.prestamo_id,
@@ -143,7 +157,7 @@ def _caso_to_out(c: FiniquitoCaso, ultima_fecha_pago: Optional[Any] = None) -> F
         estado=c.estado,
         ultimo_refresh_utc=c.ultimo_refresh_utc.isoformat() if c.ultimo_refresh_utc else None,
         ultima_fecha_pago=ufp,
-        contacto_para_siguientes=c.contacto_para_siguientes,
+        contacto_para_siguientes=cps,
     )
 
 
@@ -531,7 +545,7 @@ def finiquito_public_listar_casos(
     casos = q.all()
     mp = _map_ultima_fecha_pago_por_prestamo(db, [c.prestamo_id for c in casos])
     items: List[FiniquitoCasoOut] = [
-        _caso_to_out(c, mp.get(c.prestamo_id)) for c in casos
+        _caso_to_out(c, mp.get(c.prestamo_id), db) for c in casos
     ]
     return FiniquitoCasoListaResponse(items=items)
 
@@ -558,7 +572,7 @@ def finiquito_public_detalle(
     cuotas_l = [_cuota_to_dict(cu) for cu in cuotas]
     mp = _map_ultima_fecha_pago_por_prestamo(db, [caso.prestamo_id])
     return FiniquitoDetalleResponse(
-        caso=_caso_to_out(caso, mp.get(caso.prestamo_id)),
+        caso=_caso_to_out(caso, mp.get(caso.prestamo_id), db),
         prestamo=prestamo_d,
         cuotas=cuotas_l,
     )
@@ -619,7 +633,7 @@ def finiquito_public_patch_estado(
     db.refresh(caso)
     mp = _map_ultima_fecha_pago_por_prestamo(db, [caso.prestamo_id])
     return FiniquitoPatchEstadoResponse(
-        ok=True, caso=_caso_to_out(caso, mp.get(caso.prestamo_id))
+        ok=True, caso=_caso_to_out(caso, mp.get(caso.prestamo_id), db)
     )
 
 
@@ -692,6 +706,15 @@ def finiquito_admin_patch_estado(
         raise HTTPException(status_code=404, detail="Caso no encontrado")
     anterior = caso.estado
 
+    if nuevo in ("EN_PROCESO", "TERMINADO") and not finiquito_casos_has_contacto_para_siguientes(db):
+        return FiniquitoPatchEstadoResponse(
+            ok=False,
+            error=(
+                "Aplique la migracion de finiquito area de trabajo en la base de datos "
+                "(sql/2026-03-24_finiquito_area_trabajo_auditoria.sql o alembic 025_finiquito_area_trabajo)."
+            ),
+        )
+
     if nuevo == "TERMINADO":
         if anterior != "EN_PROCESO":
             return FiniquitoPatchEstadoResponse(
@@ -711,10 +734,11 @@ def finiquito_admin_patch_estado(
             )
 
     caso.estado = nuevo
-    if nuevo == "TERMINADO":
-        caso.contacto_para_siguientes = body.contacto_para_siguientes
-    else:
-        caso.contacto_para_siguientes = None
+    if finiquito_casos_has_contacto_para_siguientes(db):
+        if nuevo == "TERMINADO":
+            caso.contacto_para_siguientes = body.contacto_para_siguientes
+        else:
+            caso.contacto_para_siguientes = None
 
     _registrar_historial(
         db,
@@ -724,26 +748,27 @@ def finiquito_admin_patch_estado(
         actor_tipo="admin",
         user_id=admin.id,
     )
-    if nuevo == "EN_PROCESO":
-        _registrar_auditoria_area_trabajo(
-            db,
-            caso_id=caso.id,
-            accion="EN_PROCESO",
-            estado_anterior=anterior,
-            estado_nuevo=nuevo,
-            contacto_para_siguientes=None,
-            user_id=admin.id,
-        )
-    elif nuevo == "TERMINADO":
-        _registrar_auditoria_area_trabajo(
-            db,
-            caso_id=caso.id,
-            accion="TERMINADO",
-            estado_anterior=anterior,
-            estado_nuevo=nuevo,
-            contacto_para_siguientes=body.contacto_para_siguientes,
-            user_id=admin.id,
-        )
+    if finiquito_has_area_trabajo_auditoria_table(db):
+        if nuevo == "EN_PROCESO":
+            _registrar_auditoria_area_trabajo(
+                db,
+                caso_id=caso.id,
+                accion="EN_PROCESO",
+                estado_anterior=anterior,
+                estado_nuevo=nuevo,
+                contacto_para_siguientes=None,
+                user_id=admin.id,
+            )
+        elif nuevo == "TERMINADO":
+            _registrar_auditoria_area_trabajo(
+                db,
+                caso_id=caso.id,
+                accion="TERMINADO",
+                estado_anterior=anterior,
+                estado_nuevo=nuevo,
+                contacto_para_siguientes=body.contacto_para_siguientes,
+                user_id=admin.id,
+            )
 
     db.commit()
     db.refresh(caso)
