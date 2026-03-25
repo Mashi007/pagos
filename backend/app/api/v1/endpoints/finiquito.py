@@ -23,9 +23,11 @@ from app.core.deps import (
 from app.core.email import mask_email_for_log, send_email
 from app.core.email_config_holder import get_email_activo_servicio
 from app.core.security import create_access_token
+from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.finiquito import (
+    FiniquitoAreaTrabajoAuditoria,
     FiniquitoCaso,
     FiniquitoEstadoHistorial,
     FiniquitoLoginCodigo,
@@ -52,7 +54,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-ESTADOS_VALIDOS = frozenset({"REVISION", "ACEPTADO", "RECHAZADO"})
+ESTADOS_VALIDOS = frozenset(
+    {"REVISION", "ACEPTADO", "RECHAZADO", "EN_PROCESO", "TERMINADO"}
+)
 CODIGO_EXPIRA_MINUTES = 120
 
 
@@ -86,6 +90,41 @@ def _map_ultima_fecha_pago_por_prestamo(db: Session, prestamo_ids: List[int]) ->
     return out
 
 
+def _map_clientes_por_id(db: Session, cliente_ids: List[int]) -> dict[int, Cliente]:
+    seen: set[int] = set()
+    uniq: List[int] = []
+    for i in cliente_ids:
+        if i is None:
+            continue
+        ii = int(i)
+        if ii not in seen:
+            seen.add(ii)
+            uniq.append(ii)
+    if not uniq:
+        return {}
+    rows = db.query(Cliente).filter(Cliente.id.in_(uniq)).all()
+    return {int(cl.id): cl for cl in rows}
+
+
+def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[FiniquitoCasoOut]:
+    mp = _map_ultima_fecha_pago_por_prestamo(db, [c.prestamo_id for c in casos])
+    clmap = _map_clientes_por_id(db, [c.cliente_id for c in casos if c.cliente_id])
+    items: List[FiniquitoCasoOut] = []
+    for c in casos:
+        base = _caso_to_out(c, mp.get(c.prestamo_id))
+        cl = clmap.get(int(c.cliente_id)) if c.cliente_id else None
+        items.append(
+            base.model_copy(
+                update={
+                    "cliente_nombres": cl.nombres if cl else None,
+                    "cliente_email": cl.email if cl else None,
+                    "cliente_telefono": cl.telefono if cl else None,
+                }
+            )
+        )
+    return items
+
+
 def _caso_to_out(c: FiniquitoCaso, ultima_fecha_pago: Optional[Any] = None) -> FiniquitoCasoOut:
     ufp: Optional[str] = None
     if ultima_fecha_pago is not None:
@@ -104,6 +143,7 @@ def _caso_to_out(c: FiniquitoCaso, ultima_fecha_pago: Optional[Any] = None) -> F
         estado=c.estado,
         ultimo_refresh_utc=c.ultimo_refresh_utc.isoformat() if c.ultimo_refresh_utc else None,
         ultima_fecha_pago=ufp,
+        contacto_para_siguientes=c.contacto_para_siguientes,
     )
 
 
@@ -125,6 +165,28 @@ def _registrar_historial(
             user_id=user_id,
             finiquito_usuario_id=finiquito_usuario_id,
             actor_tipo=actor_tipo,
+        )
+    )
+
+
+def _registrar_auditoria_area_trabajo(
+    db: Session,
+    *,
+    caso_id: int,
+    accion: str,
+    estado_anterior: Optional[str],
+    estado_nuevo: str,
+    contacto_para_siguientes: Optional[bool],
+    user_id: Optional[int],
+) -> None:
+    db.add(
+        FiniquitoAreaTrabajoAuditoria(
+            caso_id=caso_id,
+            accion=accion,
+            estado_anterior=estado_anterior,
+            estado_nuevo=estado_nuevo,
+            contacto_para_siguientes=contacto_para_siguientes,
+            user_id=user_id,
         )
     )
 
@@ -443,7 +505,7 @@ def finiquito_public_listar_casos(
     bandeja: Optional[str] = Query(
         None,
         description=(
-            "entrada = solo REVISION; desk = solo ACEPTADO; "
+            "entrada = solo REVISION; desk = ACEPTADO, EN_PROCESO o TERMINADO; "
             "todos o omitir = todos los casos (prestamos con suma abonos = financiamiento)"
         ),
     ),
@@ -456,7 +518,11 @@ def finiquito_public_listar_casos(
     elif b == "entrada":
         q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "REVISION").order_by(FiniquitoCaso.id.desc())
     elif b == "desk":
-        q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "ACEPTADO").order_by(FiniquitoCaso.id.desc())
+        q = (
+            db.query(FiniquitoCaso)
+            .filter(FiniquitoCaso.estado.in_(["ACEPTADO", "EN_PROCESO", "TERMINADO"]))
+            .order_by(FiniquitoCaso.id.desc())
+        )
     else:
         raise HTTPException(
             status_code=400,
@@ -559,7 +625,13 @@ def finiquito_public_patch_estado(
 
 @router.get("/admin/casos", response_model=FiniquitoCasoListaResponse)
 def finiquito_admin_listar(
-    estado: Optional[str] = Query(None, description="Filtrar por REVISION, ACEPTADO o RECHAZADO"),
+    estado: Optional[str] = Query(
+        None, description="Un solo estado (REVISION, ACEPTADO, RECHAZADO, EN_PROCESO, TERMINADO)"
+    ),
+    estado_in: Optional[str] = Query(
+        None,
+        description="Varios estados separados por coma (ej. ACEPTADO,EN_PROCESO,TERMINADO). Tiene prioridad sobre estado.",
+    ),
     cedula: Optional[str] = Query(
         None,
         description="Subcadena de cedula (coincidencia parcial, sin distinguir mayusculas)",
@@ -568,7 +640,15 @@ def finiquito_admin_listar(
     _: UserResponse = Depends(require_administrador),
 ):
     q = db.query(FiniquitoCaso)
-    if estado:
+    if estado_in and estado_in.strip():
+        parts = [p.strip().upper() for p in estado_in.split(",") if p.strip()]
+        if not parts:
+            raise HTTPException(status_code=400, detail="estado_in vacio")
+        bad = [p for p in parts if p not in ESTADOS_VALIDOS]
+        if bad:
+            raise HTTPException(status_code=400, detail="Estado invalido en estado_in")
+        q = q.filter(FiniquitoCaso.estado.in_(parts))
+    elif estado:
         e = estado.upper().strip()
         if e not in ESTADOS_VALIDOS:
             raise HTTPException(status_code=400, detail="Estado invalido")
@@ -576,8 +656,7 @@ def finiquito_admin_listar(
     if cedula and cedula.strip():
         q = q.filter(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
     casos = q.order_by(FiniquitoCaso.id.desc()).all()
-    mp = _map_ultima_fecha_pago_por_prestamo(db, [c.prestamo_id for c in casos])
-    items = [_caso_to_out(c, mp.get(c.prestamo_id)) for c in casos]
+    items = _admin_casos_to_items(db, casos)
     return FiniquitoCasoListaResponse(items=items)
 
 
@@ -604,7 +683,7 @@ def finiquito_admin_patch_estado(
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_administrador),
 ):
-    """Administrador: puede pasar a cualquier estado (incl. salida de RECHAZADO)."""
+    """Administrador: bandejas y area de trabajo (EN_PROCESO / TERMINADO con Sí/No)."""
     nuevo = (body.estado or "").upper().strip()
     if nuevo not in ESTADOS_VALIDOS:
         return FiniquitoPatchEstadoResponse(ok=False, error="Estado invalido")
@@ -612,7 +691,31 @@ def finiquito_admin_patch_estado(
     if not caso:
         raise HTTPException(status_code=404, detail="Caso no encontrado")
     anterior = caso.estado
+
+    if nuevo == "TERMINADO":
+        if anterior != "EN_PROCESO":
+            return FiniquitoPatchEstadoResponse(
+                ok=False,
+                error="Solo puede marcar Terminado si el caso esta En proceso.",
+            )
+        if body.contacto_para_siguientes is None:
+            return FiniquitoPatchEstadoResponse(
+                ok=False,
+                error="Debe indicar si contacto al cliente para pasos siguientes (Si o No).",
+            )
+    elif nuevo == "EN_PROCESO":
+        if anterior != "ACEPTADO":
+            return FiniquitoPatchEstadoResponse(
+                ok=False,
+                error="Solo puede marcar En proceso desde Aceptado.",
+            )
+
     caso.estado = nuevo
+    if nuevo == "TERMINADO":
+        caso.contacto_para_siguientes = body.contacto_para_siguientes
+    else:
+        caso.contacto_para_siguientes = None
+
     _registrar_historial(
         db,
         caso=caso,
@@ -621,12 +724,31 @@ def finiquito_admin_patch_estado(
         actor_tipo="admin",
         user_id=admin.id,
     )
+    if nuevo == "EN_PROCESO":
+        _registrar_auditoria_area_trabajo(
+            db,
+            caso_id=caso.id,
+            accion="EN_PROCESO",
+            estado_anterior=anterior,
+            estado_nuevo=nuevo,
+            contacto_para_siguientes=None,
+            user_id=admin.id,
+        )
+    elif nuevo == "TERMINADO":
+        _registrar_auditoria_area_trabajo(
+            db,
+            caso_id=caso.id,
+            accion="TERMINADO",
+            estado_anterior=anterior,
+            estado_nuevo=nuevo,
+            contacto_para_siguientes=body.contacto_para_siguientes,
+            user_id=admin.id,
+        )
+
     db.commit()
     db.refresh(caso)
-    mp = _map_ultima_fecha_pago_por_prestamo(db, [caso.prestamo_id])
-    return FiniquitoPatchEstadoResponse(
-        ok=True, caso=_caso_to_out(caso, mp.get(caso.prestamo_id))
-    )
+    caso_out = _admin_casos_to_items(db, [caso])[0]
+    return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
 
 
 @router.post("/admin/refresh-materializado")

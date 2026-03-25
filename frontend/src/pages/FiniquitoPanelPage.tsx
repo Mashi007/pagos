@@ -65,6 +65,10 @@ function etiquetaEstadoFiniquito(estado: string) {
     return { label: 'Aceptado', className: 'bg-emerald-100 text-emerald-900' }
   if (e === 'RECHAZADO')
     return { label: 'Rechazado', className: 'bg-red-100 text-red-900' }
+  if (e === 'EN_PROCESO')
+    return { label: 'En proceso', className: 'bg-sky-100 text-sky-950' }
+  if (e === 'TERMINADO')
+    return { label: 'Terminado', className: 'bg-emerald-200 text-emerald-950' }
   return { label: estado || '-', className: 'bg-slate-100 text-slate-800' }
 }
 

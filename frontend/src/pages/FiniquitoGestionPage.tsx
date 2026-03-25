@@ -35,6 +35,15 @@ import {
   TableRow,
 } from '../components/ui/table'
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
+
 import { FiniquitoRevisionDialog } from '../components/finiquito/FiniquitoRevisionDialog'
 
 import {
@@ -88,7 +97,12 @@ const DEBOUNCE_MS = 420
 export function FiniquitoGestionPage() {
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaBusqueda, setCedulaBusqueda] = useState('')
-  const [itemsAceptados, setItemsAceptados] = useState<FiniquitoCasoItem[]>([])
+  const [itemsAreaTrabajo, setItemsAreaTrabajo] = useState<FiniquitoCasoItem[]>(
+    []
+  )
+  const [dialogTerminadoCasoId, setDialogTerminadoCasoId] = useState<
+    number | null
+  >(null)
   const [itemsRechazados, setItemsRechazados] = useState<FiniquitoCasoItem[]>(
     []
   )
@@ -113,12 +127,16 @@ export function FiniquitoGestionPage() {
   const cargarListas = useCallback(async () => {
     setLoading(true)
     try {
-      const [rAcept, rRech, rBandeja] = await Promise.all([
-        finiquitoAdminListar('ACEPTADO'),
+      const [rTrabajo, rRech, rBandeja] = await Promise.all([
+        finiquitoAdminListar(
+          undefined,
+          undefined,
+          'ACEPTADO,EN_PROCESO,TERMINADO'
+        ),
         finiquitoAdminListar('RECHAZADO'),
         finiquitoAdminListar('REVISION', cedulaBusqueda || undefined),
       ])
-      setItemsAceptados(rAcept.items || [])
+      setItemsAreaTrabajo(rTrabajo.items || [])
       setItemsRechazados(rRech.items || [])
       setItemsBandeja(rBandeja.items || [])
     } catch (e: unknown) {
@@ -174,6 +192,26 @@ export function FiniquitoGestionPage() {
     }
   }
 
+  const confirmarTerminado = async (contactoParaSiguientes: boolean) => {
+    if (dialogTerminadoCasoId == null) return
+    try {
+      const r = await finiquitoAdminPatchEstado(
+        dialogTerminadoCasoId,
+        'TERMINADO',
+        contactoParaSiguientes
+      )
+      if (!r.ok) {
+        toast.error(r.error || 'No se pudo actualizar')
+        return
+      }
+      setDialogTerminadoCasoId(null)
+      toast.success('Caso marcado como terminado')
+      cargarListas()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error')
+    }
+  }
+
   const limpiarCedula = () => {
     setCedulaInput('')
     setCedulaBusqueda('')
@@ -220,6 +258,72 @@ export function FiniquitoGestionPage() {
           <SelectItem value="RECHAZADO">Rechazado</SelectItem>
         </SelectContent>
       </Select>
+    </div>
+  )
+
+  const renderAccionesAreaTrabajo = (row: FiniquitoCasoItem) => (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 border-slate-300"
+        title="Ver préstamo, cuotas y pagos"
+        onClick={() => {
+          setRevisionCasoId(row.id)
+          setRevisionOpen(true)
+        }}
+      >
+        <Eye className="h-4 w-4" aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 border-slate-300"
+        title="Descargar estado de cuenta (PDF)"
+        disabled={descargandoEstadoCuentaPrestamoId === row.prestamo_id}
+        onClick={() => descargarEstadoCuenta(row.prestamo_id)}
+      >
+        {descargandoEstadoCuentaPrestamoId === row.prestamo_id ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Download className="h-4 w-4" aria-hidden />
+        )}
+        <span className="sr-only">Descargar estado de cuenta PDF</span>
+      </Button>
+      {row.estado === 'ACEPTADO' ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="h-8 text-xs"
+          onClick={() => cambiarEstado(row.id, 'EN_PROCESO')}
+        >
+          En proceso
+        </Button>
+      ) : null}
+      {row.estado === 'EN_PROCESO' ? (
+        <>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 border-slate-300 text-xs"
+            onClick={() => cambiarEstado(row.id, 'ACEPTADO')}
+          >
+            Volver a aceptado
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+            onClick={() => setDialogTerminadoCasoId(row.id)}
+          >
+            Terminado
+          </Button>
+        </>
+      ) : null}
     </div>
   )
 
@@ -279,13 +383,105 @@ export function FiniquitoGestionPage() {
     </div>
   )
 
+  const renderTablaAreaTrabajo = (items: FiniquitoCasoItem[]) => (
+    <div className="overflow-hidden rounded-md border border-slate-200">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-0 hover:bg-transparent">
+              <TableHead className={thGestion}>ID caso</TableHead>
+              <TableHead className={thGestion}>Cédula</TableHead>
+              <TableHead className={thGestion}>Préstamo</TableHead>
+              <TableHead className={cn(thGestion, 'whitespace-normal')}>
+                Último pago
+              </TableHead>
+              <TableHead className={cn(thGestion, 'min-w-[140px]')}>
+                Contacto
+              </TableHead>
+              <TableHead className={thGestion}>Estado</TableHead>
+              <TableHead className={cn(thGestion, 'text-right')}>
+                Acciones
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((row, idx) => (
+              <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
+                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                  {row.id}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                  {row.cedula}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'tabular-nums')}>
+                  {row.prestamo_id}
+                </TableCell>
+                <TableCell
+                  className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
+                  title={
+                    row.ultima_fecha_pago
+                      ? `Desde pagos: ${row.ultima_fecha_pago}`
+                      : 'Sin pagos con préstamo vinculado'
+                  }
+                >
+                  {textoUltimoPago(row.ultima_fecha_pago)}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
+                  <div className="space-y-0.5 text-xs leading-snug text-slate-800">
+                    <div className="font-medium">
+                      {row.cliente_nombres?.trim() || '-'}
+                    </div>
+                    <div className="break-all text-slate-600">
+                      {row.cliente_email?.trim() || '-'}
+                    </div>
+                    <div className="font-mono text-slate-700">
+                      {row.cliente_telefono?.trim() || '-'}
+                    </div>
+                    {row.estado === 'TERMINADO' &&
+                    row.contacto_para_siguientes !== undefined &&
+                    row.contacto_para_siguientes !== null ? (
+                      <div className="pt-1 text-[11px] text-slate-500">
+                        Contactó para siguientes:{' '}
+                        <span className="font-semibold text-slate-700">
+                          {row.contacto_para_siguientes ? 'Sí' : 'No'}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                </TableCell>
+                <TableCell className={tdGestion}>
+                  <span
+                    className={cn(
+                      'rounded px-1.5 py-0.5 text-xs font-medium uppercase',
+                      row.estado === 'ACEPTADO' &&
+                        'bg-slate-100 text-slate-800',
+                      row.estado === 'EN_PROCESO' &&
+                        'bg-amber-100 text-amber-950',
+                      row.estado === 'TERMINADO' &&
+                        'bg-emerald-100 text-emerald-950'
+                    )}
+                  >
+                    {row.estado.replace('_', ' ')}
+                  </span>
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'text-right')}>
+                  {renderAccionesAreaTrabajo(row)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+
   return (
     <div className="min-h-full bg-slate-100/80 pb-10 pt-4 md:pt-6">
       <div className="mx-auto max-w-7xl space-y-5 px-4 md:space-y-6 md:px-6">
         <ModulePageHeader
           icon={FileText}
           title="Finiquito · Gestión"
-          description="Bandeja central filtrada solo por cédula (búsqueda parcial). Arriba: aprobados. Abajo: rechazados en área de revisión."
+          description="Área de trabajo: flujo post-aprobación (en proceso, terminado). Bandeja central por cédula. Abajo: rechazados."
           actions={
             <Button
               size="sm"
@@ -325,8 +521,8 @@ export function FiniquitoGestionPage() {
                   Área de trabajo
                 </h2>
                 <p className="text-xs text-emerald-100">
-                  Aprobados · {itemsAceptados.length}{' '}
-                  {itemsAceptados.length === 1 ? 'registro' : 'registros'}
+                  Aceptados, en proceso y terminados · {itemsAreaTrabajo.length}{' '}
+                  {itemsAreaTrabajo.length === 1 ? 'registro' : 'registros'}
                 </p>
               </div>
             </div>
@@ -336,13 +532,13 @@ export function FiniquitoGestionPage() {
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-emerald-600/70" />
               </div>
-            ) : itemsAceptados.length === 0 ? (
+            ) : itemsAreaTrabajo.length === 0 ? (
               <p className="rounded-lg border border-dashed border-emerald-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
-                No hay casos aprobados. Al marcar un caso como aceptado
-                aparecerá aquí.
+                No hay casos en esta bandeja. Los aceptados aparecen aquí; use
+                «En proceso» y luego «Terminado» para cerrar el flujo.
               </p>
             ) : (
-              renderTabla(itemsAceptados)
+              renderTablaAreaTrabajo(itemsAreaTrabajo)
             )}
           </div>
         </section>
@@ -497,6 +693,45 @@ export function FiniquitoGestionPage() {
           if (!open) setRevisionCasoId(null)
         }}
       />
+
+      <Dialog
+        open={dialogTerminadoCasoId != null}
+        onOpenChange={open => {
+          if (!open) setDialogTerminadoCasoId(null)
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Marcar como terminado</DialogTitle>
+            <DialogDescription className="text-base text-slate-800">
+              ¿Usted ha contactado al cliente para pasos siguientes?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDialogTerminadoCasoId(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => confirmarTerminado(false)}
+            >
+              No
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-700 hover:bg-emerald-800"
+              onClick={() => confirmarTerminado(true)}
+            >
+              Sí
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

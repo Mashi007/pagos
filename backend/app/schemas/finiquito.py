@@ -52,6 +52,13 @@ class FiniquitoCasoOut(BaseModel):
         default=None,
         description="Ultima fecha_pago en tabla pagos para este prestamo_id (MAX).",
     )
+    contacto_para_siguientes: Optional[bool] = Field(
+        default=None,
+        description="Si estado=TERMINADO: respuesta Sí/No a contacto para pasos siguientes.",
+    )
+    cliente_nombres: Optional[str] = None
+    cliente_email: Optional[str] = None
+    cliente_telefono: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -62,7 +69,14 @@ class FiniquitoCasoListaResponse(BaseModel):
 
 
 class FiniquitoPatchEstadoRequest(BaseModel):
-    estado: str = Field(..., description="REVISION | ACEPTADO | RECHAZADO")
+    estado: str = Field(
+        ...,
+        description="REVISION | ACEPTADO | RECHAZADO | EN_PROCESO | TERMINADO",
+    )
+    contacto_para_siguientes: Optional[bool] = Field(
+        None,
+        description="Obligatorio al pasar a TERMINADO (solo desde EN_PROCESO).",
+    )
 
 
 class FiniquitoPatchEstadoResponse(BaseModel):

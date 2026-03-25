@@ -37,6 +37,7 @@ from app.models.crm_campana_envio import CampanaEnvioCrm
 from app.models.cedula_reportar_bs import CedulaReportarBs
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
 from app.models.finiquito import (
+    FiniquitoAreaTrabajoAuditoria,
     FiniquitoCaso,
     FiniquitoEstadoHistorial,
     FiniquitoLoginCodigo,
@@ -82,6 +83,7 @@ __all__ = [
     "CampanaEnvioCrm",
     "CedulaReportarBs",
     "TasaCambioDiaria",
+    "FiniquitoAreaTrabajoAuditoria",
     "FiniquitoCaso",
     "FiniquitoEstadoHistorial",
     "FiniquitoLoginCodigo",

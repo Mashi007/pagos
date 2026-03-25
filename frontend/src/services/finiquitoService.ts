@@ -72,6 +72,10 @@ export type FiniquitoCasoItem = {
   ultimo_refresh_utc: string | null
   /** ISO: ultima fecha_pago en pagos para este prestamo_id */
   ultima_fecha_pago?: string | null
+  contacto_para_siguientes?: boolean | null
+  cliente_nombres?: string | null
+  cliente_email?: string | null
+  cliente_telefono?: string | null
 }
 
 export async function finiquitoRegistro(cedula: string, email: string) {
@@ -223,9 +227,17 @@ export async function finiquitoAdminRevisionDatos(casoId: number) {
   )
 }
 
-export async function finiquitoAdminListar(estado?: string, cedula?: string) {
+export async function finiquitoAdminListar(
+  estado?: string,
+  cedula?: string,
+  estadoIn?: string
+) {
   const params = new URLSearchParams()
-  if (estado) params.set('estado', estado)
+  if (estadoIn && estadoIn.trim()) {
+    params.set('estado_in', estadoIn.trim())
+  } else if (estado) {
+    params.set('estado', estado)
+  }
   const c = (cedula ?? '').trim()
   if (c) params.set('cedula', c)
   const q = params.toString() ? `?${params.toString()}` : ''
@@ -236,13 +248,20 @@ export async function finiquitoAdminListar(estado?: string, cedula?: string) {
 
 export async function finiquitoAdminPatchEstado(
   casoId: number,
-  estado: string
+  estado: string,
+  contactoParaSiguientes?: boolean
 ) {
+  const body: { estado: string; contacto_para_siguientes?: boolean } = {
+    estado,
+  }
+  if (contactoParaSiguientes !== undefined) {
+    body.contacto_para_siguientes = contactoParaSiguientes
+  }
   return apiClient.patch<{
     ok: boolean
     caso?: FiniquitoCasoItem
     error?: string
-  }>(`${BASE}/admin/casos/${casoId}/estado`, { estado })
+  }>(`${BASE}/admin/casos/${casoId}/estado`, body)
 }
 
 export type FiniquitoRefreshStats = {

@@ -70,6 +70,7 @@ class FiniquitoCaso(Base):
     total_financiamiento = Column(Numeric(14, 2), nullable=False)
     sum_total_pagado = Column(Numeric(14, 2), nullable=False)
     estado = Column(String(20), nullable=False, server_default=text("'REVISION'"))
+    contacto_para_siguientes = Column(Boolean, nullable=True)
     ultimo_refresh_utc = Column(DateTime(timezone=False), nullable=True)
     creado_en = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     actualizado_en = Column(
@@ -98,4 +99,24 @@ class FiniquitoEstadoHistorial(Base):
         nullable=True,
     )
     actor_tipo = Column(String(20), nullable=False)
+    creado_en = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
+
+
+class FiniquitoAreaTrabajoAuditoria(Base):
+    """Auditoria: marcar EN_PROCESO / TERMINADO y respuesta Sí/No de contacto al cliente."""
+
+    __tablename__ = "finiquito_area_trabajo_auditoria"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    caso_id = Column(
+        Integer,
+        ForeignKey("finiquito_casos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    accion = Column(String(32), nullable=False)
+    estado_anterior = Column(String(20), nullable=True)
+    estado_nuevo = Column(String(20), nullable=False)
+    contacto_para_siguientes = Column(Boolean, nullable=True)
+    user_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     creado_en = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
