@@ -1,12 +1,14 @@
-import type { LucideIcon } from 'lucide-react'
-
-import type { ReactNode } from 'react'
+import type { ComponentType, ReactNode, SVGProps } from 'react'
 
 import { cn } from '../../utils'
 
+export type ModulePageHeaderIcon = ComponentType<
+  SVGProps<SVGSVGElement> & { className?: string }
+>
+
 export interface ModulePageHeaderProps {
   /** Icono lineal a la izquierda del titulo (color marca #1e67eb). */
-  icon: LucideIcon
+  icon: ModulePageHeaderIcon
 
   title: string
 
