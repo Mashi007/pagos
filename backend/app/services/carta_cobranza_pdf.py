@@ -162,6 +162,38 @@ def _reemplazar_variables_plantilla_pdf(texto: Optional[str], contexto: dict, da
     return result
 
 
+def _normalizar_encabezado_editable(texto: str) -> str:
+    """
+    Mantiene "Estimado/a Cliente" si existe en la plantilla editable y elimina
+    las líneas de encabezado redundantes (ciudad/fecha/notificación), ya que
+    el flujo actual debe iniciar el contenido con el saludo.
+    """
+    if not texto:
+        return ""
+    t = texto
+    # Quitar línea ciudad/fecha (con o sin variables).
+    t = re.sub(
+        r"(?:\{\{CIUDAD\}\}\s*,\s*)?\{\{FECHA_CARTA\}\}\s*<br\s*/?>",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    # Quitar línea de notificación correlativa (con o sin negrita HTML).
+    t = re.sub(
+        r"<b>\s*Notificaci[oó]n\s*N[°º]\s*\{\{NUMEROCORRELATIVO\}\}\s*</b>\s*<br\s*/?>?",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"Notificaci[oó]n\s*N[°º]\s*\{\{NUMEROCORRELATIVO\}\}\s*<br\s*/?>?",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    return t
+
+
 # Patrón para <img ... src="data:image/...;base64,..." ...> (captura el base64; orden flexible de atributos)
 _IMG_BASE64_PATTERN = re.compile(
     r'<img\s+[^>]*?src\s*=\s*["\']data:image/(?:png|jpeg|gif);base64,([A-Za-z0-9+/=]+)["\'][^>]*>',
@@ -349,6 +381,7 @@ def _extraer_logo_remoto_de_plantilla(texto: str) -> Tuple[Optional[str], str]:
 def build_pdf_bytes(
     datos: dict,
     logo_path: Optional[str] = None,
+    encabezado_plantilla: Optional[str] = None,
     cuerpo_principal: Optional[str] = None,
     clausula_septima: Optional[str] = None,
     firma_plantilla: Optional[str] = None,
@@ -358,6 +391,7 @@ def build_pdf_bytes(
     datos: dict con ciudad, fecha_carta, notificacion_num, tratamiento, nombre_completo, cedula,
            monto_total_usd, num_cuotas, fechas_cuotas (list).
     logo_path: ruta al PNG del logo (opcional).
+    encabezado_plantilla: bloque opcional antes del cuerpo (HTML compatible con Paragraph).
     cuerpo_principal / clausula_septima: textos opcionales (si no se pasan se usan los por defecto).
     firma_plantilla: si se indica, se usa en lugar del bloque fijo "Atentamente," + tabla (debe ser HTML compatible con Paragraph).
     """
@@ -408,6 +442,10 @@ def build_pdf_bytes(
         except Exception as e:
             logger.warning("No se pudo cargar logo para PDF cobranza: %s", e)
     story.append(Spacer(1, 0.4 * cm))
+
+    if encabezado_plantilla and encabezado_plantilla.strip():
+        story.append(Paragraph(_sanitize_for_reportlab(encabezado_plantilla.strip()), s_body))
+        story.append(Spacer(1, 0.2 * cm))
 
     _default = (
         "Ante todo, queremos extenderle un cordial saludo, por medio del presente instrumento "
@@ -530,6 +568,15 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
     cuerpo = _reemplazar_variables_plantilla_pdf(
         plantilla.get("cuerpo_principal"), contexto_cobranza, datos
     )
+    cuerpo = _normalizar_encabezado_editable(cuerpo)
+    encabezado_raw = _reemplazar_variables_plantilla_pdf(
+        plantilla.get("encabezado")
+        or plantilla.get("encabezado_html")
+        or plantilla.get("header")
+        or "",
+        contexto_cobranza,
+        datos,
+    )
     clausula = _reemplazar_variables_plantilla_pdf(
         plantilla.get("clausula_septima"), contexto_cobranza, datos
     )
@@ -538,15 +585,27 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
     )
     # Logo: si la plantilla trae un img base64/remoto, usarlo como logo y quitar la etiqueta del texto
     # (ReportLab no dibuja <img> dentro de Paragraph).
-    logo_path_plantilla, cuerpo = _extraer_logo_base64_de_plantilla(cuerpo or "")
+    logo_path_plantilla, encabezado_raw = _extraer_logo_base64_de_plantilla(encabezado_raw or "")
+    if not logo_path_plantilla:
+        logo_path_plantilla, cuerpo = _extraer_logo_base64_de_plantilla(cuerpo or "")
+    if not logo_path_plantilla:
+        logo_path_plantilla, encabezado_raw = _extraer_logo_remoto_de_plantilla(encabezado_raw or "")
     if not logo_path_plantilla:
         logo_path_plantilla, cuerpo = _extraer_logo_remoto_de_plantilla(cuerpo or "")
     # Convertir HTML con div/p/class a formato que ReportLab Paragraph acepta (cuerpo, cláusula y firma)
+    encabezado = _sanitize_for_reportlab(_html_para_reportlab(encabezado_raw or ""))
     cuerpo = _sanitize_for_reportlab(_html_para_reportlab(cuerpo or ""))
     clausula = _sanitize_for_reportlab(_html_para_reportlab(clausula or ""))
     firma_plantilla = _sanitize_for_reportlab(_html_para_reportlab(firma_raw or ""))
     if logo_path_plantilla:
         logo_path = logo_path_plantilla
+    # Respaldo: usar LOGO_URL del contexto si no hubo <img> en plantilla.
+    if not logo_path:
+        logo_url_ctx = str(contexto_cobranza.get("LOGO_URL") or "").strip()
+        if logo_url_ctx.lower().startswith(("http://", "https://")):
+            logo_path = _descargar_logo_remoto_a_temporal(logo_url_ctx) or logo_path
+            if logo_path and not logo_path_plantilla:
+                logo_path_plantilla = logo_path
     if not logo_path:
         try:
             from app.core.config import settings
@@ -557,6 +616,7 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
         return build_pdf_bytes(
             datos,
             logo_path=logo_path,
+            encabezado_plantilla=encabezado or None,
             cuerpo_principal=cuerpo or None,
             clausula_septima=clausula or None,
             firma_plantilla=firma_plantilla or None,
