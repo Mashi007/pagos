@@ -64,7 +64,20 @@ def _compute_kpis_principales(
         activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
         total_clientes = activos
         inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
-        finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
+        finalizados = (
+            db.scalar(
+                select(func.count(func.distinct(Cliente.id)))
+                .select_from(Cliente)
+                .outerjoin(Prestamo, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    or_(
+                        Cliente.estado == "FINALIZADO",
+                        Prestamo.estado == "LIQUIDADO",
+                    )
+                )
+            )
+            or 0
+        )
 
         usar_rango = fecha_inicio and fecha_fin
         inicio = fin = None
@@ -489,6 +502,20 @@ def _compute_analisis_cuentas_por_cobrar(
                 )
             ) or 0
 
+            # Cobrado del mes (misma regla que evolución mensual /admin): vencimiento en el mes y cuota pagada
+            cobrado_mes = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= inicio_d,
+                    Cuota.fecha_vencimiento <= fin_d,
+                    Cuota.fecha_pago.isnot(None),
+                )
+            ) or 0
+
             # 2. PAGOS DE MESES ANTERIORES: Cuotas que vencieron ANTES de este mes pero se pagaron EN este mes
             pagos_atrasos = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
@@ -505,18 +532,20 @@ def _compute_analisis_cuentas_por_cobrar(
             ) or 0
 
             cartera_f = _safe_float(cartera)
+            cobrado_f = _safe_float(cobrado_mes)
             pagos_atrasos_f = _safe_float(pagos_atrasos)
 
             analisis.append({
                 "mes": m["mes"],
                 "cartera": cartera_f,
+                "cobrado_mes": cobrado_f,
                 "pagos_atrasos": pagos_atrasos_f,
             })
         origen = "bd"
     except Exception as e:
         logger.exception("Error en analisis_cuentas_por_cobrar: %s", e)
         analisis = [
-            {"mes": m["mes"], "cartera": 0.0, "pagos_atrasos": 0.0}
+            {"mes": m["mes"], "cartera": 0.0, "cobrado_mes": 0.0, "pagos_atrasos": 0.0}
             for m in meses
         ]
         origen = "bd"

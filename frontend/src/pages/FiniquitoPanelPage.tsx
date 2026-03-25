@@ -37,6 +37,17 @@ import {
 
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 
+import { formatDate } from '../utils'
+
+function textoUltimoPago(iso: string | null | undefined): string {
+  if (iso == null || String(iso).trim() === '') return '-'
+  try {
+    return formatDate(String(iso))
+  } catch {
+    return String(iso)
+  }
+}
+
 function etiquetaEstadoFiniquito(estado: string) {
   const e = (estado || '').toUpperCase()
   if (e === 'REVISION')
@@ -179,6 +190,7 @@ export function FiniquitoPanelPage() {
                       <TableHead>Préstamo</TableHead>
                       <TableHead>Financiamiento</TableHead>
                       <TableHead>Abonos (suma)</TableHead>
+                      <TableHead>Último pago</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
@@ -192,6 +204,16 @@ export function FiniquitoPanelPage() {
                         <TableCell>{row.prestamo_id}</TableCell>
                         <TableCell>{row.total_financiamiento}</TableCell>
                         <TableCell>{row.sum_total_pagado}</TableCell>
+                        <TableCell
+                          className="whitespace-nowrap text-sm text-slate-800"
+                          title={
+                            row.ultima_fecha_pago
+                              ? `Pagos: ${row.ultima_fecha_pago}`
+                              : undefined
+                          }
+                        >
+                          {textoUltimoPago(row.ultima_fecha_pago)}
+                        </TableCell>
                         <TableCell>
                           {(() => {
                             const t = etiquetaEstadoFiniquito(row.estado)

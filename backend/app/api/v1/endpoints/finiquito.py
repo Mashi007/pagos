@@ -11,6 +11,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -23,6 +24,7 @@ from app.core.email import mask_email_for_log, send_email
 from app.core.email_config_holder import get_email_activo_servicio
 from app.core.security import create_access_token
 from app.models.cuota import Cuota
+from app.models.pago import Pago
 from app.models.finiquito import (
     FiniquitoCaso,
     FiniquitoEstadoHistorial,
@@ -58,7 +60,40 @@ def _generar_codigo_6() -> str:
     return "".join(random.choices(string.digits, k=6))
 
 
-def _caso_to_out(c: FiniquitoCaso) -> FiniquitoCasoOut:
+def _map_ultima_fecha_pago_por_prestamo(db: Session, prestamo_ids: List[int]) -> dict[int, Any]:
+    """MAX(fecha_pago) en pagos agrupado por prestamo_id."""
+    seen: set[int] = set()
+    uniq: List[int] = []
+    for i in prestamo_ids:
+        if i is None:
+            continue
+        ii = int(i)
+        if ii not in seen:
+            seen.add(ii)
+            uniq.append(ii)
+    if not uniq:
+        return {}
+    rows = (
+        db.query(Pago.prestamo_id, func.max(Pago.fecha_pago).label("mx"))
+        .filter(Pago.prestamo_id.in_(uniq))
+        .group_by(Pago.prestamo_id)
+        .all()
+    )
+    out: dict[int, Any] = {}
+    for r in rows:
+        if r.prestamo_id is not None and r.mx is not None:
+            out[int(r.prestamo_id)] = r.mx
+    return out
+
+
+def _caso_to_out(c: FiniquitoCaso, ultima_fecha_pago: Optional[Any] = None) -> FiniquitoCasoOut:
+    ufp: Optional[str] = None
+    if ultima_fecha_pago is not None:
+        ufp = (
+            ultima_fecha_pago.isoformat()
+            if hasattr(ultima_fecha_pago, "isoformat")
+            else str(ultima_fecha_pago)
+        )
     return FiniquitoCasoOut(
         id=c.id,
         prestamo_id=c.prestamo_id,
@@ -68,6 +103,7 @@ def _caso_to_out(c: FiniquitoCaso) -> FiniquitoCasoOut:
         sum_total_pagado=str(c.sum_total_pagado),
         estado=c.estado,
         ultimo_refresh_utc=c.ultimo_refresh_utc.isoformat() if c.ultimo_refresh_utc else None,
+        ultima_fecha_pago=ufp,
     )
 
 
@@ -426,7 +462,11 @@ def finiquito_public_listar_casos(
             status_code=400,
             detail="bandeja debe ser entrada, desk, todos u omitirse",
         )
-    items: List[FiniquitoCasoOut] = [_caso_to_out(c) for c in q.all()]
+    casos = q.all()
+    mp = _map_ultima_fecha_pago_por_prestamo(db, [c.prestamo_id for c in casos])
+    items: List[FiniquitoCasoOut] = [
+        _caso_to_out(c, mp.get(c.prestamo_id)) for c in casos
+    ]
     return FiniquitoCasoListaResponse(items=items)
 
 
@@ -450,7 +490,12 @@ def finiquito_public_detalle(
     if prestamo:
         prestamo_d = _prestamo_caso_completo(prestamo)
     cuotas_l = [_cuota_to_dict(cu) for cu in cuotas]
-    return FiniquitoDetalleResponse(caso=_caso_to_out(caso), prestamo=prestamo_d, cuotas=cuotas_l)
+    mp = _map_ultima_fecha_pago_por_prestamo(db, [caso.prestamo_id])
+    return FiniquitoDetalleResponse(
+        caso=_caso_to_out(caso, mp.get(caso.prestamo_id)),
+        prestamo=prestamo_d,
+        cuotas=cuotas_l,
+    )
 
 
 @router.get("/public/revision-datos/{caso_id}")
@@ -506,12 +551,19 @@ def finiquito_public_patch_estado(
     )
     db.commit()
     db.refresh(caso)
-    return FiniquitoPatchEstadoResponse(ok=True, caso=_caso_to_out(caso))
+    mp = _map_ultima_fecha_pago_por_prestamo(db, [caso.prestamo_id])
+    return FiniquitoPatchEstadoResponse(
+        ok=True, caso=_caso_to_out(caso, mp.get(caso.prestamo_id))
+    )
 
 
 @router.get("/admin/casos", response_model=FiniquitoCasoListaResponse)
 def finiquito_admin_listar(
     estado: Optional[str] = Query(None, description="Filtrar por REVISION, ACEPTADO o RECHAZADO"),
+    cedula: Optional[str] = Query(
+        None,
+        description="Subcadena de cedula (coincidencia parcial, sin distinguir mayusculas)",
+    ),
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_administrador),
 ):
@@ -521,7 +573,11 @@ def finiquito_admin_listar(
         if e not in ESTADOS_VALIDOS:
             raise HTTPException(status_code=400, detail="Estado invalido")
         q = q.filter(FiniquitoCaso.estado == e)
-    items = [_caso_to_out(c) for c in q.order_by(FiniquitoCaso.id.desc()).all()]
+    if cedula and cedula.strip():
+        q = q.filter(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
+    casos = q.order_by(FiniquitoCaso.id.desc()).all()
+    mp = _map_ultima_fecha_pago_por_prestamo(db, [c.prestamo_id for c in casos])
+    items = [_caso_to_out(c, mp.get(c.prestamo_id)) for c in casos]
     return FiniquitoCasoListaResponse(items=items)
 
 
@@ -567,7 +623,10 @@ def finiquito_admin_patch_estado(
     )
     db.commit()
     db.refresh(caso)
-    return FiniquitoPatchEstadoResponse(ok=True, caso=_caso_to_out(caso))
+    mp = _map_ultima_fecha_pago_por_prestamo(db, [caso.prestamo_id])
+    return FiniquitoPatchEstadoResponse(
+        ok=True, caso=_caso_to_out(caso, mp.get(caso.prestamo_id))
+    )
 
 
 @router.post("/admin/refresh-materializado")

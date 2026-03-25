@@ -273,6 +273,7 @@ def generar_recibo_pago_reportado(
         leading=11,
         textColor=_c["muted"],
         fontName="Helvetica-Bold",
+        splitLongWords=0,
     )
     value_style = ParagraphStyle(
         "Value",
@@ -416,15 +417,6 @@ def generar_recibo_pago_reportado(
             Paragraph("", value_style),
         ],
     ]
-    if estado_cuota_lbl:
-        info.append(
-            [
-                Paragraph("ESTADO (CUOTA)", label_style),
-                Paragraph(f"<b>{estado_cuota_lbl}</b>", value_emphasis_style),
-                Paragraph("", label_style),
-                Paragraph("", value_style),
-            ]
-        )
 
     _info_style = [
         ("BOX", (0, 0), (-1, -1), 1, _c["border_strong"]),
@@ -439,17 +431,14 @@ def generar_recibo_pago_reportado(
         ("TOPPADDING", (0, 0), (-1, -1), 9),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
     ]
-    if estado_cuota_lbl:
-        _info_style.append(
-            ("BACKGROUND", (0, 5), (-1, 5), colors.HexColor("#f8fafc")),
-        )
 
-    # Ancho total = area util; ultima columna mas ancha para IDs de operacion largos sin partir en 2 lineas
+    # Etiquetas (cols 0 y 2): ancho suficiente para no partir palabras (FECHA DE EMISIÓN, MONTO REPORTADO, etc.).
+    # Col 3: valores largos (número de operación) pueden partirse; col 1: titular.
     _info_col_w = [
-        _content_w * 0.12,
-        _content_w * 0.30,
-        _content_w * 0.12,
-        _content_w * 0.46,
+        _content_w * 0.20,
+        _content_w * 0.28,
+        _content_w * 0.20,
+        _content_w * 0.32,
     ]
     table = Table(info, colWidths=_info_col_w)
     table.setStyle(TableStyle(_info_style))

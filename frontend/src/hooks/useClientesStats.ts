@@ -9,6 +9,7 @@ interface ClientesStats {
 
   inactivos: number
 
+  /** Clientes FINALIZADO o con al menos un préstamo LIQUIDADO (conteo único). */
   finalizados: number
 
   nuevos_este_mes: number

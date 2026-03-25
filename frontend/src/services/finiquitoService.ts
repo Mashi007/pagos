@@ -70,6 +70,8 @@ export type FiniquitoCasoItem = {
   sum_total_pagado: string
   estado: string
   ultimo_refresh_utc: string | null
+  /** ISO: ultima fecha_pago en pagos para este prestamo_id */
+  ultima_fecha_pago?: string | null
 }
 
 export async function finiquitoRegistro(cedula: string, email: string) {
@@ -221,8 +223,12 @@ export async function finiquitoAdminRevisionDatos(casoId: number) {
   )
 }
 
-export async function finiquitoAdminListar(estado?: string) {
-  const q = estado ? `?estado=${encodeURIComponent(estado)}` : ''
+export async function finiquitoAdminListar(estado?: string, cedula?: string) {
+  const params = new URLSearchParams()
+  if (estado) params.set('estado', estado)
+  const c = (cedula ?? '').trim()
+  if (c) params.set('cedula', c)
+  const q = params.toString() ? `?${params.toString()}` : ''
   return apiClient.get<{ items: FiniquitoCasoItem[] }>(
     `${BASE}/admin/casos${q}`
   )

@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
+
 import { motion } from 'framer-motion'
 
 import {
@@ -23,6 +25,7 @@ import {
   Search,
   Building2,
   Copy,
+  Briefcase,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -557,112 +560,162 @@ export function Reportes() {
           Enlaces para compartir
         </h2>
 
-        <Card className="border-gray-200/80 shadow-sm">
-          <CardContent className="py-4">
-            <p className="mb-4 text-sm text-gray-500">
-              Copie el enlace y compártalo con clientes o equipos para consulta
-              de reporte de pagos, estado de cuenta o finiquito (colaboradores).
+        <Card className="overflow-hidden border-gray-300/90 shadow-md">
+          <CardContent className="space-y-5 p-5 sm:p-6">
+            <p className="text-sm leading-relaxed text-gray-700">
+              Copie el enlace o abra el portal según corresponda: abajo están
+              agrupados los enlaces pensados para{' '}
+              <strong className="font-semibold text-gray-900">clientes</strong>{' '}
+              y los de uso de{' '}
+              <strong className="font-semibold text-gray-900">
+                personal y colaboradores
+              </strong>
+              .
             </p>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="h-11 gap-2"
-              >
-                <Link
-                  to="/admin/tasas-cambio"
-                  title="Ir a Tasa de cambio (ingreso manual)"
-                  aria-label="Ir a Tasa de cambio"
-                >
-                  <Copy className="h-5 w-5" aria-hidden />
-                  Tasa de cambio
-                </Link>
-              </Button>
+            <div className="grid gap-5 md:grid-cols-2">
+              {/* Clientes */}
+              <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-4 shadow-sm ring-1 ring-teal-100/80">
+                <div className="mb-3 flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-600 text-white shadow-sm">
+                    <Users className="h-5 w-5" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold tracking-tight text-teal-950">
+                      Clientes
+                    </h3>
+                    <p className="mt-0.5 text-xs leading-snug text-teal-900/80">
+                      Enlaces públicos para compartir con el cliente: reporte de
+                      pagos y estado de cuenta.
+                    </p>
+                  </div>
+                </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-11 gap-2"
-                onClick={() =>
-                  copiarEnlaceServicio(
-                    PUBLIC_REPORTE_PAGO_PATH,
-                    'Reporte de pagos'
-                  )
-                }
-                title="Copiar enlace: Reporte de pagos"
-                aria-label="Copiar enlace reporte de pagos"
-              >
-                <DollarSign className="h-5 w-5" />
-                Reporte de pagos
-              </Button>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full justify-start gap-2 border-teal-300/90 bg-white/90 text-teal-950 hover:bg-white sm:w-auto"
+                    onClick={() =>
+                      copiarEnlaceServicio(
+                        PUBLIC_REPORTE_PAGO_PATH,
+                        'Reporte de pagos'
+                      )
+                    }
+                    title="Copiar enlace: Reporte de pagos"
+                    aria-label="Copiar enlace reporte de pagos"
+                  >
+                    <DollarSign className="h-4 w-4 shrink-0" />
+                    Reporte de pagos
+                  </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-11 gap-2"
-                onClick={() =>
-                  copiarEnlaceServicio(
-                    PUBLIC_ESTADO_CUENTA_PATH,
-                    'Estado de cuenta'
-                  )
-                }
-                title="Copiar enlace: Estado de cuenta"
-                aria-label="Copiar enlace estado de cuenta"
-              >
-                <FileText className="h-5 w-5" />
-                Estado de cuenta
-              </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full justify-start gap-2 border-teal-300/90 bg-white/90 text-teal-950 hover:bg-white sm:w-auto"
+                    onClick={() =>
+                      copiarEnlaceServicio(
+                        PUBLIC_ESTADO_CUENTA_PATH,
+                        'Estado de cuenta'
+                      )
+                    }
+                    title="Copiar enlace: Estado de cuenta"
+                    aria-label="Copiar enlace estado de cuenta"
+                  >
+                    <FileText className="h-4 w-4 shrink-0" />
+                    Estado de cuenta
+                  </Button>
+                </div>
+              </div>
 
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="h-11 gap-2"
-              >
-                <Link
-                  to={`/${PUBLIC_FINIQUITO_PATH}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Abrir portal Finiquito (colaboradores, código por correo)"
-                  aria-label="Abrir Finiquito en nueva pestaña"
-                >
-                  Abrir Finiquito
-                </Link>
-              </Button>
+              {/* Personal y colaboradores */}
+              <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 shadow-sm ring-1 ring-violet-100/80">
+                <div className="mb-3 flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white shadow-sm">
+                    <Briefcase className="h-5 w-5" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold tracking-tight text-violet-950">
+                      Personal y colaboradores
+                    </h3>
+                    <p className="mt-0.5 text-xs leading-snug text-violet-900/80">
+                      Tasas (administración), finiquito con código por correo e
+                      Infopagos (pago a nombre del deudor).
+                    </p>
+                  </div>
+                </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-11 gap-2"
-                onClick={() =>
-                  copiarEnlaceServicio(PUBLIC_FINIQUITO_PATH, 'Finiquito')
-                }
-                title="Copiar enlace: Finiquito (acceso colaboradores con código por correo)"
-                aria-label="Copiar enlace de Finiquito"
-              >
-                <Copy className="h-5 w-5" aria-hidden />
-                Finiquito
-              </Button>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full justify-start gap-2 border-violet-300/90 bg-white/90 text-violet-950 hover:bg-white sm:w-auto"
+                  >
+                    <Link
+                      to="/admin/tasas-cambio"
+                      title="Ir a Tasa de cambio (ingreso manual)"
+                      aria-label="Ir a Tasa de cambio"
+                    >
+                      <Copy className="h-4 w-4 shrink-0" aria-hidden />
+                      Tasa de cambio
+                    </Link>
+                  </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-11 gap-2"
-                onClick={() =>
-                  copiarEnlaceServicio(INFOPAGOS_PATH, 'Infopagos')
-                }
-                title="Copiar enlace: Infopagos (pago a nombre del deudor)"
-                aria-label="Copiar enlace Infopagos"
-              >
-                <Building2 className="h-5 w-5" />
-                Infopagos
-              </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full justify-start gap-2 border-violet-300/90 bg-white/90 text-violet-950 hover:bg-white sm:w-auto"
+                  >
+                    <Link
+                      to={`/${PUBLIC_FINIQUITO_PATH}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Abrir portal Finiquito (colaboradores, código por correo)"
+                      aria-label="Abrir Finiquito en nueva pestaña"
+                    >
+                      <ArrowTopRightOnSquareIcon
+                        className="h-4 w-4 shrink-0"
+                        aria-hidden
+                      />
+                      Abrir Finiquito
+                    </Link>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full justify-start gap-2 border-violet-300/90 bg-white/90 text-violet-950 hover:bg-white sm:w-auto"
+                    onClick={() =>
+                      copiarEnlaceServicio(PUBLIC_FINIQUITO_PATH, 'Finiquito')
+                    }
+                    title="Copiar enlace: Finiquito (acceso colaboradores con código por correo)"
+                    aria-label="Copiar enlace de Finiquito"
+                  >
+                    <Copy className="h-4 w-4 shrink-0" aria-hidden />
+                    Finiquito
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full justify-start gap-2 border-violet-300/90 bg-white/90 text-violet-950 hover:bg-white sm:w-auto"
+                    onClick={() =>
+                      copiarEnlaceServicio(INFOPAGOS_PATH, 'Infopagos')
+                    }
+                    title="Copiar enlace: Infopagos (pago a nombre del deudor)"
+                    aria-label="Copiar enlace Infopagos"
+                  >
+                    <Building2 className="h-4 w-4 shrink-0" />
+                    Infopagos
+                  </Button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

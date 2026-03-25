@@ -27,6 +27,7 @@ import {
   User,
   LogOut,
   Menu,
+  RefreshCw,
   Briefcase,
   Target,
   DollarSign,
@@ -91,6 +92,20 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
   const { counts } = useSidebarCounts()
 
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+
+    const update = () => setPrefersReducedMotion(mq.matches)
+
+    update()
+
+    mq.addEventListener('change', update)
+
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
   // Guardar preferencia en localStorage cuando cambie
 
   useEffect(() => {
@@ -132,6 +147,33 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         ? prev.filter(item => item !== title)
         : [...prev, title]
     )
+  }
+
+  /**
+   * Misma regla que el efecto que abre submenús: hijo visible coincide con la URL.
+   * Solo para resaltar el padre en la UI (no altera navegación).
+   */
+  const submenuContainsActiveRoute = (item: MenuItem): boolean => {
+    if (!item.isSubmenu || !item.children) return false
+
+    const isAdmin = (user?.rol || 'operativo') === 'administrador'
+
+    const visibleChildren = item.children.filter(
+      child => !child.adminOnly || isAdmin
+    )
+
+    return visibleChildren.some(child => {
+      if (!child.href) return false
+
+      if (child.href.includes('?')) {
+        return `${location.pathname}${location.search}` === child.href
+      }
+
+      return (
+        location.pathname === child.href ||
+        (location.pathname.startsWith(child.href) && child.href !== '/')
+      )
+    })
   }
 
   const menuItems: MenuItem[] = [
@@ -220,7 +262,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Reportes', href: '/reportes', icon: FileText },
 
         {
-          title: 'Informes (estado de cuenta)',
+          title: 'Estado de cuenta',
           href: '/informes',
           icon: Download,
         },
@@ -342,6 +384,25 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     })
   }, [location.pathname, location.search, user?.rol])
 
+  // Cerrar drawer en móvil con Escape (no afecta desktop ni rutas)
+  useEffect(() => {
+    if (!isOpen) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === 'Escape' &&
+        typeof window !== 'undefined' &&
+        window.innerWidth < 1024
+      ) {
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, onClose])
+
   // Operativo: no ve Configuración (ni auditoría); solo Administrador puede acceder a esos módulos
 
   const filteredMenuItems = menuItems.filter(item => {
@@ -353,60 +414,42 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   })
 
   const isActiveRoute = (href: string) => {
-    // âœ… Manejar dashboard especial
-
     if (href === '/dashboard') {
       return location.pathname === '/' || location.pathname === '/dashboard'
     }
 
-    // âœ… Para rutas con query parameters, comparar URL completa (EXACTA)
-
     if (href.includes('?')) {
-      // Si el href tiene query params, comparar URL completa EXACTAMENTE
-
       const currentUrl = `${location.pathname}${location.search}`
 
       return currentUrl === href
     }
 
-    // âœ… Para rutas sin query params, verificar que sea exacta Y que no haya query params en la URL actual
-
-    // Esto evita que /configuracion resalte cuando estás en /configuracion?tab=email
-
     if (location.search) {
-      // Si la URL actual tiene query params pero el href no, NO resaltar
-
       return false
     }
 
-    // âœ… Comparación exacta de pathname para rutas sin query params
-
     return location.pathname === href
+  }
+
+  const sidebarSpring = {
+    type: 'spring' as const,
+
+    stiffness: 300,
+
+    damping: 40,
   }
 
   const sidebarVariants = {
     open: {
       x: 0,
 
-      transition: {
-        type: 'spring',
-
-        stiffness: 300,
-
-        damping: 40,
-      },
+      transition: prefersReducedMotion ? { duration: 0 } : sidebarSpring,
     },
 
     closed: {
       x: '-100%',
 
-      transition: {
-        type: 'spring',
-
-        stiffness: 300,
-
-        damping: 40,
-      },
+      transition: prefersReducedMotion ? { duration: 0 } : sidebarSpring,
     },
   }
 
@@ -416,23 +459,23 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       x: 0,
 
-      transition: {
-        type: 'spring',
+      transition: prefersReducedMotion
+        ? { duration: 0 }
+        : {
+            type: 'spring' as const,
 
-        stiffness: 300,
+            stiffness: 300,
 
-        damping: 24,
-      },
+            damping: 24,
+          },
     },
 
     closed: {
-      opacity: 0,
+      opacity: prefersReducedMotion ? 1 : 0,
 
-      x: -20,
+      x: prefersReducedMotion ? 0 : -20,
 
-      transition: {
-        duration: 0.2,
-      },
+      transition: { duration: prefersReducedMotion ? 0 : 0.2 },
     },
   }
 
@@ -446,7 +489,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+            transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] lg:hidden"
             onClick={onClose}
           />
         )}
@@ -488,7 +532,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
                     delay: 0.1,
                   }}
-                  whileHover={{ scale: 1.05 }}
+                  whileHover={
+                    prefersReducedMotion ? undefined : { scale: 1.05 }
+                  }
                   className="relative flex h-20 w-20 cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-br from-white via-white to-gray-50 p-2.5 transition-all duration-300"
                   style={{
                     boxShadow: `
@@ -622,7 +668,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                   variant="ghost"
                   size="icon"
                   onClick={onToggle}
-                  className="text-white hover:bg-blue-800/50 lg:hidden"
+                  className="text-white hover:bg-blue-800/50 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-700 lg:hidden"
                 >
                   <Menu className="h-5 w-5" />
                 </Button>
@@ -632,7 +678,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 variant="ghost"
                 size="icon"
                 onClick={onClose}
-                className="text-white hover:bg-blue-800/50 lg:hidden"
+                className="text-white hover:bg-blue-800/50 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-700 lg:hidden"
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -645,7 +691,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 variant="ghost"
                 size="icon"
                 onClick={toggleCompact}
-                className="text-white hover:bg-blue-800/50"
+                className="text-white hover:bg-blue-800/50 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-700"
                 title={isCompact ? 'Expandir sidebar' : 'Compactar sidebar'}
               >
                 {isCompact ? (
@@ -659,7 +705,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
           {/* Navigation */}
 
-          <nav className="flex-1 overflow-y-auto py-4">
+          <nav className="flex-1 overflow-y-auto overscroll-y-contain py-4 [scrollbar-gutter:stable]">
             <div
               className={cn(
                 'space-y-1',
@@ -673,22 +719,31 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                   variants={itemVariants}
                   initial="closed"
                   animate="open"
-                  transition={{ delay: index * 0.05 }}
+                  transition={{
+                    delay: prefersReducedMotion ? 0 : index * 0.05,
+                  }}
                 >
                   {item.isSubmenu && item.children ? (
                     // Renderizar submenú con dropdown
 
                     <div>
                       <button
+                        type="button"
                         onClick={() => toggleSubmenu(item.title)}
                         className={cn(
-                          'flex w-full items-center justify-between rounded-lg text-sm font-medium transition-all duration-200',
+                          'flex w-full items-center justify-between rounded-lg border-l-4 border-transparent text-sm font-medium transition-all duration-200',
 
                           'text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
+
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2',
+
+                          submenuContainsActiveRoute(item) &&
+                            'bg-blue-50/90 font-semibold text-blue-800 ring-1 ring-inset ring-blue-200/50',
 
                           isCompact ? 'justify-center px-2 py-2' : 'px-3 py-2'
                         )}
                         title={isCompact ? item.title : undefined}
+                        aria-expanded={openSubmenus.includes(item.title)}
                       >
                         <div
                           className={cn(
@@ -718,7 +773,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
+                            transition={{
+                              duration: prefersReducedMotion ? 0 : 0.2,
+                            }}
                             className="overflow-hidden"
                           >
                             <div
@@ -746,11 +803,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                     }}
                                     className={() =>
                                       cn(
-                                        'flex items-center rounded-lg text-sm font-medium transition-all duration-200',
+                                        'flex items-center rounded-lg border-l-4 text-sm font-medium transition-all duration-200',
+
+                                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2',
 
                                         isActiveRoute(child.href!)
-                                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
-                                          : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
+                                          ? 'border-l-white bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                                          : 'border-l-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
 
                                         isCompact
                                           ? 'justify-center px-2 py-2'
@@ -797,11 +856,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                         }}
                         className={() =>
                           cn(
-                            'flex items-center rounded-lg text-sm font-medium transition-all duration-200',
+                            'flex items-center rounded-lg border-l-4 text-sm font-medium transition-all duration-200',
+
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2',
 
                             isActiveRoute(item.href!)
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
-                              : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
+                              ? 'border-l-white bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                              : 'border-l-transparent text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
 
                             isCompact
                               ? 'justify-center px-2 py-2'
@@ -855,13 +916,17 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className={cn(
                   'flex w-full items-center rounded-lg border border-blue-100/50 text-left transition-all duration-200 hover:border-blue-200 hover:bg-blue-50 hover:shadow-sm',
 
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2',
+
                   isCompact ? 'justify-center p-2' : 'space-x-3 p-3'
                 )}
                 title={isCompact ? userName : undefined}
+                aria-expanded={showUserMenu}
               >
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-sm font-medium text-white shadow-md">
                   {userInitials}
@@ -898,12 +963,17 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{
+                      duration: prefersReducedMotion ? 0 : 0.2,
+                    }}
                     className="overflow-hidden"
                   >
                     <div className="mt-2 rounded-lg border border-blue-200 bg-white shadow-xl shadow-blue-500/10">
                       <div className="py-2">
-                        <button className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700">
+                        <button
+                          type="button"
+                          className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
+                        >
                           <User className="h-4 w-4" />
 
                           <span>Mi Perfil</span>
@@ -912,7 +982,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                         {(user?.rol || 'operativo') === 'administrador' && (
                           <NavLink
                             to="/configuracion"
-                            className="block flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                            className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
                           >
                             <Settings className="h-4 w-4" />
 
@@ -922,6 +992,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
                         {(user?.rol || 'operativo') !== 'administrador' && (
                           <button
+                            type="button"
                             onClick={async () => {
                               try {
                                 await refreshUser()
@@ -931,17 +1002,20 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                 // Error silencioso para evitar loops de logging
                               }
                             }}
-                            className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-blue-600 transition-colors hover:bg-blue-50"
+                            className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-blue-600 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
                           >
-                            <span>ðŸ"„ Actualizar Rol</span>
+                            <RefreshCw className="h-4 w-4 shrink-0" />
+
+                            <span>Actualizar rol</span>
                           </button>
                         )}
                       </div>
 
                       <div className="border-t border-blue-100 py-2">
                         <button
+                          type="button"
                           onClick={handleLogout}
-                          className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                          className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-400"
                         >
                           <LogOut className="h-4 w-4" />
 

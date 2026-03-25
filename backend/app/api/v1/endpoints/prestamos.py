@@ -90,6 +90,11 @@ from app.services.cuota_estado import (
     sincronizar_columna_estado_cuotas,
 )
 
+from app.services.prestamo_estado_coherencia import (
+    condicion_filtro_estado_prestamo,
+    prestamo_ids_aprobados_todas_cuotas_cubiertas,
+)
+
 
 
 logger = logging.getLogger(__name__)
@@ -480,9 +485,19 @@ def listar_prestamos(
 
         est = estado.strip().upper()
 
-        q = q.where(Prestamo.estado == est)
+        cond_est = condicion_filtro_estado_prestamo(est)
 
-        count_q = count_q.where(Prestamo.estado == est)
+        if cond_est is not None:
+
+            q = q.where(cond_est)
+
+            count_q = count_q.where(cond_est)
+
+        else:
+
+            q = q.where(Prestamo.estado == est)
+
+            count_q = count_q.where(Prestamo.estado == est)
 
     if analista and analista.strip():
 
@@ -630,6 +645,10 @@ def listar_prestamos(
 
     
 
+    liquidacion_efectiva_ids = prestamo_ids_aprobados_todas_cuotas_cubiertas(
+        db, prestamo_ids
+    )
+
     items = []
 
     for row in rows:
@@ -640,6 +659,12 @@ def listar_prestamos(
 
         numero_cuotas = cuotas_por_prestamo.get(p.id) if cuotas_por_prestamo.get(p.id) is not None else p.numero_cuotas
 
+        estado_resp = p.estado or "DRAFT"
+
+        if p.id in liquidacion_efectiva_ids:
+
+            estado_resp = "LIQUIDADO"
+
         item = PrestamoListResponse(
 
             id=p.id,
@@ -648,7 +673,7 @@ def listar_prestamos(
 
             total_financiamiento=(p.total_financiamiento if p.total_financiamiento is not None else Decimal("0")),
 
-            estado=p.estado or "DRAFT",
+            estado=estado_resp,
 
             concesionario=p.concesionario,
 
@@ -1234,6 +1259,10 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
                 cuotas_por_prestamo[pid] = cnt
 
+        liquidacion_efectiva_ids = prestamo_ids_aprobados_todas_cuotas_cubiertas(
+            db, prestamo_ids
+        )
+
         items = []
 
         for row in rows:
@@ -1241,6 +1270,12 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
             p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
 
             numero_cuotas = cuotas_por_prestamo.get(p.id) if cuotas_por_prestamo.get(p.id) is not None else p.numero_cuotas
+
+            estado_resp = p.estado or "DRAFT"
+
+            if p.id in liquidacion_efectiva_ids:
+
+                estado_resp = "LIQUIDADO"
 
             items.append(
 
@@ -1252,7 +1287,7 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
                     total_financiamiento=p.total_financiamiento,
 
-                    estado=p.estado,
+                    estado=estado_resp,
 
                     concesionario=p.concesionario,
 
@@ -1469,6 +1504,10 @@ def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     resp.nombres = nombres_cliente or p.nombres or ""
 
     resp.cedula = cedula_cliente or p.cedula or ""
+
+    if prestamo_id in prestamo_ids_aprobados_todas_cuotas_cubiertas(db, [prestamo_id]):
+
+        resp.estado = "LIQUIDADO"
 
     return resp
 

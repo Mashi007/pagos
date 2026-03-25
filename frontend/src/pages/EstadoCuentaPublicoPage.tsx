@@ -543,7 +543,7 @@ export default function EstadoCuentaPublicoPage() {
 
           <CardHeader className="px-4 pb-2 text-center sm:px-6">
             <CardTitle className="text-2xl font-bold tracking-tight text-[#1e3a5f] sm:text-3xl">
-              {isInformesRoute ? 'Informes - Uso interno' : 'Bienvenido'}
+              {isInformesRoute ? 'Estado de cuenta' : 'Bienvenido'}
             </CardTitle>
           </CardHeader>
 

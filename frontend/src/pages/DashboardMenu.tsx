@@ -957,7 +957,7 @@ export function DashboardMenu() {
                 <p className="text-sm font-semibold tracking-wide text-gray-600">
                   Bienvenido,{' '}
                   <span className="font-black text-cyan-600">{userName}</span>{' '}
-                  \u2022 Monitoreo Estrat\u00E9gico
+                  • Monitoreo Estratégico
                 </p>
               </div>
             </div>
@@ -1429,9 +1429,9 @@ export function DashboardMenu() {
                             <Legend {...chartLegendStyle} />
 
                             <Bar
-                              dataKey="cartera"
-                              fill="#3b82f6"
-                              name="PAGOS CONCILIADOS"
+                              dataKey="cobrado_mes"
+                              fill="#10b981"
+                              name="Pagos conciliados"
                               radius={[4, 4, 0, 0]}
                             />
 
@@ -1444,11 +1444,11 @@ export function DashboardMenu() {
 
                             <Line
                               type="monotone"
-                              dataKey="cartera"
-                              stroke="#3b82f6"
+                              dataKey="cobrado_mes"
+                              stroke="#10b981"
                               strokeWidth={2}
                               dot={{ r: 3 }}
-                              name="Tendencia PAGOS CONCILIADOS"
+                              name="Tendencia pagos conciliados"
                               isAnimationActive={false}
                             />
 

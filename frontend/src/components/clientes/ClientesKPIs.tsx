@@ -151,7 +151,7 @@ export function ClientesKPIs({
         </CardContent>
       </Card>
 
-      {/* Clientes Finalizados */}
+      {/* Clientes finalizados (estado) o con préstamo liquidado */}
 
       <Card className="border-gray-200 bg-gray-50">
         <CardContent className="p-4">

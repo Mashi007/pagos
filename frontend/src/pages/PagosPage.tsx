@@ -1,16 +1,8 @@
 import { CreditCard } from 'lucide-react'
 
-import { Link } from 'react-router-dom'
-
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { PagosList } from '../components/pagos/PagosList'
-
-import {
-  SEGMENTO_REPORTE_COBROS,
-  SEGMENTO_INFOPAGOS,
-  SEGMENTO_GESTION_PAGOS,
-} from '../constants/rutasIngresoPago'
 
 function PagosPage() {
   return (
@@ -47,52 +39,6 @@ function PagosPage() {
           <p>
             Registre pagos, consulte por cédula, estado o fecha y descargue
             reportes.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-800">
-            Fuentes de reporte y dos monedas (Bs. / USD)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-slate-600">
-          <p>
-            El mismo formulario de reporte (moneda, montos permitidos, tasa del
-            día de la fecha de pago y recibo PDF) está en:
-          </p>
-          <ul className="list-inside list-disc space-y-1">
-            <li>
-              <Link
-                className="font-medium text-blue-700 underline"
-                to={`/${SEGMENTO_REPORTE_COBROS}`}
-              >
-                {`/${SEGMENTO_REPORTE_COBROS}`}
-              </Link>{' '}
-              (público, deudor).
-            </li>
-            <li>
-              <Link
-                className="font-medium text-blue-700 underline"
-                to={`/${SEGMENTO_INFOPAGOS}`}
-              >
-                {`/${SEGMENTO_INFOPAGOS}`}
-              </Link>{' '}
-              (colaborador; en Agregar pago se enlaza aquí).
-            </li>
-            <li>
-              <span className="font-medium text-slate-800">
-                {`/${SEGMENTO_GESTION_PAGOS}`}
-              </span>{' '}
-              (esta pantalla: Excel, Gmail y revisión). La importación aplica la
-              misma lógica de moneda y tasa cuando corresponde.
-            </li>
-          </ul>
-          <p className="text-xs text-slate-500">
-            Tras validar, los pagos reportados se encaminan al flujo normal de
-            cobranza (revisión, conciliación y aplicación a cuotas) junto con el
-            resto de fuentes.
           </p>
         </CardContent>
       </Card>

@@ -48,6 +48,10 @@ class FiniquitoCasoOut(BaseModel):
     sum_total_pagado: str
     estado: str
     ultimo_refresh_utc: Optional[str] = None
+    ultima_fecha_pago: Optional[str] = Field(
+        default=None,
+        description="Ultima fecha_pago en tabla pagos para este prestamo_id (MAX).",
+    )
 
     class Config:
         from_attributes = True

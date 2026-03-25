@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 import { Outlet } from 'react-router-dom'
 
@@ -39,13 +39,13 @@ export function Layout() {
     return () => window.removeEventListener('resize', checkScreenSize)
   }, [])
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen)
-  }
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => !prev)
+  }, [])
 
-  const closeSidebar = () => {
+  const closeSidebar = useCallback(() => {
     setSidebarOpen(false)
-  }
+  }, [])
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gray-50">

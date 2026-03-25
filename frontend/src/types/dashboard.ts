@@ -175,7 +175,11 @@ export interface CobranzasSemanalesResponse {
 export interface AnalisisCuentasPorCobrarItem {
   mes: string
 
+  /** Cuotas con vencimiento en el mes (programado); mismo concepto que barra azul Evolución mensual */
   cartera: number
+
+  /** Cuotas con vencimiento en el mes y pagadas; alinea con barra verde Evolución mensual */
+  cobrado_mes: number
 
   pagos_atrasos: number
 }

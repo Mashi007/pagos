@@ -125,9 +125,14 @@ export function PrestamosList() {
 
   const estadoValidInit =
     estadoFromUrl &&
-    ['DRAFT', 'EN_REVISION', 'EVALUADO', 'APROBADO', 'RECHAZADO'].includes(
-      estadoFromUrl
-    )
+    [
+      'DRAFT',
+      'EN_REVISION',
+      'EVALUADO',
+      'APROBADO',
+      'RECHAZADO',
+      'LIQUIDADO',
+    ].includes(estadoFromUrl)
       ? estadoFromUrl
       : undefined
 
@@ -169,9 +174,14 @@ export function PrestamosList() {
 
     const estadoValid =
       estadoParam &&
-      ['DRAFT', 'EN_REVISION', 'EVALUADO', 'APROBADO', 'RECHAZADO'].includes(
-        estadoParam
-      )
+      [
+        'DRAFT',
+        'EN_REVISION',
+        'EVALUADO',
+        'APROBADO',
+        'RECHAZADO',
+        'LIQUIDADO',
+      ].includes(estadoParam)
         ? estadoParam
         : undefined
 
@@ -423,6 +433,8 @@ export function PrestamosList() {
 
       APROBADO: 'bg-green-100 text-green-800 border-green-300',
 
+      LIQUIDADO: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+
       RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
     }
 
@@ -438,6 +450,8 @@ export function PrestamosList() {
       EVALUADO: 'Evaluado',
 
       APROBADO: 'Aprobado',
+
+      LIQUIDADO: 'Liquidado',
 
       RECHAZADO: 'Rechazado',
     }
@@ -1074,6 +1088,8 @@ export function PrestamosList() {
 
                       <SelectItem value="APROBADO">Aprobado</SelectItem>
 
+                      <SelectItem value="LIQUIDADO">Liquidado</SelectItem>
+
                       <SelectItem value="RECHAZADO">Rechazado</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1411,6 +1427,7 @@ export function PrestamosList() {
                               {/* ICONO REVISIÓN MANUAL: ⚠ no revisado | ? en revisión | ausencia = ya revisado */}
 
                               {(prestamo.estado === 'APROBADO' ||
+                                prestamo.estado === 'LIQUIDADO' ||
                                 prestamo.fecha_aprobacion) &&
                                 prestamo.revision_manual_estado !==
                                   'revisado' &&
@@ -1451,6 +1468,7 @@ export function PrestamosList() {
                               {/* Botón Ver Detalles - Visible cuando APROBADO o tiene fecha_aprobacion */}
 
                               {(prestamo.estado === 'APROBADO' ||
+                                prestamo.estado === 'LIQUIDADO' ||
                                 prestamo.fecha_aprobacion) && (
                                 <Button
                                   variant="ghost"

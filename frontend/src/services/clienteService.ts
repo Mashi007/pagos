@@ -306,6 +306,7 @@ class ClienteService {
 
   // Obtener estadísticas generales de todos los clientes
 
+  /** finalizados: clientes con estado FINALIZADO o con al menos un préstamo LIQUIDADO (sin duplicar). */
   async getStats(): Promise<{
     total: number
     activos: number

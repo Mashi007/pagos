@@ -177,7 +177,13 @@ export interface Prestamo {
 
   modelo_vehiculo?: string
 
-  estado: 'DRAFT' | 'EN_REVISION' | 'EVALUADO' | 'APROBADO' | 'RECHAZADO'
+  estado:
+    | 'DRAFT'
+    | 'EN_REVISION'
+    | 'EVALUADO'
+    | 'APROBADO'
+    | 'RECHAZADO'
+    | 'LIQUIDADO'
 
   usuario_proponente: string
 

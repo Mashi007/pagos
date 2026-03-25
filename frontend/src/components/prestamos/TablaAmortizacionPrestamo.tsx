@@ -135,7 +135,7 @@ export function TablaAmortizacionPrestamo({
 
     queryFn: () => prestamoService.getCuotasPrestamo(prestamo.id),
 
-    enabled: prestamo.estado === 'APROBADO',
+    enabled: prestamo.estado === 'APROBADO' || prestamo.estado === 'LIQUIDADO',
 
     staleTime: 0,
 
@@ -239,7 +239,7 @@ export function TablaAmortizacionPrestamo({
     }
   }
 
-  if (prestamo.estado !== 'APROBADO') {
+  if (prestamo.estado !== 'APROBADO' && prestamo.estado !== 'LIQUIDADO') {
     return (
       <Card className="border-yellow-200 bg-yellow-50">
         <CardContent className="pt-6">
@@ -248,7 +248,8 @@ export function TablaAmortizacionPrestamo({
 
             <p className="text-sm text-yellow-800">
               La tabla de amortización solo se puede ver para préstamos
-              APROBADOS. Estado actual: <strong>{prestamo.estado}</strong>
+              aprobados o liquidados. Estado actual:{' '}
+              <strong>{prestamo.estado}</strong>
             </p>
           </div>
         </CardContent>
