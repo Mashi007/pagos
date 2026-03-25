@@ -23,6 +23,13 @@ const RETRY_COUNT = 3
 
 const RETRY_DELAY = 1000 // 1 segundo
 
+const shouldRetryAnalistas = (failureCount: number, error: any): boolean => {
+  const status = error?.response?.status
+  // No reintentar 404/403 para evitar spam cuando la ruta no existe o no hay permisos.
+  if (status === 404 || status === 403) return false
+  return failureCount < RETRY_COUNT
+}
+
 // Keys para React Query
 
 export const analistaKeys = {
@@ -49,7 +56,7 @@ export function useAnalistas(filters?: any) {
 
     staleTime: STALE_TIME_MEDIUM,
 
-    retry: RETRY_COUNT,
+    retry: shouldRetryAnalistas,
 
     retryDelay: RETRY_DELAY,
   })
@@ -77,7 +84,7 @@ export function useAnalistasActivos() {
 
     staleTime: STALE_TIME_LONG,
 
-    retry: RETRY_COUNT,
+    retry: shouldRetryAnalistas,
 
     retryDelay: RETRY_DELAY,
   })

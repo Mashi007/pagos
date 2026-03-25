@@ -76,7 +76,30 @@ class AnalistaService {
 
     especialidad?: string
   }): Promise<AnalistaListResponse> {
-    return await apiClient.get<AnalistaListResponse>(this.baseUrl, { params })
+    try {
+      return await apiClient.get<AnalistaListResponse>(this.baseUrl, { params })
+    } catch (error: any) {
+      const status = error?.response?.status
+      // Compatibilidad: si el backend viejo no expone GET /analistas, usar /analistas/activos.
+      if (status === 404) {
+        const activos = await this.listarAnalistasActivos(params?.especialidad)
+        const skip = Math.max(params?.skip ?? 0, 0)
+        const limit = Math.max(params?.limit ?? 100, 1)
+        const search = (params?.search || '').toLowerCase().trim()
+        const filtrados = search
+          ? activos.filter(a => a.nombre.toLowerCase().includes(search))
+          : activos
+        const items = filtrados.slice(skip, skip + limit)
+        return {
+          items,
+          total: filtrados.length,
+          page: Math.floor(skip / limit) + 1,
+          size: limit,
+          pages: Math.max(1, Math.ceil(filtrados.length / limit)),
+        }
+      }
+      throw error
+    }
   }
 
   // Listar solo analistas activos (para formularios)

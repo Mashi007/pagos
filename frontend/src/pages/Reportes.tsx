@@ -4,8 +4,6 @@ import { Link } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
-
 import { motion } from 'framer-motion'
 
 import {
@@ -637,19 +635,21 @@ export function Reportes() {
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button
-                    asChild
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="h-10 w-full justify-start gap-2 border-violet-300/90 bg-white/90 text-violet-950 hover:bg-white sm:w-auto"
+                    onClick={() =>
+                      copiarEnlaceServicio(
+                        'admin/tasas-cambio',
+                        'Tasa de cambio'
+                      )
+                    }
+                    title="Copiar enlace: Tasa de cambio"
+                    aria-label="Copiar enlace de Tasa de cambio"
                   >
-                    <Link
-                      to="/admin/tasas-cambio"
-                      title="Ir a Tasa de cambio (ingreso manual)"
-                      aria-label="Ir a Tasa de cambio"
-                    >
-                      <Copy className="h-4 w-4 shrink-0" aria-hidden />
-                      Tasa de cambio
-                    </Link>
+                    <Copy className="h-4 w-4 shrink-0" aria-hidden />
+                    Tasa de cambio
                   </Button>
 
                   <Button
@@ -665,10 +665,6 @@ export function Reportes() {
                       title="Abrir portal Finiquito (colaboradores, código por correo)"
                       aria-label="Abrir Finiquito en nueva pestaña"
                     >
-                      <ArrowTopRightOnSquareIcon
-                        className="h-4 w-4 shrink-0"
-                        aria-hidden
-                      />
                       Abrir Finiquito
                     </Link>
                   </Button>
