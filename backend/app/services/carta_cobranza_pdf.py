@@ -378,6 +378,58 @@ def _extraer_logo_remoto_de_plantilla(texto: str) -> Tuple[Optional[str], str]:
     return path, texto_sin_img
 
 
+def _infer_y0_solo_wordmark(img) -> Optional[int]:
+    """
+    Estima la fila Y donde empieza solo el wordmark (letras), sin el ícono superior.
+    Usa densidad de tinta por fila en la mitad inferior de la imagen.
+    Retorna None si no hay señal clara (usar recorte por porcentaje).
+    """
+    try:
+        w, h = img.size
+        if h < 40:
+            return None
+        px = img.load()
+        row_fill: list[float] = []
+        for y in range(h):
+            n = 0
+            for x in range(w):
+                r, g, b, a = px[x, y]
+                if a > 12 and (r + g + b) < 735:
+                    n += 1
+            row_fill.append(n / float(max(w, 1)))
+        # Solo buscar texto en la mitad inferior (el ícono suele estar arriba).
+        y_scan_min = int(h * 0.48)
+        y_bottom = None
+        for y in range(h - 1, y_scan_min - 1, -1):
+            if row_fill[y] > 0.072:
+                y_bottom = y
+                break
+        if y_bottom is None:
+            return None
+        y_top = y_bottom
+        for y in range(y_bottom - 1, y_scan_min - 1, -1):
+            if row_fill[y] > 0.038:
+                y_top = y
+            else:
+                break
+        # Hueco blanco encima de las letras → recortar desde la primera fila del wordmark.
+        gap = 0
+        for y in range(y_top - 1, max(0, int(h * 0.05)) - 1, -1):
+            if row_fill[y] < 0.022:
+                gap += 1
+                if gap >= 6:
+                    return y_top
+            else:
+                gap = 0
+        # Sin hueco claro: usar y_top solo si la banda de texto empieza en la mitad inferior
+        # (evita confundir la base del ícono con letras).
+        if y_top >= int(h * 0.52):
+            return y_top
+        return None
+    except Exception:
+        return None
+
+
 def _preparar_wordmark_logo(path: Optional[str]) -> Optional[str]:
     """
     Convierte el logo a formato wordmark para PDF:
@@ -398,9 +450,18 @@ def _preparar_wordmark_logo(path: Optional[str]) -> Optional[str]:
         if w < 20 or h < 20:
             return None
 
-        # Recorte vertical: mantener franja inferior (wordmark) para ocultar círculo superior.
-        y0 = int(h * 0.48)
-        cropped = img.crop((0, y0, w, h))
+        # Solo letras: quitar ícono/círculo superior (detección de banda o recorte ~27% inferior).
+        y0 = _infer_y0_solo_wordmark(img)
+        if y0 is None:
+            aspect_h_over_w = h / max(w, 1)
+            if aspect_h_over_w <= 0.26:
+                cropped = img.copy()
+            else:
+                y0 = int(h * 0.76)
+                y0 = min(max(y0, int(h * 0.62)), int(h * 0.84))
+                cropped = img.crop((0, y0, w, h))
+        else:
+            cropped = img.crop((0, y0, w, h))
 
         # Detectar contenido no blanco para quitar márgenes extra.
         px = cropped.load()
@@ -430,6 +491,18 @@ def _preparar_wordmark_logo(path: Optional[str]) -> Optional[str]:
             right = min(cw, max_x + pad_x + 1)
             bottom = min(ch, max_y + pad_y + 1)
             cropped = cropped.crop((left, top, right, bottom))
+
+        # Quitar punto naranja (marca) bajo la R: no es texto, solo color corporativo naranja.
+        cw2, ch2 = cropped.size
+        px2 = cropped.load()
+        for y in range(ch2):
+            for x in range(cw2):
+                r, g, b, a = px2[x, y]
+                if a < 30:
+                    continue
+                # Naranja típico logo (#E84C0E y similares), sin tocar azul del texto.
+                if r > 150 and g > 35 and g < 220 and b < 120 and r > g + 25 and r > b + 40:
+                    px2[x, y] = (255, 255, 255, 255)
 
         tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
         cropped.save(tmp.name, format="PNG")
@@ -498,7 +571,7 @@ def build_pdf_bytes(
     if logo_path and os.path.exists(logo_path):
         try:
             # Wordmark: ancho ligeramente mayor para balance visual.
-            logo = Image(logo_path, width=6.2 * cm, height=1.2 * cm)
+            logo = Image(logo_path, width=8.0 * cm, height=1.10 * cm)
             logo.hAlign = "LEFT"
             story.append(logo)
         except Exception as e:
