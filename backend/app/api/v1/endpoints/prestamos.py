@@ -3253,8 +3253,8 @@ def get_integridad_cuotas_prestamo(
     return r
 
 
-@router.post("/{prestamo_id}/reaplicar-fifo-aplicacion", response_model=dict)
 @router.post("/{prestamo_id}/reaplicar-cascada-aplicacion", response_model=dict)
+@router.post("/{prestamo_id}/reaplicar-fifo-aplicacion", response_model=dict)
 def reaplicar_cascada_aplicacion_prestamo(
     prestamo_id: int,
     db: Session = Depends(get_db),
@@ -3264,8 +3264,8 @@ def reaplicar_cascada_aplicacion_prestamo(
     Reaplicacion integral en cascada para un prestamo: borra cuota_pagos, resetea totales en cuotas
     y vuelve a aplicar todos los pagos conciliados en orden (fecha_pago, id).
 
-    Politica vigente: SOLO CASCADA. La ruta con nombre `.../reaplicar-fifo-aplicacion`
-    se conserva unicamente por compatibilidad historica.
+    Ruta principal: POST `.../reaplicar-cascada-aplicacion`.
+    Compatibilidad: POST `.../reaplicar-fifo-aplicacion` (mismo comportamiento).
 
     Usar cuando la tabla de amortizacion no refleja los pagos pese a filas en `pagos`
     (articulacion vieja, regeneracion de cuotas, o desalineacion total_pagado vs cuota_pagos).
@@ -3304,8 +3304,8 @@ def reaplicar_cascada_aplicacion_prestamo(
 reaplicar_fifo_aplicacion_prestamo = reaplicar_cascada_aplicacion_prestamo
 
 
-@router.post("/reaplicar-fifo-aplicacion-masiva", response_model=dict)
 @router.post("/reaplicar-cascada-aplicacion-masiva", response_model=dict)
+@router.post("/reaplicar-fifo-aplicacion-masiva", response_model=dict)
 def reaplicar_cascada_aplicacion_masiva(
     body: ReaplicarCascadaMasivaBody,
     db: Session = Depends(get_db),
@@ -3313,7 +3313,8 @@ def reaplicar_cascada_aplicacion_masiva(
 ):
     """
     Igual que /{prestamo_id}/reaplicar-cascada-aplicacion pero para varios prestamos.
-    Politica vigente: SOLO CASCADA; `...-fifo-...` queda como alias legacy.
+    Ruta principal: POST `.../reaplicar-cascada-aplicacion-masiva`.
+    Compatibilidad: POST `.../reaplicar-fifo-aplicacion-masiva` (mismo comportamiento).
     Solo administrador. Maximo 500 IDs por solicitud.
     """
     if (getattr(current_user, "rol", None) or "").lower() != "administrador":

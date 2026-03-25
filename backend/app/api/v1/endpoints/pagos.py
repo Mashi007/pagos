@@ -2547,7 +2547,7 @@ def export_excel_pagos_sin_aplicar_cuotas(
 
         "sin_cupo: como cascada y sin cupo aplicable en cuotas PENDIENTE/MORA/PARCIAL. "
 
-        "Nota: fifo es alias legacy de cascada.",
+        "Nota: cohorte «cascada» es el nombre vigente; «fifo» se acepta como alias (compatibilidad).",
 
     ),
 
@@ -2573,7 +2573,10 @@ def export_excel_pagos_sin_aplicar_cuotas(
 
     if c not in ("todos", "cascada", "sin_cupo"):
 
-        raise HTTPException(status_code=400, detail="cohorte debe ser todos, cascada o sin_cupo (fifo=alias legacy)")
+        raise HTTPException(
+            status_code=400,
+            detail="cohorte debe ser todos, cascada o sin_cupo (fifo aceptado como alias de cascada)",
+        )
 
 
 
@@ -4996,7 +4999,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
         if dup and int(dup) > 0:
             logger.warning(
                 "Aplicacion en cascada detenida: ya existe cuota_pagos para cuota_id=%s pago_id=%s. "
-                "Use POST /prestamos/{id}/reaplicar-cascada-aplicacion (ruta .../reaplicar-fifo-aplicacion es alias legacy) para reconstruir.",
+                "Use POST /prestamos/{id}/reaplicar-cascada-aplicacion (compat: .../reaplicar-fifo-aplicacion) para reconstruir.",
                 c.id,
                 pago.id,
             )
@@ -5580,4 +5583,5 @@ def upload_cedulas_reportar_bs(
     }
 
 # Compat: nombre historico
+# Compat: nombre historico (importaciones antiguas).
 _estado_pago_tras_aplicar_fifo = _estado_pago_tras_aplicar_cascada

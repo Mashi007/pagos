@@ -6,7 +6,7 @@ t = p.read_text(encoding="utf-8", errors="replace")
 
 helper = r'''
 def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado, usuario_email: Optional[str]) -> None:
-    """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (FIFO) para que prestamos y estado de cuenta se actualicen igual que por /pagos/pagos."""
+    """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (cascada) para que prestamos y estado de cuenta se actualicen igual que por /pagos/pagos."""
     try:
         cedula_norm = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
         if not cedula_norm:

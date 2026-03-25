@@ -576,7 +576,7 @@ export function TablaEditablePagos({
         <p className="mt-1 text-xs text-blue-700">
           Al guardar una fila (botón Guardar en cada fila), esta desaparece de
           la tabla y el pago se registra aplicando las mismas reglas de negocio:
-          aplicación a cuotas (FIFO), conciliación y actualización de
+          aplicación a cuotas (cascada), conciliación y actualización de
           pagos/cuotas.
         </p>
 

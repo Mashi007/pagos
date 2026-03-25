@@ -1,7 +1,7 @@
 """
 Reaplicacion en cascada integral (reset cuota_pagos + totales en cuotas + aplicar pagos) por prestamo(s).
 
-Politica de aplicacion: cascada por numero_cuota (no FIFO). Script historico reaplicar_fifo_prestamo.py delega aqui.
+Politica de aplicacion: cascada por numero_cuota. Script historico reaplicar_fifo_prestamo.py delega aqui.
 
 Ejecutar desde la carpeta backend con venv activo:
 

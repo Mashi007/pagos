@@ -4,7 +4,7 @@ Test: Relacionamiento único entre prestamos, cuotas y pagos.
 
 Verifica que cuando se genera/crea un pago con prestamo_id:
 - El pago queda vinculado únicamente al préstamo indicado (pago.prestamo_id).
-- La aplicación del pago a cuotas solo afecta cuotas de ese préstamo (FIFO por numero_cuota).
+- La aplicación del pago a cuotas solo afecta cuotas de ese préstamo (cascada por numero_cuota).
 - Las cuotas de otros préstamos no reciben ninguna parte del pago.
 
 Ejecutar desde backend/:

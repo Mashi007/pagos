@@ -2,7 +2,7 @@
 Reconstruccion en cascada (waterfall) por prestamo.
 
 La aplicacion a cuotas sigue el orden `numero_cuota` ascendente (cuotas mas antiguas primero).
-No es FIFO contable; en API/rutas legacy el nombre "fifo" es solo alias de cascada.
+Politica de negocio: **cascada**; en rutas o codigo antiguo el termino «fifo» se usa solo como alias.
 
 - integridad_cuotas_prestamo: diagnostico total_pagado vs SUM(cuota_pagos).
 - reset_y_reaplicar_cascada_prestamo: borra articulacion, resetea cuotas y vuelve a aplicar pagos conciliados.
@@ -228,7 +228,7 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
 
 
 reconstruir_cascada_prestamo = reset_y_reaplicar_cascada_prestamo
-# Compat: nombre historico con sufijo fifo.
+# Compat: nombre historico (alias «fifo» en identificadores antiguos).
 reconstruir_cascada_fifo_prestamo = reset_y_reaplicar_cascada_prestamo
 
 # Compat: nombre historico

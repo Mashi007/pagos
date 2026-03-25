@@ -1,4 +1,4 @@
-"""Compat: nombre historico; delega en reaplicar_cascada_prestamo (aplicacion en cascada, no FIFO)."""
+"""Compat: nombre historico; delega en reaplicar_cascada_prestamo (aplicacion en cascada)."""
 from __future__ import annotations
 
 from reaplicar_cascada_prestamo import main

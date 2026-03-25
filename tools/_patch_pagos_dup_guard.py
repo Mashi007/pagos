@@ -26,7 +26,7 @@ new = """        monto_necesario = monto_cuota - total_pagado_actual
         if dup and int(dup) > 0:
             logger.warning(
                 "Aplicacion en cascada detenida: ya existe cuota_pagos para cuota_id=%s pago_id=%s. "
-                "Use POST /prestamos/{id}/reaplicar-fifo-aplicacion para reconstruir.",
+                "Use POST /prestamos/{id}/reaplicar-cascada-aplicacion (compat: .../reaplicar-fifo-aplicacion) para reconstruir.",
                 c.id,
                 pago.id,
             )
