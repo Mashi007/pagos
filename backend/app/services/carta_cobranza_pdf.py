@@ -222,7 +222,8 @@ def _normalizar_encabezado_editable(texto: str) -> str:
         t,
         flags=re.IGNORECASE,
     )
-    # Quitar línea de notificación correlativa (con o sin negrita HTML).
+    # Quitar TODAS las líneas de notificación correlativa (placeholder o renderizada),
+    # para reinsertar una sola en la posición correcta y evitar duplicados.
     t = re.sub(
         r"<b>\s*Notificaci[oó]n\s*N[°º]\s*\{\{NUMEROCORRELATIVO\}\}\s*</b>\s*<br\s*/?>?",
         "",
@@ -231,6 +232,18 @@ def _normalizar_encabezado_editable(texto: str) -> str:
     )
     t = re.sub(
         r"Notificaci[oó]n\s*N[°º]\s*\{\{NUMEROCORRELATIVO\}\}\s*<br\s*/?>?",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"<b>\s*Notificaci[oó]n\s*N[°º]\s*[^<]+</b>(?:\s*(?:<br\s*/?>|\r?\n))?",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"Notificaci[oó]n\s*N[°º]\s*[0-9A-Za-z\-]+(?:\s|&nbsp;)*(?:<br\s*/?>|\r?\n)?",
         "",
         t,
         flags=re.IGNORECASE,
@@ -859,15 +872,30 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
     firma_raw = _reemplazar_variables_plantilla_pdf(
         plantilla.get("firma"), contexto_cobranza, datos
     )
-    # Logo: si la plantilla trae un img base64/remoto, usarlo como logo y quitar la etiqueta del texto
-    # (ReportLab no dibuja <img> dentro de Paragraph).
-    logo_path_plantilla, encabezado_raw = _extraer_logo_base64_de_plantilla(encabezado_raw or "")
-    if not logo_path_plantilla:
-        logo_path_plantilla, cuerpo = _extraer_logo_base64_de_plantilla(cuerpo or "")
-    if not logo_path_plantilla:
-        logo_path_plantilla, encabezado_raw = _extraer_logo_remoto_de_plantilla(encabezado_raw or "")
-    if not logo_path_plantilla:
-        logo_path_plantilla, cuerpo = _extraer_logo_remoto_de_plantilla(cuerpo or "")
+    # Logo definitivo sin manipulación:
+    # 1) Si LOGO_PDF_COBRANZA_PATH está configurado, usarlo como logo fijo.
+    # 2) Si no, usar el <img> de plantilla (base64 o URL) o LOGO_URL del contexto.
+    logo_path_plantilla = None
+    logo_fijo_config = None
+    try:
+        from app.core.config import settings
+        logo_fijo_config = getattr(settings, "LOGO_PDF_COBRANZA_PATH", None)
+    except Exception:
+        logo_fijo_config = None
+    if logo_fijo_config and (str(logo_fijo_config).strip()):
+        logo_path = str(logo_fijo_config).strip()
+        # Quitar cualquier <img> del HTML para que ReportLab no lo procese como texto.
+        encabezado_raw = re.sub(r"<img\b[^>]*>", "", encabezado_raw or "", flags=re.IGNORECASE)
+        cuerpo = re.sub(r"<img\b[^>]*>", "", cuerpo or "", flags=re.IGNORECASE)
+    else:
+        # Si no hay logo fijo, tomar primer <img> disponible (encabezado/cuerpo).
+        logo_path_plantilla, encabezado_raw = _extraer_logo_base64_de_plantilla(encabezado_raw or "")
+        if not logo_path_plantilla:
+            logo_path_plantilla, cuerpo = _extraer_logo_base64_de_plantilla(cuerpo or "")
+        if not logo_path_plantilla:
+            logo_path_plantilla, encabezado_raw = _extraer_logo_remoto_de_plantilla(encabezado_raw or "")
+        if not logo_path_plantilla:
+            logo_path_plantilla, cuerpo = _extraer_logo_remoto_de_plantilla(cuerpo or "")
     # Convertir HTML con div/p/class a formato que ReportLab Paragraph acepta (cuerpo, cláusula y firma)
     encabezado = _sanitize_for_reportlab(_html_para_reportlab(encabezado_raw or ""))
     cuerpo = _sanitize_for_reportlab(_html_para_reportlab(cuerpo or ""))
@@ -883,29 +911,17 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
             if logo_path and not logo_path_plantilla:
                 logo_path_plantilla = logo_path
     if not logo_path:
-        try:
-            from app.core.config import settings
-            logo_path = getattr(settings, "LOGO_PDF_COBRANZA_PATH", None)
-        except Exception:
-            logo_path = None
+        logo_path = logo_fijo_config
     try:
-        logo_wordmark_tmp = _preparar_wordmark_logo(logo_path)
-        logo_final_path = logo_wordmark_tmp or logo_path
         return build_pdf_bytes(
             datos,
-            logo_path=logo_final_path,
+            logo_path=logo_path,
             encabezado_plantilla=encabezado or None,
             cuerpo_principal=cuerpo or None,
             clausula_septima=clausula or None,
             firma_plantilla=firma_plantilla or None,
         )
     finally:
-        try:
-            if "logo_wordmark_tmp" in locals() and logo_wordmark_tmp:
-                import os
-                os.unlink(logo_wordmark_tmp)
-        except Exception:
-            pass
         if logo_path_plantilla:
             try:
                 import os
