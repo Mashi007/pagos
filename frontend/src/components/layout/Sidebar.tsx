@@ -12,7 +12,6 @@ import {
   Settings,
   Bell,
   Brain,
-  Calendar,
   Shield,
   X,
   ChevronDown,
@@ -293,8 +292,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           href: '/configuracion?tab=plantillas',
           icon: Mail,
         },
-
-        { title: 'Programador', href: '/scheduler', icon: Calendar },
 
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
 

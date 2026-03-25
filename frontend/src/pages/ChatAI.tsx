@@ -539,8 +539,8 @@ export function ChatAI() {
                 </label>
 
                 <span className="text-xs text-gray-500">
-                  Para preguntas generales, usa el Chat de Prueba en Configuración
-                  &gt; AI
+                  Para preguntas generales, usa el Chat de Prueba en
+                  Configuración &gt; AI
                 </span>
               </div>
             </>

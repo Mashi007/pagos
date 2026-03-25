@@ -946,8 +946,9 @@ export function DashboardMenu() {
             description={
               <>
                 <p>
-                  Bienvenido, <strong className="font-semibold">{userName}</strong>
-                  . Monitoreo estratégico de KPIs y gráficos.
+                  Bienvenido,{' '}
+                  <strong className="font-semibold">{userName}</strong>.
+                  Monitoreo estratégico de KPIs y gráficos.
                 </p>
               </>
             }

@@ -587,443 +587,452 @@ export function TicketsAtencion() {
                 </Button>
               </DialogTrigger>
 
-          <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Crear Nuevo Ticket</DialogTitle>
-            </DialogHeader>
+              <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Crear Nuevo Ticket</DialogTitle>
+                </DialogHeader>
 
-            <div className="space-y-4">
-              {/* Buscar Cliente */}
+                <div className="space-y-4">
+                  {/* Buscar Cliente */}
 
-              <div className="space-y-2">
-                <Label>Cliente</Label>
+                  <div className="space-y-2">
+                    <Label>Cliente</Label>
 
-                {clienteSeleccionado ? (
-                  <Card className="border-2 border-green-300 bg-green-50 p-4 shadow-sm">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="mb-3 flex items-center gap-2">
-                          <CheckCircle className="h-5 w-5 text-green-600" />
+                    {clienteSeleccionado ? (
+                      <Card className="border-2 border-green-300 bg-green-50 p-4 shadow-sm">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="mb-3 flex items-center gap-2">
+                              <CheckCircle className="h-5 w-5 text-green-600" />
 
-                          <p className="text-base font-semibold text-green-900">
-                            {typeof clienteSeleccionado.nombres === 'string'
-                              ? clienteSeleccionado.nombres
-                              : ((clienteSeleccionado as any).nombre ??
-                                'Sin nombre')}
-                          </p>
-                        </div>
+                              <p className="text-base font-semibold text-green-900">
+                                {typeof clienteSeleccionado.nombres === 'string'
+                                  ? clienteSeleccionado.nombres
+                                  : ((clienteSeleccionado as any).nombre ??
+                                    'Sin nombre')}
+                              </p>
+                            </div>
 
-                        <div className="ml-7 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-600">
-                              Cédula:
-                            </span>
+                            <div className="ml-7 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-600">
+                                  Cédula:
+                                </span>
 
-                            <span className="font-semibold text-gray-900">
-                              {String(clienteSeleccionado.cedula ?? '')}
-                            </span>
+                                <span className="font-semibold text-gray-900">
+                                  {String(clienteSeleccionado.cedula ?? '')}
+                                </span>
+                              </div>
+
+                              {clienteSeleccionado.telefono && (
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-gray-600">
+                                    Teléfono:
+                                  </span>
+
+                                  <span className="font-semibold text-gray-900">
+                                    {String(clienteSeleccionado.telefono)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {clienteSeleccionado.email && (
+                                <div className="flex items-center gap-2 sm:col-span-2">
+                                  <span className="font-medium text-gray-600">
+                                    Email:
+                                  </span>
+
+                                  <span className="break-all font-semibold text-gray-900">
+                                    {String(clienteSeleccionado.email)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {clienteSeleccionado.direccion && (
+                                <div className="flex items-center gap-2 sm:col-span-2">
+                                  <span className="font-medium text-gray-600">
+                                    Dirección:
+                                  </span>
+
+                                  <span className="text-gray-900">
+                                    {String(clienteSeleccionado.direccion)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {clienteSeleccionado.ocupacion && (
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-gray-600">
+                                    Ocupación:
+                                  </span>
+
+                                  <span className="text-gray-900">
+                                    {String(clienteSeleccionado.ocupacion)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
 
-                          {clienteSeleccionado.telefono && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-gray-600">
-                                Teléfono:
-                              </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setClienteSeleccionado(null)
 
-                              <span className="font-semibold text-gray-900">
-                                {String(clienteSeleccionado.telefono)}
-                              </span>
-                            </div>
-                          )}
+                              setNuevoTicket(prev => ({
+                                ...prev,
+                                clienteId: undefined,
+                                cliente: undefined,
+                                clienteData: undefined,
+                              }))
 
-                          {clienteSeleccionado.email && (
-                            <div className="flex items-center gap-2 sm:col-span-2">
-                              <span className="font-medium text-gray-600">
-                                Email:
-                              </span>
-
-                              <span className="break-all font-semibold text-gray-900">
-                                {String(clienteSeleccionado.email)}
-                              </span>
-                            </div>
-                          )}
-
-                          {clienteSeleccionado.direccion && (
-                            <div className="flex items-center gap-2 sm:col-span-2">
-                              <span className="font-medium text-gray-600">
-                                Dirección:
-                              </span>
-
-                              <span className="text-gray-900">
-                                {String(clienteSeleccionado.direccion)}
-                              </span>
-                            </div>
-                          )}
-
-                          {clienteSeleccionado.ocupacion && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-gray-600">
-                                Ocupación:
-                              </span>
-
-                              <span className="text-gray-900">
-                                {String(clienteSeleccionado.ocupacion)}
-                              </span>
-                            </div>
-                          )}
+                              setSearchCliente('')
+                            }}
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                          >
+                            <XCircleIcon className="h-4 w-4" />
+                          </Button>
                         </div>
-                      </div>
+                      </Card>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setClienteSeleccionado(null)
+                          <Input
+                            placeholder="Buscar cliente por nombre, cédula o teléfono (mín. 2 caracteres)..."
+                            value={searchCliente}
+                            onChange={e => setSearchCliente(e.target.value)}
+                            className="pl-10"
+                            autoFocus
+                          />
+                        </div>
+
+                        {isLoadingSearch ? (
+                          <div className="flex justify-center py-4">
+                            <LoadingSpinner />
+                          </div>
+                        ) : searchCliente.length >= 2 &&
+                          clientesBuscados.length === 0 ? (
+                          <div className="py-4 text-center text-sm text-gray-500">
+                            <AlertCircle className="mx-auto mb-2 h-5 w-5 text-gray-400" />
+
+                            <p>No se encontraron clientes</p>
+                          </div>
+                        ) : searchCliente.length >= 2 &&
+                          clientesBuscados.length > 0 ? (
+                          <div className="z-50 max-h-64 overflow-y-auto rounded-lg border-2 border-blue-200 bg-white shadow-lg">
+                            <div className="sticky top-0 border-b border-blue-200 bg-blue-50 p-2">
+                              <p className="text-xs font-semibold text-blue-700">
+                                {clientesBuscados.length}{' '}
+                                {clientesBuscados.length === 1
+                                  ? 'resultado encontrado'
+                                  : 'resultados encontrados'}
+                              </p>
+                            </div>
+
+                            <div className="space-y-1 p-2">
+                              {clientesBuscados.map(cliente => (
+                                <div
+                                  key={cliente.id}
+                                  className="cursor-pointer rounded-lg border border-gray-200 p-3 transition-all hover:border-blue-300 hover:bg-blue-50 hover:shadow-md"
+                                  onClick={() =>
+                                    handleSeleccionarCliente(cliente)
+                                  }
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="mb-1 flex items-center gap-2">
+                                        <User className="h-4 w-4 flex-shrink-0 text-blue-600" />
+
+                                        <p className="truncate text-sm font-semibold text-gray-900">
+                                          {typeof cliente.nombres === 'string'
+                                            ? cliente.nombres
+                                            : ((cliente as any).nombre ??
+                                              'Sin nombre')}
+                                        </p>
+                                      </div>
+
+                                      <div className="ml-6 grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-gray-500">
+                                            Cédula:
+                                          </span>
+
+                                          <span className="font-medium text-gray-700">
+                                            {String(cliente.cedula ?? '')}
+                                          </span>
+                                        </div>
+
+                                        {cliente.telefono && (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-gray-500">
+                                              Tel:
+                                            </span>
+
+                                            <span className="font-medium text-gray-700">
+                                              {String(cliente.telefono)}
+                                            </span>
+                                          </div>
+                                        )}
+
+                                        {cliente.email && (
+                                          <div className="flex items-center gap-1.5 sm:col-span-2">
+                                            <span className="text-gray-500">
+                                              Email:
+                                            </span>
+
+                                            <span className="truncate font-medium text-gray-700">
+                                              {String(cliente.email)}
+                                            </span>
+                                          </div>
+                                        )}
+
+                                        {cliente.direccion && (
+                                          <div className="flex items-center gap-1.5 sm:col-span-2">
+                                            <span className="text-gray-500">
+                                              Dirección:
+                                            </span>
+
+                                            <span className="truncate font-medium text-gray-700">
+                                              {String(cliente.direccion)}
+                                            </span>
+                                          </div>
+                                        )}
+
+                                        {cliente.ocupacion && (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-gray-500">
+                                              Ocupación:
+                                            </span>
+
+                                            <span className="font-medium text-gray-700">
+                                              {String(cliente.ocupacion)}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="ml-2 flex-shrink-0"
+                                      onClick={e => {
+                                        e.stopPropagation()
+
+                                        handleSeleccionarCliente(cliente)
+                                      }}
+                                    >
+                                      Seleccionar
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : searchCliente.length > 0 &&
+                          searchCliente.length < 2 ? (
+                          <div className="mt-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">
+                            <AlertCircle className="mr-1 inline h-3 w-3" />
+                            Escribe al menos 2 caracteres para buscar
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Título */}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="titulo">Título *</Label>
+
+                    <Input
+                      id="titulo"
+                      placeholder="Ej: Consulta sobre estado de préstamo"
+                      value={nuevoTicket.titulo}
+                      onChange={e =>
+                        setNuevoTicket(prev => ({
+                          ...prev,
+                          titulo: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  {/* Descripción */}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="descripcion">Descripción *</Label>
+
+                    <Textarea
+                      id="descripcion"
+                      placeholder="Describe el problema o consulta..."
+                      value={nuevoTicket.descripcion}
+                      onChange={e =>
+                        setNuevoTicket(prev => ({
+                          ...prev,
+                          descripcion: e.target.value,
+                        }))
+                      }
+                      rows={4}
+                    />
+                  </div>
+
+                  {/* Tipo, Estado, Prioridad */}
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="tipo">Tipo</Label>
+
+                      <Select
+                        value={nuevoTicket.tipo}
+                        onValueChange={value =>
+                          setNuevoTicket(prev => ({ ...prev, tipo: value }))
+                        }
+                      >
+                        <SelectTrigger id="tipo">
+                          <SelectValue />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          {TIPOS_TICKET.map(tipo => (
+                            <SelectItem key={tipo.id} value={tipo.id}>
+                              {tipo.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="estado">Estado</Label>
+
+                      <Select
+                        value={nuevoTicket.estado}
+                        onValueChange={value =>
+                          setNuevoTicket(prev => ({ ...prev, estado: value }))
+                        }
+                      >
+                        <SelectTrigger id="estado">
+                          <SelectValue />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          {ESTADOS_TICKET.map(estado => (
+                            <SelectItem key={estado.id} value={estado.id}>
+                              {estado.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="prioridad">Prioridad</Label>
+
+                      <Select
+                        value={nuevoTicket.prioridad}
+                        onValueChange={value =>
+                          setNuevoTicket(prev => ({
+                            ...prev,
+                            prioridad: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="prioridad">
+                          <SelectValue />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          {PRIORIDADES.map(prioridad => (
+                            <SelectItem key={prioridad.id} value={prioridad.id}>
+                              {prioridad.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Fecha Límite */}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="fecha_limite">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        Fecha y Hora Límite
+                      </div>
+                    </Label>
+
+                    <Input
+                      id="fecha_limite"
+                      type="datetime-local"
+                      value={
+                        nuevoTicket.fecha_limite
+                          ? new Date(nuevoTicket.fecha_limite)
+                              .toISOString()
+                              .slice(0, 16)
+                          : ''
+                      }
+                      onChange={e => {
+                        const fechaHora = e.target.value
+
+                        if (fechaHora) {
+                          // Convertir a ISO format con timezone
+
+                          const fechaISO = new Date(fechaHora).toISOString()
 
                           setNuevoTicket(prev => ({
                             ...prev,
-                            clienteId: undefined,
-                            cliente: undefined,
-                            clienteData: undefined,
+                            fecha_limite: fechaISO,
                           }))
+                        } else {
+                          setNuevoTicket(prev => ({
+                            ...prev,
+                            fecha_limite: '',
+                          }))
+                        }
+                      }}
+                      placeholder="Selecciona fecha y hora límite"
+                    />
 
-                          setSearchCliente('')
-                        }}
-                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                      >
-                        <XCircleIcon className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </Card>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-
-                      <Input
-                        placeholder="Buscar cliente por nombre, cédula o teléfono (mín. 2 caracteres)..."
-                        value={searchCliente}
-                        onChange={e => setSearchCliente(e.target.value)}
-                        className="pl-10"
-                        autoFocus
-                      />
-                    </div>
-
-                    {isLoadingSearch ? (
-                      <div className="flex justify-center py-4">
-                        <LoadingSpinner />
-                      </div>
-                    ) : searchCliente.length >= 2 &&
-                      clientesBuscados.length === 0 ? (
-                      <div className="py-4 text-center text-sm text-gray-500">
-                        <AlertCircle className="mx-auto mb-2 h-5 w-5 text-gray-400" />
-
-                        <p>No se encontraron clientes</p>
-                      </div>
-                    ) : searchCliente.length >= 2 &&
-                      clientesBuscados.length > 0 ? (
-                      <div className="z-50 max-h-64 overflow-y-auto rounded-lg border-2 border-blue-200 bg-white shadow-lg">
-                        <div className="sticky top-0 border-b border-blue-200 bg-blue-50 p-2">
-                          <p className="text-xs font-semibold text-blue-700">
-                            {clientesBuscados.length}{' '}
-                            {clientesBuscados.length === 1
-                              ? 'resultado encontrado'
-                              : 'resultados encontrados'}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1 p-2">
-                          {clientesBuscados.map(cliente => (
-                            <div
-                              key={cliente.id}
-                              className="cursor-pointer rounded-lg border border-gray-200 p-3 transition-all hover:border-blue-300 hover:bg-blue-50 hover:shadow-md"
-                              onClick={() => handleSeleccionarCliente(cliente)}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="mb-1 flex items-center gap-2">
-                                    <User className="h-4 w-4 flex-shrink-0 text-blue-600" />
-
-                                    <p className="truncate text-sm font-semibold text-gray-900">
-                                      {typeof cliente.nombres === 'string'
-                                        ? cliente.nombres
-                                        : ((cliente as any).nombre ??
-                                          'Sin nombre')}
-                                    </p>
-                                  </div>
-
-                                  <div className="ml-6 grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-gray-500">
-                                        Cédula:
-                                      </span>
-
-                                      <span className="font-medium text-gray-700">
-                                        {String(cliente.cedula ?? '')}
-                                      </span>
-                                    </div>
-
-                                    {cliente.telefono && (
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-gray-500">
-                                          Tel:
-                                        </span>
-
-                                        <span className="font-medium text-gray-700">
-                                          {String(cliente.telefono)}
-                                        </span>
-                                      </div>
-                                    )}
-
-                                    {cliente.email && (
-                                      <div className="flex items-center gap-1.5 sm:col-span-2">
-                                        <span className="text-gray-500">
-                                          Email:
-                                        </span>
-
-                                        <span className="truncate font-medium text-gray-700">
-                                          {String(cliente.email)}
-                                        </span>
-                                      </div>
-                                    )}
-
-                                    {cliente.direccion && (
-                                      <div className="flex items-center gap-1.5 sm:col-span-2">
-                                        <span className="text-gray-500">
-                                          Dirección:
-                                        </span>
-
-                                        <span className="truncate font-medium text-gray-700">
-                                          {String(cliente.direccion)}
-                                        </span>
-                                      </div>
-                                    )}
-
-                                    {cliente.ocupacion && (
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-gray-500">
-                                          Ocupación:
-                                        </span>
-
-                                        <span className="font-medium text-gray-700">
-                                          {String(cliente.ocupacion)}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="ml-2 flex-shrink-0"
-                                  onClick={e => {
-                                    e.stopPropagation()
-
-                                    handleSeleccionarCliente(cliente)
-                                  }}
-                                >
-                                  Seleccionar
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : searchCliente.length > 0 && searchCliente.length < 2 ? (
-                      <div className="mt-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">
-                        <AlertCircle className="mr-1 inline h-3 w-3" />
-                        Escribe al menos 2 caracteres para buscar
-                      </div>
-                    ) : null}
+                    <p className="text-xs text-gray-500">
+                      El sistema alertará cuando se alcance esta fecha y hora
+                    </p>
                   </div>
-                )}
-              </div>
-
-              {/* Título */}
-
-              <div className="space-y-2">
-                <Label htmlFor="titulo">Título *</Label>
-
-                <Input
-                  id="titulo"
-                  placeholder="Ej: Consulta sobre estado de préstamo"
-                  value={nuevoTicket.titulo}
-                  onChange={e =>
-                    setNuevoTicket(prev => ({
-                      ...prev,
-                      titulo: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              {/* Descripción */}
-
-              <div className="space-y-2">
-                <Label htmlFor="descripcion">Descripción *</Label>
-
-                <Textarea
-                  id="descripcion"
-                  placeholder="Describe el problema o consulta..."
-                  value={nuevoTicket.descripcion}
-                  onChange={e =>
-                    setNuevoTicket(prev => ({
-                      ...prev,
-                      descripcion: e.target.value,
-                    }))
-                  }
-                  rows={4}
-                />
-              </div>
-
-              {/* Tipo, Estado, Prioridad */}
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="tipo">Tipo</Label>
-
-                  <Select
-                    value={nuevoTicket.tipo}
-                    onValueChange={value =>
-                      setNuevoTicket(prev => ({ ...prev, tipo: value }))
-                    }
-                  >
-                    <SelectTrigger id="tipo">
-                      <SelectValue />
-                    </SelectTrigger>
-
-                    <SelectContent>
-                      {TIPOS_TICKET.map(tipo => (
-                        <SelectItem key={tipo.id} value={tipo.id}>
-                          {tipo.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="estado">Estado</Label>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAddDialog(false)}
+                    disabled={createTicketMutation.isPending}
+                  >
+                    Cancelar
+                  </Button>
 
-                  <Select
-                    value={nuevoTicket.estado}
-                    onValueChange={value =>
-                      setNuevoTicket(prev => ({ ...prev, estado: value }))
+                  <Button
+                    onClick={handleCrearTicket}
+                    disabled={
+                      !nuevoTicket.titulo ||
+                      !nuevoTicket.descripcion ||
+                      createTicketMutation.isPending
                     }
                   >
-                    <SelectTrigger id="estado">
-                      <SelectValue />
-                    </SelectTrigger>
-
-                    <SelectContent>
-                      {ESTADOS_TICKET.map(estado => (
-                        <SelectItem key={estado.id} value={estado.id}>
-                          {estado.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="prioridad">Prioridad</Label>
-
-                  <Select
-                    value={nuevoTicket.prioridad}
-                    onValueChange={value =>
-                      setNuevoTicket(prev => ({ ...prev, prioridad: value }))
-                    }
-                  >
-                    <SelectTrigger id="prioridad">
-                      <SelectValue />
-                    </SelectTrigger>
-
-                    <SelectContent>
-                      {PRIORIDADES.map(prioridad => (
-                        <SelectItem key={prioridad.id} value={prioridad.id}>
-                          {prioridad.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Fecha Límite */}
-
-              <div className="space-y-2">
-                <Label htmlFor="fecha_limite">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Fecha y Hora Límite
-                  </div>
-                </Label>
-
-                <Input
-                  id="fecha_limite"
-                  type="datetime-local"
-                  value={
-                    nuevoTicket.fecha_limite
-                      ? new Date(nuevoTicket.fecha_limite)
-                          .toISOString()
-                          .slice(0, 16)
-                      : ''
-                  }
-                  onChange={e => {
-                    const fechaHora = e.target.value
-
-                    if (fechaHora) {
-                      // Convertir a ISO format con timezone
-
-                      const fechaISO = new Date(fechaHora).toISOString()
-
-                      setNuevoTicket(prev => ({
-                        ...prev,
-                        fecha_limite: fechaISO,
-                      }))
-                    } else {
-                      setNuevoTicket(prev => ({ ...prev, fecha_limite: '' }))
-                    }
-                  }}
-                  placeholder="Selecciona fecha y hora límite"
-                />
-
-                <p className="text-xs text-gray-500">
-                  El sistema alertará cuando se alcance esta fecha y hora
-                </p>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowAddDialog(false)}
-                disabled={createTicketMutation.isPending}
-              >
-                Cancelar
-              </Button>
-
-              <Button
-                onClick={handleCrearTicket}
-                disabled={
-                  !nuevoTicket.titulo ||
-                  !nuevoTicket.descripcion ||
-                  createTicketMutation.isPending
-                }
-              >
-                {createTicketMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creando...
-                  </>
-                ) : (
-                  'Crear Ticket'
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                    {createTicketMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creando...
+                      </>
+                    ) : (
+                      'Crear Ticket'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           }
         />
       </motion.div>

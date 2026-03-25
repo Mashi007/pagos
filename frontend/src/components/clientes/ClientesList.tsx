@@ -485,104 +485,104 @@ export function ClientesList() {
         description="Gestiona tu cartera de clientes"
         actions={
           <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={async () => {
-              await Promise.all([refetchClientes(), refetchStats()])
-
-              queryClient.invalidateQueries({ queryKey: ['clientes'] })
-
-              queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
-            }}
-            disabled={isRefetching || isLoading || statsLoading}
-            className="px-6 py-6 text-base font-semibold"
-            title="Actualizar datos y estadísticas"
-          >
-            <RefreshCw
-              className={`mr-2 h-5 w-5 ${isRefetching || statsLoading ? 'animate-spin' : ''}`}
-            />
-
-            {isRefetching || statsLoading ? 'Actualizando...' : 'Actualizar'}
-          </Button>
-
-          <Button
-            variant={showRevisarClientes ? 'default' : 'outline'}
-            size="lg"
-            onClick={() =>
-              setSearchParams(showRevisarClientes ? {} : { revisar: '1' })
-            }
-            className="px-6 py-6 text-base font-semibold"
-            title="Ver clientes enviados desde carga másiva para revisión manual (descargar Excel)"
-          >
-            <Search className="mr-2 h-5 w-5" />
-            Revisar clientes
-          </Button>
-
-          {showRevisarClientes && (
             <Button
               variant="outline"
               size="lg"
-              onClick={handleExportRevisarExcel}
-              disabled={isExportingRevisar || !revisarData?.items?.length}
+              onClick={async () => {
+                await Promise.all([refetchClientes(), refetchStats()])
+
+                queryClient.invalidateQueries({ queryKey: ['clientes'] })
+
+                queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+              }}
+              disabled={isRefetching || isLoading || statsLoading}
               className="px-6 py-6 text-base font-semibold"
-              title="Descargar todos los clientes a revisar en Excel"
+              title="Actualizar datos y estadísticas"
             >
-              {isExportingRevisar ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                <Download className="mr-2 h-5 w-5" />
-              )}
-              Descargar Excel
-            </Button>
-          )}
+              <RefreshCw
+                className={`mr-2 h-5 w-5 ${isRefetching || statsLoading ? 'animate-spin' : ''}`}
+              />
 
-          <div className="group relative">
+              {isRefetching || statsLoading ? 'Actualizando...' : 'Actualizar'}
+            </Button>
+
             <Button
+              variant={showRevisarClientes ? 'default' : 'outline'}
               size="lg"
-              className="flex min-w-[200px] items-center justify-between px-8 py-6 text-base font-semibold"
+              onClick={() =>
+                setSearchParams(showRevisarClientes ? {} : { revisar: '1' })
+              }
+              className="px-6 py-6 text-base font-semibold"
+              title="Ver clientes enviados desde carga másiva para revisión manual (descargar Excel)"
             >
-              <span className="flex items-center">
-                <Plus className="mr-2 h-5 w-5" />
-                Nuevo Cliente
-              </span>
+              <Search className="mr-2 h-5 w-5" />
+              Revisar clientes
             </Button>
 
-            {/* Puente invisible para que el hover no se pierda al bajar el cursor al men */}
-
-            <div
-              className="absolute left-0 right-0 top-full z-40 h-2"
-              aria-hidden="true"
-            />
-
-            {/* Dropdown Menu */}
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="absolute right-0 top-full z-50 mt-2 hidden w-56 rounded-lg border border-gray-200 bg-white shadow-xl group-hover:block"
-            >
-              <motion.button
-                onClick={() => setShowCrearCliente(true)}
-                className="flex w-full items-center gap-2 border-b border-gray-100 px-4 py-3 text-left text-gray-700 transition-colors first:rounded-t-lg hover:bg-blue-50 hover:text-blue-600"
+            {showRevisarClientes && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleExportRevisarExcel}
+                disabled={isExportingRevisar || !revisarData?.items?.length}
+                className="px-6 py-6 text-base font-semibold"
+                title="Descargar todos los clientes a revisar en Excel"
               >
-                <Plus className="h-4 w-4" />
-                Crear cliente manual
-              </motion.button>
+                {isExportingRevisar ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-5 w-5" />
+                )}
+                Descargar Excel
+              </Button>
+            )}
 
-              <motion.button
-                onClick={() => setShowExcelUpload(true)}
-                className="flex w-full items-center gap-2 px-4 py-3 text-left text-gray-700 transition-colors last:rounded-b-lg hover:bg-blue-50 hover:text-blue-600"
+            <div className="group relative">
+              <Button
+                size="lg"
+                className="flex min-w-[200px] items-center justify-between px-8 py-6 text-base font-semibold"
               >
-                <FileSpreadsheet className="h-4 w-4" />
-                Cargar desde Excel
-              </motion.button>
-            </motion.div>
+                <span className="flex items-center">
+                  <Plus className="mr-2 h-5 w-5" />
+                  Nuevo Cliente
+                </span>
+              </Button>
+
+              {/* Puente invisible para que el hover no se pierda al bajar el cursor al men */}
+
+              <div
+                className="absolute left-0 right-0 top-full z-40 h-2"
+                aria-hidden="true"
+              />
+
+              {/* Dropdown Menu */}
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="absolute right-0 top-full z-50 mt-2 hidden w-56 rounded-lg border border-gray-200 bg-white shadow-xl group-hover:block"
+              >
+                <motion.button
+                  onClick={() => setShowCrearCliente(true)}
+                  className="flex w-full items-center gap-2 border-b border-gray-100 px-4 py-3 text-left text-gray-700 transition-colors first:rounded-t-lg hover:bg-blue-50 hover:text-blue-600"
+                >
+                  <Plus className="h-4 w-4" />
+                  Crear cliente manual
+                </motion.button>
+
+                <motion.button
+                  onClick={() => setShowExcelUpload(true)}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-left text-gray-700 transition-colors last:rounded-b-lg hover:bg-blue-50 hover:text-blue-600"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Cargar desde Excel
+                </motion.button>
+              </motion.div>
+            </div>
           </div>
-        </div>
-          }
-        />
+        }
+      />
 
       <ClientesKPIs
         activos={statsData?.activos || 0}

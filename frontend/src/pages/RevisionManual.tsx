@@ -19,7 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
-  ClipboardList,
+  FileText,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -352,7 +352,7 @@ export function RevisionManual() {
       {/* Header */}
 
       <ModulePageHeader
-        icon={ClipboardList}
+        icon={FileText}
         title="Revisión Manual de Préstamos"
         description="Verifica y confirma los detalles de cada préstamo post-migración"
         actions={

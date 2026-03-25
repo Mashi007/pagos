@@ -620,84 +620,84 @@ export function EmbudoClientes() {
               </Button>
 
               <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Cliente
-              </Button>
-            </DialogTrigger>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Agregar Cliente
+                  </Button>
+                </DialogTrigger>
 
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Buscar y Agregar Cliente</DialogTitle>
-              </DialogHeader>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Buscar y Agregar Cliente</DialogTitle>
+                  </DialogHeader>
 
-              <div className="space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
 
-                  <Input
-                    placeholder="Buscar por nombre, cédula o teléfono..."
-                    value={searchCliente}
-                    onChange={e => setSearchCliente(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+                      <Input
+                        placeholder="Buscar por nombre, cédula o teléfono..."
+                        value={searchCliente}
+                        onChange={e => setSearchCliente(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
 
-                {isLoadingSearch ? (
-                  <div className="flex justify-center py-8">
-                    <LoadingSpinner />
+                    {isLoadingSearch ? (
+                      <div className="flex justify-center py-8">
+                        <LoadingSpinner />
+                      </div>
+                    ) : clientesBuscados.length === 0 &&
+                      searchCliente.length >= 2 ? (
+                      <div className="py-8 text-center text-gray-500">
+                        <AlertCircle className="mx-auto mb-2 h-8 w-8" />
+
+                        <p>No se encontraron clientes</p>
+                      </div>
+                    ) : (
+                      <div className="max-h-96 space-y-2 overflow-y-auto">
+                        {clientesBuscados
+
+                          .filter(c => !clientesEnEmbudo.has(c.id))
+
+                          .map(cliente => (
+                            <Card
+                              key={cliente.id}
+                              className="cursor-pointer transition-colors hover:bg-gray-50"
+                              onClick={() => handleAgregarCliente(cliente)}
+                            >
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h3 className="font-semibold">
+                                      {cliente.nombres || 'Sin nombre'}
+                                    </h3>
+
+                                    <p className="text-sm text-gray-500">
+                                      Cédula: {cliente.cedula}
+                                    </p>
+
+                                    {cliente.telefono && (
+                                      <p className="text-sm text-gray-500">
+                                        Tel: {cliente.telefono}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  <Button size="sm">
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    Agregar
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                      </div>
+                    )}
                   </div>
-                ) : clientesBuscados.length === 0 &&
-                  searchCliente.length >= 2 ? (
-                  <div className="py-8 text-center text-gray-500">
-                    <AlertCircle className="mx-auto mb-2 h-8 w-8" />
-
-                    <p>No se encontraron clientes</p>
-                  </div>
-                ) : (
-                  <div className="max-h-96 space-y-2 overflow-y-auto">
-                    {clientesBuscados
-
-                      .filter(c => !clientesEnEmbudo.has(c.id))
-
-                      .map(cliente => (
-                        <Card
-                          key={cliente.id}
-                          className="cursor-pointer transition-colors hover:bg-gray-50"
-                          onClick={() => handleAgregarCliente(cliente)}
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h3 className="font-semibold">
-                                  {cliente.nombres || 'Sin nombre'}
-                                </h3>
-
-                                <p className="text-sm text-gray-500">
-                                  Cédula: {cliente.cedula}
-                                </p>
-
-                                {cliente.telefono && (
-                                  <p className="text-sm text-gray-500">
-                                    Tel: {cliente.telefono}
-                                  </p>
-                                )}
-                              </div>
-
-                              <Button size="sm">
-                                <Plus className="mr-1 h-4 w-4" />
-                                Agregar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
+                </DialogContent>
+              </Dialog>
             </div>
           }
         />

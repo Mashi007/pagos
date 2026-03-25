@@ -1,40 +1,20 @@
 import { PrestamosList } from '../components/prestamos/PrestamosList'
 
-import { DollarSign, Bell, Search, CheckCircle2 } from 'lucide-react'
+import { Bell, Search } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
-import { Button } from '../components/ui/button'
-
 import { usePrestamos } from '../hooks/usePrestamos'
 
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 export function Prestamos() {
   const { data: enRevisionData } = usePrestamos({ estado: 'EN_REVISION' }, 1, 1)
 
   const enRevisionCount = enRevisionData?.total ?? 0
 
-  const navigate = useNavigate()
-
   return (
     <div className="space-y-6 p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <DollarSign className="h-8 w-8 text-blue-600" />
-
-          <h1 className="text-3xl font-bold text-gray-900">Préstamos</h1>
-        </div>
-
-        <Button
-          onClick={() => navigate('/revision-manual')}
-          className="gap-2 bg-green-600 text-white hover:bg-green-700"
-        >
-          <CheckCircle2 className="h-4 w-4" />
-          Revisión Manual Post-Migración
-        </Button>
-      </div>
-
       {/* Novedades: información para el usuario */}
 
       <Card className="border-blue-100 bg-blue-50/50">

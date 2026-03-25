@@ -641,390 +641,404 @@ export function EmbudoConcesionarios() {
           description="Seguimiento de concesionarios que gestionan ventas en base a créditos"
           actions={
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => setShowConfigDialog(true)}>
-            <Settings className="mr-2 h-4 w-4" />
-            Configurar Tarjetas
-          </Button>
-
-          <Button variant="outline" onClick={() => navigate('/concesionarios')}>
-            <Building className="mr-2 h-4 w-4" />
-            Gestionar Concesionarios
-          </Button>
-
-          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Existente
+              <Button
+                variant="outline"
+                onClick={() => setShowConfigDialog(true)}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Configurar Tarjetas
               </Button>
-            </DialogTrigger>
 
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Buscar y Agregar Concesionario</DialogTitle>
-              </DialogHeader>
+              <Button
+                variant="outline"
+                onClick={() => navigate('/concesionarios')}
+              >
+                <Building className="mr-2 h-4 w-4" />
+                Gestionar Concesionarios
+              </Button>
 
-              <div className="space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+              <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Agregar Existente
+                  </Button>
+                </DialogTrigger>
 
-                  <Input
-                    placeholder="Buscar por nombre de concesionario..."
-                    value={searchConcesionario}
-                    onChange={e => setSearchConcesionario(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Buscar y Agregar Concesionario</DialogTitle>
+                  </DialogHeader>
 
-                {searchConcesionario.length >= 2 &&
-                concesionariosBuscados.length === 0 ? (
-                  <div className="py-8 text-center text-gray-500">
-                    <AlertCircle className="mx-auto mb-2 h-8 w-8 text-gray-400" />
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
 
-                    <p>No se encontraron concesionarios</p>
+                      <Input
+                        placeholder="Buscar por nombre de concesionario..."
+                        value={searchConcesionario}
+                        onChange={e => setSearchConcesionario(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+
+                    {searchConcesionario.length >= 2 &&
+                    concesionariosBuscados.length === 0 ? (
+                      <div className="py-8 text-center text-gray-500">
+                        <AlertCircle className="mx-auto mb-2 h-8 w-8 text-gray-400" />
+
+                        <p>No se encontraron concesionarios</p>
+                      </div>
+                    ) : searchConcesionario.length >= 2 &&
+                      concesionariosBuscados.length > 0 ? (
+                      <div className="max-h-96 space-y-2 overflow-y-auto">
+                        {concesionariosBuscados.map(concesionario => (
+                          <Card
+                            key={concesionario.id}
+                            className="cursor-pointer transition-colors hover:bg-gray-50"
+                            onClick={() =>
+                              handleAgregarConcesionario(concesionario)
+                            }
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h3 className="font-semibold">
+                                    {concesionario.nombre}
+                                  </h3>
+
+                                  <p className="text-sm text-gray-500">
+                                    {concesionario.activo
+                                      ? 'Activo'
+                                      : 'Inactivo'}
+                                  </p>
+                                </div>
+
+                                <Button size="sm">
+                                  <Plus className="mr-1 h-4 w-4" />
+                                  Agregar
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : searchConcesionario.length > 0 &&
+                      searchConcesionario.length < 2 ? (
+                      <div className="mt-1 px-1 text-xs text-gray-400">
+                        Escribe al menos 2 caracteres para buscar
+                      </div>
+                    ) : null}
                   </div>
-                ) : searchConcesionario.length >= 2 &&
-                  concesionariosBuscados.length > 0 ? (
-                  <div className="max-h-96 space-y-2 overflow-y-auto">
-                    {concesionariosBuscados.map(concesionario => (
-                      <Card
-                        key={concesionario.id}
-                        className="cursor-pointer transition-colors hover:bg-gray-50"
-                        onClick={() =>
-                          handleAgregarConcesionario(concesionario)
+                </DialogContent>
+              </Dialog>
+
+              <Dialog
+                open={showCreateDialog}
+                onOpenChange={setShowCreateDialog}
+              >
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Crear Nuevo
+                  </Button>
+                </DialogTrigger>
+
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Crear Nuevo Concesionario</DialogTitle>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="nombre">Nombre del Concesionario *</Label>
+
+                      <Input
+                        id="nombre"
+                        placeholder="Ej: Concesionario ABC"
+                        value={nuevoConcesionario.nombre}
+                        onChange={e =>
+                          setNuevoConcesionario({
+                            ...nuevoConcesionario,
+                            nombre: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="activo"
+                        checked={nuevoConcesionario.activo}
+                        onChange={e =>
+                          setNuevoConcesionario({
+                            ...nuevoConcesionario,
+                            activo: e.target.checked,
+                          })
+                        }
+                        className="rounded border-gray-300"
+                      />
+
+                      <Label htmlFor="activo" className="cursor-pointer">
+                        Concesionario activo
+                      </Label>
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowCreateDialog(false)
+
+                          setNuevoConcesionario({ nombre: '', activo: true })
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+
+                      <Button
+                        onClick={handleCrearConcesionario}
+                        disabled={
+                          !nuevoConcesionario.nombre.trim() ||
+                          createConcesionarioMutation.isPending
                         }
                       >
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="font-semibold">
-                                {concesionario.nombre}
-                              </h3>
-
-                              <p className="text-sm text-gray-500">
-                                {concesionario.activo ? 'Activo' : 'Inactivo'}
-                              </p>
-                            </div>
-
-                            <Button size="sm">
-                              <Plus className="mr-1 h-4 w-4" />
-                              Agregar
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                        {createConcesionarioMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creando...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Crear
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                ) : searchConcesionario.length > 0 &&
-                  searchConcesionario.length < 2 ? (
-                  <div className="mt-1 px-1 text-xs text-gray-400">
-                    Escribe al menos 2 caracteres para buscar
+                </DialogContent>
+              </Dialog>
+
+              {/* Diálogo de Configuración de Tarjetas */}
+
+              <Dialog
+                open={showConfigDialog}
+                onOpenChange={setShowConfigDialog}
+              >
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      Configurar Campos de Tarjetas
+                    </DialogTitle>
+                  </DialogHeader>
+
+                  <div className="space-y-4 py-4">
+                    <p className="text-sm text-gray-600">
+                      Selecciona qué campos deseas mostrar en las tarjetas del
+                      embudo:
+                    </p>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="mostrarNombre"
+                          checked={camposTarjeta.mostrarNombre}
+                          onChange={e => {
+                            const nuevo = {
+                              ...camposTarjeta,
+                              mostrarNombre: e.target.checked,
+                            }
+
+                            setCamposTarjeta(nuevo)
+
+                            localStorage.setItem(
+                              'embudo_concesionarios_campos',
+                              JSON.stringify(nuevo)
+                            )
+                          }}
+                          className="rounded border-gray-300"
+                        />
+
+                        <Label
+                          htmlFor="mostrarNombre"
+                          className="cursor-pointer font-normal"
+                        >
+                          Nombre del concesionario
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="mostrarEstado"
+                          checked={camposTarjeta.mostrarEstado}
+                          onChange={e => {
+                            const nuevo = {
+                              ...camposTarjeta,
+                              mostrarEstado: e.target.checked,
+                            }
+
+                            setCamposTarjeta(nuevo)
+
+                            localStorage.setItem(
+                              'embudo_concesionarios_campos',
+                              JSON.stringify(nuevo)
+                            )
+                          }}
+                          className="rounded border-gray-300"
+                        />
+
+                        <Label
+                          htmlFor="mostrarEstado"
+                          className="cursor-pointer font-normal"
+                        >
+                          Estado (Venta asignada/Inactivo)
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="mostrarClientes"
+                          checked={camposTarjeta.mostrarClientes}
+                          onChange={e => {
+                            const nuevo = {
+                              ...camposTarjeta,
+                              mostrarClientes: e.target.checked,
+                            }
+
+                            setCamposTarjeta(nuevo)
+
+                            localStorage.setItem(
+                              'embudo_concesionarios_campos',
+                              JSON.stringify(nuevo)
+                            )
+                          }}
+                          className="rounded border-gray-300"
+                        />
+
+                        <Label
+                          htmlFor="mostrarClientes"
+                          className="cursor-pointer font-normal"
+                        >
+                          Clientes asignados
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="mostrarPrestamos"
+                          checked={camposTarjeta.mostrarPrestamos}
+                          onChange={e => {
+                            const nuevo = {
+                              ...camposTarjeta,
+                              mostrarPrestamos: e.target.checked,
+                            }
+
+                            setCamposTarjeta(nuevo)
+
+                            localStorage.setItem(
+                              'embudo_concesionarios_campos',
+                              JSON.stringify(nuevo)
+                            )
+                          }}
+                          className="rounded border-gray-300"
+                        />
+
+                        <Label
+                          htmlFor="mostrarPrestamos"
+                          className="cursor-pointer font-normal"
+                        >
+                          Préstamos activos
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="mostrarMontoTotal"
+                          checked={camposTarjeta.mostrarMontoTotal}
+                          onChange={e => {
+                            const nuevo = {
+                              ...camposTarjeta,
+                              mostrarMontoTotal: e.target.checked,
+                            }
+
+                            setCamposTarjeta(nuevo)
+
+                            localStorage.setItem(
+                              'embudo_concesionarios_campos',
+                              JSON.stringify(nuevo)
+                            )
+                          }}
+                          className="rounded border-gray-300"
+                        />
+
+                        <Label
+                          htmlFor="mostrarMontoTotal"
+                          className="cursor-pointer font-normal"
+                        >
+                          Monto total
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="mostrarFechaRegistro"
+                          checked={camposTarjeta.mostrarFechaRegistro}
+                          onChange={e => {
+                            const nuevo = {
+                              ...camposTarjeta,
+                              mostrarFechaRegistro: e.target.checked,
+                            }
+
+                            setCamposTarjeta(nuevo)
+
+                            localStorage.setItem(
+                              'embudo_concesionarios_campos',
+                              JSON.stringify(nuevo)
+                            )
+                          }}
+                          className="rounded border-gray-300"
+                        />
+
+                        <Label
+                          htmlFor="mostrarFechaRegistro"
+                          className="cursor-pointer font-normal"
+                        >
+                          Fecha de registro
+                        </Label>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 border-t pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setCamposTarjeta(CAMPOS_DEFAULT)
+
+                          localStorage.setItem(
+                            'embudo_concesionarios_campos',
+                            JSON.stringify(CAMPOS_DEFAULT)
+                          )
+                        }}
+                      >
+                        Restaurar por defecto
+                      </Button>
+
+                      <Button onClick={() => setShowConfigDialog(false)}>
+                        Cerrar
+                      </Button>
+                    </div>
                   </div>
-                ) : null}
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Crear Nuevo
-              </Button>
-            </DialogTrigger>
-
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Crear Nuevo Concesionario</DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nombre">Nombre del Concesionario *</Label>
-
-                  <Input
-                    id="nombre"
-                    placeholder="Ej: Concesionario ABC"
-                    value={nuevoConcesionario.nombre}
-                    onChange={e =>
-                      setNuevoConcesionario({
-                        ...nuevoConcesionario,
-                        nombre: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="activo"
-                    checked={nuevoConcesionario.activo}
-                    onChange={e =>
-                      setNuevoConcesionario({
-                        ...nuevoConcesionario,
-                        activo: e.target.checked,
-                      })
-                    }
-                    className="rounded border-gray-300"
-                  />
-
-                  <Label htmlFor="activo" className="cursor-pointer">
-                    Concesionario activo
-                  </Label>
-                </div>
-
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowCreateDialog(false)
-
-                      setNuevoConcesionario({ nombre: '', activo: true })
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-
-                  <Button
-                    onClick={handleCrearConcesionario}
-                    disabled={
-                      !nuevoConcesionario.nombre.trim() ||
-                      createConcesionarioMutation.isPending
-                    }
-                  >
-                    {createConcesionarioMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creando...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Crear
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Diálogo de Configuración de Tarjetas */}
-
-          <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Configurar Campos de Tarjetas
-                </DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-4 py-4">
-                <p className="text-sm text-gray-600">
-                  Selecciona qué campos deseas mostrar en las tarjetas del
-                  embudo:
-                </p>
-
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="mostrarNombre"
-                      checked={camposTarjeta.mostrarNombre}
-                      onChange={e => {
-                        const nuevo = {
-                          ...camposTarjeta,
-                          mostrarNombre: e.target.checked,
-                        }
-
-                        setCamposTarjeta(nuevo)
-
-                        localStorage.setItem(
-                          'embudo_concesionarios_campos',
-                          JSON.stringify(nuevo)
-                        )
-                      }}
-                      className="rounded border-gray-300"
-                    />
-
-                    <Label
-                      htmlFor="mostrarNombre"
-                      className="cursor-pointer font-normal"
-                    >
-                      Nombre del concesionario
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="mostrarEstado"
-                      checked={camposTarjeta.mostrarEstado}
-                      onChange={e => {
-                        const nuevo = {
-                          ...camposTarjeta,
-                          mostrarEstado: e.target.checked,
-                        }
-
-                        setCamposTarjeta(nuevo)
-
-                        localStorage.setItem(
-                          'embudo_concesionarios_campos',
-                          JSON.stringify(nuevo)
-                        )
-                      }}
-                      className="rounded border-gray-300"
-                    />
-
-                    <Label
-                      htmlFor="mostrarEstado"
-                      className="cursor-pointer font-normal"
-                    >
-                      Estado (Venta asignada/Inactivo)
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="mostrarClientes"
-                      checked={camposTarjeta.mostrarClientes}
-                      onChange={e => {
-                        const nuevo = {
-                          ...camposTarjeta,
-                          mostrarClientes: e.target.checked,
-                        }
-
-                        setCamposTarjeta(nuevo)
-
-                        localStorage.setItem(
-                          'embudo_concesionarios_campos',
-                          JSON.stringify(nuevo)
-                        )
-                      }}
-                      className="rounded border-gray-300"
-                    />
-
-                    <Label
-                      htmlFor="mostrarClientes"
-                      className="cursor-pointer font-normal"
-                    >
-                      Clientes asignados
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="mostrarPrestamos"
-                      checked={camposTarjeta.mostrarPrestamos}
-                      onChange={e => {
-                        const nuevo = {
-                          ...camposTarjeta,
-                          mostrarPrestamos: e.target.checked,
-                        }
-
-                        setCamposTarjeta(nuevo)
-
-                        localStorage.setItem(
-                          'embudo_concesionarios_campos',
-                          JSON.stringify(nuevo)
-                        )
-                      }}
-                      className="rounded border-gray-300"
-                    />
-
-                    <Label
-                      htmlFor="mostrarPrestamos"
-                      className="cursor-pointer font-normal"
-                    >
-                      Préstamos activos
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="mostrarMontoTotal"
-                      checked={camposTarjeta.mostrarMontoTotal}
-                      onChange={e => {
-                        const nuevo = {
-                          ...camposTarjeta,
-                          mostrarMontoTotal: e.target.checked,
-                        }
-
-                        setCamposTarjeta(nuevo)
-
-                        localStorage.setItem(
-                          'embudo_concesionarios_campos',
-                          JSON.stringify(nuevo)
-                        )
-                      }}
-                      className="rounded border-gray-300"
-                    />
-
-                    <Label
-                      htmlFor="mostrarMontoTotal"
-                      className="cursor-pointer font-normal"
-                    >
-                      Monto total
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="mostrarFechaRegistro"
-                      checked={camposTarjeta.mostrarFechaRegistro}
-                      onChange={e => {
-                        const nuevo = {
-                          ...camposTarjeta,
-                          mostrarFechaRegistro: e.target.checked,
-                        }
-
-                        setCamposTarjeta(nuevo)
-
-                        localStorage.setItem(
-                          'embudo_concesionarios_campos',
-                          JSON.stringify(nuevo)
-                        )
-                      }}
-                      className="rounded border-gray-300"
-                    />
-
-                    <Label
-                      htmlFor="mostrarFechaRegistro"
-                      className="cursor-pointer font-normal"
-                    >
-                      Fecha de registro
-                    </Label>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 border-t pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setCamposTarjeta(CAMPOS_DEFAULT)
-
-                      localStorage.setItem(
-                        'embudo_concesionarios_campos',
-                        JSON.stringify(CAMPOS_DEFAULT)
-                      )
-                    }}
-                  >
-                    Restaurar por defecto
-                  </Button>
-
-                  <Button onClick={() => setShowConfigDialog(false)}>
-                    Cerrar
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+                </DialogContent>
+              </Dialog>
             </div>
           }
         />

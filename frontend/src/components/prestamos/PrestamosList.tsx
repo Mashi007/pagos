@@ -20,7 +20,6 @@ import {
   FileSpreadsheet,
   Download,
   Loader2,
-  Landmark,
 } from 'lucide-react'
 
 import {
@@ -652,93 +651,93 @@ export function PrestamosList() {
       {/* Título y botones */}
 
       <ModulePageHeader
-        icon={Landmark}
+        icon={DollarSign}
         title="Préstamos"
         description="Gestión de préstamos y financiamiento"
         actions={
           <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => navigate('/revision-manual')}
-            className="border-green-200 bg-green-50 px-6 py-6 text-base font-semibold text-green-700 hover:border-green-300 hover:bg-green-100"
-          >
-            <CheckCircle2 className="mr-2 h-5 w-5" />
-            Revisión Manual
-          </Button>
-
-          <Button
-            variant={showRevisarPrestamos ? 'default' : 'outline'}
-            size="lg"
-            onClick={() =>
-              setSearchParams(showRevisarPrestamos ? {} : { revisar: '1' })
-            }
-            className="px-6 py-6 text-base font-semibold"
-          >
-            <Search className="mr-2 h-5 w-5" />
-            Revisar préstamos
-          </Button>
-
-          {showRevisarPrestamos && (
             <Button
               variant="outline"
               size="lg"
-              onClick={handleExportRevisarExcel}
-              disabled={isExportingRevisar || !revisarData?.items?.length}
+              onClick={() => navigate('/revision-manual')}
+              className="border-green-200 bg-green-50 px-6 py-6 text-base font-semibold text-green-700 hover:border-green-300 hover:bg-green-100"
+            >
+              <CheckCircle2 className="mr-2 h-5 w-5" />
+              Revisión Manual
+            </Button>
+
+            <Button
+              variant={showRevisarPrestamos ? 'default' : 'outline'}
+              size="lg"
+              onClick={() =>
+                setSearchParams(showRevisarPrestamos ? {} : { revisar: '1' })
+              }
               className="px-6 py-6 text-base font-semibold"
             >
-              {isExportingRevisar ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                <Download className="mr-2 h-5 w-5" />
-              )}
-              Descargar Excel
-            </Button>
-          )}
-
-          <div className="group relative">
-            <Button
-              size="lg"
-              className="flex min-w-[200px] items-center justify-between px-8 py-6 text-base font-semibold"
-            >
-              <span className="flex items-center">
-                <Plus className="mr-2 h-5 w-5" />
-                Nuevo Préstamo
-              </span>
-
-              <span className="ml-2">▼</span>
+              <Search className="mr-2 h-5 w-5" />
+              Revisar préstamos
             </Button>
 
-            {/* Puente invisible para que el hover no se pierda al bajar el cursor al menú */}
-
-            <div
-              className="absolute left-0 right-0 top-full z-40 h-2"
-              aria-hidden="true"
-            />
-
-            {/* Dropdown Menu */}
-
-            <div className="absolute right-0 top-full z-50 mt-2 hidden w-56 rounded-lg border border-gray-200 bg-white shadow-xl group-hover:block">
-              <button
-                onClick={() => setShowCrearPrestamo(true)}
-                className="flex w-full items-center gap-2 border-b border-gray-100 px-4 py-3 text-left text-gray-700 transition-colors first:rounded-t-lg hover:bg-blue-50 hover:text-blue-600"
+            {showRevisarPrestamos && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleExportRevisarExcel}
+                disabled={isExportingRevisar || !revisarData?.items?.length}
+                className="px-6 py-6 text-base font-semibold"
               >
-                <Plus className="h-4 w-4" />
-                Crear préstamo manual
-              </button>
+                {isExportingRevisar ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-5 w-5" />
+                )}
+                Descargar Excel
+              </Button>
+            )}
 
-              <button
-                onClick={() => setShowExcelUpload(true)}
-                className="flex w-full items-center gap-2 px-4 py-3 text-left text-gray-700 transition-colors last:rounded-b-lg hover:bg-blue-50 hover:text-blue-600"
+            <div className="group relative">
+              <Button
+                size="lg"
+                className="flex min-w-[200px] items-center justify-between px-8 py-6 text-base font-semibold"
               >
-                <FileSpreadsheet className="h-4 w-4" />
-                Cargar desde Excel
-              </button>
+                <span className="flex items-center">
+                  <Plus className="mr-2 h-5 w-5" />
+                  Nuevo Préstamo
+                </span>
+
+                <span className="ml-2">▼</span>
+              </Button>
+
+              {/* Puente invisible para que el hover no se pierda al bajar el cursor al menú */}
+
+              <div
+                className="absolute left-0 right-0 top-full z-40 h-2"
+                aria-hidden="true"
+              />
+
+              {/* Dropdown Menu */}
+
+              <div className="absolute right-0 top-full z-50 mt-2 hidden w-56 rounded-lg border border-gray-200 bg-white shadow-xl group-hover:block">
+                <button
+                  onClick={() => setShowCrearPrestamo(true)}
+                  className="flex w-full items-center gap-2 border-b border-gray-100 px-4 py-3 text-left text-gray-700 transition-colors first:rounded-t-lg hover:bg-blue-50 hover:text-blue-600"
+                >
+                  <Plus className="h-4 w-4" />
+                  Crear préstamo manual
+                </button>
+
+                <button
+                  onClick={() => setShowExcelUpload(true)}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-left text-gray-700 transition-colors last:rounded-b-lg hover:bg-blue-50 hover:text-blue-600"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Cargar desde Excel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-          }
-        />
+        }
+      />
 
       {/* Sección Revisar préstamos (enviados desde carga masiva) */}
 

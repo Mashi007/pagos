@@ -1069,7 +1069,9 @@ class ApiClient {
         backendMessage = d
       } else if (Array.isArray(d)) {
         backendMessage = d
-          .map((x: any) => (typeof x?.msg === 'string' ? x.msg : JSON.stringify(x)))
+          .map((x: any) =>
+            typeof x?.msg === 'string' ? x.msg : JSON.stringify(x)
+          )
           .join('; ')
       } else if (d != null && typeof d === 'object') {
         backendMessage = JSON.stringify(d)

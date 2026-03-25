@@ -373,7 +373,12 @@ export function CampanasPage() {
         description="Correos masivos y seguimiento de campañas desde la base de clientes."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={load}
+              disabled={loading}
+            >
               <RefreshCw
                 className={`mr-1 h-4 w-4 ${loading ? 'animate-spin' : ''}`}
               />
