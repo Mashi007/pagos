@@ -32,7 +32,11 @@ from app.models.cliente import Cliente
 
 from app.models.cuota import Cuota
 
+from app.models.cuota_pago import CuotaPago
+
 from app.models.prestamo import Prestamo
+
+from app.services.cuota_estado import hoy_negocio
 
 
 
@@ -1113,13 +1117,24 @@ def exportar_morosidad(
 def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
     """Exporta Excel de morosidad por cedulas: situacion a la fecha (hoy).
 
-    Una sola vista temporal: cuotas impagas que cumplen mora (4 meses + 1 dia) al corte de hoy.
-    Cliente ACTIVO, prestamo APROBADO, fecha_pago NULL. Sin desglose mes a mes.
-    Una sola hoja RESUMEN: cantidad de cuotas y deuda por cedula.
+    Misma regla que la tabla de amortizacion por prestamo (app.services.cuota_estado):
+    - Hoy = fecha calendario America/Caracas.
+    - Cuota sin cubrir al 100%: SUM(cuota_pagos.monto_aplicado) < monto_cuota - 0.01.
+    - Mora (4+ meses): fecha_vencimiento + 4 meses + 1 dia <= hoy Caracas.
+    Cliente ACTIVO, prestamo APROBADO. Agrupado por cedula del cliente (todas las cuotas
+    MORA de todos sus prestamos aprobados).
     """
     import openpyxl
 
-    fc_hoy = date.today()
+    hoy_caracas_sql = text("(CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date")
+    sum_aplicado = (
+        select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
+        .where(CuotaPago.cuota_id == Cuota.id)
+        .scalar_subquery()
+    )
+    monto_cuota = func.coalesce(Cuota.monto, 0)
+    no_cubierta_completa = sum_aplicado < (monto_cuota - 0.01)
+    en_mora_4m = Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= hoy_caracas_sql
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -1145,8 +1160,8 @@ def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
         .where(
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
-            Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc_hoy,
+            no_cubierta_completa,
+            en_mora_4m,
         )
         .group_by(Cliente.cedula)
         .order_by(Cliente.cedula.asc())
@@ -1166,7 +1181,7 @@ def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
     buf = io.BytesIO()
     wb.save(buf)
     content = buf.getvalue()
-    hoy_str = date.today().isoformat()
+    hoy_str = hoy_negocio().isoformat()
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
