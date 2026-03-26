@@ -27,6 +27,7 @@ from app.api.v1.endpoints.notificaciones import (
     get_notificaciones_envios_config,
     get_plantilla_asunto_cuerpo,
     build_contexto_cobranza_para_item,
+    contexto_cobranza_aplica_a_prestamo,
     plantilla_usa_variables_cobranza,
 )
 from app.models.plantilla_notificacion import PlantillaNotificacion
@@ -230,6 +231,15 @@ def _enviar_correos_items(
                 )
                 omitidos_paquete_incompleto += 1
                 continue
+
+        # No reutilizar contexto de otro prestamo (mismo dict en lista, cache de UI, etc.).
+        if db and item.get("prestamo_id"):
+            ctx_existente = item.get("contexto_cobranza")
+            if ctx_existente is not None and not contexto_cobranza_aplica_a_prestamo(
+                ctx_existente, item.get("prestamo_id")
+            ):
+                item.pop("contexto_cobranza", None)
+                item.pop("_correlativo_envio", None)
 
         # Construir contexto_cobranza cuando haga falta: email COBRANZA, adjunto PDF (Carta_Cobranza) o plantilla con variables cobranza
         # Si "Incluir PDF" está marcado pero no hay plantilla (Texto por defecto), igual se construye contexto para adjuntar Carta_Cobranza.pdf

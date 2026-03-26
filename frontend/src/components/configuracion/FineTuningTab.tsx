@@ -50,6 +50,13 @@ export function FineTuningTab() {
     handlers,
   } = useFineTuning()
 
+  const {
+    cargarConversaciones,
+    cargarJobs,
+    cargarEstadisticasFeedback,
+    cargarTablasCampos,
+  } = handlers
+
   // Local UI state
 
   const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false)
@@ -81,17 +88,21 @@ export function FineTuningTab() {
       conversacionesListasCount - conversacionesConFeedbackNegativo
   }
 
-  // Load initial data
-
+  // Load initial data once on mount. Do not depend on `handlers` (new object every render -> infinite requests).
   useEffect(() => {
-    handlers.cargarConversaciones()
+    void cargarConversaciones()
 
-    handlers.cargarJobs()
+    void cargarJobs()
 
-    handlers.cargarEstadisticasFeedback()
+    void cargarEstadisticasFeedback()
 
-    handlers.cargarTablasCampos()
-  }, [handlers])
+    void cargarTablasCampos()
+  }, [
+    cargarConversaciones,
+    cargarJobs,
+    cargarEstadisticasFeedback,
+    cargarTablasCampos,
+  ])
 
   // Handlers that wrap the main hook handlers
 

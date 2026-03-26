@@ -146,6 +146,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
         get_notificaciones_envios_config,
         get_plantilla_asunto_cuerpo,
         build_contexto_cobranza_para_item,
+        contexto_cobranza_aplica_a_prestamo,
         plantilla_usa_variables_cobranza,
     )
     from app.services.notificacion_service import get_primer_item_ejemplo_paquete_prueba
@@ -225,6 +226,14 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
             out["ok"] = False
             out["motivo"] = "sin_prestamo_id_para_pdf_carta"
             return out
+
+    if db and item.get("prestamo_id"):
+        ctx_existente = item.get("contexto_cobranza")
+        if ctx_existente is not None and not contexto_cobranza_aplica_a_prestamo(
+            ctx_existente, item.get("prestamo_id")
+        ):
+            item.pop("contexto_cobranza", None)
+            item.pop("_correlativo_envio", None)
 
     correlativos_en_batch: dict = {}
     if db and item.get("prestamo_id") and not item.get("contexto_cobranza"):

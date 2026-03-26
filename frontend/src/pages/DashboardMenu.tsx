@@ -370,9 +370,11 @@ export function DashboardMenu() {
       return response as PrestamosPorModeloResponse
     },
 
-    staleTime: 4 * 60 * 60 * 1000,
+    staleTime: 0,
 
-    refetchOnWindowFocus: false,
+    refetchOnMount: 'always',
+
+    refetchOnWindowFocus: true,
 
     enabled: true,
   })
@@ -1592,7 +1594,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-            {/* Recibos: pagos en USD vs Bs. en USD (por mes) */}
+            {/* Recibos: pagos conciliados USD vs Bs. en USD (por mes; sin meses vacíos al inicio/fin) */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1605,7 +1607,7 @@ export function DashboardMenu() {
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <FileText className="h-5 w-5 text-violet-600" />
 
-                      <span>Pagos por recibo (USD)</span>
+                      <span>Pagos conciliados por recibo (USD)</span>
                     </CardTitle>
 
                     <div className="flex items-center gap-2">
@@ -1621,16 +1623,19 @@ export function DashboardMenu() {
                   </div>
 
                   <p className="mt-1 text-xs text-gray-600">
-                    Reportes con recibo generado (aprobado o importado). Línea
-                    verde: monto en USD. Línea ámbar: bolívares convertidos a
-                    USD (tasa del pago en tabla pagos o tasa oficial del día).
+                    Pagos conciliados con recibo (aprobado o importado): unos en
+                    dólares y otros en bolívares expresados en USD. Verde: monto
+                    USD del reporte. Ambar: Bs. conciliados en USD (monto del
+                    pago en tabla pagos si existe; si no, tasa oficial del día).
+                    Solo se muestran meses con movimiento (sin meses vacíos al
+                    inicio ni al final).
                   </p>
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
                   {loadingRecibosUsd ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando pagos por recibo...
+                      Cargando pagos conciliados por recibo...
                     </div>
                   ) : errorRecibosUsd ? (
                     <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-500">
@@ -1704,7 +1709,7 @@ export function DashboardMenu() {
                               stroke="#059669"
                               strokeWidth={2}
                               dot={{ r: 4 }}
-                              name="Pagos recibidos en USD"
+                              name="Conciliados en USD (reporte en USD)"
                             />
 
                             <Line
@@ -1713,7 +1718,7 @@ export function DashboardMenu() {
                               stroke="#d97706"
                               strokeWidth={2}
                               dot={{ r: 4 }}
-                              name="Bolívares en USD (con tasa)"
+                              name="Conciliados en Bs. (equivalente USD)"
                             />
                           </RechartsLineChart>
                         </ResponsiveContainer>
@@ -1721,7 +1726,8 @@ export function DashboardMenu() {
                     </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay datos para el período seleccionado
+                      No hay pagos conciliados con recibo en el período
+                      seleccionado
                     </div>
                   )}
                 </CardContent>
@@ -2001,8 +2007,9 @@ export function DashboardMenu() {
                 </div>
 
                 <p className="mt-1 text-xs text-gray-600">
-                  Distribución en porcentaje (acumulado). Usa el filtro Modelo
-                  en la barra superior para filtrar por vehículo.
+                  Distribución en porcentaje (acumulado). Los nombres se alinean
+                  al catálogo de modelos cuando hay vínculo o coincidencia de
+                  texto. Usa el filtro Modelo en la barra superior para acotar.
                 </p>
               </CardHeader>
 

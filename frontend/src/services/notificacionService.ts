@@ -183,6 +183,16 @@ export interface HistorialEnvioItem {
   prestamo_id: number | null
 
   correlativo: number | null
+
+  /** Metadatos de adjuntos persistidos (envíos con snapshot). */
+
+  adjuntos?: Array<{ id: number; nombre_archivo: string; orden: number }>
+
+  tiene_mensaje_html?: boolean
+
+  tiene_mensaje_texto?: boolean
+
+  tiene_comprobante_pdf?: boolean
 }
 
 export interface HistorialEnvioResponse {
@@ -477,6 +487,45 @@ class NotificacionService {
     )
 
     return text as string
+  }
+
+  /** Descarga cuerpo HTML del correo (snapshot). */
+
+  async descargarHistorialMensajeHtml(envioId: number): Promise<Blob> {
+    return (await apiClient.get<Blob>(
+      `${this.baseUrl}/historial-por-cedula/${envioId}/mensaje-html`,
+      { responseType: 'blob' }
+    )) as Blob
+  }
+
+  /** Descarga cuerpo texto del correo (snapshot). */
+
+  async descargarHistorialMensajeTexto(envioId: number): Promise<Blob> {
+    return (await apiClient.get<Blob>(
+      `${this.baseUrl}/historial-por-cedula/${envioId}/mensaje-texto`,
+      { responseType: 'blob' }
+    )) as Blob
+  }
+
+  /** Descarga un adjunto del envío (PDF u otro). */
+
+  async descargarHistorialAdjunto(
+    envioId: number,
+    adjuntoId: number
+  ): Promise<Blob> {
+    return (await apiClient.get<Blob>(
+      `${this.baseUrl}/historial-por-cedula/${envioId}/adjunto/${adjuntoId}`,
+      { responseType: 'blob' }
+    )) as Blob
+  }
+
+  /** Comprobante de envío en PDF (generado al persistir). */
+
+  async descargarHistorialComprobantePdf(envioId: number): Promise<Blob> {
+    return (await apiClient.get<Blob>(
+      `${this.baseUrl}/historial-por-cedula/${envioId}/comprobante-pdf`,
+      { responseType: 'blob' }
+    )) as Blob
   }
 
   /** Ejecutar actualización de notificaciones (dias_mora en clientes). Llamar desde cron a las 2am. */

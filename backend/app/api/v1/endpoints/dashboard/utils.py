@@ -7,6 +7,12 @@ import threading
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
+from sqlalchemy import func, select
+from sqlalchemy.orm import aliased
+
+from app.models.modelo_vehiculo import ModeloVehiculo
+from app.models.prestamo import Prestamo
+
 logger = logging.getLogger(__name__)
 
 MAX_FILTER_STRING_LEN = 200
@@ -210,6 +216,35 @@ def _parse_fechas_concesionario(fecha_inicio: Optional[str], fecha_fin: Optional
     fin = hoy_date
     inicio = fin - timedelta(days=365)
     return inicio, fin
+
+
+def _modelo_label_dashboard_expr(producto_expr, *, incluir_sin_modelo: bool = False):
+    """
+    Nombre de modelo unificado para gráficos y listas de filtro: catálogo (por id join),
+    catálogo por coincidencia lower(trim) con texto del préstamo, texto crudo, producto.
+    """
+    _mv_texto = aliased(ModeloVehiculo)
+    modelo_desde_catalogo_por_texto = (
+        select(_mv_texto.modelo)
+        .where(
+            func.length(func.trim(Prestamo.modelo_vehiculo)) > 0,
+            func.lower(func.trim(_mv_texto.modelo))
+            == func.lower(func.trim(Prestamo.modelo_vehiculo)),
+        )
+        .order_by(_mv_texto.id)
+        .limit(1)
+        .correlate(Prestamo)
+        .scalar_subquery()
+    )
+    parts = [
+        ModeloVehiculo.modelo,
+        modelo_desde_catalogo_por_texto,
+        func.nullif(func.trim(Prestamo.modelo_vehiculo), ""),
+        producto_expr,
+    ]
+    if incluir_sin_modelo:
+        parts.append("Sin modelo")
+    return func.coalesce(*parts)
 
 
 def _rangos_financiamiento():

@@ -22,6 +22,7 @@ from .utils import (
     _CACHE_OPCIONES_FILTROS,
     _DASHBOARD_ADMIN_CACHE,
     _lock,
+    _modelo_label_dashboard_expr,
     _next_refresh_local,
     _OPCIONES_FILTROS_TTL_SEC,
     _safe_float,
@@ -306,10 +307,9 @@ def get_opciones_filtros(db: Session = Depends(get_db)):
             .distinct()
         ).all() if r[0]]
         producto_valido = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
-        modelo_nombre = func.coalesce(
-            func.nullif(func.trim(Prestamo.modelo_vehiculo), ""),
-            ModeloVehiculo.modelo,
+        modelo_nombre = _modelo_label_dashboard_expr(
             producto_valido,
+            incluir_sin_modelo=False,
         )
         modelos = [r[0] for r in db.execute(
             select(modelo_nombre)

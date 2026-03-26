@@ -27,6 +27,7 @@ from .utils import (
     _CACHE_MOROSIDAD_ANALISTA,
     _CACHE_MOROSIDAD_DIA,
     _lock,
+    _modelo_label_dashboard_expr,
     _next_refresh_local,
     _safe_float,
     _sanitize_filter_string,
@@ -568,11 +569,9 @@ def get_prestamos_por_modelo(
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
         mes_expr = func.to_char(func.date_trunc("month", Prestamo.fecha_registro), "YYYY-MM")
         producto_valido = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
-        modelo_expr = func.coalesce(
-            func.nullif(func.trim(Prestamo.modelo_vehiculo), ""),
-            ModeloVehiculo.modelo,
+        modelo_expr = _modelo_label_dashboard_expr(
             producto_valido,
-            "Sin modelo",
+            incluir_sin_modelo=True,
         )
         conds_base = [
             Prestamo.estado == "APROBADO",
@@ -839,14 +838,38 @@ def get_evolucion_pagos(
         return {"meses": [{"mes": x["mes"], "pagos": x.get("pagos", 0), "monto": x.get("monto", 0)} for x in m]}
 
 
+def _trim_recibos_usd_series_extremos(series: list[dict]) -> list[dict]:
+    """
+    Quita meses sin movimiento al inicio y al final (pagos_usd y pagos_bs_en_usd ambos en cero).
+    No rellena ni inventa meses; si no hay ningún mes con datos, devuelve lista vacía.
+    """
+    if not series:
+        return []
+
+    def tiene_movimiento(p: dict) -> bool:
+        u = _safe_float(p.get("pagos_usd"))
+        b = _safe_float(p.get("pagos_bs_en_usd"))
+        return u > 0 or b > 0
+
+    first = next((i for i, row in enumerate(series) if tiene_movimiento(row)), None)
+    if first is None:
+        return []
+    last = next(
+        (i for i in range(len(series) - 1, -1, -1) if tiene_movimiento(series[i])),
+        first,
+    )
+    return series[first : last + 1]
+
+
 def _compute_recibos_pagos_mensual_usd(
     db: Session,
     fecha_inicio: Optional[str],
     fecha_fin: Optional[str],
 ) -> dict:
     """
-    Por mes (fecha_pago del reporte con recibo en BD o ruta legacy): montos en USD declarados
-    vs bolívares expresados en USD (prioridad: Pago vinculado COB-{ref}; si no, tasa del día).
+    Por mes (fecha_pago del reporte con recibo en BD o ruta legacy): pagos conciliados.
+    USD declarados en el reporte vs. bolívares expresados en USD (fila Pago COB-{ref} si existe;
+    si no, tasa oficial del día). La serie devuelta recorta meses sin movimiento al inicio/fin.
     """
     if fecha_inicio and fecha_fin:
         try:
@@ -942,25 +965,24 @@ def _compute_recibos_pagos_mensual_usd(
                 "pagos_bs_en_usd": float(row.pagos_bs_en_usd or 0),
             }
 
-        series = []
+        series_raw: list[dict] = []
         for m in meses:
             yk, mk = m["year"], m["month"]
             b = buckets.get((yk, mk), {"pagos_usd": 0.0, "pagos_bs_en_usd": 0.0})
-            series.append({
+            series_raw.append({
                 "mes": m["mes"],
                 "pagos_usd": round(b["pagos_usd"], 2),
                 "pagos_bs_en_usd": round(b["pagos_bs_en_usd"], 2),
             })
+        series = _trim_recibos_usd_series_extremos(series_raw)
         return {"series": series, "origen": "bd"}
     except Exception as e:
         logger.exception("Error en recibos-pagos-mensual-usd: %s", e)
-        return {
-            "series": [
-                {"mes": mm["mes"], "pagos_usd": 0.0, "pagos_bs_en_usd": 0.0}
-                for mm in meses
-            ],
-            "origen": "bd",
-        }
+        fallback = [
+            {"mes": mm["mes"], "pagos_usd": 0.0, "pagos_bs_en_usd": 0.0}
+            for mm in meses
+        ]
+        return {"series": _trim_recibos_usd_series_extremos(fallback), "origen": "bd"}
 
 
 @router.get("/recibos-pagos-mensual-usd")
@@ -970,7 +992,7 @@ def get_recibos_pagos_mensual_usd(
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Pagos por recibo (pagos_reportados con PDF): USD vs Bs. en USD por mes."""
+    """Pagos conciliados por recibo (PDF/ruta): USD vs Bs. en USD por mes; sin meses vacíos al inicio/fin."""
     fi, ff = fecha_inicio, fecha_fin
     if not (fi and ff):
         pfi, pff = _fechas_iso_desde_periodo_dashboard(periodo)

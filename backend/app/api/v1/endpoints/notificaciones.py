@@ -219,6 +219,24 @@ def get_plantilla_asunto_cuerpo(db: Session, plantilla_id: Optional[int], item: 
     return (asunto, cuerpo)
 
 
+def contexto_cobranza_aplica_a_prestamo(contexto: object, prestamo_id: object) -> bool:
+    """
+    True si el contexto (produccion o stub de tests) corresponde al prestamo_id del item.
+    Asi no se reutiliza Carta/PDF de otro credito cuando el dict se comparte en un batch
+    o llega con datos obsoletos.
+    """
+    if not isinstance(contexto, dict) or prestamo_id is None:
+        return False
+    pid_ctx = contexto.get("PRESTAMOS.ID")
+    if pid_ctx is None:
+        pid_ctx = contexto.get("IDPRESTAMO")
+    if pid_ctx is None:
+        pid_ctx = contexto.get("prestamo_id")
+    try:
+        return int(pid_ctx) == int(prestamo_id)
+    except (TypeError, ValueError):
+        return False
+
 
 def build_contexto_cobranza_para_item(
     db: Session, item: dict, correlativos_en_batch: dict

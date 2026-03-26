@@ -243,8 +243,7 @@ function App() {
   const isPublicPath = PUBLIC_PATHS.some((p: string) => pathname === p)
 
   const colaboradorFiniquitoEnGestion =
-    pathname === '/finiquitos/gestion' &&
-    !!getFiniquitoAccessToken()?.trim()
+    pathname === '/finiquitos/gestion' && !!getFiniquitoAccessToken()?.trim()
 
   if (isLoading && !isPublicPath && !colaboradorFiniquitoEnGestion) {
     return <PageLoader />

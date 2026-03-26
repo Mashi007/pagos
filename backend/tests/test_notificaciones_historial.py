@@ -8,6 +8,7 @@ Ejecutar desde backend/:
 """
 import os
 import sys
+import uuid
 from datetime import datetime
 
 import pytest
@@ -69,14 +70,15 @@ def client(db: Session):
 
 @pytest.fixture(scope="function")
 def un_envio_en_bd(db: Session):
-    """Crea un registro en envios_notificacion para pruebas."""
+    """Crea un registro en envios_notificacion para pruebas (cédula única por ejecución)."""
+    cedula_unica = "V9" + uuid.uuid4().hex[:8].upper()
     envio = EnvioNotificacion(
         fecha_envio=datetime.utcnow(),
         tipo_tab="dias_5",
         asunto="Recordatorio cuota - Test",
         email="cliente@test.local",
         nombre="Cliente Test",
-        cedula="V12345678",
+        cedula=cedula_unica,
         exito=True,
         error_mensaje=None,
         prestamo_id=1,
@@ -138,12 +140,16 @@ def test_historial_por_cedula_con_registro(client: TestClient, db: Session, un_e
     assert item.get("tipo_tab") == "dias_5"
     assert item.get("asunto") == "Recordatorio cuota - Test"
     assert item.get("exito") is True
+    assert item.get("adjuntos") == []
+    assert item.get("tiene_mensaje_html") is False
+    assert item.get("tiene_comprobante_pdf") is False
 
 
 def test_historial_por_cedula_normaliza_cedula(client: TestClient, db: Session, un_envio_en_bd: EnvioNotificacion):
     """GET con cédula con espacios/guiones encuentra el mismo registro (normalización)."""
-    # En BD está V12345678
-    r = client.get("/api/v1/notificaciones/historial-por-cedula", params={"cedula": "V-12 345 678"})
+    raw = un_envio_en_bd.cedula
+    spaced = f"{raw[0]}-{raw[1:5]} {raw[5:]}" if len(raw) > 5 else raw
+    r = client.get("/api/v1/notificaciones/historial-por-cedula", params={"cedula": spaced})
     assert r.status_code == 200
     data = r.json()
     assert data.get("total") >= 1

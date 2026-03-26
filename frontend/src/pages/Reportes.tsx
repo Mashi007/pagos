@@ -148,8 +148,10 @@ export function Reportes() {
 
   const [loadingExcelHistorial, setLoadingExcelHistorial] = useState(false)
 
-  const [loadingComprobanteId, setLoadingComprobanteId] = useState<
-    number | null
+  /** Clave de descarga en curso: html:ID, pdf:ID, mhtml:ID, mtxt:ID, adj:envioId:adjId */
+
+  const [loadingHistorialDescarga, setLoadingHistorialDescarga] = useState<
+    string | null
   >(null)
 
   // Bloque mostrado si canViewReports() restringe por rol (ej. solo admin). Restriccion por tipo de reporte: canAccessReport().
@@ -346,7 +348,9 @@ export function Reportes() {
   }
 
   const abrirComprobante = async (envioId: number) => {
-    setLoadingComprobanteId(envioId)
+    const key = `html:${envioId}`
+
+    setLoadingHistorialDescarga(key)
 
     try {
       const html = await notificacionService.getComprobanteEnvioHtml(envioId)
@@ -365,7 +369,111 @@ export function Reportes() {
 
       toast.error(getErrorMessage(e) || 'Error al abrir comprobante.')
     } finally {
-      setLoadingComprobanteId(null)
+      setLoadingHistorialDescarga(null)
+    }
+  }
+
+  const descargarHistorialComprobantePdf = async (envioId: number) => {
+    const key = `pdf:${envioId}`
+
+    setLoadingHistorialDescarga(key)
+
+    try {
+      const blob =
+        await notificacionService.descargarHistorialComprobantePdf(envioId)
+
+      descargarBlob(blob, `comprobante_notificacion_${envioId}.pdf`)
+
+      toast.success('Comprobante PDF descargado.')
+    } catch (e) {
+      console.error(e)
+
+      toast.error(
+        getErrorMessage(e) ||
+          'No hay PDF o no está disponible para este envío (registros antiguos).'
+      )
+    } finally {
+      setLoadingHistorialDescarga(null)
+    }
+  }
+
+  const descargarHistorialMensajeHtml = async (envioId: number) => {
+    const key = `mhtml:${envioId}`
+
+    setLoadingHistorialDescarga(key)
+
+    try {
+      const blob =
+        await notificacionService.descargarHistorialMensajeHtml(envioId)
+
+      descargarBlob(blob, `mensaje_notificacion_${envioId}.html`)
+
+      toast.success('Cuerpo HTML descargado.')
+    } catch (e) {
+      console.error(e)
+
+      toast.error(
+        getErrorMessage(e) ||
+          'No hay cuerpo HTML almacenado (envíos anteriores al snapshot).'
+      )
+    } finally {
+      setLoadingHistorialDescarga(null)
+    }
+  }
+
+  const descargarHistorialMensajeTexto = async (envioId: number) => {
+    const key = `mtxt:${envioId}`
+
+    setLoadingHistorialDescarga(key)
+
+    try {
+      const blob =
+        await notificacionService.descargarHistorialMensajeTexto(envioId)
+
+      descargarBlob(blob, `mensaje_notificacion_${envioId}.txt`)
+
+      toast.success('Cuerpo texto descargado.')
+    } catch (e) {
+      console.error(e)
+
+      toast.error(
+        getErrorMessage(e) ||
+          'No hay cuerpo de texto almacenado (envíos anteriores al snapshot).'
+      )
+    } finally {
+      setLoadingHistorialDescarga(null)
+    }
+  }
+
+  const descargarHistorialAdjunto = async (
+    envioId: number,
+    adjuntoId: number,
+    nombreArchivo: string
+  ) => {
+    const key = `adj:${envioId}:${adjuntoId}`
+
+    setLoadingHistorialDescarga(key)
+
+    try {
+      const blob = await notificacionService.descargarHistorialAdjunto(
+        envioId,
+        adjuntoId
+      )
+
+      const safe =
+        (nombreArchivo || `adjunto_${adjuntoId}`)
+          .replace(/[/\\?%*:|"<>]/g, '_')
+          .slice(0, 180) || `adjunto_${adjuntoId}.pdf`
+
+      descargarBlob(blob, safe)
+
+      toast.success('Adjunto descargado.')
+    } catch (e) {
+      console.error(e)
+
+      toast.error(getErrorMessage(e) || 'Error al descargar adjunto.')
+    } finally {
+      setLoadingHistorialDescarga(null)
     }
   }
 
@@ -903,8 +1011,8 @@ export function Reportes() {
 
             <p className="text-sm text-muted-foreground">
               Consulte por cédula el historial de notificaciones enviadas.
-              Descargue un Excel con todo el historial o abra cada comprobante
-              de envío (para fines administrativos y legales).
+              Descargue Excel, comprobante HTML o PDF, y desde envíos recientes
+              el cuerpo del correo y los PDFs adjuntos tal como se enviaron.
             </p>
           </CardHeader>
 
@@ -1028,22 +1136,143 @@ export function Reportes() {
                             </span>
                           </td>
 
-                          <td className="px-3 py-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => abrirComprobante(row.id)}
-                              disabled={loadingComprobanteId === row.id}
-                            >
-                              {loadingComprobanteId === row.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <FileText className="h-4 w-4" />
-                              )}
+                          <td className="min-w-[200px] max-w-[280px] px-3 py-2 align-top">
+                            <div className="flex flex-col gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 justify-start px-2"
+                                onClick={() => abrirComprobante(row.id)}
+                                disabled={
+                                  loadingHistorialDescarga === `html:${row.id}`
+                                }
+                              >
+                                {loadingHistorialDescarga ===
+                                `html:${row.id}` ? (
+                                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                                ) : (
+                                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                                )}
 
-                              <span className="ml-1">Ver comprobante</span>
-                            </Button>
+                                <span className="ml-1 text-xs">
+                                  Comprobante (HTML)
+                                </span>
+                              </Button>
+
+                              {row.tiene_comprobante_pdf ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 justify-start px-2"
+                                  onClick={() =>
+                                    descargarHistorialComprobantePdf(row.id)
+                                  }
+                                  disabled={
+                                    loadingHistorialDescarga === `pdf:${row.id}`
+                                  }
+                                >
+                                  {loadingHistorialDescarga ===
+                                  `pdf:${row.id}` ? (
+                                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                                  ) : (
+                                    <Download className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+
+                                  <span className="ml-1 text-xs">
+                                    Comprobante PDF
+                                  </span>
+                                </Button>
+                              ) : null}
+
+                              {row.tiene_mensaje_html ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 justify-start px-2"
+                                  onClick={() =>
+                                    descargarHistorialMensajeHtml(row.id)
+                                  }
+                                  disabled={
+                                    loadingHistorialDescarga ===
+                                    `mhtml:${row.id}`
+                                  }
+                                >
+                                  {loadingHistorialDescarga ===
+                                  `mhtml:${row.id}` ? (
+                                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                                  ) : (
+                                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+
+                                  <span className="ml-1 text-xs">
+                                    Cuerpo (HTML)
+                                  </span>
+                                </Button>
+                              ) : null}
+
+                              {row.tiene_mensaje_texto ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 justify-start px-2"
+                                  onClick={() =>
+                                    descargarHistorialMensajeTexto(row.id)
+                                  }
+                                  disabled={
+                                    loadingHistorialDescarga ===
+                                    `mtxt:${row.id}`
+                                  }
+                                >
+                                  {loadingHistorialDescarga ===
+                                  `mtxt:${row.id}` ? (
+                                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                                  ) : (
+                                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+
+                                  <span className="ml-1 text-xs">
+                                    Cuerpo (texto)
+                                  </span>
+                                </Button>
+                              ) : null}
+
+                              {(row.adjuntos ?? []).map(adj => (
+                                <Button
+                                  key={adj.id}
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 justify-start px-2"
+                                  title={adj.nombre_archivo}
+                                  onClick={() =>
+                                    descargarHistorialAdjunto(
+                                      row.id,
+                                      adj.id,
+                                      adj.nombre_archivo
+                                    )
+                                  }
+                                  disabled={
+                                    loadingHistorialDescarga ===
+                                    `adj:${row.id}:${adj.id}`
+                                  }
+                                >
+                                  {loadingHistorialDescarga ===
+                                  `adj:${row.id}:${adj.id}` ? (
+                                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                                  ) : (
+                                    <Download className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+
+                                  <span className="ml-1 line-clamp-2 text-left text-xs">
+                                    {adj.nombre_archivo || `Adjunto ${adj.id}`}
+                                  </span>
+                                </Button>
+                              ))}
+                            </div>
                           </td>
                         </tr>
                       ))
