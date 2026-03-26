@@ -858,55 +858,62 @@ class PrestamoService {
    * GET /api/v1/prestamos/{id}/estado-cuenta/pdf
    */
   async descargarEstadoCuentaPDF(prestamoId: number): Promise<void> {
-    const axiosInstance = apiClient.getAxiosInstance()
+    const previewWindow = window.open('', '_blank', 'noopener,noreferrer')
 
-    const response = await axiosInstance.get(
-      `${this.baseUrl}/${prestamoId}/estado-cuenta/pdf`,
-      { responseType: 'blob' }
-    )
-
-    const raw: Blob =
-      response.data instanceof Blob ? response.data : new Blob([response.data])
-    const head = new Uint8Array(await raw.slice(0, 5).arrayBuffer())
-    const looksPdf =
-      head[0] === 0x25 &&
-      head[1] === 0x50 &&
-      head[2] === 0x44 &&
-      head[3] === 0x46
-    const ct = String(
-      response.headers?.['content-type'] ||
-        response.headers?.['Content-Type'] ||
-        ''
-    )
-    const looksExcel =
-      ct.includes('spreadsheet') ||
-      ct.includes('excel') ||
-      ct.includes('officedocument.spreadsheetml') ||
-      (head[0] === 0x50 && head[1] === 0x4b)
-
-    if (!looksPdf && looksExcel) {
-      throw new Error(
-        'La respuesta no es un PDF de estado de cuenta (se recibió Excel). Actualice la aplicación o revise el despliegue.'
-      )
-    }
-    if (!looksPdf && !ct.includes('pdf')) {
-      throw new Error(
-        'La respuesta no es un PDF válido. Verifique sesión e intente de nuevo.'
-      )
-    }
-
-    const blob = new Blob([raw], { type: 'application/pdf' })
-    const url = window.URL.createObjectURL(blob)
-    const opened = window.open(url, '_blank', 'noopener,noreferrer')
-
-    if (!opened) {
-      window.URL.revokeObjectURL(url)
+    if (!previewWindow) {
       throw new Error(
         'El navegador bloqueo la pestana de previsualizacion del estado de cuenta PDF.'
       )
     }
 
-    window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
+    try {
+      const axiosInstance = apiClient.getAxiosInstance()
+
+      const response = await axiosInstance.get(
+        ${this.baseUrl}//estado-cuenta/pdf,
+        { responseType: 'blob' }
+      )
+
+      const raw: Blob =
+        response.data instanceof Blob ? response.data : new Blob([response.data])
+      const head = new Uint8Array(await raw.slice(0, 5).arrayBuffer())
+      const looksPdf =
+        head[0] === 0x25 &&
+        head[1] === 0x50 &&
+        head[2] === 0x44 &&
+        head[3] === 0x46
+      const ct = String(
+        response.headers?.['content-type'] ||
+          response.headers?.['Content-Type'] ||
+          ''
+      )
+      const looksExcel =
+        ct.includes('spreadsheet') ||
+        ct.includes('excel') ||
+        ct.includes('officedocument.spreadsheetml') ||
+        (head[0] === 0x50 && head[1] === 0x4b)
+
+      if (!looksPdf && looksExcel) {
+        throw new Error(
+          'La respuesta no es un PDF de estado de cuenta (se recibio Excel). Actualice la aplicacion o revise el despliegue.'
+        )
+      }
+      if (!looksPdf && !ct.includes('pdf')) {
+        throw new Error(
+          'La respuesta no es un PDF valido. Verifique sesion e intente de nuevo.'
+        )
+      }
+
+      const blob = new Blob([raw], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      previewWindow.location.href = url
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
+    } catch (error) {
+      if (!previewWindow.closed) {
+        previewWindow.close()
+      }
+      throw error
+    }
   }
 }
 

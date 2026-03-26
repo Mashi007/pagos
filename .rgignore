@@ -1,0 +1,29 @@
+﻿# Build artifacts and dependencies
+**/dist/**
+**/build/**
+**/coverage/**
+**/node_modules/**
+
+# Python cache and virtual environments
+**/__pycache__/**
+**/.pytest_cache/**
+**/.mypy_cache/**
+**/.venv/**
+**/.venv_new/**
+**/venv/**
+
+# Binary and generated files
+**/*.pyc
+**/*.pyo
+**/*.exe
+**/*.dll
+**/*.so
+**/*.dylib
+**/*.bin
+**/*.min.js
+**/*.map
+
+# Local tooling output
+**/.cursor/**
+**/agent-tools/**
+**/audit-screenshots/**

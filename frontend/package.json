@@ -33,7 +33,9 @@
     "render-start": "node server.js",
     "sanitize:chars": "node scripts/sanitize-artifact-chars.mjs",
     "check:hygiene": "node scripts/check-source-hygiene.mjs",
-    "verify": "npm run check:hygiene && npm run type-check"
+    "verify": "npm run check:hygiene && npm run type-check",
+    "logs:scan": "rg -n --hidden --no-ignore-vcs --glob \"!dist/**\" --glob \"!node_modules/**\" --glob \"!coverage/**\" --glob \"!**/__pycache__/**\" \"ERROR|Exception|Traceback|failed|timeout\" src ..\\backend\\app",
+    "logs:scan:errors": "rg -n --hidden --no-ignore-vcs --glob \"!dist/**\" --glob \"!node_modules/**\" --glob \"!coverage/**\" --glob \"!**/__pycache__/**\" \"error|exception|traceback\" src ..\\backend\\app -i"
   },
   "dependencies": {
     "@heroicons/react": "^2.0.18",

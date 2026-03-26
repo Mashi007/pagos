@@ -52,6 +52,7 @@ type TabId =
   | 'dias_1_atraso'
   | 'dias_5_atraso'
   | 'dias_30_atraso'
+  | 'masivos'
   | 'configuracion'
 
 const TABS: { id: TabId; label: string; icon: typeof Clock }[] = [
@@ -64,6 +65,8 @@ const TABS: { id: TabId; label: string; icon: typeof Clock }[] = [
   { id: 'dias_5_atraso', label: '5 días atrasado', icon: Clock },
 
   { id: 'dias_30_atraso', label: '30 días atrasado', icon: Clock },
+
+  { id: 'masivos', label: 'Masivos', icon: Mail },
 
   { id: 'configuracion', label: 'Configuración', icon: Settings },
 ]
@@ -82,6 +85,9 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
 
     case 'dias_30_atraso':
       return 'prejudicial'
+
+    case 'masivos':
+      return 'masivos'
 
     default:
       return null
@@ -169,7 +175,7 @@ export function Notificaciones() {
 
     /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
 
-    enabled: activeTab !== 'configuracion',
+    enabled: activeTab !== 'configuracion' && activeTab !== 'masivos',
   })
 
   const { data: estadisticasPorTab } = useQuery({
@@ -198,8 +204,22 @@ export function Notificaciones() {
 
       prejudicial: { enviados: 0, rebotados: 0 },
 
+      masivos: { enviados: 0, rebotados: 0 },
+
       liquidados: { enviados: 0, rebotados: 0 },
     } as EstadisticasPorTab,
+  })
+
+  const { data: masivosData } = useQuery({
+    queryKey: ['notificaciones-masivos-lista'],
+
+    queryFn: () => notificacionService.listarNotificacionesMasivos(),
+
+    staleTime: 0,
+
+    enabled: activeTab === 'masivos',
+
+    placeholderData: { items: [], total: 0 },
   })
 
   const queryClient = useQueryClient()
@@ -356,6 +376,9 @@ export function Notificaciones() {
       case 'dias_30_atraso':
         return data.dias_30_atraso ?? []
 
+      case 'masivos':
+        return masivosData?.items ?? []
+
       default:
         return []
     }
@@ -374,6 +397,8 @@ export function Notificaciones() {
   )
 
   const mostrarTablaCuotas = hasColumnasCuota
+
+  const esTabMasivos = activeTab === 'masivos'
 
   if (activeTab === 'configuracion') {
     return (
@@ -560,6 +585,15 @@ export function Notificaciones() {
               </p>
             )}
 
+            {esTabMasivos && (
+              <p className="mb-4 text-xs text-gray-500">
+                Comunicaciones masivas generales: no dependen de cuotas ni de
+                préstamos. Se envían a clientes con correo registrado, usando
+                la configuración del caso
+                <code className="mx-1 rounded bg-gray-100 px-1">MASIVOS</code>.
+              </p>
+            )}
+
             {/* Botón descargar informe Excel de no entregados (rebotados) */}
 
             {statTabKey != null && (
@@ -690,9 +724,17 @@ export function Notificaciones() {
                               : '-'}
                           </td>
 
-                          <td className="px-3 py-2">
-                            {estadoCuentaPdfCell(row.prestamo_id)}
-                          </td>
+                          {esTabMasivos ? (
+                            <>
+                              <td className="px-3 py-2">{row.correo || '-'}</td>
+
+                              <td className="px-3 py-2">{row.telefono || '-'}</td>
+                            </>
+                          ) : (
+                            <td className="px-3 py-2">
+                              {estadoCuentaPdfCell(row.prestamo_id)}
+                            </td>
+                          )}
                         </tr>
                       ))
                     )}
@@ -714,9 +756,21 @@ export function Notificaciones() {
                         Cédula
                       </th>
 
-                      <th className="px-3 py-2 text-left font-semibold">
-                        Estado de cuenta
-                      </th>
+                      {esTabMasivos ? (
+                        <>
+                          <th className="px-3 py-2 text-left font-semibold">
+                            Correo
+                          </th>
+
+                          <th className="px-3 py-2 text-left font-semibold">
+                            Teléfono
+                          </th>
+                        </>
+                      ) : (
+                        <th className="px-3 py-2 text-left font-semibold">
+                          Estado de cuenta
+                        </th>
+                      )}
                     </tr>
                   </thead>
 
@@ -724,7 +778,7 @@ export function Notificaciones() {
                     {list.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={4}
+                          colSpan={esTabMasivos ? 5 : 4}
                           className="py-8 text-center text-gray-500"
                         >
                           Ningún cliente en este criterio.
@@ -744,9 +798,17 @@ export function Notificaciones() {
 
                           <td className="px-3 py-2">{row.cedula}</td>
 
-                          <td className="px-3 py-2">
-                            {estadoCuentaPdfCell(row.prestamo_id)}
-                          </td>
+                          {esTabMasivos ? (
+                            <>
+                              <td className="px-3 py-2">{row.correo || '-'}</td>
+
+                              <td className="px-3 py-2">{row.telefono || '-'}</td>
+                            </>
+                          ) : (
+                            <td className="px-3 py-2">
+                              {estadoCuentaPdfCell(row.prestamo_id)}
+                            </td>
+                          )}
                         </tr>
                       ))
                     )}

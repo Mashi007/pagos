@@ -77,14 +77,36 @@ def _save_dedup(db: Session, m: Dict[str, str]) -> None:
         db.add(Configuracion(clave=CLAVE_DEDUP, valor=valor))
 
 
-def _config_tiene_coincidencia_hora(config: dict, hm: Tuple[int, int]) -> bool:
+def _config_tiene_coincidencia_hora(config: dict, hm: Tuple[int, int], weekday: int) -> bool:
     for k, v in config.items():
-        if k in GLOBAL_KEYS or not isinstance(v, dict):
+        if k in GLOBAL_KEYS or k == "masivos_campanas" or not isinstance(v, dict):
             continue
         if v.get("habilitado", True) is False:
             continue
         if parse_programador_hm(v.get("programador")) == hm:
             return True
+
+    campanas = config.get("masivos_campanas") if isinstance(config, dict) else None
+    if isinstance(campanas, list):
+        for raw in campanas:
+            if not isinstance(raw, dict):
+                continue
+            if raw.get("habilitado", True) is False:
+                continue
+            dias = raw.get("dias_semana")
+            if isinstance(dias, list) and len(dias) > 0:
+                ok_dia = False
+                for d in dias:
+                    try:
+                        if int(d) == weekday:
+                            ok_dia = True
+                            break
+                    except (TypeError, ValueError):
+                        continue
+                if not ok_dia:
+                    continue
+            if parse_programador_hm(raw.get("programador")) == hm:
+                return True
     return False
 
 
@@ -122,6 +144,7 @@ def ejecutar_envios_por_programador(db: Session) -> Dict[str, Any]:
         _tipo_prejudicial,
         _tipo_previas,
         _tipo_retrasadas,
+        ejecutar_envio_masivos_por_campanas,
     )
 
     config = get_notificaciones_envios_dict(db)
@@ -129,7 +152,8 @@ def ejecutar_envios_por_programador(db: Session) -> Dict[str, Any]:
     hm = (now.hour, now.minute)
     fecha_str = now.date().isoformat()
 
-    if not _config_tiene_coincidencia_hora(config, hm):
+    weekday = now.weekday()
+    if not _config_tiene_coincidencia_hora(config, hm, weekday):
         return {"skipped": True, "motivo": "ninguna_hora_coincide", "hm_caracas": f"{hm[0]:02d}:{hm[1]:02d}"}
 
     dedup = _load_dedup(db)
@@ -221,6 +245,25 @@ def ejecutar_envios_por_programador(db: Session) -> Dict[str, Any]:
         sk = _slot_key(fecha_str, hm)
         for it in items_f:
             dedup[get_tipo(it)] = sk
+
+
+    masivos_prog = ejecutar_envio_masivos_por_campanas(
+        db,
+        config,
+        filtrar_hora=hm,
+        filtrar_weekday=weekday,
+        dedup=dedup,
+        fecha_str=fecha_str,
+    )
+    if any(int(masivos_prog.get(k, 0) or 0) > 0 for k in ("enviados", "fallidos", "sin_email", "omitidos_config", "omitidos_paquete_incompleto")):
+        detalles["masivos"] = masivos_prog
+    total_e += int(masivos_prog.get("enviados", 0) or 0)
+    total_f += int(masivos_prog.get("fallidos", 0) or 0)
+    total_se += int(masivos_prog.get("sin_email", 0) or 0)
+    total_oc += int(masivos_prog.get("omitidos_config", 0) or 0)
+    total_op += int(masivos_prog.get("omitidos_paquete_incompleto", 0) or 0)
+    total_wok += int(masivos_prog.get("enviados_whatsapp", 0) or 0)
+    total_wf += int(masivos_prog.get("fallidos_whatsapp", 0) or 0)
 
     if detalles:
         _save_dedup(db, dedup)

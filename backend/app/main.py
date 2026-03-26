@@ -44,22 +44,41 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
     """Registra mÃ©todo, ruta, cÃ³digo de estado y tiempo para correlacionar con logs de Render."""
     async def dispatch(self, request: Request, call_next):
         start = time.perf_counter()
-        response = await call_next(request)
+        path = request.url.path
+        request_id = request.headers.get("X-Request-Id") or "n/a"
+        client_ip = request.client.host if request.client else "n/a"
+
+        try:
+            response = await call_next(request)
+        except Exception:
+            elapsed_ms = int((time.perf_counter() - start) * 1000)
+            logger.exception(
+                "request method=%s path=%s status=%s elapsed_ms=%s request_id=%s client_ip=%s",
+                request.method,
+                path,
+                500,
+                elapsed_ms,
+                request_id,
+                client_ip,
+            )
+            raise
+
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         status = response.status_code
-        path = request.url.path
-        msg = "request method=%s path=%s status=%s elapsed_ms=%s"
-        # run-now puede tardar 20â€“120 s; no marcar como slow
+        msg = "request method=%s path=%s status=%s elapsed_ms=%s request_id=%s client_ip=%s"
+
+        # run-now puede tardar 20-120 s; no marcar como slow
         is_run_now = "gmail/run-now" in path
         if status >= 500:
-            logger.warning(msg + " (error)", request.method, path, status, elapsed_ms)
+            logger.warning(msg + " (error)", request.method, path, status, elapsed_ms, request_id, client_ip)
         elif not is_run_now and elapsed_ms >= 5000:
-            logger.warning(msg + " (slow)", request.method, path, status, elapsed_ms)
+            logger.warning(msg + " (slow)", request.method, path, status, elapsed_ms, request_id, client_ip)
         elif request.method == "POST" and path.rstrip("/").endswith("/api/v1/pagos") and status == 409:
             # 409 documento duplicado en carga masiva: muchos por lote; solo DEBUG para no saturar logs
-            logger.debug(msg, request.method, path, status, elapsed_ms)
+            logger.debug(msg, request.method, path, status, elapsed_ms, request_id, client_ip)
         else:
-            logger.info(msg, request.method, path, status, elapsed_ms)
+            logger.info(msg, request.method, path, status, elapsed_ms, request_id, client_ip)
+
         return response
 
 # Crear aplicaciÃ³n FastAPI
@@ -107,6 +126,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Log de cada request (mÃ©todo, ruta, status, tiempo) para depuraciÃ³n en Render
 app.add_middleware(RequestLogMiddleware)
+
+# Request ID para correlación entre frontend/backend
+app.add_middleware(RequestIdMiddleware)
 
 # Middleware: Validaciï¿½n en tiempo real de sobre-aplicaciones
 app.add_middleware(ValidadorSobreAplicacionMiddleware)

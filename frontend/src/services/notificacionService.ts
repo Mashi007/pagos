@@ -79,6 +79,9 @@ export interface ClienteRetrasadoItem {
   monto?: number
 
   dias_atraso?: number
+  correo?: string
+  telefono?: string
+  estado?: string
 }
 
 /** Préstamo con total financiamiento = total abonos (liquidado). */
@@ -115,6 +118,11 @@ export interface ClientesRetrasadosResponse {
   liquidados?: LiquidadoItem[]
 }
 
+export interface NotificacionesMasivosResponse {
+  items: ClienteRetrasadoItem[]
+  total: number
+}
+
 export interface EstadisticasTabItem {
   enviados: number
 
@@ -139,6 +147,8 @@ export interface EstadisticasPorTab {
   dias_5_retraso: EstadisticasTabItem
 
   prejudicial: EstadisticasTabItem
+
+  masivos: EstadisticasTabItem
 
   liquidados: EstadisticasTabItem
 }
@@ -707,6 +717,13 @@ class NotificacionService {
     )
   }
 
+  async listarNotificacionesMasivos(): Promise<NotificacionesMasivosResponse> {
+    return await apiClient.get<NotificacionesMasivosResponse>(
+      `${API_V1}/notificaciones-masivos/`,
+      { timeout: 120000 }
+    )
+  }
+
   /** Envía correo a cada cliente en la clasificación indicada (email desde tabla clientes). */
 
   async enviarNotificacionesPrevias(): Promise<{
@@ -782,6 +799,26 @@ class NotificacionService {
       fallidos: number
     }>(
       `${API_V1}/notificaciones-prejudicial/enviar`,
+
+      {},
+
+      { timeout: 120000 }
+    )
+  }
+
+  async enviarNotificacionesMasivos(): Promise<{
+    mensaje: string
+    enviados: number
+    sin_email: number
+    fallidos: number
+  }> {
+    return await apiClient.post<{
+      mensaje: string
+      enviados: number
+      sin_email: number
+      fallidos: number
+    }>(
+      `${API_V1}/notificaciones-masivos/enviar`,
 
       {},
 

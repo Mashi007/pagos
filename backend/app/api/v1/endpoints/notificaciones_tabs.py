@@ -14,6 +14,7 @@ import logging
 from typing import Callable, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -30,6 +31,7 @@ from app.api.v1.endpoints.notificaciones import (
     contexto_cobranza_aplica_a_prestamo,
     plantilla_usa_variables_cobranza,
 )
+from app.models.cliente import Cliente
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
 from app.services.envio_notificacion_snapshot import persistir_snapshot_envio_notificacion
@@ -58,6 +60,7 @@ _CONFIG_TIPO_TO_TAB = {
     "PAGO_3_DIAS_ATRASADO": "dias_3_retraso",
     "PAGO_5_DIAS_ATRASADO": "dias_5_retraso",
     "PREJUDICIAL": "prejudicial",
+    "MASIVOS": "masivos",
 }
 
 
@@ -145,6 +148,7 @@ router_previas = APIRouter(dependencies=[Depends(get_current_user)])
 router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
 router_retrasadas = APIRouter(dependencies=[Depends(get_current_user)])
 router_prejudicial = APIRouter(dependencies=[Depends(get_current_user)])
+router_masivos = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _enviar_correos_items(
@@ -213,19 +217,20 @@ def _enviar_correos_items(
                 log_envio_paquete_incompleto(item_id_log, mot_plant, tipo)
                 omitidos_paquete_incompleto += 1
                 continue
-            if not _cfg_incluir_pdf_anexo(tipo_cfg):
+            requiere_pdf_cobranza = tipo != "MASIVOS"
+            if requiere_pdf_cobranza and not _cfg_incluir_pdf_anexo(tipo_cfg):
                 log_envio_paquete_incompleto(
                     item_id_log, "incluir_pdf_anexo_desactivado_en_config", tipo
                 )
                 omitidos_paquete_incompleto += 1
                 continue
-            if tipo_cfg.get("incluir_adjuntos_fijos", True) is False:
+            if requiere_pdf_cobranza and tipo_cfg.get("incluir_adjuntos_fijos", True) is False:
                 log_envio_paquete_incompleto(
                     item_id_log, "incluir_adjuntos_fijos_no_puede_desactivarse", tipo
                 )
                 omitidos_paquete_incompleto += 1
                 continue
-            if not item.get("prestamo_id"):
+            if requiere_pdf_cobranza and not item.get("prestamo_id"):
                 log_envio_paquete_incompleto(
                     item_id_log, "sin_prestamo_id_para_pdf_carta", tipo
                 )
@@ -278,8 +283,8 @@ def _enviar_correos_items(
         # - PDF (pestaña 2): Carta_Cobranza.pdf generada desde Plantilla anexo PDF. Se agrega OBLIGATORIAMENTE si incluir_pdf_anexo=True.
         # - Adj. (pestaña 3): Documentos PDF fijos subidos en Documentos PDF anexos. Se agregan OBLIGATORIAMENTE si incluir_adjuntos_fijos no es False.
         if paquete_estricto:
-            incluir_pdf_anexo = True
-            incluir_adjuntos_fijos = True
+            incluir_pdf_anexo = tipo != "MASIVOS"
+            incluir_adjuntos_fijos = tipo != "MASIVOS"
         else:
             incluir_pdf_anexo = _cfg_incluir_pdf_anexo(tipo_cfg)
             incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
@@ -322,6 +327,8 @@ def _enviar_correos_items(
                     attachments = None
         if paquete_estricto:
             ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(attachments)
+            if tipo == "MASIVOS":
+                ok_pkg = True
             if not ok_pkg:
                 relax_prueba = bool(
                     getattr(settings, "NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO", False)
@@ -637,6 +644,177 @@ def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
     return {"mensaje": "Env�o de notificaciones prejudiciales finalizado.", **res}
 
 
+def get_items_masivos(db: Session) -> List[dict]:
+    """Clientes con email valido para comunicaciones masivas no relacionadas con pagos."""
+    rows = (
+        db.execute(
+            select(Cliente)
+            .where(Cliente.email.isnot(None), func.length(func.trim(Cliente.email)) > 0)
+            .order_by(Cliente.nombres.asc(), Cliente.id.asc())
+        )
+        .scalars().all()
+    )
+    items: List[dict] = []
+    for c in rows:
+        email = (getattr(c, "email", None) or "").strip()
+        if not email:
+            continue
+        items.append(
+            {
+                "cliente_id": c.id,
+                "nombre": c.nombres or "",
+                "cedula": c.cedula or "",
+                "correo": email,
+                "telefono": (getattr(c, "telefono", None) or "").strip(),
+                "estado": "COMUNICACION_GENERAL",
+            }
+        )
+    return items
+
+
+def _tipo_masivos(_item: dict) -> str:
+    return "MASIVOS"
+
+
+def _normalizar_campana_masiva(raw: dict, idx: int) -> dict:
+    if not isinstance(raw, dict):
+        raw = {}
+    camp_id = str(raw.get("id") or f"campana-{idx}").strip() or f"campana-{idx}"
+    nombre = str(raw.get("nombre") or f"Campana {idx}").strip() or f"Campana {idx}"
+    cco_raw = raw.get("cco")
+    cco = [str(e).strip() for e in cco_raw] if isinstance(cco_raw, list) else []
+    cco = [e for e in cco if e]
+    dias_raw = raw.get("dias_semana")
+    dias = []
+    if isinstance(dias_raw, list):
+        for d in dias_raw:
+            try:
+                v = int(d)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= v <= 6:
+                dias.append(v)
+    dias = sorted(set(dias))
+    return {
+        "id": camp_id,
+        "nombre": nombre,
+        "habilitado": raw.get("habilitado", True) is not False,
+        "plantilla_id": raw.get("plantilla_id"),
+        "programador": str(raw.get("programador") or "03:00"),
+        "cco": cco,
+        "dias_semana": dias,
+    }
+
+
+def get_campanas_masivos_config(config_envios: dict) -> List[dict]:
+    raw = config_envios.get("masivos_campanas") if isinstance(config_envios, dict) else None
+    if not isinstance(raw, list):
+        return []
+    return [_normalizar_campana_masiva(c, i + 1) for i, c in enumerate(raw)]
+
+
+def _slot_campana_masiva(campana_id: str) -> str:
+    return f"MASIVOS::{campana_id}"
+
+
+def ejecutar_envio_masivos_por_campanas(
+    db: Session,
+    config_envios: dict,
+    *,
+    filtrar_hora: Optional[Tuple[int, int]] = None,
+    filtrar_weekday: Optional[int] = None,
+    dedup: Optional[dict] = None,
+    fecha_str: Optional[str] = None,
+    forzar_habilitado: bool = False,
+) -> dict:
+    campanas = get_campanas_masivos_config(config_envios)
+    items = get_items_masivos(db)
+    base_asunto = "Comunicado oficial - Rapicredit"
+    base_cuerpo = (
+        "Estimado/a {nombre} (cedula {cedula}),\n\n"
+        "Le compartimos este comunicado oficial de Rapicredit.\n"
+        "Revise el contenido completo en este correo.\n\n"
+        "Saludos,\nRapicredit"
+    )
+
+    total_enviados = total_fallidos = total_sin_email = 0
+    total_omitidos_config = total_omitidos_paquete = 0
+    total_wok = total_wf = 0
+    detalles: Dict[str, dict] = {}
+
+    for camp in campanas:
+        if not camp.get("habilitado", True) and not forzar_habilitado:
+            continue
+        if filtrar_weekday is not None:
+            dias = camp.get("dias_semana") or []
+            if dias and filtrar_weekday not in dias:
+                continue
+        hm = camp.get("programador")
+        if filtrar_hora is not None:
+            from app.services.notificaciones_programador import parse_programador_hm
+            if parse_programador_hm(hm) != filtrar_hora:
+                continue
+        if dedup is not None and fecha_str and filtrar_hora is not None:
+            key = _slot_campana_masiva(str(camp.get("id") or ""))
+            if dedup.get(key) == f"{fecha_str}|{filtrar_hora[0]:02d}:{filtrar_hora[1]:02d}":
+                continue
+
+        tipo_cfg = {
+            "habilitado": True,
+            "cco": camp.get("cco") or [],
+            "plantilla_id": camp.get("plantilla_id"),
+            "programador": camp.get("programador") or "03:00",
+            "incluir_pdf_anexo": False,
+            "incluir_adjuntos_fijos": False,
+        }
+        cfg_tmp = dict(config_envios)
+        cfg_tmp["MASIVOS"] = tipo_cfg
+
+        r = _enviar_correos_items(items, base_asunto, base_cuerpo, cfg_tmp, _tipo_masivos, db)
+        detalles[str(camp.get("id") or camp.get("nombre") or "campana")] = {
+            "campana": camp,
+            **r,
+        }
+        total_enviados += int(r.get("enviados", 0) or 0)
+        total_fallidos += int(r.get("fallidos", 0) or 0)
+        total_sin_email += int(r.get("sin_email", 0) or 0)
+        total_omitidos_config += int(r.get("omitidos_config", 0) or 0)
+        total_omitidos_paquete += int(r.get("omitidos_paquete_incompleto", 0) or 0)
+        total_wok += int(r.get("enviados_whatsapp", 0) or 0)
+        total_wf += int(r.get("fallidos_whatsapp", 0) or 0)
+
+        if dedup is not None and fecha_str and filtrar_hora is not None:
+            key = _slot_campana_masiva(str(camp.get("id") or ""))
+            dedup[key] = f"{fecha_str}|{filtrar_hora[0]:02d}:{filtrar_hora[1]:02d}"
+
+    return {
+        "enviados": total_enviados,
+        "fallidos": total_fallidos,
+        "sin_email": total_sin_email,
+        "omitidos_config": total_omitidos_config,
+        "omitidos_paquete_incompleto": total_omitidos_paquete,
+        "enviados_whatsapp": total_wok,
+        "fallidos_whatsapp": total_wf,
+        "total_en_lista": len(items),
+        "campanas": detalles,
+    }
+
+
+@router_masivos.get("")
+def get_notificaciones_masivos(db: Session = Depends(get_db)):
+    """Lista de clientes para comunicaciones masivas (sin relacion con mora/pagos)."""
+    items = get_items_masivos(db)
+    return {"items": items, "total": len(items)}
+
+
+@router_masivos.post("/enviar")
+def enviar_notificaciones_masivos(db: Session = Depends(get_db)):
+    """Envia comunicaciones masivas segun campanas configuradas para MASIVOS."""
+    config_envios = get_notificaciones_envios_config(db)
+    res = ejecutar_envio_masivos_por_campanas(db, config_envios, forzar_habilitado=True)
+    return {"mensaje": "Envio de notificaciones masivas finalizado.", **res}
+
+
 # Tipos alineados con CRITERIOS_ENVIO_TABLA (frontend) y _CONFIG_TIPO_TO_TAB
 TIPOS_CASO_MANUAL = frozenset(
     {
@@ -648,6 +826,7 @@ TIPOS_CASO_MANUAL = frozenset(
         "PAGO_3_DIAS_ATRASADO",
         "PAGO_5_DIAS_ATRASADO",
         "PREJUDICIAL",
+        "MASIVOS",
     }
 )
 
@@ -711,6 +890,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
         "Saludos,\nRapicredit"
     )
     asunto_prej = "Aviso prejudicial - Rapicredit"
+    asunto_mas = "Comunicado oficial - Rapicredit"
     cuerpo_prej = (
         "Estimado/a {nombre} (c\u00e9dula {cedula}),\n\n"
         "Le informamos que su cuenta presenta varias cuotas en mora.\n"
@@ -718,6 +898,12 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
         "Cuota de referencia: {numero_cuota}\n"
         "Monto de referencia: {monto}\n\n"
         "Por favor contacte a la entidad para regularizar su situaci\u00f3n.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    cuerpo_mas = (
+        "Estimado/a {nombre} (cedula {cedula}),\n\n"
+        "Le compartimos este comunicado oficial de Rapicredit.\n"
+        "Revise el contenido completo en este correo.\n\n"
         "Saludos,\nRapicredit"
     )
 
@@ -745,6 +931,9 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
     elif tipo == "PREJUDICIAL":
         items = data["prejudicial"]
         res = _enviar_correos_items(items, asunto_prej, cuerpo_prej, config_envios, _tipo_prejudicial, db)
+    elif tipo == "MASIVOS":
+        items = get_items_masivos(db)
+        res = ejecutar_envio_masivos_por_campanas(db, config_envios, forzar_habilitado=True)
     else:
         raise ValueError("tipo_caso_manual_invalido")
 
@@ -860,6 +1049,25 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_whatsapp_ok += r.get("enviados_whatsapp", 0)
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["prejudicial"] = r
+
+    # Masivos (comunicaciones generales)
+    items_masivos = get_items_masivos(db)
+    asunto_mas = "Comunicado oficial - Rapicredit"
+    cuerpo_mas = (
+        "Estimado/a {nombre} (cedula {cedula}),\n\n"
+        "Le compartimos este comunicado oficial de Rapicredit.\n"
+        "Revise el contenido completo en este correo.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    r = _enviar_correos_items(items_masivos, asunto_mas, cuerpo_mas, config_envios, _tipo_masivos, db)
+    total_enviados += r.get("enviados", 0)
+    total_fallidos += r.get("fallidos", 0)
+    total_sin_email += r.get("sin_email", 0)
+    total_omitidos_config += r.get("omitidos_config", 0)
+    total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
+    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
+    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
+    detalles["masivos"] = r
 
     return {
         "enviados": total_enviados,

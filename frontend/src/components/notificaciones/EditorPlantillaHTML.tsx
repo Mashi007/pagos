@@ -47,6 +47,7 @@ const PLANTILLA_TIPO_A_TIPO_TAB: Record<string, string> = {
   PAGO_3_DIAS_ATRASADO: 'dias_3_retraso',
   PAGO_5_DIAS_ATRASADO: 'dias_5_retraso',
   PREJUDICIAL: 'prejudicial',
+  MASIVOS: 'masivos',
   COBRANZA: 'dias_1_retraso',
 }
 
@@ -97,6 +98,8 @@ export function EditorPlantillaHTML({
     ],
 
     prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
+
+    masivos: [{ valor: 'MASIVOS', label: 'Comunicaciones masivas' }],
 
     cobranza: [{ valor: 'COBRANZA', label: 'Carta de cobranza' }],
   }

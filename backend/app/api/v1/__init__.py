@@ -252,6 +252,16 @@ api_router.include_router(
 
 )
 
+api_router.include_router(
+
+    notificaciones_tabs.router_masivos,
+
+    prefix="/notificaciones-masivos",
+
+    tags=["notificaciones-masivos"],
+
+)
+
 # Dashboard (KPIs, graficos, filtros; datos reales BD + caches programadas en dashboard/__init__.py)
 
 api_router.include_router(

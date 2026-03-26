@@ -333,7 +333,7 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_5_DIAS_ANTES", "PAGO_3_DIAS_ANTES", "PAGO_1_DIA_ANTES",
     "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO",
-    "PREJUDICIAL", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
+    "PREJUDICIAL", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
 ])
 
@@ -1221,6 +1221,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "dias_3_retraso": {"enviados": 0, "rebotados": 0},
         "dias_5_retraso": {"enviados": 0, "rebotados": 0},
         "prejudicial": {"enviados": 0, "rebotados": 0},
+        "masivos": {"enviados": 0, "rebotados": 0},
         "liquidados": {"enviados": 0, "rebotados": 0},
     }
     try:
@@ -1233,6 +1234,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
             "dias_3_retraso",
             "dias_5_retraso",
             "prejudicial",
+            "masivos",
             "liquidados",
         ):
             env = db.scalar(
@@ -1262,6 +1264,7 @@ TIPOS_TAB_NOTIFICACIONES = (
     "dias_3_retraso",
     "dias_5_retraso",
     "prejudicial",
+    "masivos",
     "liquidados",
 )
 
@@ -1304,7 +1307,7 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 def get_rebotados_por_tab(
     tipo: str = Query(
         ...,
-        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, liquidados",
+        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, masivos, liquidados",
     ),
     db: Session = Depends(get_db),
 ):
