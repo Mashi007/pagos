@@ -59,6 +59,16 @@ import { DialogConciliacion } from '../components/reportes/DialogConciliacion'
 
 import { usePermissions } from '../hooks/usePermissions'
 
+import {
+  DEFAULT_MESES_VENTANA_PAGOS,
+  REPORTES_TOAST,
+} from '../constants/reportes'
+
+import {
+  validateFiltrosReporte,
+  validateFiltrosReporteContable,
+} from '../utils/reportesFiltros'
+
 import { BASE_PATH, PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
 /** Path pÃºblico de estado de cuenta (consultar por cÃ©dula, PDF por correo). */
@@ -239,6 +249,12 @@ export function Reportes() {
 
   const generarReporteContable = async (filtros: FiltrosReporteContable) => {
     try {
+      const errContable = validateFiltrosReporteContable(filtros)
+      if (errContable) {
+        toast.error(errContable)
+        return
+      }
+
       setGenerandoReporte('CONTABLE')
 
       const toastId = toast.loading(
@@ -254,7 +270,7 @@ export function Reportes() {
       const cedulas = filtros.cedulas === 'todas' ? undefined : filtros.cedulas
 
       const { blob, vacio } = await reporteService.exportarReporteContable(
-        (filtros as any).anos ?? (filtros as any)['a\u00f1os'] ?? [],
+        filtros.años,
         filtros.meses,
         cedulas
       )
@@ -268,7 +284,7 @@ export function Reportes() {
           'El reporte no tiene datos para el perÃ­odo seleccionado. Verifique que las fechas sean pasadas y que existan cuotas pagadas.'
         )
       } else {
-        toast.success('Ã¢Å"" Reporte Contable descargado exitosamente')
+        toast.success(REPORTES_TOAST.contableOk)
       }
     } catch (error: unknown) {
       console.error('Error generando reporte:', error)
@@ -480,6 +496,12 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
+      const errFiltros = validateFiltrosReporte(filtros)
+      if (errFiltros) {
+        toast.error(errFiltros)
+        return
+      }
+
       setGenerandoReporte(tipo)
 
       const labelReporte =
@@ -508,7 +530,7 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('Ã¢Å"" Reporte de Cartera descargado exitosamente')
+        toast.success(REPORTES_TOAST.cartera)
 
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'PAGOS') {
@@ -516,7 +538,7 @@ export function Reportes() {
           'excel',
           undefined,
           undefined,
-          12,
+          DEFAULT_MESES_VENTANA_PAGOS,
           filtros
         )
 
@@ -524,7 +546,7 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('Ã¢Å"" Informe de Pagos descargado exitosamente')
+        toast.success(REPORTES_TOAST.pagos)
 
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'MOROSIDAD') {
@@ -535,7 +557,7 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('Ã¢Å"" Reporte de Morosidad descargado exitosamente')
+        toast.success(REPORTES_TOAST.morosidad)
       } else if (tipo === 'VENCIMIENTO') {
         const blob = await reporteService.exportarReporteMorosidad(
           'excel',
@@ -547,7 +569,7 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('Ã¢Å"" Reporte de Vencimiento descargado exitosamente')
+        toast.success(REPORTES_TOAST.vencimiento)
       } else if (tipo === 'ASESORES') {
         // ASESORES ahora es Pago vencido (antes MOROSIDAD)
 
@@ -561,7 +583,7 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('Ã¢Å"" Reporte de Pago Vencido descargado exitosamente')
+        toast.success(REPORTES_TOAST.pagoVencido)
       } else if (tipo === 'CEDULA') {
         const blob = await reporteService.exportarReporteCedula()
 
@@ -569,7 +591,7 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('Ã¢Å"" Reporte por CÃ©dula descargado exitosamente')
+        toast.success(REPORTES_TOAST.cedula)
       } else {
         toast.dismiss(toastId)
 

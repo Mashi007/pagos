@@ -198,19 +198,26 @@ def _compute_composicion_morosidad(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> dict:
-    """Calcula composición de morosidad: cuotas vencidas sin pagar al día de hoy."""
+    """
+    Morosidad por préstamo (una sola banda por préstamo):
+    se toma el máximo atraso en días entre sus cuotas vencidas sin pagar;
+    el préstamo cuenta solo en esa banda (no se duplica en varias barras).
+    Bandas alineadas con la UI: 1-30, 31-60, 61-89 (vencido), 90+ (moroso).
+    """
     try:
-        bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 120, "61-120 dias"), (121, 999999, "4+ meses (moroso)")]
-        puntos = []
-        total_monto = 0.0
-        total_cuotas = 0
-        total_prestamos = 0
+        bandas = [
+            (1, 30, "1-30 días"),
+            (31, 60, "31-60 días"),
+            (61, 89, "61-89 días"),
+            (90, 999999, "90+ días (moroso)"),
+        ]
         dias_atraso = func.current_date() - Cuota.fecha_vencimiento
         conds_base = [
             Cuota.prestamo_id == Prestamo.id,
             Prestamo.cliente_id == Cliente.id,
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
+            dias_atraso >= 1,
         ]
         if analista:
             conds_base.append(Prestamo.analista == analista)
@@ -218,41 +225,98 @@ def _compute_composicion_morosidad(
             conds_base.append(Prestamo.concesionario == concesionario)
         if modelo:
             conds_base.append(Prestamo.modelo_vehiculo == modelo)
-        for min_d, max_d, cat in bandas:
-            conds_comp = list(conds_base) + [dias_atraso >= min_d]
-            if max_d < 999999:
-                conds_comp.append(dias_atraso <= max_d)
-            q = (
-                select(
-                    func.count().label("n"),
-                    func.coalesce(func.sum(Cuota.monto), 0).label("m"),
-                    func.count(distinct(Cuota.prestamo_id)).label("np"),
-                )
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(and_(*conds_comp))
+
+        worst_subq = (
+            select(
+                Cuota.prestamo_id.label("prestamo_id"),
+                func.max(dias_atraso).label("max_dias"),
             )
-            row = db.execute(q).one()
-            n, m, np = int(row.n or 0), _safe_float(row.m), int(row.np or 0)
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_base))
+            .group_by(Cuota.prestamo_id)
+        ).subquery()
+
+        total_prestamos_global = int(db.scalar(select(func.count()).select_from(worst_subq)) or 0)
+
+        puntos = []
+        total_monto = 0.0
+        total_cuotas = 0
+
+        for min_d, max_d, cat in bandas:
+            band_conds = [worst_subq.c.max_dias >= min_d]
+            if max_d < 999999:
+                band_conds.append(worst_subq.c.max_dias <= max_d)
+
+            np = int(
+                db.scalar(
+                    select(func.count()).select_from(worst_subq).where(and_(*band_conds))
+                )
+                or 0
+            )
+
+            prestamos_en_banda = select(worst_subq.c.prestamo_id).where(and_(*band_conds))
+
+            n = int(
+                db.scalar(
+                    select(func.count())
+                    .select_from(Cuota)
+                    .where(
+                        Cuota.prestamo_id.in_(prestamos_en_banda),
+                        Cuota.fecha_pago.is_(None),
+                        dias_atraso >= 1,
+                    )
+                )
+                or 0
+            )
+
+            m = _safe_float(
+                db.scalar(
+                    select(func.coalesce(func.sum(Cuota.monto), 0))
+                    .select_from(Cuota)
+                    .where(
+                        Cuota.prestamo_id.in_(prestamos_en_banda),
+                        Cuota.fecha_pago.is_(None),
+                        dias_atraso >= 1,
+                    )
+                )
+            )
+
             total_cuotas += n
             total_monto += m
-            total_prestamos += np
-            puntos.append({"categoria": cat, "monto": m, "cantidad_cuotas": n, "cantidad_prestamos": np})
-        return {"puntos": puntos, "total_morosidad": total_monto, "total_cuotas": total_cuotas, "total_prestamos": total_prestamos}
+            puntos.append(
+                {
+                    "categoria": cat,
+                    "monto": m,
+                    "cantidad_cuotas": n,
+                    "cantidad_prestamos": np,
+                }
+            )
+
+        return {
+            "puntos": puntos,
+            "total_morosidad": total_monto,
+            "total_cuotas": total_cuotas,
+            "total_prestamos": total_prestamos_global,
+        }
     except Exception as e:
         logger.exception("Error en composicion-morosidad: %s", e)
-        puntos = [
-            ("1-30 días", 12000, 45, 12), ("31-60 días", 8500, 28, 9), ("61-120 dias", 6200, 18, 6), ("4+ meses (moroso)", 15800, 32, 10),
+        demo = [
+            ("1-30 días", 12000, 45, 12),
+            ("31-60 días", 8500, 28, 9),
+            ("61-89 días", 6200, 18, 6),
+            ("90+ días (moroso)", 15800, 32, 10),
         ]
         return {
-            "puntos": [{"categoria": c, "monto": m, "cantidad_cuotas": n, "cantidad_prestamos": np} for c, m, n, np in puntos],
-            "total_morosidad": sum(p[1] for p in puntos),
-            "total_cuotas": sum(p[2] for p in puntos),
-            "total_prestamos": sum(p[3] for p in puntos),
+            "puntos": [
+                {"categoria": c, "monto": m, "cantidad_cuotas": n, "cantidad_prestamos": np}
+                for c, m, n, np in demo
+            ],
+            "total_morosidad": sum(p[1] for p in demo),
+            "total_cuotas": sum(p[2] for p in demo),
+            "total_prestamos": sum(p[3] for p in demo),
         }
-
-
 def _compute_cobranzas_semanales(
     db: Session,
     fecha_inicio: Optional[str],
