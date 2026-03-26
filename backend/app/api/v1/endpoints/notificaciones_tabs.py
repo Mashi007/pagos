@@ -370,6 +370,7 @@ def _enviar_correos_items(
         email_sent_ok = False
         if to_email:
             tipo_tab_envio = _tipo_tab_para_persistencia(tipo)
+            smtp_meta: dict = {}
             ok, msg = send_email(
                 to_email,
                 asunto,
@@ -380,6 +381,7 @@ def _enviar_correos_items(
                 servicio="notificaciones",
                 tipo_tab=tipo_tab_envio,
                 respetar_destinos_manuales=bool(forzar_destinos_prueba),
+                smtp_session_metadata=smtp_meta,
             )
             log_envio_email(item_id_log, to_email[0], ok, None if ok else msg)
             email_sent_ok = ok
@@ -408,6 +410,7 @@ def _enviar_correos_items(
                             correlativo=item.get("_correlativo_envio"),
                             mensaje_html=body_html,
                             mensaje_texto=cuerpo if cuerpo else None,
+                            metadata_tecnica=smtp_meta if smtp_meta else None,
                         ),
                         adj_snapshot,
                     )

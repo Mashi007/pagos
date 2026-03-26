@@ -247,6 +247,9 @@ const COLORES = {
 
 const HORA_DEFAULT = '04:00'
 
+/** Toast fijo mientras corre POST /notificaciones/enviar-caso-manual (lote largo). */
+const TOAST_ID_ENVIO_CASO_MANUAL = 'envio-caso-manual'
+
 function defaultEnvio(): ConfigEnvioItem {
   return {
     habilitado: true,
@@ -558,7 +561,14 @@ export function ConfiguracionNotificaciones() {
 
     try {
       setEnviandoCasoTipo(tipo)
+      toast.loading(
+        `Enviando «${etiquetaCaso}»… El servidor recorre la lista (un correo por cliente); ` +
+          'puede tardar varios minutos. En Red (F12): el POST a notificaciones/enviar-caso-manual ' +
+          'permanece pendiente hasta que termine todo el lote.',
+        { id: TOAST_ID_ENVIO_CASO_MANUAL, duration: Infinity }
+      )
       const res = await notificacionService.enviarCasoManual(tipo)
+      toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo,
       })
@@ -575,6 +585,7 @@ export function ConfiguracionNotificaciones() {
             : '')
       )
     } catch (error: unknown) {
+      toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
       toast.error(getErrorDetail(error) || 'Error al enviar este caso.')
     } finally {
       setEnviandoCasoTipo(null)
@@ -1339,7 +1350,21 @@ export function ConfiguracionNotificaciones() {
                         cambió plantilla o CCO).
                         {modoPruebas
                           ? ' Modo prueba: destino = correo(s) de pruebas.'
-                          : ' Producción: un correo por cliente con email.'}
+                          : ' Producción: un correo por cliente con email.'}{' '}
+                        Mientras dura el envío: el botón muestra «Enviando…»,
+                        hay un aviso fijo arriba y en Red el POST{' '}
+                        <code className="rounded bg-gray-100 px-0.5">
+                          .../enviar-caso-manual
+                        </code>{' '}
+                        queda en curso hasta el final. En logs del servidor verá{' '}
+                        <code className="rounded bg-gray-100 px-0.5">
+                          [SMTP_ENVIO]
+                        </code>{' '}
+                        y{' '}
+                        <code className="rounded bg-gray-100 px-0.5">
+                          [notif_envio_email]
+                        </code>
+                        .
                       </p>
                     </div>
 

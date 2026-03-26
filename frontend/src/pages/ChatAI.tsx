@@ -28,6 +28,8 @@ import { BASE_PATH, env } from '../config/env'
 
 import { safeGetItem, safeGetSessionItem } from '../utils/storage'
 
+import { useSimpleAuth } from '../store/simpleAuthStore'
+
 interface Mensaje {
   id: string
 
@@ -45,6 +47,11 @@ interface Mensaje {
 }
 
 export function ChatAI() {
+  const { user } = useSimpleAuth()
+
+  const esAdministrador =
+    (user?.rol || '').toLowerCase() === 'administrador'
+
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
 
   const [pregunta, setPregunta] = useState('')
@@ -334,7 +341,12 @@ export function ChatAI() {
 
           tipo: 'ai',
 
-          contenido: `⏱️ La consulta está tardando más de lo esperado. Esto puede deberse a:\n• Consultas complejas a la base de datos\n• Procesamiento de información extensa\n• Carga alta en el servidor\n\nðŸ'¡ Intenta reformular tu pregunta de forma más específica o intenta nuevamente en unos momentos.`,
+          contenido:
+            'La consulta está tardando más de lo esperado. Esto puede deberse a:\n' +
+            '• Consultas complejas a la base de datos\n' +
+            '• Procesamiento de información extensa\n' +
+            '• Carga alta en el servidor\n\n' +
+            'Consejo: reformula la pregunta de forma más específica o reintenta en unos momentos.',
 
           timestamp: new Date(),
 
@@ -388,7 +400,13 @@ export function ChatAI() {
 
             tipo: 'ai',
 
-            contenido: `âš ï¸ ${errorDetail}\n\nðŸ'¡ Tip: Asegúrate de que tu pregunta incluya términos relacionados con:\n• Clientes, préstamos, pagos, cuotas\n• Morosidad, estadísticas, datos\n• Fechas, montos, análisis\n• O cualquier término relacionado con la base de datos del sistema`,
+            contenido:
+              `Atención: ${errorDetail}\n\n` +
+              'Consejo: incluye términos relacionados con:\n' +
+              '• Clientes, préstamos, pagos, cuotas\n' +
+              '• Morosidad, estadísticas, datos\n' +
+              '• Fechas, montos, análisis\n' +
+              '• Cualquier término relacionado con la base de datos del sistema',
 
             timestamp: new Date(),
 
@@ -406,7 +424,7 @@ export function ChatAI() {
 
             tipo: 'ai',
 
-            contenido: `âŒ Error: ${errorDetail}`,
+            contenido: `Error: ${errorDetail}`,
 
             timestamp: new Date(),
 
@@ -425,7 +443,7 @@ export function ChatAI() {
 
           tipo: 'ai',
 
-          contenido: `âŒ Error: ${errorDetail}`,
+          contenido: `Error: ${errorDetail}`,
 
           timestamp: new Date(),
 
@@ -475,20 +493,22 @@ export function ChatAI() {
       if (status === 503) {
         toast.error(
           'Sistema de calificaciones no disponible. Ejecuta la migración SQL para crear la tabla.',
-
           {
             duration: 5000,
-
-            action: {
-              label: 'Ver instrucciones',
-
-              onClick: () => {
-                window.open(
-                  '/configuracion?tab=ai&subtab=calificaciones-chat',
-                  '_blank'
-                )
-              },
-            },
+            ...(esAdministrador
+              ? {
+                  action: {
+                    label: 'Ver instrucciones',
+                    onClick: () => {
+                      window.open(
+                        BASE_PATH +
+                          '/configuracion?tab=ai&subtab=calificaciones-chat',
+                        '_blank'
+                      )
+                    },
+                  },
+                }
+              : {}),
           }
         )
       } else {
@@ -539,8 +559,9 @@ export function ChatAI() {
                 </label>
 
                 <span className="text-xs text-gray-500">
-                  Para preguntas generales, usa el Chat de Prueba en
-                  Configuración &gt; AI
+                  {esAdministrador
+                    ? 'Para preguntas generales, usa el Chat de Prueba en Configuración > AI.'
+                    : 'El chat de prueba con mensajes libres está en Configuración > AI (solo administradores).'}
                 </span>
               </div>
             </>
@@ -572,14 +593,26 @@ export function ChatAI() {
                 </p>
 
                 <p className="text-sm text-amber-700">
-                  Para usar Chat AI, necesitas configurar y activar la
-                  Inteligencia Artificial en{' '}
-                  <a
-                    href={BASE_PATH + '/configuracion?tab=ai'}
-                    className="font-medium underline"
-                  >
-                    Configuración &gt; Inteligencia Artificial
-                  </a>
+                  {esAdministrador ? (
+                    <>
+                      Para usar Chat AI, configura y activa la Inteligencia
+                      Artificial en{' '}
+                      <a
+                        href={BASE_PATH + '/configuracion?tab=ai'}
+                        className="font-medium underline"
+                      >
+                        Configuración &gt; Inteligencia Artificial
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      El Chat AI requiere que un{' '}
+                      <strong>administrador</strong> configure y active la
+                      Inteligencia Artificial (API y estado activo). Si necesitas
+                      acceso urgente, contacta al administrador del sistema.
+                    </>
+                  )}
                 </p>
               </div>
             </div>

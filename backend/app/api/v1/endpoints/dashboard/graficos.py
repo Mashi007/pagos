@@ -26,9 +26,14 @@ from .utils import (
     _CACHE_FINANCIAMIENTO_RANGOS,
     _CACHE_MOROSIDAD_ANALISTA,
     _CACHE_MOROSIDAD_DIA,
+    _CACHE_PRESTAMOS_POR_CONCESIONARIO,
+    _CACHE_PRESTAMOS_POR_MODELO,
     _lock,
     _modelo_label_dashboard_expr,
     _next_refresh_local,
+    _prestamos_graficos_cache_key,
+    _prestamos_graficos_store,
+    _prestamos_graficos_try_hit,
     _safe_float,
     _sanitize_filter_string,
     _etiquetas_12_meses,
@@ -491,19 +496,15 @@ def get_monto_programado_proxima_semana(db: Session = Depends(get_db)):
         return {"dias": []}
 
 
-@router.get("/prestamos-por-concesionario")
-def get_prestamos_por_concesionario(
-    fecha_inicio: Optional[str] = Query(None),
-    fecha_fin: Optional[str] = Query(None),
-    analista: Optional[str] = Query(None),
-    concesionario: Optional[str] = Query(None),
-    modelo: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """Préstamos aprobados por concesionario."""
-    analista = _sanitize_filter_string(analista)
-    concesionario = _sanitize_filter_string(concesionario)
-    modelo = _sanitize_filter_string(modelo)
+def _compute_prestamos_por_concesionario(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> dict:
+    """Agregados préstamos por concesionario (sin caché)."""
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
         mes_expr = func.to_char(func.date_trunc("month", Prestamo.fecha_registro), "YYYY-MM")
@@ -552,19 +553,15 @@ def get_prestamos_por_concesionario(
         return {"por_mes": [], "acumulado": []}
 
 
-@router.get("/prestamos-por-modelo")
-def get_prestamos_por_modelo(
-    fecha_inicio: Optional[str] = Query(None),
-    fecha_fin: Optional[str] = Query(None),
-    analista: Optional[str] = Query(None),
-    concesionario: Optional[str] = Query(None),
-    modelo: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """Préstamos aprobados por modelo."""
-    analista = _sanitize_filter_string(analista)
-    concesionario = _sanitize_filter_string(concesionario)
-    modelo_filtro = _sanitize_filter_string(modelo)
+def _compute_prestamos_por_modelo(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo_filtro: Optional[str],
+) -> dict:
+    """Agregados préstamos por modelo (sin caché)."""
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
         mes_expr = func.to_char(func.date_trunc("month", Prestamo.fecha_registro), "YYYY-MM")
@@ -614,6 +611,50 @@ def get_prestamos_por_modelo(
     except Exception as e:
         logger.exception("Error en prestamos-por-modelo: %s", e)
         return {"por_mes": [], "acumulado": []}
+
+
+@router.get("/prestamos-por-concesionario")
+def get_prestamos_por_concesionario(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Préstamos aprobados por concesionario. Caché en memoria 5 min por misma consulta."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
+    ck = _prestamos_graficos_cache_key(fecha_inicio, fecha_fin, analista, concesionario, modelo)
+    hit = _prestamos_graficos_try_hit(_CACHE_PRESTAMOS_POR_CONCESIONARIO, ck)
+    if hit is not None:
+        return hit
+    data = _compute_prestamos_por_concesionario(db, fecha_inicio, fecha_fin, analista, concesionario, modelo)
+    _prestamos_graficos_store(_CACHE_PRESTAMOS_POR_CONCESIONARIO, ck, data)
+    return data
+
+
+@router.get("/prestamos-por-modelo")
+def get_prestamos_por_modelo(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Préstamos aprobados por modelo. Caché en memoria 5 min por misma consulta."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo_filtro = _sanitize_filter_string(modelo)
+    ck = _prestamos_graficos_cache_key(fecha_inicio, fecha_fin, analista, concesionario, modelo_filtro)
+    hit = _prestamos_graficos_try_hit(_CACHE_PRESTAMOS_POR_MODELO, ck)
+    if hit is not None:
+        return hit
+    data = _compute_prestamos_por_modelo(db, fecha_inicio, fecha_fin, analista, concesionario, modelo_filtro)
+    _prestamos_graficos_store(_CACHE_PRESTAMOS_POR_MODELO, ck, data)
+    return data
 
 
 @router.get("/financiamiento-por-rangos")

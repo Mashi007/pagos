@@ -14,14 +14,19 @@ from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query, File, UploadFile, BackgroundTasks
-from fastapi.responses import Response, JSONResponse
+from fastapi.responses import Response, JSONResponse, RedirectResponse
+from starlette.requests import Request
 
 from app.core.deps import get_current_user
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.services.cuota_estado import hoy_negocio
 from app.services.notificacion_service import (
+    CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+    SALDO_PENDIENTE_CUOTA,
+    TOL_SALDO_CUOTA_NOTIFICACION,
     get_cuotas_pendientes_con_cliente,
     format_cuota_item,
     _item,
@@ -246,6 +251,7 @@ def build_contexto_cobranza_para_item(
     Carga cuotas pendientes de pago (no pagadas) con fecha_vencimiento <= hoy (vencidas o vencen hoy),
     para que en "DÃ­a de pago" (pestaÃ±a 2) tambiÃ©n se incluyan las cuotas que vencen hoy y se reemplacen
     {{CUOTAS_VENCIDAS}} y {{FECHAS_CUOTAS_PENDIENTES}}. Calcula siguiente numero correlativo.
+    hoy = fecha calendario America/Caracas (misma regla que mora en cuotas).
     Si no hay prestamo_id devuelve (None, None).
     correlativos_en_batch: dict prestamo_id -> ultimo correlativo usado en este batch.
     """
@@ -253,14 +259,16 @@ def build_contexto_cobranza_para_item(
     if not prestamo_id:
         return None, None
     from app.services.plantilla_cobranza import construir_contexto_cobranza
-    hoy = date.today()
+    hoy = hoy_negocio()
     cuotas = (
         db.execute(
             select(Cuota)
             .where(
                 Cuota.prestamo_id == prestamo_id,
                 Cuota.fecha_pago.is_(None),
+                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
                 Cuota.fecha_vencimiento <= hoy,
+                SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
             )
             .order_by(Cuota.numero_cuota)
         )
@@ -448,20 +456,21 @@ def get_plantilla_pdf_cobranza(db: Session = Depends(get_db)):
         return {"ciudad_default": "Guacara", "cuerpo_principal": None, "clausula_septima": None, "firma": None}
 
 
-# Contexto de ejemplo para vista previa del PDF de cobranza (sin datos reales)
-_CONTEXTO_PREVIEW_COBRANZA = {
-    "CLIENTES.TRATAMIENTO": "Sr.",
-    "CLIENTES.NOMBRE_COMPLETO": "Juan PÃƒÂ©rez (ejemplo)",
-    "CLIENTES.CEDULA": "V-12345678",
-    "PRESTAMOS.ID": "1001",
-    "NUMEROCORRELATIVO": "2025-001",
-    "TOTAL_ADEUDADO": "300,00",
-    "FECHA_CARTA": date.today().isoformat(),
-    "CUOTAS.VENCIMIENTOS": [
-        {"fecha_vencimiento": "2025-01-15", "monto": 150.00, "numero_cuota": 1},
-        {"fecha_vencimiento": "2025-02-15", "monto": 150.00, "numero_cuota": 2},
-    ],
-}
+def _contexto_preview_cobranza() -> dict:
+    """Contexto de ejemplo para vista previa del PDF (fecha en America/Caracas)."""
+    return {
+        "CLIENTES.TRATAMIENTO": "Sr.",
+        "CLIENTES.NOMBRE_COMPLETO": "Juan PÃƒÂ©rez (ejemplo)",
+        "CLIENTES.CEDULA": "V-12345678",
+        "PRESTAMOS.ID": "1001",
+        "NUMEROCORRELATIVO": "2025-001",
+        "TOTAL_ADEUDADO": "300,00",
+        "FECHA_CARTA": hoy_negocio().isoformat(),
+        "CUOTAS.VENCIMIENTOS": [
+            {"fecha_vencimiento": "2025-01-15", "monto": 150.00, "numero_cuota": 1},
+            {"fecha_vencimiento": "2025-02-15", "monto": 150.00, "numero_cuota": 2},
+        ],
+    }
 
 
 @router.get("/plantilla-pdf-cobranza/preview")
@@ -472,7 +481,7 @@ def preview_plantilla_pdf_cobranza(db: Session = Depends(get_db)):
     """
     from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
     try:
-        pdf_bytes = generar_carta_cobranza_pdf(_CONTEXTO_PREVIEW_COBRANZA, db=db)
+        pdf_bytes = generar_carta_cobranza_pdf(_contexto_preview_cobranza(), db=db)
         return Response(content=pdf_bytes, media_type="application/pdf")
     except Exception as e:
         logger.exception("preview_plantilla_pdf_cobranza: %s", e)
@@ -1404,8 +1413,12 @@ def get_historial_notificaciones_por_cedula(
             "prestamo_id": r.prestamo_id,
             "correlativo": r.correlativo,
             "adjuntos": adj_por_envio.get(r.id, []),
-            "tiene_mensaje_html": bool(getattr(r, "mensaje_html", None)),
-            "tiene_mensaje_texto": bool(getattr(r, "mensaje_texto", None)),
+            "tiene_mensaje_html": bool((getattr(r, "mensaje_html", None) or "").strip()),
+            "tiene_mensaje_texto": bool((getattr(r, "mensaje_texto", None) or "").strip()),
+            "tiene_mensaje_pdf": bool(
+                (getattr(r, "mensaje_html", None) or "").strip()
+                or (getattr(r, "mensaje_texto", None) or "").strip()
+            ),
             "tiene_comprobante_pdf": bool(getattr(r, "comprobante_pdf", None)),
         }
         for r in rows
@@ -1462,57 +1475,24 @@ def get_historial_por_cedula_excel(
 
 
 @router.get("/historial-por-cedula/{envio_id}/comprobante")
-def get_comprobante_envio(
+def get_comprobante_envio_redirect_pdf(
     envio_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
-    Comprobante de envÃƒÂ­o de una notificaciÃƒÂ³n (un registro). Para descarga individual y fines legales.
-    Devuelve HTML imprimible (el usuario puede guardar como PDF desde el navegador).
+    Redirige al comprobante en PDF (unico formato oficial). Mantiene la ruta antigua por compatibilidad.
     """
     row = db.get(EnvioNotificacion, envio_id)
     if not row:
         log_historial_comprobante(envio_id, False, error="no_encontrado")
-        raise HTTPException(status_code=404, detail="Registro de envÃƒÂ­o no encontrado")
+        raise HTTPException(
+            status_code=404,
+            detail="Registro de env\u00edo no encontrado",
+        )
     log_historial_comprobante(envio_id, True)
-    asunto = getattr(row, "asunto", None) or (f"NotificaciÃƒÂ³n {row.tipo_tab}" if row.tipo_tab else "EnvÃƒÂ­o")
-    html = f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <title>Comprobante de notificaciÃƒÂ³n #{row.id}</title>
-  <style>
-    body {{ font-family: system-ui, sans-serif; margin: 2rem; max-width: 640px; }}
-    h1 {{ font-size: 1.25rem; }}
-    table {{ border-collapse: collapse; width: 100%; margin-top: 1rem; }}
-    th, td {{ border: 1px solid #ddd; padding: 0.5rem 0.75rem; text-align: left; }}
-    th {{ background: #f5f5f5; }}
-    .estado {{ font-weight: bold; }}
-    .estado.ok {{ color: green; }}
-    .estado.fallo {{ color: red; }}
-    @media print {{ body {{ margin: 1rem; }} }}
-  </style>
-</head>
-<body>
-  <h1>Comprobante de envÃƒÂ­o de notificaciÃƒÂ³n</h1>
-  <p><strong>ID registro:</strong> {row.id}</p>
-  <table>
-    <tr><th>Fecha envÃƒÂ­o</th><td>{row.fecha_envio.isoformat() if row.fecha_envio else ""}</td></tr>
-    <tr><th>Tipo</th><td>{row.tipo_tab or ""}</td></tr>
-    <tr><th>Asunto</th><td>{asunto}</td></tr>
-    <tr><th>Destinatario (email)</th><td>{row.email or ""}</td></tr>
-    <tr><th>Nombre</th><td>{row.nombre or ""}</td></tr>
-    <tr><th>CÃƒÂ©dula</th><td>{row.cedula or ""}</td></tr>
-    <tr><th>Estado</th><td class="estado {'ok' if row.exito else 'fallo'}">{'Entregado' if row.exito else 'Rebotado'}</td></tr>
-    <tr><th>Error (si aplica)</th><td>{row.error_mensaje or ""}</td></tr>
-    <tr><th>ID PrÃƒÂ©stamo</th><td>{row.prestamo_id or ""}</td></tr>
-    <tr><th>Correlativo</th><td>{row.correlativo or ""}</td></tr>
-  </table>
-  <p style="margin-top: 1.5rem; font-size: 0.875rem; color: #666;">Documento generado para fines administrativos y legales. RapiCredit.</p>
-</body>
-</html>"""
-    return Response(content=html, media_type="text/html; charset=utf-8",
-                    headers={"Content-Disposition": f"inline; filename=comprobante_notificacion_{row.id}.html"})
+    base = str(request.url.path).rsplit("/comprobante", 1)[0]
+    return RedirectResponse(url=f"{base}/comprobante-pdf", status_code=307)
 
 
 def _safe_download_filename(name: str, fallback: str) -> str:
@@ -1524,24 +1504,52 @@ def _safe_download_filename(name: str, fallback: str) -> str:
 
 
 @router.get("/historial-por-cedula/{envio_id}/mensaje-html")
-def get_historial_envio_mensaje_html(
+def get_historial_envio_mensaje_html_redirect_pdf(
     envio_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    """Cuerpo HTML del correo guardado al enviar (registros nuevos)."""
+    """
+    Compatibilidad: redirige al PDF del cuerpo (formato oficial para constancia).
+    El HTML crudo ya no se expone como descarga separada.
+    """
     row = db.get(EnvioNotificacion, envio_id)
     if not row:
         raise HTTPException(status_code=404, detail="Registro de envío no encontrado")
-    if not (row.mensaje_html or "").strip():
+    has_body = bool((row.mensaje_html or "").strip() or (row.mensaje_texto or "").strip())
+    if not has_body:
         raise HTTPException(
             status_code=404,
-            detail="No hay cuerpo HTML almacenado (envíos anteriores a la versión con snapshot).",
+            detail="No hay cuerpo del mensaje almacenado (envíos anteriores a la versión con snapshot).",
         )
-    body = row.mensaje_html.encode("utf-8")
-    fn = _safe_download_filename(f"mensaje_notificacion_{row.id}.html", f"mensaje_notificacion_{row.id}.html")
+    base = str(request.url.path).rsplit("/mensaje-html", 1)[0]
+    return RedirectResponse(url=f"{base}/mensaje-pdf", status_code=307)
+
+
+@router.get("/historial-por-cedula/{envio_id}/mensaje-pdf")
+def get_historial_envio_mensaje_pdf(
+    envio_id: int,
+    db: Session = Depends(get_db),
+):
+    """Cuerpo del correo en PDF (desde HTML o texto plano guardado al enviar)."""
+    from app.services.envio_notificacion_mensaje_pdf import generar_mensaje_envio_pdf_bytes
+
+    row = db.get(EnvioNotificacion, envio_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Registro de envío no encontrado")
+    pdf = generar_mensaje_envio_pdf_bytes(row)
+    if not pdf:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay cuerpo del mensaje almacenado o no se pudo generar el PDF.",
+        )
+    fn = _safe_download_filename(
+        f"mensaje_notificacion_{row.id}.pdf",
+        f"mensaje_notificacion_{row.id}.pdf",
+    )
     return Response(
-        content=body,
-        media_type="text/html; charset=utf-8",
+        content=pdf,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{fn}"'},
     )
 
@@ -1593,17 +1601,22 @@ def get_historial_envio_comprobante_pdf(
     envio_id: int,
     db: Session = Depends(get_db),
 ):
-    """Comprobante de envío en PDF (generado al guardar el registro)."""
+    """Comprobante de envio en PDF (snapshot al enviar o regenerado al vuelo si falta)."""
+    from app.services.envio_notificacion_comprobante_pdf import generar_comprobante_envio_pdf_bytes
+
     row = db.get(EnvioNotificacion, envio_id)
     if not row:
-        raise HTTPException(status_code=404, detail="Registro de envío no encontrado")
-    if not row.comprobante_pdf:
+        raise HTTPException(status_code=404, detail="Registro de envio no encontrado")
+    pdf = row.comprobante_pdf
+    if not pdf:
+        pdf = generar_comprobante_envio_pdf_bytes(row)
+    if not pdf:
         raise HTTPException(
             status_code=404,
-            detail="No hay comprobante PDF (envíos anteriores a la versión con snapshot o error al generarlo).",
+            detail="No se pudo generar el comprobante PDF.",
         )
     return Response(
-        content=bytes(row.comprobante_pdf),
+        content=bytes(pdf),
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="comprobante_notificacion_{row.id}.pdf"'},
     )
@@ -1625,7 +1638,7 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     Solo cuotas con fecha_pago nula: si se registra un pago que liquida la cuota,
     deja de listarse en la siguiente lectura (sin depender de un job de refresco).
     """
-    hoy = date.today()
+    hoy = hoy_negocio()
     try:
         rows = get_cuotas_pendientes_con_cliente(db)
     except Exception as e:
@@ -1725,8 +1738,13 @@ def ejecutar_actualizacion_notificaciones(db: Session) -> dict:
     LÃƒÂ³gica de actualizaciÃƒÂ³n de notificaciones (mora desde cuotas no pagadas).
     Usado por el endpoint POST /actualizar y por el scheduler a las 2:00.
     """
-    hoy = date.today()
-    q = select(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento <= hoy)
+    hoy = hoy_negocio()
+    q = select(Cuota).where(
+        Cuota.fecha_pago.is_(None),
+        CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+        SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+        Cuota.fecha_vencimiento <= hoy,
+    )
     db.execute(q).scalars().all()
     return {"mensaje": "ActualizaciÃƒÂ³n ejecutada.", "clientes_actualizados": 0}
 
@@ -1742,11 +1760,15 @@ def get_notificaciones_tabs_data(db: Session):
     Datos para envio de notificaciones (retrasadas, prejudicial).
     Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1/3/5 dias de atraso)
     y prejudicial. Claves dias_5, dias_3, dias_1, hoy van vacias (compat API).
-    Datos desde get_cuotas_pendientes_con_cliente (fuente unica).
+    Fuente: get_cuotas_pendientes_con_cliente (fecha_pago nula, estado no pagado, saldo > tolerancia).
+    Fecha de corte: America/Caracas.
+
+    Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
+    calendario después de la fecha de vencimiento), sin fecha_pago y con saldo pendiente.
     """
     from sqlalchemy import func
 
-    hoy = date.today()
+    hoy = hoy_negocio()
     rows = get_cuotas_pendientes_con_cliente(db)
 
     dias_5: List[dict] = []
@@ -1779,8 +1801,10 @@ def get_notificaciones_tabs_data(db: Session):
         select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
         .where(
             Cuota.fecha_pago.is_(None),
+            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
             Cuota.fecha_vencimiento < hoy,
             Cuota.cliente_id.isnot(None),
+            SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
         )
         .group_by(Cuota.cliente_id)
         .having(func.count(Cuota.id) >= 3)
@@ -1793,7 +1817,13 @@ def get_notificaciones_tabs_data(db: Session):
         # Primera cuota atrasada para mostrar en la tarjeta
         primera = db.execute(
             select(Cuota)
-            .where(Cuota.cliente_id == cliente_id, Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy)
+            .where(
+                Cuota.cliente_id == cliente_id,
+                Cuota.fecha_pago.is_(None),
+                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+                Cuota.fecha_vencimiento < hoy,
+                SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+            )
             .order_by(Cuota.fecha_vencimiento.asc())
             .limit(1)
         ).scalars().first()

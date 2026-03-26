@@ -328,9 +328,11 @@ export function DashboardFinanciamiento() {
         return result
       },
 
-      staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+      staleTime: 5 * 60 * 1000,
 
-      refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+      refetchOnWindowFocus: false,
+
+      retry: 1,
     })
 
   // Cargar tendencia mensual

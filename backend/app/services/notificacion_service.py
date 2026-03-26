@@ -6,30 +6,41 @@ Una sola fuente de datos: get_cuotas_pendientes_con_cliente(db) para listado y e
 from datetime import date, timedelta
 from typing import List, Optional, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
+from app.services.cuota_estado import hoy_negocio
+
+# Misma tolerancia que clasificación de cuota pagada (cuota_estado): evita notificar si ya está cubierta al 100%.
+TOL_SALDO_CUOTA_NOTIFICACION = 0.01
+SALDO_PENDIENTE_CUOTA = func.coalesce(Cuota.monto, 0) - func.coalesce(Cuota.total_pagado, 0)
+
+# Estados que marcan cuota pagada (columna cuotas.estado); no notificar aunque falte fecha_pago.
+_ESTADOS_CUOTA_PAGADA = ("PAGADO", "PAGO_ADELANTADO", "PAGADA")
+# NULL en estado sigue permitiendo notificar (se filtra por saldo y fecha_pago).
+CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
+    Cuota.estado.is_(None),
+    ~Cuota.estado.in_(_ESTADOS_CUOTA_PAGADA),
+)
 
 
 def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
     """
-    Fuente única: cuotas no pagadas (fecha_pago nula) con su cliente vía préstamo.
-    Excluye préstamos en estado LIQUIDADO (alineado con tabla prestamos).
+    Fuente única: cuotas con saldo pendiente (monto - total_pagado > tolerancia), fecha_pago nula,
+    estado distinto de PAGADO/PAGO_ADELANTADO/PAGADA, préstamo no LIQUIDADO.
 
-    Al registrar pagos que aplican a cuotas y fijan fecha_pago, esas cuotas dejan
-    de aparecer aquí: las listas de notificaciones reflejan el estado actual de la BD
-    en cada lectura (no dependen de un batch nocturno para “quitar” mora pagada).
-
-    Usado por get_clientes_retrasados y get_notificaciones_tabs_data para evitar duplicar consulta.
+    Usado por get_clientes_retrasados y get_notificaciones_tabs_data.
     """
     q = (
         select(Cuota, Cliente)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(Cuota.fecha_pago.is_(None))
+        .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
+        .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
         .where(Prestamo.estado != "LIQUIDADO")
     )
     rows = db.execute(q).all()
@@ -42,7 +53,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
     Misma semantica que el primer elemento de get_notificaciones_tabs_data por criterio.
     """
     tipo = (tipo or "").strip()
-    hoy = date.today()
+    hoy = hoy_negocio()
 
     if tipo in ("PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO"):
         dias_map = {
@@ -57,6 +68,8 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .where(Cuota.fecha_pago.is_(None))
+            .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
+            .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
             .where(Prestamo.estado != "LIQUIDADO")
             .where(Cuota.fecha_vencimiento == target)
             .limit(1)
@@ -72,8 +85,10 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
             .where(
                 Cuota.fecha_pago.is_(None),
+                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.cliente_id.isnot(None),
+                SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
             )
             .group_by(Cuota.cliente_id)
             .having(func.count(Cuota.id) >= 3)
@@ -91,7 +106,9 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .where(
                 Cuota.cliente_id == cliente_id,
                 Cuota.fecha_pago.is_(None),
+                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
                 Cuota.fecha_vencimiento < hoy,
+                SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
             )
             .order_by(Cuota.fecha_vencimiento.asc())
             .limit(1)

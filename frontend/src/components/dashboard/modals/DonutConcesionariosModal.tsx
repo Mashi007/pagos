@@ -109,6 +109,10 @@ export function DonutConcesionariosModal({
     },
 
     staleTime: 5 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    retry: 1,
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)

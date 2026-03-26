@@ -370,11 +370,14 @@ export function DashboardMenu() {
       return response as PrestamosPorModeloResponse
     },
 
-    staleTime: 0,
+    // Alineado con caché backend (~5 min) y otros gráficos: evita refetch al cambiar de pestaña
+    staleTime: 5 * 60 * 1000,
 
-    refetchOnMount: 'always',
+    refetchOnMount: false,
 
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
+
+    retry: 1,
 
     enabled: true,
   })

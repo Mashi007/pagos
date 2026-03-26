@@ -2,7 +2,7 @@
 Registro de envíos de notificaciones por email (éxito/fallo) para estadísticas y rebotados.
 Tabla: envios_notificacion. Usado por GET estadisticas-por-tab y GET rebotados-por-tab.
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, LargeBinary, func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, LargeBinary, JSON, func
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -26,6 +26,8 @@ class EnvioNotificacion(Base):
     mensaje_html = Column(Text, nullable=True)
     mensaje_texto = Column(Text, nullable=True)
     comprobante_pdf = Column(LargeBinary, nullable=True)
+    # Metadatos SMTP/socket al enviar (prueba de entrega al relay; no constata lectura en buzon).
+    metadata_tecnica = Column(JSON, nullable=True)
 
     adjuntos = relationship(
         EnvioNotificacionAdjunto,

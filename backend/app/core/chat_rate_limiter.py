@@ -1,6 +1,10 @@
 """
 Rate limiter para el Chat AI: máximo N peticiones por minuto por usuario.
 Evita abuso y controla costes de API OpenRouter.
+
+Nota: el contador es en memoria por proceso. Con varias réplicas (p. ej. Render)
+cada instancia aplica su propio límite; el techo efectivo puede ser hasta
+N × número de workers. Para un límite global usar Redis o similar.
 """
 import threading
 import time

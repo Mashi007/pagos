@@ -31,6 +31,52 @@ _CACHE_MOROSIDAD_ANALISTA: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_REFRESH_HOURS = (1, 13)
 _lock = threading.Lock()
 
+# Préstamos por modelo / concesionario: el frontend suele enviar siempre fecha_inicio/fecha_fin;
+# caché en memoria por clave de consulta (TTL corto) reduce golpes repetidos a la BD.
+_PRESTAMOS_GRAFICOS_CACHE_TTL_SEC = 300
+_CACHE_PRESTAMOS_POR_MODELO: dict[str, Any] = {"key": None, "data": None, "refreshed_at": None}
+_CACHE_PRESTAMOS_POR_CONCESIONARIO: dict[str, Any] = {"key": None, "data": None, "refreshed_at": None}
+
+
+def _prestamos_graficos_cache_key(
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> str:
+    return "\x1e".join(
+        [
+            fecha_inicio or "",
+            fecha_fin or "",
+            analista or "",
+            concesionario or "",
+            modelo or "",
+        ]
+    )
+
+
+def _prestamos_graficos_try_hit(cache_box: dict[str, Any], key: str) -> Optional[Any]:
+    """Devuelve datos en caché si la clave coincide y no expiró el TTL."""
+    now = datetime.now()
+    with _lock:
+        if cache_box.get("key") != key:
+            return None
+        refreshed = cache_box.get("refreshed_at")
+        if refreshed is None:
+            return None
+        age = (now - refreshed).total_seconds()
+        if age >= _PRESTAMOS_GRAFICOS_CACHE_TTL_SEC:
+            return None
+        return cache_box.get("data")
+
+
+def _prestamos_graficos_store(cache_box: dict[str, Any], key: str, data: Any) -> None:
+    with _lock:
+        cache_box["key"] = key
+        cache_box["data"] = data
+        cache_box["refreshed_at"] = datetime.now()
+
 
 def _next_refresh_local() -> datetime:
     """Próxima hora de refresco: 1:00 o 13:00 (hora local del servidor)."""

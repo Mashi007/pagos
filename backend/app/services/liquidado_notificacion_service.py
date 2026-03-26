@@ -169,6 +169,7 @@ Equipo RapiCredit"""
 
             exito = False
             error_msg: Optional[str] = None
+            smtp_meta: dict = {}
             try:
                 logger.info(
                     "[SMTP_ENVIO] context=liquidado_notif prestamo_id=%s recordatorio=%s email_cliente_MASK=%s",
@@ -183,6 +184,7 @@ Equipo RapiCredit"""
                     attachments=adjuntos,
                     servicio="notificaciones",
                     tipo_tab="liquidados",
+                    smtp_session_metadata=smtp_meta,
                 )
             except Exception as e:
                 logger.error("[LIQUIDADO_NOTIF] Excepcion enviando correo: %s", e)
@@ -214,6 +216,7 @@ Equipo RapiCredit"""
                 correlativo=recordatorio_seq,
                 mensaje_html=None,
                 mensaje_texto=cuerpo_texto,
+                metadata_tecnica=smtp_meta if smtp_meta else None,
             )
             db.add(envio)
             persistir_snapshot_envio_notificacion(db, envio, adjuntos)

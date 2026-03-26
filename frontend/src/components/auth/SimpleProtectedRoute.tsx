@@ -13,7 +13,7 @@ import { BASE_PATH } from '../../config/env'
 interface SimpleProtectedRouteProps {
   children: React.ReactNode
 
-  requireAdmin?: boolean // Cambio clave: requiredRoles â†' requireAdmin
+  requireAdmin?: boolean // Cambio clave: requiredRoles -> requireAdmin
 
   /** Si no autenticado, redirige aquí. Por defecto /rapicredit (formulario público). Empleados usan /login. */
 
@@ -23,7 +23,7 @@ interface SimpleProtectedRouteProps {
 export function SimpleProtectedRoute({
   children,
 
-  requireAdmin = false, // Cambio clave: requiredRoles â†' requireAdmin
+  requireAdmin = false, // Cambio clave: requiredRoles -> requireAdmin
 
   fallbackPath = '/login',
 }: SimpleProtectedRouteProps) {
@@ -157,7 +157,7 @@ export function SimpleProtectedRoute({
               onClick={() => window.history.back()}
               className="w-full rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700"
             >
-              â† Volver a la página anterior
+              ← Volver a la página anterior
             </button>
 
             <button

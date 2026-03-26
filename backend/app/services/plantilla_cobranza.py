@@ -162,7 +162,8 @@ def construir_contexto_cobranza(
     Construye el diccionario de contexto para render_plantilla_cobranza.
     Incluye IDPRESTAMO, NUMEROCORRELATIVO, TOTAL_ADEUDADO y CUOTAS.VENCIMIENTOS.
     """
-    from datetime import date as date_type
+    from app.services.cuota_estado import hoy_negocio
+
     try:
         from app.core.config import settings
         base = (logo_url or (getattr(settings, "FRONTEND_PUBLIC_URL", None) or "https://rapicredit.onrender.com/pagos")).rstrip("/")
@@ -170,7 +171,7 @@ def construir_contexto_cobranza(
         base = (logo_url or "https://rapicredit.onrender.com/pagos").rstrip("/")
     url_logo = f"{base}/logos/rapicredit-public.png"
 
-    f = fecha_carta or date_type.today()
+    f = fecha_carta or hoy_negocio()
     lista = []
     total_adeudado = 0
     for c in cuotas_vencidas:

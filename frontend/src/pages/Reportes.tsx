@@ -347,27 +347,29 @@ export function Reportes() {
     }
   }
 
-  const abrirComprobante = async (envioId: number) => {
-    const key = `html:${envioId}`
+  const abrirComprobantePdfEnVentana = async (envioId: number) => {
+    const key = `pdf-view:${envioId}`
 
     setLoadingHistorialDescarga(key)
 
     try {
-      const html = await notificacionService.getComprobanteEnvioHtml(envioId)
+      const blob =
+        await notificacionService.descargarHistorialComprobantePdf(envioId)
 
-      const w = window.open('', '_blank')
+      const url = URL.createObjectURL(blob)
 
-      if (w) {
-        w.document.write(html)
+      const w = window.open(url, '_blank')
 
-        w.document.close()
+      if (!w) {
+        URL.revokeObjectURL(url)
+        toast.error('Permita ventanas emergentes para ver el comprobante PDF.')
       } else {
-        toast.error('Permita ventanas emergentes para ver el comprobante.')
+        window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
       }
     } catch (e) {
       console.error(e)
 
-      toast.error(getErrorMessage(e) || 'Error al abrir comprobante.')
+      toast.error(getErrorMessage(e) || 'Error al abrir el comprobante PDF.')
     } finally {
       setLoadingHistorialDescarga(null)
     }
@@ -397,24 +399,24 @@ export function Reportes() {
     }
   }
 
-  const descargarHistorialMensajeHtml = async (envioId: number) => {
-    const key = `mhtml:${envioId}`
+  const descargarHistorialMensajePdf = async (envioId: number) => {
+    const key = `mpdf:${envioId}`
 
     setLoadingHistorialDescarga(key)
 
     try {
       const blob =
-        await notificacionService.descargarHistorialMensajeHtml(envioId)
+        await notificacionService.descargarHistorialMensajePdf(envioId)
 
-      descargarBlob(blob, `mensaje_notificacion_${envioId}.html`)
+      descargarBlob(blob, `mensaje_notificacion_${envioId}.pdf`)
 
-      toast.success('Cuerpo HTML descargado.')
+      toast.success('Cuerpo del mensaje descargado (PDF).')
     } catch (e) {
       console.error(e)
 
       toast.error(
         getErrorMessage(e) ||
-          'No hay cuerpo HTML almacenado (envíos anteriores al snapshot).'
+          'No hay cuerpo almacenado o no se pudo generar el PDF (envíos sin snapshot).'
       )
     } finally {
       setLoadingHistorialDescarga(null)
@@ -1011,8 +1013,9 @@ export function Reportes() {
 
             <p className="text-sm text-muted-foreground">
               Consulte por cédula el historial de notificaciones enviadas.
-              Descargue Excel, comprobante HTML o PDF, y desde envíos recientes
-              el cuerpo del correo y los PDFs adjuntos tal como se enviaron.
+              Descargue Excel, comprobante PDF (oficial) y desde envíos
+              recientes el cuerpo del correo y los PDFs adjuntos tal como se
+              enviaron.
             </p>
           </CardHeader>
 
@@ -1143,72 +1146,73 @@ export function Reportes() {
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 justify-start px-2"
-                                onClick={() => abrirComprobante(row.id)}
+                                onClick={() =>
+                                  abrirComprobantePdfEnVentana(row.id)
+                                }
                                 disabled={
-                                  loadingHistorialDescarga === `html:${row.id}`
+                                  loadingHistorialDescarga ===
+                                  `pdf-view:${row.id}`
                                 }
                               >
                                 {loadingHistorialDescarga ===
-                                `html:${row.id}` ? (
+                                `pdf-view:${row.id}` ? (
                                   <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                                 ) : (
                                   <FileText className="h-3.5 w-3.5 shrink-0" />
                                 )}
 
                                 <span className="ml-1 text-xs">
-                                  Comprobante (HTML)
+                                  Abrir comprobante (PDF)
                                 </span>
                               </Button>
 
-                              {row.tiene_comprobante_pdf ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 justify-start px-2"
+                                onClick={() =>
+                                  descargarHistorialComprobantePdf(row.id)
+                                }
+                                disabled={
+                                  loadingHistorialDescarga === `pdf:${row.id}`
+                                }
+                              >
+                                {loadingHistorialDescarga ===
+                                `pdf:${row.id}` ? (
+                                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                                ) : (
+                                  <Download className="h-3.5 w-3.5 shrink-0" />
+                                )}
+
+                                <span className="ml-1 text-xs">
+                                  Descargar comprobante PDF
+                                </span>
+                              </Button>
+
+                              {row.tiene_mensaje_pdf ? (
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="sm"
                                   className="h-8 justify-start px-2"
                                   onClick={() =>
-                                    descargarHistorialComprobantePdf(row.id)
-                                  }
-                                  disabled={
-                                    loadingHistorialDescarga === `pdf:${row.id}`
-                                  }
-                                >
-                                  {loadingHistorialDescarga ===
-                                  `pdf:${row.id}` ? (
-                                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                                  ) : (
-                                    <Download className="h-3.5 w-3.5 shrink-0" />
-                                  )}
-
-                                  <span className="ml-1 text-xs">
-                                    Comprobante PDF
-                                  </span>
-                                </Button>
-                              ) : null}
-
-                              {row.tiene_mensaje_html ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 justify-start px-2"
-                                  onClick={() =>
-                                    descargarHistorialMensajeHtml(row.id)
+                                    descargarHistorialMensajePdf(row.id)
                                   }
                                   disabled={
                                     loadingHistorialDescarga ===
-                                    `mhtml:${row.id}`
+                                    `mpdf:${row.id}`
                                   }
                                 >
                                   {loadingHistorialDescarga ===
-                                  `mhtml:${row.id}` ? (
+                                  `mpdf:${row.id}` ? (
                                     <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                                   ) : (
                                     <Mail className="h-3.5 w-3.5 shrink-0" />
                                   )}
 
                                   <span className="ml-1 text-xs">
-                                    Cuerpo (HTML)
+                                    Cuerpo (PDF)
                                   </span>
                                 </Button>
                               ) : null}

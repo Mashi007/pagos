@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Tests para historial de notificaciones por cédula y comprobante de envío.
-Indicadores: GET historial-por-cedula, GET historial-por-cedula/excel, GET historial-por-cedula/{id}/comprobante.
+Indicadores: GET historial-por-cedula, GET historial-por-cedula/excel, GET historial-por-cedula/{id}/comprobante-pdf.
 
 Ejecutar desde backend/:
   pytest tests/test_notificaciones_historial.py -v
@@ -142,6 +142,7 @@ def test_historial_por_cedula_con_registro(client: TestClient, db: Session, un_e
     assert item.get("exito") is True
     assert item.get("adjuntos") == []
     assert item.get("tiene_mensaje_html") is False
+    assert item.get("tiene_mensaje_pdf") is False
     assert item.get("tiene_comprobante_pdf") is False
 
 
@@ -180,18 +181,91 @@ def test_historial_excel_sin_cedula_422(client: TestClient):
 # --- Comprobante por id ---
 
 
-def test_comprobante_envio_ok(client: TestClient, db: Session, un_envio_en_bd: EnvioNotificacion):
-    """GET historial-por-cedula/{id}/comprobante devuelve HTML con datos del envío."""
-    r = client.get(f"/api/v1/notificaciones/historial-por-cedula/{un_envio_en_bd.id}/comprobante")
+def test_comprobante_envio_redirige_a_pdf(client: TestClient, db: Session, un_envio_en_bd: EnvioNotificacion):
+    """GET .../comprobante redirige al PDF oficial."""
+    r = client.get(
+        f"/api/v1/notificaciones/historial-por-cedula/{un_envio_en_bd.id}/comprobante",
+        follow_redirects=False,
+    )
+    assert r.status_code == 307
+    loc = r.headers.get("location") or ""
+    assert "comprobante-pdf" in loc
+
+
+def test_comprobante_pdf_ok(client: TestClient, db: Session, un_envio_en_bd: EnvioNotificacion):
+    """GET .../comprobante-pdf devuelve PDF (generado al vuelo si no hay snapshot)."""
+    r = client.get(
+        f"/api/v1/notificaciones/historial-por-cedula/{un_envio_en_bd.id}/comprobante-pdf"
+    )
     assert r.status_code == 200
-    assert "text/html" in r.headers.get("content-type", "")
-    html = r.text
-    assert str(un_envio_en_bd.id) in html
-    assert un_envio_en_bd.cedula in html
-    assert "Comprobante" in html or "comprobante" in html
+    assert r.headers.get("content-type", "").startswith("application/pdf")
+    assert r.content[:4] == b"%PDF"
 
 
 def test_comprobante_envio_404(client: TestClient):
     """GET comprobante con id inexistente devuelve 404."""
     r = client.get("/api/v1/notificaciones/historial-por-cedula/99999999/comprobante")
     assert r.status_code == 404
+
+
+# --- Cuerpo del mensaje (PDF) ---
+
+
+def test_mensaje_html_sin_cuerpo_404(client: TestClient, un_envio_en_bd: EnvioNotificacion):
+    """GET .../mensaje-html sin snapshot de cuerpo devuelve 404."""
+    r = client.get(
+        f"/api/v1/notificaciones/historial-por-cedula/{un_envio_en_bd.id}/mensaje-html",
+        follow_redirects=False,
+    )
+    assert r.status_code == 404
+
+
+def test_mensaje_html_redirige_a_pdf(client: TestClient, db: Session, un_envio_en_bd: EnvioNotificacion):
+    """GET .../mensaje-html redirige al PDF oficial cuando hay cuerpo."""
+    un_envio_en_bd.mensaje_html = "<p>Prueba cuerpo</p>"
+    db.commit()
+    r = client.get(
+        f"/api/v1/notificaciones/historial-por-cedula/{un_envio_en_bd.id}/mensaje-html",
+        follow_redirects=False,
+    )
+    assert r.status_code == 307
+    loc = r.headers.get("location") or ""
+    assert "mensaje-pdf" in loc
+
+
+def test_mensaje_pdf_ok(client: TestClient, db: Session, un_envio_en_bd: EnvioNotificacion):
+    """GET .../mensaje-pdf devuelve PDF cuando hay HTML guardado."""
+    un_envio_en_bd.mensaje_html = "<table><tr><td>Uno</td><td>Dos</td></tr></table>"
+    db.commit()
+    r = client.get(
+        f"/api/v1/notificaciones/historial-por-cedula/{un_envio_en_bd.id}/mensaje-pdf"
+    )
+    assert r.status_code == 200
+    assert r.headers.get("content-type", "").startswith("application/pdf")
+    assert r.content[:4] == b"%PDF"
+
+
+def test_mensaje_pdf_solo_texto_ok(client: TestClient, db: Session, un_envio_en_bd: EnvioNotificacion):
+    """GET .../mensaje-pdf con solo mensaje_texto genera PDF."""
+    un_envio_en_bd.mensaje_html = None
+    un_envio_en_bd.mensaje_texto = "Linea 1\nLinea 2"
+    db.commit()
+    r = client.get(
+        f"/api/v1/notificaciones/historial-por-cedula/{un_envio_en_bd.id}/mensaje-pdf"
+    )
+    assert r.status_code == 200
+    assert r.content[:4] == b"%PDF"
+
+
+def test_historial_indica_tiene_mensaje_pdf(client: TestClient, db: Session, un_envio_en_bd: EnvioNotificacion):
+    """El listado marca tiene_mensaje_pdf cuando hay HTML o texto."""
+    un_envio_en_bd.mensaje_html = "<p>x</p>"
+    db.commit()
+    r = client.get(
+        "/api/v1/notificaciones/historial-por-cedula",
+        params={"cedula": un_envio_en_bd.cedula},
+    )
+    assert r.status_code == 200
+    item = r.json()["items"][0]
+    assert item.get("tiene_mensaje_pdf") is True
+    assert item.get("tiene_mensaje_html") is True

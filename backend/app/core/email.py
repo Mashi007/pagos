@@ -8,7 +8,9 @@ import logging
 import re
 import smtplib
 import time
-from typing import List, Optional, Tuple
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
 from email.utils import formatdate
 
 # Timeout para conexi�n y env�o SMTP/IMAP (evita 502 por proxy cuando Gmail/red tardan)
@@ -287,6 +289,33 @@ def test_imap_connection(
         return False, error_msg, None
 
 
+def _message_id_domain(from_header: str, smtp_host: str) -> str:
+    if from_header and "@" in from_header:
+        dom = from_header.split("@")[-1].strip().rstrip(">").strip()
+        if dom:
+            return dom
+    h = (smtp_host or "localhost").split(":")[0].strip()
+    return h or "localhost"
+
+
+def _smtp_capture_socket_metadata(server: Any, target: Dict[str, Any]) -> None:
+    sock = getattr(server, "sock", None)
+    if sock is None:
+        return
+    try:
+        peer = sock.getpeername()
+        target["ip_servidor_smtp_conectado"] = peer[0]
+        target["puerto_servidor_smtp_conectado"] = peer[1]
+    except OSError:
+        pass
+    try:
+        loc = sock.getsockname()
+        target["ip_socket_local_proceso"] = loc[0]
+        target["puerto_socket_local"] = loc[1]
+    except OSError:
+        pass
+
+
 def send_email(
     to_emails: List[str],
     subject: str,
@@ -299,6 +328,7 @@ def send_email(
     respetar_destinos_manuales: bool = False,
     servicio: Optional[str] = None,
     tipo_tab: Optional[str] = None,
+    smtp_session_metadata: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Env�a un correo v�a SMTP (desde el email configurado en Configuraci�n > Email o .env).
@@ -310,6 +340,9 @@ def send_email(
     """
     if not to_emails:
         logger.info("[SMTP_ENVIO] estado=abortado razon=sin_destinatarios servicio=%s tipo_tab=%s", servicio or "", tipo_tab or "")
+        if smtp_session_metadata is not None:
+            smtp_session_metadata.clear()
+            smtp_session_metadata.update({"resultado": "no_intentado", "motivo": "sin_destinatarios"})
         return False, "No hay destinatarios."
     sync_from_db()
     dest_solicitados_originales = [str(e).strip() for e in to_emails if e is not None and str(e).strip()]
@@ -343,6 +376,11 @@ def send_email(
                 "Modo Pruebas activo pero no hay correo de pruebas configurado. "
                 "Configure en Notificaciones > Configuracion (envios) o en Configuracion > Email."
             )
+            if smtp_session_metadata is not None:
+                smtp_session_metadata.clear()
+                smtp_session_metadata.update(
+                    {"resultado": "no_intentado", "motivo": "modo_pruebas_sin_correo_pruebas"}
+                )
             return False, (
                 "En modo Pruebas debe configurar el correo de pruebas en Notificaciones > Configuracion (envios) "
                 "o en Configuracion > Email."
@@ -367,6 +405,9 @@ def send_email(
             modo_pruebas,
             redirigido_modo_pruebas,
         )
+        if smtp_session_metadata is not None:
+            smtp_session_metadata.clear()
+            smtp_session_metadata.update({"resultado": "no_intentado", "motivo": "sin_smtp_config"})
         return False, "No hay servidor SMTP configurado. Configura en Configuracion > Email."
     if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() == "***":
         log_phase(logger, FASE_SMTP_CONFIG, False, "falta contrasena SMTP")
@@ -377,6 +418,9 @@ def send_email(
             modo_pruebas,
             redirigido_modo_pruebas,
         )
+        if smtp_session_metadata is not None:
+            smtp_session_metadata.clear()
+            smtp_session_metadata.update({"resultado": "no_intentado", "motivo": "sin_smtp_password"})
         return False, "Falta contrasena SMTP. Configura en Configuracion > Email."
     log_phase(logger, FASE_SMTP_CONFIG, True, "host=%s port=%s" % (cfg.get("smtp_host"), cfg.get("smtp_port")))
 
@@ -406,6 +450,18 @@ def send_email(
         from email.mime.base import MIMEBase
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
+
+        if smtp_session_metadata is not None:
+            smtp_session_metadata.clear()
+            smtp_session_metadata.update(
+                {
+                    "fecha_registro_utc": datetime.now(timezone.utc).isoformat(),
+                    "servidor_smtp_host": cfg.get("smtp_host"),
+                    "servidor_smtp_puerto": int(cfg.get("smtp_port") or 587),
+                    "modo_pruebas_redirigido": redirigido_modo_pruebas,
+                    "destinatarios_sesion_smtp": list(efectivos_para_smtp),
+                }
+            )
 
         # Asegurar body_text y body_html son str y UTF-8 validos
         if body_text is None:
@@ -462,6 +518,12 @@ def send_email(
 
         msg["Subject"] = subject
         msg["From"] = cfg.get("from_email") or cfg.get("smtp_user")
+        _from_hdr = str(msg["From"] or "")
+        _mid_domain = _message_id_domain(_from_hdr, str(cfg.get("smtp_host") or ""))
+        _message_id = f"<{uuid.uuid4().hex}@{_mid_domain}>"
+        msg["Message-ID"] = _message_id
+        if smtp_session_metadata is not None:
+            smtp_session_metadata["message_id_rfc5322"] = _message_id
         msg["Date"] = formatdate(localtime=True)
         msg["To"] = ", ".join(to_emails)
         if cc_list:
@@ -491,6 +553,10 @@ def send_email(
             with smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
                 log_phase(logger, FASE_SMTP_CONEXION, True, f"SMTP_SSL {cfg['smtp_host']}:{port}", duration_ms=(time.time() - t0_smtp) * 1000)
                 server.login(cfg["smtp_user"], cfg["smtp_password"])
+                if smtp_session_metadata is not None:
+                    _smtp_capture_socket_metadata(server, smtp_session_metadata)
+                    smtp_session_metadata["tls"] = True
+                    smtp_session_metadata["tipo_conexion"] = "SMTP_SSL"
                 refused = server.sendmail(msg["From"], all_recipients, msg_bytes)
         else:
             with smtplib.SMTP(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
@@ -498,6 +564,10 @@ def send_email(
                     server.starttls()
                 log_phase(logger, FASE_SMTP_CONEXION, True, f"SMTP {cfg['smtp_host']}:{port} TLS={use_tls}", duration_ms=(time.time() - t0_smtp) * 1000)
                 server.login(cfg["smtp_user"], cfg["smtp_password"])
+                if smtp_session_metadata is not None:
+                    _smtp_capture_socket_metadata(server, smtp_session_metadata)
+                    smtp_session_metadata["tls"] = bool(use_tls)
+                    smtp_session_metadata["tipo_conexion"] = "SMTP_STARTTLS" if use_tls else "SMTP"
                 refused = server.sendmail(msg["From"], all_recipients, msg_bytes)
         if refused:
             log_phase(logger, FASE_SMTP_ENVIO, False, f"smtp_rechazo_destinatarios={refused}", duration_ms=(time.time() - t0_smtp) * 1000)
@@ -515,6 +585,9 @@ def send_email(
                 msg.get("From"),
                 subject,
             )
+            if smtp_session_metadata is not None:
+                smtp_session_metadata["resultado"] = "rechazo_smtp_por_destinatario"
+                smtp_session_metadata["smtp_refused"] = str(refused)[:2000]
             return False, "El servidor SMTP rechazo uno o mas destinatarios: %s" % (refused,)
         log_phase(
             logger,
@@ -542,6 +615,8 @@ def send_email(
             subject,
             msg.get("From"),
         )
+        if smtp_session_metadata is not None:
+            smtp_session_metadata["resultado"] = "aceptado_por_servidor_smtp"
         return True, None
     except Exception as e:
         err_msg = _sanitize_smtp_error(e)
@@ -566,6 +641,9 @@ def send_email(
             logger.error("Error enviando correo (SMTP): %s", err_msg)
         else:
             logger.exception("Error enviando correo: %s", e)
+        if smtp_session_metadata is not None:
+            smtp_session_metadata["resultado"] = "error_excepcion"
+            smtp_session_metadata["error_resumen"] = err_msg[:2000]
         return False, err_msg
 
 

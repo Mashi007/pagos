@@ -192,6 +192,10 @@ export interface HistorialEnvioItem {
 
   tiene_mensaje_texto?: boolean
 
+  /** Hay HTML o texto guardado: se puede descargar el cuerpo como PDF. */
+
+  tiene_mensaje_pdf?: boolean
+
   tiene_comprobante_pdf?: boolean
 }
 
@@ -476,24 +480,11 @@ class NotificacionService {
     return blob as Blob
   }
 
-  /** Obtiene el HTML del comprobante de un envío (abrir en nueva ventana o guardar como PDF). */
+  /** Descarga el cuerpo del correo como PDF (snapshot HTML o texto). */
 
-  async getComprobanteEnvioHtml(envioId: number): Promise<string> {
-    const text = await apiClient.get<string>(
-      `${this.baseUrl}/historial-por-cedula/${envioId}/comprobante`,
-      {
-        responseType: 'text',
-      }
-    )
-
-    return text as string
-  }
-
-  /** Descarga cuerpo HTML del correo (snapshot). */
-
-  async descargarHistorialMensajeHtml(envioId: number): Promise<Blob> {
+  async descargarHistorialMensajePdf(envioId: number): Promise<Blob> {
     return (await apiClient.get<Blob>(
-      `${this.baseUrl}/historial-por-cedula/${envioId}/mensaje-html`,
+      `${this.baseUrl}/historial-por-cedula/${envioId}/mensaje-pdf`,
       { responseType: 'blob' }
     )) as Blob
   }

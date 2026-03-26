@@ -69,7 +69,10 @@ pandas==2.3.3
 numpy==2.3.4
 scikit-learn==1.6.1
 xgboost==2.1.3
-reportlab==4.2.5
+# xhtml2pdf/svglib requieren reportlab >= 4.4.3
+reportlab>=4.4.3,<5
+# HTML del correo (snapshot) -> PDF del cuerpo del mensaje
+xhtml2pdf>=0.2.15
 
 # ============================================
 # NOTIFICATIONS

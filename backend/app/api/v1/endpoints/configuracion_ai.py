@@ -26,7 +26,7 @@ import logging
 
 from app.core.config import settings
 from app.core.database import get_db, engine, SessionLocal
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_administrador
 from app.core.openrouter_client import call_openrouter as _openrouter_call
 from app.core.openrouter_client import call_openrouter_stream
 from app.core.chat_context_cache import get_cached_context, set_cached_context, invalidate_cache
@@ -45,7 +45,8 @@ from sqlalchemy import inspect as sa_inspect
 CONTEXTO_AI_STATEMENT_TIMEOUT_MS = 10_000  # 10 segundos
 
 logger = logging.getLogger(__name__)
-router = APIRouter(dependencies=[Depends(get_current_user)])
+# Auth por endpoint: chat y GET config para cualquier usuario autenticado; el resto solo administrador.
+router = APIRouter()
 
 CLAVE_AI = "configuracion_ai"
 # Clave opcional en tabla configuracion: JSON array de {"pregunta": "...", "campo": "..."} para
@@ -411,7 +412,10 @@ def _call_openrouter(messages: list[dict], model: Optional[str] = None, temperat
 
 # --- GET /configuracion/ai/configuracion: devolver config SIN la clave (persistida en BD)
 @router.get("/configuracion")
-def get_ai_configuracion(db: Session = Depends(get_db)):
+def get_ai_configuracion(
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(get_current_user),
+):
     """
     Devuelve la configuración AI para el frontend (desde BD).
     NUNCA incluye el token real: openai_api_key es "***" si hay clave (BD o env), "" si no.
@@ -484,7 +488,11 @@ class AIConfigUpdate(BaseModel):
 
 
 @router.put("/configuracion")
-def put_ai_configuracion(payload: AIConfigUpdate = Body(...), db: Session = Depends(get_db)):
+def put_ai_configuracion(
+    payload: AIConfigUpdate = Body(...),
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """
     Actualiza modelo, temperatura, max_tokens, activo y opcionalmente el token OpenRouter.
     Si openai_api_key u openrouter_api_key viene con *** o vacío, no se sobrescribe el token guardado.
@@ -607,7 +615,10 @@ class PromptPutBody(BaseModel):
 
 
 @router.get("/prompt")
-def get_ai_prompt(db: Session = Depends(get_db)):
+def get_ai_prompt(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """
     Devuelve el prompt personalizado y si se está usando el por defecto.
     Incluye variables personalizadas para el frontend (Editor de prompt).
@@ -635,7 +646,11 @@ def get_ai_prompt(db: Session = Depends(get_db)):
 
 
 @router.put("/prompt")
-def put_ai_prompt(payload: PromptPutBody = Body(...), db: Session = Depends(get_db)):
+def put_ai_prompt(
+    payload: PromptPutBody = Body(...),
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Guarda el prompt personalizado. Si prompt está vacío, se restaura el por defecto."""
     texto = (payload.prompt or "").strip()
     _set_prompt_personalizado(db, texto)
@@ -659,7 +674,10 @@ class PromptVariableUpdate(BaseModel):
 
 
 @router.get("/prompt/variables")
-def get_ai_prompt_variables(db: Session = Depends(get_db)):
+def get_ai_prompt_variables(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Lista las variables personalizadas del prompt."""
     variables = _get_prompt_variables_list(db)
     out = []
@@ -677,7 +695,11 @@ def get_ai_prompt_variables(db: Session = Depends(get_db)):
 
 
 @router.post("/prompt/variables")
-def post_ai_prompt_variable(payload: PromptVariableCreate = Body(...), db: Session = Depends(get_db)):
+def post_ai_prompt_variable(
+    payload: PromptVariableCreate = Body(...),
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Crea una variable para el prompt."""
     variables = _get_prompt_variables_list(db)
     max_id = max((v.get("id") for v in variables if isinstance(v, dict) and v.get("id") is not None), default=0)
@@ -711,6 +733,7 @@ def put_ai_prompt_variable(
     variable_id: int,
     payload: PromptVariableUpdate = Body(...),
     db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
 ):
     """Actualiza una variable del prompt."""
     variables = _get_prompt_variables_list(db)
@@ -735,7 +758,11 @@ def put_ai_prompt_variable(
 
 
 @router.delete("/prompt/variables/{variable_id}")
-def delete_ai_prompt_variable(variable_id: int, db: Session = Depends(get_db)):
+def delete_ai_prompt_variable(
+    variable_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Elimina una variable del prompt."""
     variables = _get_prompt_variables_list(db)
     new_list = [v for v in variables if isinstance(v, dict) and v.get("id") != variable_id]
@@ -854,7 +881,10 @@ class ProbarRequest(BaseModel):
 
 
 @router.post("/probar")
-def post_ai_probar(payload: ProbarRequest = Body(...)):
+def post_ai_probar(
+    payload: ProbarRequest = Body(...),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Prueba la conexión con OpenRouter. Carga config desde BD en sesión corta (no retiene conexión durante la llamada)."""
     session = SessionLocal()
     try:
@@ -884,7 +914,10 @@ def post_ai_probar(payload: ProbarRequest = Body(...)):
 
 
 @router.get("/documentos")
-def get_ai_documentos(db: Session = Depends(get_db)):
+def get_ai_documentos(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """
     Listado de documentos para RAG/IA. El frontend AIConfig lo usa.
     Con get_db para futura persistencia en BD; por ahora devuelve lista vacía.
@@ -932,7 +965,11 @@ class CalificarRequest(BaseModel):
 
 
 @router.post("/chat/calificar")
-def post_chat_calificar(payload: CalificarRequest = Body(...), db: Session = Depends(get_db)):
+def post_chat_calificar(
+    payload: CalificarRequest = Body(...),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
     """
     Registra una calificación del usuario sobre una respuesta del Chat AI.
     Persiste en BD (configuracion.chat_ai_calificaciones). get_db para acceso a BD.
@@ -947,7 +984,7 @@ def post_chat_calificar(payload: CalificarRequest = Body(...), db: Session = Dep
         "pregunta": (payload.pregunta or "").strip(),
         "respuesta_ai": (payload.respuesta or "").strip(),
         "calificacion": calificacion_tipo,
-        "usuario_email": None,
+        "usuario_email": (current_user.email or "").strip().lower() or None,
         "procesado": False,
         "notas_procesamiento": None,
         "mejorado": False,
@@ -964,6 +1001,7 @@ def get_chat_calificaciones(
     calificacion: Optional[str] = None,
     procesado: Optional[str] = None,
     db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
 ):
     """
     Lista calificaciones del Chat AI desde BD. Filtros: calificacion (arriba|abajo), procesado (true|false).
@@ -987,6 +1025,7 @@ def put_chat_calificacion_procesar(
     calificacion_id: int,
     payload: ProcesarCalificacionRequest = Body(...),
     db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
 ):
     """
     Marca una calificación como procesada y opcionalmente guarda notas.
@@ -1044,7 +1083,10 @@ def _inspector_tablas_campos() -> dict[str, list[dict]]:
 
 
 @router.get("/tablas-campos")
-def get_tablas_campos(db: Session = Depends(get_db)):
+def get_tablas_campos(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """
     Lista tablas y campos del esquema de la BD (para Catálogo de Campos y Fine-tuning).
     El frontend usa tablas_campos, total_tablas y fecha_consulta.
@@ -1099,7 +1141,10 @@ def _definicion_to_dict(row: DefinicionCampo) -> dict:
 
 
 @router.get("/definiciones-campos")
-def get_definiciones_campos(db: Session = Depends(get_db)):
+def get_definiciones_campos(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """
     Lista definiciones de campos desde la tabla definiciones_campos (BD).
     Sirve al Catálogo de Campos en Configuración > AI > Catálogo de Campos.
@@ -1110,7 +1155,10 @@ def get_definiciones_campos(db: Session = Depends(get_db)):
 
 
 @router.get("/definiciones-campos/tablas")
-def get_definiciones_campos_tablas(db: Session = Depends(get_db)):
+def get_definiciones_campos_tablas(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """
     Lista nombres de tablas con al menos una definición (desde definiciones_campos).
     Usado por el Catálogo de Campos para el filtro por tabla.
@@ -1154,7 +1202,10 @@ class DefinicionCampoUpdate(BaseModel):
 
 
 @router.post("/definiciones-campos/sincronizar")
-def post_definiciones_campos_sincronizar(db: Session = Depends(get_db)):
+def post_definiciones_campos_sincronizar(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """
     Sincroniza definiciones con el esquema actual de la BD.
     Crea definiciones para campos nuevos; actualiza tipo_dato/obligatorio/índice/FK
@@ -1213,7 +1264,11 @@ def post_definiciones_campos_sincronizar(db: Session = Depends(get_db)):
 
 
 @router.post("/definiciones-campos")
-def post_definiciones_campos(payload: DefinicionCampoCreate = Body(...), db: Session = Depends(get_db)):
+def post_definiciones_campos(
+    payload: DefinicionCampoCreate = Body(...),
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Crea una definición de campo."""
     if not (payload.tabla or "").strip() or not (payload.campo or "").strip() or not (payload.definicion or "").strip():
         raise HTTPException(status_code=400, detail="Tabla, campo y definición son obligatorios")
@@ -1245,7 +1300,12 @@ def post_definiciones_campos(payload: DefinicionCampoCreate = Body(...), db: Ses
 
 
 @router.put("/definiciones-campos/{definicion_id}")
-def put_definiciones_campos(definicion_id: int, payload: DefinicionCampoUpdate = Body(...), db: Session = Depends(get_db)):
+def put_definiciones_campos(
+    definicion_id: int,
+    payload: DefinicionCampoUpdate = Body(...),
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Actualiza una definición de campo (parcial)."""
     row = db.get(DefinicionCampo, definicion_id)
     if not row:
@@ -1262,7 +1322,11 @@ def put_definiciones_campos(definicion_id: int, payload: DefinicionCampoUpdate =
 
 
 @router.delete("/definiciones-campos/{definicion_id}")
-def delete_definiciones_campos(definicion_id: int, db: Session = Depends(get_db)):
+def delete_definiciones_campos(
+    definicion_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Elimina una definición de campo."""
     row = db.get(DefinicionCampo, definicion_id)
     if not row:
@@ -1302,7 +1366,10 @@ def _diccionario_to_dict(row: DiccionarioSemantico) -> dict:
 
 
 @router.get("/diccionario-semantico")
-def get_diccionario_semantico(db: Session = Depends(get_db)):
+def get_diccionario_semantico(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Lista entradas del diccionario semántico."""
     rows = db.query(DiccionarioSemantico).order_by(DiccionarioSemantico.orden, DiccionarioSemantico.palabra).all()
     entradas = [_diccionario_to_dict(r) for r in rows]
@@ -1310,7 +1377,10 @@ def get_diccionario_semantico(db: Session = Depends(get_db)):
 
 
 @router.get("/diccionario-semantico/categorias")
-def get_diccionario_semantico_categorias(db: Session = Depends(get_db)):
+def get_diccionario_semantico_categorias(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Lista categorías distintas del diccionario."""
     from sqlalchemy import distinct
     cats = db.query(distinct(DiccionarioSemantico.categoria)).where(DiccionarioSemantico.categoria.isnot(None)).all()
@@ -1343,7 +1413,11 @@ class DiccionarioSemanticoUpdate(BaseModel):
 
 
 @router.post("/diccionario-semantico")
-def post_diccionario_semantico(payload: DiccionarioSemanticoCreate = Body(...), db: Session = Depends(get_db)):
+def post_diccionario_semantico(
+    payload: DiccionarioSemanticoCreate = Body(...),
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Crea entrada en el diccionario semántico."""
     if not (payload.palabra or "").strip() or not (payload.definicion or "").strip():
         raise HTTPException(status_code=400, detail="Palabra y definición son obligatorios")
@@ -1367,7 +1441,12 @@ def post_diccionario_semantico(payload: DiccionarioSemanticoCreate = Body(...), 
 
 
 @router.put("/diccionario-semantico/{entrada_id}")
-def put_diccionario_semantico(entrada_id: int, payload: DiccionarioSemanticoUpdate = Body(...), db: Session = Depends(get_db)):
+def put_diccionario_semantico(
+    entrada_id: int,
+    payload: DiccionarioSemanticoUpdate = Body(...),
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Actualiza entrada del diccionario semántico."""
     row = db.get(DiccionarioSemantico, entrada_id)
     if not row:
@@ -1384,7 +1463,11 @@ def put_diccionario_semantico(entrada_id: int, payload: DiccionarioSemanticoUpda
 
 
 @router.delete("/diccionario-semantico/{entrada_id}")
-def delete_diccionario_semantico(entrada_id: int, db: Session = Depends(get_db)):
+def delete_diccionario_semantico(
+    entrada_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Elimina entrada del diccionario semántico."""
     row = db.get(DiccionarioSemantico, entrada_id)
     if not row:
@@ -1395,6 +1478,9 @@ def delete_diccionario_semantico(entrada_id: int, db: Session = Depends(get_db))
 
 
 @router.post("/diccionario-semantico/procesar")
-def post_diccionario_semantico_procesar(payload: dict = Body(...)):
+def post_diccionario_semantico_procesar(
+    payload: dict = Body(...),
+    _admin: UserResponse = Depends(require_administrador),
+):
     """Procesa entrada con IA para mejorar definición (stub)."""
     return {"mensaje": "Procesamiento con IA no implementado aún", "definicion_mejorada": payload.get("definicion", "")}
