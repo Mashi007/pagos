@@ -503,7 +503,7 @@ export function ConfiguracionNotificaciones() {
 
     if (!c) return defaultEnvio()
 
-    return {
+    const row: ConfigEnvioItem = {
       habilitado: c.habilitado !== false,
 
       cco: Array.isArray(c.cco) ? c.cco : [],
@@ -518,6 +518,13 @@ export function ConfiguracionNotificaciones() {
 
       incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
     }
+
+    // Masivos: nunca carta PDF de cobranza (comunicación general; evita Carta_Cobranza.pdf por error).
+    if (tipo === 'MASIVOS') {
+      return { ...row, incluir_pdf_anexo: false }
+    }
+
+    return row
   }
 
   const setConfig = (tipo: string, upd: Partial<ConfigEnvioItem>) => {
@@ -633,7 +640,8 @@ export function ConfiguracionNotificaciones() {
         ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
           ...c,
 
-          incluir_pdf_anexo: c.incluir_pdf_anexo !== false,
+          incluir_pdf_anexo:
+            tipo === 'MASIVOS' ? false : c.incluir_pdf_anexo !== false,
 
           incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
         }
@@ -721,7 +729,7 @@ export function ConfiguracionNotificaciones() {
     }
   }
 
-  /** En modo prueba el envío usa solo plantilla predeterminada (ejemplo) y envía a correo de pruebas 1 y 2. */
+  /** Prueba de paquete (mora/prejudicial): un correo por criterio con plantilla guardada en BD. Masivos usa otro boton. */
 
   const handleEnviarNotificacionesPrueba = async () => {
     const destinos = [
@@ -1208,9 +1216,10 @@ export function ConfiguracionNotificaciones() {
                 </Button>
 
                 <p className="mt-2 text-sm text-gray-600">
-                  Envíos masivos: envía ahora un correo por cada cliente que
-                  requiera notificación; todos van al correo de pruebas (no a
-                  clientes).
+                  Envíos masivos: un correo por contacto en lista Masivos; en
+                  modo prueba todos van al correo de pruebas. Usa la plantilla de
+                  la primera campaña activa; si esa campaña no tiene plantilla,
+                  la de la fila «Comunicaciones masivas» (guarde antes).
                 </p>
               </div>
             )}
@@ -1310,9 +1319,10 @@ export function ConfiguracionNotificaciones() {
             Campanas masivas semanales
           </CardTitle>
           <CardDescription>
-            Solo para la pestana Masivos: permite ejecutar varias campanas en
-            paralelo, cada una con plantilla, horario, CCO y dias de repeticion
-            semanal.
+            Solo para la pestana Masivos: varias campanas con plantilla, horario,
+            CCO y dias semanales. Si una campana deja la plantilla en «Texto por
+            defecto», se usa la plantilla de la fila «Comunicaciones masivas» de
+            la tabla de arriba (guardada en el servidor).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1614,8 +1624,14 @@ export function ConfiguracionNotificaciones() {
                           incluir_pdf_anexo: !config.incluir_pdf_anexo,
                         })
                       }
-                      disabled={!config.habilitado}
-                      title="Carta_Cobranza.pdf (plantilla PDF cobranza). El servidor exige este PDF y un PDF fijo para enviar; debe estar activado."
+                      disabled={
+                        !config.habilitado || tipo === 'MASIVOS'
+                      }
+                      title={
+                        tipo === 'MASIVOS'
+                          ? 'No aplica: comunicaciones masivas no adjuntan Carta_Cobranza.pdf'
+                          : 'Carta_Cobranza.pdf (plantilla PDF cobranza). El servidor exige este PDF y un PDF fijo para enviar; debe estar activado.'
+                      }
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>

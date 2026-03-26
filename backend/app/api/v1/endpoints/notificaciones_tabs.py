@@ -11,7 +11,7 @@ Paquete de correo al cliente (NOTIFICACIONES_PAQUETE_ESTRICTO=True por defecto):
    siempre se envia junto al PDF variable cuando el paquete es estricto.
 """
 import logging
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select, text
@@ -205,6 +205,11 @@ def _enviar_correos_items(
         item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
         tipo = get_tipo_for_item(item)
         tipo_cfg = config_envios.get(tipo) or {}
+        # Masivos: nunca carta PDF de cobranza ni contexto de préstamo (comunicación general).
+        if tipo == "MASIVOS":
+            item.pop("contexto_cobranza", None)
+            item.pop("_correlativo_envio", None)
+            item.pop("prestamo_id", None)
         # Omitir solo cuando "Envío" está explícitamente desactivado (habilitado=False)
         if tipo_cfg.get("habilitado", True) is False:
             omitidos_config += 1
@@ -248,7 +253,12 @@ def _enviar_correos_items(
 
         # Construir contexto_cobranza cuando haga falta: email COBRANZA, adjunto PDF (Carta_Cobranza) o plantilla con variables cobranza
         # Si "Incluir PDF" está marcado pero no hay plantilla (Texto por defecto), igual se construye contexto para adjuntar Carta_Cobranza.pdf
-        if db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
+        if (
+            db
+            and tipo != "MASIVOS"
+            and item.get("prestamo_id")
+            and not item.get("contexto_cobranza")
+        ):
             plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
             need_ctx = paquete_estricto or (
                 (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
@@ -290,7 +300,11 @@ def _enviar_correos_items(
             else:
                 incluir_adjuntos_fijos = True
         else:
-            incluir_pdf_anexo = _cfg_incluir_pdf_anexo(tipo_cfg)
+            # Masivos: nunca Carta_Cobranza.pdf aunque la fila tenga PDF marcado (checkbox mora).
+            if tipo == "MASIVOS":
+                incluir_pdf_anexo = False
+            else:
+                incluir_pdf_anexo = _cfg_incluir_pdf_anexo(tipo_cfg)
             incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
             try:
@@ -758,6 +772,49 @@ def _slot_campana_masiva(campana_id: str) -> str:
     return f"MASIVOS::{campana_id}"
 
 
+def _norm_cco_list(raw) -> List[str]:
+    if not isinstance(raw, list):
+        return []
+    return [
+        str(e).strip()
+        for e in raw
+        if e and isinstance(e, str) and "@" in str(e).strip()
+    ]
+
+
+def _tipo_cfg_masivos_por_campana(camp: dict, config_envios: dict) -> dict:
+    """
+    Combina la fila global MASIVOS (tabla de envios) con cada campaña en masivos_campanas.
+
+    La UI guarda plantilla/CCO en la fila «Comunicaciones masivas» y puede repetirlos
+    por campaña; si la campaña no tiene plantilla_id, debe usarse el de la fila MASIVOS
+    (antes solo se leía camp.plantilla_id y se ignoraba la selección principal).
+    """
+    base_m = (
+        config_envios.get("MASIVOS")
+        if isinstance(config_envios.get("MASIVOS"), dict)
+        else {}
+    )
+    cid = _parse_plantilla_id_desde_config(camp.get("plantilla_id"))
+    bid = _parse_plantilla_id_desde_config(base_m.get("plantilla_id"))
+    plantilla_efectiva = cid if cid else bid
+
+    cco_c = _norm_cco_list(camp.get("cco"))
+    cco_b = _norm_cco_list(base_m.get("cco"))
+    cco = cco_c if len(cco_c) > 0 else cco_b
+
+    incluir_adj = base_m.get("incluir_adjuntos_fijos", True) is not False
+
+    return {
+        "habilitado": True,
+        "cco": cco,
+        "plantilla_id": plantilla_efectiva,
+        "programador": camp.get("programador") or base_m.get("programador") or "03:00",
+        "incluir_pdf_anexo": False,
+        "incluir_adjuntos_fijos": incluir_adj,
+    }
+
+
 def ejecutar_envio_masivos_por_campanas(
     db: Session,
     config_envios: dict,
@@ -769,6 +826,30 @@ def ejecutar_envio_masivos_por_campanas(
     forzar_habilitado: bool = False,
 ) -> dict:
     campanas = get_campanas_masivos_config(config_envios)
+    base_m_row = (
+        config_envios.get("MASIVOS")
+        if isinstance(config_envios.get("MASIVOS"), dict)
+        else {}
+    )
+    if not campanas and (
+        forzar_habilitado or base_m_row.get("habilitado", True) is not False
+    ):
+        campanas = [
+            _normalizar_campana_masiva(
+                {
+                    "id": "fila-principal-masivos",
+                    "nombre": "Masivos (fila principal)",
+                    "habilitado": True,
+                    "plantilla_id": base_m_row.get("plantilla_id"),
+                    "programador": base_m_row.get("programador") or "03:00",
+                    "cco": base_m_row.get("cco")
+                    if isinstance(base_m_row.get("cco"), list)
+                    else [],
+                    "dias_semana": [],
+                },
+                0,
+            )
+        ]
     items = get_items_masivos(db)
     base_asunto = "Comunicado oficial - Rapicredit"
     base_cuerpo = (
@@ -800,14 +881,7 @@ def ejecutar_envio_masivos_por_campanas(
             if dedup.get(key) == f"{fecha_str}|{filtrar_hora[0]:02d}:{filtrar_hora[1]:02d}":
                 continue
 
-        tipo_cfg = {
-            "habilitado": True,
-            "cco": camp.get("cco") or [],
-            "plantilla_id": camp.get("plantilla_id"),
-            "programador": camp.get("programador") or "03:00",
-            "incluir_pdf_anexo": False,
-            "incluir_adjuntos_fijos": False,
-        }
+        tipo_cfg = _tipo_cfg_masivos_por_campana(camp, config_envios)
         cfg_tmp = dict(config_envios)
         cfg_tmp["MASIVOS"] = tipo_cfg
 
@@ -1091,7 +1165,9 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["prejudicial"] = r
 
-    # Masivos (comunicaciones generales)
+    # Masivos (comunicaciones generales): misma plantilla/CCO que campañas + fila MASIVOS.
+    # enviar-todas y "Envios masivos prueba" leian solo config["MASIVOS"] e ignoraban
+    # plantilla_id en masivos_campanas; se unifica con _tipo_cfg_masivos_por_campana.
     items_masivos = get_items_masivos(db)
     asunto_mas = "Comunicado oficial - Rapicredit"
     cuerpo_mas = (
@@ -1100,7 +1176,29 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
         "Revise el contenido completo en este correo.\n\n"
         "Saludos,\nRapicredit"
     )
-    r = _enviar_correos_items(items_masivos, asunto_mas, cuerpo_mas, config_envios, _tipo_masivos, db)
+    campanas_m = get_campanas_masivos_config(config_envios)
+    hab_m = [c for c in campanas_m if c.get("habilitado", True) is not False]
+    if hab_m:
+        camp_m_ref = hab_m[0]
+    else:
+        camp_m_ref = _normalizar_campana_masiva(
+            {
+                "id": "enviar-todas-masivos",
+                "nombre": "Masivos",
+                "habilitado": True,
+                "plantilla_id": None,
+                "programador": "03:00",
+                "cco": [],
+                "dias_semana": [],
+            },
+            0,
+        )
+    tipo_mas_merge = _tipo_cfg_masivos_por_campana(camp_m_ref, config_envios)
+    cfg_masivos_envio = dict(config_envios)
+    cfg_masivos_envio["MASIVOS"] = tipo_mas_merge
+    r = _enviar_correos_items(
+        items_masivos, asunto_mas, cuerpo_mas, cfg_masivos_envio, _tipo_masivos, db
+    )
     total_enviados += r.get("enviados", 0)
     total_fallidos += r.get("fallidos", 0)
     total_sin_email += r.get("sin_email", 0)
