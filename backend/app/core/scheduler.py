@@ -237,12 +237,12 @@ def start_scheduler() -> None:
         id="notificaciones_0050",
         name="Actualizar notificaciones 00:50",
     )
-    # Cada minuto: envio por hora configurada (programador) en notificaciones_envios
+    # Cada 15 min (Caracas): envio por hora configurada en notificaciones_envios
     _scheduler.add_job(
         _job_envio_notificaciones_programador,
-        CronTrigger(minute="*", timezone=SCHEDULER_TZ),
+        CronTrigger(minute="0,15,30,45", timezone=SCHEDULER_TZ),
         id="envio_notificaciones_programador",
-        name="Envio notificaciones por programador (cada minuto)",
+        name="Envio notificaciones por programador (cada 15 min)",
     )
     _scheduler.add_job(
         _job_emails_liquidado_diferidos,
@@ -314,7 +314,7 @@ def start_scheduler() -> None:
 
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: notificaciones 00:50 + programador cada minuto; liquidado PDF 01:10; finiquito 02:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
+        "Scheduler iniciado: notificaciones 00:50 + programador cada 15 min; liquidado PDF 01:10; finiquito 02:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
         SCHEDULER_TZ,
     )
 
