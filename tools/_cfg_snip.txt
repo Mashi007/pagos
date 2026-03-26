@@ -1,0 +1,130 @@
+101:   programador?: string
+102:   dias_semana: number[]
+103:   cco: string[]
+104: }
+105: 
+106: /** Respuesta de la API: config por tipo + modo_pruebas y email_pruebas (un solo objeto, sin duplicar) */
+107: 
+108: export type ConfigEnvioCompleta = Record<
+109:   string,
+110:   ConfigEnvioItem | CampanaMasivaConfig[] | boolean | string | string[]
+111: >
+112: 
+113: /** Criterios de notificación (tipo → label). Exportado para uso en Plantillas / vinculación PDF. */
+114: 
+115: type CriterioEnvioRow = {
+116:   tipo: string
+117:   label: string
+118:   categoria: string
+119:   color: 'blue' | 'green' | 'orange' | 'red' | 'slate'
+120: }
+121: 
+122: /**
+123:  * Tabla de envíos / programador: una fila por caso (hora y CCO independientes).
+124:  * Alineado con los tipos que usa el backend (notificaciones_tabs + programador).
+125:  */
+126: export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
+127:   {
+128:     tipo: 'PAGO_5_DIAS_ANTES',
+129:     label: 'Faltan 5 días al vencimiento',
+130:     categoria: 'Por vencer',
+131:     color: 'blue',
+132:   },
+133:   {
+134:     tipo: 'PAGO_3_DIAS_ANTES',
+135:     label: 'Faltan 3 días al vencimiento',
+136:     categoria: 'Por vencer',
+137:     color: 'blue',
+138:   },
+139:   {
+140:     tipo: 'PAGO_1_DIA_ANTES',
+141:     label: 'Falta 1 día al vencimiento',
+142:     categoria: 'Por vencer',
+143:     color: 'blue',
+144:   },
+145:   {
+146:     tipo: 'PAGO_DIA_0',
+147:     label: 'Vence hoy',
+148:     categoria: 'Día de pago',
+149:     color: 'green',
+150:   },
+151:   {
+152:     tipo: 'PAGO_1_DIA_ATRASADO',
+153:     label: 'Día siguiente al vencimiento',
+154:     categoria: 'Retrasada',
+155:     color: 'orange',
+156:   },
+157:   {
+158:     tipo: 'PAGO_3_DIAS_ATRASADO',
+159:     label: '3 días de retraso',
+160:     categoria: 'Retrasada',
+161:     color: 'orange',
+162:   },
+163:   {
+164:     tipo: 'PAGO_5_DIAS_ATRASADO',
+165:     label: '5 días atrasado',
+166:     categoria: 'Retrasada',
+167:     color: 'orange',
+168:   },
+169:   {
+170:     tipo: 'PREJUDICIAL',
+171:     label: 'Prejudicial',
+172:     categoria: 'Prejudicial',
+173:     color: 'red',
+174:   },
+175:   {
+176:     tipo: 'MASIVOS',
+177:     label: 'Comunicaciones masivas',
+178:     categoria: 'Comunicaciones',
+179:     color: 'slate',
+180:   },
+181: ]
+182: 
+183: /**
+184:  * Subconjunto para prueba de paquete (cuotas en mora / prejudicial con datos típicos en BD).
+185:  */
+186: export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
+187:   {
+188:     tipo: 'PAGO_1_DIA_ATRASADO',
+189:     label: 'Día siguiente al vencimiento',
+190:     categoria: 'Retrasada',
+191:     color: 'orange',
+192:   },
+193:   {
+194:     tipo: 'PAGO_3_DIAS_ATRASADO',
+195:     label: '3 días de retraso',
+196:     categoria: 'Retrasada',
+197:     color: 'orange',
+198:   },
+199:   {
+200:     tipo: 'PAGO_5_DIAS_ATRASADO',
+201:     label: '5 días atrasado',
+202:     categoria: 'Retrasada',
+203:     color: 'orange',
+204:   },
+205:   {
+206:     tipo: 'PREJUDICIAL',
+207:     label: 'Prejudicial',
+208:     categoria: 'Prejudicial',
+209:     color: 'red',
+210:   },
+211:   {
+212:     tipo: 'MASIVOS',
+213:     label: 'Comunicaciones masivas',
+214:     categoria: 'Comunicaciones',
+215:     color: 'slate',
+216:   },
+217: ]
+218: 
+219: /** Etiquetas para vinculación PDF + compat; incluye COBRANZA (solo plantilla, sin fila envío). */
+220: export const CRITERIOS_ETIQUETAS: CriterioEnvioRow[] = [
+221:   ...CRITERIOS_ENVIO_TABLA,
+222:   {
+223:     tipo: 'COBRANZA',
+224:     label: 'Carta de cobranza (plantilla tipo cobranza)',
+225:     categoria: 'Cobranza',
+226:     color: 'red',
+227:   },
+228: ]
+229: 
+230: /** @deprecated Usar CRITERIOS_ENVIO_PANEL o CRITERIOS_ETIQUETAS según contexto */

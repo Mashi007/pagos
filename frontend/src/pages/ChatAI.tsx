@@ -49,8 +49,7 @@ interface Mensaje {
 export function ChatAI() {
   const { user } = useSimpleAuth()
 
-  const esAdministrador =
-    (user?.rol || '').toLowerCase() === 'administrador'
+  const esAdministrador = (user?.rol || '').toLowerCase() === 'administrador'
 
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
 
@@ -607,10 +606,10 @@ export function ChatAI() {
                     </>
                   ) : (
                     <>
-                      El Chat AI requiere que un{' '}
-                      <strong>administrador</strong> configure y active la
-                      Inteligencia Artificial (API y estado activo). Si necesitas
-                      acceso urgente, contacta al administrador del sistema.
+                      El Chat AI requiere que un <strong>administrador</strong>{' '}
+                      configure y active la Inteligencia Artificial (API y
+                      estado activo). Si necesitas acceso urgente, contacta al
+                      administrador del sistema.
                     </>
                   )}
                 </p>

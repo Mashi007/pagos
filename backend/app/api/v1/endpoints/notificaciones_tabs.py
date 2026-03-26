@@ -284,7 +284,11 @@ def _enviar_correos_items(
         # - Adj. (pestaña 3): Documentos PDF fijos subidos en Documentos PDF anexos. Se agregan OBLIGATORIAMENTE si incluir_adjuntos_fijos no es False.
         if paquete_estricto:
             incluir_pdf_anexo = tipo != "MASIVOS"
-            incluir_adjuntos_fijos = tipo != "MASIVOS"
+            # Masivos: sin Carta_Cobranza.pdf; adjuntos de pestaña 3 según config
+            if tipo == "MASIVOS":
+                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
+            else:
+                incluir_adjuntos_fijos = True
         else:
             incluir_pdf_anexo = _cfg_incluir_pdf_anexo(tipo_cfg)
             incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)

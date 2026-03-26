@@ -588,8 +588,8 @@ export function Notificaciones() {
             {esTabMasivos && (
               <p className="mb-4 text-xs text-gray-500">
                 Comunicaciones masivas generales: no dependen de cuotas ni de
-                préstamos. Se envían a clientes con correo registrado, usando
-                la configuración del caso
+                préstamos. Se envían a clientes con correo registrado, usando la
+                configuración del caso
                 <code className="mx-1 rounded bg-gray-100 px-1">MASIVOS</code>.
               </p>
             )}
@@ -728,7 +728,9 @@ export function Notificaciones() {
                             <>
                               <td className="px-3 py-2">{row.correo || '-'}</td>
 
-                              <td className="px-3 py-2">{row.telefono || '-'}</td>
+                              <td className="px-3 py-2">
+                                {row.telefono || '-'}
+                              </td>
                             </>
                           ) : (
                             <td className="px-3 py-2">
@@ -802,7 +804,9 @@ export function Notificaciones() {
                             <>
                               <td className="px-3 py-2">{row.correo || '-'}</td>
 
-                              <td className="px-3 py-2">{row.telefono || '-'}</td>
+                              <td className="px-3 py-2">
+                                {row.telefono || '-'}
+                              </td>
                             </>
                           ) : (
                             <td className="px-3 py-2">

@@ -133,7 +133,9 @@ export function PagosBuscadorAmortizacion() {
 
       if (!opened) {
         window.URL.revokeObjectURL(url)
-        throw new Error('El navegador bloqueo la pestana de previsualizacion del PDF')
+        throw new Error(
+          'El navegador bloqueo la pestana de previsualizacion del PDF'
+        )
       }
 
       window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000)

@@ -2083,8 +2083,8 @@ export function DashboardMenu() {
 
                 <p className="mt-1 text-xs text-gray-600">
                   Cada préstamo cuenta una sola vez, en la barra según su mayor
-                  atraso entre cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 días =
-                  Vencido; 90+ días = Moroso (snapshot al día de hoy).
+                  atraso entre cuotas vencidas sin pagar. 1-30, 31-60 y 61-89
+                  días = Vencido; 90+ días = Moroso (snapshot al día de hoy).
                 </p>
               </CardHeader>
 

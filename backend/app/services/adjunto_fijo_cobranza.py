@@ -22,6 +22,7 @@ CLAVE_ADJUNTOS_FIJOS_POR_CASO = "adjuntos_fijos_por_caso"
 TIPOS_CASO_VALIDOS = frozenset([
     "dias_1_retraso", "dias_3_retraso", "dias_5_retraso",
     "prejudicial",
+    "masivos",
 ])
 
 # Evitar repetir el mismo WARNING por cada ítem del batch (Render: disco efímero, archivos no existen)

@@ -698,7 +698,7 @@ def get_adjuntos_fijos_cobranza(db: Session = Depends(get_db)):
 
 @router.post("/adjuntos-fijos-cobranza/upload")
 def upload_adjunto_fijo_cobranza(
-    tipo_caso: str = Query(..., description="Caso: dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial"),
+    tipo_caso: str = Query(..., description="Caso: dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, masivos"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -712,7 +712,7 @@ def upload_adjunto_fijo_cobranza(
     if tipo_caso not in TIPOS_CASO_VALIDOS:
         raise HTTPException(
             status_code=400,
-            detail="tipo_caso debe ser uno de: dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial",
+            detail="tipo_caso debe ser uno de: dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, masivos",
         )
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se permiten documentos PDF")

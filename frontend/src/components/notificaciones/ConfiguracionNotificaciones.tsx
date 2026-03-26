@@ -314,7 +314,10 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
   let emailsPruebas: [string, string] = ['', '']
 
   if (Array.isArray(data.emails_pruebas)) {
-    emailsPruebas = [String(data.emails_pruebas[0] ?? ''), String(data.emails_pruebas[1] ?? '')]
+    emailsPruebas = [
+      String(data.emails_pruebas[0] ?? ''),
+      String(data.emails_pruebas[1] ?? ''),
+    ]
   } else if (typeof data.email_pruebas === 'string') {
     emailsPruebas = [data.email_pruebas, '']
   }
@@ -323,8 +326,12 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
 
   CLAVES_GLOBALES.forEach(k => delete sinGlobales[k])
 
-  const rawCampanas = Array.isArray((data as Record<string, unknown>).masivos_campanas)
-    ? ((data as Record<string, unknown>).masivos_campanas as Array<Record<string, unknown>>)
+  const rawCampanas = Array.isArray(
+    (data as Record<string, unknown>).masivos_campanas
+  )
+    ? ((data as Record<string, unknown>).masivos_campanas as Array<
+        Record<string, unknown>
+      >)
     : []
 
   const campanasMasivos: CampanaMasivaConfig[] = rawCampanas.map((c, idx) => {
@@ -390,7 +397,9 @@ export function ConfiguracionNotificaciones() {
 
   const [enviandoCasoTipo, setEnviandoCasoTipo] = useState<string | null>(null)
 
-  const [campanasMasivos, setCampanasMasivos] = useState<CampanaMasivaConfig[]>([])
+  const [campanasMasivos, setCampanasMasivos] = useState<CampanaMasivaConfig[]>(
+    []
+  )
 
   const guardandoRef = useRef(false)
 
@@ -938,10 +947,11 @@ export function ConfiguracionNotificaciones() {
             plantilla de correo HTML con variables; (2) PDF de carta con
             variables (Carta_Cobranza.pdf); (3) PDFs fijos de anexos, siempre
             junto al PDF variable. Solo aparecen casos con envio por pestaña
-            (retrasadas, prejudicial y masivos). Las plantillas tipo carta de cobranza
-            (COBRANZA) se crean en Plantillas y se eligen aqui por caso. El
-            backend exige plantilla activa, PDF variable valido y al menos un
-            PDF fijo adicional (pestaña Documentos PDF anexos / adjunto global).
+            (retrasadas, prejudicial y masivos). Las plantillas tipo carta de
+            cobranza (COBRANZA) se crean en Plantillas y se eligen aqui por
+            caso. El backend exige plantilla activa, PDF variable valido y al
+            menos un PDF fijo adicional (pestaña Documentos PDF anexos / adjunto
+            global).
           </CardDescription>
         </CardHeader>
       </Card>
@@ -1300,8 +1310,9 @@ export function ConfiguracionNotificaciones() {
             Campanas masivas semanales
           </CardTitle>
           <CardDescription>
-            Solo para la pestana Masivos: permite ejecutar varias campanas en paralelo,
-            cada una con plantilla, horario, CCO y dias de repeticion semanal.
+            Solo para la pestana Masivos: permite ejecutar varias campanas en
+            paralelo, cada una con plantilla, horario, CCO y dias de repeticion
+            semanal.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1309,13 +1320,19 @@ export function ConfiguracionNotificaciones() {
             Tip: define minutos 00, 15, 30 o 45 para coincidir con el scheduler.
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" onClick={agregarCampanaMasiva}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={agregarCampanaMasiva}
+            >
               Agregar campana
             </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => void handleEnviarCasoManual('MASIVOS', 'campanas masivas')}
+              onClick={() =>
+                void handleEnviarCasoManual('MASIVOS', 'campanas masivas')
+              }
               disabled={enviandoCasoTipo !== null || enviandoMasivo}
             >
               {enviandoCasoTipo === 'MASIVOS'
@@ -1443,13 +1460,14 @@ export function ConfiguracionNotificaciones() {
                         Dias de repeticion semanal
                       </p>
                       <p className="mb-2 text-[11px] text-gray-500">
-                        Si no marcas dias, se enviara todos los dias segun la hora.
+                        Si no marcas dias, se enviara todos los dias segun la
+                        hora.
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {DIAS_SEMANA.map(d => (
                           <label
                             key={`${camp.id}-dia-${d.id}`}
-                            className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors ${camp.dias_semana.includes(d.id) ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
+                            className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors ${camp.dias_semana.includes(d.id) ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
                           >
                             <input
                               type="checkbox"
@@ -1692,11 +1710,11 @@ export function ConfiguracionNotificaciones() {
                             Cada <strong>fila</strong> (caso) tiene su propia
                             hora y CCO. Zona <strong>America/Caracas</strong>:
                             el servidor revisa cada <strong>15 minutos</strong>{' '}
-                            (:00, :15, :30, :45) y envía ese caso cuando coincide
-                            la hora (una vez al día por caso). Elija minutos{' '}
-                            <strong>00, 15, 30 o 45</strong> en el selector para
-                            que coincida con una corrida. Si el campo viene
-                            vacío en datos antiguos, el backend usa{' '}
+                            (:00, :15, :30, :45) y envía ese caso cuando
+                            coincide la hora (una vez al día por caso). Elija
+                            minutos <strong>00, 15, 30 o 45</strong> en el
+                            selector para que coincida con una corrida. Si el
+                            campo viene vacío en datos antiguos, el backend usa{' '}
                             <strong>01:00</strong> por compatibilidad.
                           </p>
                         </div>

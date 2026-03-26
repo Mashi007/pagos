@@ -183,6 +183,8 @@ export function PlantillasNotificaciones({
 
     prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
 
+    masivos: [{ valor: 'MASIVOS', label: 'Comunicaciones masivas (Masivos)' }],
+
     cobranza: [{ valor: 'COBRANZA', label: 'Carta de cobranza' }],
   }
 
@@ -191,6 +193,7 @@ export function PlantillasNotificaciones({
     'PAGO_3_DIAS_ATRASADO',
     'PAGO_5_DIAS_ATRASADO',
     'PREJUDICIAL',
+    'MASIVOS',
     'COBRANZA',
   ]
 
@@ -198,6 +201,8 @@ export function PlantillasNotificaciones({
     ...tiposPorCategoria.retraso,
 
     ...tiposPorCategoria.prejudicial,
+
+    ...tiposPorCategoria.masivos,
 
     ...(tiposPorCategoria.cobranza || []),
   ]
@@ -1583,6 +1588,11 @@ export function PlantillasNotificaciones({
 
     PREJUDICIAL: { categoria: 'Prejudicial', caso: 'Prejudicial' },
 
+    MASIVOS: {
+      categoria: 'Comunicaciones masivas',
+      caso: 'Masivos',
+    },
+
     COBRANZA: { categoria: 'Cobranza', caso: 'Carta de cobranza' },
   }
 
@@ -1611,6 +1621,12 @@ export function PlantillasNotificaciones({
       tipo: 'PREJUDICIAL',
       label: 'Prejudicial',
       borderColor: 'border-red-500',
+    },
+
+    {
+      tipo: 'MASIVOS',
+      label: 'Masivos',
+      borderColor: 'border-teal-500',
     },
 
     {
@@ -1653,6 +1669,13 @@ export function PlantillasNotificaciones({
       color: 'red',
       borderColor: 'border-red-500',
       icon: '🚨',
+    },
+
+    {
+      key: 'Comunicaciones masivas',
+      color: 'teal',
+      borderColor: 'border-teal-500',
+      icon: 'mail',
     },
 
     {
@@ -1944,6 +1967,38 @@ export function PlantillasNotificaciones({
                     </label>
                   ))}
                 </div>
+              </div>
+
+              {/* Masivos: correos masivos (pestaña Masivos); sin cuota/préstamo */}
+
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-teal-700">
+                  Masivos
+                </h4>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {tiposPorCategoria.masivos.map(t => (
+                    <label
+                      key={t.valor}
+                      className="flex cursor-pointer items-center gap-2 rounded border border-teal-200 p-2 hover:bg-white"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={tiposSeleccionados.includes(t.valor)}
+                        onChange={() => toggleTipo(t.valor)}
+                        className="rounded"
+                      />
+
+                      <span className="text-sm">{t.label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Asigna la plantilla al caso MASIVOS en Notificaciones &gt;
+                  Configuración. Los PDF fijos para este caso se suben en la
+                  pestaña Documentos PDF anexos (carpeta Masivos).
+                </p>
               </div>
             </div>
 
