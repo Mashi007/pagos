@@ -72,7 +72,7 @@ export function DialogReporteFiltros({
     añoActual - 2,
     añoActual - 3,
     añoActual - 4,
-  ]
+  ].filter(a => a !== 2022 && a !== 2023)
 
   const toggleAño = (año: number) => {
     setAñosSeleccionados(prev => {

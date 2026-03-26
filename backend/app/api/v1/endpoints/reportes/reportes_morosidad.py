@@ -8,7 +8,7 @@ import calendar
 
 import io
 
-from datetime import date
+from datetime import date, timedelta
 
 from typing import List, Optional
 
@@ -1116,26 +1116,66 @@ def exportar_morosidad_cedulas(
     meses_list: Optional[str] = Query(None),
     meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atras"),
 ):
-    """Exporta Excel de clientes en estado MORA: una fila por cada cuota en mora."""
+    """Exporta Excel: pestana 1 RESUMEN (>121 dias); luego detalle por mes."""
     import openpyxl
+
+    fc = date.today()
+    cutoff_121 = fc - timedelta(days=121)
 
     periodos = _periodos_desde_filtros(anos, meses_list, meses)
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
+    ws_resumen = wb.create_sheet(title="RESUMEN", index=0)
+    ws_resumen.append(
+        [
+            "Cedula",
+            "Cantidad de cuotas (mayores a 121 dias)",
+            "Deuda en dolares",
+        ]
+    )
+
+    rows_resumen = db.execute(
+        select(
+            Cliente.cedula.label("cedula"),
+            func.count(Cuota.id).label("total_cuotas"),
+            func.coalesce(func.sum(Cuota.monto), 0).label("total_monto"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < cutoff_121,
+        )
+        .group_by(Cliente.cedula)
+        .order_by(Cliente.cedula.asc())
+    ).fetchall()
+
+    total_cuotas_general = 0
+    total_monto_general = 0.0
+    for r in rows_resumen:
+        cuotas = int(r.total_cuotas or 0)
+        monto = round(_safe_float(r.total_monto), 2)
+        total_cuotas_general += cuotas
+        total_monto_general += monto
+        ws_resumen.append([r.cedula or "", cuotas, monto])
+
+    ws_resumen.append(["TOTAL", total_cuotas_general, round(total_monto_general, 2)])
+
     for (ano, mes) in periodos:
         ws = wb.create_sheet(title=f"MORA_{mes:02d}-{ano}")
         ws.append(
-            ["Cedula", "Nombre", "Prestamo ID", "Cuota", "Fecha Vencimiento", "Monto USD"]
+            ["Cedula", "Nombre", "Cuota", "Monto USD"]
         )
 
         rows = db.execute(
             select(
                 Cliente.cedula.label("cedula"),
                 Cliente.nombres.label("nombre"),
-                Prestamo.id.label("prestamo_id"),
                 Cuota.numero_cuota.label("numero_cuota"),
-                Cuota.fecha_vencimiento.label("fecha_vencimiento"),
                 Cuota.monto.label("monto"),
             )
             .select_from(Cuota)
@@ -1161,73 +1201,12 @@ def exportar_morosidad_cedulas(
                     [
                         r.cedula or "",
                         r.nombre or "",
-                        int(r.prestamo_id) if r.prestamo_id is not None else None,
                         int(r.numero_cuota) if r.numero_cuota is not None else None,
-                        r.fecha_vencimiento.isoformat() if r.fecha_vencimiento else "",
                         round(_safe_float(r.monto), 2),
                     ]
                 )
         else:
-            ws.append(["", "Sin registros para este periodo", "", "", "", ""])
-
-    # Segunda pestana: resumen por cedula.
-    ws_resumen = wb.create_sheet(title="RESUMEN")
-    ws_resumen.append(
-        [
-            "Cedula",
-            "Numero de cuotas en morosidad",
-            "Dolares de las cuotas en morosidad",
-        ]
-    )
-
-    where_resumen = [
-        Cliente.estado == "ACTIVO",
-        Prestamo.estado == "APROBADO",
-        Cuota.fecha_pago.is_(None),
-    ]
-
-    if anos and meses_list:
-        try:
-            anos_set = {int(x.strip()) for x in anos.split(",") if x.strip()}
-            meses_set = {
-                int(x.strip())
-                for x in meses_list.split(",")
-                if x.strip() and 1 <= int(x.strip()) <= 12
-            }
-            if anos_set and meses_set:
-                where_resumen.append(
-                    func.extract("year", Cuota.fecha_vencimiento).in_(anos_set)
-                )
-                where_resumen.append(
-                    func.extract("month", Cuota.fecha_vencimiento).in_(meses_set)
-                )
-        except (TypeError, ValueError):
-            pass
-
-    rows_resumen = db.execute(
-        select(
-            Cliente.cedula.label("cedula"),
-            func.count(Cuota.id).label("total_cuotas"),
-            func.coalesce(func.sum(Cuota.monto), 0).label("total_monto"),
-        )
-        .select_from(Cuota)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(*where_resumen)
-        .group_by(Cliente.cedula)
-        .order_by(Cliente.cedula.asc())
-    ).fetchall()
-
-    total_cuotas_general = 0
-    total_monto_general = 0.0
-    for r in rows_resumen:
-        cuotas = int(r.total_cuotas or 0)
-        monto = round(_safe_float(r.total_monto), 2)
-        total_cuotas_general += cuotas
-        total_monto_general += monto
-        ws_resumen.append([r.cedula or "", cuotas, monto])
-
-    ws_resumen.append(["TOTAL", total_cuotas_general, round(total_monto_general, 2)])
+            ws.append(["", "Sin registros para este periodo", "", ""])
 
     buf = io.BytesIO()
     wb.save(buf)

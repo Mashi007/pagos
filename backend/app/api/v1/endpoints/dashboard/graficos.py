@@ -200,17 +200,18 @@ def _compute_composicion_morosidad(
 ) -> dict:
     """
     Cartera por préstamo (una sola banda por préstamo):
-    - Sin retraso: préstamos sin cuotas vencidas sin pagar → "Al día".
+    - Sin retraso: préstamos sin cuotas vencidas sin pagar -> "Al día".
     - Con retraso: se usa el máximo atraso en días entre cuotas vencidas sin pagar;
       el préstamo cuenta solo en esa banda.
-    Bandas de mora: 1-30, 31-60, 61-89 (vencido), 90+ (moroso).
+    Bandas: 1-30, 31-60, 61-89 y 90-120 = vencido; 121+ días = moroso.
     """
     try:
         bandas = [
             (1, 30, "1-30 días"),
             (31, 60, "31-60 días"),
             (61, 89, "61-89 días"),
-            (90, 999999, "90+ días (moroso)"),
+            (90, 120, "90-120 días"),
+            (121, 999999, "121+ días (moroso)"),
         ]
         dias_atraso = func.current_date() - Cuota.fecha_vencimiento
         conds_base = [
@@ -363,7 +364,8 @@ def _compute_composicion_morosidad(
             ("1-30 días", 12000, 45, 12),
             ("31-60 días", 8500, 28, 9),
             ("61-89 días", 6200, 18, 6),
-            ("90+ días (moroso)", 15800, 32, 10),
+            ("90-120 días", 9000, 22, 8),
+            ("121+ días (moroso)", 15800, 32, 10),
         ]
         return {
             "puntos": [

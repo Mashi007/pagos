@@ -2088,8 +2088,8 @@ export function DashboardMenu() {
                 <p className="mt-1 text-xs text-gray-600">
                   Incluye préstamos al día (sin cuotas vencidas sin pagar). Si
                   hay atraso, cada préstamo cuenta una sola vez según su mayor
-                  atraso. 1-30, 31-60 y 61-89 días = Vencido; 90+ días = Moroso
-                  (snapshot al día de hoy).
+                  atraso. 1-30, 31-60, 61-89 y 90-120 días = Vencido; 121+ días
+                  = Moroso (snapshot al día de hoy).
                 </p>
               </CardHeader>
 
