@@ -14,7 +14,7 @@ import logging
 from typing import Callable, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -645,7 +645,45 @@ def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
 
 
 def get_items_masivos(db: Session) -> List[dict]:
-    """Clientes con email valido para comunicaciones masivas no relacionadas con pagos."""
+    """
+    Contactos para comunicaciones masivas.
+
+    Fuente principal: vista vw_notificaciones_masivos_contactos (sincronizada en 2 vias).
+    Fallback de compatibilidad: tabla clientes si la vista aun no existe.
+    """
+    items: List[dict] = []
+
+    try:
+        rows = db.execute(
+            text(
+                """
+                SELECT id, cliente_id, cedula, nombre, email, telefono, updated_at
+                FROM vw_notificaciones_masivos_contactos
+                ORDER BY nombre ASC, id ASC
+                """
+            )
+        ).mappings().all()
+        for r in rows:
+            email = str(r.get("email") or "").strip()
+            if not email:
+                continue
+            items.append(
+                {
+                    "cliente_id": r.get("cliente_id"),
+                    "nombre": r.get("nombre") or "",
+                    "cedula": r.get("cedula") or "",
+                    "correo": email,
+                    "telefono": str(r.get("telefono") or "").strip(),
+                    "estado": "COMUNICACION_GENERAL",
+                }
+            )
+        return items
+    except Exception:
+        logger.warning(
+            "get_items_masivos: vista vw_notificaciones_masivos_contactos no disponible; usando fallback clientes",
+            exc_info=True,
+        )
+
     rows = (
         db.execute(
             select(Cliente)
@@ -654,7 +692,6 @@ def get_items_masivos(db: Session) -> List[dict]:
         )
         .scalars().all()
     )
-    items: List[dict] = []
     for c in rows:
         email = (getattr(c, "email", None) or "").strip()
         if not email:

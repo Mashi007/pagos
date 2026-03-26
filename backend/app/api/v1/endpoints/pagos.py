@@ -2164,7 +2164,8 @@ def importar_un_pago_reportado_a_pagos(
 
         numero_documento=numero_doc_norm,
 
-        estado="PENDIENTE",
+        # Evita violar chk_pagos_conciliado_pendiente_inconsistente
+        estado="PAGADO",
 
         referencia_pago=ref_pago,
 

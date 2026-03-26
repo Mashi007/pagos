@@ -35,7 +35,10 @@
     "check:hygiene": "node scripts/check-source-hygiene.mjs",
     "verify": "npm run check:hygiene && npm run type-check",
     "logs:scan": "rg -n --hidden --no-ignore-vcs --glob \"!dist/**\" --glob \"!node_modules/**\" --glob \"!coverage/**\" --glob \"!**/__pycache__/**\" \"ERROR|Exception|Traceback|failed|timeout\" src ..\\backend\\app",
-    "logs:scan:errors": "rg -n --hidden --no-ignore-vcs --glob \"!dist/**\" --glob \"!node_modules/**\" --glob \"!coverage/**\" --glob \"!**/__pycache__/**\" \"error|exception|traceback\" src ..\\backend\\app -i"
+    "logs:scan:errors": "rg -n --hidden --no-ignore-vcs --glob \"!dist/**\" --glob \"!node_modules/**\" --glob \"!coverage/**\" --glob \"!**/__pycache__/**\" \"error|exception|traceback\" src ..\\backend\\app -i",
+    "logs:scan:critical": "rg -n -S --max-count 200 --glob \"!dist/**\" --glob \"!node_modules/**\" --glob \"!coverage/**\" --glob \"!**/__pycache__/**\" \"(Traceback|Unhandled|CRITICAL|FATAL|ECONNREFUSED|ETIMEDOUT|ConnectionError|TimeoutError|status=5[0-9]{2})\" src ..\\backend\\app",
+    "logs:scan:critical:backend": "rg -n -S --max-count 200 --glob \"!**/__pycache__/**\" \"(Traceback|CRITICAL|FATAL|ConnectionError|TimeoutError|status=5[0-9]{2})\" ..\\backend\\app",
+    "logs:scan:critical:frontend": "rg -n -S --max-count 200 --glob \"!dist/**\" --glob \"!node_modules/**\" \"(Unhandled|TypeError|ReferenceError|Network Error|timeout|status\\s*[:=]\\s*5[0-9]{2})\" src"
   },
   "dependencies": {
     "@heroicons/react": "^2.0.18",
