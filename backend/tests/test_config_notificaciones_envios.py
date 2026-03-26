@@ -202,14 +202,26 @@ def test_adjuntos_cumplen_paquete_requiere_cabecera_pdf():
     assert "invalido" in mot or "variable" in mot
 
 
-def test_adjuntos_cumplen_paquete_requiere_segundo_pdf_valido():
+def test_adjuntos_cumplen_paquete_segundo_adjunto_no_pdf_no_invalida_paquete():
+    """Solo se valida Carta_Cobranza.pdf; adjuntos extra corruptos no bloquean (compat sin volumen persistente)."""
     from app.api.v1.endpoints.notificaciones_tabs import _adjuntos_cumplen_paquete_completo
 
     ok, mot = _adjuntos_cumplen_paquete_completo(
         [("Carta_Cobranza.pdf", b"%PDF-1.4 carta"), ("Fijo.bin", b"XXXX")]
     )
-    assert ok is False
-    assert "PDF" in mot
+    assert ok is True
+    assert mot == ""
+
+
+def test_contexto_cobranza_aplica_a_prestamo():
+    from app.api.v1.endpoints.notificaciones import contexto_cobranza_aplica_a_prestamo
+
+    assert contexto_cobranza_aplica_a_prestamo({"PRESTAMOS.ID": 5}, 5) is True
+    assert contexto_cobranza_aplica_a_prestamo({"IDPRESTAMO": 5}, 5) is True
+    assert contexto_cobranza_aplica_a_prestamo({"prestamo_id": 5}, 5) is True
+    assert contexto_cobranza_aplica_a_prestamo({"PRESTAMOS.ID": 1}, 5) is False
+    assert contexto_cobranza_aplica_a_prestamo({}, 5) is False
+    assert contexto_cobranza_aplica_a_prestamo({"PRESTAMOS.ID": 5}, None) is False
 
 
 def test_adjuntos_cumplen_paquete_dos_pdfs_validos_ok():

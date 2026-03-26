@@ -100,6 +100,12 @@ def _compute_kpis_principales(
             inicio_dt, fin_dt = inicio_mes_actual, fin_mes_actual
             inicio_ant_dt, fin_ant_dt = inicio_mes_anterior, fin_mes_anterior
 
+        producto_valido_kpi = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
+        modelo_lbl_expr = _modelo_label_dashboard_expr(
+            producto_valido_kpi,
+            incluir_sin_modelo=False,
+        )
+
         conds = [
             Prestamo.cliente_id == Cliente.id,
             Prestamo.estado == "APROBADO",
@@ -111,7 +117,7 @@ def _compute_kpis_principales(
         if concesionario:
             conds.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds.append(Prestamo.modelo_vehiculo == modelo)
+            conds.append(modelo_lbl_expr == modelo)
         conds_ant = [
             Prestamo.cliente_id == Cliente.id,
             Prestamo.estado == "APROBADO",
@@ -123,15 +129,20 @@ def _compute_kpis_principales(
         if concesionario:
             conds_ant.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds_ant.append(Prestamo.modelo_vehiculo == modelo)
+            conds_ant.append(modelo_lbl_expr == modelo)
         total_prestamos = db.scalar(
-            select(func.count()).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id).where(and_(*conds))
+            select(func.count())
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
+            .where(and_(*conds))
         ) or 0
 
         total_prestamos_mes_anterior = db.scalar(
             select(func.count())
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
             .where(and_(*conds_ant))
         ) or 0
         if total_prestamos_mes_anterior and _safe_float(total_prestamos_mes_anterior) != 0:
@@ -143,19 +154,21 @@ def _compute_kpis_principales(
             select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
             .where(and_(
                 Prestamo.estado == "APROBADO",
                 Prestamo.fecha_registro >= inicio_dt,
                 Prestamo.fecha_registro <= fin_dt,
                 *([] if not analista else [Prestamo.analista == analista]),
                 *([] if not concesionario else [Prestamo.concesionario == concesionario]),
-                *([] if not modelo else [Prestamo.modelo_vehiculo == modelo]),
+                *([] if not modelo else [modelo_lbl_expr == modelo]),
             ))
         ) or 0
         total_mes_anterior = db.scalar(
             select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
             .where(and_(*conds_ant))
         ) or 0
 
@@ -182,13 +195,14 @@ def _compute_kpis_principales(
         if concesionario:
             conds_moro.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds_moro.append(Prestamo.modelo_vehiculo == modelo)
+            conds_moro.append(modelo_lbl_expr == modelo)
         morosidad_actual = _safe_float(
             db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
                 .where(and_(*conds_moro))
             )
         )
@@ -208,13 +222,14 @@ def _compute_kpis_principales(
         if concesionario:
             conds_moro_ant.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds_moro_ant.append(Prestamo.modelo_vehiculo == modelo)
+            conds_moro_ant.append(modelo_lbl_expr == modelo)
         morosidad_mes_anterior = _safe_float(
             db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
                 .where(and_(*conds_moro_ant))
             )
         )
@@ -237,12 +252,13 @@ def _compute_kpis_principales(
         if concesionario:
             conds_cuota.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds_cuota.append(Prestamo.modelo_vehiculo == modelo)
+            conds_cuota.append(modelo_lbl_expr == modelo)
         monto_cuotas_programadas = db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0))
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
             .where(and_(*conds_cuota))
         ) or 0
         total_programado = _safe_float(monto_cuotas_programadas)
@@ -251,6 +267,7 @@ def _compute_kpis_principales(
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
             .where(and_(*conds_cuota))
         ) or 0
         cuotas_pagadas_count = db.scalar(
@@ -258,6 +275,7 @@ def _compute_kpis_principales(
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
             .where(and_(*conds_cuota, Cuota.fecha_pago.isnot(None)))
         ) or 0
         porcentaje_cuotas = (float(cuotas_pagadas_count) / float(total_cuotas_periodo) * 100.0) if total_cuotas_periodo else 0.0
