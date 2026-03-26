@@ -2368,7 +2368,7 @@ def exportar_amortizacion_excel(prestamo_id: int, db: Session = Depends(get_db))
 
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 
-        headers={"Content-Disposition": f"inline; filename={filename}"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
 
     )
 

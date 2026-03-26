@@ -163,7 +163,7 @@ export function PagosListResumen() {
 
       toast.success('PDF abierto en una nueva pestana')
     } catch (error: unknown) {
-      const { getErrorMessage, isAxiosError, getErrorDetail } =
+      const { getErrorMessage, getErrorDetail } =
         await import('../../types/errors')
 
       let errorMessage = getErrorMessage(error)
