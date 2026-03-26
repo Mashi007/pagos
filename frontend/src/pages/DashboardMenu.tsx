@@ -1058,6 +1058,9 @@ export function DashboardMenu() {
               >
                 <KpiCardLarge
                   title="Prestamos (mensual)"
+                  subtitle={`Financiamiento comprometido: ${formatCurrency(
+                    kpisPrincipales.total_prestamos.financiamiento_total ?? 0
+                  )} · según fecha de aprobación`}
                   value={kpisPrincipales.total_prestamos.valor_actual}
                   variation={
                     kpisPrincipales.total_prestamos.variacion_porcentual !==
@@ -1080,6 +1083,7 @@ export function DashboardMenu() {
 
                 <KpiCardLarge
                   title="Creditos nuevos (mensual)"
+                  subtitle="Cantidad aprobada según fecha de aprobación"
                   value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
                   variation={
                     kpisPrincipales.creditos_nuevos_mes.variacion_porcentual !==
@@ -1097,7 +1101,7 @@ export function DashboardMenu() {
                   color="text-green-600"
                   bgColor="bg-green-100"
                   borderColor="border-green-500"
-                  format="currency"
+                  format="number"
                 />
 
                 <KpiCardLarge

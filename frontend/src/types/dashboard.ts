@@ -24,8 +24,13 @@ export interface KpiValor {
   variacion_porcentual: number
 }
 
+/** Préstamos (mensual): cantidad aprobada en el periodo + financiamiento comprometido (fecha_aprobacion). */
+export interface KpiPrestamosMensual extends KpiValor {
+  financiamiento_total?: number
+}
+
 export interface KpisPrincipalesResponse {
-  total_prestamos: KpiValor
+  total_prestamos: KpiPrestamosMensual
 
   creditos_nuevos_mes: KpiValor
 

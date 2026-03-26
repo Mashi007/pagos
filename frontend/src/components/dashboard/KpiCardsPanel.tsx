@@ -28,6 +28,8 @@ interface KPIsPrincipalesData {
     variacion_porcentual: number
 
     variacion_absoluta: number
+
+    financiamiento_total?: number
   }
 
   creditos_nuevos_mes: {
@@ -128,6 +130,14 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
         variationAbs={kpisData.total_prestamos?.variacion_absoluta ?? 0}
         color="blue"
         icon={DollarSign}
+        formatValue={v =>
+          typeof v === 'number' &&
+          kpisData.total_prestamos?.financiamiento_total != null
+            ? `${v.toLocaleString('es-EC')} · ${formatCurrency(
+                kpisData.total_prestamos.financiamiento_total
+              )}`
+            : String(v)
+        }
       />
 
       <KpiCard
@@ -139,6 +149,9 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
         variationAbs={kpisData.creditos_nuevos_mes?.variacion_absoluta ?? 0}
         color="green"
         icon={TrendingUp}
+        formatValue={v =>
+          typeof v === 'number' ? v.toLocaleString('es-EC') : String(v)
+        }
       />
 
       <KpiCard

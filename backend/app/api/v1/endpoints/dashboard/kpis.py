@@ -106,77 +106,74 @@ def _compute_kpis_principales(
             incluir_sin_modelo=False,
         )
 
-        conds = [
-            Prestamo.cliente_id == Cliente.id,
+        conds_aprobacion_act = [
             Prestamo.estado == "APROBADO",
-            Prestamo.fecha_registro >= inicio_dt,
-            Prestamo.fecha_registro <= fin_dt,
+            Prestamo.fecha_aprobacion.isnot(None),
+            Prestamo.fecha_aprobacion >= inicio_dt,
+            Prestamo.fecha_aprobacion <= fin_dt,
         ]
         if analista:
-            conds.append(Prestamo.analista == analista)
+            conds_aprobacion_act.append(Prestamo.analista == analista)
         if concesionario:
-            conds.append(Prestamo.concesionario == concesionario)
+            conds_aprobacion_act.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds.append(modelo_lbl_expr == modelo)
-        conds_ant = [
-            Prestamo.cliente_id == Cliente.id,
-            Prestamo.estado == "APROBADO",
-            Prestamo.fecha_registro >= inicio_ant_dt,
-            Prestamo.fecha_registro <= fin_ant_dt,
-        ]
-        if analista:
-            conds_ant.append(Prestamo.analista == analista)
-        if concesionario:
-            conds_ant.append(Prestamo.concesionario == concesionario)
-        if modelo:
-            conds_ant.append(modelo_lbl_expr == modelo)
-        total_prestamos = db.scalar(
-            select(func.count())
-            .select_from(Prestamo)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
-            .where(and_(*conds))
-        ) or 0
+            conds_aprobacion_act.append(modelo_lbl_expr == modelo)
 
-        total_prestamos_mes_anterior = db.scalar(
-            select(func.count())
-            .select_from(Prestamo)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
-            .where(and_(*conds_ant))
-        ) or 0
+        conds_aprobacion_ant = [
+            Prestamo.estado == "APROBADO",
+            Prestamo.fecha_aprobacion.isnot(None),
+            Prestamo.fecha_aprobacion >= inicio_ant_dt,
+            Prestamo.fecha_aprobacion <= fin_ant_dt,
+        ]
+        if analista:
+            conds_aprobacion_ant.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_aprobacion_ant.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_aprobacion_ant.append(modelo_lbl_expr == modelo)
+
+        total_prestamos = (
+            db.scalar(
+                select(func.count())
+                .select_from(Prestamo)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
+                .where(and_(*conds_aprobacion_act))
+            )
+            or 0
+        )
+
+        total_prestamos_mes_anterior = (
+            db.scalar(
+                select(func.count())
+                .select_from(Prestamo)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
+                .where(and_(*conds_aprobacion_ant))
+            )
+            or 0
+        )
         if total_prestamos_mes_anterior and _safe_float(total_prestamos_mes_anterior) != 0:
-            variacion_prestamos = ((_safe_float(total_prestamos) - _safe_float(total_prestamos_mes_anterior)) / _safe_float(total_prestamos_mes_anterior)) * 100.0
+            variacion_prestamos = (
+                (_safe_float(total_prestamos) - _safe_float(total_prestamos_mes_anterior))
+                / _safe_float(total_prestamos_mes_anterior)
+            ) * 100.0
         else:
             variacion_prestamos = 0.0
 
-        total_mes_actual = db.scalar(
-            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
-            .select_from(Prestamo)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
-            .where(and_(
-                Prestamo.estado == "APROBADO",
-                Prestamo.fecha_registro >= inicio_dt,
-                Prestamo.fecha_registro <= fin_dt,
-                *([] if not analista else [Prestamo.analista == analista]),
-                *([] if not concesionario else [Prestamo.concesionario == concesionario]),
-                *([] if not modelo else [modelo_lbl_expr == modelo]),
-            ))
-        ) or 0
-        total_mes_anterior = db.scalar(
-            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
-            .select_from(Prestamo)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
-            .where(and_(*conds_ant))
-        ) or 0
+        financiamiento_aprobado_mes = (
+            db.scalar(
+                select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
+                .select_from(Prestamo)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
+                .where(and_(*conds_aprobacion_act))
+            )
+            or 0
+        )
 
-        creditos_nuevos_valor = _safe_float(total_mes_actual)
-        if total_mes_anterior and _safe_float(total_mes_anterior) != 0:
-            variacion_creditos = ((creditos_nuevos_valor - _safe_float(total_mes_anterior)) / _safe_float(total_mes_anterior)) * 100.0
-        else:
-            variacion_creditos = 0.0
+        creditos_nuevos_valor = _safe_float(total_prestamos)
+        variacion_creditos = variacion_prestamos
 
         hoy = date.today()
         inicio_d = inicio_dt.date() if hasattr(inicio_dt, "date") else (inicio if usar_rango else inicio_dt.date())
@@ -281,7 +278,10 @@ def _compute_kpis_principales(
         porcentaje_cuotas = (float(cuotas_pagadas_count) / float(total_cuotas_periodo) * 100.0) if total_cuotas_periodo else 0.0
 
         return {
-            "total_prestamos": _kpi(_safe_float(total_prestamos), round(variacion_prestamos, 1)),
+            "total_prestamos": {
+                **_kpi(_safe_float(total_prestamos), round(variacion_prestamos, 1)),
+                "financiamiento_total": round(_safe_float(financiamiento_aprobado_mes), 2),
+            },
             "creditos_nuevos_mes": _kpi(creditos_nuevos_valor, round(variacion_creditos, 1)),
             "total_clientes": _kpi(_safe_float(total_clientes), 0.0),
             "clientes_por_estado": {
