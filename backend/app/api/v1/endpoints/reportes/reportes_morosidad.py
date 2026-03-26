@@ -1110,26 +1110,17 @@ def exportar_morosidad(
 
 
 @router.get("/exportar/morosidad-cedulas")
-def exportar_morosidad_cedulas(
-    db: Session = Depends(get_db),
-    anos: Optional[str] = Query(None),
-    meses_list: Optional[str] = Query(None),
-    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atras"),
-):
-    """Exporta Excel de morosidad por cedulas (situacion de hoy).
+def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
+    """Exporta Excel de morosidad por cedulas: situacion a la fecha (hoy).
 
-    - Solo cuotas con fecha_pago NULL a la fecha de ejecucion (cartera impaga actual).
-    - Regla de mora: fecha_vencimiento + 4 meses + 1 dia <= fecha_corte.
-    - RESUMEN: fecha_corte = hoy.
-    - Hojas MORA_MM-AAAA: fecha_corte = ultimo dia de ese mes; cada hoja filtra las
-      mismas cuotas impagas de hoy que cumplen la regla respecto a ese cierre (no es
-      reconstruccion historica de pagos).
+    Una sola vista temporal: cuotas impagas que cumplen mora (4 meses + 1 dia) al corte de hoy.
+    Cliente ACTIVO, prestamo APROBADO, fecha_pago NULL. Sin desglose mes a mes.
+    Una sola hoja RESUMEN: cantidad de cuotas y deuda por cedula.
     """
     import openpyxl
 
     fc_hoy = date.today()
 
-    periodos = _periodos_desde_filtros(anos, meses_list, meses)
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
@@ -1171,51 +1162,6 @@ def exportar_morosidad_cedulas(
         ws_resumen.append([r.cedula or "", cuotas, monto])
 
     ws_resumen.append(["TOTAL", total_cuotas_general, round(total_monto_general, 2)])
-
-    for (ano, mes) in periodos:
-        _, ultimo_dia = calendar.monthrange(ano, mes)
-        fc_mes = date(ano, mes, ultimo_dia)
-
-        ws = wb.create_sheet(title=f"MORA_{mes:02d}-{ano}")
-        ws.append(
-            ["Cedula", "Nombre", "Cuota", "Monto USD"]
-        )
-
-        rows = db.execute(
-            select(
-                Cliente.cedula.label("cedula"),
-                Cliente.nombres.label("nombre"),
-                Cuota.numero_cuota.label("numero_cuota"),
-                Cuota.monto.label("monto"),
-            )
-            .select_from(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                Cliente.estado == "ACTIVO",
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_pago.is_(None),
-                Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc_mes,
-            )
-            .order_by(
-                Cliente.cedula.asc(),
-                Cuota.fecha_vencimiento.asc(),
-                Cuota.numero_cuota.asc(),
-            )
-        ).fetchall()
-
-        if rows:
-            for r in rows:
-                ws.append(
-                    [
-                        r.cedula or "",
-                        r.nombre or "",
-                        int(r.numero_cuota) if r.numero_cuota is not None else None,
-                        round(_safe_float(r.monto), 2),
-                    ]
-                )
-        else:
-            ws.append(["", "Sin registros para este periodo", "", ""])
 
     buf = io.BytesIO()
     wb.save(buf)

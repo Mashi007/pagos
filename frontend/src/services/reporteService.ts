@@ -885,24 +885,13 @@ class ReporteService {
    */
 
   /**
-   * Exporta reporte de morosos en estado MORA (una fila por cuota), filtrado por año/mes.
+   * Morosidad por cedula: situacion a la fecha (hoy). Sin filtro año/mes.
    */
-  async exportarReporteMorosidadCedulas(filtros?: {
-    años: number[]
-    meses: number[]
-  }): Promise<Blob> {
-    const params = new URLSearchParams()
-
-    if (filtros?.años?.length) params.set('anos', filtros.años.join(','))
-
-    if (filtros?.meses?.length)
-      params.set('meses_list', filtros.meses.join(','))
-
+  async exportarReporteMorosidadCedulas(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
 
     const response = await axiosInstance.get(
-      `${this.baseUrl}/exportar/morosidad-cedulas?${params.toString()}`,
-
+      `${this.baseUrl}/exportar/morosidad-cedulas`,
       { responseType: 'blob', timeout: 120000 }
     )
 

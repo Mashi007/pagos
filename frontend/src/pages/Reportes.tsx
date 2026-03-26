@@ -233,7 +233,7 @@ export function Reportes() {
       return
     }
 
-    if (tipo === 'CEDULA') {
+    if (tipo === 'CEDULA' || tipo === 'MOROSIDAD') {
       generarReporte(tipo, {
         ['a\u00f1os']: [],
         meses: [],
@@ -496,7 +496,7 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      if (tipo !== 'CEDULA') {
+      if (tipo !== 'CEDULA' && tipo !== 'MOROSIDAD') {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
           toast.error(errFiltros)
@@ -552,8 +552,7 @@ export function Reportes() {
 
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'MOROSIDAD') {
-        const blob =
-          await reporteService.exportarReporteMorosidadCedulas(filtros)
+        const blob = await reporteService.exportarReporteMorosidadCedulas()
 
         descargarBlob(blob, `reporte_morosidad_${fechaCorte}.${ext}`)
 
