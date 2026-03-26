@@ -2082,9 +2082,10 @@ export function DashboardMenu() {
                 </div>
 
                 <p className="mt-1 text-xs text-gray-600">
-                  Cada préstamo cuenta una sola vez, en la barra según su mayor
-                  atraso entre cuotas vencidas sin pagar. 1-30, 31-60 y 61-89
-                  días = Vencido; 90+ días = Moroso (snapshot al día de hoy).
+                  Incluye préstamos al día (sin cuotas vencidas sin pagar). Si
+                  hay atraso, cada préstamo cuenta una sola vez según su mayor
+                  atraso. 1-30, 31-60 y 61-89 días = Vencido; 90+ días = Moroso
+                  (snapshot al día de hoy).
                 </p>
               </CardHeader>
 
@@ -2131,10 +2132,20 @@ export function DashboardMenu() {
 
                           <Bar
                             dataKey="cantidad_prestamos"
-                            fill="#be123c"
                             name="Cantidad de préstamos"
                             radius={[4, 4, 0, 0]}
-                          />
+                          >
+                            {filteredData.map((row, index) => (
+                              <Cell
+                                key={`cell-composicion-morosidad-${index}-${String(row.categoria ?? '')}`}
+                                fill={
+                                  row.categoria === 'Al día'
+                                    ? '#15803d'
+                                    : '#be123c'
+                                }
+                              />
+                            ))}
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     )}

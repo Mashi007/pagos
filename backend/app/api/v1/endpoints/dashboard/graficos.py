@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import Float, and_, case, cast, distinct, extract, func, literal, or_, select
+from sqlalchemy import Float, and_, case, cast, distinct, exists, extract, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, SessionLocal
@@ -199,10 +199,11 @@ def _compute_composicion_morosidad(
     modelo: Optional[str],
 ) -> dict:
     """
-    Morosidad por préstamo (una sola banda por préstamo):
-    se toma el máximo atraso en días entre sus cuotas vencidas sin pagar;
-    el préstamo cuenta solo en esa banda (no se duplica en varias barras).
-    Bandas alineadas con la UI: 1-30, 31-60, 61-89 (vencido), 90+ (moroso).
+    Cartera por préstamo (una sola banda por préstamo):
+    - Sin retraso: préstamos sin cuotas vencidas sin pagar → "Al día".
+    - Con retraso: se usa el máximo atraso en días entre cuotas vencidas sin pagar;
+      el préstamo cuenta solo en esa banda.
+    Bandas de mora: 1-30, 31-60, 61-89 (vencido), 90+ (moroso).
     """
     try:
         bandas = [
@@ -226,6 +227,33 @@ def _compute_composicion_morosidad(
         if modelo:
             conds_base.append(Prestamo.modelo_vehiculo == modelo)
 
+        conds_prestamo = [
+            Prestamo.estado == "APROBADO",
+        ]
+        if analista:
+            conds_prestamo.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_prestamo.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_prestamo.append(Prestamo.modelo_vehiculo == modelo)
+
+        tiene_cuota_vencida = exists(
+            select(1)
+            .select_from(Cuota)
+            .where(
+                Cuota.prestamo_id == Prestamo.id,
+                Cuota.fecha_pago.is_(None),
+                dias_atraso >= 1,
+            )
+        )
+
+        al_dia_subq = (
+            select(Prestamo.id.label("prestamo_id"))
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_prestamo, ~tiene_cuota_vencida))
+        ).subquery()
+
         worst_subq = (
             select(
                 Cuota.prestamo_id.label("prestamo_id"),
@@ -238,9 +266,37 @@ def _compute_composicion_morosidad(
             .group_by(Cuota.prestamo_id)
         ).subquery()
 
-        total_prestamos_global = int(db.scalar(select(func.count()).select_from(worst_subq)) or 0)
+        total_mora = int(db.scalar(select(func.count()).select_from(worst_subq)) or 0)
 
-        puntos = []
+        np_al_dia = int(
+            db.scalar(select(func.count()).select_from(al_dia_subq)) or 0
+        )
+
+        cuotas_al_dia_conds = [
+            Cuota.prestamo_id.in_(select(al_dia_subq.c.prestamo_id)),
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento >= func.current_date(),
+        ]
+        n_al_dia = int(
+            db.scalar(select(func.count()).select_from(Cuota).where(and_(*cuotas_al_dia_conds)))
+            or 0
+        )
+        m_al_dia = _safe_float(
+            db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .where(and_(*cuotas_al_dia_conds))
+            )
+        )
+
+        puntos = [
+            {
+                "categoria": "Al día",
+                "monto": m_al_dia,
+                "cantidad_cuotas": n_al_dia,
+                "cantidad_prestamos": np_al_dia,
+            }
+        ]
         total_monto = 0.0
         total_cuotas = 0
 
@@ -298,11 +354,12 @@ def _compute_composicion_morosidad(
             "puntos": puntos,
             "total_morosidad": total_monto,
             "total_cuotas": total_cuotas,
-            "total_prestamos": total_prestamos_global,
+            "total_prestamos": np_al_dia + total_mora,
         }
     except Exception as e:
         logger.exception("Error en composicion-morosidad: %s", e)
         demo = [
+            ("Al día", 50000, 120, 400),
             ("1-30 días", 12000, 45, 12),
             ("31-60 días", 8500, 28, 9),
             ("61-89 días", 6200, 18, 6),
@@ -317,6 +374,7 @@ def _compute_composicion_morosidad(
             "total_cuotas": sum(p[2] for p in demo),
             "total_prestamos": sum(p[3] for p in demo),
         }
+
 def _compute_cobranzas_semanales(
     db: Session,
     fecha_inicio: Optional[str],
