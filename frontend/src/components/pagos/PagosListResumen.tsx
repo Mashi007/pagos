@@ -149,27 +149,19 @@ export function PagosListResumen() {
 
       const blob = await pagoService.descargarPDFPendientes(cedula)
 
-      // Crear URL temporal y descargar
-
       const url = window.URL.createObjectURL(blob)
+      const opened = window.open(url, '_blank', 'noopener,noreferrer')
 
-      const a = document.createElement('a')
+      if (!opened) {
+        window.URL.revokeObjectURL(url)
+        throw new Error('El navegador bloqueo la pestana de previsualizacion del PDF.')
+      }
 
-      a.href = url
-
-      a.download = `pendientes_${cedula}_${new Date().toISOString().split('T')[0]}.pdf`
-
-      document.body.appendChild(a)
-
-      a.click()
-
-      document.body.removeChild(a)
-
-      window.URL.revokeObjectURL(url)
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
 
       toast.dismiss()
 
-      toast.success('PDF descargado exitosamente')
+      toast.success('PDF abierto en una nueva pestana')
     } catch (error: unknown) {
       const { getErrorMessage, isAxiosError, getErrorDetail } =
         await import('../../types/errors')

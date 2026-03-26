@@ -231,7 +231,7 @@ export function TablaAmortizacionPrestamo({
     try {
       await prestamoService.descargarEstadoCuentaPDF(prestamo.id)
 
-      toast.success('Estado de cuenta PDF descargado exitosamente')
+      toast.success('Estado de cuenta PDF abierto en una nueva pestana')
     } catch (error) {
       console.error('Error al exportar a PDF:', error)
 

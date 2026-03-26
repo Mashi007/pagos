@@ -129,21 +129,16 @@ export function PagosBuscadorAmortizacion() {
 
       const url = window.URL.createObjectURL(blob)
 
-      const a = document.createElement('a')
+      const opened = window.open(url, '_blank', 'noopener,noreferrer')
 
-      a.href = url
+      if (!opened) {
+        window.URL.revokeObjectURL(url)
+        throw new Error('El navegador bloqueo la pestana de previsualizacion del PDF')
+      }
 
-      a.download = `amortizacion_${cedulaBuscar}_${new Date().toISOString().split('T')[0]}.pdf`
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
 
-      document.body.appendChild(a)
-
-      a.click()
-
-      document.body.removeChild(a)
-
-      window.URL.revokeObjectURL(url)
-
-      toast.success('PDF descargado', { id: 'pdf-amort' })
+      toast.success('PDF abierto en una nueva pestana', { id: 'pdf-amort' })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al descargar PDF'
 

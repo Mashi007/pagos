@@ -897,13 +897,16 @@ class PrestamoService {
 
     const blob = new Blob([raw], { type: 'application/pdf' })
     const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `Estado_Cuenta_Prestamo_${prestamoId}.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    const opened = window.open(url, '_blank', 'noopener,noreferrer')
+
+    if (!opened) {
+      window.URL.revokeObjectURL(url)
+      throw new Error(
+        'El navegador bloqueo la pestana de previsualizacion del estado de cuenta PDF.'
+      )
+    }
+
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
   }
 }
 

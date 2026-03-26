@@ -86,7 +86,7 @@ def get_pendientes_cliente_pdf(cedula: str, db: Session = Depends(get_db)):
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=pendientes_{cedula}.pdf"},
+        headers={"Content-Disposition": f"inline; filename="pendientes_{cedula}.pdf""},
     )
 
 
@@ -158,5 +158,5 @@ def get_amortizacion_cliente_pdf(cedula: str, db: Session = Depends(get_db)):
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=amortizacion_{cedula}.pdf"},
+        headers={"Content-Disposition": f"inline; filename="amortizacion_{cedula}.pdf""},
     )

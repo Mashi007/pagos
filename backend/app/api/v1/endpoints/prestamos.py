@@ -2368,7 +2368,7 @@ def exportar_amortizacion_excel(prestamo_id: int, db: Session = Depends(get_db))
 
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f"inline; filename={filename}"},
 
     )
 
@@ -2404,7 +2404,7 @@ def exportar_amortizacion_pdf(prestamo_id: int, db: Session = Depends(get_db)):
 
         media_type="application/pdf",
 
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f"inline; filename={filename}"},
 
     )
 
@@ -4768,7 +4768,7 @@ def get_estado_cuenta_prestamo_pdf(
 
             media_type="application/pdf",
 
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            headers={"Content-Disposition": f"inline; filename={filename}"},
 
         )
 
