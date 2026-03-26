@@ -1,4 +1,4 @@
-"""
+﻿"""
 Gemini: enviar imagen o PDF, extraer datos de comprobantes.
 Usa el paquete google-genai (google.genai) — sucesor de google-generativeai.
 Configuración única para todo el sistema: GEMINI_API_KEY y GEMINI_MODEL (app.core.config.settings).
@@ -453,7 +453,7 @@ INSTRUCCIONES:
 
 Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión estos datos (los que aparezcan):
 - fecha_pago: fecha de la operación/transacción que aparece en el comprobante (día, mes y año). Puede estar en cualquier formato (dd/mm/yyyy, yyyy-mm-dd, texto, etc.). Este valor se comparará con la fecha que la persona ingresó en el formulario.
-- institucion_financiera: nombre del banco o entidad (ej. Banesco, Mercantil, BNC, BDV, Pago Móvil). Si en el comprobante solo aparece la palabra Recibo (o recibo, REcibo) sin nombre de banco, usa "Recibo" como institucion_financiera; es un valor válido en el criterio Bancos/banco.
+- institucion_financiera: nombre del banco o entidad (ej. Banesco, Mercantil, BNC, BDV, Pago Móvil). Si en el comprobante solo aparece la palabra Recibo/Recibos (ej. recibo, REcibo, recibos) sin nombre de banco, usa "Recibo" como institucion_financiera; es un valor válido en el criterio Bancos/banco. Para comparar Banco, Recibo y Recibos se consideran equivalentes.
 - numero_operacion: es el número/código de la transacción. En el comprobante puede aparecer como "Serial", "Serial:", "Nº operación", "Referencia", "Número de referencia", "Código de operación", etc. Extrae los dígitos (y letras si los hay) de ese campo; ese valor es el numero_operacion para comparar con el formulario.
 - monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
 - moneda: BS o USD. Regla: USDT = Dólares = USD = $; si el comprobante muestra USDT, Dólares, $ o USD, devuelve moneda 'USD'.
@@ -461,7 +461,7 @@ Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión esto
 
 Paso 2 — Comparar campo por campo: Para cada dato extraído de la imagen, compáralo con el valor que la persona ingresó en el formulario (listado abajo). Reglas:
 - Fecha pago: La fecha del formulario debe coincidir con la fecha de la operación en la imagen. Si difiere, es divergencia (incluir "Fecha pago" en comentario). EXCEPCIÓN: si Banco = BINANCE (o Binance), NO comparar fecha ni incluir "Fecha pago" en comentario; en comprobantes BINANCE no hay fecha que comprobar. Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
-- Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido). Recibo, recibo y REcibo se consideran el mismo valor (coinciden entre sí).
+- Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido). Recibo/Recibos (y variaciones de mayúsculas/minúsculas) se consideran el mismo valor (coinciden entre sí).
 - Número de operación: el formulario tiene "numero_operacion"; en el comprobante puede estar como "Serial", "Referencia", "Nº operación", etc. Es el mismo dato. Compara los dígitos/código; si coinciden (ignorar espacios o guiones intermedios), COINCIDE. No marques divergencia solo porque la etiqueta en el recibo diga "Serial" en vez de "Número de operación".
 - Monto y moneda: mismo valor numérico. Para moneda: BS/Bs/bolívares = misma familia; USD/USDT/US$/Dólares/$/Tether = misma familia (USDT=USD siempre). No marques columna Moneda solo por USDT vs USD.
 - Cédula: aplicar las REGLAS DEL VALIDADOR DE CÉDULA anteriores. Ejemplo: comprobante DP:V-015989899 → normalizado V15989899 (ignorar guión; nunca ceros después de la letra). Comparar tipo (V/E/G/J) y número sin ceros a la izquierda. Si en imagen ves V-015989899 o 015989899 y en formulario V15989899 → COINCIDE. Solo es divergencia si el tipo o el número (normalizado) son distintos. Verifica haber quitado guión y ceros a la izquierda antes de marcar Cédula en comentario.
@@ -486,6 +486,14 @@ def _comentario_solo_columna_moneda(comentario: str) -> bool:
         if s:
             tokens.append(s)
     return bool(tokens) and all(t == "moneda" for t in tokens)
+
+
+def _is_recibo_alias(value: Any) -> bool:
+    """True cuando el texto representa Recibo/Recibos (ignorando mayúsculas y espacios)."""
+    if value is None:
+        return False
+    normalized = str(value).strip().lower()
+    return normalized in {"recibo", "recibos"}
 
 
 def compare_form_with_image(
@@ -570,6 +578,20 @@ def compare_form_with_image(
                             coincide = True
                             comentario = ""
                             logger.info("[COBROS] Gemini: divergencia solo Moneda (USDT=USD); ignorada.")
+                    # Banco Recibo/Recibos: tratar como equivalentes para evitar falsos negativos.
+                    if not coincide and comentario:
+                        lower_comment = comentario.lower()
+                        solo_banco = (
+                            "banco" in lower_comment
+                            and not any(
+                                k in lower_comment
+                                for k in ("cédula", "cedula", "fecha", "operación", "operacion", "monto", "moneda")
+                            )
+                        )
+                        if solo_banco and _is_recibo_alias(form_data.get("institucion_financiera")):
+                            coincide = True
+                            comentario = ""
+                            logger.info("[COBROS] Gemini: divergencia solo Banco con Recibo/Recibos; ignorada.")
                     return {
                         "coincide_exacto": coincide,
                         "requiere_revision_humana": not coincide,
@@ -589,3 +611,4 @@ def compare_form_with_image(
         logger.exception("Gemini compare_form_with_image: %s", e)
         default_result["comentario"] = str(e)[:500]
         return default_result
+

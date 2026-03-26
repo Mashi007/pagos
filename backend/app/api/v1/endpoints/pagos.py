@@ -274,6 +274,22 @@ def _debe_aplicar_cascada_pago(pago: Pago) -> bool:
     return True
 
 
+def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuotas_parciales: int) -> str:
+
+    estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
+
+    # Si no hubo aplicacion real, el pago no puede quedar conciliado en estado PENDIENTE.
+    if estado == "PENDIENTE" and bool(getattr(pago, "conciliado", False)):
+
+        pago.conciliado = False
+
+        pago.fecha_conciliacion = None
+
+        pago.verificado_concordancia = "NO"
+
+    return estado
+
+
 def _usuario_registro_desde_current_user(current_user: Optional[Any]) -> str:
 
     """
@@ -1692,7 +1708,7 @@ async def upload_excel_pagos(
 
                     numero_documento=numero_doc_norm,
 
-                    estado="PENDIENTE",
+                    estado="PAGADO" if conciliado else "PENDIENTE",
 
                     referencia_pago=ref_pago,
 
@@ -1760,7 +1776,7 @@ async def upload_excel_pagos(
 
                     numero_documento=normalize_documento(pce_data.get("numero_doc")),
 
-                    estado="PENDIENTE",
+                    estado="PAGADO" if conciliado else "PENDIENTE",
 
                     errores_descripcion=pce_data["errores"],
 
@@ -1938,7 +1954,7 @@ def importar_un_pago_reportado_a_pagos(
 
             numero_documento=(pr.referencia_interna or "")[:100],
 
-            estado="PENDIENTE",
+            estado="PAGADO" if conciliado else "PENDIENTE",
 
             referencia_pago=ref,
 
@@ -3263,7 +3279,7 @@ def guardar_fila_editable(
 
             numero_documento=numero_doc_norm,
 
-            estado="PENDIENTE",
+            estado="PAGADO",
 
             referencia_pago=ref_pago,
 
@@ -3301,7 +3317,7 @@ def guardar_fila_editable(
 
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
 
-        pago.estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
+        pago.estado = _estado_conciliacion_post_cascada(pago, cuotas_completadas, cuotas_parciales)
 
 
 
@@ -4439,7 +4455,7 @@ def crear_pagos_batch(
 
                     institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
 
-                    estado="PENDIENTE",
+                    estado="PAGADO" if conciliado else "PENDIENTE",
 
                     notas=payload.notas.strip() if payload.notas else None,
 
@@ -4473,7 +4489,7 @@ def crear_pagos_batch(
 
                     cc_b, cp_b = _aplicar_pago_a_cuotas_interno(row, db)
 
-                    row.estado = _estado_pago_tras_aplicar_cascada(cc_b, cp_b)
+                    row.estado = _estado_conciliacion_post_cascada(row, cc_b, cp_b)
 
                 results.append({"index": idx, "success": True, "pago": _pago_to_response(row)})
 
@@ -4661,7 +4677,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
 
-            estado="PENDIENTE",
+            estado="PAGADO" if conciliado else "PENDIENTE",
 
             notas=payload.notas.strip() if payload.notas else None,
 
@@ -4699,7 +4715,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             cc_n, cp_n = _aplicar_pago_a_cuotas_interno(row, db)
 
-            row.estado = _estado_pago_tras_aplicar_cascada(cc_n, cp_n)
+            row.estado = _estado_conciliacion_post_cascada(row, cc_n, cp_n)
 
         db.commit()
 
@@ -5320,7 +5336,7 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
 
         cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
 
-        pago.estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
+        pago.estado = _estado_conciliacion_post_cascada(pago, cuotas_completadas, cuotas_parciales)
 
         db.commit()
 
