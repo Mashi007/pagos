@@ -9,7 +9,7 @@ ActualizaciÃ³n periÃ³dica de informes y reportes:
 - 13:00  Informe de pagos por email.
 - 16:00  CachÃ© dashboard (hilo aparte en main: 1:00, 13:00).
 - 16:30  Informe de pagos por email.
-- * cada minuto  Envio automatico por hora configurada (programador en notificaciones_envios; America/Caracas).
+- * cada 15 min (:00,:15,:30,:45)  Envio automatico por hora configurada (programador en notificaciones_envios; America/Caracas).
 - 01:10  Emails credito liquidado: PDF estado de cuenta (dias 1 y 2 despues de fecha_liquidado; America/Caracas).
 - 02:00  Finiquito: refrescar tabla finiquito_casos (total_financiamiento = sum cuotas.total_pagado exacto).
 
@@ -77,8 +77,9 @@ def _job_emails_liquidado_diferidos() -> None:
 
 def _job_envio_notificaciones_programador() -> None:
     """
-    Cada minuto (Caracas): envia solo los criterios cuya hora en configuracion coincide
-    con la hora actual (campo programador por tipo). Una vez por dia por criterio.
+    Cada 15 minutos en Caracas (:00, :15, :30, :45): envia los criterios cuya hora
+    en configuracion coincide con la hora actual (programador por tipo). Una vez por dia por criterio.
+    La hora del programador debe usar minuto 0, 15, 30 o 45 para coincidir con una corrida.
     """
     db = SessionLocal()
     try:
@@ -223,7 +224,7 @@ def _job_pagos_gmail_pipeline() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: notificaciones 00:50 + envio por hora cada minuto; liquidado+PDF 01:10; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
+    """Inicia el scheduler: notificaciones 00:50 + envio programador cada 15 min; liquidado+PDF 01:10; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
