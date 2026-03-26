@@ -3872,10 +3872,14 @@ def delete_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
         # Al desvincular pagos, prestamo_id pasa a NULL; chk_pagos_prestamo_id_not_null exige
         # estado = ANULADO_IMPORT cuando no hay prestamo (mismo criterio que FK ON DELETE SET NULL).
+        # Dos pasos en SQL crudo: evita PAGADO + prestamo_id NULL si el FK SET NULL actua sin estado.
         db.execute(
-            update(Pago)
-            .where(Pago.prestamo_id == prestamo_id)
-            .values(prestamo_id=None, estado="ANULADO_IMPORT")
+            text("UPDATE pagos SET estado = :estado WHERE prestamo_id = :pid"),
+            {"estado": "ANULADO_IMPORT", "pid": prestamo_id},
+        )
+        db.execute(
+            text("UPDATE pagos SET prestamo_id = NULL WHERE prestamo_id = :pid"),
+            {"pid": prestamo_id},
         )
 
         db.execute(

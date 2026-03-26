@@ -300,7 +300,7 @@ def start_scheduler() -> None:
         _job_campanas_programadas,
         IntervalTrigger(minutes=1),
         id="campanas_crm_programadas",
-        name="CampaÃ±as CRM programadas (cada 1 min)",
+        name="Campanas CRM programadas (cada 1 min)",
     )
     # Pagos Gmail: intervalo desde PAGOS_GMAIL_CRON_MINUTES (por defecto 30 min; cuota Gemini free ~15 RPM)
     cron_min = settings.PAGOS_GMAIL_CRON_MINUTES
