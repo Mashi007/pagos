@@ -1570,6 +1570,15 @@ export function PagosList() {
                                                 exact: false,
                                               }
                                             )
+                                            await queryClient.invalidateQueries(
+                                              {
+                                                queryKey: ['cuotas-prestamo'],
+                                                exact: false,
+                                              }
+                                            )
+                                            await invalidateListasNotificacionesMora(
+                                              queryClient
+                                            )
                                           } catch (error) {
                                             toast.error(
                                               'Error al actualizar conciliación'

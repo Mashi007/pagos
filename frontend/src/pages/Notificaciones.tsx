@@ -44,6 +44,8 @@ import { ConfiguracionNotificaciones } from '../components/notificaciones/Config
 import {
   NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
   NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+  NOTIFICACIONES_MORA_BROADCAST_CHANNEL,
+  invalidateListasNotificacionesMora,
 } from '../constants/queryKeys'
 
 type TabId =
@@ -158,7 +160,8 @@ export function Notificaciones() {
 
     queryFn: () => notificacionService.getClientesRetrasados(),
 
-    staleTime: 45 * 1000,
+    // Siempre considerar obsoleto: al volver a la pestaña o tras invalidar por pagos, se refetch al instante.
+    staleTime: 0,
 
     refetchOnWindowFocus: true,
 
@@ -174,7 +177,7 @@ export function Notificaciones() {
 
     queryFn: () => notificacionService.getEstadisticasPorTab(),
 
-    staleTime: 1 * 60 * 1000,
+    staleTime: 0,
 
     enabled: activeTab !== 'configuracion',
 
@@ -200,6 +203,26 @@ export function Notificaciones() {
   })
 
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return undefined
+    let ch: BroadcastChannel
+    try {
+      ch = new BroadcastChannel(NOTIFICACIONES_MORA_BROADCAST_CHANNEL)
+    } catch {
+      return undefined
+    }
+    ch.onmessage = (ev: MessageEvent<{ type?: string }>) => {
+      if (ev?.data?.type !== 'invalidate') return
+      void invalidateListasNotificacionesMora(queryClient, {
+        skipCrossTabBroadcast: true,
+      })
+    }
+    return () => {
+      ch.onmessage = null
+      ch.close()
+    }
+  }, [queryClient])
 
   const [actualizandoListas, setActualizandoListas] = useState(false)
 

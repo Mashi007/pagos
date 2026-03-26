@@ -24,6 +24,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 
 import { useQueryClient } from '@tanstack/react-query'
 
+import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
+
 import {
   getPagoReportadoDetalle,
   aprobarPagoReportado,
@@ -169,6 +171,8 @@ export default function CobrosDetallePage() {
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
 
       queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+
+      void invalidateListasNotificacionesMora(queryClient)
     } catch (e: any) {
       toast.error(e?.message || 'Error al aprobar.')
 

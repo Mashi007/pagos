@@ -76,6 +76,8 @@ import {
   etiquetaEstadoCuotaRespaldo,
 } from '../../utils/cuotaEstadoDisplay'
 
+import { invalidateListasNotificacionesMora } from '../../constants/queryKeys'
+
 interface ClienteInfo {
   id: number
 
@@ -385,6 +387,8 @@ export function TablaAmortizacionCompleta() {
         queryKey: ['cuotas-prestamos', prestamoIdsKey],
       })
 
+      void invalidateListasNotificacionesMora(queryClient)
+
       setMostrarDialogCuota(false)
 
       setCuotaEditando(null)
@@ -415,6 +419,8 @@ export function TablaAmortizacionCompleta() {
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
 
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
+
+      void invalidateListasNotificacionesMora(queryClient)
     },
 
     onError: (error: any) => {
@@ -464,6 +470,8 @@ export function TablaAmortizacionCompleta() {
 
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
 
+      void invalidateListasNotificacionesMora(queryClient)
+
       setMostrarDialogPago(false)
 
       setPagoEditando(null)
@@ -487,6 +495,8 @@ export function TablaAmortizacionCompleta() {
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
 
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
+
+      void invalidateListasNotificacionesMora(queryClient)
     },
 
     onError: (error: any) => {
@@ -516,6 +526,8 @@ export function TablaAmortizacionCompleta() {
       queryClient.invalidateQueries({
         queryKey: ['prestamos-cedula', cedulaSeleccionada],
       })
+
+      void invalidateListasNotificacionesMora(queryClient)
     },
 
     onError: (error: any) => {
@@ -638,6 +650,8 @@ export function TablaAmortizacionCompleta() {
       queryClient.invalidateQueries({
         queryKey: ['pagos-cedula', cedulaSeleccionada],
       })
+
+      await invalidateListasNotificacionesMora(queryClient)
 
       toast.success(
         'Tabla de amortización generada y pagos aplicados exitosamente'

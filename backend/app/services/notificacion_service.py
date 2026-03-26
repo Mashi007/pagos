@@ -13,6 +13,9 @@ from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import hoy_negocio
+from app.services.pagos_cuotas_sincronizacion import (
+    sincronizar_pagos_pendientes_para_listado_notificaciones,
+)
 
 # Misma tolerancia que clasificación de cuota pagada (cuota_estado): evita notificar si ya está cubierta al 100%.
 TOL_SALDO_CUOTA_NOTIFICACION = 0.01
@@ -34,6 +37,7 @@ def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]
 
     Usado por get_clientes_retrasados y get_notificaciones_tabs_data.
     """
+    sincronizar_pagos_pendientes_para_listado_notificaciones(db)
     q = (
         select(Cuota, Cliente)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
