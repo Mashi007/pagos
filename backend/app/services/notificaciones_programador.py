@@ -3,6 +3,8 @@
 Envio automatico de notificaciones por hora configurada (campo programador en notificaciones_envios).
 
 - Zona: America/Caracas (igual que el scheduler).
+- El scheduler corre en :00, :15, :30 y :45 de cada hora; la hora del programador debe
+  usar minuto 0, 15, 30 o 45 para coincidir con una ejecucion.
 - Por cada criterio (PAGO_* , PREJUDICIAL) la hora HH:MM del cuadro dispara una vez por dia
   ese lote filtrado (deduplicacion en configuracion).
 - Si programador falta o es invalido, se usa 01:00 (compatibilidad con el antiguo job unico).

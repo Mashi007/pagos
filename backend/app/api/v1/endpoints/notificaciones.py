@@ -27,7 +27,7 @@ from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
-    get_cuotas_pendientes_con_cliente,
+    get_cuotas_pendientes_por_vencimientos,
     format_cuota_item,
     _item,
     _item_tab,
@@ -1634,13 +1634,15 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     4. Credito pagado (liquidados): prestamos con estado LIQUIDADO (misma columna estado en BD).
        Se muestran total_financiamiento y suma de abonos en cuotas para referencia.
     Claves dias_5, dias_3, dias_1, hoy se devuelven vacias (compatibilidad API).
-    Datos desde BD: get_cuotas_pendientes_con_cliente y tabla prestamos/cuotas.
+    Datos desde BD: cuotas pendientes filtradas por fecha_vencimiento (hoy-1, hoy-5, hoy-30)
+    y tabla prestamos/cuotas (liquidados).
     Solo cuotas con fecha_pago nula: si se registra un pago que liquida la cuota,
     deja de listarse en la siguiente lectura (sin depender de un job de refresco).
     """
     hoy = hoy_negocio()
+    fechas_retraso = (hoy - timedelta(days=1), hoy - timedelta(days=5), hoy - timedelta(days=30))
     try:
-        rows = get_cuotas_pendientes_con_cliente(db)
+        rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
     except Exception as e:
         logger.exception("clientes-retrasados: error cargando cuotas pendientes: %s", e)
         raise HTTPException(
@@ -1760,7 +1762,7 @@ def get_notificaciones_tabs_data(db: Session):
     Datos para envio de notificaciones (retrasadas, prejudicial).
     Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1/3/5 dias de atraso)
     y prejudicial. Claves dias_5, dias_3, dias_1, hoy van vacias (compat API).
-    Fuente: get_cuotas_pendientes_con_cliente (fecha_pago nula, estado no pagado, saldo > tolerancia).
+    Fuente: cuotas pendientes con fecha_vencimiento en {hoy-1, hoy-3, hoy-5} (consulta acotada).
     Fecha de corte: America/Caracas.
 
     Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
@@ -1769,7 +1771,8 @@ def get_notificaciones_tabs_data(db: Session):
     from sqlalchemy import func
 
     hoy = hoy_negocio()
-    rows = get_cuotas_pendientes_con_cliente(db)
+    fechas_retraso = (hoy - timedelta(days=1), hoy - timedelta(days=3), hoy - timedelta(days=5))
+    rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
 
     dias_5: List[dict] = []
     dias_3: List[dict] = []

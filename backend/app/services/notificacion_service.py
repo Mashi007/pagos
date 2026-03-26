@@ -1,10 +1,10 @@
 """
 Servicios para notificaciones de cuotas vencidas y en mora.
 Centraliza la lógica de serialización y filtrado de cuotas.
-Una sola fuente de datos: get_cuotas_pendientes_con_cliente(db) para listado y envío.
+Listados por pestaña: get_cuotas_pendientes_por_vencimientos (filtra en SQL por fechas).
 """
 from datetime import date, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -13,9 +13,6 @@ from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import hoy_negocio
-from app.services.pagos_cuotas_sincronizacion import (
-    sincronizar_pagos_pendientes_para_listado_notificaciones,
-)
 
 # Misma tolerancia que clasificación de cuota pagada (cuota_estado): evita notificar si ya está cubierta al 100%.
 TOL_SALDO_CUOTA_NOTIFICACION = 0.01
@@ -30,15 +27,9 @@ CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
 )
 
 
-def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
-    """
-    Fuente única: cuotas con saldo pendiente (monto - total_pagado > tolerancia), fecha_pago nula,
-    estado distinto de PAGADO/PAGO_ADELANTADO/PAGADA, préstamo no LIQUIDADO.
-
-    Usado por get_clientes_retrasados y get_notificaciones_tabs_data.
-    """
-    sincronizar_pagos_pendientes_para_listado_notificaciones(db)
-    q = (
+def _select_cuotas_pendientes_con_cliente():
+    """Query base: cuota pendiente + cliente vía préstamo (sin filtro de fecha de vencimiento)."""
+    return (
         select(Cuota, Cliente)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
@@ -47,7 +38,33 @@ def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]
         .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
         .where(Prestamo.estado != "LIQUIDADO")
     )
+
+
+def get_cuotas_pendientes_por_vencimientos(
+    db: Session, fechas_vencimiento: Sequence[date]
+) -> List[Tuple[Cuota, Cliente]]:
+    """
+    Misma semántica que get_cuotas_pendientes_con_cliente pero solo filas cuya
+    fecha_vencimiento está en el conjunto dado. Evita cargar todo el universo de mora
+    (timeout en /clientes-retrasados y get_notificaciones_tabs_data).
+
+    No ejecuta sincronización de pagos: el listado debe ser lectura rápida; la conciliación
+    ocurre al registrar pagos o en jobs dedicados.
+    """
+    fechas = tuple({d for d in fechas_vencimiento if d is not None})
+    if not fechas:
+        return []
+    q = _select_cuotas_pendientes_con_cliente().where(Cuota.fecha_vencimiento.in_(fechas))
     rows = db.execute(q).all()
+    return [(row[0], row[1]) for row in rows]
+
+
+def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
+    """
+    Todas las cuotas pendientes de notificar (sin filtrar por día de vencimiento).
+    Costoso en carteras grandes; preferir get_cuotas_pendientes_por_vencimientos para pestañas.
+    """
+    rows = db.execute(_select_cuotas_pendientes_con_cliente()).all()
     return [(row[0], row[1]) for row in rows]
 
 

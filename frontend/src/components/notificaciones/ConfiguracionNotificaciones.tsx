@@ -1392,11 +1392,13 @@ export function ConfiguracionNotificaciones() {
                           <p className="mt-1.5 text-xs text-gray-600">
                             Cada <strong>fila</strong> (caso) tiene su propia
                             hora y CCO. Zona <strong>America/Caracas</strong>:
-                            el servidor revisa cada minuto y envía solo ese caso
-                            cuando coincide la hora (una vez al día por caso).
-                            Si el campo viene vacío en datos antiguos, el
-                            backend usa <strong>01:00</strong> por
-                            compatibilidad.
+                            el servidor revisa cada <strong>15 minutos</strong>{' '}
+                            (:00, :15, :30, :45) y envía ese caso cuando coincide
+                            la hora (una vez al día por caso). Elija minutos{' '}
+                            <strong>00, 15, 30 o 45</strong> en el selector para
+                            que coincida con una corrida. Si el campo viene
+                            vacío en datos antiguos, el backend usa{' '}
+                            <strong>01:00</strong> por compatibilidad.
                           </p>
                         </div>
 

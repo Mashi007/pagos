@@ -160,7 +160,7 @@ export function Programador() {
 
     staleTime: 30 * 1000, // 30 segundos
 
-    refetchInterval: 60 * 1000, // Refrescar cada minuto
+    refetchInterval: 15 * 60 * 1000, // Alineado con envío notificaciones cada 15 min
   })
 
   const tareas = tareasData?.tareas || []
