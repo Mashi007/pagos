@@ -1142,7 +1142,8 @@ def exportar_morosidad_cedulas(
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .where(
-                Cliente.estado == "MORA",
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
                 Cuota.fecha_pago.is_(None),
                 func.extract("year", Cuota.fecha_vencimiento) == ano,
                 func.extract("month", Cuota.fecha_vencimiento) == mes,
@@ -1180,7 +1181,8 @@ def exportar_morosidad_cedulas(
     )
 
     where_resumen = [
-        Cliente.estado == "MORA",
+        Cliente.estado == "ACTIVO",
+        Prestamo.estado == "APROBADO",
         Cuota.fecha_pago.is_(None),
     ]
 
