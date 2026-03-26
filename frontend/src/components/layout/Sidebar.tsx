@@ -270,14 +270,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
 
     {
-      title: 'Chat AI',
-
-      href: '/chat-ai',
-
-      icon: Brain,
-    },
-
-    {
       title: 'Configuración',
 
       icon: Settings,
