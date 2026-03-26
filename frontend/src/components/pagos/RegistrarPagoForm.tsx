@@ -50,6 +50,12 @@ import {
   getErrorDetail,
 } from '../../types/errors'
 
+const DUPLICADO_DOCUMENTO_UI =
+  'Este comprobante ya fue registrado. Verifique el numero_documento.'
+
+const DUPLICADO_HUELLA_UI =
+  'Pago duplicado detectado para este prestamo, fecha, monto y referencia.'
+
 interface RegistrarPagoFormProps {
   onClose: () => void
 
@@ -361,9 +367,19 @@ export function RegistrarPagoForm({
       let errorMessage = getErrorMessage(error)
 
       if (isAxiosError(error)) {
+        const status = error.response?.status
         const detail = getErrorDetail(error)
+        const detailLower = (detail || '').toLowerCase()
 
-        if (detail) {
+        if (status === 409 && detailLower.includes('huella funcional')) {
+          errorMessage = DUPLICADO_HUELLA_UI
+        } else if (
+          status === 409 &&
+          (detailLower.includes('numero_documento') ||
+            detailLower.includes('documento'))
+        ) {
+          errorMessage = DUPLICADO_DOCUMENTO_UI
+        } else if (detail) {
           errorMessage = detail
         }
       }

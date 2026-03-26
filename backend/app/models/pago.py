@@ -3,7 +3,9 @@ Modelo SQLAlchemy para registro de pagos (tabla pagos).
 Conectado al frontend /pagos/pagos; lista y CRUD desde BD.
 Columnas alineadas con la tabla real en Render (cedula, fecha_pago timestamp, referencia_pago, etc.).
 """
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, Text, Boolean, ForeignKey, Date
+import re
+
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Text, Boolean, ForeignKey, Date, event
 from sqlalchemy.orm import validates
 from sqlalchemy.sql import func, text
 
@@ -40,8 +42,34 @@ class Pago(Base):
     documento_ruta = Column(String(255), nullable=True)
     # NOT NULL en BD; obligatorio al insertar
     referencia_pago = Column(String(100), nullable=False, server_default=text("''"))
+    # Huella normalizada para prevenir duplicados funcionales (prestamo + fecha + monto + referencia).
+    ref_norm = Column(Text, nullable=True)
     # Auditoria moneda (solo datos en BD; monto_pagado siempre USD cuando aplica conversion)
     moneda_registro = Column(String(10), nullable=True)  # USD | BS
     monto_bs_original = Column(Numeric(15, 2), nullable=True)
     tasa_cambio_bs_usd = Column(Numeric(15, 6), nullable=True)
     fecha_tasa_referencia = Column(Date, nullable=True)  # misma fecha de pago usada para buscar tasa
+
+
+
+_REF_PREFIX_PATTERNS = (
+    r"^(BS\.?\s*)?BNC\s*/\s*(REF\.?\s*)?",
+    r"^BINANCE\s*/\s*",
+    r"^BNC\s*/\s*",
+    r"^VE\s*/\s*",
+)
+
+
+def _normalizar_referencia_pago(valor: str | None) -> str:
+    raw = (valor or "").strip().upper()
+    for pattern in _REF_PREFIX_PATTERNS:
+        raw = re.sub(pattern, "", raw)
+    return raw.strip()
+
+
+@event.listens_for(Pago, "before_insert")
+@event.listens_for(Pago, "before_update")
+def _set_ref_norm(_mapper, _connection, target: Pago) -> None:
+    # Prioriza numero_documento; si no existe usa referencia_pago.
+    base = target.numero_documento or target.referencia_pago
+    target.ref_norm = _normalizar_referencia_pago(base)

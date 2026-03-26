@@ -225,6 +225,55 @@ _USUARIO_REGISTRO_FALLBACK = "import-masivo@sistema.rapicredit.com"
 
 
 
+def _normalizar_ref_fingerprint(valor: Optional[str]) -> str:
+
+    ref = (valor or "").strip().upper()
+
+    patrones = (
+
+        r"^(BS\.?\s*)?BNC\s*/\s*(REF\.?\s*)?",
+
+        r"^BINANCE\s*/\s*",
+
+        r"^BNC\s*/\s*",
+
+        r"^VE\s*/\s*",
+
+    )
+
+    for pat in patrones:
+
+        ref = re.sub(pat, "", ref)
+
+    return ref.strip()
+
+
+
+def _debe_aplicar_cascada_pago(pago: Pago) -> bool:
+
+    """Regla unica de seguridad para aplicar pagos en cascada."""
+
+    if not pago.prestamo_id:
+
+        return False
+
+    if float(pago.monto_pagado or 0) <= 0:
+
+        return False
+
+    if not bool(getattr(pago, "conciliado", False)):
+
+        return False
+
+    estado = str(getattr(pago, "estado", "") or "").upper()
+
+    if estado in ("DUPLICADO", "ANULADO_IMPORT"):
+
+        return False
+
+    return True
+
+
 def _usuario_registro_desde_current_user(current_user: Optional[Any]) -> str:
 
     """
@@ -4244,6 +4293,8 @@ def crear_pagos_batch(
 
             ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
 
+    ref_norm = _normalizar_ref_fingerprint(num_doc or ref)
+
             cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
 
             ced_norm_prest = (payload.cedula_cliente or "").strip().replace("-", "").upper()
@@ -4418,7 +4469,7 @@ def crear_pagos_batch(
 
                 db.refresh(row)
 
-                if row.prestamo_id and float(row.monto_pagado or 0) > 0:
+                if _debe_aplicar_cascada_pago(row):
 
                     cc_b, cp_b = _aplicar_pago_a_cuotas_interno(row, db)
 
@@ -4482,7 +4533,15 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
     """Crea un pago. Documento acepta cualquier formato. Regla general: no duplicados (409 si ya existe)."""
 
+    if payload.prestamo_id is None:
+
+        raise HTTPException(status_code=400, detail="prestamo_id es obligatorio para crear pagos.")
+
     num_doc = normalize_documento(payload.numero_documento)
+
+    if not num_doc:
+
+        raise HTTPException(status_code=400, detail="numero_documento es obligatorio para crear pagos.")
 
     if num_doc and numero_documento_ya_registrado(db, num_doc):
 
@@ -4490,11 +4549,13 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             status_code=409,
 
-            detail="Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.",
+            detail="Ya existe un pago con ese numero_documento. Regla general: no se aceptan duplicados en documentos.",
 
         )
 
     ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
+
+    ref_norm = _normalizar_ref_fingerprint(num_doc or ref)
 
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
 
@@ -4606,6 +4667,8 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             referencia_pago=ref,
 
+            ref_norm=ref_norm,
+
             conciliado=conciliado,  # [B2] Usar solo conciliado, no verificado_concordancia
 
             fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
@@ -4632,7 +4695,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         # [C3] Aplicar cascada a cuotas en la misma transacción para que préstamos y estado de cuenta se actualicen
 
-        if row.prestamo_id and float(row.monto_pagado or 0) > 0:
+        if _debe_aplicar_cascada_pago(row):
 
             cc_n, cp_n = _aplicar_pago_a_cuotas_interno(row, db)
 
@@ -4656,11 +4719,23 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
 
+            constraint = getattr(getattr(getattr(e, "orig", None), "diag", None), "constraint_name", "") or ""
+
+            if "ux_pagos_fingerprint_activos" in constraint:
+
+                raise HTTPException(
+
+                    status_code=409,
+
+                    detail="Pago duplicado detectado por huella funcional (prestamo, fecha, monto y referencia).",
+
+                )
+
             raise HTTPException(
 
                 status_code=409,
 
-                detail="Ya existe un pago con ese Nº de documento. El documento debe ser único; no se permiten repetidos.",
+                detail="Ya existe un pago con ese numero_documento. El documento debe ser unico; no se permiten repetidos.",
 
             )
 
@@ -4702,13 +4777,29 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
         num_doc = normalize_documento(data["numero_documento"])
 
-        if num_doc and numero_documento_ya_registrado(db, num_doc, exclude_pago_id=pago_id):
+        if not num_doc:
+
+            raise HTTPException(status_code=400, detail="numero_documento no puede estar vacio.")
+
+        num_doc_actual = normalize_documento(row.numero_documento)
+
+        if num_doc_actual and num_doc != num_doc_actual and (bool(row.conciliado) or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")):
 
             raise HTTPException(
 
                 status_code=409,
 
-                detail="Ya existe otro pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.",
+                detail="No se permite cambiar numero_documento en pagos conciliados o pagados.",
+
+            )
+
+        if numero_documento_ya_registrado(db, num_doc, exclude_pago_id=pago_id):
+
+            raise HTTPException(
+
+                status_code=409,
+
+                detail="Ya existe otro pago con ese numero_documento. Regla general: no se aceptan duplicados en documentos.",
 
             )
 
@@ -4782,7 +4873,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
                 status_code=409,
 
-                detail="Ya existe otro pago con ese Nº de documento. El documento debe ser único; no se permiten repetidos.",
+                detail="Ya existe otro pago con ese numero_documento. El documento debe ser unico; no se permiten repetidos.",
 
             )
 
@@ -4953,23 +5044,23 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
 
     hoy = _hoy_local()
 
-    cuotas_pendientes = (
+    # Lock pesimista para evitar carreras de aplicacion concurrente sobre las mismas cuotas.
+    cuotas_stmt = (
 
-        db.execute(
+        select(Cuota)
 
-            select(Cuota)
-
-            .where(
-                Cuota.prestamo_id == prestamo_id,
-                # Solo saldo pendiente: no exigir fecha_pago NULL. Si hay fecha_pago pero total_pagado < monto
-                # (carga manual, migración o bug), excluir la cuota bloqueaba la cascada y los pagos quedaban sin aplicar.
-                or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto - 0.01),
-            )
-            .order_by(Cuota.numero_cuota.asc())  # Cascada: primero las cuotas más antiguas (numero_cuota menor), luego las siguientes
-
+        .where(
+            Cuota.prestamo_id == prestamo_id,
+            # Solo saldo pendiente: no exigir fecha_pago NULL. Si hay fecha_pago pero total_pagado < monto
+            # (carga manual, migracion o bug), excluir la cuota bloqueaba la cascada y los pagos quedaban sin aplicar.
+            or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto - 0.01),
         )
+        .order_by(Cuota.numero_cuota.asc())  # Cascada: primero cuotas mas antiguas
+        .with_for_update(skip_locked=True)
 
-    ).scalars().all()
+    )
+
+    cuotas_pendientes = db.execute(cuotas_stmt).scalars().all()
 
     cuotas_completadas = 0
 

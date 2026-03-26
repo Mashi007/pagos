@@ -27,10 +27,13 @@ class PagoCreate(BaseModel):
     @field_validator("numero_documento", mode="before")
     @classmethod
     def numero_documento_cualquier_formato(cls, v: object) -> str:
-        """Acepta cualquier formato; no se valida contenido. Solo se normaliza a string."""
+        """Documento obligatorio para candado antifraude; se normaliza a string."""
         if v is None:
-            return ""
-        return str(v).strip()
+            raise ValueError("numero_documento es obligatorio")
+        s = str(v).strip()
+        if not s:
+            raise ValueError("numero_documento es obligatorio")
+        return s
 
     @field_validator("prestamo_id")
     @classmethod
@@ -69,11 +72,13 @@ class PagoUpdate(BaseModel):
     @field_validator("numero_documento", mode="before")
     @classmethod
     def numero_documento_cualquier_formato(cls, v: object) -> Optional[str]:
-        """Acepta cualquier formato; no se valida contenido. Solo se normaliza a string o None."""
+        """Si se envia, debe contener valor no vacio."""
         if v is None:
             return None
         s = str(v).strip()
-        return s if s else None
+        if not s:
+            raise ValueError("numero_documento no puede estar vacio")
+        return s
 
     @field_validator("prestamo_id")
     @classmethod
