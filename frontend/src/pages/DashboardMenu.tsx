@@ -80,7 +80,6 @@ import type {
   ComposicionMorosidadResponse,
   CobranzasSemanalesResponse,
   MorosidadPorAnalistaItem,
-  PrestamosPorModeloResponse,
   AnalisisCuentasPorCobrarResponse,
   TendenciaProgramadoTotalCobradoResponse,
   RecibosPagosMensualUsdResponse,
@@ -346,40 +345,6 @@ export function DashboardMenu() {
     retry: 1, // Permitir 1 reintento para errores de red
 
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
-  })
-
-  const {
-    data: datosPrestamosPorModelo,
-    isLoading: loadingPrestamosPorModelo,
-  } = useQuery({
-    queryKey: ['prestamos-por-modelo', periodoRangos, JSON.stringify(filtros)],
-
-    queryFn: async (): Promise<PrestamosPorModeloResponse> => {
-      const params = construirFiltrosObject(periodoRangos)
-
-      const queryParams = new URLSearchParams()
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-
-      const response = await apiClient.get(
-        `/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`
-      )
-
-      return response as PrestamosPorModeloResponse
-    },
-
-    // Alineado con caché backend (~5 min) y otros gráficos: evita refetch al cambiar de pestaña
-    staleTime: 5 * 60 * 1000,
-
-    refetchOnMount: false,
-
-    refetchOnWindowFocus: false,
-
-    retry: 1,
-
-    enabled: true,
   })
 
   const periodoComposicionMorosidad = getPeriodoGrafico('composicion-morosidad')
@@ -2089,177 +2054,6 @@ export function DashboardMenu() {
             </Card>
           </motion.div>
 
-          {/* Préstamos aprobados por modelo de vehículo (barras horizontales) */}
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.42 }}
-            className="h-full"
-          >
-            <Card className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-violet-50/90 to-purple-50/90 pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                    <BarChart3 className="h-5 w-5 text-violet-600" />
-
-                    <span>Préstamos aprobados por modelo de vehículo</span>
-                  </CardTitle>
-
-                  <div className="flex items-center gap-2">
-                    <SelectorPeriodoGrafico chartId="rangos" />
-
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                      {getRangoFechasLabelGrafico('rangos')}
-                    </Badge>
-
-                    {filtros.modelo && filtros.modelo !== '__ALL__' && (
-                      <Badge
-                        variant="outline"
-                        className="border-violet-300 bg-violet-50 text-xs font-medium text-violet-600"
-                      >
-                        Modelo: {filtros.modelo}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                <p className="mt-1 text-xs text-gray-600">
-                  Distribución en porcentaje (acumulado). Los nombres se alinean
-                  al catálogo de modelos cuando hay vínculo o coincidencia de
-                  texto. Usa el filtro Modelo en la barra superior para acotar.
-                </p>
-              </CardHeader>
-
-              <CardContent className="flex-1 p-6">
-                {loadingPrestamosPorModelo ? (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    Cargando...
-                  </div>
-                ) : datosPrestamosPorModelo?.acumulado?.length ? (
-                  (() => {
-                    const acumulado = datosPrestamosPorModelo.acumulado
-
-                    const total = acumulado.reduce(
-                      (s, d) => s + d.cantidad_acumulada,
-                      0
-                    )
-
-                    const dataBarras = acumulado.map(d => ({
-                      modelo: d.modelo || 'Sin modelo',
-
-                      cantidad: d.cantidad_acumulada,
-
-                      porcentaje:
-                        total > 0 ? (d.cantidad_acumulada / total) * 100 : 0,
-                    }))
-
-                    const numItems = dataBarras.length
-
-                    const chartHeight = Math.max(
-                      380,
-                      Math.min(620, numItems * 26)
-                    )
-
-                    return (
-                      <ResponsiveContainer width="100%" height={chartHeight}>
-                        <BarChart
-                          data={dataBarras}
-                          layout="vertical"
-                          margin={{ top: 12, right: 48, left: 16, bottom: 12 }}
-                          barCategoryGap="10%"
-                          barGap={4}
-                        >
-                          <CartesianGrid
-                            {...chartCartesianGrid}
-                            horizontal={false}
-                          />
-
-                          <XAxis
-                            type="number"
-                            domain={[0, 100]}
-                            tickFormatter={v => `${v}%`}
-                            tick={chartAxisTick}
-                            axisLine={{ stroke: '#e5e7eb' }}
-                            label={{
-                              value: '% del total',
-                              position: 'insideBottom',
-                              offset: -8,
-                              style: { fill: '#6b7280', fontSize: 12 },
-                            }}
-                          />
-
-                          <YAxis
-                            type="category"
-                            dataKey="modelo"
-                            width={140}
-                            tick={{
-                              fontSize: 11,
-                              fill: '#374151',
-                              fontWeight: 500,
-                            }}
-                            interval={0}
-                            tickLine={false}
-                            axisLine={{ stroke: '#e5e7eb' }}
-                            tickFormatter={name =>
-                              name && name.length > 22
-                                ? `${name.slice(0, 20)}…`
-                                : name
-                            }
-                          />
-
-                          <Tooltip
-                            contentStyle={chartTooltipStyle.contentStyle}
-                            labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(
-                              value: number,
-                              _name: string,
-                              props: {
-                                payload?: {
-                                  cantidad: number
-                                  porcentaje: number
-                                }
-                              }
-                            ) => [
-                              `${props.payload?.cantidad?.toLocaleString('es-EC') ?? value} préstamos (${Number(value ?? props.payload?.porcentaje ?? 0).toFixed(1)}%)`,
-
-                              '% del total',
-                            ]}
-                            labelFormatter={label => `Modelo: ${label}`}
-                            cursor={{ fill: 'rgba(99, 102, 241, 0.06)' }}
-                          />
-
-                          <Legend {...chartLegendStyle} />
-
-                          <Bar
-                            dataKey="porcentaje"
-                            name="% del total"
-                            fill="#6366f1"
-                            radius={[0, 4, 4, 0]}
-                            maxBarSize={22}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )
-                  })()
-                ) : (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    No hay datos para mostrar
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* GRÁFICOS DE MOROSIDAD */}
-
-        <div className="grid grid-cols-1 gap-6">
-          {/* Cantidad de préstamos en mora por rango de días */}
-
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -2352,6 +2146,12 @@ export function DashboardMenu() {
               </CardContent>
             </Card>
           </motion.div>
+        </div>
+
+        {/* GRÁFICOS DE MOROSIDAD */}
+
+        <div className="grid grid-cols-1 gap-6">
+          {/* Cantidad de préstamos en mora por rango de días */}
         </div>
 
         {/* Pago vencido por Analista: 1 gráfico por fila, bloques independientes */}
