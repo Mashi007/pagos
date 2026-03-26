@@ -96,6 +96,8 @@ from app.services.cuota_estado import (
     sincronizar_columna_estado_cuotas,
 )
 
+from app.services.prestamos.prestamo_huella import ensure_no_duplicate_aprobado_huella
+
 from app.services.prestamo_estado_coherencia import (
     condicion_filtro_estado_prestamo,
     prestamo_bloquea_insertar_filas_cuota_si_liquidado_bd,
@@ -2536,6 +2538,8 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
 
         p.fecha_aprobacion = datetime.combine(fa, datetime.min.time())
 
+    ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
+
     _registrar_en_revision_manual(db, prestamo_id)
 
     db.commit()
@@ -2690,6 +2694,8 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
 
     p.estado = "APROBADO"
 
+    ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
+
     _registrar_en_revision_manual(db, prestamo_id)
 
     existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
@@ -2841,6 +2847,8 @@ def aprobar_manual(
         p.usuario_aprobador = current_user.email
 
         p.estado = "APROBADO"
+
+        ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
 
 
 
@@ -3594,6 +3602,10 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
     )
 
+    if not payload.omitir_validacion_huella_duplicada:
+
+        ensure_no_duplicate_aprobado_huella(db, row, exclude_prestamo_id=None)
+
     db.add(row)
 
     db.commit()
@@ -3779,6 +3791,10 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
             )
 
     try:
+
+        if (row.estado or "").upper() == "APROBADO":
+
+            ensure_no_duplicate_aprobado_huella(db, row, exclude_prestamo_id=row.id)
 
         db.commit()
 

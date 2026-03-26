@@ -8,7 +8,7 @@ import calendar
 
 import io
 
-from datetime import date, timedelta
+from datetime import date
 
 from typing import List, Optional
 
@@ -1116,11 +1116,18 @@ def exportar_morosidad_cedulas(
     meses_list: Optional[str] = Query(None),
     meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atras"),
 ):
-    """Exporta Excel: pestana 1 RESUMEN (>121 dias); luego detalle por mes."""
+    """Exporta Excel de morosidad por cedulas (situacion de hoy).
+
+    - Solo cuotas con fecha_pago NULL a la fecha de ejecucion (cartera impaga actual).
+    - Regla de mora: fecha_vencimiento + 4 meses + 1 dia <= fecha_corte.
+    - RESUMEN: fecha_corte = hoy.
+    - Hojas MORA_MM-AAAA: fecha_corte = ultimo dia de ese mes; cada hoja filtra las
+      mismas cuotas impagas de hoy que cumplen la regla respecto a ese cierre (no es
+      reconstruccion historica de pagos).
+    """
     import openpyxl
 
-    fc = date.today()
-    cutoff_121 = fc - timedelta(days=121)
+    fc_hoy = date.today()
 
     periodos = _periodos_desde_filtros(anos, meses_list, meses)
     wb = openpyxl.Workbook()
@@ -1130,7 +1137,7 @@ def exportar_morosidad_cedulas(
     ws_resumen.append(
         [
             "Cedula",
-            "Cantidad de cuotas (mayores a 121 dias)",
+            "Cantidad de cuotas (4+ meses mora, corte hoy)",
             "Deuda en dolares",
         ]
     )
@@ -1148,7 +1155,7 @@ def exportar_morosidad_cedulas(
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento < cutoff_121,
+            Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc_hoy,
         )
         .group_by(Cliente.cedula)
         .order_by(Cliente.cedula.asc())
@@ -1166,6 +1173,9 @@ def exportar_morosidad_cedulas(
     ws_resumen.append(["TOTAL", total_cuotas_general, round(total_monto_general, 2)])
 
     for (ano, mes) in periodos:
+        _, ultimo_dia = calendar.monthrange(ano, mes)
+        fc_mes = date(ano, mes, ultimo_dia)
+
         ws = wb.create_sheet(title=f"MORA_{mes:02d}-{ano}")
         ws.append(
             ["Cedula", "Nombre", "Cuota", "Monto USD"]
@@ -1185,8 +1195,7 @@ def exportar_morosidad_cedulas(
                 Cliente.estado == "ACTIVO",
                 Prestamo.estado == "APROBADO",
                 Cuota.fecha_pago.is_(None),
-                func.extract("year", Cuota.fecha_vencimiento) == ano,
-                func.extract("month", Cuota.fecha_vencimiento) == mes,
+                Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc_mes,
             )
             .order_by(
                 Cliente.cedula.asc(),
