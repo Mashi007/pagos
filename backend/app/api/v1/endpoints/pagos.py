@@ -4293,7 +4293,7 @@ def crear_pagos_batch(
 
             ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
 
-    ref_norm = _normalizar_ref_fingerprint(num_doc or ref)
+            ref_norm = _normalizar_ref_fingerprint(num_doc or ref)
 
             cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
 
