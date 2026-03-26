@@ -1,4 +1,4 @@
-﻿import type { FiltrosReporte } from '../components/reportes/DialogReporteFiltros'
+import type { FiltrosReporte } from '../components/reportes/DialogReporteFiltros'
 import type { FiltrosReporteContable } from '../components/reportes/DialogReporteContableFiltros'
 
 import { REPORTE_ANIO_MAX, REPORTE_ANIO_MIN } from '../constants/reportes'

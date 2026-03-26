@@ -1,4 +1,4 @@
-﻿/** Valores por defecto y textos del Centro de Reportes (exportaciones Excel/PDF). */
+/** Valores por defecto y textos del Centro de Reportes (exportaciones Excel/PDF). */
 
 /** Ventana en meses para el informe de pagos cuando el backend espera un solo entero `meses`. */
 export const DEFAULT_MESES_VENTANA_PAGOS = 12

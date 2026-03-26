@@ -496,10 +496,12 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      const errFiltros = validateFiltrosReporte(filtros)
-      if (errFiltros) {
-        toast.error(errFiltros)
-        return
+      if (tipo !== 'CEDULA') {
+        const errFiltros = validateFiltrosReporte(filtros)
+        if (errFiltros) {
+          toast.error(errFiltros)
+          return
+        }
       }
 
       setGenerandoReporte(tipo)
