@@ -267,7 +267,7 @@ def get_prestamos_revision_manual(
             func.sum(
                 case(
                     (
-                        and_(no_pago_completo, dias_retraso >= 1, dias_retraso < 92),
+                        and_(no_pago_completo, dias_retraso >= 1, hoy_lit < (Cuota.fecha_vencimiento + literal_column("INTERVAL '4 months 1 day'"))),
                         1,
                     ),
                     else_=0,
@@ -275,7 +275,7 @@ def get_prestamos_revision_manual(
             ).label("vencidas"),
             func.sum(
                 case(
-                    (and_(no_pago_completo, dias_retraso >= 92), 1),
+                    (and_(no_pago_completo, hoy_lit >= (Cuota.fecha_vencimiento + literal_column("INTERVAL '4 months 1 day'"))), 1),
                     else_=0,
                 )
             ).label("morosas"),

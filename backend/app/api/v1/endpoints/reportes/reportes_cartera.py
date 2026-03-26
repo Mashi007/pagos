@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -53,7 +53,7 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento < fecha_corte,
+            Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fecha_corte,
         )
         .distinct()
     )
@@ -69,7 +69,7 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
                 Cliente.estado == "ACTIVO",
                 Prestamo.estado == "APROBADO",
                 Cuota.fecha_pago.is_(None),
-                Cuota.fecha_vencimiento < fecha_corte,
+                Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fecha_corte,
             )
         )
         or 0
@@ -113,7 +113,7 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
         ("1-30 días", 1, 30),
         ("31-60 días", 31, 60),
         ("61-89 días", 61, 89),
-        ("90+ días (moroso)", 90, 9999),
+        ("4+ meses (moroso)", 121, 9999),
     ]:
         delta_min = fecha_corte - timedelta(days=dias_max)
         delta_max = fecha_corte - timedelta(days=dias_min)

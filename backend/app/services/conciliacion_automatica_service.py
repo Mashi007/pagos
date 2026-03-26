@@ -39,8 +39,8 @@ class EstadoCuota:
     DOCUMENTACION = {
         PAGADO: 'Cuota cubierta al 100% (vencimiento ya cumplido o hoy).',
         PENDIENTE: 'Sin cubrir al 100%; al corriente (vencimiento hoy o futuro).',
-        VENCIDO: 'Sin cubrir al 100%; 1 a 91 dias despues del vencimiento.',
-        MORA: 'Sin cubrir al 100%; 92 o mas dias despues del vencimiento.',
+        VENCIDO: 'Sin cubrir al 100%; desde 1 dia de retraso hasta antes del umbral de mora (4 meses + 1 dia).',
+        MORA: 'Sin cubrir al 100%; desde el dia siguiente de cumplir 4 meses calendario del vencimiento.',
         PARCIAL: 'Abonos sin cubrir al 100%; aun al corriente respecto al vencimiento.',
         PAGO_ADELANTADO: 'Cubierta al 100% antes de la fecha de vencimiento.',
         CANCELADA: 'Cuota anulada o no vigente. No requiere pago.',

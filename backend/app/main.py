@@ -45,7 +45,12 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start = time.perf_counter()
         path = request.url.path
-        request_id = request.headers.get("X-Request-Id") or "n/a"
+        request_id = (
+            getattr(request.state, "request_id", None)
+            or request.headers.get("X-Request-ID")
+            or request.headers.get("X-Request-Id")
+            or "n/a"
+        )
         client_ip = request.client.host if request.client else "n/a"
 
         try:
@@ -65,6 +70,7 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
 
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         status = response.status_code
+        request_id = response.headers.get("X-Request-ID") or request_id
         msg = "request method=%s path=%s status=%s elapsed_ms=%s request_id=%s client_ip=%s"
 
         # run-now puede tardar 20-120 s; no marcar como slow

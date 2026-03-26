@@ -200,7 +200,7 @@ def _compute_composicion_morosidad(
 ) -> dict:
     """Calcula composición de morosidad: cuotas vencidas sin pagar al día de hoy."""
     try:
-        bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 89, "61-89 días"), (90, 999999, "90+ días (moroso)")]
+        bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 120, "61-120 dias"), (121, 999999, "4+ meses (moroso)")]
         puntos = []
         total_monto = 0.0
         total_cuotas = 0
@@ -243,7 +243,7 @@ def _compute_composicion_morosidad(
     except Exception as e:
         logger.exception("Error en composicion-morosidad: %s", e)
         puntos = [
-            ("1-30 días", 12000, 45, 12), ("31-60 días", 8500, 28, 9), ("61-89 días", 6200, 18, 6), ("90+ días (moroso)", 15800, 32, 10),
+            ("1-30 días", 12000, 45, 12), ("31-60 días", 8500, 28, 9), ("61-120 dias", 6200, 18, 6), ("4+ meses (moroso)", 15800, 32, 10),
         ]
         return {
             "puntos": [{"categoria": c, "monto": m, "cantidad_cuotas": n, "cantidad_prestamos": np} for c, m, n, np in puntos],

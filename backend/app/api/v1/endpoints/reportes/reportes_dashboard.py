@@ -1,10 +1,10 @@
 """
 Reportes dashboard - resumen general.
 """
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -69,7 +69,7 @@ def get_resumen_dashboard(db: Session = Depends(get_db)):
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento < (hoy - timedelta(days=89)),  # MOROSO: vencido hace 90+ días
+            Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= hoy,  # MOROSO: 4 meses calendario + 1 dia
         )
         .distinct()
     )

@@ -6,8 +6,8 @@ Reglas de negocio:
 - Pago adelantado: cubierta al 100% y fecha de vencimiento > fecha de referencia.
 - Pendiente: sin cubrir al 100%, sin retraso (el dia del vencimiento cuenta como al corriente).
 - Parcial: sin cubrir al 100%, sin retraso, con abonos.
-- Vencido: sin cubrir al 100%, 1..91 dias calendario despues del vencimiento.
-- Mora: sin cubrir al 100%, 92+ dias calendario despues del vencimiento.
+- Vencido: sin cubrir al 100%, desde 1 dia de retraso hasta antes del umbral de mora.
+- Mora: sin cubrir al 100%, desde el dia siguiente de cumplir 4 meses calendario del vencimiento.
 
 Conciliacion bancaria no altera el estado de cuota para el cliente.
 
@@ -20,12 +20,13 @@ Persistencia en BD:
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+import calendar
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 TZ_NEGOCIO = "America/Caracas"
 _TOL_MONTO = 0.01
-_MORA_DESDE_DIAS_RETRASO = 92
+_MORA_DESDE_MESES = 4
 
 
 def hoy_negocio() -> date:
@@ -56,6 +57,28 @@ def dias_retraso_desde_vencimiento(
     return max(0, (ref - fv).days)
 
 
+def _sumar_meses_calendario(fecha_base: date, meses: int) -> date:
+    """Suma meses calendario conservando dia, ajustando al ultimo dia valido del mes destino."""
+    month_index = (fecha_base.month - 1) + meses
+    year = fecha_base.year + (month_index // 12)
+    month = (month_index % 12) + 1
+    day = min(fecha_base.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def _es_mora_por_4_meses(fv: date | None, ref: date) -> bool:
+    """
+    Regla de mora por meses calendario:
+    - Se cumplen 4 meses calendario exactos desde la fecha de vencimiento.
+    - MORA aplica desde el dia siguiente.
+    """
+    if fv is None:
+        return False
+    fecha_cumple_4m = _sumar_meses_calendario(fv, _MORA_DESDE_MESES)
+    inicio_mora = fecha_cumple_4m + timedelta(days=1)
+    return ref >= inicio_mora
+
+
 def clasificar_estado_cuota(
     total_pagado: float,
     monto_cuota: float,
@@ -81,7 +104,7 @@ def clasificar_estado_cuota(
             return "PARCIAL"
         return "PENDIENTE"
 
-    if dias_ret >= _MORA_DESDE_DIAS_RETRASO:
+    if _es_mora_por_4_meses(fv, ref):
         return "MORA"
     return "VENCIDO"
 
@@ -105,7 +128,7 @@ def etiqueta_estado_cuota(codigo: str) -> str:
         "PENDIENTE": "Pendiente",
         "PARCIAL": "Pendiente parcial",
         "VENCIDO": "Vencido",
-        "MORA": "Mora (92+ d)",
+        "MORA": "Mora (4 meses+)",
         "PAGADO": "Pagado",
         "PAGO_ADELANTADO": "Pago adelantado",
         "PAGADA": "Pagado",
@@ -156,14 +179,14 @@ SQL_PG_ESTADO_CUOTA_CASE_CORRELATED = """CASE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
-      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
       ELSE 'VENCIDO'
     END
   ELSE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
-      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
       ELSE 'VENCIDO'
     END
 END"""
@@ -180,14 +203,14 @@ SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE = """CASE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
-      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
       ELSE 'VENCIDO'
     END
   ELSE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
-      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
       ELSE 'VENCIDO'
     END
 END"""

@@ -12,7 +12,7 @@ export function etiquetaEstadoCuotaRespaldo(
     PENDIENTE: 'Pendiente',
     PARCIAL: 'Pendiente parcial',
     VENCIDO: 'Vencido',
-    MORA: 'Mora (92+ d)',
+    MORA: 'Mora (4 meses+)',
     PAGADO: 'Pagado',
     PAGO_ADELANTADO: 'Pago adelantado',
     PAGADA: 'Pagado',

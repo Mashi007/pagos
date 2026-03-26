@@ -4946,7 +4946,7 @@ def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_v
 
     """
 
-    Delega en app.services.cuota_estado (Caracas; VENCIDO dias 1-91; MORA desde dia 92).
+    Delega en app.services.cuota_estado (Caracas; VENCIDO hasta umbral de mora; MORA desde 4 meses + 1 dia).
 
     """
 

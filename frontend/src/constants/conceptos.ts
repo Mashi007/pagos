@@ -33,7 +33,7 @@
 
 
 
- * - Moroso: 90+ días de atraso (se declara como moroso desde el día 90).
+ * - Moroso: se declara desde el dia siguiente de cumplir 4 meses calendario de atraso.
 
 
 
@@ -50,9 +50,9 @@
 
  */
 
-/** Días a partir de los cuales se declara MOROSO (90+ días de atraso) */
+/** Meses calendario para declarar MOROSO (desde el dia siguiente al mes 4) */
 
-export const DIAS_MOROSO_DESDE = 90
+export const MESES_MOROSO_DESDE = 4
 
 /** Etiqueta en UI: reemplaza "Morosidad" por "Pago vencido" */
 

@@ -171,14 +171,14 @@ class DiagnosticoCritico:
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
-      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
       ELSE 'VENCIDO'
     END
   ELSE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
-      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
       ELSE 'VENCIDO'
     END
 END as estado_calculado,
@@ -310,14 +310,14 @@ class CorrectoresCriticos:
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
-      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
       ELSE 'VENCIDO'
     END
   ELSE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
-      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
       ELSE 'VENCIDO'
     END
 END as estado_correcto

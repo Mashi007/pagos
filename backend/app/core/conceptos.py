@@ -5,10 +5,10 @@ PAGO VENCIDO Y MOROSO:
 - Pago vencido = cuotas vencidas y no pagadas (fecha_vencimiento < hoy).
 - Vencido: si debo pagar hasta el 23 feb, NO estoy vencido hasta el 24 feb.
   Desde el 24 = vencido (1-89 días de atraso).
-- Moroso: 90+ días de atraso (se declara como moroso desde el día 90).
+- Moroso: se declara desde el dia siguiente de cumplir 4 meses calendario de atraso.
 
 Condición técnica: fecha_vencimiento < fecha_referencia AND fecha_pago IS NULL
 """
 
-# Días a partir de los cuales se declara MOROSO (90+ días de atraso)
-DIAS_MOROSO_DESDE = 90
+# Meses calendario para declarar MOROSO (desde el dia siguiente al mes 4)
+MESES_MOROSO_DESDE = 4

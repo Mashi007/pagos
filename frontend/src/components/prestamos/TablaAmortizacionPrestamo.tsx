@@ -182,7 +182,7 @@ export function TablaAmortizacionPrestamo({
 
       VENCIDO: 'Vencido',
 
-      MORA: 'Mora (92+ d)',
+      MORA: 'Mora (4 meses+)',
 
       PARCIAL: 'Pendiente parcial',
     }

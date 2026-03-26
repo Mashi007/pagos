@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -61,7 +61,7 @@ import { usePermissions } from '../hooks/usePermissions'
 
 import { BASE_PATH, PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
-/** Path público de estado de cuenta (consultar por cédula, PDF por correo). */
+/** Path pÃƒÂºblico de estado de cuenta (consultar por cÃƒÂ©dula, PDF por correo). */
 
 const PUBLIC_ESTADO_CUENTA_PATH = 'rapicredit-estadocuenta'
 
@@ -69,7 +69,7 @@ const PUBLIC_ESTADO_CUENTA_PATH = 'rapicredit-estadocuenta'
 
 const INFOPAGOS_PATH = 'infopagos'
 
-/** Portal público Finiquito (colaboradores: código por correo). */
+/** Portal pÃƒÂºblico Finiquito (colaboradores: cÃƒÂ³digo por correo). */
 
 const PUBLIC_FINIQUITO_PATH = 'finiquitos'
 
@@ -85,7 +85,7 @@ function getLinkParaCompartir(path: string): string {
   return `${base}${pathBase ? `/${pathBase}` : ''}/${path}`.replace(/\/+/g, '/')
 }
 
-/** Cada icono = un reporte. Click = abre diálogo años/meses, luego descarga Excel. */
+/** Cada icono = un reporte. Click = abre diÃƒÂ¡logo aÃƒÂ±os/meses, luego descarga Excel. */
 
 const tiposReporte = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
@@ -100,9 +100,9 @@ const tiposReporte = [
 
   { value: 'CONTABLE', label: 'Contable', icon: Calculator },
 
-  { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
+  { value: 'CEDULA', label: 'Por cÃƒÂ©dula', icon: CreditCard },
 
-  { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
+  { value: 'CONCILIACION', label: 'ConciliaciÃƒÂ³n', icon: CheckCircle2 },
 ]
 
 const REPORTES_COBRANZA = [
@@ -136,7 +136,7 @@ export function Reportes() {
 
   const puedeVerReportes = canViewReports()
 
-  // Historial de notificaciones por cédula (reportes / legales)
+  // Historial de notificaciones por cÃƒÂ©dula (reportes / legales)
 
   const [cedulaHistorial, setCedulaHistorial] = useState('')
 
@@ -214,7 +214,7 @@ export function Reportes() {
     window.URL.revokeObjectURL(url)
   }
 
-  // Abrir diálogo al hacer clic en icono (o descargar directo si no requiere filtros)
+  // Abrir diÃƒÂ¡logo al hacer clic en icono (o descargar directo si no requiere filtros)
 
   const abrirDialogoReporte = (tipo: string) => {
     if (tipo === 'CONCILIACION') {
@@ -223,14 +223,8 @@ export function Reportes() {
       return
     }
 
-    if (tipo === 'MOROSIDAD') {
-      generarReporte(tipo, { años: [], meses: [] })
-
-      return
-    }
-
     if (tipo === 'CEDULA') {
-      generarReporte(tipo, { años: [], meses: [] })
+      generarReporte(tipo, { ['a\u00f1os']: [], meses: [] } as unknown as FiltrosReporte)
 
       return
     }
@@ -257,7 +251,7 @@ export function Reportes() {
       const cedulas = filtros.cedulas === 'todas' ? undefined : filtros.cedulas
 
       const { blob, vacio } = await reporteService.exportarReporteContable(
-        filtros.años,
+        ((filtros as any).anos ?? (filtros as any)['a\u00f1os'] ?? []),
         filtros.meses,
         cedulas
       )
@@ -268,10 +262,10 @@ export function Reportes() {
 
       if (vacio) {
         toast.warning(
-          'El reporte no tiene datos para el período seleccionado. Verifique que las fechas sean pasadas y que existan cuotas pagadas.'
+          'El reporte no tiene datos para el perÃƒÂ­odo seleccionado. Verifique que las fechas sean pasadas y que existan cuotas pagadas.'
         )
       } else {
-        toast.success('âœ" Reporte Contable descargado exitosamente')
+        toast.success('ÃƒÂ¢Ã…"" Reporte Contable descargado exitosamente')
       }
     } catch (error: unknown) {
       console.error('Error generando reporte:', error)
@@ -292,7 +286,7 @@ export function Reportes() {
     const ced = cedulaHistorial.trim()
 
     if (!ced) {
-      toast.error('Ingrese una cédula para consultar el historial.')
+      toast.error('Ingrese una cÃƒÂ©dula para consultar el historial.')
 
       return
     }
@@ -308,7 +302,7 @@ export function Reportes() {
       setHistorialCedulaLabel(res.cedula || ced)
 
       if ((res.items?.length ?? 0) === 0) {
-        toast.info('No hay notificaciones registradas para esta cédula.')
+        toast.info('No hay notificaciones registradas para esta cÃƒÂ©dula.')
       }
     } catch (e) {
       console.error(e)
@@ -392,7 +386,7 @@ export function Reportes() {
 
       toast.error(
         getErrorMessage(e) ||
-          'No hay PDF o no está disponible para este envío (registros antiguos).'
+          'No hay PDF o no estÃƒÂ¡ disponible para este envÃƒÂ­o (registros antiguos).'
       )
     } finally {
       setLoadingHistorialDescarga(null)
@@ -416,7 +410,7 @@ export function Reportes() {
 
       toast.error(
         getErrorMessage(e) ||
-          'No hay cuerpo almacenado o no se pudo generar el PDF (envíos sin snapshot).'
+          'No hay cuerpo almacenado o no se pudo generar el PDF (envÃƒÂ­os sin snapshot).'
       )
     } finally {
       setLoadingHistorialDescarga(null)
@@ -440,7 +434,7 @@ export function Reportes() {
 
       toast.error(
         getErrorMessage(e) ||
-          'No hay cuerpo de texto almacenado (envíos anteriores al snapshot).'
+          'No hay cuerpo de texto almacenado (envÃƒÂ­os anteriores al snapshot).'
       )
     } finally {
       setLoadingHistorialDescarga(null)
@@ -479,7 +473,7 @@ export function Reportes() {
     }
   }
 
-  // Generar reporte tras confirmar filtros en el diálogo
+  // Generar reporte tras confirmar filtros en el diÃƒÂ¡logo
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
@@ -511,7 +505,7 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('âœ" Reporte de Cartera descargado exitosamente')
+        toast.success('ÃƒÂ¢Ã…"" Reporte de Cartera descargado exitosamente')
 
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'PAGOS') {
@@ -527,18 +521,18 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('âœ" Informe de Pagos descargado exitosamente')
+        toast.success('ÃƒÂ¢Ã…"" Informe de Pagos descargado exitosamente')
 
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'MOROSIDAD') {
         const blob =
-          await reporteService.exportarReporteMorosidadClientes(fechaCorte)
+          await reporteService.exportarReporteMorosidadCedulas(filtros)
 
         descargarBlob(blob, `reporte_morosidad_${fechaCorte}.${ext}`)
 
         toast.dismiss(toastId)
 
-        toast.success('âœ" Reporte de Morosidad descargado exitosamente')
+        toast.success('ÃƒÂ¢Ã…"" Reporte de Morosidad descargado exitosamente')
       } else if (tipo === 'VENCIMIENTO') {
         const blob = await reporteService.exportarReporteMorosidad(
           'excel',
@@ -550,7 +544,7 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('âœ" Reporte de Vencimiento descargado exitosamente')
+        toast.success('ÃƒÂ¢Ã…"" Reporte de Vencimiento descargado exitosamente')
       } else if (tipo === 'ASESORES') {
         // ASESORES ahora es Pago vencido (antes MOROSIDAD)
 
@@ -564,7 +558,7 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('âœ" Reporte de Pago Vencido descargado exitosamente')
+        toast.success('ÃƒÂ¢Ã…"" Reporte de Pago Vencido descargado exitosamente')
       } else if (tipo === 'CEDULA') {
         const blob = await reporteService.exportarReporteCedula()
 
@@ -572,11 +566,11 @@ export function Reportes() {
 
         toast.dismiss(toastId)
 
-        toast.success('âœ" Reporte por Cédula descargado exitosamente')
+        toast.success('ÃƒÂ¢Ã…"" Reporte por CÃƒÂ©dula descargado exitosamente')
       } else {
         toast.dismiss(toastId)
 
-        toast.info(`Generación de reporte ${tipo} próximamente disponible`)
+        toast.info(`GeneraciÃƒÂ³n de reporte ${tipo} prÃƒÂ³ximamente disponible`)
       }
     } catch (error: unknown) {
       console.error('Error generando reporte:', error)
@@ -605,7 +599,7 @@ export function Reportes() {
         errorMessage?.includes('Timeout')
       ) {
         mensajeError =
-          'La operación está tomando demasiado tiempo. Por favor, intente con un rango de fechas más corto.'
+          'La operaciÃƒÂ³n estÃƒÂ¡ tomando demasiado tiempo. Por favor, intente con un rango de fechas mÃƒÂ¡s corto.'
       } else if (!mensajeError) {
         mensajeError = 'No se pudo generar el reporte'
       }
@@ -623,7 +617,7 @@ export function Reportes() {
       transition={{ duration: 0.3 }}
       className="mx-auto max-w-5xl space-y-10"
     >
-      {/* --- Encabezado de página --- */}
+      {/* --- Encabezado de pÃƒÂ¡gina --- */}
 
       <ModulePageHeader
         icon={FileText}
@@ -646,7 +640,7 @@ export function Reportes() {
         }
       />
 
-      {/* --- Sección: Enlaces para compartir --- */}
+      {/* --- SecciÃƒÂ³n: Enlaces para compartir --- */}
 
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-800">
@@ -657,7 +651,7 @@ export function Reportes() {
         <Card className="overflow-hidden border-gray-300/90 shadow-md">
           <CardContent className="space-y-5 p-5 sm:p-6">
             <p className="text-sm leading-relaxed text-gray-700">
-              Copie el enlace o abra el portal según corresponda: abajo están
+              Copie el enlace o abra el portal segÃƒÂºn corresponda: abajo estÃƒÂ¡n
               agrupados los enlaces pensados para{' '}
               <strong className="font-semibold text-gray-900">clientes</strong>{' '}
               y los de uso de{' '}
@@ -679,7 +673,7 @@ export function Reportes() {
                       Clientes
                     </h3>
                     <p className="mt-0.5 text-xs leading-snug text-teal-900/80">
-                      Enlaces públicos para compartir con el cliente: reporte de
+                      Enlaces pÃƒÂºblicos para compartir con el cliente: reporte de
                       pagos y estado de cuenta.
                     </p>
                   </div>
@@ -735,7 +729,7 @@ export function Reportes() {
                       Personal y colaboradores
                     </h3>
                     <p className="mt-0.5 text-xs leading-snug text-violet-900/80">
-                      Tasas (administración), finiquito con código por correo e
+                      Tasas (administraciÃƒÂ³n), finiquito con cÃƒÂ³digo por correo e
                       Infopagos (pago a nombre del deudor).
                     </p>
                   </div>
@@ -768,7 +762,7 @@ export function Reportes() {
                     onClick={() =>
                       copiarEnlaceServicio(PUBLIC_FINIQUITO_PATH, 'Finiquito')
                     }
-                    title="Copiar enlace: Finiquito (acceso colaboradores con código por correo)"
+                    title="Copiar enlace: Finiquito (acceso colaboradores con cÃƒÂ³digo por correo)"
                     aria-label="Copiar enlace de Finiquito"
                   >
                     <Copy className="h-4 w-4 shrink-0" aria-hidden />
@@ -796,7 +790,7 @@ export function Reportes() {
         </Card>
       </section>
 
-      {/* --- Sección: Reportes para descargar --- */}
+      {/* --- SecciÃƒÂ³n: Reportes para descargar --- */}
 
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-800">
@@ -805,7 +799,7 @@ export function Reportes() {
         </h2>
 
         <p className="text-sm text-gray-500">
-          Seleccione un reporte para elegir período (año/mes) y descargar en
+          Seleccione un reporte para elegir perÃƒÂ­odo (aÃƒÂ±o/mes) y descargar en
           Excel.
         </p>
 
@@ -996,12 +990,12 @@ export function Reportes() {
         </Card>
       </section>
 
-      {/* --- Sección: Historial de notificaciones --- */}
+      {/* --- SecciÃƒÂ³n: Historial de notificaciones --- */}
 
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-800">
           <span className="flex h-1 w-1 rounded-full bg-blue-500" aria-hidden />
-          Historial de notificaciones por cédula
+          Historial de notificaciones por cÃƒÂ©dula
         </h2>
 
         <Card className="border-gray-200/80 shadow-sm">
@@ -1012,8 +1006,8 @@ export function Reportes() {
             </CardTitle>
 
             <p className="text-sm text-muted-foreground">
-              Consulte por cédula el historial de notificaciones enviadas.
-              Descargue Excel, comprobante PDF (oficial) y desde envíos
+              Consulte por cÃƒÂ©dula el historial de notificaciones enviadas.
+              Descargue Excel, comprobante PDF (oficial) y desde envÃƒÂ­os
               recientes el cuerpo del correo y los PDFs adjuntos tal como se
               enviaron.
             </p>
@@ -1023,7 +1017,7 @@ export function Reportes() {
             <div className="flex flex-wrap items-center gap-2">
               <Input
                 type="text"
-                placeholder="Cédula del cliente"
+                placeholder="CÃƒÂ©dula del cliente"
                 value={cedulaHistorial}
                 onChange={e => setCedulaHistorial(e.target.value)}
                 onKeyDown={e =>
@@ -1059,7 +1053,7 @@ export function Reportes() {
                     <Download className="h-4 w-4" />
                   )}
 
-                  <span className="ml-2">Descargar Excel (histórico)</span>
+                  <span className="ml-2">Descargar Excel (histÃƒÂ³rico)</span>
                 </Button>
               )}
             </div>
@@ -1090,7 +1084,7 @@ export function Reportes() {
                       </th>
 
                       <th className="px-3 py-2 text-left font-semibold">
-                        Acción
+                        AcciÃƒÂ³n
                       </th>
                     </tr>
                   </thead>
@@ -1102,7 +1096,7 @@ export function Reportes() {
                           colSpan={6}
                           className="py-6 text-center text-gray-500"
                         >
-                          No hay notificaciones para la cédula consultada.
+                          No hay notificaciones para la cÃƒÂ©dula consultada.
                         </td>
                       </tr>
                     ) : (
@@ -1291,26 +1285,16 @@ export function Reportes() {
 
       <DialogReporteFiltros
         key={reporteSeleccionado ?? 'filtros'}
-        open={
-          dialogAbierto &&
-          reporteSeleccionado !== 'CONTABLE' &&
-          reporteSeleccionado !== 'MOROSIDAD'
-        }
+        open={dialogAbierto && reporteSeleccionado !== 'CONTABLE'}
         onOpenChange={setDialogAbierto}
         tituloReporte={
-          reporteSeleccionado &&
-          reporteSeleccionado !== 'CONTABLE' &&
-          reporteSeleccionado !== 'MOROSIDAD'
+          reporteSeleccionado && reporteSeleccionado !== 'CONTABLE'
             ? (tiposReporte.find(t => t.value === reporteSeleccionado)?.label ??
               reporteSeleccionado)
             : ''
         }
         onConfirm={filtros => {
-          if (
-            reporteSeleccionado &&
-            reporteSeleccionado !== 'CONTABLE' &&
-            reporteSeleccionado !== 'MOROSIDAD'
-          )
+          if (reporteSeleccionado && reporteSeleccionado !== 'CONTABLE')
             generarReporte(reporteSeleccionado, filtros)
         }}
       />
@@ -1334,3 +1318,5 @@ export function Reportes() {
 }
 
 export default Reportes
+
+

@@ -860,12 +860,6 @@ class PrestamoService {
   async descargarEstadoCuentaPDF(prestamoId: number): Promise<void> {
     const previewWindow = window.open('', '_blank', 'noopener,noreferrer')
 
-    if (!previewWindow) {
-      throw new Error(
-        'El navegador bloqueo la pestana de previsualizacion del estado de cuenta PDF.'
-      )
-    }
-
     try {
       const axiosInstance = apiClient.getAxiosInstance()
 
@@ -875,7 +869,9 @@ class PrestamoService {
       )
 
       const raw: Blob =
-        response.data instanceof Blob ? response.data : new Blob([response.data])
+        response.data instanceof Blob
+          ? response.data
+          : new Blob([response.data])
       const head = new Uint8Array(await raw.slice(0, 5).arrayBuffer())
       const looksPdf =
         head[0] === 0x25 &&
@@ -906,10 +902,19 @@ class PrestamoService {
 
       const blob = new Blob([raw], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)
-      previewWindow.location.href = url
+      if (previewWindow) {
+        previewWindow.location.href = url
+      } else {
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `Estado_Cuenta_${prestamoId}.pdf`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
       window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
     } catch (error) {
-      if (!previewWindow.closed) {
+      if (previewWindow && !previewWindow.closed) {
         previewWindow.close()
       }
       throw error
