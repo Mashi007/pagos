@@ -409,7 +409,7 @@ def _compute_dashboard_admin(
                 if fin_mes.tzinfo is None:
                     fin_mes = fin_mes.replace(tzinfo=timezone.utc)
                 inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
-            # CARTERA: Cuotas programadas (vencimiento) en este mes
+            # PROGRAMADOS (cartera): suma de cuotas con vencimiento en este mes
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
@@ -422,7 +422,8 @@ def _compute_dashboard_admin(
                 )
             ) or 0
             
-            # COBRADO: Cuotas CON FECHA_VENCIMIENTO EN ESTE MES que fueron pagadas (sin importar cuándo se pagaron)
+            # CONCILIADOS DEL MES: cuotas con vencimiento en este mes y ya pagadas (fecha_pago no nula).
+            # No incluye cobros de cuotas vencidas en meses anteriores (eso va en pagos_atrasos).
             cobrado = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
@@ -436,6 +437,7 @@ def _compute_dashboard_admin(
                 )
             ) or 0
 
+            # Pagos de meses anteriores: vencieron antes de este mes pero se pagaron dentro del mes (solo para la barra naranja).
             pagos_atrasos = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
@@ -454,7 +456,8 @@ def _compute_dashboard_admin(
             cobrado_f = _safe_float(cobrado)
             pagos_atrasos_f = _safe_float(pagos_atrasos)
 
-            # CUENTAS POR COBRAR: Lo que falta cobrar de este mes = Cartera - Cobrado
+            # Cuentas por cobrar (línea): únicamente programados del mes menos conciliados del mes.
+            # pagos_atrasos no participa en este cálculo.
             cuentas_por_cobrar_f = cartera_f - cobrado_f
             evolucion.append({
                 "mes": m["mes"],

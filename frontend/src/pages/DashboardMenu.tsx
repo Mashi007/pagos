@@ -616,18 +616,17 @@ export function DashboardMenu() {
 
       const r = response as RecibosPagosMensualUsdResponse
 
-      if (!r.estadistica) {
-        r.estadistica = {
+      return {
+        ...r,
+        estadistica: r.estadistica ?? {
           total_bs_en_usd: 0,
           total_reportes: 0,
           promedio_mensual_usd: 0,
           meses_con_datos: 0,
           primer_mes: null,
           ultimo_mes: null,
-        }
+        },
       }
-
-      return r
     },
 
     staleTime: 4 * 60 * 60 * 1000,
@@ -773,7 +772,14 @@ export function DashboardMenu() {
     }
   }
 
-  const evolucionMensual = datosDashboard?.evolucion_mensual || []
+  const evolucionMensual = useMemo(() => {
+    const raw = datosDashboard?.evolucion_mensual ?? []
+
+    return raw.map((e: EvolucionMensualItem) => ({
+      ...e,
+      cuentas_por_cobrar: e.cartera - e.cobrado,
+    }))
+  }, [datosDashboard?.evolucion_mensual])
 
   const COLORS_CONCESIONARIOS = [
     '#3b82f6',
@@ -1264,6 +1270,14 @@ export function DashboardMenu() {
                       )}
                     </div>
                   </div>
+
+                  <CardDescription className="mt-2 text-xs text-gray-600">
+                    La línea roja <strong>Cuentas por cobrar</strong> es cada
+                    mes: <strong>pagos programados</strong> (azul) menos{' '}
+                    <strong>pagos conciliados</strong> del mismo mes (verde).
+                    Los <strong>pagos de meses anteriores</strong> (naranja) son
+                    informativos y <strong>no</strong> entran en ese cálculo.
+                  </CardDescription>
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
@@ -1308,10 +1322,17 @@ export function DashboardMenu() {
                             <Tooltip
                               contentStyle={chartTooltipStyle.contentStyle}
                               labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number, name: string) => [
-                                formatCurrency(value),
-                                name,
-                              ]}
+                              formatter={(value: number, name: string) => {
+                                const suffix =
+                                  name === 'Cuentas por Cobrar'
+                                    ? ' (programados - conciliados del mes)'
+                                    : ''
+
+                                return [
+                                  formatCurrency(value),
+                                  `${name}${suffix}`,
+                                ]
+                              }}
                             />
 
                             <Legend {...chartLegendStyle} />
@@ -1640,8 +1661,8 @@ export function DashboardMenu() {
                     es bolívar: se suma por mes el equivalente en USD con el
                     monto conciliado en tabla pagos si existe la fila vinculada;
                     si no, el monto en Bs. del reporte dividido por la tasa
-                    oficial del día. El gráfico omite meses vacíos al inicio y al
-                    final del rango.
+                    oficial del día. El gráfico omite meses vacíos al inicio y
+                    al final del rango.
                   </p>
 
                   {!loadingRecibosUsd &&
@@ -1694,7 +1715,7 @@ export function DashboardMenu() {
                             {datosRecibosUsd.estadistica.primer_mes &&
                               datosRecibosUsd.estadistica.ultimo_mes && (
                                 <span className="mt-0.5 block text-xs font-normal text-gray-500">
-                                  {datosRecibosUsd.estadistica.primer_mes} –{' '}
+                                  {datosRecibosUsd.estadistica.primer_mes} -{' '}
                                   {datosRecibosUsd.estadistica.ultimo_mes}
                                 </span>
                               )}
