@@ -614,7 +614,20 @@ export function DashboardMenu() {
         { timeout: 60000 }
       )
 
-      return response as RecibosPagosMensualUsdResponse
+      const r = response as RecibosPagosMensualUsdResponse
+
+      if (!r.estadistica) {
+        r.estadistica = {
+          total_bs_en_usd: 0,
+          total_reportes: 0,
+          promedio_mensual_usd: 0,
+          meses_con_datos: 0,
+          primer_mes: null,
+          ultimo_mes: null,
+        }
+      }
+
+      return r
     },
 
     staleTime: 4 * 60 * 60 * 1000,
@@ -1594,7 +1607,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-            {/* Recibos: pagos conciliados USD vs Bs. en USD (por mes; sin meses vacíos al inicio/fin) */}
+            {/* Recibos solo en Bs.: USD equivalente por mes + estadística */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1607,7 +1620,7 @@ export function DashboardMenu() {
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <FileText className="h-5 w-5 text-violet-600" />
 
-                      <span>Pagos conciliados por recibo (USD)</span>
+                      <span>Recibos en bolívares (USD equivalente)</span>
                     </CardTitle>
 
                     <div className="flex items-center gap-2">
@@ -1617,25 +1630,84 @@ export function DashboardMenu() {
                         variant="secondary"
                         className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
                       >
-                        Recibos PDF
+                        Solo Bs. · PDF
                       </Badge>
                     </div>
                   </div>
 
                   <p className="mt-1 text-xs text-gray-600">
-                    Pagos conciliados con recibo (aprobado o importado): unos en
-                    dólares y otros en bolívares expresados en USD. Verde: monto
-                    USD del reporte. Ambar: Bs. conciliados en USD (monto del
-                    pago en tabla pagos si existe; si no, tasa oficial del día).
-                    Solo se muestran meses con movimiento (sin meses vacíos al
-                    inicio ni al final).
+                    Solo reportes con recibo (aprobado o importado) cuya moneda
+                    es bolívar: se suma por mes el equivalente en USD con el
+                    monto conciliado en tabla pagos si existe la fila vinculada;
+                    si no, el monto en Bs. del reporte dividido por la tasa
+                    oficial del día. El gráfico omite meses vacíos al inicio y al
+                    final del rango.
                   </p>
+
+                  {!loadingRecibosUsd &&
+                    !errorRecibosUsd &&
+                    datosRecibosUsd?.series &&
+                    datosRecibosUsd.series.length > 0 &&
+                    datosRecibosUsd.estadistica && (
+                      <dl className="mt-3 grid gap-2 text-xs text-gray-700 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-lg border border-violet-100 bg-white/90 px-3 py-2 shadow-sm">
+                          <dt className="font-medium text-gray-500">
+                            Total USD equivalente
+                          </dt>
+
+                          <dd className="text-base font-semibold text-gray-900">
+                            {formatCurrency(
+                              datosRecibosUsd.estadistica.total_bs_en_usd
+                            )}
+                          </dd>
+                        </div>
+
+                        <div className="rounded-lg border border-violet-100 bg-white/90 px-3 py-2 shadow-sm">
+                          <dt className="font-medium text-gray-500">
+                            Recibos en Bs. (cantidad)
+                          </dt>
+
+                          <dd className="text-base font-semibold text-gray-900">
+                            {datosRecibosUsd.estadistica.total_reportes}
+                          </dd>
+                        </div>
+
+                        <div className="rounded-lg border border-violet-100 bg-white/90 px-3 py-2 shadow-sm">
+                          <dt className="font-medium text-gray-500">
+                            Promedio mensual (USD eq.)
+                          </dt>
+
+                          <dd className="text-base font-semibold text-gray-900">
+                            {formatCurrency(
+                              datosRecibosUsd.estadistica.promedio_mensual_usd
+                            )}
+                          </dd>
+                        </div>
+
+                        <div className="rounded-lg border border-violet-100 bg-white/90 px-3 py-2 shadow-sm">
+                          <dt className="font-medium text-gray-500">
+                            Meses en el gráfico
+                          </dt>
+
+                          <dd className="text-base font-semibold text-gray-900">
+                            {datosRecibosUsd.estadistica.meses_con_datos}
+                            {datosRecibosUsd.estadistica.primer_mes &&
+                              datosRecibosUsd.estadistica.ultimo_mes && (
+                                <span className="mt-0.5 block text-xs font-normal text-gray-500">
+                                  {datosRecibosUsd.estadistica.primer_mes} –{' '}
+                                  {datosRecibosUsd.estadistica.ultimo_mes}
+                                </span>
+                              )}
+                          </dd>
+                        </div>
+                      </dl>
+                    )}
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
                   {loadingRecibosUsd ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando pagos conciliados por recibo...
+                      Cargando recibos en bolívares...
                     </div>
                   ) : errorRecibosUsd ? (
                     <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-500">
@@ -1685,7 +1757,7 @@ export function DashboardMenu() {
                                 return `$${value}`
                               }}
                               label={{
-                                value: 'Monto (USD)',
+                                value: 'USD equivalente (Bs.)',
                                 angle: -90,
                                 position: 'insideLeft',
                                 style: { fill: '#374151', fontSize: 13 },
@@ -1695,30 +1767,55 @@ export function DashboardMenu() {
                             <Tooltip
                               contentStyle={chartTooltipStyle.contentStyle}
                               labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number, name: string) => [
-                                formatCurrency(value),
-                                name,
-                              ]}
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null
+
+                                const row = payload[0]?.payload as {
+                                  bs_en_usd?: number
+                                  cantidad?: number
+                                }
+
+                                const usd = Number(
+                                  payload[0]?.value ?? row?.bs_en_usd ?? 0
+                                )
+
+                                const n = Number(row?.cantidad ?? 0)
+
+                                return (
+                                  <div
+                                    style={chartTooltipStyle.contentStyle}
+                                    className="text-sm"
+                                  >
+                                    <p
+                                      style={{
+                                        ...chartTooltipStyle.labelStyle,
+                                        marginBottom: 6,
+                                      }}
+                                    >
+                                      {label}
+                                    </p>
+
+                                    <p className="text-amber-800">
+                                      {formatCurrency(usd)} USD eq.
+                                    </p>
+
+                                    <p className="mt-1 text-gray-600">
+                                      {n} recibo{n === 1 ? '' : 's'} en Bs.
+                                    </p>
+                                  </div>
+                                )
+                              }}
                             />
 
                             <Legend {...chartLegendStyle} />
 
                             <Line
                               type="monotone"
-                              dataKey="pagos_usd"
-                              stroke="#059669"
-                              strokeWidth={2}
-                              dot={{ r: 4 }}
-                              name="Conciliados en USD (reporte en USD)"
-                            />
-
-                            <Line
-                              type="monotone"
-                              dataKey="pagos_bs_en_usd"
+                              dataKey="bs_en_usd"
                               stroke="#d97706"
                               strokeWidth={2}
                               dot={{ r: 4 }}
-                              name="Conciliados en Bs. (equivalente USD)"
+                              name="Bolívares (USD equivalente)"
                             />
                           </RechartsLineChart>
                         </ResponsiveContainer>
@@ -1726,7 +1823,7 @@ export function DashboardMenu() {
                     </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay pagos conciliados con recibo en el período
+                      No hay recibos en bolívares con movimiento en el período
                       seleccionado
                     </div>
                   )}

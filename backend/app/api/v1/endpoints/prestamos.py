@@ -85,6 +85,10 @@ from app.services.pagos_cuotas_reaplicacion import (
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
 from app.services.cobros.recibo_cuota_moneda import contexto_moneda_montos_recibo_cuota
 
+from app.services.analistas_catalogo_sync import (
+    sincronizar_analistas_desde_prestamos_si_catalogo_vacio,
+)
+
 from app.services.cuota_estado import (
     estado_cuota_para_mostrar,
     etiqueta_estado_cuota,
@@ -115,6 +119,7 @@ def _resolver_analista_para_prestamo(
     Catálogo analistas: prioriza analista_id; si solo viene texto y existe en catálogo, enlaza id.
     Texto sin coincidencia se guarda en prestamos.analista sin id (cargas legacy / Excel).
     """
+    sincronizar_analistas_desde_prestamos_si_catalogo_vacio(db)
     if analista_id is not None:
         row_a = db.get(Analista, analista_id)
         if not row_a:

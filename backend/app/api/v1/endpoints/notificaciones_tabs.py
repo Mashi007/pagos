@@ -634,6 +634,125 @@ def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
     return {"mensaje": "Env�o de notificaciones prejudiciales finalizado.", **res}
 
 
+# Tipos alineados con CRITERIOS_ENVIO_TABLA (frontend) y _CONFIG_TIPO_TO_TAB
+TIPOS_CASO_MANUAL = frozenset(
+    {
+        "PAGO_5_DIAS_ANTES",
+        "PAGO_3_DIAS_ANTES",
+        "PAGO_1_DIA_ANTES",
+        "PAGO_DIA_0",
+        "PAGO_1_DIA_ATRASADO",
+        "PAGO_3_DIAS_ATRASADO",
+        "PAGO_5_DIAS_ATRASADO",
+        "PREJUDICIAL",
+    }
+)
+
+
+def _config_envios_forzar_habilitado_caso(config_envios: dict, tipo: str) -> dict:
+    """
+    Copia superficial de la config de envios con habilitado=True solo para el tipo indicado.
+    El envio manual debe ejecutarse aunque el toggle Envio este apagado en la fila.
+    """
+    out = dict(config_envios)
+    cur = out.get(tipo)
+    if isinstance(cur, dict):
+        merged = dict(cur)
+        merged["habilitado"] = True
+        out[tipo] = merged
+    return out
+
+
+def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
+    """
+    Envio masivo solo para un criterio (fila de configuracion).
+    Misma logica que previas/dia/retrasadas/prejudicial pero filtrando items por tipo.
+    Respeta modo_pruebas, plantilla, CCO y paquete estricto desde BD.
+    """
+    tipo = (tipo or "").strip()
+    if tipo not in TIPOS_CASO_MANUAL:
+        raise ValueError("tipo_caso_manual_invalido")
+
+    config_raw = get_notificaciones_envios_config(db)
+    config_envios = _config_envios_forzar_habilitado_caso(config_raw, tipo)
+    data = get_notificaciones_tabs_data(db)
+
+    asunto_prev = "Recordatorio: cuota por vencer - Rapicredit"
+    cuerpo_prev = (
+        "Estimado/a {nombre} (c\u00e9dula {cedula}),\n\n"
+        "Le recordamos que tiene una cuota por vencer.\n"
+        "Fecha de vencimiento: {fecha_vencimiento}\n"
+        "N\u00famero de cuota: {numero_cuota}\n"
+        "Monto: {monto}\n\n"
+        "Por favor realice el pago a tiempo.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    asunto_hoy = "Vencimiento hoy: cuota de pago - Rapicredit"
+    cuerpo_hoy = (
+        "Estimado/a {nombre} (c\u00e9dula {cedula}),\n\n"
+        "Le informamos que su cuota vence HOY.\n"
+        "Fecha de vencimiento: {fecha_vencimiento}\n"
+        "N\u00famero de cuota: {numero_cuota}\n"
+        "Monto: {monto}\n\n"
+        "Por favor realice el pago hoy.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    asunto_ret = "Cuenta con cuota atrasada - Rapicredit"
+    cuerpo_ret = (
+        "Estimado/a {nombre} (c\u00e9dula {cedula}),\n\n"
+        "Le recordamos que tiene una cuota en mora.\n"
+        "Fecha de vencimiento: {fecha_vencimiento}\n"
+        "N\u00famero de cuota: {numero_cuota}\n"
+        "Monto: {monto}\n\n"
+        "Por favor regularice su pago lo antes posible.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    asunto_prej = "Aviso prejudicial - Rapicredit"
+    cuerpo_prej = (
+        "Estimado/a {nombre} (c\u00e9dula {cedula}),\n\n"
+        "Le informamos que su cuenta presenta varias cuotas en mora.\n"
+        "Fecha de vencimiento de referencia: {fecha_vencimiento}\n"
+        "Cuota de referencia: {numero_cuota}\n"
+        "Monto de referencia: {monto}\n\n"
+        "Por favor contacte a la entidad para regularizar su situaci\u00f3n.\n\n"
+        "Saludos,\nRapicredit"
+    )
+
+    if tipo == "PAGO_5_DIAS_ANTES":
+        items = data["dias_5"]
+        res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+    elif tipo == "PAGO_3_DIAS_ANTES":
+        items = data["dias_3"]
+        res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+    elif tipo == "PAGO_1_DIA_ANTES":
+        items = data["dias_1"]
+        res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+    elif tipo == "PAGO_DIA_0":
+        items = data["hoy"]
+        res = _enviar_correos_items(items, asunto_hoy, cuerpo_hoy, config_envios, _tipo_dia_pago, db)
+    elif tipo == "PAGO_1_DIA_ATRASADO":
+        items = data["dias_1_retraso"]
+        res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+    elif tipo == "PAGO_3_DIAS_ATRASADO":
+        items = data["dias_3_retraso"]
+        res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+    elif tipo == "PAGO_5_DIAS_ATRASADO":
+        items = data["dias_5_retraso"]
+        res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+    elif tipo == "PREJUDICIAL":
+        items = data["prejudicial"]
+        res = _enviar_correos_items(items, asunto_prej, cuerpo_prej, config_envios, _tipo_prejudicial, db)
+    else:
+        raise ValueError("tipo_caso_manual_invalido")
+
+    return {
+        "mensaje": f"Envio manual del caso {tipo} finalizado.",
+        "tipo_caso": tipo,
+        "total_en_lista": len(items),
+        **res,
+    }
+
+
 def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     """
     Ejecuta el env�o de todas las notificaciones (previas, d�a pago, retrasadas, prejudicial).

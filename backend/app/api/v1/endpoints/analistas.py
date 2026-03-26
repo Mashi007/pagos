@@ -12,6 +12,9 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.analista import Analista
 from app.models.prestamo import Prestamo
+from app.services.analistas_catalogo_sync import (
+    sincronizar_analistas_desde_prestamos_si_catalogo_vacio,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -45,6 +48,7 @@ def listar_analistas(
     search: str | None = None,
     db: Session = Depends(get_db),
 ):
+    sincronizar_analistas_desde_prestamos_si_catalogo_vacio(db)
     safe_skip = max(skip, 0)
     safe_limit = max(min(limit, 1000), 1)
     count_q = select(func.count()).select_from(Analista)
@@ -70,6 +74,7 @@ def listar_analistas(
 
 @router.get("/activos", response_model=list)
 def listar_analistas_activos(db: Session = Depends(get_db)):
+    sincronizar_analistas_desde_prestamos_si_catalogo_vacio(db)
     q = (
         select(Analista)
         .where(Analista.activo.is_(True))

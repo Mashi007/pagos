@@ -52,6 +52,8 @@ import { toast } from 'sonner'
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
+import { invalidateListasNotificacionesMora } from '../../constants/queryKeys'
+
 /** Claves reservadas en la config (no son tipos de caso) */
 
 const CLAVES_GLOBALES = [
@@ -320,6 +322,8 @@ export function ConfiguracionNotificaciones() {
 
   const [diagnosticoCargando, setDiagnosticoCargando] = useState(false)
 
+  const [enviandoCasoTipo, setEnviandoCasoTipo] = useState<string | null>(null)
+
   const guardandoRef = useRef(false)
 
   const queryClient = useQueryClient()
@@ -530,6 +534,52 @@ export function ConfiguracionNotificaciones() {
 
   const esEmailValido = (e: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((e || '').trim())
+
+  const handleEnviarCasoManual = async (tipo: string, etiquetaCaso: string) => {
+    if (modoPruebas) {
+      const primero = (emailsPruebas[0] || '').trim()
+      if (!primero || !esEmailValido(primero)) {
+        toast.error(
+          'Configure Correo pruebas 1 válido antes de enviar este caso.'
+        )
+        return
+      }
+      if (smtpConfigurado === false) {
+        toast.error('Configure SMTP en Configuración → Email para enviar.')
+        return
+      }
+    } else {
+      const ok = window.confirm(
+        `¿Enviar ahora el caso «${etiquetaCaso}» a los correos de los clientes en lista? ` +
+          'Se usa la configuración ya guardada en el servidor (plantilla, CCO, PDFs).'
+      )
+      if (!ok) return
+    }
+
+    try {
+      setEnviandoCasoTipo(tipo)
+      const res = await notificacionService.enviarCasoManual(tipo)
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo,
+      })
+      await invalidateListasNotificacionesMora(queryClient)
+      const lista = res.total_en_lista ?? 0
+      const env = res.enviados ?? 0
+      const fall = res.fallidos ?? 0
+      const sin = res.sin_email ?? 0
+      const omPkg = res.omitidos_paquete_incompleto ?? 0
+      toast.success(
+        `${res.mensaje || 'Listo.'} Lista: ${lista}. Enviados: ${env}, fallidos: ${fall}, sin email: ${sin}. ` +
+          (omPkg > 0
+            ? `Omitidos paquete: ${omPkg} (revise plantilla y PDFs).`
+            : '')
+      )
+    } catch (error: unknown) {
+      toast.error(getErrorDetail(error) || 'Error al enviar este caso.')
+    } finally {
+      setEnviandoCasoTipo(null)
+    }
+  }
 
   /** En modo prueba el envío usa solo plantilla predeterminada (ejemplo) y envía a correo de pruebas 1 y 2. */
 
@@ -1044,9 +1094,9 @@ export function ConfiguracionNotificaciones() {
           </div>
 
           <CardDescription className="text-xs">
-            Resultado del último «Enviar todas» (API) o del envío automático por
-            hora (Caracas). Útil cuando la petición masiva responde 202 sin
-            cuerpo.
+            Resultado del último «Enviar todas», del envío automático por hora
+            (Caracas) o del botón «Enviar este caso ahora» por fila. Útil cuando
+            la petición masiva responde 202 sin cuerpo.
           </CardDescription>
         </CardHeader>
 
@@ -1260,6 +1310,39 @@ export function ConfiguracionNotificaciones() {
                   </td>
 
                   <td className="px-4 py-3">
+                    <div className="mb-3 space-y-1.5">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-auto w-full gap-1.5 py-2 text-xs sm:max-w-[220px]"
+                        disabled={
+                          enviandoCasoTipo !== null ||
+                          enviandoMasivo ||
+                          diagnosticoCargando ||
+                          enviandoPruebaIndice !== null ||
+                          guardandoEnvios ||
+                          (modoPruebas && smtpConfigurado === false)
+                        }
+                        onClick={() => void handleEnviarCasoManual(tipo, label)}
+                      >
+                        <Mail className="h-3.5 w-3.5 shrink-0" />
+
+                        {enviandoCasoTipo === tipo
+                          ? 'Enviando...'
+                          : 'Enviar este caso ahora'}
+                      </Button>
+
+                      <p className="max-w-md text-[11px] leading-snug text-gray-500">
+                        Masivo según listas en BD para este criterio. Usa la
+                        config <strong>guardada</strong> (pulse Guardar si
+                        cambió plantilla o CCO).
+                        {modoPruebas
+                          ? ' Modo prueba: destino = correo(s) de pruebas.'
+                          : ' Producción: un correo por cliente con email.'}
+                      </p>
+                    </div>
+
                     <details className="group">
                       <summary className="cursor-pointer list-none text-xs font-medium text-blue-600 hover:text-blue-800">
                         Hora y CCO (hasta {CCO_MAX})

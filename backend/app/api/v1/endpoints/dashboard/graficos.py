@@ -838,18 +838,17 @@ def get_evolucion_pagos(
         return {"meses": [{"mes": x["mes"], "pagos": x.get("pagos", 0), "monto": x.get("monto", 0)} for x in m]}
 
 
-def _trim_recibos_usd_series_extremos(series: list[dict]) -> list[dict]:
+def _trim_serie_bs_recibos_extremos(series: list[dict]) -> list[dict]:
     """
-    Quita meses sin movimiento al inicio y al final (pagos_usd y pagos_bs_en_usd ambos en cero).
-    No rellena ni inventa meses; si no hay ningún mes con datos, devuelve lista vacía.
+    Quita meses sin movimiento al inicio y al final (bs_en_usd en cero y cantidad 0).
     """
     if not series:
         return []
 
     def tiene_movimiento(p: dict) -> bool:
-        u = _safe_float(p.get("pagos_usd"))
-        b = _safe_float(p.get("pagos_bs_en_usd"))
-        return u > 0 or b > 0
+        b = _safe_float(p.get("bs_en_usd"))
+        c = int(p.get("cantidad") or 0)
+        return b > 0 or c > 0
 
     first = next((i for i, row in enumerate(series) if tiene_movimiento(row)), None)
     if first is None:
@@ -861,15 +860,39 @@ def _trim_recibos_usd_series_extremos(series: list[dict]) -> list[dict]:
     return series[first : last + 1]
 
 
+def _estadistica_recibos_bs_usd(series: list[dict]) -> dict:
+    """Totales y promedios sobre la serie ya recortada (solo meses con datos visibles)."""
+    if not series:
+        return {
+            "total_bs_en_usd": 0.0,
+            "total_reportes": 0,
+            "promedio_mensual_usd": 0.0,
+            "meses_con_datos": 0,
+            "primer_mes": None,
+            "ultimo_mes": None,
+        }
+    total_usd = sum(_safe_float(p.get("bs_en_usd")) for p in series)
+    total_rep = sum(int(p.get("cantidad") or 0) for p in series)
+    n = len(series)
+    return {
+        "total_bs_en_usd": round(total_usd, 2),
+        "total_reportes": total_rep,
+        "promedio_mensual_usd": round(total_usd / n, 2) if n else 0.0,
+        "meses_con_datos": n,
+        "primer_mes": series[0].get("mes"),
+        "ultimo_mes": series[-1].get("mes"),
+    }
+
+
 def _compute_recibos_pagos_mensual_usd(
     db: Session,
     fecha_inicio: Optional[str],
     fecha_fin: Optional[str],
 ) -> dict:
     """
-    Por mes (fecha_pago del reporte con recibo en BD o ruta legacy): pagos conciliados.
-    USD declarados en el reporte vs. bolívares expresados en USD (fila Pago COB-{ref} si existe;
-    si no, tasa oficial del día). La serie devuelta recorta meses sin movimiento al inicio/fin.
+    Solo reportes en bolívares (moneda BS) con recibo: equivalente USD por mes.
+    Conversión: monto conciliado en tabla pagos (COB-ref) si existe; si no, monto BS / tasa oficial del día.
+    Serie recortada sin meses vacíos al inicio/fin; incluye estadística agregada.
     """
     if fecha_inicio and fecha_fin:
         try:
@@ -904,10 +927,6 @@ def _compute_recibos_pagos_mensual_usd(
         mon_raw = func.upper(func.trim(func.coalesce(PagoReportado.moneda, "BS")))
         mon_norm = case((mon_raw == "USDT", literal("USD")), else_=mon_raw)
 
-        usd_part = case(
-            (mon_norm == "USD", cast(PagoReportado.monto, Float)),
-            else_=literal(0.0),
-        )
         tasa_ok = and_(
             TasaCambioDiaria.tasa_oficial.isnot(None),
             TasaCambioDiaria.tasa_oficial > 0,
@@ -919,15 +938,9 @@ def _compute_recibos_pagos_mensual_usd(
             ),
             else_=literal(0.0),
         )
-        bs_part = case(
-            (
-                mon_norm == "BS",
-                case(
-                    (Pago.monto_pagado.isnot(None), cast(Pago.monto_pagado, Float)),
-                    else_=bs_from_tasa,
-                ),
-            ),
-            else_=literal(0.0),
+        bs_en_usd_expr = case(
+            (Pago.monto_pagado.isnot(None), cast(Pago.monto_pagado, Float)),
+            else_=bs_from_tasa,
         )
 
         yr = extract("year", PagoReportado.fecha_pago)
@@ -939,18 +952,20 @@ def _compute_recibos_pagos_mensual_usd(
                 func.trim(PagoReportado.ruta_recibo_pdf) != "",
             ),
         )
+        solo_bs = mon_norm == literal("BS")
         q = (
             select(
                 yr.label("anio"),
                 mo.label("mes_num"),
-                func.coalesce(func.sum(usd_part), 0).label("pagos_usd"),
-                func.coalesce(func.sum(bs_part), 0).label("pagos_bs_en_usd"),
+                func.coalesce(func.sum(bs_en_usd_expr), 0).label("bs_en_usd"),
+                func.count(PagoReportado.id).label("cantidad"),
             )
             .select_from(PagoReportado)
             .outerjoin(Pago, Pago.numero_documento == doc_key)
             .outerjoin(TasaCambioDiaria, TasaCambioDiaria.fecha == PagoReportado.fecha_pago)
             .where(
                 tiene_recibo,
+                solo_bs,
                 PagoReportado.estado.in_(("aprobado", "importado")),
                 PagoReportado.fecha_pago >= min_date,
                 PagoReportado.fecha_pago <= max_date,
@@ -961,28 +976,34 @@ def _compute_recibos_pagos_mensual_usd(
         for row in db.execute(q).all():
             yk, mk = int(row.anio), int(row.mes_num)
             buckets[(yk, mk)] = {
-                "pagos_usd": float(row.pagos_usd or 0),
-                "pagos_bs_en_usd": float(row.pagos_bs_en_usd or 0),
+                "bs_en_usd": float(row.bs_en_usd or 0),
+                "cantidad": int(row.cantidad or 0),
             }
 
         series_raw: list[dict] = []
         for m in meses:
             yk, mk = m["year"], m["month"]
-            b = buckets.get((yk, mk), {"pagos_usd": 0.0, "pagos_bs_en_usd": 0.0})
+            b = buckets.get((yk, mk), {"bs_en_usd": 0.0, "cantidad": 0})
             series_raw.append({
                 "mes": m["mes"],
-                "pagos_usd": round(b["pagos_usd"], 2),
-                "pagos_bs_en_usd": round(b["pagos_bs_en_usd"], 2),
+                "bs_en_usd": round(b["bs_en_usd"], 2),
+                "cantidad": int(b["cantidad"]),
             })
-        series = _trim_recibos_usd_series_extremos(series_raw)
-        return {"series": series, "origen": "bd"}
+        series = _trim_serie_bs_recibos_extremos(series_raw)
+        estadistica = _estadistica_recibos_bs_usd(series)
+        return {"series": series, "estadistica": estadistica, "origen": "bd"}
     except Exception as e:
         logger.exception("Error en recibos-pagos-mensual-usd: %s", e)
         fallback = [
-            {"mes": mm["mes"], "pagos_usd": 0.0, "pagos_bs_en_usd": 0.0}
+            {"mes": mm["mes"], "bs_en_usd": 0.0, "cantidad": 0}
             for mm in meses
         ]
-        return {"series": _trim_recibos_usd_series_extremos(fallback), "origen": "bd"}
+        series = _trim_serie_bs_recibos_extremos(fallback)
+        return {
+            "series": series,
+            "estadistica": _estadistica_recibos_bs_usd(series),
+            "origen": "bd",
+        }
 
 
 @router.get("/recibos-pagos-mensual-usd")
@@ -992,7 +1013,7 @@ def get_recibos_pagos_mensual_usd(
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Pagos conciliados por recibo (PDF/ruta): USD vs Bs. en USD por mes; sin meses vacíos al inicio/fin."""
+    """Recibos solo en Bs.: equivalente USD por mes (pago conciliado o tasa del día) + estadística."""
     fi, ff = fecha_inicio, fecha_fin
     if not (fi and ff):
         pfi, pff = _fechas_iso_desde_periodo_dashboard(periodo)

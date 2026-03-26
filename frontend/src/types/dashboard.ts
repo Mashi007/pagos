@@ -214,13 +214,30 @@ export interface TendenciaProgramadoTotalCobradoResponse {
 export interface RecibosPagosMensualUsdItem {
   mes: string
 
-  pagos_usd: number
+  /** Equivalente USD del mes (solo reportes en Bs., conciliado o tasa del día) */
+  bs_en_usd: number
 
-  pagos_bs_en_usd: number
+  cantidad: number
+}
+
+export interface RecibosPagosMensualUsdEstadistica {
+  total_bs_en_usd: number
+
+  total_reportes: number
+
+  promedio_mensual_usd: number
+
+  meses_con_datos: number
+
+  primer_mes: string | null
+
+  ultimo_mes: string | null
 }
 
 export interface RecibosPagosMensualUsdResponse {
   series: RecibosPagosMensualUsdItem[]
+
+  estadistica: RecibosPagosMensualUsdEstadistica
 
   origen: 'demo' | 'bd'
 }

@@ -84,6 +84,7 @@ try:
     print('  [OK] GET /api/v1/notificaciones (lista todos los tipos)')
     print('  [OK] GET /api/v1/notificaciones?tipo=liquidado (filtra por tipo)')
     print('  [OK] POST /api/v1/notificaciones/enviar (envia manual)')
+    print('  [OK] POST /api/v1/notificaciones/enviar-caso-manual (masivo por criterio)')
     print('  [OK] GET /api/v1/notificaciones/tabs (tabs en frontend)')
     
     print('\nCompatibilidad verificada:')
@@ -100,4 +101,4 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 finally:
-    db.close()
+    db.close()

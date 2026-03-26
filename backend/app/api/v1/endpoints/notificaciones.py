@@ -1116,6 +1116,54 @@ def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
     )
 
 
+@router.post("/enviar-caso-manual")
+def enviar_caso_manual(payload: dict = Body(...), db: Session = Depends(get_db)):
+    """
+    Envio masivo sincrono para un solo criterio (fila de configuracion: PAGO_5_DIAS_ANTES, etc.).
+    En produccion: un correo por cliente en la lista de ese caso. En modo pruebas: al correo de pruebas.
+    Ignora el toggle Envio apagado para esa fila (accion explicita del operador). Respeta plantilla, CCO y paquete estricto.
+    """
+    from datetime import timezone
+
+    from app.api.v1.endpoints import notificaciones_tabs
+    from app.services.notificaciones_envio_batch_resumen import persist_ultimo_envio_batch
+
+    tipo = (payload.get("tipo") or "").strip()
+    if tipo not in notificaciones_tabs.TIPOS_CASO_MANUAL:
+        allowed = ", ".join(sorted(notificaciones_tabs.TIPOS_CASO_MANUAL))
+        raise HTTPException(
+            status_code=422,
+            detail=f"tipo invalido. Use uno de: {allowed}",
+        )
+    inicio = datetime.now(timezone.utc).isoformat()
+    try:
+        res = notificaciones_tabs.ejecutar_envio_caso_manual(db, tipo)
+        para_persist = {k: v for k, v in res.items() if k != "mensaje"}
+        para_persist["detalles"] = {"tipo_caso": tipo}
+        persist_ultimo_envio_batch(
+            db,
+            resultado=para_persist,
+            origen="api_enviar_caso_manual",
+            inicio_utc=inicio,
+        )
+        return res
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("enviar_caso_manual: %s", e)
+        try:
+            persist_ultimo_envio_batch(
+                db,
+                resultado={},
+                origen="api_enviar_caso_manual",
+                error=str(e)[:5000],
+                inicio_utc=inicio,
+            )
+        except Exception:
+            logger.warning("enviar_caso_manual: no se pudo persistir resumen de error", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)[:800]) from e
+
+
 @router.get("/estadisticas/resumen")
 def get_notificaciones_resumen(db: Session = Depends(get_db)):
     """

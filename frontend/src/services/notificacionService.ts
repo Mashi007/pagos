@@ -863,6 +863,26 @@ class NotificacionService {
     }>(`${this.baseUrl}/enviar-todas`, {}, { timeout: 20000 })
   }
 
+  /** Envio masivo sincrono solo para un criterio (configuracion por fila). */
+  async enviarCasoManual(tipo: string): Promise<{
+    mensaje: string
+    tipo_caso: string
+    total_en_lista: number
+    enviados: number
+    sin_email: number
+    fallidos: number
+    omitidos_config?: number
+    omitidos_paquete_incompleto?: number
+    enviados_whatsapp?: number
+    fallidos_whatsapp?: number
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/enviar-caso-manual`,
+      { tipo },
+      { timeout: 180000 }
+    )
+  }
+
   /** Ultimo resumen persistido tras enviar-todas o job 01:00 (sin depender solo de logs). */
 
   async obtenerUltimoEnvioBatch(): Promise<{
