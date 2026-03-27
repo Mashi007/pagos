@@ -888,6 +888,16 @@ export function DashboardMenu() {
 
   const chartAxisTick = { fontSize: 13, fill: '#374151', fontWeight: 500 }
 
+  const colorComposicionBarra = (categoria: string) => {
+    const c = String(categoria ?? '')
+    if (c === 'Pagado') return '#15803d'
+    if (c === 'Pendiente') return '#2563eb'
+    if (c === 'Pendiente parcial') return '#ca8a04'
+    if (c === 'Vencido') return '#ea580c'
+    if (c === 'Mora (4 meses+)') return '#7f1d1d'
+    return '#64748b'
+  }
+
   const chartLegendStyle = {
     wrapperStyle: { paddingTop: 14 },
     iconType: 'rect' as const,
@@ -2098,7 +2108,7 @@ export function DashboardMenu() {
                   <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                     <BarChart3 className="h-5 w-5 text-rose-600" />
 
-                    <span>Cantidad de préstamos con pago vencido</span>
+                    <span>Préstamos por estado de la última cuota</span>
                   </CardTitle>
 
                   <div className="flex items-center gap-2">
@@ -2114,10 +2124,11 @@ export function DashboardMenu() {
                 </div>
 
                 <p className="mt-1 text-xs text-gray-600">
-                  Incluye préstamos al día (sin cuotas vencidas sin pagar). Si
-                  hay atraso, cada préstamo cuenta una sola vez según su mayor
-                  atraso. 1-30, 31-60, 61-89 y 90-120 días = Vencido; 121+ días
-                  = Moroso (snapshot al día de hoy).
+                  Por cada préstamo aprobado se toma la última fila de la tabla
+                  de amortización (mayor número de cuota) y el estado de esa
+                  cuota: Pagado, Pendiente, Pendiente parcial, Vencido o Mora
+                  (4+ meses desde el vencimiento). Misma regla que la
+                  amortización en Caracas (hoy).
                 </p>
               </CardHeader>
 
@@ -2170,11 +2181,9 @@ export function DashboardMenu() {
                             {filteredData.map((row, index) => (
                               <Cell
                                 key={`cell-composicion-morosidad-${index}-${String(row.categoria ?? '')}`}
-                                fill={
-                                  row.categoria === 'Al día'
-                                    ? '#15803d'
-                                    : '#be123c'
-                                }
+                                fill={colorComposicionBarra(
+                                  String(row.categoria ?? '')
+                                )}
                               />
                             ))}
                           </Bar>
