@@ -404,7 +404,7 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
-/** GET /reportes/morosidad/auditoria/mora-por-cliente — misma base que el Excel de morosidad por cedula (reporte). */
+/** GET /reportes/morosidad/auditoria/mora-por-cliente — cuotas.estado = MORA en BD (como el Excel). */
 export interface AuditoriaMoraPorCliente {
   alcance: 'reporte_morosidad_cedulas'
 
@@ -420,30 +420,6 @@ export interface AuditoriaMoraPorCliente {
 
   criterio: string
 
-  cantidad_cuotas_mora_si_sum_cuota_pagos?: number
-
-  cantidad_cuotas_estado_columna_bd_mora?: number
-
-  conteos_coinciden?: boolean
-
-  tolerancia_alineacion_usd?: number
-
-  cuotas_desalineadas_pagos?: Array<{
-    cuota_id: number
-
-    prestamo_id: number
-
-    numero_cuota: number
-
-    total_pagado_columna: number
-
-    sum_cuota_pagos: number
-
-    diff_usd: number
-  }>
-
-  precision?: string
-
   cuotas: Array<{
     cuota_id: number
 
@@ -455,7 +431,7 @@ export interface AuditoriaMoraPorCliente {
   }>
 }
 
-/** Opcional: un solo prestamo. El reporte oficial es por cedula (mora-por-cliente). */
+/** Diagnostico por un solo prestamo (misma regla: cuotas.estado = MORA). */
 export interface AuditoriaMoraPorPrestamo {
   alcance?: 'diagnostico_por_prestamo'
 
@@ -470,32 +446,6 @@ export interface AuditoriaMoraPorPrestamo {
   total_monto_usd: number
 
   criterio: string
-
-  /** Mismo CASE pero con SUM(cuota_pagos); si difiere de cantidad_cuotas_mora, total_pagado no refleja pagos. */
-  cantidad_cuotas_mora_si_sum_cuota_pagos?: number
-
-  /** Filas con cuotas.estado = MORA en BD; si difiere, columna estado desactualizada vs calculo. */
-  cantidad_cuotas_estado_columna_bd_mora?: number
-
-  conteos_coinciden?: boolean
-
-  tolerancia_alineacion_usd?: number
-
-  cuotas_desalineadas_pagos?: Array<{
-    cuota_id: number
-
-    numero_cuota: number
-
-    total_pagado_columna: number
-
-    sum_cuota_pagos: number
-
-    diff_usd: number
-
-    prestamo_id?: number
-  }>
-
-  precision?: string
 
   cuotas: Array<{
     cuota_id: number
