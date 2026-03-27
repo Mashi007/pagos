@@ -300,12 +300,25 @@ export function Notificaciones() {
     setActualizandoListas(true)
     try {
       await notificacionService.actualizarNotificaciones()
-      await queryClient.invalidateQueries({
-        queryKey: ['notificaciones-estadisticas-por-tab'],
+      await invalidateListasNotificacionesMora(queryClient, {
+        skipCrossTabBroadcast: true,
       })
-      await refetch()
+      await queryClient.invalidateQueries({
+        queryKey: ['notificaciones-masivos-lista'],
+      })
+      await Promise.all([
+        queryClient.refetchQueries({
+          queryKey: NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
+        }),
+        queryClient.refetchQueries({
+          queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+        }),
+        queryClient.refetchQueries({
+          queryKey: ['notificaciones-masivos-lista'],
+        }),
+      ])
       toast.success(
-        'Listas y mora actualizadas. El servidor tambien recalcula automaticamente a las 00:50 (America/Caracas), antes del envio programado 01:00.'
+        'Listas y KPI actualizados manualmente. El servidor tambien ejecuta un job a las 00:50 (America/Caracas).'
       )
     } catch (e) {
       console.error(e)
@@ -407,6 +420,18 @@ export function Notificaciones() {
           icon={Bell}
           title="Notificaciones"
           description="Clientes retrasados por fecha de vencimiento y mora"
+          actions={
+            <Button
+              variant="outline"
+              onClick={() => void handleRefresh()}
+              disabled={actualizandoListas}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
+              />
+              Actualizacion manual
+            </Button>
+          }
         />
 
         <div className="border-b border-gray-200">
@@ -448,12 +473,12 @@ export function Notificaciones() {
             <Button
               variant="outline"
               onClick={() => void handleRefresh()}
-              disabled={isFetching || actualizandoListas}
+              disabled={actualizandoListas}
             >
               <RefreshCw
-                className={`mr-2 h-4 w-4 ${isFetching || actualizandoListas ? 'animate-spin' : ''}`}
+                className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
               />
-              Actualizar
+              Actualizacion manual
             </Button>
           }
         />
@@ -538,6 +563,28 @@ export function Notificaciones() {
           </CardHeader>
 
           <CardContent>
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleRefresh()}
+                disabled={actualizandoListas}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
+                />
+                Actualizacion manual
+              </Button>
+              <p className="max-w-xl text-xs text-gray-600">
+                Vuelve a pedir al servidor las listas de mora, los KPI y masivos
+                (POST{' '}
+                <code className="rounded bg-white px-1">
+                  /notificaciones/actualizar
+                </code>{' '}
+                y refetch de datos).
+              </p>
+            </div>
+
             {/* KPIs por pestaña: correos enviados y rebotados */}
 
             {(activeTab as TabId) !== 'configuracion' && estadisticasPorTab && (

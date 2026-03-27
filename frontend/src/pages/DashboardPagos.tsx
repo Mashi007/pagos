@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 
 import { motion } from 'framer-motion'
 
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   CreditCard,
@@ -11,8 +11,6 @@ import {
   TrendingUp,
   CheckCircle,
   AlertCircle,
-  PieChart,
-  BarChart3,
   ChevronRight,
   Filter,
   Search,
@@ -41,23 +39,12 @@ import { useNavigate } from 'react-router-dom'
 
 import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
 
-import { pagoService } from '../services/pagoService'
 
-import {
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-} from 'recharts'
+const DashboardPagosCharts = lazy(() =>
+  import('../components/dashboard/DashboardPagosCharts').then(m => ({
+    default: m.DashboardPagosCharts,
+  }))
+)
 
 export function DashboardPagos() {
   const navigate = useNavigate()
@@ -71,68 +58,70 @@ export function DashboardPagos() {
   const { construirFiltrosObject, tieneFiltrosActivos } =
     useDashboardFiltros(filtros)
 
+  const queryClient = useQueryClient()
+
   const {
-    data: opcionesFiltros,
-    isLoading: loadingOpcionesFiltros,
+    data: inicialPagos,
+    isLoading: loadingInicialPagos,
     isError: errorOpcionesFiltros,
-  } = useQuery({
-    queryKey: ['opciones-filtros'],
-
-    queryFn: async () => {
-      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
-
-      return response as {
-        analistas: string[]
-        concesionarios: string[]
-        modelos: string[]
-      }
-    },
-  })
-
-  // Cargar estadísticas de pagos
-
-  const {
-    data: pagosStats,
-    isLoading: pagosStatsLoading,
     refetch,
+    isFetching: fetchingInicialPagos,
   } = useQuery({
-    queryKey: ['pagos-stats', filtros],
+    queryKey: ['dashboard-pagos-inicial', filtros],
 
     queryFn: async ({ signal }) => {
       const params = construirFiltrosObject()
-
-      return await pagoService.getStats(params, { signal })
-    },
-
-    staleTime: 2 * 60 * 1000,
-
-    refetchOnWindowFocus: false,
-  })
-
-  // Cargar KPIs de pagos - queryKey compartida con useSidebarCounts para evitar llamadas duplicadas
-
-  const { data: kpisPagos, isLoading: loadingKPIs } = useQuery({
-    queryKey: tieneFiltrosActivos ? ['kpis-pagos', filtros] : ['kpis-pagos'],
-
-    queryFn: async ({ signal }) => {
-      const response = (await apiClient.get('/api/v1/pagos/kpis', {
-        signal,
-      })) as {
-        montoCobradoMes: number
-
-        saldoPorCobrar: number
-
-        clientesEnMora: number
-
-        clientesAlDia: number
-
-        cuotas_pendientes?: number
+      const queryParams = new URLSearchParams()
+      queryParams.append('meses_evolucion', '6')
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+      const res = (await apiClient.get(
+        `/api/v1/dashboard/pagos-inicial?${queryParams.toString()}`,
+        { signal }
+      )) as {
+        opciones_filtros: {
+          analistas: string[]
+          concesionarios: string[]
+          modelos: string[]
+        }
+        pagos_stats: {
+          total_pagos: number
+          total_pagado: number
+          pagos_por_estado: Array<{ estado: string; count: number }>
+          cuotas_pagadas: number
+          cuotas_pendientes: number
+        }
+        kpis_pagos: {
+          montoCobradoMes: number
+          saldoPorCobrar: number
+          clientesEnMora: number
+          clientesAlDia: number
+          cuotas_pendientes?: number
+        }
+        evolucion_pagos_meses: Array<{
+          mes: string
+          pagos: number
+          monto: number
+        }>
       }
 
-      return response
+      queryClient.setQueryData(['opciones-filtros'], res.opciones_filtros)
+      const filtrosActivos =
+        Boolean(filtros.analista) ||
+        Boolean(filtros.concesionario) ||
+        Boolean(filtros.modelo) ||
+        Boolean(filtros.fecha_inicio) ||
+        Boolean(filtros.fecha_fin)
+      if (!filtrosActivos) {
+        queryClient.setQueryData(['kpis-pagos'], res.kpis_pagos)
+      }
+      return res
     },
 
-    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
+
+    staleTime: 2 * 60 * 1000,
 
     refetchOnWindowFocus: false,
 
@@ -143,43 +132,21 @@ export function DashboardPagos() {
     retry: 1,
   })
 
-  // Cargar pagos por estado
+  const opcionesFiltros = inicialPagos?.opciones_filtros
 
-  const { data: pagosPorEstado, isLoading: loadingPagosEstado } = useQuery({
-    queryKey: ['pagos-por-estado', filtros],
+  const loadingOpcionesFiltros = loadingInicialPagos
 
-    queryFn: async ({ signal }) => {
-      const params = construirFiltrosObject()
+  const pagosStats = inicialPagos?.pagos_stats
 
-      const queryParams = new URLSearchParams()
+  const pagosStatsLoading = loadingInicialPagos
 
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
+  const kpisPagos = inicialPagos?.kpis_pagos
 
-      const queryString = queryParams.toString()
+  const loadingKPIs = loadingInicialPagos
 
-      const response = (await apiClient.get(
-        `/api/v1/pagos/stats${queryString ? '?' + queryString : ''}`,
+  const pagosPorEstado = inicialPagos?.pagos_stats
 
-        { signal }
-      )) as {
-        total_pagos: number
-
-        total_pagado: number
-
-        pagos_por_estado: Array<{ estado: string; count: number }>
-      }
-
-      return response
-    },
-
-    staleTime: 2 * 60 * 1000,
-
-    refetchOnWindowFocus: false,
-  })
-
-  // Datos para gráfico de pagos por estado
+  const loadingPagosEstado = loadingInicialPagos
 
   const datosPagosEstado =
     pagosPorEstado?.pagos_por_estado.map(item => ({
@@ -188,40 +155,14 @@ export function DashboardPagos() {
       cantidad: item.count,
 
       porcentaje:
-        pagosPorEstado.total_pagos > 0
-          ? (item.count / pagosPorEstado.total_pagos) * 100
+        (pagosPorEstado?.total_pagos || 0) > 0
+          ? (item.count / (pagosPorEstado?.total_pagos || 1)) * 100
           : 0,
     })) || []
 
-  // Cargar evolución de pagos (últimos 6 meses) - DATOS REALES
+  const datosEvolucion = inicialPagos?.evolucion_pagos_meses
 
-  const { data: datosEvolucion, isLoading: loadingEvolucion } = useQuery({
-    queryKey: ['evolucion-pagos', filtros],
-
-    queryFn: async () => {
-      const params = construirFiltrosObject()
-
-      const queryParams = new URLSearchParams()
-
-      queryParams.append('meses', '6')
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-
-      const response = (await apiClient.get(
-        `/api/v1/dashboard/evolucion-pagos?${queryParams.toString()}`
-      )) as {
-        meses: Array<{ mes: string; pagos: number; monto: number }>
-      }
-
-      return response.meses
-    },
-
-    staleTime: 5 * 60 * 1000,
-
-    refetchOnWindowFocus: false,
-  })
+  const loadingEvolucion = loadingInicialPagos
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -375,167 +316,31 @@ export function DashboardPagos() {
           </div>
         )}
 
-        {/* GRÁFICOS PRINCIPALES */}
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Gráfico 1: Pagos por Estado */}
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card className="border-2 border-gray-200 shadow-lg">
-              <CardHeader className="border-b-2 border-violet-200 bg-gradient-to-r from-violet-50 to-purple-50">
-                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                  <PieChart className="h-6 w-6 text-violet-600" />
-
-                  <span>Pagos por Estado</span>
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent className="p-6">
-                {loadingPagosEstado ? (
-                  <div className="flex h-[300px] items-center justify-center">
-                    <div className="animate-pulse text-gray-400">
-                      Cargando...
-                    </div>
-                  </div>
-                ) : datosPagosEstado.length > 0 ? (
-                  <div className="relative">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <RechartsPieChart>
-                        <Pie
-                          data={datosPagosEstado.map(p => ({
-                            name: p.estado,
-
-                            value: p.porcentaje,
-
-                            cantidad: p.cantidad,
-                          }))}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) =>
-                            `${name}: ${(percent * 100).toFixed(1)}%`
-                          }
-                          outerRadius={100}
-                          innerRadius={60}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {datosPagosEstado.map((entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={COLORS_ESTADO[index % COLORS_ESTADO.length]}
-                            />
-                          ))}
-                        </Pie>
-
-                        <Tooltip />
-                      </RechartsPieChart>
-                    </ResponsiveContainer>
-
-                    {/* Centro del donut */}
-
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="text-2xl font-black text-gray-800">
-                          {totalPagos.toLocaleString()}
-                        </div>
-
-                        <div className="text-xs text-gray-500">Total Pagos</div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex h-[300px] items-center justify-center text-gray-400">
-                    No hay datos disponibles
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Gráfico 2: Evolución de Pagos */}
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card className="border-2 border-gray-200 shadow-lg">
-              <CardHeader className="border-b-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50">
-                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                  <BarChart3 className="h-6 w-6 text-indigo-600" />
-
-                  <span>Evolución de Pagos</span>
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent className="p-6">
-                {loadingEvolucion ? (
-                  <div className="flex h-[300px] items-center justify-center">
-                    <div className="animate-pulse text-gray-400">
-                      Cargando...
-                    </div>
-                  </div>
-                ) : datosEvolucion && datosEvolucion.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={datosEvolucion}>
-                      <defs>
-                        <linearGradient
-                          id="colorEvolucion"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="5%"
-                            stopColor="#6366f1"
-                            stopOpacity={0.8}
-                          />
-
-                          <stop
-                            offset="95%"
-                            stopColor="#6366f1"
-                            stopOpacity={0.1}
-                          />
-                        </linearGradient>
-                      </defs>
-
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-
-                      <XAxis dataKey="mes" stroke="#6b7280" />
-
-                      <YAxis stroke="#6b7280" />
-
-                      <Tooltip
-                        formatter={(value: number) => formatCurrency(value)}
-                      />
-
-                      <Legend />
-
-                      <Area
-                        type="monotone"
-                        dataKey="monto"
-                        stroke="#6366f1"
-                        fillOpacity={1}
-                        fill="url(#colorEvolucion)"
-                        name="Monto Total"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-[300px] items-center justify-center text-gray-400">
-                    No hay datos disponibles
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
+        <Suspense
+          fallback={
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="flex h-[320px] items-center justify-center rounded-lg border border-gray-200 bg-white">
+                <div className="animate-pulse text-gray-400">
+                  Cargando graficos...
+                </div>
+              </div>
+              <div className="flex h-[320px] items-center justify-center rounded-lg border border-gray-200 bg-white">
+                <div className="animate-pulse text-gray-400">
+                  Cargando graficos...
+                </div>
+              </div>
+            </div>
+          }
+        >
+          <DashboardPagosCharts
+            loadingPagosEstado={loadingPagosEstado}
+            datosPagosEstado={datosPagosEstado}
+            totalPagos={totalPagos}
+            COLORS_ESTADO={COLORS_ESTADO}
+            loadingEvolucion={loadingEvolucion}
+            datosEvolucion={datosEvolucion}
+          />
+        </Suspense>
 
         {/* BOTONES EXPLORAR DETALLES */}
 

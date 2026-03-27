@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { motion } from 'framer-motion'
 
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   DollarSign,
@@ -113,257 +113,112 @@ export function DashboardFinanciamiento() {
 
   const { construirFiltrosObject } = useDashboardFiltros(filtros)
 
-  // Cargar opciones de filtros
+  const queryClient = useQueryClient()
 
   const {
-    data: opcionesFiltros,
-    isLoading: loadingOpcionesFiltros,
-    isError: errorOpcionesFiltros,
-  } = useQuery({
-    queryKey: ['opciones-filtros'],
-
-    queryFn: async () => {
-      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
-
-      return response as {
-        analistas: string[]
-        concesionarios: string[]
-        modelos: string[]
-      }
-    },
-  })
-
-  // Cargar KPIs
-
-  const {
-    data: kpisData,
-    isLoading: loadingKpis,
+    data: inicialFin,
+    isLoading: loadingInicialFin,
     refetch,
   } = useQuery({
-    queryKey: ['kpis-financiamiento', filtros],
+    queryKey: ['dashboard-financiamiento-inicial', filtros],
 
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = construirFiltrosObject()
-
       const queryParams = new URLSearchParams()
-
+      queryParams.append('meses_tendencia', '12')
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
-
-      const queryString = queryParams.toString()
-
-      const response = (await apiClient.get(
-        `/api/v1/kpis/dashboard${queryString ? '?' + queryString : ''}`
-      )) as KPIsData & {
-        total_prestamos?: number
-        promedio_financiamiento?: number
-      }
-
-      const total_financiamientos = response.total_prestamos || 0
-
-      const monto_total = response.total_financiamiento || 0
-
-      const monto_promedio =
-        total_financiamientos > 0 ? monto_total / total_financiamientos : 0
-
-      return {
-        total_financiamiento: monto_total,
-
-        total_financiamiento_activo: response.total_financiamiento_activo || 0,
-
-        total_financiamiento_inactivo:
-          response.total_financiamiento_inactivo || 0,
-
-        total_financiamiento_finalizado:
-          response.total_financiamiento_finalizado || 0,
-
-        total_financiamientos: total_financiamientos,
-
-        monto_promedio: monto_promedio,
-      } as KPIsData
-    },
-
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-  })
-
-  // Cargar datos de gráfico por estado
-
-  const { data: datosEstado, isLoading: loadingEstado } = useQuery({
-    queryKey: ['financiamiento-por-estado', filtros],
-
-    queryFn: async () => {
-      const params = construirFiltrosObject()
-
-      const queryParams = new URLSearchParams()
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-
-      const queryString = queryParams.toString()
-
-      const response = (await apiClient.get(
-        `/api/v1/kpis/dashboard${queryString ? '?' + queryString : ''}`
+      const res = (await apiClient.get(
+        `/api/v1/dashboard/financiamiento-inicial?${queryParams.toString()}`,
+        { signal }
       )) as {
-        total_financiamiento?: number
-
-        total_financiamiento_activo?: number
-
-        total_financiamiento_inactivo?: number
-
-        total_financiamiento_finalizado?: number
+        opciones_filtros: {
+          analistas: string[]
+          concesionarios: string[]
+          modelos: string[]
+        }
+        kpis_dashboard: KPIsData & {
+          total_prestamos?: number
+          promedio_financiamiento?: number
+        }
+        tendencia_mensual_meses: TendenciaMensualData[]
       }
 
-      const total = response.total_financiamiento || 0
-
-      const activo = response.total_financiamiento_activo || 0
-
-      const inactivo = response.total_financiamiento_inactivo || 0
-
-      const finalizado = response.total_financiamiento_finalizado || 0
-
-      const datos: EstadoData[] = [
-        {
-          estado: 'Activo',
-
-          monto: activo,
-
-          cantidad: 0, // Se calcularía desde BD si es necesario
-
-          porcentaje: total > 0 ? (activo / total) * 100 : 0,
-        },
-
-        {
-          estado: 'Inactivo',
-
-          monto: inactivo,
-
-          cantidad: 0,
-
-          porcentaje: total > 0 ? (inactivo / total) * 100 : 0,
-        },
-
-        {
-          estado: 'Finalizado',
-
-          monto: finalizado,
-
-          cantidad: 0,
-
-          porcentaje: total > 0 ? (finalizado / total) * 100 : 0,
-        },
-      ]
-
-      return datos
+      queryClient.setQueryData(['opciones-filtros'], res.opciones_filtros)
+      return res
     },
 
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+    placeholderData: keepPreviousData,
 
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
   })
 
-  // Cargar datos de concesionarios
+  const opcionesFiltros = inicialFin?.opciones_filtros
 
-  const { data: datosConcesionarios, isLoading: loadingConcesionarios } =
-    useQuery({
-      queryKey: ['prestamos-por-concesionario', filtros],
+  const loadingOpcionesFiltros = loadingInicialFin
 
-      queryFn: async () => {
-        const params = construirFiltrosObject()
+  const errorOpcionesFiltros = false
 
-        const queryParams = new URLSearchParams()
+  const kpisRaw = inicialFin?.kpis_dashboard
 
-        Object.entries(params).forEach(([key, value]) => {
-          if (value) queryParams.append(key, value.toString())
-        })
+  const kpisData = kpisRaw
+    ? (() => {
+        const total_financiamientos = kpisRaw.total_prestamos || 0
+        const monto_total = kpisRaw.total_financiamiento || 0
+        const monto_promedio =
+          total_financiamientos > 0 ? monto_total / total_financiamientos : 0
+        return {
+          total_financiamiento: monto_total,
+          total_financiamiento_activo: kpisRaw.total_financiamiento_activo || 0,
+          total_financiamiento_inactivo:
+            kpisRaw.total_financiamiento_inactivo || 0,
+          total_financiamiento_finalizado:
+            kpisRaw.total_financiamiento_finalizado || 0,
+          total_financiamientos: total_financiamientos,
+          monto_promedio,
+        } as KPIsData
+      })()
+    : undefined
 
-        const queryString = queryParams.toString()
+  const loadingKpis = loadingInicialFin
 
-        const response = (await apiClient.get(
-          `/api/v1/dashboard/prestamos-por-concesionario${queryString ? '?' + queryString : ''}`
-        )) as { concesionarios: ConcesionarioData[] }
-
-        // Tomar top 10 y agrupar el resto como "Otros"
-
-        const top10 = response.concesionarios.slice(0, 10)
-
-        const otros = response.concesionarios.slice(10)
-
-        const otrosSum = otros.reduce(
-          (acc, c) => ({
-            cantidad_prestamos: acc.cantidad_prestamos + c.cantidad_prestamos,
-
-            monto_total: acc.monto_total + c.monto_total,
-
-            porcentaje_cantidad:
-              acc.porcentaje_cantidad + c.porcentaje_cantidad,
-
-            porcentaje_monto: acc.porcentaje_monto + c.porcentaje_monto,
-          }),
-
+  const datosEstado: EstadoData[] | undefined = kpisRaw
+    ? (() => {
+        const total = kpisRaw.total_financiamiento || 0
+        const activo = kpisRaw.total_financiamiento_activo || 0
+        const inactivo = kpisRaw.total_financiamiento_inactivo || 0
+        const finalizado = kpisRaw.total_financiamiento_finalizado || 0
+        return [
           {
-            cantidad_prestamos: 0,
+            estado: 'Activo',
+            monto: activo,
+            cantidad: 0,
+            porcentaje: total > 0 ? (activo / total) * 100 : 0,
+          },
+          {
+            estado: 'Inactivo',
+            monto: inactivo,
+            cantidad: 0,
+            porcentaje: total > 0 ? (inactivo / total) * 100 : 0,
+          },
+          {
+            estado: 'Finalizado',
+            monto: finalizado,
+            cantidad: 0,
+            porcentaje: total > 0 ? (finalizado / total) * 100 : 0,
+          },
+        ]
+      })()
+    : undefined
 
-            monto_total: 0,
+  const loadingEstado = loadingInicialFin
 
-            porcentaje_cantidad: 0,
+  const datosTendencia = inicialFin?.tendencia_mensual_meses
 
-            porcentaje_monto: 0,
-          }
-        )
-
-        const result = [...top10]
-
-        if (otrosSum.cantidad_prestamos > 0) {
-          result.push({
-            concesionario: 'Otros',
-
-            ...otrosSum,
-          })
-        }
-
-        return result
-      },
-
-      staleTime: 5 * 60 * 1000,
-
-      refetchOnWindowFocus: false,
-
-      retry: 1,
-    })
-
-  // Cargar tendencia mensual
-
-  const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
-    queryKey: ['financiamiento-tendencia-mensual', filtros],
-
-    queryFn: async () => {
-      const params = construirFiltrosObject()
-
-      const queryParams = new URLSearchParams()
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-
-      queryParams.append('meses', '12')
-
-      const queryString = queryParams.toString()
-
-      const response = (await apiClient.get(
-        `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryString}`
-      )) as { meses: TendenciaMensualData[] }
-
-      return response.meses
-    },
-
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-  })
+  const loadingTendencia = loadingInicialFin
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends
 from app.core.database import SessionLocal
 from app.core.deps import get_current_user
 
-from . import graficos, kpis
+from . import financiamiento_inicial, graficos, kpis, pagos_inicial
 from .utils import (
     _CACHE_COBRANZAS_SEMANALES,
     _CACHE_COMPOSICION_MOROSIDAD,
@@ -32,6 +32,8 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 # Include sub-routers (no prefix - all routes are at /dashboard/*)
 router.include_router(kpis.router, tags=["dashboard-kpis"])
 router.include_router(graficos.router, tags=["dashboard-graficos"])
+router.include_router(pagos_inicial.router, tags=["dashboard-pagos-inicial"])
+router.include_router(financiamiento_inicial.router, tags=["dashboard-financiamiento-inicial"])
 
 
 def _refresh_dashboard_admin_cache() -> None:
