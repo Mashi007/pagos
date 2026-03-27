@@ -6,6 +6,8 @@ Reportes de morosidad (pago vencido).
 
 import calendar
 
+import logging
+
 import io
 
 from datetime import date
@@ -18,9 +20,9 @@ from fastapi import APIRouter, Depends, Query
 
 from fastapi.responses import Response
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, literal_column, select, text
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 
 
@@ -32,11 +34,9 @@ from app.models.cliente import Cliente
 
 from app.models.cuota import Cuota
 
-from app.models.cuota_pago import CuotaPago
-
 from app.models.prestamo import Prestamo
 
-from app.services.cuota_estado import hoy_negocio
+from app.services.cuota_estado import SQL_PG_ESTADO_CUOTA_CASE_CORRELATED, hoy_negocio
 
 
 
@@ -46,6 +46,12 @@ from app.api.v1.endpoints.reportes_utils import _safe_float, _parse_fecha, _peri
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+logger = logging.getLogger(__name__)
+
+
+# Export /exportar/morosidad-cedulas: regla no negociable — solo filas cuyo estado calculado sea este codigo.
+# Ningun otro estado (VENCIDO, PENDIENTE, PARCIAL, etc.) entra en el Excel.
+REPORTE_MOROSIDAD_SOLO_ESTADO = "MORA"
 
 
 RANGOS_ATRASO = [
@@ -1115,57 +1121,63 @@ def exportar_morosidad(
 
 @router.get("/exportar/morosidad-cedulas")
 def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
-    """Exporta Excel de morosidad por cedulas: situacion a la fecha (hoy).
+    """Exporta Excel por cedula: solo clientes con cuotas en estado MORA (exclusivo).
 
-    Misma regla que la tabla de amortizacion por prestamo (app.services.cuota_estado):
-    - Hoy = fecha calendario America/Caracas.
-    - Cuota sin cubrir al 100%: SUM(cuota_pagos.monto_aplicado) < monto_cuota - 0.01.
-    - Mora (4+ meses): fecha_vencimiento + 4 meses + 1 dia <= hoy Caracas.
-    Cliente ACTIVO, prestamo APROBADO. Agrupado por cedula del cliente (todas las cuotas
-    MORA de todos sus prestamos aprobados).
+    Regla no negociable: ninguna cuota con otro estado entra en agregados ni en montos.
+    Criterio: mismo CASE que amortizacion (`SQL_PG_ESTADO_CUOTA_CASE_CORRELATED`) = MORA.
+    UI: etiqueta 'Mora (4 meses+)'. Corte: hoy America/Caracas.
     """
+    import time
+
     import openpyxl
 
-    hoy_caracas_sql = text("(CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date")
-    sum_aplicado = (
-        select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
-        .where(CuotaPago.cuota_id == Cuota.id)
-        .scalar_subquery()
-    )
-    monto_cuota = func.coalesce(Cuota.monto, 0)
-    no_cubierta_completa = sum_aplicado < (monto_cuota - 0.01)
-    en_mora_4m = Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= hoy_caracas_sql
+    t0 = time.perf_counter()
 
-    wb = openpyxl.Workbook()
-    wb.remove(wb.active)
-
-    ws_resumen = wb.create_sheet(title="RESUMEN", index=0)
-    ws_resumen.append(
-        [
-            "Cedula",
-            "Cantidad de cuotas (4+ meses mora, corte hoy)",
-            "Deuda en dolares",
-        ]
+    # Alias `c` debe coincidir con el SQL embebido (referencias c.id, c.monto_cuota, ...).
+    c = aliased(Cuota, name="c")
+    _solo = REPORTE_MOROSIDAD_SOLO_ESTADO
+    estado_es_mora = text(
+        f"(TRIM(BOTH FROM ({SQL_PG_ESTADO_CUOTA_CASE_CORRELATED}))) = '{_solo}'"
     )
+    modalidad_por_cliente = literal_column(
+        "string_agg(DISTINCT prestamos.modalidad_pago, ', ' "
+        "ORDER BY prestamos.modalidad_pago)"
+    ).label("modalidad")
 
     rows_resumen = db.execute(
         select(
+            Cliente.id.label("cliente_id"),
             Cliente.cedula.label("cedula"),
-            func.count(Cuota.id).label("total_cuotas"),
-            func.coalesce(func.sum(Cuota.monto), 0).label("total_monto"),
+            modalidad_por_cliente,
+            func.count(c.id).label("total_cuotas"),
+            func.coalesce(func.sum(c.monto), 0).label("total_monto"),
         )
-        .select_from(Cuota)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .select_from(c)
+        .join(Prestamo, c.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
-            no_cubierta_completa,
-            en_mora_4m,
+            estado_es_mora,
         )
-        .group_by(Cliente.cedula)
+        .group_by(Cliente.id, Cliente.cedula)
         .order_by(Cliente.cedula.asc())
     ).fetchall()
+
+    fc = hoy_negocio()
+    hoy_str = fc.isoformat()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Solo estado MORA"
+    ws.append(
+        [
+            "C\u00e9dula",
+            "Modalidad",
+            f"Cantidad cuotas (solo {_solo})",
+            f"Total USD (solo {_solo})",
+        ]
+    )
 
     total_cuotas_general = 0
     total_monto_general = 0.0
@@ -1174,19 +1186,43 @@ def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
         monto = round(_safe_float(r.total_monto), 2)
         total_cuotas_general += cuotas
         total_monto_general += monto
-        ws_resumen.append([r.cedula or "", cuotas, monto])
+        ws.append(
+            [
+                r.cedula or "",
+                r.modalidad or "",
+                cuotas,
+                monto,
+            ]
+        )
 
-    ws_resumen.append(["TOTAL", total_cuotas_general, round(total_monto_general, 2)])
+    ws.append(
+        [
+            "TOTAL",
+            "",
+            total_cuotas_general,
+            round(total_monto_general, 2),
+        ]
+    )
 
     buf = io.BytesIO()
     wb.save(buf)
     content = buf.getvalue()
-    hoy_str = hoy_negocio().isoformat()
+    ms = (time.perf_counter() - t0) * 1000
+    logger.info(
+        "exportar_morosidad_cedulas solo_estado=%s filas_clientes=%s total_cuotas=%s ms=%.1f fecha_corte=%s",
+        _solo,
+        len(rows_resumen),
+        total_cuotas_general,
+        ms,
+        hoy_str,
+    )
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": f"attachment; filename=reporte_mora_cedulas_{hoy_str}.xlsx"
+            "Content-Disposition": f"attachment; filename=reporte_mora_cedulas_{hoy_str}.xlsx",
+            "X-Reporte-Morosidad-Clientes": str(len(rows_resumen)),
+            "X-Reporte-Morosidad-Fecha-Corte": hoy_str,
         },
     )
 

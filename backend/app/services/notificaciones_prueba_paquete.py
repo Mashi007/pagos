@@ -59,8 +59,6 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
             detail="No hay datos de ejemplo en BD para este criterio. Debe existir al menos un cliente en la lista correspondiente.",
         )
 
-    config_envios = get_notificaciones_envios_config(db)
-
     if tipo in ("PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO"):
         get_tipo = nt._tipo_retrasadas
         asunto = "Cuenta con cuota atrasada - Rapicredit"
@@ -85,6 +83,14 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
             "Por favor contacte a la entidad para regularizar su situacion.\n\n"
             "Saludos,\nRapicredit"
         )
+
+    # Igual que enviar-caso-manual: la prueba debe enviar aunque el toggle Envio este apagado
+    # en la fila del criterio que aplica al item (p. ej. PAGO_3 vs PAGO_1 en retrasadas).
+    tipo_resuelto = get_tipo(item)
+    config_envios = nt._config_envios_forzar_habilitado_caso(
+        get_notificaciones_envios_config(db),
+        tipo_resuelto,
+    )
 
     try:
         res = nt._enviar_correos_items(
@@ -173,7 +179,6 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
             ),
         }
 
-    config_envios = get_notificaciones_envios_config(db)
     if tipo in ("PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO"):
         get_tipo = nt._tipo_retrasadas
         asunto_base = "Cuenta con cuota atrasada - Rapicredit"
@@ -186,6 +191,10 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     item = deepcopy(item)
     paquete_estricto = bool(getattr(settings, "NOTIFICACIONES_PAQUETE_ESTRICTO", True))
     tipo_res = get_tipo(item)
+    config_envios = nt._config_envios_forzar_habilitado_caso(
+        get_notificaciones_envios_config(db),
+        tipo_res,
+    )
     tipo_cfg = config_envios.get(tipo_res) or {}
     habilitado = tipo_cfg.get("habilitado", True) is not False
     plantilla_id = nt._parse_plantilla_id_desde_config(tipo_cfg.get("plantilla_id"))

@@ -949,14 +949,13 @@ TIPOS_CASO_MANUAL = frozenset(
 def _config_envios_forzar_habilitado_caso(config_envios: dict, tipo: str) -> dict:
     """
     Copia superficial de la config de envios con habilitado=True solo para el tipo indicado.
-    El envio manual debe ejecutarse aunque el toggle Envio este apagado en la fila.
+    El envio manual y la prueba de paquete deben ejecutarse aunque el toggle Envio este apagado.
     """
     out = dict(config_envios)
     cur = out.get(tipo)
-    if isinstance(cur, dict):
-        merged = dict(cur)
-        merged["habilitado"] = True
-        out[tipo] = merged
+    merged = dict(cur) if isinstance(cur, dict) else {}
+    merged["habilitado"] = True
+    out[tipo] = merged
     return out
 
 
