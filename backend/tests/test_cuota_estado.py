@@ -40,10 +40,11 @@ def test_vencido_91_dias():
     assert clasificar_estado_cuota(0.0, 100.0, fv, ref) == "VENCIDO"
 
 
-def test_mora_desde_dia_92():
-    ref = date(2025, 9, 15)
+def test_mora_desde_4_meses_calendario_mas_un_dia():
+    """MORA desde el dia siguiente a cumplir 4 meses calendario desde el vencimiento (no regla fija en dias)."""
     fv = date(2025, 6, 15)
-    assert dias_retraso_desde_vencimiento(fv, ref) == 92
+    # Jun 15 + 4 meses = Oct 15; MORA desde Oct 16
+    ref = date(2025, 10, 16)
     assert clasificar_estado_cuota(0.0, 100.0, fv, ref) == "MORA"
 
 
@@ -57,7 +58,7 @@ def test_etiquetas_paridad_frontend():
     assert etiqueta_estado_cuota("PENDIENTE") == "Pendiente"
     assert etiqueta_estado_cuota("PARCIAL") == "Pendiente parcial"
     assert etiqueta_estado_cuota("VENCIDO") == "Vencido"
-    assert etiqueta_estado_cuota("MORA") == "Mora (92+ d)"
+    assert etiqueta_estado_cuota("MORA") == "Mora (4 meses+)"
     assert etiqueta_estado_cuota("PAGADO") == "Pagado"
     assert etiqueta_estado_cuota("PAGO_ADELANTADO") == "Pago adelantado"
     assert etiqueta_estado_cuota("PAGADA") == "Pagado"

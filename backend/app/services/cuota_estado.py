@@ -193,17 +193,18 @@ SQL_PG_ESTADO_CUOTA_CASE_CORRELATED = """CASE
 END"""
 
 # Misma logica que GET lista de cuotas / amortizacion (_listado_cuotas_prestamo_dicts usa c.total_pagado).
-# Usar en reportes morosidad para que el conteo coincida con la UI (evita 6 vs 7 cuando columna != SUM(cuota_pagos)).
-# ROUND(..., 2) en numeric reduce ruido de precision en DECIMAL vs float al comparar con clasificar_estado_cuota.
+# Usar en reportes morosidad para que el conteo coincida con la UI.
+# Comparaciones en numeric SIN ROUND: clasificar_estado_cuota usa paid >= monto - 0.01 (sin redondear antes).
+# Redondear en SQL podia marcar PAGADO/VENCIDO distinto que Python y variar el conteo MORA.
 SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO = """CASE
-  WHEN ROUND(COALESCE(c.total_pagado, 0)::numeric, 2) >= ROUND(COALESCE(c.monto_cuota, 0)::numeric, 2) - 0.01 THEN
+  WHEN COALESCE(c.total_pagado, 0)::numeric >= COALESCE(c.monto_cuota, 0)::numeric - 0.01 THEN
     CASE
       WHEN c.fecha_vencimiento IS NOT NULL
         AND c.fecha_vencimiento::date > (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
       THEN 'PAGO_ADELANTADO'
       ELSE 'PAGADO'
     END
-  WHEN ROUND(COALESCE(c.total_pagado, 0)::numeric, 2) > 0.001 THEN
+  WHEN COALESCE(c.total_pagado, 0)::numeric > 0.001 THEN
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'

@@ -404,8 +404,63 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
-/** GET /reportes/morosidad/auditoria/mora-por-prestamo — contrastar con tabla amortizacion (solo MORA). */
+/** GET /reportes/morosidad/auditoria/mora-por-cliente — misma base que el Excel de morosidad por cedula (reporte). */
+export interface AuditoriaMoraPorCliente {
+  alcance: 'reporte_morosidad_cedulas'
+
+  cliente_id: number
+
+  cedula: string
+
+  nombres: string
+
+  cantidad_cuotas_mora: number
+
+  total_monto_usd: number
+
+  criterio: string
+
+  cantidad_cuotas_mora_si_sum_cuota_pagos?: number
+
+  cantidad_cuotas_estado_columna_bd_mora?: number
+
+  conteos_coinciden?: boolean
+
+  tolerancia_alineacion_usd?: number
+
+  cuotas_desalineadas_pagos?: Array<{
+    cuota_id: number
+
+    prestamo_id: number
+
+    numero_cuota: number
+
+    total_pagado_columna: number
+
+    sum_cuota_pagos: number
+
+    diff_usd: number
+  }>
+
+  precision?: string
+
+  cuotas: Array<{
+    cuota_id: number
+
+    prestamo_id: number
+
+    numero_cuota: number
+
+    monto_usd: number
+  }>
+}
+
+/** Opcional: un solo prestamo. El reporte oficial es por cedula (mora-por-cliente). */
 export interface AuditoriaMoraPorPrestamo {
+  alcance?: 'diagnostico_por_prestamo'
+
+  reporte_morosidad_usar?: string
+
   prestamo_id: number
 
   cedula_prestamo: string
@@ -415,6 +470,14 @@ export interface AuditoriaMoraPorPrestamo {
   total_monto_usd: number
 
   criterio: string
+
+  /** Mismo CASE pero con SUM(cuota_pagos); si difiere de cantidad_cuotas_mora, total_pagado no refleja pagos. */
+  cantidad_cuotas_mora_si_sum_cuota_pagos?: number
+
+  /** Filas con cuotas.estado = MORA en BD; si difiere, columna estado desactualizada vs calculo. */
+  cantidad_cuotas_estado_columna_bd_mora?: number
+
+  conteos_coinciden?: boolean
 
   tolerancia_alineacion_usd?: number
 
@@ -428,6 +491,8 @@ export interface AuditoriaMoraPorPrestamo {
     sum_cuota_pagos: number
 
     diff_usd: number
+
+    prestamo_id?: number
   }>
 
   precision?: string
@@ -883,7 +948,7 @@ class ReporteService {
 
 
 
-   * Exporta morosidad-clientes: mismo backend que lista MORA (no VENCIDO). Nombre, Cedula, cant/total.
+   * Exporta morosidad-clientes: solo estado MORA (mismo criterio que morosidad-cedulas). Excel con fila TOTAL.
 
 
 
@@ -938,6 +1003,24 @@ class ReporteService {
   /**
    * Auditoria: cuotas MORA por prestamo (mismo filtro que export morosidad-cedulas).
    */
+  /**
+   * Auditoria del reporte de morosidad (Excel por cedula): mismo criterio que exportar/morosidad-cedulas.
+   */
+  async getAuditoriaMoraPorCliente(params: {
+    cedula?: string
+    clienteId?: number
+  }): Promise<AuditoriaMoraPorCliente> {
+    const q = new URLSearchParams()
+    if (params.cedula != null && params.cedula !== '')
+      q.set('cedula', params.cedula.trim())
+    if (params.clienteId != null) q.set('cliente_id', String(params.clienteId))
+
+    return await apiClient.get(
+      `${this.baseUrl}/morosidad/auditoria/mora-por-cliente?${q.toString()}`
+    )
+  }
+
+  /** Diagnostico por un solo prestamo (opcional; el informe va por cedula). */
   async getAuditoriaMoraPorPrestamo(
     prestamoId: number
   ): Promise<AuditoriaMoraPorPrestamo> {

@@ -1,7 +1,8 @@
--- Validacion: mismo criterio que
+-- Validacion: mismo criterio que el reporte de morosidad (Excel por cedula):
 --   GET /api/v1/reportes/exportar/morosidad-cedulas
 --   GET /api/v1/reportes/morosidad/clientes
---   GET /api/v1/reportes/morosidad/auditoria/mora-por-prestamo?prestamo_id=
+--   GET /api/v1/reportes/morosidad/auditoria/mora-por-cliente?cedula=
+-- (mora-por-prestamo es solo diagnostico por un prestamo)
 -- UNICAMENTE estado calculado = 'MORA' (VENCIDO excluido). Alias c en cuotas.
 -- CASE alineado con amortizacion: usa c.total_pagado (no solo SUM cuota_pagos).
 -- Resultado: una fila por cedula (GROUP BY cliente_id): suma todas las cuotas MORA de todos los prestamos del cliente.
@@ -15,14 +16,14 @@ WITH por_cuota AS (
     c.monto_cuota,
     TRIM(BOTH FROM (
 CASE
-  WHEN ROUND(COALESCE(c.total_pagado, 0)::numeric, 2) >= ROUND(COALESCE(c.monto_cuota, 0)::numeric, 2) - 0.01 THEN
+  WHEN COALESCE(c.total_pagado, 0)::numeric >= COALESCE(c.monto_cuota, 0)::numeric - 0.01 THEN
     CASE
       WHEN c.fecha_vencimiento IS NOT NULL
         AND c.fecha_vencimiento::date > (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
       THEN 'PAGO_ADELANTADO'
       ELSE 'PAGADO'
     END
-  WHEN ROUND(COALESCE(c.total_pagado, 0)::numeric, 2) > 0.001 THEN
+  WHEN COALESCE(c.total_pagado, 0)::numeric > 0.001 THEN
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
