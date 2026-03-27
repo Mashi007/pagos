@@ -3053,6 +3053,7 @@ def validar_filas_batch(
 
 
 @router.post("/guardar-fila-editable", response_model=dict)
+@router.put("/guardar-fila-editable", response_model=dict)
 
 def guardar_fila_editable(
 
@@ -4154,24 +4155,6 @@ def mover_a_revisar_pagos(payload: MoverRevisarPagosBody = Body(...), db: Sessio
 
 
 
-@router.get("/{pago_id:int}", response_model=dict)
-
-def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
-
-    """Obtiene un pago por ID desde la tabla pagos."""
-
-    row = db.get(Pago, pago_id)
-
-    if not row:
-
-        raise HTTPException(status_code=404, detail="Pago no encontrado")
-
-    return _pago_to_response(row)
-
-
-
-
-
 @router.post("/batch", response_model=dict)
 
 def crear_pagos_batch(
@@ -4559,6 +4542,24 @@ def crear_pagos_batch(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}") from e
 
 
+
+
+
+
+
+@router.get("/{pago_id:int}", response_model=dict)
+
+def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
+
+    """Obtiene un pago por ID desde la tabla pagos."""
+
+    row = db.get(Pago, pago_id)
+
+    if not row:
+
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+
+    return _pago_to_response(row)
 
 
 
