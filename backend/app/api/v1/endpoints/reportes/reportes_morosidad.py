@@ -49,9 +49,10 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
 
 
-# Export /exportar/morosidad-cedulas: regla no negociable — solo filas cuyo estado calculado sea este codigo.
-# Ningun otro estado (VENCIDO, PENDIENTE, PARCIAL, etc.) entra en el Excel.
-REPORTE_MOROSIDAD_SOLO_ESTADO = "MORA"
+# Export /exportar/morosidad-cedulas: mismo CASE que la tabla de amortizacion (app.services.cuota_estado).
+# Incluye solo cuotas impagas fuera de plazo: VENCIDO (etiqueta UI "Vencido") y MORA ("Mora (4 meses+)").
+# Excluye: PAGADO, PAGO_ADELANTADO, PENDIENTE, PARCIAL (al corriente / no vencidas).
+REPORTE_MOROSIDAD_ESTADOS_INCLUIDOS = ("VENCIDO", "MORA")
 
 
 RANGOS_ATRASO = [
@@ -1121,11 +1122,11 @@ def exportar_morosidad(
 
 @router.get("/exportar/morosidad-cedulas")
 def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
-    """Exporta Excel por cedula: solo clientes con cuotas en estado MORA (exclusivo).
+    """Exporta Excel por cedula: cuotas en mora segun amortizacion (VENCIDO o MORA).
 
-    Regla no negociable: ninguna cuota con otro estado entra en agregados ni en montos.
-    Criterio: mismo CASE que amortizacion (`SQL_PG_ESTADO_CUOTA_CASE_CORRELATED`) = MORA.
-    UI: etiqueta 'Mora (4 meses+)'. Corte: hoy America/Caracas.
+    Cada fila cuenta y suma solo cuotas cuyo estado calculado es VENCIDO o MORA.
+    No incluye Pendiente ni Pagado (alineado con badges de la tabla de cuotas).
+    Corte: hoy America/Caracas.
     """
     import time
 
@@ -1135,9 +1136,9 @@ def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
 
     # Alias `c` debe coincidir con el SQL embebido (referencias c.id, c.monto_cuota, ...).
     c = aliased(Cuota, name="c")
-    _solo = REPORTE_MOROSIDAD_SOLO_ESTADO
-    estado_es_mora = text(
-        f"(TRIM(BOTH FROM ({SQL_PG_ESTADO_CUOTA_CASE_CORRELATED}))) = '{_solo}'"
+    _estados_sql = "', '".join(REPORTE_MOROSIDAD_ESTADOS_INCLUIDOS)
+    estado_cuota_en_morosidad = text(
+        f"(TRIM(BOTH FROM ({SQL_PG_ESTADO_CUOTA_CASE_CORRELATED}))) IN ('{_estados_sql}')"
     )
     modalidad_por_cliente = literal_column(
         "string_agg(DISTINCT prestamos.modalidad_pago, ', ' "
@@ -1158,7 +1159,7 @@ def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
         .where(
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
-            estado_es_mora,
+            estado_cuota_en_morosidad,
         )
         .group_by(Cliente.id, Cliente.cedula)
         .order_by(Cliente.cedula.asc())
@@ -1169,13 +1170,13 @@ def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Solo estado MORA"
+    ws.title = "Morosidad amortizacion"
     ws.append(
         [
             "C\u00e9dula",
             "Modalidad",
-            f"Cantidad cuotas (solo {_solo})",
-            f"Total USD (solo {_solo})",
+            "Cantidad cuotas (Vencido + Mora)",
+            "Total USD (Vencido + Mora)",
         ]
     )
 
@@ -1209,8 +1210,8 @@ def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
     content = buf.getvalue()
     ms = (time.perf_counter() - t0) * 1000
     logger.info(
-        "exportar_morosidad_cedulas solo_estado=%s filas_clientes=%s total_cuotas=%s ms=%.1f fecha_corte=%s",
-        _solo,
+        "exportar_morosidad_cedulas estados=%s filas_clientes=%s total_cuotas=%s ms=%.1f fecha_corte=%s",
+        ",".join(REPORTE_MOROSIDAD_ESTADOS_INCLUIDOS),
         len(rows_resumen),
         total_cuotas_general,
         ms,
