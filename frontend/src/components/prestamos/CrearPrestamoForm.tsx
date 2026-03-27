@@ -83,6 +83,18 @@ function fechaInputYmd(v: unknown): string {
   return s.length >= 10 ? s.slice(0, 10) : s
 }
 
+/** Texto de modelo guardado en BD/API (modelo_vehiculo o alias modelo). */
+function modeloTextoDesdePrestamo(p?: Prestamo): string {
+  if (!p) return ''
+  const mv =
+    p.modelo_vehiculo != null && String(p.modelo_vehiculo).trim() !== ''
+      ? String(p.modelo_vehiculo).trim()
+      : ''
+  if (mv) return mv
+  const m = (p as { modelo?: string | null }).modelo
+  return m != null && String(m).trim() !== '' ? String(m).trim() : ''
+}
+
 interface CrearPrestamoFormProps {
   prestamo?: Prestamo // Préstamo existente para edición
 
@@ -123,11 +135,7 @@ export function CrearPrestamoForm({
     return `${year}-${month}-${day}`
   }
 
-  const modeloInicial =
-    prestamo?.modelo_vehiculo != null &&
-    String(prestamo.modelo_vehiculo).trim() !== ''
-      ? String(prestamo.modelo_vehiculo).trim()
-      : ''
+  const modeloInicial = modeloTextoDesdePrestamo(prestamo)
 
   const [formData, setFormData] = useState<Partial<PrestamoForm>>({
     cedula: prestamo?.cedula || '',
@@ -192,6 +200,17 @@ export function CrearPrestamoForm({
   const { data: modelosVehiculos = [], error: errorModelos } =
     useModelosVehiculosActivos()
 
+  type ModeloCat = { id: number; modelo: string; precio?: number | null }
+
+  const modelosParaSelect = useMemo((): ModeloCat[] => {
+    const base = (modelosVehiculos || []) as ModeloCat[]
+    const guardado = (formData.modelo_vehiculo || '').trim()
+    if (guardado && !base.some(m => String(m.modelo).trim() === guardado)) {
+      return [{ id: -1, modelo: guardado, precio: null }, ...base]
+    }
+    return base
+  }, [modelosVehiculos, formData.modelo_vehiculo])
+
   const { user } = useSimpleAuth()
 
   // Errores de carga de configuración (sin bloquear renderizado; solo en desarrollo se puede loguear)
@@ -200,9 +219,13 @@ export function CrearPrestamoForm({
     // Opcional: logger condicionado por NODE_ENV
   }
 
-  const [valorActivo, setValorActivo] = useState<number>(
-    prestamo?.valor_activo || 0
-  )
+  const [valorActivo, setValorActivo] = useState<number>(() => {
+    if (!prestamo) return 0
+    const va = prestamo.valor_activo
+    if (va == null) return 0
+    const n = Number(va)
+    return Number.isFinite(n) ? n : 0
+  })
 
   // Estados para validación de préstamos existentes
 
@@ -240,6 +263,52 @@ export function CrearPrestamoForm({
   })
 
   const [showConfirmCreate, setShowConfirmCreate] = useState(false)
+
+  useEffect(() => {
+    if (!prestamo?.id) return
+    const mv = modeloTextoDesdePrestamo(prestamo)
+    setFormData({
+      cedula: prestamo.cedula || '',
+      total_financiamiento: Number(prestamo.total_financiamiento) || 0,
+      modalidad_pago: prestamo.modalidad_pago || 'MENSUAL',
+      fecha_requerimiento: fechaInputYmd(prestamo.fecha_requerimiento),
+      fecha_aprobacion: prestamo.fecha_aprobacion
+        ? fechaInputYmd(prestamo.fecha_aprobacion)
+        : undefined,
+      fecha_base_calculo: prestamo.fecha_base_calculo
+        ? fechaInputYmd(prestamo.fecha_base_calculo)
+        : undefined,
+      tasa_interes:
+        prestamo.tasa_interes != null
+          ? Number(prestamo.tasa_interes)
+          : undefined,
+      producto: prestamo.producto || '',
+      concesionario: prestamo.concesionario || '',
+      analista: prestamo.analista || '',
+      analista_id:
+        prestamo.analista_id != null ? Number(prestamo.analista_id) : undefined,
+      modelo_vehiculo: mv,
+      estado: prestamo.estado,
+      observaciones: prestamo.observaciones || '',
+    })
+    const va = prestamo.valor_activo
+    setValorActivo(
+      va != null && String(va).trim() !== '' && !Number.isNaN(Number(va))
+        ? Number(va)
+        : 0
+    )
+    const n = prestamo.numero_cuotas
+    setNumeroCuotas(n && Number(n) > 0 ? Number(n) : 12)
+    const cpRaw = prestamo.cuota_periodo
+    const cp = cpRaw != null && Number(cpRaw) > 0 ? Number(cpRaw) : 0
+    if (cp > 0) {
+      setCuotaPeriodo(cp)
+    } else {
+      const tf = Number(prestamo.total_financiamiento || 0)
+      const nn = n && Number(n) > 0 ? Number(n) : 12
+      setCuotaPeriodo(nn > 0 && tf > 0 ? Math.round((tf / nn) * 100) / 100 : 0)
+    }
+  }, [prestamo?.id])
 
   const [showRechazarDialog, setShowRechazarDialog] = useState(false)
 
@@ -689,9 +758,17 @@ export function CrearPrestamoForm({
                     </SelectTrigger>
 
                     <SelectContent>
-                      {modelosVehiculos.map(modelo => (
-                        <SelectItem key={modelo.id} value={modelo.modelo}>
+                      {modelosParaSelect.map(modelo => (
+                        <SelectItem
+                          key={
+                            modelo.id === -1
+                              ? `guardado-${modelo.modelo}`
+                              : modelo.id
+                          }
+                          value={modelo.modelo}
+                        >
                           {modelo.modelo}
+                          {modelo.id === -1 ? ' (guardado)' : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1188,11 +1265,15 @@ export function CrearPrestamoForm({
                       Al guardar se persistirá el estado en la base de datos.
                       Revise coherencia con cuotas y pagos.
                     </p>
-                    {prestamo?.estado === 'DESISTIMIENTO' &&
-                    prestamo?.fecha_desistimiento ? (
+                    {prestamo?.fecha_desistimiento ? (
                       <p className="mt-2 text-xs text-slate-600">
-                        Fecha de desistimiento:{' '}
+                        Fecha de desistimiento registrada:{' '}
                         {fechaInputYmd(prestamo.fecha_desistimiento)}
+                      </p>
+                    ) : formData.estado === 'DESISTIMIENTO' ? (
+                      <p className="mt-2 text-xs text-amber-700">
+                        Al guardar se registrará la fecha de desistimiento en la
+                        base de datos.
                       </p>
                     ) : null}
                   </div>

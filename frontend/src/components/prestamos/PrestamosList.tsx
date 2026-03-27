@@ -564,6 +564,7 @@ export function PrestamosList() {
   if (showCrearPrestamo) {
     return (
       <CrearPrestamoForm
+        key={editingPrestamo?.id ?? 'nuevo'}
         prestamo={editingPrestamo ?? undefined}
         onClose={() => {
           setShowCrearPrestamo(false)
