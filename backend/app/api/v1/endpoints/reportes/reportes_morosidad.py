@@ -3,7 +3,8 @@ Reportes de morosidad.
 
 AUDITORIA — conexion API base: /api/v1/reportes
 
-Solo estado calculado MORA (CASE con c.total_pagado; mismo criterio que el Excel del reporte):
+Solo estado MORA: clasificar_estado_cuota en Python (misma regla que la amortizacion en pantalla).
+  Export /morosidad/clientes y /exportar/morosidad-cedulas NO usan el CASE en SQL (evita contar VENCIDO/PENDIENTE).
   - GET /morosidad/clientes
   - GET /exportar/morosidad-clientes
   - GET /exportar/morosidad-cedulas  (una fila por cedula: reporte principal)
@@ -32,7 +33,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from fastapi.responses import Response
 
-from sqlalchemy import func, literal_column, select, text
+from collections import defaultdict
+
+from sqlalchemy import func, or_, select, text
 
 from sqlalchemy.orm import Session, aliased
 
@@ -52,7 +55,7 @@ from app.models.prestamo import Prestamo
 
 from app.services.cuota_estado import (
     SQL_PG_ESTADO_CUOTA_CASE_CORRELATED,
-    SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO,
+    clasificar_estado_cuota,
     hoy_negocio,
 )
 
@@ -90,25 +93,155 @@ assert (
 ), "reporte morosidad: debe cubrir exactamente los 6 estados de cuota_estado"
 
 
-def _sql_expr_trim_estado_cuota_alias_c() -> str:
-    """TRIM(CASE...) con alias `c`; usa total_pagado de columna como la lista de amortizacion."""
-
-
-    return f"TRIM(BOTH FROM ({SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO}))"
-
-
-def _filtro_cuota_solo_estado_mora_sql() -> text:
-    """Estado calculado == MORA unicamente (UI: Mora 4+ meses). VENCIDO y resto quedan fuera."""
-
-
-    return text(f"({_sql_expr_trim_estado_cuota_alias_c()}) = 'MORA'")
-
-
 def _filtro_cuota_mora_desde_case_sql(case_sql: str) -> text:
     """Mismo patron que solo MORA pero con otro CASE (p. ej. SUM cuota_pagos vs total_pagado)."""
 
 
     return text(f"(TRIM(BOTH FROM ({case_sql}))) = 'MORA'")
+
+
+def _fv_a_date(fv: object):
+    """fecha_vencimiento ORM -> date para clasificar_estado_cuota."""
+    if fv is None:
+        return None
+    if hasattr(fv, "date"):
+        return fv.date()
+    return fv
+
+
+def _cuota_incluida_mora_reporte_python(
+    total_pagado: object,
+    monto_cuota: object,
+    fecha_vencimiento: object,
+    ref,
+) -> bool:
+    """
+    Misma regla que GET /prestamos/{id}/cuotas (amortizacion). Solo codigo MORA;
+    excluye VENCIDO, PENDIENTE, PARCIAL, etc. (no usar solo el CASE en SQL PG).
+    """
+    tp = _safe_float(total_pagado)
+    m = _safe_float(monto_cuota)
+    fv = _fv_a_date(fecha_vencimiento)
+    return clasificar_estado_cuota(tp, m, fv, ref) == "MORA"
+
+
+def _query_base_cuotas_activos_aprobados(ref):
+    """Cuotas de clientes ACTIVO y prestamos APROBADO; prefiltra impagadas y vencidas a la fecha de corte."""
+    return (
+        select(
+            Cliente.id.label("cliente_id"),
+            Cliente.cedula,
+            Cliente.nombres,
+            Prestamo.modalidad_pago,
+            Cuota.monto,
+            Cuota.total_pagado,
+            Cuota.fecha_vencimiento,
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento < ref,
+            or_(
+                Cuota.total_pagado.is_(None),
+                Cuota.total_pagado < func.coalesce(Cuota.monto, 0) - 0.01,
+            ),
+        )
+    )
+
+
+def _morosidad_cedulas_filas_desde_python(db: Session):
+    """
+    Agregado por cedula para exportar/morosidad-cedulas: solo cuotas con clasificar_estado_cuota == MORA.
+    Lista de (cedula, modalidad_csv, cantidad, total_usd) ordenada por cedula.
+    """
+    ref = hoy_negocio()
+    rows = db.execute(_query_base_cuotas_activos_aprobados(ref)).mappings().all()
+    by_c: defaultdict[int, dict] = defaultdict(
+        lambda: {
+            "cedula": "",
+            "mods": set(),
+            "n": 0,
+            "usd": 0.0,
+        }
+    )
+    for row in rows:
+        if not _cuota_incluida_mora_reporte_python(
+            row["total_pagado"],
+            row["monto"],
+            row["fecha_vencimiento"],
+            ref,
+        ):
+            continue
+        cid = row["cliente_id"]
+        d = by_c[cid]
+        d["cedula"] = row["cedula"] or ""
+        mod = (row["modalidad_pago"] or "").strip()
+        if mod:
+            d["mods"].add(mod)
+        d["n"] += 1
+        d["usd"] += _safe_float(row["monto"])
+
+    out: List[tuple] = []
+    for cid in sorted(by_c.keys(), key=lambda i: by_c[i]["cedula"] or ""):
+        d = by_c[cid]
+        modalidad = ", ".join(sorted(d["mods"]))
+        out.append(
+            (
+                d["cedula"],
+                modalidad,
+                int(d["n"]),
+                round(d["usd"], 2),
+            )
+        )
+    return out
+
+
+def _morosidad_clientes_json_desde_python(db: Session):
+    """Mismo criterio que export morosidad-cedulas; incluye nombre para JSON."""
+    ref = hoy_negocio()
+    rows = db.execute(_query_base_cuotas_activos_aprobados(ref)).mappings().all()
+    by_c: defaultdict[int, dict] = defaultdict(
+        lambda: {
+            "cedula": "",
+            "nombre": "",
+            "mods": set(),
+            "n": 0,
+            "usd": 0.0,
+        }
+    )
+    for row in rows:
+        if not _cuota_incluida_mora_reporte_python(
+            row["total_pagado"],
+            row["monto"],
+            row["fecha_vencimiento"],
+            ref,
+        ):
+            continue
+        cid = row["cliente_id"]
+        d = by_c[cid]
+        d["cedula"] = row["cedula"] or ""
+        d["nombre"] = row["nombres"] or ""
+        mod = (row["modalidad_pago"] or "").strip()
+        if mod:
+            d["mods"].add(mod)
+        d["n"] += 1
+        d["usd"] += _safe_float(row["monto"])
+
+    items = []
+    for cid in sorted(by_c.keys(), key=lambda i: by_c[i]["usd"], reverse=True):
+        d = by_c[cid]
+        items.append(
+            {
+                "nombre": d["nombre"],
+                "cedula": d["cedula"],
+                "cantidad_cuotas_morosidad": int(d["n"]),
+                "total_usd_morosidad": round(d["usd"], 2),
+            }
+        )
+    return items
 
 
 RANGOS_ATRASO = [
@@ -169,7 +302,6 @@ def get_auditoria_mora_por_cliente(
         )
 
     c = aliased(Cuota, name="c")
-    filtro_mora = _filtro_cuota_solo_estado_mora_sql()
     filtro_mora_sum_pagos = _filtro_cuota_mora_desde_case_sql(SQL_PG_ESTADO_CUOTA_CASE_CORRELATED)
 
     base_filters = [
@@ -178,13 +310,35 @@ def get_auditoria_mora_por_cliente(
         Prestamo.estado == "APROBADO",
     ]
 
-    agg = db.execute(
-        select(func.count(c.id), func.coalesce(func.sum(c.monto), 0))
+    ref = hoy_negocio()
+    rows_cuotas = db.execute(
+        select(
+            c.id,
+            c.numero_cuota,
+            c.monto,
+            c.total_pagado,
+            c.fecha_vencimiento,
+            Prestamo.id.label("prestamo_id"),
+        )
         .select_from(c)
         .join(Prestamo, c.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(*base_filters, filtro_mora)
-    ).one()
+        .where(*base_filters)
+        .order_by(Prestamo.id, c.numero_cuota.asc())
+    ).mappings().all()
+
+    mora_python = [
+        r
+        for r in rows_cuotas
+        if _cuota_incluida_mora_reporte_python(
+            r["total_pagado"],
+            r["monto"],
+            r["fecha_vencimiento"],
+            ref,
+        )
+    ]
+    n_mora_reporte = len(mora_python)
+    total_monto_rep = sum(_safe_float(r["monto"]) for r in mora_python)
 
     n_mora_si_sum_cuota_pagos = int(
         db.execute(
@@ -208,14 +362,7 @@ def get_auditoria_mora_por_cliente(
         or 0
     )
 
-    detalle = db.execute(
-        select(c.id, c.numero_cuota, c.monto, Prestamo.id.label("prestamo_id"))
-        .select_from(c)
-        .join(Prestamo, c.prestamo_id == Prestamo.id)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(*base_filters, filtro_mora)
-        .order_by(Prestamo.id, c.numero_cuota.asc())
-    ).fetchall()
+    detalle = mora_python
 
     sum_aplicado_sq = (
         select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
@@ -251,16 +398,14 @@ def get_auditoria_mora_por_cliente(
                 }
             )
 
-    n_mora_reporte = int(agg[0] or 0)
-
     return {
         "alcance": "reporte_morosidad_cedulas",
         "cliente_id": row_cl.id,
         "cedula": row_cl.cedula or "",
         "nombres": row_cl.nombres or "",
         "cantidad_cuotas_mora": n_mora_reporte,
-        "total_monto_usd": round(_safe_float(agg[1]), 2),
-        "criterio": "Informe morosidad: todas las cuotas MORA del cliente en prestamos APROBADO (ACTIVO).",
+        "total_monto_usd": round(total_monto_rep, 2),
+        "criterio": "Informe morosidad: clasificar_estado_cuota == MORA (misma regla que amortizacion en pantalla).",
         "cantidad_cuotas_mora_si_sum_cuota_pagos": n_mora_si_sum_cuota_pagos,
         "cantidad_cuotas_estado_columna_bd_mora": n_mora_estado_columna_bd,
         "conteos_coinciden": n_mora_reporte
@@ -268,13 +413,13 @@ def get_auditoria_mora_por_cliente(
         == n_mora_estado_columna_bd,
         "tolerancia_alineacion_usd": TOL_ALINEACION_PAGADO_CUOTA,
         "cuotas_desalineadas_pagos": desv,
-        "precision": "Valide el Excel de morosidad por cedula con estos numeros. Si difiere cantidad_cuotas_mora_si_sum_cuota_pagos, total_pagado no coincide con SUM(cuota_pagos). Diagnostico por un solo prestamo: GET .../mora-por-prestamo.",
+        "precision": "cantidad_cuotas_mora se calcula en Python (paridad con UI). cantidad_cuotas_mora_si_sum_cuota_pagos usa CASE SQL con SUM(cuota_pagos) para diagnosticar desincronizacion.",
         "cuotas": [
             {
-                "cuota_id": r.id,
-                "prestamo_id": r.prestamo_id,
-                "numero_cuota": r.numero_cuota,
-                "monto_usd": round(_safe_float(r.monto), 2),
+                "cuota_id": r["id"],
+                "prestamo_id": r["prestamo_id"],
+                "numero_cuota": r["numero_cuota"],
+                "monto_usd": round(_safe_float(r["monto"]), 2),
             }
             for r in detalle
         ],
@@ -297,13 +442,31 @@ def get_auditoria_mora_por_prestamo(
         raise HTTPException(status_code=404, detail="Prestamo no encontrado")
 
     c = aliased(Cuota, name="c")
-    filtro_mora = _filtro_cuota_solo_estado_mora_sql()
-
-    agg = db.execute(
-        select(func.count(c.id), func.coalesce(func.sum(c.monto), 0))
+    ref = hoy_negocio()
+    rows_p = db.execute(
+        select(
+            c.id,
+            c.numero_cuota,
+            c.monto,
+            c.total_pagado,
+            c.fecha_vencimiento,
+        )
         .select_from(c)
-        .where(c.prestamo_id == prestamo_id, filtro_mora)
-    ).one()
+        .where(c.prestamo_id == prestamo_id)
+        .order_by(c.numero_cuota.asc())
+    ).mappings().all()
+    mora_p = [
+        r
+        for r in rows_p
+        if _cuota_incluida_mora_reporte_python(
+            r["total_pagado"],
+            r["monto"],
+            r["fecha_vencimiento"],
+            ref,
+        )
+    ]
+    n_mora_reporte = len(mora_p)
+    total_monto_rep = sum(_safe_float(r["monto"]) for r in mora_p)
 
     filtro_mora_sum_pagos = _filtro_cuota_mora_desde_case_sql(SQL_PG_ESTADO_CUOTA_CASE_CORRELATED)
     n_mora_si_sum_cuota_pagos = int(
@@ -325,12 +488,7 @@ def get_auditoria_mora_por_prestamo(
         or 0
     )
 
-    detalle = db.execute(
-        select(c.id, c.numero_cuota, c.monto)
-        .select_from(c)
-        .where(c.prestamo_id == prestamo_id, filtro_mora)
-        .order_by(c.numero_cuota.asc())
-    ).fetchall()
+    detalle = mora_p
 
     sum_aplicado_sq = (
         select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
@@ -363,16 +521,14 @@ def get_auditoria_mora_por_prestamo(
                 }
             )
 
-    n_mora_reporte = int(agg[0] or 0)
-
     return {
         "alcance": "diagnostico_por_prestamo",
         "reporte_morosidad_usar": "GET /reportes/morosidad/auditoria/mora-por-cliente (Excel va por cedula, no por prestamo)",
         "prestamo_id": prestamo_id,
         "cedula_prestamo": row_p.cedula or "",
         "cantidad_cuotas_mora": n_mora_reporte,
-        "total_monto_usd": round(_safe_float(agg[1]), 2),
-        "criterio": "Un solo prestamo: estado MORA con total_pagado (como lista de cuotas).",
+        "total_monto_usd": round(total_monto_rep, 2),
+        "criterio": "Un solo prestamo: clasificar_estado_cuota == MORA (paridad con amortizacion).",
         "cantidad_cuotas_mora_si_sum_cuota_pagos": n_mora_si_sum_cuota_pagos,
         "cantidad_cuotas_estado_columna_bd_mora": n_mora_estado_columna_bd,
         "conteos_coinciden": n_mora_reporte == n_mora_si_sum_cuota_pagos == n_mora_estado_columna_bd,
@@ -381,9 +537,9 @@ def get_auditoria_mora_por_prestamo(
         "precision": "Auxiliar para contrastar una tabla de amortizacion. El reporte de morosidad agrega por cliente: mora-por-cliente.",
         "cuotas": [
             {
-                "cuota_id": r.id,
-                "numero_cuota": r.numero_cuota,
-                "monto_usd": round(_safe_float(r.monto), 2),
+                "cuota_id": r["id"],
+                "numero_cuota": r["numero_cuota"],
+                "monto_usd": round(_safe_float(r["monto"]), 2),
             }
             for r in detalle
         ],
@@ -407,49 +563,7 @@ def get_morosidad_clientes(
 
     fc = _parse_fecha(fecha_corte)
 
-    c = aliased(Cuota, name="c")
-
-    filtro_mora = _filtro_cuota_solo_estado_mora_sql()
-
-    q = (
-
-        select(
-
-            Cliente.id.label("cliente_id"),
-
-            Cliente.nombres.label("nombre"),
-
-            Cliente.cedula.label("cedula"),
-
-            func.count(c.id).label("cantidad_cuotas"),
-
-            func.coalesce(func.sum(c.monto), 0).label("total_usd"),
-
-        )
-
-        .select_from(c)
-
-        .join(Prestamo, c.prestamo_id == Prestamo.id)
-
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-
-        .where(
-
-            Cliente.estado == "ACTIVO",
-
-            Prestamo.estado == "APROBADO",
-
-            filtro_mora,
-
-        )
-
-        .group_by(Cliente.id, Cliente.nombres, Cliente.cedula)
-
-        .order_by(func.coalesce(func.sum(c.monto), 0).desc())
-
-    )
-
-    rows = db.execute(q).fetchall()
+    items = _morosidad_clientes_json_desde_python(db)
 
     return {
 
@@ -459,25 +573,9 @@ def get_morosidad_clientes(
 
         "excluye_estados_cuota": list(REPORTE_MOROSIDAD_ESTADOS_EXCLUIDOS),
 
-        "criterio": "Solo cuotas con estado calculado MORA (4+ meses; excluye VENCIDO y demas).",
+        "criterio": "Solo cuotas con clasificar_estado_cuota == MORA (misma regla que amortizacion en pantalla).",
 
-        "items": [
-
-            {
-
-                "nombre": r.nombre or "",
-
-                "cedula": r.cedula or "",
-
-                "cantidad_cuotas_morosidad": int(r.cantidad_cuotas or 0),
-
-                "total_usd_morosidad": round(_safe_float(r.total_usd), 2),
-
-            }
-
-            for r in rows
-
-        ],
+        "items": items,
 
     }
 
@@ -1523,33 +1621,7 @@ def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
 
     t0 = time.perf_counter()
 
-    # Alias `c` debe coincidir con el SQL embebido (referencias c.id, c.monto_cuota, ...).
-    c = aliased(Cuota, name="c")
-    estado_cuota_en_morosidad = _filtro_cuota_solo_estado_mora_sql()
-    modalidad_por_cliente = literal_column(
-        "string_agg(DISTINCT prestamos.modalidad_pago, ', ' "
-        "ORDER BY prestamos.modalidad_pago)"
-    ).label("modalidad")
-
-    rows_resumen = db.execute(
-        select(
-            Cliente.id.label("cliente_id"),
-            Cliente.cedula.label("cedula"),
-            modalidad_por_cliente,
-            func.count(c.id).label("total_cuotas"),
-            func.coalesce(func.sum(c.monto), 0).label("total_monto"),
-        )
-        .select_from(c)
-        .join(Prestamo, c.prestamo_id == Prestamo.id)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(
-            Cliente.estado == "ACTIVO",
-            Prestamo.estado == "APROBADO",
-            estado_cuota_en_morosidad,
-        )
-        .group_by(Cliente.id, Cliente.cedula)
-        .order_by(Cliente.cedula.asc())
-    ).fetchall()
+    rows_resumen = _morosidad_cedulas_filas_desde_python(db)
 
     fc = hoy_negocio()
     hoy_str = fc.isoformat()
@@ -1569,15 +1641,15 @@ def exportar_morosidad_cedulas(db: Session = Depends(get_db)):
 
     total_cuotas_general = 0
     total_monto_general = 0.0
-    for r in rows_resumen:
-        cuotas = int(r.total_cuotas or 0)
-        monto = round(_safe_float(r.total_monto), 2)
+    for ced, mod, cuotas, monto in rows_resumen:
+        cuotas = int(cuotas or 0)
+        monto = round(_safe_float(monto), 2)
         total_cuotas_general += cuotas
         total_monto_general += monto
         ws.append(
             [
-                r.cedula or "",
-                r.modalidad or "",
+                ced or "",
+                mod or "",
                 cuotas,
                 monto,
             ]

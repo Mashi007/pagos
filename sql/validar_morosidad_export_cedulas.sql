@@ -1,4 +1,6 @@
--- Validacion: mismo criterio que el reporte de morosidad (Excel por cedula):
+-- Validacion aproximada (CASE en SQL). El Excel en la API usa clasificar_estado_cuota() en Python
+-- (paridad con amortizacion); si difiere, confiar en el export o en GET .../auditoria/mora-por-cliente.
+-- Mismo objetivo que el reporte de morosidad (Excel por cedula):
 --   GET /api/v1/reportes/exportar/morosidad-cedulas
 --   GET /api/v1/reportes/morosidad/clientes
 --   GET /api/v1/reportes/morosidad/auditoria/mora-por-cliente?cedula=
