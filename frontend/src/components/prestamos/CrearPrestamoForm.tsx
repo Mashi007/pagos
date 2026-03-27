@@ -164,6 +164,8 @@ export function CrearPrestamoForm({
 
     modelo_vehiculo: modeloInicial,
 
+    estado: prestamo?.estado,
+
     observaciones: prestamo?.observaciones || '',
   })
 
@@ -545,6 +547,10 @@ export function CrearPrestamoForm({
         observaciones: justificacionAutorizacion
           ? `${formData.observaciones || ''}\n\n--- JUSTIFICACIÓN PARA NUEVO PRÉSTAMO ---\n${justificacionAutorizacion}`.trim()
           : formData.observaciones,
+      }
+
+      if (!prestamo) {
+        delete prestamoData.estado
       }
 
       // No enviar fecha_aprobacion vacía: FastAPI rechaza "" como datetime (422).
@@ -1135,6 +1141,51 @@ export function CrearPrestamoForm({
                     </div>
                   ) : null}
                 </div>
+
+                {prestamo ? (
+                  <div className="mt-4">
+                    <label className="mb-1 block text-sm font-medium">
+                      Estado del préstamo
+                    </label>
+
+                    <Select
+                      value={String(
+                        formData.estado ?? prestamo.estado ?? 'DRAFT'
+                      )}
+                      onValueChange={value =>
+                        setFormData({
+                          ...formData,
+
+                          estado: value as Prestamo['estado'],
+                        })
+                      }
+                      disabled={isReadOnly}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Estado" />
+                      </SelectTrigger>
+
+                      <SelectContent>
+                        <SelectItem value="DRAFT">Borrador</SelectItem>
+
+                        <SelectItem value="EN_REVISION">En revisión</SelectItem>
+
+                        <SelectItem value="EVALUADO">Evaluado</SelectItem>
+
+                        <SelectItem value="APROBADO">Aprobado</SelectItem>
+
+                        <SelectItem value="LIQUIDADO">Liquidado</SelectItem>
+
+                        <SelectItem value="RECHAZADO">Rechazado</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      Al guardar se persistirá el estado en la base de datos.
+                      Revise coherencia con cuotas y pagos.
+                    </p>
+                  </div>
+                ) : null}
 
                 {prestamo && prestamo.estado === 'APROBADO' && (
                   <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">

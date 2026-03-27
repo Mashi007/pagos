@@ -8,7 +8,9 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-PRESTAMO_ESTADOS_VALIDOS = frozenset({"APROBADO", "DRAFT", "EN_REVISION", "EVALUADO", "RECHAZADO", "LIQUIDADO"})
+PRESTAMO_ESTADOS_VALIDOS = frozenset(
+    {"APROBADO", "DRAFT", "EN_REVISION", "EVALUADO", "RECHAZADO", "LIQUIDADO", "DESISTIMIENTO"}
+)
 
 def _normalizar_estado_prestamo(v):
     if not v or not str(v).strip(): return "DRAFT"
@@ -116,6 +118,8 @@ class PrestamoResponse(BaseModel):
     producto: Optional[str] = None
     valor_activo: Optional[Decimal] = None
     observaciones: Optional[str] = None
+    # Fecha calendario (Caracas) en que el prestamo paso a DESISTIMIENTO; inmutable mientras siga en ese estado.
+    fecha_desistimiento: Optional[date] = None
 
 
 class PrestamoListResponse(PrestamoResponse):

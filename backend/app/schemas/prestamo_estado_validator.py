@@ -2,7 +2,9 @@
 # Añadir al inicio de app/schemas/prestamo.py (después de los imports) y usar
 # field_validator en PrestamoBase y PrestamoUpdate.
 
-PRESTAMO_ESTADOS_VALIDOS = frozenset({"APROBADO", "DRAFT", "EN_REVISION", "EVALUADO", "RECHAZADO", "LIQUIDADO"})
+PRESTAMO_ESTADOS_VALIDOS = frozenset(
+    {"APROBADO", "DRAFT", "EN_REVISION", "EVALUADO", "RECHAZADO", "LIQUIDADO", "DESISTIMIENTO"}
+)
 
 
 def normalizar_estado_prestamo(v: Optional[str]) -> str:

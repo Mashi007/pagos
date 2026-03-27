@@ -227,6 +227,10 @@ export interface PrestamoForm {
 
   modelo_vehiculo?: string
 
+  /** Solo edicion: estado del prestamo (PUT). Creacion usa default del backend. */
+
+  estado?: Prestamo['estado']
+
   numero_cuotas?: number // Número de cuotas manual del formulario
 
   cuota_periodo?: number // Cuota por periodo (manual en formulario nuevo prestamo)
