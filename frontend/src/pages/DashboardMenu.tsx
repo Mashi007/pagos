@@ -12,7 +12,6 @@ import {
   Filter,
   TrendingUp,
   TrendingDown,
-  Users,
   AlertTriangle,
   Shield,
   Clock,
@@ -77,12 +76,10 @@ import type {
   OpcionesFiltrosResponse,
   DashboardAdminResponse,
   FinanciamientoPorRangosResponse,
-  ComposicionMorosidadResponse,
   CobranzasSemanalesResponse,
   MorosidadPorAnalistaItem,
   AnalisisCuentasPorCobrarResponse,
   TendenciaProgramadoTotalCobradoResponse,
-  RecibosPagosMensualUsdResponse,
   EvolucionMensualItem,
 } from '../types/dashboard'
 
@@ -113,11 +110,6 @@ import {
   ComposedChart,
   ScatterChart,
   Scatter,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
 } from 'recharts'
 
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
@@ -375,41 +367,6 @@ export function DashboardMenu() {
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
   })
 
-  const periodoComposicionMorosidad = getPeriodoGrafico('composicion-morosidad')
-
-  const {
-    data: datosComposicionMorosidad,
-    isLoading: loadingComposicionMorosidad,
-  } = useQuery({
-    queryKey: [
-      'composicion-morosidad',
-      periodoComposicionMorosidad,
-      JSON.stringify(filtros),
-    ],
-
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodoComposicionMorosidad)
-
-      const queryParams = new URLSearchParams()
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-
-      const response = await apiClient.get(
-        `/api/v1/dashboard/composicion-morosidad?${queryParams.toString()}`
-      )
-
-      return response as ComposicionMorosidadResponse
-    },
-
-    staleTime: 4 * 60 * 60 * 1000,
-
-    refetchOnWindowFocus: false,
-
-    enabled: true,
-  })
-
   const periodoCobranzasSemanales = getPeriodoGrafico('cobranzas-semanales')
 
   const {
@@ -579,59 +536,6 @@ export function DashboardMenu() {
       enabled: true,
     })
 
-  const periodoRecibosUsd = getPeriodoGrafico('recibos-pagos-usd')
-
-  const {
-    data: datosRecibosUsd,
-    isLoading: loadingRecibosUsd,
-    isError: errorRecibosUsd,
-    refetch: refetchRecibosUsd,
-  } = useQuery({
-    queryKey: [
-      'recibos-pagos-mensual-usd',
-      periodoRecibosUsd,
-      JSON.stringify(filtros),
-    ],
-
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodoRecibosUsd)
-
-      const queryParams = new URLSearchParams()
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-
-      if (!queryParams.has('periodo') && periodoRecibosUsd)
-        queryParams.append('periodo', periodoRecibosUsd)
-
-      const response = await apiClient.get(
-        `/api/v1/dashboard/recibos-pagos-mensual-usd${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
-        { timeout: 60000 }
-      )
-
-      const r = response as RecibosPagosMensualUsdResponse
-
-      return {
-        ...r,
-        estadistica: r.estadistica ?? {
-          total_bs_en_usd: 0,
-          total_reportes: 0,
-          promedio_mensual_usd: 0,
-          meses_con_datos: 0,
-          primer_mes: null,
-          ultimo_mes: null,
-        },
-      }
-    },
-
-    staleTime: 4 * 60 * 60 * 1000,
-
-    refetchOnWindowFocus: false,
-
-    enabled: true,
-  })
-
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Mostrar toast cuando falla la carga del gráfico principal (auditoría: no fallar en silencio)
@@ -672,11 +576,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['composicion-morosidad'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
         queryKey: ['cobranzas-semanales'],
         exact: false,
       })
@@ -698,11 +597,6 @@ export function DashboardMenu() {
 
       await queryClient.invalidateQueries({
         queryKey: ['tendencia-programado-total-cobrado'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
-        queryKey: ['recibos-pagos-mensual-usd'],
         exact: false,
       })
 
@@ -724,11 +618,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['composicion-morosidad'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
         queryKey: ['cobranzas-semanales'],
         exact: false,
       })
@@ -750,11 +639,6 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['tendencia-programado-total-cobrado'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
-        queryKey: ['recibos-pagos-mensual-usd'],
         exact: false,
       })
 
@@ -887,16 +771,6 @@ export function DashboardMenu() {
   }
 
   const chartAxisTick = { fontSize: 13, fill: '#374151', fontWeight: 500 }
-
-  const colorComposicionBarra = (categoria: string) => {
-    const c = String(categoria ?? '')
-    if (c === 'Pagado') return '#15803d'
-    if (c === 'Pendiente') return '#2563eb'
-    if (c === 'Pendiente parcial') return '#ca8a04'
-    if (c === 'Vencido') return '#ea580c'
-    if (c === 'Mora (4 meses+)') return '#7f1d1d'
-    return '#64748b'
-  }
 
   const chartLegendStyle = {
     wrapperStyle: { paddingTop: 14 },
@@ -1637,336 +1511,115 @@ export function DashboardMenu() {
                 </CardContent>
               </Card>
             </motion.div>
-
-            {/* Recibos solo en Bs.: USD equivalente por mes + estadística */}
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.32 }}
-            >
-              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-violet-50/90 to-fuchsia-50/90 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <FileText className="h-5 w-5 text-violet-600" />
-
-                      <span>Recibos en bolívares (USD equivalente)</span>
-                    </CardTitle>
-
-                    <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="recibos-pagos-usd" />
-
-                      <Badge
-                        variant="secondary"
-                        className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                      >
-                        Solo Bs. · PDF
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <p className="mt-1 text-xs text-gray-600">
-                    Solo reportes con recibo (aprobado o importado) cuya moneda
-                    es bolívar: se suma por mes el equivalente en USD con el
-                    monto conciliado en tabla pagos si existe la fila vinculada;
-                    si no, el monto en Bs. del reporte dividido por la tasa
-                    oficial del día. El gráfico omite meses vacíos al inicio y
-                    al final del rango.
-                  </p>
-
-                  {!loadingRecibosUsd &&
-                    !errorRecibosUsd &&
-                    datosRecibosUsd?.series &&
-                    datosRecibosUsd.series.length > 0 &&
-                    datosRecibosUsd.estadistica && (
-                      <dl className="mt-3 grid gap-2 text-xs text-gray-700 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="rounded-lg border border-violet-100 bg-white/90 px-3 py-2 shadow-sm">
-                          <dt className="font-medium text-gray-500">
-                            Total USD equivalente
-                          </dt>
-
-                          <dd className="text-base font-semibold text-gray-900">
-                            {formatCurrency(
-                              datosRecibosUsd.estadistica.total_bs_en_usd
-                            )}
-                          </dd>
-                        </div>
-
-                        <div className="rounded-lg border border-violet-100 bg-white/90 px-3 py-2 shadow-sm">
-                          <dt className="font-medium text-gray-500">
-                            Recibos en Bs. (cantidad)
-                          </dt>
-
-                          <dd className="text-base font-semibold text-gray-900">
-                            {datosRecibosUsd.estadistica.total_reportes}
-                          </dd>
-                        </div>
-
-                        <div className="rounded-lg border border-violet-100 bg-white/90 px-3 py-2 shadow-sm">
-                          <dt className="font-medium text-gray-500">
-                            Promedio mensual (USD eq.)
-                          </dt>
-
-                          <dd className="text-base font-semibold text-gray-900">
-                            {formatCurrency(
-                              datosRecibosUsd.estadistica.promedio_mensual_usd
-                            )}
-                          </dd>
-                        </div>
-
-                        <div className="rounded-lg border border-violet-100 bg-white/90 px-3 py-2 shadow-sm">
-                          <dt className="font-medium text-gray-500">
-                            Meses en el gráfico
-                          </dt>
-
-                          <dd className="text-base font-semibold text-gray-900">
-                            {datosRecibosUsd.estadistica.meses_con_datos}
-                            {datosRecibosUsd.estadistica.primer_mes &&
-                              datosRecibosUsd.estadistica.ultimo_mes && (
-                                <span className="mt-0.5 block text-xs font-normal text-gray-500">
-                                  {datosRecibosUsd.estadistica.primer_mes} -{' '}
-                                  {datosRecibosUsd.estadistica.ultimo_mes}
-                                </span>
-                              )}
-                          </dd>
-                        </div>
-                      </dl>
-                    )}
-                </CardHeader>
-
-                <CardContent className="p-6 pt-4">
-                  {loadingRecibosUsd ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando recibos en bolívares...
-                    </div>
-                  ) : errorRecibosUsd ? (
-                    <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-500">
-                      <p className="text-center text-sm">
-                        No se pudieron cargar los datos de este gráfico. Revisa
-                        la conexión o intenta de nuevo.
-                      </p>
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void refetchRecibosUsd()}
-                      >
-                        Reintentar
-                      </Button>
-                    </div>
-                  ) : datosRecibosUsd?.series &&
-                    datosRecibosUsd.series.length > 0 ? (
-                    <ChartWithDateRangeSlider
-                      data={datosRecibosUsd.series}
-                      dataKey="mes"
-                      chartHeight={360}
-                    >
-                      {filteredData => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RechartsLineChart
-                            data={filteredData}
-                            margin={{
-                              top: 14,
-                              right: 24,
-                              left: 12,
-                              bottom: 14,
-                            }}
-                          >
-                            <CartesianGrid {...chartCartesianGrid} />
-
-                            <XAxis dataKey="mes" tick={chartAxisTick} />
-
-                            <YAxis
-                              tick={chartAxisTick}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
-
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'USD equivalente (Bs.)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
-
-                            <Tooltip
-                              contentStyle={chartTooltipStyle.contentStyle}
-                              labelStyle={chartTooltipStyle.labelStyle}
-                              content={({ active, payload, label }) => {
-                                if (!active || !payload?.length) return null
-
-                                const row = payload[0]?.payload as {
-                                  bs_en_usd?: number
-                                  cantidad?: number
-                                }
-
-                                const usd = Number(
-                                  payload[0]?.value ?? row?.bs_en_usd ?? 0
-                                )
-
-                                const n = Number(row?.cantidad ?? 0)
-
-                                return (
-                                  <div
-                                    style={chartTooltipStyle.contentStyle}
-                                    className="text-sm"
-                                  >
-                                    <p
-                                      style={{
-                                        ...chartTooltipStyle.labelStyle,
-                                        marginBottom: 6,
-                                      }}
-                                    >
-                                      {label}
-                                    </p>
-
-                                    <p className="text-amber-800">
-                                      {formatCurrency(usd)} USD eq.
-                                    </p>
-
-                                    <p className="mt-1 text-gray-600">
-                                      {n} recibo{n === 1 ? '' : 's'} en Bs.
-                                    </p>
-                                  </div>
-                                )
-                              }}
-                            />
-
-                            <Legend {...chartLegendStyle} />
-
-                            <Line
-                              type="monotone"
-                              dataKey="bs_en_usd"
-                              stroke="#d97706"
-                              strokeWidth={2}
-                              dot={{ r: 4 }}
-                              name="Bolívares (USD equivalente)"
-                            />
-                          </RechartsLineChart>
-                        </ResponsiveContainer>
-                      )}
-                    </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay recibos en bolívares con movimiento en el período
-                      seleccionado
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Monto programado por día: hoy hasta una semana despu\u00E9s */}
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.36 }}
-            >
-              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <DollarSign className="h-5 w-5 text-emerald-600" />
-
-                      <span>Monto programado por día</span>
-                    </CardTitle>
-
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                      Hoy hasta 1 semana
-                    </Badge>
-                  </div>
-
-                  <CardDescription className="text-sm text-gray-600">
-                    Suma de monto_cuota (cuotas con vencimiento cada d\u00EDa)
-                    desde hoy hasta 7 d\u00EDas despu\u00E9s
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent className="p-6 pt-4">
-                  {loadingMontoProgramadoSemana ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando...
-                    </div>
-                  ) : datosMontoProgramadoSemana &&
-                    datosMontoProgramadoSemana.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={340}>
-                      <BarChart
-                        data={datosMontoProgramadoSemana}
-                        margin={{ top: 14, right: 24, left: 12, bottom: 14 }}
-                      >
-                        <CartesianGrid {...chartCartesianGrid} />
-
-                        <XAxis
-                          dataKey="dia"
-                          angle={-35}
-                          textAnchor="end"
-                          tick={chartAxisTick}
-                          height={72}
-                        />
-
-                        <YAxis
-                          tick={chartAxisTick}
-                          tickFormatter={value =>
-                            `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`
-                          }
-                          label={{
-                            value: 'Monto (USD)',
-                            angle: -90,
-                            position: 'insideLeft',
-                            style: { fill: '#374151', fontSize: 13 },
-                          }}
-                        />
-
-                        <Tooltip
-                          contentStyle={chartTooltipStyle.contentStyle}
-                          labelStyle={chartTooltipStyle.labelStyle}
-                          formatter={(value: number) => [
-                            formatCurrency(value),
-                            'Monto programado',
-                          ]}
-                          labelFormatter={(_, payload) =>
-                            payload?.[0]?.payload?.fecha
-                              ? `Fecha: ${payload[0].payload.fecha}`
-                              : ''
-                          }
-                        />
-
-                        <Legend {...chartLegendStyle} />
-
-                        <Bar
-                          dataKey="monto_programado"
-                          name="Monto programado"
-                          fill="#10b981"
-                          radius={[4, 4, 0, 0]}
-                          maxBarSize={56}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay datos de monto programado para los próximos 7
-                      d\u00EDas
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
           </div>
         ) : null}
 
         {/* GRÁFICOS: BANDAS DE FINANCIAMIENTO Y COBRANZA PLANIFICADA VS REAL */}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {datosDashboard ? (
+            <>
+              {/* Monto programado por día: ventana D+4 a D+7 (4 días en el futuro) */}
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.36 }}
+              >
+                <Card className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+                  <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                        <DollarSign className="h-5 w-5 text-emerald-600" />
+
+                        <span>Monto programado por día</span>
+                      </CardTitle>
+
+                      <Badge
+                        variant="secondary"
+                        className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                      >
+                        D+4 a D+7 (4 días)
+                      </Badge>
+                    </div>
+
+                    <CardDescription className="text-sm text-gray-600">
+                      Suma de monto_cuota por fecha de vencimiento entre hoy +4
+                      y hoy +7 (cuatro días corridos en el futuro).
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="p-6 pt-4">
+                    {loadingMontoProgramadoSemana ? (
+                      <div className="flex items-center justify-center py-16 text-gray-500">
+                        Cargando...
+                      </div>
+                    ) : datosMontoProgramadoSemana &&
+                      datosMontoProgramadoSemana.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={340}>
+                        <BarChart
+                          data={datosMontoProgramadoSemana}
+                          margin={{ top: 14, right: 24, left: 12, bottom: 14 }}
+                        >
+                          <CartesianGrid {...chartCartesianGrid} />
+
+                          <XAxis
+                            dataKey="dia"
+                            angle={-35}
+                            textAnchor="end"
+                            tick={chartAxisTick}
+                            height={72}
+                          />
+
+                          <YAxis
+                            tick={chartAxisTick}
+                            tickFormatter={value =>
+                              `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`
+                            }
+                            label={{
+                              value: 'Monto (USD)',
+                              angle: -90,
+                              position: 'insideLeft',
+                              style: { fill: '#374151', fontSize: 13 },
+                            }}
+                          />
+
+                          <Tooltip
+                            contentStyle={chartTooltipStyle.contentStyle}
+                            labelStyle={chartTooltipStyle.labelStyle}
+                            formatter={(value: number) => [
+                              formatCurrency(value),
+                              'Monto programado',
+                            ]}
+                            labelFormatter={(_, payload) =>
+                              payload?.[0]?.payload?.fecha
+                                ? `Fecha: ${payload[0].payload.fecha}`
+                                : ''
+                            }
+                          />
+
+                          <Legend {...chartLegendStyle} />
+
+                          <Bar
+                            dataKey="monto_programado"
+                            name="Monto programado"
+                            fill="#10b981"
+                            radius={[4, 4, 0, 0]}
+                            maxBarSize={56}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center py-16 text-gray-500">
+                        No hay datos de monto programado para el rango D+4 a D+7
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </>
+          ) : null}
+
           {/* GRÁFICO DE BANDAS DE $400 USD */}
 
           <motion.div
@@ -2095,110 +1748,6 @@ export function DashboardMenu() {
               </CardContent>
             </Card>
           </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.82 }}
-            className="h-full"
-          >
-            <Card className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-rose-50/90 to-red-50/90 pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                    <BarChart3 className="h-5 w-5 text-rose-600" />
-
-                    <span>Préstamos por estado de la última cuota</span>
-                  </CardTitle>
-
-                  <div className="flex items-center gap-2">
-                    <SelectorPeriodoGrafico chartId="composicion-morosidad" />
-
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                      Al día de hoy
-                    </Badge>
-                  </div>
-                </div>
-
-                <p className="mt-1 text-xs text-gray-600">
-                  Por cada préstamo aprobado se toma la última fila de la tabla
-                  de amortización (mayor número de cuota) y el estado de esa
-                  cuota: Pagado, Pendiente, Pendiente parcial, Vencido o Mora
-                  (4+ meses desde el vencimiento). Misma regla que la
-                  amortización en Caracas (hoy).
-                </p>
-              </CardHeader>
-
-              <CardContent className="flex-1 p-6">
-                {datosComposicionMorosidad?.puntos?.length ? (
-                  <ChartWithDateRangeSlider
-                    data={datosComposicionMorosidad.puntos}
-                    dataKey="categoria"
-                    chartHeight={400}
-                  >
-                    {filteredData => (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={filteredData}
-                          margin={{ top: 12, right: 24, left: 12, bottom: 12 }}
-                        >
-                          <CartesianGrid {...chartCartesianGrid} />
-
-                          <XAxis dataKey="categoria" tick={chartAxisTick} />
-
-                          <YAxis
-                            tick={chartAxisTick}
-                            allowDecimals={false}
-                            label={{
-                              value: 'Cantidad de préstamos',
-                              angle: -90,
-                              position: 'insideLeft',
-                              style: { fill: '#374151', fontSize: 12 },
-                            }}
-                          />
-
-                          <Tooltip
-                            contentStyle={chartTooltipStyle.contentStyle}
-                            labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number) => [
-                              typeof value === 'number'
-                                ? value.toLocaleString('es-EC')
-                                : value,
-                              'Préstamos',
-                            ]}
-                          />
-
-                          <Legend {...chartLegendStyle} />
-
-                          <Bar
-                            dataKey="cantidad_prestamos"
-                            name="Cantidad de préstamos"
-                            radius={[4, 4, 0, 0]}
-                          >
-                            {filteredData.map((row, index) => (
-                              <Cell
-                                key={`cell-composicion-morosidad-${index}-${String(row.categoria ?? '')}`}
-                                fill={colorComposicionBarra(
-                                  String(row.categoria ?? '')
-                                )}
-                              />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </ChartWithDateRangeSlider>
-                ) : (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    No hay datos para mostrar
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
         </div>
 
         {/* GRÁFICOS DE MOROSIDAD */}
@@ -2207,119 +1756,10 @@ export function DashboardMenu() {
           {/* Cantidad de préstamos en mora por rango de días */}
         </div>
 
-        {/* Pago vencido por Analista: 1 gráfico por fila, bloques independientes */}
+        {/* Pago vencido por Analista (por analista) */}
 
         <div className="mt-6 flex flex-col gap-6">
-          {/* Fila 1: solo Cuotas vencidas por analista (radar) */}
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9 }}
-            className="w-full"
-          >
-            <Card className="w-full overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-orange-50/90 to-amber-50/90 pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                    <Users className="h-5 w-5 text-orange-600" />
-
-                    <span>Pago vencido por Analista - Cuotas vencidas</span>
-                  </CardTitle>
-
-                  <div className="flex items-center gap-2">
-                    <SelectorPeriodoGrafico chartId="morosidad-analista" />
-
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                      Al día de hoy
-                    </Badge>
-                  </div>
-                </div>
-
-                <p className="mt-1 px-6 text-xs text-gray-600">
-                  Cuotas vencidas sin pagar (fecha_vencimiento &lt; hoy),
-                  snapshot actual por analista
-                </p>
-              </CardHeader>
-
-              <CardContent className="p-6">
-                {loadingMorosidadAnalista ? (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    Cargando...
-                  </div>
-                ) : datosMorosidadAnalista &&
-                  datosMorosidadAnalista.length > 0 ? (
-                  <>
-                    <h4 className="mb-3 text-center text-sm font-semibold text-gray-700">
-                      Cuotas vencidas por analista
-                    </h4>
-
-                    <ResponsiveContainer width="100%" height={400}>
-                      <RadarChart
-                        data={datosMorosidadAnalista}
-                        margin={{ top: 24, right: 32, left: 32, bottom: 24 }}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius="75%"
-                      >
-                        <PolarGrid stroke="#e5e7eb" strokeWidth={1} />
-
-                        <PolarAngleAxis
-                          dataKey="analista"
-                          tick={{
-                            fontSize: 11,
-                            fill: '#374151',
-                            fontWeight: 500,
-                          }}
-                          tickFormatter={name =>
-                            name && name.length > 18
-                              ? `${name.slice(0, 16)}…`
-                              : name
-                          }
-                        />
-
-                        <PolarRadiusAxis
-                          angle={90}
-                          tick={{ fontSize: 11, fill: '#6b7280' }}
-                          domain={[0, 'auto']}
-                        />
-
-                        <Radar
-                          name="Cuotas vencidas"
-                          dataKey="cantidad_cuotas_vencidas"
-                          stroke="#ea580c"
-                          strokeWidth={2}
-                          fill="#f97316"
-                          fillOpacity={0.4}
-                        />
-
-                        <Tooltip
-                          contentStyle={chartTooltipStyle.contentStyle}
-                          labelStyle={chartTooltipStyle.labelStyle}
-                          formatter={(value: number) => [
-                            value.toLocaleString('es-EC'),
-                            'Cuotas vencidas',
-                          ]}
-                          labelFormatter={label => `Analista: ${label}`}
-                        />
-
-                        <Legend {...chartLegendStyle} />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                  </>
-                ) : (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    No hay datos para mostrar
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Fila 2: solo Dólares vencidos por analista (barras) */}
+          {/* Dólares vencidos por analista (barras) */}
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}

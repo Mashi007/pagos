@@ -544,14 +544,15 @@ def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
 
 @router.get("/monto-programado-proxima-semana")
 def get_monto_programado_proxima_semana(db: Session = Depends(get_db)):
-    """Monto programado por día desde hoy hasta una semana después (7 días)."""
+    """Monto programado por día: vencimientos entre hoy+4 y hoy+7 (4 días en el futuro)."""
     try:
         hoy_utc = datetime.now(timezone.utc)
         hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
+        inicio_date = hoy_date + timedelta(days=4)
         fin_date = hoy_date + timedelta(days=7)
         resultado = []
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
-        d = hoy_date
+        d = inicio_date
         while d <= fin_date:
             programado = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
