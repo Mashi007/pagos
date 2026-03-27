@@ -404,6 +404,43 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
+/** GET /reportes/morosidad/auditoria/mora-por-prestamo — contrastar con tabla amortizacion (solo MORA). */
+export interface AuditoriaMoraPorPrestamo {
+  prestamo_id: number
+
+  cedula_prestamo: string
+
+  cantidad_cuotas_mora: number
+
+  total_monto_usd: number
+
+  criterio: string
+
+  tolerancia_alineacion_usd?: number
+
+  cuotas_desalineadas_pagos?: Array<{
+    cuota_id: number
+
+    numero_cuota: number
+
+    total_pagado_columna: number
+
+    sum_cuota_pagos: number
+
+    diff_usd: number
+  }>
+
+  precision?: string
+
+  cuotas: Array<{
+    cuota_id: number
+
+    numero_cuota: number
+
+    monto_usd: number
+  }>
+}
+
 class ReporteService {
   private baseUrl = '/api/v1/reportes'
 
@@ -846,7 +883,7 @@ class ReporteService {
 
 
 
-   * Exporta reporte Morosidad (clientes con cuotas 90+ días): Nombre, Cédula, Cant cuotas, Total USD
+   * Exporta morosidad-clientes: mismo backend que lista MORA (no VENCIDO). Nombre, Cedula, cant/total.
 
 
 
@@ -885,7 +922,7 @@ class ReporteService {
    */
 
   /**
-   * Morosidad por cedula: situacion a la fecha (hoy). Sin filtro año/mes.
+   * Morosidad por cedula: solo estado calculado MORA (Mora 4+ meses). Vencido excluido.
    */
   async exportarReporteMorosidadCedulas(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
@@ -896,6 +933,21 @@ class ReporteService {
     )
 
     return response.data as Blob
+  }
+
+  /**
+   * Auditoria: cuotas MORA por prestamo (mismo filtro que export morosidad-cedulas).
+   */
+  async getAuditoriaMoraPorPrestamo(
+    prestamoId: number
+  ): Promise<AuditoriaMoraPorPrestamo> {
+    const params = new URLSearchParams({
+      prestamo_id: String(prestamoId),
+    })
+
+    return await apiClient.get(
+      `${this.baseUrl}/morosidad/auditoria/mora-por-prestamo?${params.toString()}`
+    )
   }
 
   async exportarReporteMorosidad(

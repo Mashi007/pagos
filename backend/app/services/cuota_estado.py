@@ -166,6 +166,7 @@ def sincronizar_columna_estado_cuotas(db: object, cuotas: list, *, commit: bool 
 
 
 # SQL PostgreSQL (misma regla que clasificar_estado_cuota).
+# Version con SUM(cuota_pagos): util cuando se quiere verdad desde aplicaciones sin confiar en columna.
 SQL_PG_ESTADO_CUOTA_CASE_CORRELATED = """CASE
   WHEN COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.cuota_id = c.id), 0)
        >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
@@ -176,6 +177,33 @@ SQL_PG_ESTADO_CUOTA_CASE_CORRELATED = """CASE
       ELSE 'PAGADO'
     END
   WHEN COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.cuota_id = c.id), 0) > 0.001 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+  ELSE
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+END"""
+
+# Misma logica que GET lista de cuotas / amortizacion (_listado_cuotas_prestamo_dicts usa c.total_pagado).
+# Usar en reportes morosidad para que el conteo coincida con la UI (evita 6 vs 7 cuando columna != SUM(cuota_pagos)).
+# ROUND(..., 2) en numeric reduce ruido de precision en DECIMAL vs float al comparar con clasificar_estado_cuota.
+SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO = """CASE
+  WHEN ROUND(COALESCE(c.total_pagado, 0)::numeric, 2) >= ROUND(COALESCE(c.monto_cuota, 0)::numeric, 2) - 0.01 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NOT NULL
+        AND c.fecha_vencimiento::date > (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
+      THEN 'PAGO_ADELANTADO'
+      ELSE 'PAGADO'
+    END
+  WHEN ROUND(COALESCE(c.total_pagado, 0)::numeric, 2) > 0.001 THEN
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
