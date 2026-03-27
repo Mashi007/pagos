@@ -51,6 +51,44 @@ def parse_programador_hm(raw: Any) -> Tuple[int, int]:
         return DEFAULT_HM
 
 
+def snap_hm_to_cron_slot(hm: Tuple[int, int]) -> Tuple[int, int]:
+    """
+    Redondea al slot de 15 minutos mas cercano (0, 15, 30, 45).
+    El scheduler solo ejecuta en esos minutos (America/Caracas); sin esto,
+    un programador como 10:07 nunca coincide y no se envia nada.
+    """
+    total = (hm[0] % 24) * 60 + (hm[1] % 60)
+    rounded = ((total + 7) // 15) * 15
+    h2 = (rounded // 60) % 24
+    m2 = rounded % 60
+    return (h2, m2)
+
+
+def formato_hm_programador(hm: Tuple[int, int]) -> str:
+    return f"{hm[0]:02d}:{hm[1]:02d}"
+
+
+def normalizar_payload_envios_programadores(payload: dict) -> None:
+    """
+    Al guardar PUT /configuracion/notificaciones/envios, persiste horas alineadas al cron.
+    Mutacion in-place.
+    """
+    if not isinstance(payload, dict):
+        return
+    for k, v in payload.items():
+        if k in GLOBAL_KEYS or k == "masivos_campanas" or not isinstance(v, dict):
+            continue
+        if "programador" in v:
+            ph = snap_hm_to_cron_slot(parse_programador_hm(v.get("programador")))
+            v["programador"] = formato_hm_programador(ph)
+    raw = payload.get("masivos_campanas")
+    if isinstance(raw, list):
+        for camp in raw:
+            if isinstance(camp, dict) and "programador" in camp:
+                ph = snap_hm_to_cron_slot(parse_programador_hm(camp.get("programador")))
+                camp["programador"] = formato_hm_programador(ph)
+
+
 def _load_dedup(db: Session) -> Dict[str, str]:
     try:
         row = db.get(Configuracion, CLAVE_DEDUP)
@@ -83,7 +121,7 @@ def _config_tiene_coincidencia_hora(config: dict, hm: Tuple[int, int], weekday: 
             continue
         if v.get("habilitado", True) is False:
             continue
-        if parse_programador_hm(v.get("programador")) == hm:
+        if snap_hm_to_cron_slot(parse_programador_hm(v.get("programador"))) == hm:
             return True
 
     campanas = config.get("masivos_campanas") if isinstance(config, dict) else None
@@ -105,7 +143,7 @@ def _config_tiene_coincidencia_hora(config: dict, hm: Tuple[int, int], weekday: 
                         continue
                 if not ok_dia:
                     continue
-            if parse_programador_hm(raw.get("programador")) == hm:
+            if snap_hm_to_cron_slot(parse_programador_hm(raw.get("programador"))) == hm:
                 return True
     return False
 
@@ -122,7 +160,7 @@ def _item_entra(
     cfg = config.get(tipo) or {}
     if cfg.get("habilitado", True) is False:
         return False
-    phm = parse_programador_hm(cfg.get("programador"))
+    phm = snap_hm_to_cron_slot(parse_programador_hm(cfg.get("programador")))
     if phm != hm_now:
         return False
     sk = _slot_key(fecha_str, phm)

@@ -30,6 +30,7 @@ from app.services.notificaciones_envios_store import (
     get_notificaciones_envios_dict,
     put_notificaciones_envios_dict,
 )
+from app.services.notificaciones_programador import normalizar_payload_envios_programadores
 
 logger = logging.getLogger(__name__)
 # Router con auth para todo excepto logo (general, upload, delete, sub-routers)
@@ -315,6 +316,7 @@ def put_notificaciones_envios(payload: dict = Body(...), db: Session = Depends(g
     if not ok:
         raise HTTPException(status_code=422, detail="; ".join(errs) if errs else "Validacion fallida")
     try:
+        normalizar_payload_envios_programadores(payload)
         put_notificaciones_envios_dict(db, payload)
         db.commit()
         invalidate_email_config_cache()

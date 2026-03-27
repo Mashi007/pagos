@@ -4784,6 +4784,26 @@ def get_estado_cuenta_prestamo_pdf(
 
         
 
+        if not pdf_bytes or len(pdf_bytes) < 8 or not pdf_bytes.startswith(b"%PDF"):
+
+            logger.error(
+
+                "PDF invalido generado para estado de cuenta prestamo_id=%s len=%s",
+
+                prestamo_id,
+
+                len(pdf_bytes) if pdf_bytes else 0,
+
+            )
+
+            raise HTTPException(
+
+                status_code=500,
+
+                detail="Error generando PDF del estado de cuenta (salida invalida).",
+
+            )
+
         filename = f"Estado_Cuenta_Prestamo_{prestamo_id}.pdf"
 
         return Response(
@@ -4792,7 +4812,13 @@ def get_estado_cuenta_prestamo_pdf(
 
             media_type="application/pdf",
 
-            headers={"Content-Disposition": f"inline; filename={filename}"},
+            headers={
+
+                "Content-Disposition": f'inline; filename="{filename}"',
+
+                "X-Content-Type-Options": "nosniff",
+
+            },
 
         )
 

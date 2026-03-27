@@ -1217,9 +1217,10 @@ export function ConfiguracionNotificaciones() {
 
                 <p className="mt-2 text-sm text-gray-600">
                   Envíos masivos: un correo por contacto en lista Masivos; en
-                  modo prueba todos van al correo de pruebas. Usa la plantilla de
-                  la primera campaña activa; si esa campaña no tiene plantilla,
-                  la de la fila «Comunicaciones masivas» (guarde antes).
+                  modo prueba todos van al correo de pruebas. Usa la plantilla
+                  de la primera campaña activa; si esa campaña no tiene
+                  plantilla, la de la fila «Comunicaciones masivas» (guarde
+                  antes).
                 </p>
               </div>
             )}
@@ -1319,10 +1320,10 @@ export function ConfiguracionNotificaciones() {
             Campanas masivas semanales
           </CardTitle>
           <CardDescription>
-            Solo para la pestana Masivos: varias campanas con plantilla, horario,
-            CCO y dias semanales. Si una campana deja la plantilla en «Texto por
-            defecto», se usa la plantilla de la fila «Comunicaciones masivas» de
-            la tabla de arriba (guardada en el servidor).
+            Solo para la pestana Masivos: varias campanas con plantilla,
+            horario, CCO y dias semanales. Si una campana deja la plantilla en
+            «Texto por defecto», se usa la plantilla de la fila «Comunicaciones
+            masivas» de la tabla de arriba (guardada en el servidor).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1438,6 +1439,7 @@ export function ConfiguracionNotificaciones() {
                         </label>
                         <Input
                           type="time"
+                          step={900}
                           value={camp.programador || HORA_DEFAULT_MASIVOS}
                           onChange={e =>
                             actualizarCampanaMasiva(camp.id, {
@@ -1624,9 +1626,7 @@ export function ConfiguracionNotificaciones() {
                           incluir_pdf_anexo: !config.incluir_pdf_anexo,
                         })
                       }
-                      disabled={
-                        !config.habilitado || tipo === 'MASIVOS'
-                      }
+                      disabled={!config.habilitado || tipo === 'MASIVOS'}
                       title={
                         tipo === 'MASIVOS'
                           ? 'No aplica: comunicaciones masivas no adjuntan Carta_Cobranza.pdf'
@@ -1714,6 +1714,7 @@ export function ConfiguracionNotificaciones() {
 
                           <Input
                             type="time"
+                            step={900}
                             value={config.programador || HORA_DEFAULT}
                             onChange={e =>
                               setConfig(tipo, { programador: e.target.value })

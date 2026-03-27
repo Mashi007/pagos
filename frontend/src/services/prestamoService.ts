@@ -872,7 +872,9 @@ class PrestamoService {
         response.data instanceof Blob
           ? response.data
           : new Blob([response.data])
-      const head = new Uint8Array(await raw.slice(0, 5).arrayBuffer())
+      // Un solo ArrayBuffer evita PDFs corruptos al guardar (Blob dentro de Blob).
+      const pdfBuffer = await raw.arrayBuffer()
+      const head = new Uint8Array(pdfBuffer.slice(0, 5))
       const looksPdf =
         head[0] === 0x25 &&
         head[1] === 0x50 &&
@@ -900,7 +902,7 @@ class PrestamoService {
         )
       }
 
-      const blob = new Blob([raw], { type: 'application/pdf' })
+      const blob = new Blob([pdfBuffer], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)
       if (previewWindow) {
         previewWindow.location.href = url

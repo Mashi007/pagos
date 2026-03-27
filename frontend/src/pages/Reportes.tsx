@@ -699,8 +699,8 @@ export function Reportes() {
                       Clientes
                     </h3>
                     <p className="mt-0.5 text-xs leading-snug text-teal-900/80">
-                      Enlaces públicos para compartir con el cliente: reporte
-                      de pagos y estado de cuenta.
+                      Enlaces públicos para compartir con el cliente: reporte de
+                      pagos y estado de cuenta.
                     </p>
                   </div>
                 </div>
@@ -755,8 +755,8 @@ export function Reportes() {
                       Personal y colaboradores
                     </h3>
                     <p className="mt-0.5 text-xs leading-snug text-violet-900/80">
-                      Tasas (administración), finiquito con código por correo
-                      e Infopagos (pago a nombre del deudor).
+                      Tasas (administración), finiquito con código por correo e
+                      Infopagos (pago a nombre del deudor).
                     </p>
                   </div>
                 </div>

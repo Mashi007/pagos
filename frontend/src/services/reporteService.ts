@@ -404,7 +404,7 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
-/** GET /reportes/morosidad/auditoria/mora-por-cliente — cuotas.estado = MORA en BD (como el Excel). */
+/** GET /reportes/morosidad/auditoria/mora-por-cliente - cuotas.estado = MORA en BD (como el Excel). */
 export interface AuditoriaMoraPorCliente {
   alcance: 'reporte_morosidad_cedulas'
 

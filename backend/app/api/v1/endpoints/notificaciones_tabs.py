@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.email import send_email
+from app.core.email import cuerpo_parece_html, send_email
 from app.core.email_config_holder import sync_from_db as sync_email_config_from_db
 from app.core.whatsapp_send import send_whatsapp_text
 from app.api.v1.endpoints.notificaciones import (
@@ -284,11 +284,10 @@ def _enviar_correos_items(
                 getattr(plantilla, "tipo", None) == "COBRANZA" or plantilla_usa_variables_cobranza(plantilla)
             ):
                 body_html = cuerpo  # cuerpo renderizado con variables cobranza es HTML
-        # Si el cuerpo parece HTML (cualquier plantilla con tabla/div/p/html), enviar como HTML para que el cliente lo renderice
-        if body_html is None and cuerpo and "<" in cuerpo and ">" in cuerpo:
-            _c = cuerpo.lower()
-            if any(tag in _c for tag in ("<table", "</table>", "<div", "<p ", "<span", "<html", "<body", "<br", "<h1", "<h2", "<h3")):
-                body_html = cuerpo
+        # Si el cuerpo es HTML (plantilla editor), enviar como multipart/alternative html.
+        # La lista antigua omitia <p>, <ul>, etc.; con adjuntos Gmail mostraba solo texto plano.
+        if body_html is None and cuerpo and cuerpo_parece_html(cuerpo):
+            body_html = cuerpo
         # Adjuntos obligatorios cuando están seleccionados en Config (Notificaciones → Envíos):
         # - PDF (pestaña 2): Carta_Cobranza.pdf generada desde Plantilla anexo PDF. Se agrega OBLIGATORIAMENTE si incluir_pdf_anexo=True.
         # - Adj. (pestaña 3): Documentos PDF fijos subidos en Documentos PDF anexos. Se agregan OBLIGATORIAMENTE si incluir_adjuntos_fijos no es False.
@@ -873,8 +872,12 @@ def ejecutar_envio_masivos_por_campanas(
                 continue
         hm = camp.get("programador")
         if filtrar_hora is not None:
-            from app.services.notificaciones_programador import parse_programador_hm
-            if parse_programador_hm(hm) != filtrar_hora:
+            from app.services.notificaciones_programador import (
+                parse_programador_hm,
+                snap_hm_to_cron_slot,
+            )
+
+            if snap_hm_to_cron_slot(parse_programador_hm(hm)) != filtrar_hora:
                 continue
         if dedup is not None and fecha_str and filtrar_hora is not None:
             key = _slot_campana_masiva(str(camp.get("id") or ""))

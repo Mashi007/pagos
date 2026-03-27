@@ -95,6 +95,20 @@ def _normalize_attachments_for_smtp(
     return out
 
 
+def cuerpo_parece_html(cuerpo: Optional[str]) -> bool:
+    """
+    Indica si el cuerpo debe enviarse como text/html (no solo texto plano).
+    Lista fija de etiquetas (<p> sin espacio, <ul>, etc.) omitia muchas plantillas reales;
+    con adjuntos el cliente mostraba solo la parte text/plain sin el HTML.
+    """
+    if not cuerpo or "<" not in cuerpo or ">" not in cuerpo:
+        return False
+    return bool(
+        re.search(r"<\s*!?\s*[a-zA-Z]", cuerpo)
+        or re.search(r"<\s*/\s*[a-zA-Z]", cuerpo)
+    )
+
+
 def _strip_html_to_plain(html: str, max_len: int = 8000) -> str:
     '''Quita tags y data URLs para usar como parte text/plain cuando el cuerpo es HTML.'''
     if not html or not html.strip():
@@ -476,11 +490,9 @@ def send_email(
                 body_text.encode("utf-8")
             except (UnicodeEncodeError, UnicodeDecodeError):
                 body_text = body_text.encode("utf-8", errors="replace").decode("utf-8")
-        # Si el caller envió HTML solo en body_text (sin body_html), tratar como HTML para que Gmail renderice
-        if body_html is None and body_text and "<" in body_text and ">" in body_text:
-            _bt = body_text.lower()
-            if any(tag in _bt for tag in ("<table", "</table>", "<div", "<p ", "<span", "<html", "<body", "<br", "<h1", "<h2", "<h3")):
-                body_html = body_text
+        # Si el caller envió HTML solo en body_text (sin body_html), detectar y enviar como HTML
+        if body_html is None and body_text and cuerpo_parece_html(body_text):
+            body_html = body_text
         # Asegurar body_html es str y UTF-8 valido (evita HTML corrupto por encoding BD/plantilla)
         if body_html is not None:
             if isinstance(body_html, bytes):
