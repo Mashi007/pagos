@@ -362,7 +362,7 @@ def _compute_kpis_dashboard_flat(
             sum_activo.label("tf_activo"),
             sum_inactivo.label("tf_inactivo"),
             sum_finalizado.label("tf_finalizado"),
-            func.count(Prestamo.id),
+            func.count(Prestamo.id).label("n_prestamos"),
         )
         .select_from(Prestamo)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
@@ -374,7 +374,7 @@ def _compute_kpis_dashboard_flat(
     ti = _safe_float(row.tf_inactivo)
     tfi = _safe_float(row.tf_finalizado)
     total_tf = ta + ti + tfi
-    n_prestamos = int(row[3] or 0)
+    n_prestamos = int(row.n_prestamos or 0)
     return {
         "total_financiamiento": round(total_tf, 2),
         "total_financiamiento_activo": round(ta, 2),

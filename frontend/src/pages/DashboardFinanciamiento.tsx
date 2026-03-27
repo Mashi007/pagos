@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { motion } from 'framer-motion'
 
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   DollarSign,
@@ -118,6 +118,7 @@ export function DashboardFinanciamiento() {
   const {
     data: inicialFin,
     isLoading: loadingInicialFin,
+    isError: errorOpcionesFiltros,
     refetch,
   } = useQuery({
     queryKey: ['dashboard-financiamiento-inicial', filtros],
@@ -149,7 +150,7 @@ export function DashboardFinanciamiento() {
       return res
     },
 
-    placeholderData: keepPreviousData,
+    placeholderData: previousData => previousData,
 
     staleTime: 2 * 60 * 1000,
 
@@ -159,8 +160,6 @@ export function DashboardFinanciamiento() {
   const opcionesFiltros = inicialFin?.opciones_filtros
 
   const loadingOpcionesFiltros = loadingInicialFin
-
-  const errorOpcionesFiltros = false
 
   const kpisRaw = inicialFin?.kpis_dashboard
 
@@ -219,6 +218,72 @@ export function DashboardFinanciamiento() {
   const datosTendencia = inicialFin?.tendencia_mensual_meses
 
   const loadingTendencia = loadingInicialFin
+
+  const { data: datosConcesionarios, isLoading: loadingConcesionarios } =
+    useQuery({
+      queryKey: ['prestamos-por-concesionario', filtros],
+
+      queryFn: async () => {
+        const params = construirFiltrosObject()
+
+        const queryParams = new URLSearchParams()
+
+        Object.entries(params).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value.toString())
+        })
+
+        const queryString = queryParams.toString()
+
+        const response = (await apiClient.get(
+          `/api/v1/dashboard/prestamos-por-concesionario${queryString ? '?' + queryString : ''}`
+        )) as { concesionarios: ConcesionarioData[] }
+
+        const top10 = response.concesionarios.slice(0, 10)
+
+        const otros = response.concesionarios.slice(10)
+
+        const otrosSum = otros.reduce(
+          (acc, c) => ({
+            cantidad_prestamos: acc.cantidad_prestamos + c.cantidad_prestamos,
+
+            monto_total: acc.monto_total + c.monto_total,
+
+            porcentaje_cantidad:
+              acc.porcentaje_cantidad + c.porcentaje_cantidad,
+
+            porcentaje_monto: acc.porcentaje_monto + c.porcentaje_monto,
+          }),
+
+          {
+            cantidad_prestamos: 0,
+
+            monto_total: 0,
+
+            porcentaje_cantidad: 0,
+
+            porcentaje_monto: 0,
+          }
+        )
+
+        const result = [...top10]
+
+        if (otrosSum.cantidad_prestamos > 0) {
+          result.push({
+            concesionario: 'Otros',
+
+            ...otrosSum,
+          })
+        }
+
+        return result
+      },
+
+      staleTime: 5 * 60 * 1000,
+
+      refetchOnWindowFocus: false,
+
+      retry: 1,
+    })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 

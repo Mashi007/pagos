@@ -1,9 +1,6 @@
 import { motion } from 'framer-motion'
 
-import {
-  PieChart,
-  BarChart3,
-} from 'lucide-react'
+import { PieChart, BarChart3 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 
@@ -151,11 +148,7 @@ export function DashboardPagosCharts({
                       x2="0"
                       y2="1"
                     >
-                      <stop
-                        offset="5%"
-                        stopColor="#6366f1"
-                        stopOpacity={0.8}
-                      />
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
                       <stop
                         offset="95%"
                         stopColor="#6366f1"

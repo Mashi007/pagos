@@ -131,6 +131,34 @@ export function DashboardMenu() {
 
   const queryClient = useQueryClient()
 
+  useEffect(() => {
+    const run = async () => {
+      try {
+        await queryClient.prefetchQuery({
+          queryKey: ['dashboard-pagos-inicial', {}],
+          queryFn: async () =>
+            apiClient.get('/api/v1/dashboard/pagos-inicial?meses_evolucion=6'),
+          staleTime: 2 * 60 * 1000,
+        })
+      } catch {
+        /* prefetch opcional */
+      }
+      try {
+        await queryClient.prefetchQuery({
+          queryKey: ['dashboard-financiamiento-inicial', {}],
+          queryFn: async () =>
+            apiClient.get(
+              '/api/v1/dashboard/financiamiento-inicial?meses_tendencia=12'
+            ),
+          staleTime: 2 * 60 * 1000,
+        })
+      } catch {
+        /* prefetch opcional */
+      }
+    }
+    void run()
+  }, [queryClient])
+
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
 
   const [periodo, setPeriodo] = useState('ultimos_12_meses') // Por defecto últimos 12 meses para que los gráficos muestren datos recientes

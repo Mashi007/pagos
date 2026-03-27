@@ -21,7 +21,7 @@ MAX_FILTER_STRING_LEN = 200
 _DASHBOARD_ADMIN_CACHE: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_KPIS: dict[str, Any] = {"data": None, "refreshed_at": None}
 # Opciones de filtros: TTL corto (5 min) para evitar golpes repetidos al cargar dashboard
-_OPCIONES_FILTROS_TTL_SEC = 300
+_OPCIONES_FILTROS_TTL_SEC = 360
 _CACHE_OPCIONES_FILTROS: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_MOROSIDAD_DIA: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_FINANCIAMIENTO_RANGOS: dict[str, Any] = {"data": None, "refreshed_at": None}
@@ -33,7 +33,7 @@ _lock = threading.Lock()
 
 # Préstamos por modelo / concesionario: el frontend suele enviar siempre fecha_inicio/fecha_fin;
 # caché en memoria por clave de consulta (TTL corto) reduce golpes repetidos a la BD.
-_PRESTAMOS_GRAFICOS_CACHE_TTL_SEC = 300
+_PRESTAMOS_GRAFICOS_CACHE_TTL_SEC = 360
 _CACHE_PRESTAMOS_POR_MODELO: dict[str, Any] = {"key": None, "data": None, "refreshed_at": None}
 _CACHE_PRESTAMOS_POR_CONCESIONARIO: dict[str, Any] = {"key": None, "data": None, "refreshed_at": None}
 

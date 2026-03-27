@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react'
 
 import { motion } from 'framer-motion'
 
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   CreditCard,
@@ -39,7 +39,6 @@ import { useNavigate } from 'react-router-dom'
 
 import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
 
-
 const DashboardPagosCharts = lazy(() =>
   import('../components/dashboard/DashboardPagosCharts').then(m => ({
     default: m.DashboardPagosCharts,
@@ -65,7 +64,6 @@ export function DashboardPagos() {
     isLoading: loadingInicialPagos,
     isError: errorOpcionesFiltros,
     refetch,
-    isFetching: fetchingInicialPagos,
   } = useQuery({
     queryKey: ['dashboard-pagos-inicial', filtros],
 
@@ -119,7 +117,7 @@ export function DashboardPagos() {
       return res
     },
 
-    placeholderData: keepPreviousData,
+    placeholderData: previousData => previousData,
 
     staleTime: 2 * 60 * 1000,
 
