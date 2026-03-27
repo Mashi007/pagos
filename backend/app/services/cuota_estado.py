@@ -148,9 +148,27 @@ def calcular_estado_cuota_desde_fila(c: object, fecha_referencia: date | None = 
 
 def sincronizar_columna_estado_cuotas(db: object, cuotas: list, *, commit: bool = False) -> int:
     """
+
     Actualiza `cuotas.estado` en la sesion si difiere del calculado.
+
     Si commit=True, hace commit (usar en endpoints que no hagan commit despues).
+
     """
+
+    if cuotas:
+
+        pid = getattr(cuotas[0], "prestamo_id", None)
+
+        if pid is not None:
+
+            from app.models.prestamo import Prestamo
+
+            pr = db.get(Prestamo, pid)
+
+            if pr and (pr.estado or "").strip().upper() == "DESISTIMIENTO":
+
+                return 0
+
     changed = 0
     for c in cuotas:
         nuevo = calcular_estado_cuota_desde_fila(c)

@@ -1176,6 +1176,10 @@ export function CrearPrestamoForm({
 
                         <SelectItem value="LIQUIDADO">Liquidado</SelectItem>
 
+                        <SelectItem value="DESISTIMIENTO">
+                          Desistimiento
+                        </SelectItem>
+
                         <SelectItem value="RECHAZADO">Rechazado</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1184,6 +1188,13 @@ export function CrearPrestamoForm({
                       Al guardar se persistirá el estado en la base de datos.
                       Revise coherencia con cuotas y pagos.
                     </p>
+                    {prestamo?.estado === 'DESISTIMIENTO' &&
+                    prestamo?.fecha_desistimiento ? (
+                      <p className="mt-2 text-xs text-slate-600">
+                        Fecha de desistimiento:{' '}
+                        {fechaInputYmd(prestamo.fecha_desistimiento)}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
 

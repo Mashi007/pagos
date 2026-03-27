@@ -19,14 +19,12 @@ def upgrade() -> None:
     op.add_column(
         "prestamos",
         sa.Column("fecha_desistimiento", sa.Date(), nullable=True),
-        schema="public",
     )
     op.create_index(
         "ix_prestamos_fecha_desistimiento",
         "prestamos",
         ["fecha_desistimiento"],
         unique=False,
-        schema="public",
     )
     op.execute(
         """

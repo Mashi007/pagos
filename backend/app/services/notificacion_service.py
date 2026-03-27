@@ -36,7 +36,7 @@ def _select_cuotas_pendientes_con_cliente():
         .where(Cuota.fecha_pago.is_(None))
         .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
         .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
-        .where(Prestamo.estado != "LIQUIDADO")
+        .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
     )
 
 
@@ -91,7 +91,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .where(Cuota.fecha_pago.is_(None))
             .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
             .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
-            .where(Prestamo.estado != "LIQUIDADO")
+            .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
             .where(Cuota.fecha_vencimiento == target)
             .limit(1)
         )
@@ -104,12 +104,14 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
     if tipo == "PREJUDICIAL":
         subq = (
             select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
                 Cuota.fecha_pago.is_(None),
                 CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.cliente_id.isnot(None),
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+                ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
             )
             .group_by(Cuota.cliente_id)
             .having(func.count(Cuota.id) >= 3)
@@ -124,12 +126,14 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             return None
         primera = db.execute(
             select(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
                 Cuota.cliente_id == cliente_id,
                 Cuota.fecha_pago.is_(None),
                 CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
                 Cuota.fecha_vencimiento < hoy,
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+                ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
             )
             .order_by(Cuota.fecha_vencimiento.asc())
             .limit(1)

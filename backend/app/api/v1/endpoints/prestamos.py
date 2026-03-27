@@ -104,12 +104,21 @@ from app.services.prestamo_estado_coherencia import (
     prestamo_bloquea_nuevas_cuotas_o_cambio_plazo,
     prestamo_ids_aprobados_todas_cuotas_cubiertas,
 )
+from app.services.prestamo_db_compat import (
+    fetch_prestamos_fecha_desistimiento_map,
+    prestamos_tiene_columna_fecha_desistimiento,
+)
 
 
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _escape_ilike_pattern(fragment: str) -> str:
+    """Escape LIKE metacharacters for ILIKE with escape backslash (PostgreSQL)."""
+    return fragment.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _resolver_analista_para_prestamo(
@@ -581,7 +590,9 @@ def listar_prestamos(
 
             prestamo_id_search = None
 
-        condicion_search = Cliente.cedula.ilike(f"%{search_clean}%") | Cliente.nombres.ilike(f"%{search_clean}%")
+        pat = f"%{_escape_ilike_pattern(search_clean)}%"
+
+        condicion_search = Cliente.cedula.ilike(pat, escape="\\") | Cliente.nombres.ilike(pat, escape="\\")
 
         if prestamo_id_search is not None:
 
@@ -660,6 +671,8 @@ def listar_prestamos(
 
     prestamo_ids = [row[0].id for row in rows]
 
+    fd_desist_map = fetch_prestamos_fecha_desistimiento_map(db, prestamo_ids)
+
     # Conteo de cuotas por préstamo (para mostrar en columna Cuotas)
 
     cuotas_por_prestamo = {}
@@ -708,9 +721,20 @@ def listar_prestamos(
 
     
 
-    liquidacion_efectiva_ids = prestamo_ids_aprobados_todas_cuotas_cubiertas(
-        db, prestamo_ids
-    )
+    try:
+
+        liquidacion_efectiva_ids = prestamo_ids_aprobados_todas_cuotas_cubiertas(
+            db, prestamo_ids
+        )
+
+    except (ProgrammingError, OperationalError) as e:
+
+        logger.warning(
+            "liquidacion efectiva (cuotas/cuota_pagos) no disponible al listar prestamos: %s",
+            e,
+        )
+
+        liquidacion_efectiva_ids = set()
 
     items = []
 
@@ -761,6 +785,8 @@ def listar_prestamos(
             modalidad_pago=p.modalidad_pago,
 
             revision_manual_estado=revision_manual_estados.get(p.id),  # None si no existe
+
+            fecha_desistimiento=fd_desist_map.get(p.id),
 
         )
 
@@ -1302,6 +1328,8 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
         prestamo_ids = [row[0].id for row in rows]
 
+        fd_desist_map_ced = fetch_prestamos_fecha_desistimiento_map(db, prestamo_ids)
+
         cuotas_por_prestamo = {}
 
         if prestamo_ids:
@@ -1373,6 +1401,8 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
                     numero_cuotas=numero_cuotas,
 
                     modalidad_pago=p.modalidad_pago,
+
+                    fecha_desistimiento=fd_desist_map_ced.get(p.id),
 
                 )
 
@@ -1561,6 +1591,12 @@ def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
 
     resp = PrestamoResponse.model_validate(p)
+
+    fd_one = fetch_prestamos_fecha_desistimiento_map(db, [prestamo_id])
+
+    if prestamo_id in fd_one:
+
+        resp.fecha_desistimiento = fd_one[prestamo_id]
 
     # Preferir cedula/nombres del cliente (join) si faltan o vacíos en prestamo
 
@@ -3688,6 +3724,18 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
+    est_antes = (row.estado or "").strip().upper()
+
+    if est_antes == "DESISTIMIENTO":
+
+        raise HTTPException(
+
+            status_code=400,
+
+            detail="El prestamo esta en desistimiento; no admite modificaciones.",
+
+        )
+
     if payload.cliente_id is not None:
 
         cliente = db.get(Cliente, payload.cliente_id)
@@ -3789,6 +3837,32 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
                 detail=f"La fecha de requerimiento ({row.fecha_requerimiento}) no puede ser posterior a la fecha de aprobación ({ap_date}).",
 
             )
+
+    est_despues = (row.estado or "").strip().upper()
+
+    if est_despues == "DESISTIMIENTO" and est_antes != "DESISTIMIENTO":
+
+        if prestamos_tiene_columna_fecha_desistimiento(db):
+
+            db.execute(
+
+                text(
+
+                    "UPDATE prestamos SET fecha_desistimiento = :fd "
+
+                    "WHERE id = :pid AND fecha_desistimiento IS NULL"
+
+                ),
+
+                {"fd": hoy_negocio(), "pid": prestamo_id},
+
+            )
+
+        cli_des = db.get(Cliente, row.cliente_id)
+
+        if cli_des is not None:
+
+            cli_des.estado = "FINALIZADO"
 
     try:
 

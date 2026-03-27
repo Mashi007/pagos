@@ -136,6 +136,7 @@ export function PrestamosList() {
       'APROBADO',
       'RECHAZADO',
       'LIQUIDADO',
+      'DESISTIMIENTO',
     ].includes(estadoFromUrl)
       ? estadoFromUrl
       : undefined
@@ -185,6 +186,7 @@ export function PrestamosList() {
         'APROBADO',
         'RECHAZADO',
         'LIQUIDADO',
+        'DESISTIMIENTO',
       ].includes(estadoParam)
         ? estadoParam
         : undefined
@@ -442,6 +444,8 @@ export function PrestamosList() {
 
       LIQUIDADO: 'bg-gray-100 text-gray-800 border-gray-300',
 
+      DESISTIMIENTO: 'bg-slate-200 text-slate-800 border-slate-400',
+
       RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
     }
 
@@ -459,6 +463,8 @@ export function PrestamosList() {
       APROBADO: 'Aprobado',
 
       LIQUIDADO: 'Liquidado',
+
+      DESISTIMIENTO: 'Desistimiento',
 
       RECHAZADO: 'Rechazado',
     }
@@ -1115,6 +1121,10 @@ export function PrestamosList() {
                       <SelectItem value="APROBADO">Aprobado</SelectItem>
 
                       <SelectItem value="LIQUIDADO">Liquidado</SelectItem>
+
+                      <SelectItem value="DESISTIMIENTO">
+                        Desistimiento
+                      </SelectItem>
 
                       <SelectItem value="RECHAZADO">Rechazado</SelectItem>
                     </SelectContent>

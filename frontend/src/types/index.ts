@@ -186,6 +186,7 @@ export interface Prestamo {
     | 'APROBADO'
     | 'RECHAZADO'
     | 'LIQUIDADO'
+    | 'DESISTIMIENTO'
 
   usuario_proponente: string
 
@@ -198,6 +199,8 @@ export interface Prestamo {
   fecha_registro: string
 
   fecha_aprobacion?: string
+
+  fecha_desistimiento?: string
 
   fecha_actualizacion: string
 }

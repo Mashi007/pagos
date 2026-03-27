@@ -4237,6 +4237,14 @@ def crear_pagos_batch(
             ids_rows = db.execute(select(Prestamo.id).where(Prestamo.id.in_(prestamo_ids))).scalars().all()
 
             valid_prestamo_ids = {r for r in ids_rows if r is not None}
+        prestamo_estado_por_id: dict[int, str] = {}
+
+        if prestamo_ids:
+
+            er_rows = db.execute(select(Prestamo.id, Prestamo.estado).where(Prestamo.id.in_(prestamo_ids))).all()
+
+            prestamo_estado_por_id = {int(r[0]): (r[1] or "") for r in er_rows if r[0] is not None}
+
 
         # Preload: cédulas que tienen al menos un préstamo (normalizadas)
 
@@ -4331,6 +4339,18 @@ def crear_pagos_batch(
             if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
 
                 errors_by_index[idx] = {"error": f"Credito #{payload.prestamo_id} no existe.", "status_code": 400}
+
+                continue
+
+            if payload.prestamo_id and (prestamo_estado_por_id.get(payload.prestamo_id) or "").strip().upper() == "DESISTIMIENTO":
+
+                errors_by_index[idx] = {
+
+                    "error": "El prestamo esta en desistimiento; no se registran pagos.",
+
+                    "status_code": 400,
+
+                }
 
                 continue
 
@@ -4605,6 +4625,16 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
                 detail=f"El crédito #{payload.prestamo_id} no existe. Elija un crédito de la lista (no use el número de documento como crédito).",
 
             )
+        if prestamo and (prestamo.estado or "").strip().upper() == "DESISTIMIENTO":
+
+            raise HTTPException(
+
+                status_code=400,
+
+                detail="El prestamo esta en desistimiento; no se registran pagos.",
+
+            )
+
 
     # Validar que cedula existe en clientes si se proporciona y hay prestamo_id
 
@@ -4987,6 +5017,10 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
 
     est = (prestamo.estado or "").upper()
 
+    if est == "DESISTIMIENTO":
+
+        return
+
     if pendientes == 0:
 
         if est == "APROBADO":
@@ -5054,6 +5088,12 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
     monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
 
     if monto_restante <= 0:
+
+        return 0, 0
+
+    prestamo_row = db.execute(select(Prestamo).where(Prestamo.id == prestamo_id)).scalars().first()
+
+    if prestamo_row and (prestamo_row.estado or "").strip().upper() == "DESISTIMIENTO":
 
         return 0, 0
 
@@ -5246,6 +5286,12 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
     Retorna el número de pagos a los que se les aplicó algo.
 
     """
+
+    prestamo_chk = db.get(Prestamo, prestamo_id)
+
+    if prestamo_chk and (prestamo_chk.estado or "").strip().upper() == "DESISTIMIENTO":
+
+        return 0
 
     subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
 

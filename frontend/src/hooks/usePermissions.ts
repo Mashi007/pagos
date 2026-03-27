@@ -72,6 +72,10 @@ export function usePermissions() {
   const canEditPrestamo = (prestamoEstado: string): boolean => {
     if (!prestamoEstado) return false
 
+    if (prestamoEstado === 'DESISTIMIENTO') {
+      return false
+    }
+
     if (isAdmin()) {
       return true // Admin puede editar siempre
     }

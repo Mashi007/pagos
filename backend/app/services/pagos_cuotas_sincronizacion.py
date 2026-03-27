@@ -33,7 +33,7 @@ def _prestamo_ids_con_cuotas_pendientes_para_notif(db: Session) -> List[int]:
         .where(Cuota.fecha_pago.is_(None))
         .where(_CUOTA_NO_PAGADA_NOTIF)
         .where(_SALDO_PEND_CUOTA > _TOL_SALDO_NOTIF)
-        .where(Prestamo.estado != "LIQUIDADO")
+        .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
     )
     rows = db.execute(q).scalars().all()
     return sorted({int(x) for x in rows if x is not None})
