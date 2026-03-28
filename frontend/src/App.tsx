@@ -145,7 +145,7 @@ import EmbudoConcesionarios from './pages/EmbudoConcesionarios'
 
 import RevisionManual from './pages/RevisionManual'
 
-import Auditoria from './pages/Auditoria'
+import Auditoria from './pages/Auditoria.tsx'
 
 import EditarRevisionManual from './pages/EditarRevisionManual'
 
