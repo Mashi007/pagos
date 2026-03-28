@@ -9,7 +9,7 @@
 
 
  * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
- * Vista por defecto (sin filtro de estado): el API no devuelve aprobados ni importados; al aprobar la fila desaparece y el Excel agrupa aprobados pendientes de exportar.
+ * Vista por defecto (sin filtro de estado): el API no devuelve aprobados, importados ni rechazados; los rechazados solo con filtro o tarjeta Rechazado. Al aprobar, la fila desaparece y el Excel agrupa aprobados pendientes de exportar.
 
 
 
@@ -450,7 +450,7 @@ export default function CobrosPagosReportadosPage() {
               aria-label="Filtrar por estado del reporte"
             >
               <option value="">
-                Por gestionar (excluye aprobados e importados)
+                Por gestionar (excluye aprobados, importados y rechazados)
               </option>
 
               <option value="pendiente">Pendiente</option>
@@ -469,8 +469,10 @@ export default function CobrosPagosReportadosPage() {
             <p className="text-xs text-muted-foreground">
               La opción por defecto coincide con el listado: al aprobar, la fila
               deja de mostrarse aquí y pasa al Excel &quot;Descargar Excel
-              Aprobados&quot;. Si elige &quot;Aprobado&quot; en el filtro, las
-              filas aprobadas siguen visibles hasta exportarlas.
+              Aprobados&quot;. Los rechazados no se listan aquí: use la tarjeta
+              o el filtro &quot;Rechazado&quot;. Si elige &quot;Aprobado&quot;
+              en el filtro, las filas aprobadas siguen visibles hasta
+              exportarlas.
             </p>
           </div>
 
@@ -525,7 +527,7 @@ export default function CobrosPagosReportadosPage() {
           <button
             type="button"
             onClick={() => handleKpiClick('')}
-            title="Misma vista que el filtro por defecto: pendiente, en revisión y rechazado (sin aprobados ni importados)."
+            title="Cola operativa: pendiente y en revisión (sin aprobados, importados ni rechazados). Ver rechazados con la tarjeta Rechazado o el filtro."
             className={
               'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
               (estado === ''
@@ -538,7 +540,7 @@ export default function CobrosPagosReportadosPage() {
             </span>
 
             <span className="text-2xl font-bold">
-              {kpis.pendiente + kpis.en_revision + kpis.rechazado}
+              {kpis.pendiente + kpis.en_revision}
             </span>
           </button>
 

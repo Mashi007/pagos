@@ -381,6 +381,8 @@ export default function ReportePagoPage({
 
   const [aplicadoCuotas, setAplicadoCuotas] = useState<string | null>(null)
 
+  const [infopagosEnRevision, setInfopagosEnRevision] = useState(false)
+
   const [messageForScreenReader, setMessageForScreenReader] = useState('')
 
   const [notification, setNotification] = useState<NotificationState>(null)
@@ -465,6 +467,8 @@ export default function ReportePagoPage({
     setPagoId(null)
 
     setAplicadoCuotas(null)
+
+    setInfopagosEnRevision(false)
 
     setStep(irAStep)
   }
@@ -658,9 +662,19 @@ export default function ReportePagoPage({
 
         setAplicadoCuotas(res.aplicado_a_cuotas ?? null)
 
-        if (res.recibo_descarga_token) setReciboToken(res.recibo_descarga_token)
+        setInfopagosEnRevision(
+          String(res.estado_reportado ?? '')
+            .toLowerCase()
+            .replace(/\s+/g, '_') === 'en_revision'
+        )
 
-        if (res.pago_id != null) setPagoId(res.pago_id)
+        if (res.recibo_descarga_token) {
+          setReciboToken(res.recibo_descarga_token)
+          if (res.pago_id != null) setPagoId(res.pago_id)
+        } else {
+          setReciboToken(null)
+          setPagoId(null)
+        }
 
         setEnviado(true)
 
@@ -1595,11 +1609,14 @@ export default function ReportePagoPage({
               <p className="break-words text-sm text-gray-600">
                 {isInfopagos ? (
                   <>
-                    El recibo se enviará al correo del deudor (
+                    Si el comprobante coincide con los datos, el recibo se
+                    enviará al correo del deudor (
                     <span className="break-all rounded bg-blue-50 px-1.5 py-0.5 font-semibold text-[#1e3a5f]">
                       {emailParaVerificacion || 'correo registrado'}
                     </span>
-                    ) y podrá descargarlo aquí al finalizar.
+                    ) y podrá descargarlo aquí. Si queda en revisión manual
+                    (mismo flujo que Pagos reportados), no se envía recibo ni
+                    descarga hasta que cobranzas apruebe.
                   </>
                 ) : (
                   <>
@@ -1661,7 +1678,9 @@ export default function ReportePagoPage({
         <CardHeader className="px-4 sm:px-6">
           <CardTitle className="text-base text-green-700 sm:text-lg">
             {isInfopagos
-              ? 'Pago registrado correctamente.'
+              ? infopagosEnRevision
+                ? 'Reporte enviado - en revisión manual.'
+                : 'Pago registrado correctamente.'
               : 'Tu reporte de pago fue recibido exitosamente.'}
           </CardTitle>
         </CardHeader>
@@ -1692,21 +1711,32 @@ export default function ReportePagoPage({
 
           {isInfopagos ? (
             <>
-              <p className="text-sm text-gray-600">
-                Se envió el recibo al correo registrado del deudor (según
-                cédula). Puede descargar el recibo aquí para compartirlo.
-              </p>
+              {infopagosEnRevision ? (
+                <p className="text-sm text-gray-600">
+                  El comprobante quedó en revisión manual en Pagos reportados.
+                  No se envió recibo al deudor ni hay descarga aquí hasta que
+                  cobranzas apruebe. Use la referencia para dar seguimiento en
+                  el módulo de cobros.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Se envió el recibo al correo registrado del deudor (según
+                    cédula). Puede descargar el recibo aquí para compartirlo.
+                  </p>
 
-              {reciboToken && pagoId != null && (
-                <Button
-                  className="min-h-[48px] w-full touch-manipulation gap-2"
-                  onClick={handleDescargarRecibo}
-                  disabled={descargandoRecibo}
-                >
-                  {descargandoRecibo
-                    ? 'Descargando...'
-                    : 'Descargar recibo (PDF)'}
-                </Button>
+                  {reciboToken && pagoId != null && (
+                    <Button
+                      className="min-h-[48px] w-full touch-manipulation gap-2"
+                      onClick={handleDescargarRecibo}
+                      disabled={descargandoRecibo}
+                    >
+                      {descargandoRecibo
+                        ? 'Descargando...'
+                        : 'Descargar recibo (PDF)'}
+                    </Button>
+                  )}
+                </>
               )}
             </>
           ) : (

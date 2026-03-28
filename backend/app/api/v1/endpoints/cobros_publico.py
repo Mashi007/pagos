@@ -589,7 +589,7 @@ class EnviarReporteResponse(BaseModel):
 
 class EnviarReporteInfopagosResponse(BaseModel):
 
-    """Respuesta de Infopagos: incluye token para que el colaborador descargue el recibo."""
+    """Respuesta de Infopagos. Token y recibo solo si quedo aprobado (misma politica que cobros publico)."""
 
     ok: bool
 
@@ -602,6 +602,8 @@ class EnviarReporteInfopagosResponse(BaseModel):
     recibo_descarga_token: Optional[str] = None
 
     pago_id: Optional[int] = None
+
+    estado_reportado: Optional[str] = None
 
 
 
@@ -1270,11 +1272,13 @@ async def enviar_reporte_infopagos(
 
     """
 
-    Registro de pago a nombre del deudor (uso interno / personal). Mismo proceso que enviar-reporte;
+    Registro de pago a nombre del deudor (uso interno / personal). Misma política que enviar-reporte
 
-    no requiere token. Siempre genera recibo, envía al email del deudor (por cédula) y devuelve
+    (cobros público): validación con comprobante; si coincide, aprobado, importación automática
 
-    token para que el colaborador descargue el recibo en la misma pantalla.
+    cuando aplique, recibo al email del deudor y token de descarga para el colaborador; si no,
+
+    estado en revisión manual en Pagos reportados — sin recibo ni correo hasta aprobación.
 
     """
 
@@ -1462,7 +1466,7 @@ async def enviar_reporte_infopagos(
 
                     correo_enviado_a=cliente.email,
 
-                    estado="aprobado",
+                    estado="pendiente",
 
                 )
 
@@ -1517,61 +1521,115 @@ async def enviar_reporte_infopagos(
 
         if _gemini_configured:
 
-            gemini_result = compare_form_with_image(form_data, content, filename)
+            logger.info("[INFOPAGOS] Usando servicio Gemini para validar comprobante ref=%s", referencia)
 
-            pr.gemini_coincide_exacto = "true" if gemini_result.get("coincide_exacto", False) else "false"
+        else:
 
-            pr.gemini_comentario = gemini_result.get("comentario")
+            logger.info(
 
-        _intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
+                "[INFOPAGOS] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual",
 
-        db.refresh(pr)
-
-        cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
-
-        pdf_bytes = _generar_recibo_desde_pago(db, pr)
-
-        pr.recibo_pdf = pdf_bytes
-
-        to_email = (cliente.email or "").strip()
-
-        if to_email:
-
-            body = (
-
-                f"Se ha registrado un pago a su nombre.\n\n"
-
-                f"Número de referencia: {_referencia_display(referencia)}\n\n"
-
-                f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
-
-                "RapiCredit C.A."
+                referencia,
 
             )
 
-            ok_mail, err_mail = send_email(
+        gemini_result = compare_form_with_image(form_data, content, filename)
 
-                [to_email],
+        coincide = gemini_result.get("coincide_exacto", False)
 
-                f"Recibo de pago {_referencia_display(referencia)}",
+        pr.gemini_coincide_exacto = "true" if coincide else "false"
 
-                body,
+        pr.gemini_comentario = gemini_result.get("comentario")
 
-                attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
+        if coincide:
 
-                servicio="cobros",
+            pr.estado = "aprobado"
 
-                respetar_destinos_manuales=True,
+        else:
 
-            )
-
-            if not ok_mail:
-
-                logger.error("[INFOPAGOS] Recibo ref=%s: correo NO enviado a %s. Error: %s.", referencia, to_email, err_mail or "desconocido")
-
-        recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
+            pr.estado = "en_revision"
 
         db.commit()
+
+        if coincide:
+
+            _intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
+
+            db.refresh(pr)
+
+            cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
+
+            pdf_bytes = _generar_recibo_desde_pago(db, pr)
+
+            pr.recibo_pdf = pdf_bytes
+
+            to_email = (cliente.email or "").strip()
+
+            if to_email:
+
+                body = (
+
+                    f"Se ha registrado un pago a su nombre.\n\n"
+
+                    f"Número de referencia: {_referencia_display(referencia)}\n\n"
+
+                    f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
+
+                    "RapiCredit C.A."
+
+                )
+
+                ok_mail, err_mail = send_email(
+
+                    [to_email],
+
+                    f"Recibo de pago {_referencia_display(referencia)}",
+
+                    body,
+
+                    attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
+
+                    servicio="cobros",
+
+                    respetar_destinos_manuales=True,
+
+                )
+
+                if not ok_mail:
+
+                    logger.error(
+
+                        "[INFOPAGOS] Recibo ref=%s: correo NO enviado a %s. Error: %s.",
+
+                        referencia,
+
+                        to_email,
+
+                        err_mail or "desconocido",
+
+                    )
+
+            recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
+
+            db.commit()
+
+            return EnviarReporteInfopagosResponse(
+
+                ok=True,
+
+                referencia_interna=referencia,
+
+                mensaje="Pago registrado. Se envió el recibo al correo del deudor. Puede descargar el recibo aquí.",
+
+                recibo_descarga_token=recibo_token,
+
+                pago_id=pr.id,
+
+                aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
+
+                estado_reportado="aprobado",
+
+            )
 
         return EnviarReporteInfopagosResponse(
 
@@ -1579,13 +1637,21 @@ async def enviar_reporte_infopagos(
 
             referencia_interna=referencia,
 
-            mensaje="Pago registrado. Se envió el recibo al correo del deudor. Puede descargar el recibo aquí.",
+            mensaje=(
 
-            recibo_descarga_token=recibo_token,
+                "Reporte recibido. El comprobante quedó en revisión manual (mismo flujo que Pagos reportados). "
 
-            pago_id=pr.id,
+                "No se envía recibo al deudor ni descarga aquí hasta que cobranzas apruebe."
 
-            aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
+            ),
+
+            recibo_descarga_token=None,
+
+            pago_id=None,
+
+            aplicado_a_cuotas=None,
+
+            estado_reportado="en_revision",
 
         )
 

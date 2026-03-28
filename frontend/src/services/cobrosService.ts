@@ -98,6 +98,10 @@ export interface EnviarReporteInfopagosResponse {
   /** Ej. Cuota 1 / Cuotas 1, 2 si ya aplico en amortizacion. */
 
   aplicado_a_cuotas?: string | null
+
+  /** Alineado con cobros publico: sin token/recibo hasta aprobacion si en_revision. */
+
+  estado_reportado?: string | null
 }
 
 /** P├â┬║blico: validar c├â┬⌐dula (formato + tiene pr├â┬⌐stamo). Sin auth. Sin env├â┬¡o de token. */

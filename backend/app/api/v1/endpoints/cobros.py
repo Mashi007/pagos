@@ -572,8 +572,9 @@ def _list_pagos_reportados_payload(
         q = q.where(PagoReportado.estado == estado)
         count_q = count_q.where(PagoReportado.estado == estado)
     else:
-        q = q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
-        count_q = count_q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
+        # Por defecto: cola operativa (sin cerrados). Rechazados solo con filtro estado=rechazado o KPI Rechazado.
+        q = q.where(~PagoReportado.estado.in_(("aprobado", "importado", "rechazado")))
+        count_q = count_q.where(~PagoReportado.estado.in_(("aprobado", "importado", "rechazado")))
 
     q = q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
     count_q = count_q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
@@ -634,7 +635,7 @@ def list_pagos_reportados(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=300),
 ):
-    """Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados para mostrar solo casos pendientes."""
+    """Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados, importados y rechazados (cola operativa)."""
     return _list_pagos_reportados_payload(
         db,
         estado=estado,

@@ -3,6 +3,7 @@ Dependencias reutilizables para la API (autenticación, BD).
 get_current_user: exige Bearer token válido; se usa en routers protegidos.
 """
 from datetime import datetime, timezone
+import logging
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -19,6 +20,9 @@ from app.schemas.auth import UserResponse
 
 security = HTTPBearer(auto_error=True)
 security_optional_bearer = HTTPBearer(auto_error=False)
+
+
+logger = logging.getLogger(__name__)
 
 
 def _fake_user_response(email: str) -> UserResponse:
@@ -70,7 +74,8 @@ def get_current_user(
     email = sub if "@" in sub else f"{sub}@admin.local"
     try:
         u = db.query(User).filter(User.email == email).first()
-    except OperationalError:
+    except OperationalError as e:
+        logger.warning("get_current_user: fallo de BD al cargar usuario: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Servicio no disponible. Reintente en unos segundos.",
@@ -166,7 +171,8 @@ def get_current_user_optional(
     email = sub if "@" in sub else f"{sub}@admin.local"
     try:
         u = db.query(User).filter(User.email == email).first()
-    except OperationalError:
+    except OperationalError as e:
+        logger.warning("get_current_user: fallo de BD al cargar usuario: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Servicio no disponible. Reintente en unos segundos.",
