@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { motion } from 'framer-motion'
 
@@ -30,9 +30,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   notificacionService,
+  emailConfigService,
   type ClientesRetrasadosResponse,
   type ClienteRetrasadoItem,
   type EstadisticasPorTab,
+  type NotificacionPlantilla,
 } from '../services/notificacionService'
 
 import { prestamoService } from '../services/prestamoService'
@@ -47,6 +49,8 @@ import {
   NOTIFICACIONES_MORA_BROADCAST_CHANNEL,
   invalidateListasNotificacionesMora,
 } from '../constants/queryKeys'
+
+import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
 type TabId =
   | 'dias_1_atraso'
@@ -91,6 +95,104 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
 
     default:
       return null
+  }
+}
+
+/** Deep-link a Configuracion: ?tab=configuracion&cfg=... */
+
+type ConfigEnvioSeccionId =
+  | 'por-vencer'
+  | 'dia-pago'
+  | 'retrasada'
+  | 'prejudicial'
+  | 'comunicaciones'
+
+function cfgSlugParaPestanaListado(tab: TabId): ConfigEnvioSeccionId | null {
+  switch (tab) {
+    case 'dias_1_atraso':
+    case 'dias_5_atraso':
+      return 'retrasada'
+
+    case 'dias_30_atraso':
+      return 'prejudicial'
+
+    case 'masivos':
+      return 'comunicaciones'
+
+    default:
+      return null
+  }
+}
+
+/** Tipo de fila en GET/PUT notificaciones/envios que corresponde a cada pestaña de listado. */
+
+function tipoConfigPlantillaParaPestana(
+  tab: TabId
+):
+  | 'PAGO_1_DIA_ATRASADO'
+  | 'PAGO_5_DIAS_ATRASADO'
+  | 'PREJUDICIAL'
+  | 'MASIVOS'
+  | null {
+  switch (tab) {
+    case 'dias_1_atraso':
+      return 'PAGO_1_DIA_ATRASADO'
+
+    case 'dias_5_atraso':
+      return 'PAGO_5_DIAS_ATRASADO'
+
+    case 'dias_30_atraso':
+      return 'PREJUDICIAL'
+
+    case 'masivos':
+      return 'MASIVOS'
+
+    default:
+      return null
+  }
+}
+
+function parsePlantillaIdEnvio(raw: unknown): number | null {
+  if (raw == null || typeof raw !== 'object') return null
+  const pid = (raw as { plantilla_id?: unknown }).plantilla_id
+  if (pid == null || pid === '') return null
+  const n = Number(pid)
+  return Number.isFinite(n) ? n : null
+}
+
+function etiquetaPlantillaParaPestana(
+  tab: TabId,
+  enviosRaw: Record<string, unknown> | undefined,
+  plantillas: NotificacionPlantilla[] | undefined
+): { linea: string; cfgHref: string } {
+  const slug = cfgSlugParaPestanaListado(tab)
+  const tipo = tipoConfigPlantillaParaPestana(tab)
+  const baseSearch =
+    slug == null
+      ? '?tab=configuracion'
+      : slug === 'retrasada'
+        ? '?tab=configuracion'
+        : `?tab=configuracion&cfg=${slug}`
+
+  if (!tipo) {
+    return {
+      linea: 'Abra Configuracion para revisar envios.',
+      cfgHref: baseSearch,
+    }
+  }
+
+  const pid = parsePlantillaIdEnvio(enviosRaw?.[tipo])
+  if (pid == null) {
+    return {
+      linea: 'Texto por defecto (sin plantilla HTML elegida para este caso).',
+      cfgHref: baseSearch,
+    }
+  }
+
+  const nombre = plantillas?.find(p => p.id === pid)?.nombre?.trim()
+  return {
+    linea: nombre ? `Plantilla: ${nombre} (#${pid})` : `Plantilla ID ${pid}`,
+    cfgHref: baseSearch,
   }
 }
 
@@ -157,6 +259,8 @@ export function Notificaciones() {
       if (tab === 'dias_1_atraso') next.delete('tab')
       else next.set('tab', tab)
 
+      if (tab !== 'configuracion') next.delete('cfg')
+
       return next
     })
   }
@@ -221,6 +325,45 @@ export function Notificaciones() {
 
     placeholderData: { items: [], total: 0 },
   })
+
+  const listadoPideResumenEnvios =
+    activeTab !== 'configuracion' &&
+    tipoConfigPlantillaParaPestana(activeTab) != null
+
+  const { data: enviosResumenRaw } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+
+    queryFn: () =>
+      emailConfigService.obtenerConfiguracionEnvios() as Promise<
+        Record<string, unknown>
+      >,
+
+    staleTime: 60 * 1000,
+
+    enabled: listadoPideResumenEnvios,
+  })
+
+  const { data: plantillasCatalogo } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
+
+    queryFn: () => notificacionService.listarPlantillas(undefined, false),
+
+    staleTime: 60 * 1000,
+
+    enabled: listadoPideResumenEnvios,
+
+    placeholderData: [] as NotificacionPlantilla[],
+  })
+
+  const resumenPlantillaPestana = useMemo(
+    () =>
+      etiquetaPlantillaParaPestana(
+        activeTab,
+        enviosResumenRaw as Record<string, unknown> | undefined,
+        plantillasCatalogo
+      ),
+    [activeTab, enviosResumenRaw, plantillasCatalogo]
+  )
 
   const queryClient = useQueryClient()
 
@@ -305,6 +448,9 @@ export function Notificaciones() {
       })
       await queryClient.invalidateQueries({
         queryKey: ['notificaciones-masivos-lista'],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
       })
       await Promise.all([
         queryClient.refetchQueries({
@@ -530,10 +676,28 @@ export function Notificaciones() {
       </div>
 
       <motion.div
+        key={activeTab}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2 }}
       >
+        {listadoPideResumenEnvios && (
+          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <span className="font-medium text-slate-800">Esta pestaña: </span>
+            <span>{resumenPlantillaPestana.linea}</span>
+            <Link
+              to={resumenPlantillaPestana.cfgHref}
+              className="ml-2 inline-flex items-center text-blue-600 underline-offset-2 hover:underline"
+            >
+              Ir a configuración del caso
+            </Link>
+            <span className="mt-1 block text-xs text-slate-500">
+              Cada pestaña usa solo su fila en el servidor; aquí solo se muestra
+              un resumen. Los cambios requieren Guardar en Configuración.
+            </span>
+          </div>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

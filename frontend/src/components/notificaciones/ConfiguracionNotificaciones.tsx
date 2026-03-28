@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -179,6 +179,36 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
     color: 'slate',
   },
 ]
+
+const CONFIG_ENVIO_SECCIONES = [
+  {
+    id: 'por-vencer' as const,
+    label: 'Por vencer',
+    categorias: ['Por vencer'],
+  },
+  {
+    id: 'dia-pago' as const,
+    label: 'Día de pago',
+    categorias: ['Día de pago'],
+  },
+  { id: 'retrasada' as const, label: 'Retrasada', categorias: ['Retrasada'] },
+  {
+    id: 'prejudicial' as const,
+    label: 'Prejudicial',
+    categorias: ['Prejudicial'],
+  },
+  {
+    id: 'comunicaciones' as const,
+    label: 'Comunicaciones',
+    categorias: ['Comunicaciones'],
+  },
+]
+
+type ConfigEnvioSeccionId = (typeof CONFIG_ENVIO_SECCIONES)[number]['id']
+
+function esConfigEnvioSeccionId(v: string | null): v is ConfigEnvioSeccionId {
+  return CONFIG_ENVIO_SECCIONES.some(s => s.id === v)
+}
 
 /**
  * Subconjunto para prueba de paquete (cuotas en mora / prejudicial con datos típicos en BD).
@@ -415,6 +445,47 @@ export function ConfiguracionNotificaciones() {
   }
 
   const queryClient = useQueryClient()
+
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const cfgParam = searchParams.get('cfg')
+
+  const seccionConfigId: ConfigEnvioSeccionId = esConfigEnvioSeccionId(cfgParam)
+    ? cfgParam
+    : 'retrasada'
+
+  useEffect(() => {
+    if (cfgParam != null && !esConfigEnvioSeccionId(cfgParam)) {
+      setSearchParams(
+        p => {
+          const n = new URLSearchParams(p)
+          n.delete('cfg')
+          return n
+        },
+        { replace: true }
+      )
+    }
+  }, [cfgParam, setSearchParams])
+
+  const setSeccionConfig = (id: ConfigEnvioSeccionId) => {
+    setSearchParams(
+      p => {
+        const n = new URLSearchParams(p)
+        if (id === 'retrasada') n.delete('cfg')
+        else n.set('cfg', id)
+        return n
+      },
+      { replace: true }
+    )
+  }
+
+  const categoriasSeccionActiva = new Set(
+    CONFIG_ENVIO_SECCIONES.find(s => s.id === seccionConfigId)?.categorias ?? []
+  )
+
+  const filasEnvioPorSeccion = CRITERIOS_ENVIO_TABLA.filter(row =>
+    categoriasSeccionActiva.has(row.categoria)
+  )
 
   const {
     data: dataEnvios,
@@ -1336,192 +1407,221 @@ export function ConfiguracionNotificaciones() {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 bg-slate-50/40">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Mail className="h-4 w-4 text-slate-600" />
-            Campanas masivas semanales
-          </CardTitle>
-          <CardDescription>
-            Solo para la pestana Masivos: varias campanas con plantilla,
-            horario, CCO y dias semanales. Si una campana deja la plantilla en
-            «Texto por defecto», se usa la plantilla de la fila «Comunicaciones
-            masivas» de la tabla de arriba (guardada en el servidor).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-            Tip: define minutos 00, 15, 30 o 45 para coincidir con el scheduler.
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
+      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <p className="mb-2 text-xs font-medium text-slate-600">
+          Grupo de configuración: solo se listan filas y acciones de este
+          bloque. Campañas masivas aparecen únicamente en «Comunicaciones».
+        </p>
+        <nav className="flex flex-wrap gap-1" aria-label="Grupos de envío">
+          {CONFIG_ENVIO_SECCIONES.map(sec => (
+            <button
+              key={sec.id}
               type="button"
-              variant="outline"
-              onClick={agregarCampanaMasiva}
+              onClick={() => setSeccionConfig(sec.id)}
+              className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                seccionConfigId === sec.id
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
             >
-              Agregar campana
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() =>
-                void handleEnviarCasoManual('MASIVOS', 'campanas masivas')
-              }
-              disabled={enviandoCasoTipo !== null || enviandoMasivo}
-            >
-              {enviandoCasoTipo === 'MASIVOS'
-                ? 'Enviando campanas...'
-                : 'Enviar campanas activas ahora'}
-            </Button>
-          </div>
+              {sec.label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
-          {campanasMasivos.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              No hay campanas configuradas. Agrega al menos una para usar envio
-              recurrente semanal en Masivos.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {campanasMasivos.map(camp => {
-                const listaPlantillas = plantillasPorTipo('MASIVOS')
-                return (
-                  <div
-                    key={camp.id}
-                    className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-                  >
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <Input
-                        value={camp.nombre}
-                        onChange={e =>
-                          actualizarCampanaMasiva(camp.id, {
-                            nombre: e.target.value,
-                          })
-                        }
-                        className="h-9 w-full max-w-md bg-white"
-                        placeholder="Nombre de campana"
-                      />
-                      <div className="flex flex-wrap items-center gap-2">
-                        <label className="text-xs text-gray-600">Activa</label>
-                        <input
-                          type="checkbox"
-                          checked={camp.habilitado}
-                          onChange={e =>
-                            actualizarCampanaMasiva(camp.id, {
-                              habilitado: e.target.checked,
-                            })
-                          }
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => eliminarCampanaMasiva(camp.id)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">
-                          Plantilla
-                        </label>
-                        <Select
-                          key={`plantilla-select-masivos-${camp.id}-${camp.plantilla_id ?? 'none'}`}
-                          value={
-                            camp.plantilla_id
-                              ? String(camp.plantilla_id)
-                              : '__ninguna__'
-                          }
-                          onValueChange={v =>
-                            actualizarCampanaMasiva(camp.id, {
-                              plantilla_id:
-                                v === '__ninguna__' ? null : parseInt(v, 10),
-                            })
-                          }
-                        >
-                          <SelectTrigger className="h-9 bg-white">
-                            <SelectValue placeholder="Seleccionar" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__ninguna__">
-                              Texto por defecto
-                            </SelectItem>
-                            {listaPlantillas.map(p => (
-                              <SelectItem key={p.id} value={String(p.id)}>
-                                {p.nombre || `#${p.id}`}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">
-                          Hora (Caracas)
-                        </label>
-                        <Input
-                          type="time"
-                          step={900}
-                          value={camp.programador || HORA_DEFAULT_MASIVOS}
-                          onChange={e =>
-                            actualizarCampanaMasiva(camp.id, {
-                              programador: e.target.value,
-                            })
-                          }
-                          className="h-9 max-w-[11rem] bg-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">
-                          CCO (coma, ; o salto)
-                        </label>
-                        <Textarea
-                          value={(camp.cco || []).join('\n')}
-                          onChange={e =>
-                            actualizarCampanaMasiva(camp.id, {
-                              cco: parsearCorreosCco(e.target.value),
-                            })
-                          }
-                          rows={3}
-                          className="bg-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-3">
-                      <p className="mb-1 text-xs font-medium text-gray-600">
-                        Dias de repeticion semanal
-                      </p>
-                      <p className="mb-2 text-[11px] text-gray-500">
-                        Si no marcas dias, se enviara todos los dias segun la
-                        hora.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {DIAS_SEMANA.map(d => (
-                          <label
-                            key={`${camp.id}-dia-${d.id}`}
-                            className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors ${camp.dias_semana.includes(d.id) ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={camp.dias_semana.includes(d.id)}
-                              onChange={() => toggleDiaCampana(camp.id, d.id)}
-                            />
-                            {d.label}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+      {seccionConfigId === 'comunicaciones' ? (
+        <Card className="border-slate-200 bg-slate-50/40">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Mail className="h-4 w-4 text-slate-600" />
+              Campanas masivas semanales
+            </CardTitle>
+            <CardDescription>
+              Solo para la pestana Masivos: varias campanas con plantilla,
+              horario, CCO y dias semanales. Si una campana deja la plantilla en
+              «Texto por defecto», se usa la plantilla de la fila
+              «Comunicaciones masivas» de la tabla de arriba (guardada en el
+              servidor).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+              Tip: define minutos 00, 15, 30 o 45 para coincidir con el
+              scheduler.
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={agregarCampanaMasiva}
+              >
+                Agregar campana
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() =>
+                  void handleEnviarCasoManual('MASIVOS', 'campanas masivas')
+                }
+                disabled={enviandoCasoTipo !== null || enviandoMasivo}
+              >
+                {enviandoCasoTipo === 'MASIVOS'
+                  ? 'Enviando campanas...'
+                  : 'Enviar campanas activas ahora'}
+              </Button>
+            </div>
+
+            {campanasMasivos.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No hay campanas configuradas. Agrega al menos una para usar
+                envio recurrente semanal en Masivos.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {campanasMasivos.map(camp => {
+                  const listaPlantillas = plantillasPorTipo('MASIVOS')
+                  return (
+                    <div
+                      key={camp.id}
+                      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <Input
+                          value={camp.nombre}
+                          onChange={e =>
+                            actualizarCampanaMasiva(camp.id, {
+                              nombre: e.target.value,
+                            })
+                          }
+                          className="h-9 w-full max-w-md bg-white"
+                          placeholder="Nombre de campana"
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="text-xs text-gray-600">
+                            Activa
+                          </label>
+                          <input
+                            type="checkbox"
+                            checked={camp.habilitado}
+                            onChange={e =>
+                              actualizarCampanaMasiva(camp.id, {
+                                habilitado: e.target.checked,
+                              })
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => eliminarCampanaMasiva(camp.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Plantilla
+                          </label>
+                          <Select
+                            key={`plantilla-select-masivos-${camp.id}-${camp.plantilla_id ?? 'none'}`}
+                            value={
+                              camp.plantilla_id
+                                ? String(camp.plantilla_id)
+                                : '__ninguna__'
+                            }
+                            onValueChange={v =>
+                              actualizarCampanaMasiva(camp.id, {
+                                plantilla_id:
+                                  v === '__ninguna__' ? null : parseInt(v, 10),
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-9 bg-white">
+                              <SelectValue placeholder="Seleccionar" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__ninguna__">
+                                Texto por defecto
+                              </SelectItem>
+                              {listaPlantillas.map(p => (
+                                <SelectItem key={p.id} value={String(p.id)}>
+                                  {p.nombre || `#${p.id}`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Hora (Caracas)
+                          </label>
+                          <Input
+                            type="time"
+                            step={900}
+                            value={camp.programador || HORA_DEFAULT_MASIVOS}
+                            onChange={e =>
+                              actualizarCampanaMasiva(camp.id, {
+                                programador: e.target.value,
+                              })
+                            }
+                            className="h-9 max-w-[11rem] bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            CCO (coma, ; o salto)
+                          </label>
+                          <Textarea
+                            value={(camp.cco || []).join('\n')}
+                            onChange={e =>
+                              actualizarCampanaMasiva(camp.id, {
+                                cco: parsearCorreosCco(e.target.value),
+                              })
+                            }
+                            rows={3}
+                            className="bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <p className="mb-1 text-xs font-medium text-gray-600">
+                          Dias de repeticion semanal
+                        </p>
+                        <p className="mb-2 text-[11px] text-gray-500">
+                          Si no marcas dias, se enviara todos los dias segun la
+                          hora.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {DIAS_SEMANA.map(d => (
+                            <label
+                              key={`${camp.id}-dia-${d.id}`}
+                              className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors ${camp.dias_semana.includes(d.id) ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={camp.dias_semana.includes(d.id)}
+                                onChange={() => toggleDiaCampana(camp.id, d.id)}
+                              />
+                              {d.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
         <table className="w-full text-sm">
@@ -1562,7 +1662,7 @@ export function ConfiguracionNotificaciones() {
           </thead>
 
           <tbody>
-            {CRITERIOS_ENVIO_TABLA.map(({ tipo, label, categoria, color }) => {
+            {filasEnvioPorSeccion.map(({ tipo, label, categoria, color }) => {
               const config = getConfig(tipo)
 
               const col = COLORES[color]
