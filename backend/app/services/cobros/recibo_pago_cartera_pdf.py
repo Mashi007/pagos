@@ -14,14 +14,13 @@ from app.services.cobros.recibo_pdf import (
     WHATSAPP_LINK,
     _formato_monto_venezolano,
 )
-from app.services.tasa_cambio_service import fecha_hoy_caracas
-
 _LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "logo.png"
 
 
 def generar_recibo_pago_cartera_pdf(
     *,
     referencia_documento: str,
+    fecha_reporte_aprobacion_display: str,
     fecha_pago_display: str,
     titular_credito: str,
     cedula_titular: str,
@@ -173,11 +172,10 @@ def generar_recibo_pago_cartera_pdf(
     story.append(Paragraph(f"Ref. {referencia_documento}", ref_style))
     story.append(Spacer(1, 10))
 
-    fecha_emision = fecha_hoy_caracas().strftime("%d/%m/%Y")
     info = [
         [
-            Paragraph("FECHA DE EMISION", label_style),
-            Paragraph(fecha_emision, value_style),
+            Paragraph("Fecha de reporte de pago", label_style),
+            Paragraph(fecha_reporte_aprobacion_display or "-", value_style),
             Paragraph("FECHA DE PAGO", label_style),
             Paragraph(fecha_pago_display or "-", value_style),
         ],

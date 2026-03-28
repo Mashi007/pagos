@@ -203,7 +203,7 @@ def generar_pdf_estado_cuenta(
     story.append(Spacer(1, 12))
     story.append(
         Paragraph(
-            "Los pagos conciliados se aplican a las cuotas en orden por número de cuota.",
+"Los pagos de la sección <b>Pagos realizados</b> (Subtotal en USD) se aplican a las cuotas en orden por número de cuota; en la amortización, la columna <b>Pago</b> muestra cuánto de esos pagos quedó aplicado a cada cuota en USD.",
             styles["EC_Muted"],
         )
     )
@@ -369,22 +369,31 @@ def generar_pdf_estado_cuenta(
                     "Interés",
                     "Total",
                     "Saldo",
-                    "Pago conc.",
+                    "Pago",
                     "Estado",
                     "Recibo",
                 ]
             ]
             for c in cuotas:
-                estado_codigo = (c.get("estado") or "").strip().upper()
                 estado_etiqueta = (c.get("estado_etiqueta") or "").strip() or etiqueta_estado_cuota(
                     c.get("estado") or ""
                 )
                 cuota_id = c.get("id")
-                puede_recibo = (
-                    estado_codigo in ("PAGADO", "PAGADA", "PAGO_ADELANTADO")
-                    and cuota_id
-                    and base_url
-                    and recibo_token
+                raw_tp = c.get("total_pagado_cuota")
+                try:
+                    total_aplicado = float(raw_tp) if raw_tp is not None else 0.0
+                except (TypeError, ValueError):
+                    total_aplicado = 0.0
+                if total_aplicado <= 0:
+                    disp = c.get("pago_conciliado_display")
+                    if disp not in (None, "", "-"):
+                        try:
+                            total_aplicado = float(str(disp).replace(",", ""))
+                        except ValueError:
+                            total_aplicado = 0.0
+                # Enlace solo si la fila tiene pago aplicado (coherente con columna Pago).
+                puede_recibo = bool(
+                    total_aplicado > 0 and cuota_id and base_url and recibo_token
                 )
                 if puede_recibo:
                     url_recibo = f"{base_url}/api/v1/estado-cuenta/public/recibo-cuota?token={recibo_token}&prestamo_id={prestamo_id}&cuota_id={cuota_id}"
@@ -407,15 +416,34 @@ def generar_pdf_estado_cuenta(
                         recibo_cell,
                     ]
                 )
-            t = Table(rows, colWidths=[30, 44, 42, 38, 44, 42, 42, 56, 48])
+            t = Table(
+                rows,
+                colWidths=[
+                    0.40 * inch,
+                    0.66 * inch,
+                    0.94 * inch,
+                    0.94 * inch,
+                    1.00 * inch,
+                    0.82 * inch,
+                    0.76 * inch,
+                    0.78 * inch,
+                    0.70 * inch,
+                ],
+            )
             t.setStyle(
                 tbl_style(
                     len(rows),
                     hf=8,
                     bf=7,
                     extras=[
+                        # Encabezado: Capital, Interes, Total centrados (referencia visual).
+                        ("ALIGN", (2, 0), (4, 0), "CENTER"),
+                        ("ALIGN", (0, 0), (1, 0), "CENTER"),
+                        ("ALIGN", (5, 0), (8, 0), "CENTER"),
                         ("ALIGN", (0, 1), (0, -1), "CENTER"),
                         ("ALIGN", (2, 1), (6, -1), "RIGHT"),
+                        ("ALIGN", (7, 1), (7, -1), "CENTER"),
+                        ("ALIGN", (8, 1), (8, -1), "CENTER"),
                     ],
                 )
             )

@@ -504,6 +504,11 @@ def get_recibo_pago_cartera_publico(
     referencia = (doc or refp or f"Pago-{pago_id}")[:80]
     fp = getattr(pago, "fecha_pago", None)
     fecha_pago_display = fp.strftime("%d/%m/%Y %H:%M") if fp and hasattr(fp, "strftime") else "-"
+    f_rep = getattr(pago, "fecha_conciliacion", None) or getattr(pago, "fecha_registro", None)
+    fecha_reporte_aprobacion_display = (
+        f_rep.strftime("%d/%m/%Y %H:%M") if f_rep and hasattr(f_rep, "strftime") else "-"
+    )
+
     titular = (getattr(prestamo, "nombres", None) or "").strip() or "-"
     ced_tit = (getattr(prestamo, "cedula", None) or "").strip() or "-"
     ced_comp = (getattr(pago, "cedula_cliente", None) or "").strip() or "-"
@@ -527,6 +532,7 @@ def get_recibo_pago_cartera_publico(
     filas = desglose_aplicacion_cuotas_por_pago(db, pago_id)
     pdf_bytes = generar_recibo_pago_cartera_pdf(
         referencia_documento=referencia,
+        fecha_reporte_aprobacion_display=fecha_reporte_aprobacion_display,
         fecha_pago_display=fecha_pago_display,
         titular_credito=titular,
         cedula_titular=ced_tit,
@@ -1085,7 +1091,7 @@ def solicitar_estado_cuenta(
 
     Usado por: /pagos/rapicredit-estadocuenta y /pagos/informes; en ambos se muestran
 
-    las mismas tablas de amortización (cuotas) con Pago conc. y Recibo desde la tabla cuotas.
+    las mismas tablas de amortización (cuotas) con columna Pago (USD aplicado por cuota) y Recibo desde la tabla cuotas.
 
     Estados de cuota en el PDF: mismas reglas Caracas y etiquetas que la app interna
 

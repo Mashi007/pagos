@@ -414,21 +414,14 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
 
                 monto_c = float(getattr(c, "monto", 0) or 0)
 
-                pago_conciliado = getattr(c, "pago_conciliado", False)
-
-                
-
                 fv_c = getattr(c, "fecha_vencimiento", None)
 
                 fv_date_c = fv_c.date() if fv_c and hasattr(fv_c, "date") else fv_c
 
                 estado_cuota = estado_cuota_para_mostrar(total_pagado_c, monto_c, fv_date_c, fecha_corte_dt)
 
-                
-
-                pago_conc_display = "Si" if pago_conciliado else "-"
-
-                
+                # USD aplicado a esta cuota (reparto desde pagos de cobranza; ver sección Pagos realizados).
+                pago_conc_display = f"{total_pagado_c:,.2f}" if total_pagado_c > 0 else "-"
 
                 cuotas_data.append({
 
@@ -447,6 +440,8 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
                     "saldo_capital_final": float(getattr(c, "saldo_capital_final", 0) or 0),
 
                     "pago_conciliado_display": pago_conc_display,
+
+                    "total_pagado_cuota": total_pagado_c,
 
                     "estado": estado_cuota,
 

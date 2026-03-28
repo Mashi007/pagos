@@ -395,8 +395,8 @@ def generar_recibo_pago_reportado(
         [
             Paragraph("TITULAR", label_style),
             Paragraph(nombre_completo or "-", value_style),
-            Paragraph("CÉDULA", label_style),
-            Paragraph(cedula or "-", value_style),
+            Paragraph("", label_style),
+            Paragraph("", label_style),
         ],
         [
             Paragraph("BANCO", label_style),
@@ -423,6 +423,7 @@ def generar_recibo_pago_reportado(
         ("ROUNDEDCORNERS", [6, 6, 6, 6]),
         ("ROWBACKGROUNDS", (0, 0), (-1, -1), [_c["row_white"], _c["row_alt"]]),
         ("GRID", (0, 0), (-1, -1), 0.35, _c["border"]),
+        ("SPAN", (1, 1), (3, 1)),
         ("SPAN", (1, 3), (3, 3)),
         ("SPAN", (1, 4), (3, 4)),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
