@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Download,
   FileText,
+  Filter,
   Loader2,
   RefreshCw,
 } from 'lucide-react'
@@ -29,14 +30,6 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table'
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select'
 
 import {
   Dialog,
@@ -92,6 +85,7 @@ type CarteraSessionCacheV1 = {
   resumen: Record<string, unknown>
   filtrosApi: FiltrosApi
   page: number
+  /** Legacy; UI ya no filtra por control (se persiste vacio). */
   filtroControlCodigo: string
   ocultosKeys: string[]
   /** true = ver tambien excepciones ya aceptadas (motor completo). */
@@ -206,10 +200,6 @@ export function AuditoriaCarteraTab() {
 
   const [pageSize] = useState(PAGE_SIZE_DEFAULT)
 
-  const [filtroControlCodigo, setFiltroControlCodigo] = useState(
-    () => boot?.filtroControlCodigo ?? ''
-  )
-
   const [vistaMotorCrudo, setVistaMotorCrudo] = useState(
     () => boot?.vista_motor_crudo === true
   )
@@ -279,7 +269,6 @@ export function AuditoriaCarteraTab() {
           cedula: filtrosApi.cedula.trim() || undefined,
           prestamo_id: filtrosApi.prestamo_id,
           excluir_marcar_ok: !vistaMotorCrudo,
-          codigo_control: filtroControlCodigo.trim() || undefined,
         })
 
         const nextItems = cheq.items || []
@@ -300,7 +289,7 @@ export function AuditoriaCarteraTab() {
           resumen: nextResumen,
           filtrosApi,
           page,
-          filtroControlCodigo,
+          filtroControlCodigo: '',
           ocultosKeys: [...ocultos],
           vista_motor_crudo: vistaMotorCrudo,
         })
@@ -325,7 +314,6 @@ export function AuditoriaCarteraTab() {
       page,
       pageSize,
       filtrosApi,
-      filtroControlCodigo,
       vistaMotorCrudo,
       syncOcultosConItems,
     ]
@@ -347,7 +335,6 @@ export function AuditoriaCarteraTab() {
   }, [fetchLista])
 
   const resetFiltrosUiYSesion = useCallback(() => {
-    setFiltroControlCodigo('')
     setCedulaInput('')
     setPrestamoInput('')
     setFiltrosApi({ cedula: '' })
@@ -385,7 +372,6 @@ export function AuditoriaCarteraTab() {
         cedula: filtrosApi.cedula.trim() || undefined,
         prestamo_id: filtrosApi.prestamo_id,
         excluir_marcar_ok: !vistaMotorCrudo,
-        codigo_control: filtroControlCodigo.trim() || undefined,
       })
       setPanelKpis((r.resumen as Record<string, unknown>) || {})
       setMetaUltimaCorridaPanel(
@@ -438,16 +424,12 @@ export function AuditoriaCarteraTab() {
         cedula: filtrosApi.cedula.trim() || undefined,
         prestamo_id: filtrosApi.prestamo_id,
         excluir_marcar_ok: !vistaMotorCrudo,
-        codigo_control: filtroControlCodigo.trim() || undefined,
       })
       const header =
         'prestamo_id,cedula,nombres,estado_prestamo,codigo_control,titulo_control,detalle'
       const lines = [`\ufeff${header}`]
       for (const row of cheq.items || []) {
         for (const c of row.controles) {
-          if (filtroControlCodigo && c.codigo !== filtroControlCodigo) {
-            continue
-          }
           lines.push(
             [
               String(row.prestamo_id),
@@ -507,16 +489,6 @@ export function AuditoriaCarteraTab() {
     }
     return {}
   }, [resumen])
-
-  const displayRows = useMemo(() => {
-    if (!filtroControlCodigo) return visibleRows
-    return visibleRows
-      .filter(row => row.controles.some(c => c.codigo === filtroControlCodigo))
-      .map(row => ({
-        ...row,
-        controles: row.controles.filter(c => c.codigo === filtroControlCodigo),
-      }))
-  }, [visibleRows, filtroControlCodigo])
 
   const abrirDialogoExcepcion = (
     prestamoId: number,
@@ -633,7 +605,7 @@ export function AuditoriaCarteraTab() {
 
   return (
     <div className="space-y-6">
-      <Card className="border-amber-200 bg-amber-50/60">
+      <Card className="rounded-lg border-amber-200/90 bg-amber-50/70 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-base text-amber-950">
             Excepciones operativas (acuerdos de negocio)
@@ -667,226 +639,214 @@ export function AuditoriaCarteraTab() {
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => recargarCompleta()}
-          disabled={loading}
-          title="Vuelve a pedir la lista al servidor (siempre lee la BD en tiempo real)."
-        >
-          {loading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          Recargar
-        </Button>
-
-        <Button
-          size="sm"
-          onClick={ejecutarAhora}
-          disabled={running || loading}
-          title="Recalcula controles desde la BD (motor objetivo) y guarda KPIs en configuracion. Igual criterio que el job 03:00; sin usar MARCAR_OK en esos totales."
-        >
-          {running ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          Ejecutar ahora y guardar meta
-        </Button>
-
-        {esAdmin && hayDesajustePagosVsAplicado && !loading ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void corregirDesajustePagos()}
-            disabled={corrigiendo || running || loading}
-            title="Reaplica pagos en cascada en prestamos con alerta de suma pagos vs cuota_pagos, luego sincroniza estados de cuota."
-          >
-            {corrigiendo ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            Corregir desajuste pagos (cascada)
-          </Button>
-        ) : null}
-
-        <p className="w-full text-xs text-muted-foreground">
-          La vista de cartera permanece en memoria al cambiar de pestaña. En la misma sesion del
-          navegador se restaura la ultima lista y filtros; al volver se actualiza en segundo plano.
-          Los chequeos se calculan en vivo contra la BD; el job 03:00 actualiza la meta guardada
-          (KPIs en configuracion), no sustituye una recarga manual si hubo cambios despues.
-        </p>
-
-        {hayAlertas && !loading ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void exportarCsv()}
-            disabled={exportando}
-          >
-            {exportando ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
-            Exportar CSV
-          </Button>
-        ) : null}
-
-        <div className="flex w-full min-w-[200px] max-w-sm flex-col gap-1 sm:w-auto">
-          <Label
-            htmlFor="auditoria-cedula-filtro"
-            className="text-xs text-gray-600"
-          >
-            Cedula (fragmento)
-          </Label>
-
-          <Input
-            id="auditoria-cedula-filtro"
-            type="search"
-            placeholder="Ej. V12345678"
-            value={cedulaInput}
-            onChange={e => setCedulaInput(e.target.value)}
-            autoComplete="off"
-            className="h-9"
-          />
-        </div>
-
-        <div className="flex w-full min-w-[140px] max-w-xs flex-col gap-1 sm:w-auto">
-          <Label
-            htmlFor="auditoria-prestamo-filtro"
-            className="text-xs text-gray-600"
-          >
-            ID prestamo
-          </Label>
-
-          <Input
-            id="auditoria-prestamo-filtro"
-            inputMode="numeric"
-            placeholder="Opcional"
-            value={prestamoInput}
-            onChange={e => setPrestamoInput(e.target.value)}
-            autoComplete="off"
-            className="h-9"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-end gap-2 pb-0.5">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={aplicarFiltros}
-            disabled={loading}
-          >
-            Aplicar filtros
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void soloKpisResumen()}
-            disabled={loading || loadingKpis}
-            title="Misma logica que la lista pero sin devolver prestamos (GET .../cartera/resumen). Usa filtros ya aplicados."
-          >
-            {loadingKpis ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <BarChart3 className="mr-2 h-4 w-4" />
-            )}
-            Solo KPIs
-          </Button>
-        </div>
-
-        {hayAlertas && !loading ? (
-          <div className="flex w-full min-w-[240px] max-w-xl flex-col gap-1 sm:w-auto">
-            <Label
-              htmlFor="auditoria-control-filtro"
-              className="text-xs text-gray-600"
-            >
-              Filtrar por control
-            </Label>
-
-            <Select
-              value={filtroControlCodigo || '__todos__'}
-              onValueChange={v => {
-                setPage(1)
-                setFiltroControlCodigo(v === '__todos__' ? '' : v)
-              }}
-            >
-              <SelectTrigger
-                id="auditoria-control-filtro"
-                className="h-9 w-full"
-              >
-                <SelectValue placeholder="Todos los controles" />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="__todos__">
-                  Todos los controles (cualquier alerta)
-                </SelectItem>
-
-                {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => {
-                  const cnt = conteosPorControlCodigo[def.codigo] ?? 0
-
-                  return (
-                    <SelectItem
-                      key={def.codigo}
-                      value={def.codigo}
-                      title={def.titulo}
-                    >
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {def.n}.
-                      </span>{' '}
-                      {def.titulo}
-                      <span className="text-muted-foreground"> ({cnt})</span>
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
+      <Card className="overflow-hidden border-slate-200/90 shadow-sm">
+        <CardHeader className="space-y-1 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white py-3 sm:py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-800 text-white">
+              <Filter className="h-4 w-4" aria-hidden />
+            </div>
+            <div>
+              <CardTitle className="text-base text-slate-900">
+                Consulta y controles de cartera
+              </CardTitle>
+              <p className="text-xs font-normal text-muted-foreground">
+                Totales por control: use <strong className="font-medium text-slate-700">Solo KPIs</strong>{' '}
+                (panel inferior) con los mismos filtros cedula/prestamo.{' '}
+                <strong className="font-medium text-slate-700">Ver motor completo</strong> incluye
+                excepciones MARCAR_OK en la API.
+              </p>
+            </div>
           </div>
-        ) : null}
+        </CardHeader>
 
-        {resumen && !loading ? (
-          <span className="text-sm text-gray-600">
-            Evaluados:{' '}
-            <strong>{String(resumen.prestamos_evaluados ?? '-')}</strong>
-            {' · '}
-            Con alerta:{' '}
-            <strong>{String(resumen.prestamos_con_alerta ?? '-')}</strong>
-            {' · '}
-            Mostrando:{' '}
-            <strong>
-              {rangoDesde}-{rangoHasta}
-            </strong>{' '}
-            de <strong>{totalListados}</strong>
-            {resumen.fecha_referencia ? (
-              <>
-                {' · '}
-                Fecha referencia (Caracas):{' '}
-                <strong className="font-mono">
-                  {String(resumen.fecha_referencia)}
-                </strong>
-              </>
+        <CardContent className="space-y-4 pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => recargarCompleta()}
+              disabled={loading}
+              title="Vuelve a pedir la lista al servidor (siempre lee la BD en tiempo real)."
+            >
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Recargar
+            </Button>
+
+            <Button
+              size="sm"
+              onClick={ejecutarAhora}
+              disabled={running || loading}
+              title="Recalcula controles desde la BD (motor objetivo) y guarda KPIs en configuracion. Igual criterio que el job 03:00; sin usar MARCAR_OK en esos totales."
+            >
+              {running ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Ejecutar ahora y guardar meta
+            </Button>
+
+            {esAdmin && hayDesajustePagosVsAplicado && !loading ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void corregirDesajustePagos()}
+                disabled={corrigiendo || running || loading}
+                title="Reaplica pagos en cascada en prestamos con alerta de suma pagos vs cuota_pagos, luego sincroniza estados de cuota."
+              >
+                {corrigiendo ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Corregir desajuste pagos (cascada)
+              </Button>
             ) : null}
-            {resumen.reglas_version ? (
-              <>
-                {' · '}
-                Version reglas:{' '}
-                <strong className="font-mono text-xs">
-                  {String(resumen.reglas_version)}
-                </strong>
-              </>
+
+            {hayAlertas && !loading ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void exportarCsv()}
+                disabled={exportando}
+              >
+                {exportando ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                Exportar CSV
+              </Button>
             ) : null}
-          </span>
-        ) : null}
-      </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            La lista se guarda en la sesion del navegador; los chequeos son en vivo contra la BD. El
+            job 03:00 actualiza la meta en configuracion, no sustituye una recarga manual si hubo
+            cambios despues.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+            <div className="flex flex-col gap-1.5 sm:col-span-1 lg:col-span-2">
+              <Label
+                htmlFor="auditoria-cedula-filtro"
+                className="text-xs font-medium text-slate-700"
+              >
+                Cedula (fragmento)
+              </Label>
+              <Input
+                id="auditoria-cedula-filtro"
+                type="search"
+                placeholder="Ej. V12345678"
+                value={cedulaInput}
+                onChange={e => setCedulaInput(e.target.value)}
+                autoComplete="off"
+                className="h-9 border-slate-200"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 sm:col-span-1 lg:col-span-2">
+              <Label
+                htmlFor="auditoria-prestamo-filtro"
+                className="text-xs font-medium text-slate-700"
+              >
+                ID prestamo
+              </Label>
+              <Input
+                id="auditoria-prestamo-filtro"
+                inputMode="numeric"
+                placeholder="Opcional"
+                value={prestamoInput}
+                onChange={e => setPrestamoInput(e.target.value)}
+                autoComplete="off"
+                className="h-9 border-slate-200"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={aplicarFiltros}
+                disabled={loading}
+              >
+                Aplicar filtros
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void soloKpisResumen()}
+                disabled={loading || loadingKpis}
+                title="Misma logica que la lista pero sin devolver prestamos (GET .../cartera/resumen)."
+              >
+                {loadingKpis ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                )}
+                Solo KPIs
+              </Button>
+            </div>
+
+          </div>
+
+          {resumen && !loading ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm text-slate-700">
+              <span>
+                Evaluados:{' '}
+                <strong className="text-slate-900">
+                  {String(resumen.prestamos_evaluados ?? '-')}
+                </strong>
+              </span>
+              <span className="text-slate-300" aria-hidden>
+                |
+              </span>
+              <span>
+                Con alerta:{' '}
+                <strong className="text-slate-900">
+                  {String(resumen.prestamos_con_alerta ?? '-')}
+                </strong>
+              </span>
+              <span className="text-slate-300" aria-hidden>
+                |
+              </span>
+              <span>
+                Mostrando{' '}
+                <strong className="text-slate-900">
+                  {rangoDesde}-{rangoHasta}
+                </strong>{' '}
+                de <strong className="text-slate-900">{totalListados}</strong>
+              </span>
+              {resumen.fecha_referencia ? (
+                <>
+                  <span className="text-slate-300" aria-hidden>
+                    |
+                  </span>
+                  <span className="font-mono text-xs">
+                    Ref. {String(resumen.fecha_referencia)}
+                  </span>
+                </>
+              ) : null}
+              {resumen.reglas_version ? (
+                <>
+                  <span className="text-slate-300" aria-hidden>
+                    |
+                  </span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {String(resumen.reglas_version)}
+                  </span>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {panelKpis ? (
         <Card className="border-dashed border-blue-200 bg-blue-50/50">
@@ -929,21 +889,31 @@ export function AuditoriaCarteraTab() {
               </p>
             ) : null}
 
-            <div className="max-h-36 overflow-y-auto rounded border border-slate-200 bg-white p-2 font-mono text-xs">
+            <div className="max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white p-2 text-xs">
               {(() => {
                 const c = panelKpis.conteos_por_control
                 if (!c || typeof c !== 'object' || Array.isArray(c)) {
                   return <span className="text-slate-500">Sin conteos</span>
                 }
-                const entries = Object.entries(c as Record<string, number>)
-                if (entries.length === 0) {
-                  return <span className="text-slate-500">Sin conteos</span>
-                }
-                return entries.map(([k, v]) => (
-                  <div key={k}>
-                    {k}: {String(v)}
-                  </div>
-                ))
+                const map = c as Record<string, number>
+                return (
+                  <ul className="space-y-1 text-slate-700">
+                    {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => {
+                      const v = map[def.codigo] ?? 0
+                      return (
+                        <li key={def.codigo} className="flex gap-2">
+                          <span className="shrink-0 font-mono text-muted-foreground">
+                            {def.n}.
+                          </span>
+                          <span className="min-w-0 flex-1">{def.titulo}</span>
+                          <span className="shrink-0 tabular-nums font-medium text-slate-900">
+                            {v}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )
               })()}
             </div>
           </CardContent>
@@ -979,49 +949,6 @@ export function AuditoriaCarteraTab() {
         </div>
       ) : null}
 
-      {hayAlertas && !loading ? (
-        <Card className="border-slate-200 bg-slate-50/80">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base text-slate-800">
-              Controles numerados (mismo orden que la auditoria en servidor)
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            <p className="mb-3 text-xs text-slate-600">
-              Los numeros entre parentesis son <strong>totales</strong> por control
-              (toda la cartera con los filtros cedula/prestamo). Al elegir un
-              control, la tabla y la paginacion se cargan <strong>solo</strong> con
-              prestamos que tienen esa alerta (ya no se mezcla con la primera
-              pagina de &quot;cualquier&quot; alerta). Excepciones MARCAR_OK se
-              omiten pares con excepcion aceptada (MARCAR_OK); si el motor ya no
-              marca SI, el caso no aparece en absoluto. Use{' '}
-              <strong>Ver motor completo</strong> para el motor sin ese filtro.
-            </p>
-
-            <ol className="list-decimal space-y-1.5 pl-5 text-sm text-slate-800">
-              {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => (
-                <li key={def.codigo}>
-                  <span className="font-medium">{def.titulo}</span>
-                  {conteosPorControlCodigo[def.codigo] ? (
-                    <span className="text-muted-foreground">
-                      {' '}
-                      - {conteosPorControlCodigo[def.codigo]} prestamo(s) con
-                      esta alerta
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {' '}
-                      - sin casos con filtros actuales
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </CardContent>
-        </Card>
-      ) : null}
-
       {loading ? (
         <Card>
           <CardContent className="pt-6">
@@ -1042,30 +969,14 @@ export function AuditoriaCarteraTab() {
           <CardContent className="pt-6">
             {visibleRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
-                En esta pagina no quedan filas (paginacion, filtro de control, o
-                casos fuera de cola por aceptacion o motor ya en NO). Pulse{' '}
-                <strong>Recargar</strong> o <strong>Ver motor completo</strong>{' '}
-                para revisar el motor sin filtro operativo.
-              </p>
-            ) : displayRows.length === 0 ? (
-              <p className="py-8 text-center text-gray-600">
-                {filtroControlCodigo && visibleRows.length > 0 ? (
-                  <>
-                    Ningun prestamo cumple el{' '}
-                    <strong>control seleccionado</strong> en esta pagina (puede
-                    estar oculto por <strong>OK</strong> en BD o no hay casos).
-                    Pruebe <strong>Todos los controles</strong> u otra pagina.
-                  </>
-                ) : (
-                  <>
-                    Sin filas en esta pagina. Pruebe otra pagina o ajuste
-                    filtros.
-                  </>
-                )}
+                En esta pagina no quedan filas (paginacion o casos fuera de cola
+                por aceptacion o motor ya en NO). Pulse <strong>Recargar</strong>{' '}
+                o <strong>Ver motor completo</strong> para revisar el motor sin
+                filtro operativo.
               </p>
             ) : (
               <div className="space-y-8">
-                {displayRows.map(row => (
+                {visibleRows.map(row => (
                   <div
                     key={row.prestamo_id}
                     className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
