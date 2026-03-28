@@ -2,7 +2,8 @@
 Auditoria de cartera por prestamo: controles desde tablas reales (prestamos, clientes, cuotas, pagos, cuota_pagos).
 
 La lista de alertas es orientativa; debe revisarla un humano. La corrida automatica (03:00 America/Caracas)
-actualiza metadatos en `configuracion`; el GET del API recalcula en tiempo real para reflejar la BD actual.
+alinea antes `cuotas.estado` con `clasificar_estado_cuota`, luego evalua y actualiza metadatos en
+`configuracion`; el GET del API recalcula en tiempo real para reflejar la BD actual.
 """
 from __future__ import annotations
 
@@ -421,3 +422,15 @@ def ejecutar_auditoria_cartera(
         "fecha_referencia": str(hoy),
     }
     return out, meta
+
+
+def prestamos_ids_alerta_total_pagos_vs_aplicado(rows: list[dict[str, Any]]) -> list[int]:
+    """IDs de prestamos con control SI `total_pagado_vs_aplicado_cuotas` (salida de ejecutar_auditoria_cartera)."""
+    out: list[int] = []
+    for r in rows:
+        pid = int(r["prestamo_id"])
+        for c in r.get("controles", []):
+            if c.get("codigo") == "total_pagado_vs_aplicado_cuotas":
+                out.append(pid)
+                break
+    return sorted(set(out))

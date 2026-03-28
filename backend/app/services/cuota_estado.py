@@ -16,13 +16,19 @@ Persistencia en BD:
 - GET `/prestamos/{id}/cuotas` y exportaciones llaman a `sincronizar_columna_estado_cuotas` para alinear la columna
   con el mismo codigo que se devuelve en JSON (`estado` / `estado_etiqueta`). Asi informes que lean solo la tabla
   ven el mismo estado que la API.
+- `sincronizar_estado_cuotas_cartera`: alinea en lote todas las cuotas de prestamos APROBADO/LIQUIDADO (job nocturno
+  tras auditoria o POST admin), sin tocar montos ni cuota_pagos.
 
 """
 from __future__ import annotations
 
 import calendar
+import logging
 from datetime import date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
+
+logger = logging.getLogger(__name__)
 
 TZ_NEGOCIO = "America/Caracas"
 _TOL_MONTO = 0.01
@@ -181,6 +187,57 @@ def sincronizar_columna_estado_cuotas(db: object, cuotas: list, *, commit: bool 
     return changed
 
 
+def sincronizar_estado_cuotas_cartera(db: Any, *, commit: bool = True) -> dict[str, int]:
+    """
+    Recalcula y persiste `cuotas.estado` con la misma regla que la auditoria y GET cuotas,
+    para todos los prestamos en APROBADO o LIQUIDADO. No modifica total_pagado ni articulacion.
+
+    Paginacion por id para no cargar toda la tabla en memoria.
+    """
+    from sqlalchemy import select
+
+    from app.models.cuota import Cuota
+    from app.models.prestamo import Prestamo
+
+    hoy = hoy_negocio()
+    scanned = 0
+    changed = 0
+    last_id = 0
+    batch_size = 500
+    while True:
+        rows = (
+            db.execute(
+                select(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .where(
+                    Prestamo.estado.in_(("APROBADO", "LIQUIDADO")),
+                    Cuota.id > last_id,
+                )
+                .order_by(Cuota.id.asc())
+                .limit(batch_size)
+            )
+            .scalars()
+            .all()
+        )
+        if not rows:
+            break
+        last_id = int(rows[-1].id)
+        for c in rows:
+            scanned += 1
+            nuevo = calcular_estado_cuota_desde_fila(c, hoy)
+            cur = (getattr(c, "estado", None) or "").strip().upper()
+            if cur != nuevo:
+                setattr(c, "estado", nuevo)
+                changed += 1
+        db.flush()
+    if commit:
+        db.commit()
+    logger.info(
+        "sincronizar_estado_cuotas_cartera: escaneadas=%s estados_actualizados=%s",
+        scanned,
+        changed,
+    )
+    return {"cuotas_escaneadas": scanned, "estados_actualizados": changed}
 
 
 # SQL PostgreSQL (misma regla que clasificar_estado_cuota).

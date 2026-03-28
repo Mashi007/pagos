@@ -34,6 +34,8 @@ import {
   PrestamoCarteraChequeo,
 } from '../../services/auditoriaService'
 
+import { useSimpleAuth } from '../../store/simpleAuthStore'
+
 import { toast } from 'sonner'
 
 import { Link } from 'react-router-dom'
@@ -51,10 +53,18 @@ function normalizarCedulaBusqueda(valor: string) {
   return valor.trim().toUpperCase().replace(/\s+/g, '')
 }
 
+const COD_DESAJUSTE_PAGOS = 'total_pagado_vs_aplicado_cuotas'
+
 export function AuditoriaCarteraTab() {
+  const { user } = useSimpleAuth()
+
+  const esAdmin = (user?.rol || 'operativo') === 'administrador'
+
   const [loading, setLoading] = useState(true)
 
   const [running, setRunning] = useState(false)
+
+  const [corrigiendo, setCorrigiendo] = useState(false)
 
   const [items, setItems] = useState<PrestamoCarteraChequeo[]>([])
 
@@ -119,7 +129,12 @@ export function AuditoriaCarteraTab() {
 
       setFiltroControlCodigo('')
 
-      toast.success('Auditoria ejecutada y metadatos actualizados')
+      const s = cheq.sincronizar_estado_cuotas
+      const extra =
+        s && typeof s.estados_actualizados === 'number'
+          ? ` Estados de cuota alineados: ${s.estados_actualizados} fila(s).`
+          : ''
+      toast.success(`Auditoria ejecutada y metadatos actualizados.${extra}`)
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
@@ -181,6 +196,47 @@ export function AuditoriaCarteraTab() {
 
   const hayAlertas = items.length > 0
 
+  const hayDesajustePagosVsAplicado = useMemo(() => {
+    return items.some(row =>
+      row.controles.some(c => c.codigo === COD_DESAJUSTE_PAGOS)
+    )
+  }, [items])
+
+  const corregirDesajustePagos = async () => {
+    try {
+      setCorrigiendo(true)
+      const res = await auditoriaService.corregirCartera({
+        sincronizar_estados: true,
+        reaplicar_cascada_desajuste_pagos: true,
+        max_reaplicaciones: 100,
+      })
+      setItems(res.items || [])
+      setResumen((res.resumen as Record<string, unknown>) || {})
+      setDismissed({})
+      setCedulaFiltro('')
+      setFiltroControlCodigo('')
+      const ok = (res.reaplicar_cascada || []).filter(
+        (x: Record<string, unknown>) => x.ok === true
+      ).length
+      const fail = (res.reaplicar_cascada || []).length - ok
+      const sync = res.sincronizar_estado_cuotas
+      toast.success(
+        `Correccion: cascada ${ok} prestamo(s) OK${fail ? `, ${fail} con error` : ''}.` +
+          (sync && typeof sync.estados_actualizados === 'number'
+            ? ` Estados sincronizados: ${sync.estados_actualizados}.`
+            : '')
+      )
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al corregir cartera'
+      toast.error(msg)
+    } finally {
+      setCorrigiendo(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -206,6 +262,23 @@ export function AuditoriaCarteraTab() {
           )}
           Ejecutar ahora y guardar meta
         </Button>
+
+        {esAdmin && hayDesajustePagosVsAplicado && !loading ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void corregirDesajustePagos()}
+            disabled={corrigiendo || running || loading}
+            title="Reaplica pagos en cascada en prestamos con alerta de suma pagos vs cuota_pagos, luego sincroniza estados de cuota."
+          >
+            {corrigiendo ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Corregir desajuste pagos (cascada)
+          </Button>
+        ) : null}
 
         {hayAlertas && !loading ? (
           <>
@@ -332,13 +405,13 @@ export function AuditoriaCarteraTab() {
                   {conteosPorControlCodigo[def.codigo] ? (
                     <span className="text-muted-foreground">
                       {' '}
-                      — {conteosPorControlCodigo[def.codigo]} préstamo(s) con
+                      - {conteosPorControlCodigo[def.codigo]} préstamo(s) con
                       esta alerta en vista actual
                     </span>
                   ) : (
                     <span className="text-muted-foreground">
                       {' '}
-                      — sin casos en vista actual
+                      - sin casos en vista actual
                     </span>
                   )}
                 </li>

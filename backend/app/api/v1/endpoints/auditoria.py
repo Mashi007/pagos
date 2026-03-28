@@ -9,17 +9,19 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.auditoria import Auditoria
+from app.schemas.auth import UserResponse
 from app.services.prestamo_cartera_auditoria import (
     ejecutar_auditoria_cartera,
     leer_meta_ejecucion,
     persistir_meta_ejecucion,
+    prestamos_ids_alerta_total_pagos_vs_aplicado,
 )
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -269,6 +271,26 @@ class PrestamoCarteraChequeoResponse(BaseModel):
     items: List[PrestamoCarteraChequeoItem]
     resumen: dict
     meta_ultima_corrida: dict
+    sincronizar_estado_cuotas: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Solo en POST ejecutar/corregir: alineacion masiva de cuotas.estado antes/después del flujo.",
+    )
+
+
+class CarteraCorregirBody(BaseModel):
+    """Correcciones de datos orientadas por la auditoria de cartera (solo administrador)."""
+
+    sincronizar_estados: bool = True
+    reaplicar_cascada_desajuste_pagos: bool = False
+    max_reaplicaciones: int = Field(50, ge=1, le=500)
+
+
+class CarteraCorreccionResponse(BaseModel):
+    items: List[PrestamoCarteraChequeoItem]
+    resumen: dict
+    meta_ultima_corrida: dict
+    sincronizar_estado_cuotas: Optional[dict[str, Any]] = None
+    reaplicar_cascada: List[dict[str, Any]] = Field(default_factory=list)
 
 
 def _prestamos_cartera_dicts_a_items(rows: List[dict[str, Any]]) -> List[PrestamoCarteraChequeoItem]:
@@ -322,8 +344,14 @@ def ejecutar_y_persistir_auditoria_cartera(
     ),
     db: Session = Depends(get_db),
 ):
-    """Recalcula toda la cartera, persiste metadatos de ejecucion y devuelve el mismo cuerpo que GET chequeos."""
+    """
+    Alinea `cuotas.estado` con la regla de negocio (misma que la auditoria), recalcula chequeos,
+    persiste metadatos de ejecucion y devuelve alertas restantes.
+    """
     _ = solo_alertas  # compat. API; ejecutar_auditoria_cartera ya solo devuelve filas con alerta SI
+    from app.services.cuota_estado import sincronizar_estado_cuotas_cartera
+
+    sync_stats = sincronizar_estado_cuotas_cartera(db, commit=True)
     rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
     con_alerta = int(resumen.get("prestamos_con_alerta") or 0)
     total_ev = int(resumen.get("prestamos_evaluados") or 0)
@@ -333,6 +361,61 @@ def ejecutar_y_persistir_auditoria_cartera(
         items=_prestamos_cartera_dicts_a_items(rows),
         resumen=resumen,
         meta_ultima_corrida=meta,
+        sincronizar_estado_cuotas=sync_stats,
+    )
+
+
+@router.post("/prestamos/cartera/corregir", response_model=CarteraCorreccionResponse)
+def corregir_auditoria_cartera(
+    body: CarteraCorregirBody,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Opciones de correccion acotadas: sincronizar estados de cuota en cartera y/o reaplicar cascada
+    en prestamos que la auditoria marca con desajuste suma pagos vs aplicado a cuotas.
+    Solo administrador. Tras las acciones vuelve a ejecutar auditoria y persiste meta.
+    """
+    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administracion puede ejecutar correcciones de cartera.",
+        )
+    from app.services.cuota_estado import sincronizar_estado_cuotas_cartera
+    from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
+
+    reaplicar_resultados: list[dict[str, Any]] = []
+    if body.reaplicar_cascada_desajuste_pagos:
+        rows_pre, _ = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
+        pids = prestamos_ids_alerta_total_pagos_vs_aplicado(rows_pre)[: int(body.max_reaplicaciones)]
+        for pid in pids:
+            try:
+                r = reset_y_reaplicar_cascada_prestamo(db, pid)
+                if r.get("ok"):
+                    db.commit()
+                    reaplicar_resultados.append({"prestamo_id": pid, "ok": True, **r})
+                else:
+                    db.rollback()
+                    reaplicar_resultados.append({"prestamo_id": pid, "ok": False, **r})
+            except Exception as e:
+                db.rollback()
+                reaplicar_resultados.append({"prestamo_id": pid, "ok": False, "error": str(e)})
+
+    sync_stats: Optional[dict[str, Any]] = None
+    if body.sincronizar_estados:
+        sync_stats = sincronizar_estado_cuotas_cartera(db, commit=True)
+
+    rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
+    con_alerta = int(resumen.get("prestamos_con_alerta") or 0)
+    total_ev = int(resumen.get("prestamos_evaluados") or 0)
+    persistir_meta_ejecucion(db, total_evaluados=total_ev, con_alerta=con_alerta, commit=True)
+    meta = leer_meta_ejecucion(db)
+    return CarteraCorreccionResponse(
+        items=_prestamos_cartera_dicts_a_items(rows),
+        resumen=resumen,
+        meta_ultima_corrida=meta,
+        sincronizar_estado_cuotas=sync_stats,
+        reaplicar_cascada=reaplicar_resultados,
     )
 
 

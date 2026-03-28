@@ -179,11 +179,13 @@ def _job_finiquito_refresh() -> None:
 
 
 def _job_auditoria_cartera_prestamos() -> None:
-    """Job 03:00. Evalua prestamos (cartera) y persiste metadatos en configuracion (ultima ejecucion)."""
+    """Job 03:00. Evalua prestamos (cartera), alinea cuotas.estado con reglas, persiste metadatos en configuracion."""
     db = SessionLocal()
     try:
+        from app.services.cuota_estado import sincronizar_estado_cuotas_cartera
         from app.services.prestamo_cartera_auditoria import ejecutar_auditoria_cartera, persistir_meta_ejecucion
 
+        sync = sincronizar_estado_cuotas_cartera(db, commit=True)
         _rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
         persistir_meta_ejecucion(
             db,
@@ -192,9 +194,11 @@ def _job_auditoria_cartera_prestamos() -> None:
             commit=True,
         )
         logger.info(
-            "Auditoria cartera prestamos: evaluados=%s con_alerta=%s",
+            "Auditoria cartera prestamos: evaluados=%s con_alerta=%s; sync_estado cuotas escaneadas=%s actualizadas=%s",
             resumen.get("prestamos_evaluados"),
             resumen.get("prestamos_con_alerta"),
+            sync.get("cuotas_escaneadas"),
+            sync.get("estados_actualizados"),
         )
     except Exception as e:
         logger.exception("Error en job auditoria_cartera_prestamos: %s", e)

@@ -102,6 +102,15 @@ export interface PrestamoCarteraChequeoResponse {
   items: PrestamoCarteraChequeo[]
   resumen: Record<string, unknown>
   meta_ultima_corrida: Record<string, unknown>
+  /** Presente en POST ejecutar/corregir: cuotas escaneadas y estados actualizados. */
+  sincronizar_estado_cuotas?: {
+    cuotas_escaneadas?: number
+    estados_actualizados?: number
+  } | null
+}
+
+export interface CarteraCorreccionResponse extends PrestamoCarteraChequeoResponse {
+  reaplicar_cascada?: Array<Record<string, unknown>>
 }
 
 class AuditoriaService {
@@ -214,6 +223,23 @@ class AuditoriaService {
     return apiClient.post<PrestamoCarteraChequeoResponse>(
       `${this.baseUrl}/prestamos/cartera/ejecutar`,
       undefined
+    )
+  }
+
+  /** Solo administrador. Reaplica cascada en prestamos con alerta pagos vs aplicado (opcional) y sincroniza estados. */
+  async corregirCartera(body: {
+    sincronizar_estados?: boolean
+    reaplicar_cascada_desajuste_pagos?: boolean
+    max_reaplicaciones?: number
+  }): Promise<CarteraCorreccionResponse> {
+    return apiClient.post<CarteraCorreccionResponse>(
+      `${this.baseUrl}/prestamos/cartera/corregir`,
+      {
+        sincronizar_estados: body.sincronizar_estados ?? true,
+        reaplicar_cascada_desajuste_pagos:
+          body.reaplicar_cascada_desajuste_pagos ?? false,
+        max_reaplicaciones: body.max_reaplicaciones ?? 50,
+      }
     )
   }
 
