@@ -922,6 +922,18 @@ class PrestamoService {
       throw error
     }
   }
+
+  /**
+   * Mismo payload que el PDF de estado de cuenta (JSON).
+   * GET /api/v1/prestamos/{id}/estado-cuenta
+   */
+  async getEstadoCuentaJson(prestamoId: number): Promise<Record<string, unknown>> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/${prestamoId}/estado-cuenta`
+    )
+    return response.data as Record<string, unknown>
+  }
 }
 
 export const prestamoService = new PrestamoService()

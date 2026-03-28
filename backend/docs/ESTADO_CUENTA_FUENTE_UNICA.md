@@ -1,33 +1,35 @@
-# Estado de cuenta: fuente única de datos y consumidores
+﻿# Estado de cuenta: fuente unica de datos y consumidores
 
-## Rol del módulo
+## Modulos
 
-La **definición operativa** del estado de cuenta (prestamos del cliente, cuotas pendientes, totales, tablas de amortización con columnas alineadas a la app) vive en el servicio:
+| Archivo | Responsabilidad |
+|---------|-----------------|
+| `app/services/estado_cuenta_datos.py` | **Fuente unica**: carga desde BD, sync pagos, `obtener_datos_estado_cuenta_prestamo`, `obtener_datos_estado_cuenta_cliente`, `obtener_recibos_cliente_estado_cuenta`, `serializar_estado_cuenta_payload_json`. |
+| `app/services/estado_cuenta_pdf.py` | Solo generacion PDF (`generar_pdf_estado_cuenta`) y re-export de las funciones de datos (compatibilidad con imports existentes). |
 
-- `app/services/estado_cuenta_pdf.py`
-  - `obtener_datos_estado_cuenta_prestamo(db, prestamo_id, sincronizar=True)` — un préstamo.
-  - `obtener_datos_estado_cuenta_cliente(db, cedula_lookup)` — todos los préstamos del cliente (cedula sin guiones).
-  - `generar_pdf_estado_cuenta(...)` — solo renderiza PDF a partir del dict anterior (ReportLab).
+## Tabla de amortizacion en PDF / JSON
 
-**Reglas de etiqueta de cuota** (Caracas, mora, etc.): `app/services/cuota_estado.py` (`estado_cuota_para_mostrar`, `etiqueta_estado_cuota`). Los listados de cuotas en `prestamos` deben seguir usando la misma función para no divergir del PDF.
+Se incluye cuando el prestamo esta en `ESTADOS_PRESTAMO_TABLA_AMORTIZACION` (`APROBADO`, `LIQUIDADO`). Otros estados: sin bloque de amortizacion completa (cuotas pendientes siguen calculandose).
 
-**Sincronización pagos → cuotas** antes de armar datos: `app/services/pagos_cuotas_sincronizacion.py` (`sincronizar_pagos_pendientes_a_prestamos`), invocada desde `obtener_datos_estado_cuenta_*`.
+## Reglas de etiqueta de cuota
 
-## Tablas de base de datos involucradas
+`app/services/cuota_estado.py` (`estado_cuota_para_mostrar`, `etiqueta_estado_cuota`). El listado `GET /prestamos/{id}/cuotas` y el estado de cuenta deben coincidir; test: `tests/test_estado_cuenta_contract.py`.
 
-- `clientes`, `prestamos`, `cuotas`, `pagos` (y compatibilidad de columnas vía `prestamo_db_compat` para `fecha_liquidado`).
-- Flujo público adicional para sección “recibos” en PDF: `pagos_reportados`, `pagos` (conciliación `COB-` + `estado == PAGADO`) — lógica hoy en `estado_cuenta_publico._obtener_recibos_cliente`.
+## Tablas de base de datos
 
-## Consumidores autorizados (deben usar el servicio)
+- `clientes`, `prestamos`, `cuotas`, `pagos`, `pagos_reportados` (recibos publicos), `estado_cuenta_codigos` (flujo codigo email).
+
+## Consumidores
 
 | Consumidor | Uso |
 |------------|-----|
-| `GET /api/v1/prestamos/{id}/estado-cuenta/pdf` | `obtener_datos_estado_cuenta_prestamo` + `generar_pdf_estado_cuenta` |
-| `app/api/v1/endpoints/estado_cuenta_publico.py` | `obtener_datos_estado_cuenta_cliente` + PDF; códigos en `estado_cuenta_codigos` |
-| `app/services/liquidado_notificacion_service.py` | Mismo origen que el PDF por préstamo (adjunto email liquidado) |
+| `GET /api/v1/prestamos/{id}/estado-cuenta` | JSON del mismo payload que el PDF (`serializar_estado_cuenta_payload_json`). |
+| `GET /api/v1/prestamos/{id}/estado-cuenta/pdf` | PDF |
+| `app/api/v1/endpoints/estado_cuenta_publico.py` | PDF por cedula + `obtener_recibos_cliente_estado_cuenta` |
+| `app/services/liquidado_notificacion_service.py` | PDF adjunto (datos via `obtener_datos_estado_cuenta_prestamo`) |
 
-**No** duplicar en otros endpoints la construcción de `amortizaciones_por_prestamo` / `cuotas_pendientes` con consultas paralelas: extender `obtener_datos_estado_cuenta_*` o exponer un endpoint JSON que reutilice esas funciones.
+No duplicar la construccion de `amortizaciones_por_prestamo` en otros servicios: extender `estado_cuenta_datos` o consumir el endpoint JSON.
 
 ## Informes / SQL ad-hoc
 
-Reportes por cédula o hojas de cálculo que necesiten la misma semántica que el PDF deben **documentar** que la referencia de negocio es este servicio (o reutilizarlo vía API interna), para evitar divergencia con consultas SQL sueltas.
+Los reportes que deban reflejar la misma semantica que el PDF deben reutilizar `estado_cuenta_datos` o el endpoint JSON, y documentar esta dependencia.

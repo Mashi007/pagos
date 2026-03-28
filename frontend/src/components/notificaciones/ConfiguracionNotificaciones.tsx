@@ -403,6 +403,17 @@ export function ConfiguracionNotificaciones() {
 
   const guardandoRef = useRef(false)
 
+  /**
+   * Evita que un refetch de GET .../notificaciones/envios (otra pestaña del navegador,
+   * foco de ventana, invalidacion) pise cambios locales sin guardar. Cada fila/caso
+   * sigue teniendo su propia clave en configEnvios; esto no mezcla plantillas entre casos.
+   */
+  const enviosLocalDirtyRef = useRef(false)
+
+  const markEnviosLocalDirty = () => {
+    enviosLocalDirtyRef.current = true
+  }
+
   const queryClient = useQueryClient()
 
   const {
@@ -473,21 +484,21 @@ export function ConfiguracionNotificaciones() {
   const cargando = loadingEnvios || loadingPlantillas
 
   useEffect(() => {
-    if (dataEnvios != null) {
-      const {
-        modoPruebas: mp,
-        emailsPruebas: ep,
-        configEnvios: ce,
-        campanasMasivos: cm,
-      } = normalizeConfigFromApi(dataEnvios)
+    if (dataEnvios == null) return
+    if (enviosLocalDirtyRef.current) return
+    const {
+      modoPruebas: mp,
+      emailsPruebas: ep,
+      configEnvios: ce,
+      campanasMasivos: cm,
+    } = normalizeConfigFromApi(dataEnvios)
 
-      setModoPruebas(mp)
+    setModoPruebas(mp)
 
-      setEmailsPruebas(ep)
+    setEmailsPruebas(ep)
 
-      setConfigEnvios(ce)
-      setCampanasMasivos(cm)
-    }
+    setConfigEnvios(ce)
+    setCampanasMasivos(cm)
   }, [dataEnvios])
 
   useEffect(() => {
@@ -528,6 +539,7 @@ export function ConfiguracionNotificaciones() {
   }
 
   const setConfig = (tipo: string, upd: Partial<ConfigEnvioItem>) => {
+    markEnviosLocalDirty()
     setConfigEnvios(prev => {
       const current = prev[tipo] || defaultEnvio()
 
@@ -552,6 +564,7 @@ export function ConfiguracionNotificaciones() {
   }
 
   const agregarCampanaMasiva = () => {
+    markEnviosLocalDirty()
     setCampanasMasivos(prev => [
       ...prev,
       {
@@ -570,16 +583,19 @@ export function ConfiguracionNotificaciones() {
     id: string,
     patch: Partial<CampanaMasivaConfig>
   ) => {
+    markEnviosLocalDirty()
     setCampanasMasivos(prev =>
       prev.map(c => (c.id === id ? { ...c, ...patch } : c))
     )
   }
 
   const eliminarCampanaMasiva = (id: string) => {
+    markEnviosLocalDirty()
     setCampanasMasivos(prev => prev.filter(c => c.id !== id))
   }
 
   const toggleDiaCampana = (id: string, dia: number) => {
+    markEnviosLocalDirty()
     setCampanasMasivos(prev =>
       prev.map(c => {
         if (c.id !== id) return c
@@ -648,6 +664,8 @@ export function ConfiguracionNotificaciones() {
       })
 
       await emailConfigService.actualizarConfiguracionEnvios(payload)
+
+      enviosLocalDirtyRef.current = false
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1031,7 +1049,10 @@ export function ConfiguracionNotificaciones() {
               type="button"
               role="switch"
               aria-checked={modoPruebas}
-              onClick={() => setModoPruebas(!modoPruebas)}
+              onClick={() => {
+                markEnviosLocalDirty()
+                setModoPruebas(!modoPruebas)
+              }}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
                 modoPruebas ? 'bg-amber-500' : 'bg-emerald-600'
               }`}
@@ -1065,9 +1086,10 @@ export function ConfiguracionNotificaciones() {
                   type="email"
                   placeholder="ejemplo@correo.com"
                   value={emailsPruebas[0]}
-                  onChange={e =>
+                  onChange={e => {
+                    markEnviosLocalDirty()
                     setEmailsPruebas(prev => [e.target.value, prev[1]])
-                  }
+                  }}
                   className="h-9 max-w-xs bg-white"
                   maxLength={120}
                 />
@@ -1093,9 +1115,10 @@ export function ConfiguracionNotificaciones() {
                   type="email"
                   placeholder="ejemplo2@correo.com"
                   value={emailsPruebas[1]}
-                  onChange={e =>
+                  onChange={e => {
+                    markEnviosLocalDirty()
                     setEmailsPruebas(prev => [prev[0], e.target.value])
-                  }
+                  }}
                   className="h-9 max-w-xs bg-white"
                   maxLength={120}
                 />
@@ -1405,6 +1428,7 @@ export function ConfiguracionNotificaciones() {
                           Plantilla
                         </label>
                         <Select
+                          key={`plantilla-select-masivos-${camp.id}-${camp.plantilla_id ?? 'none'}`}
                           value={
                             camp.plantilla_id
                               ? String(camp.plantilla_id)
@@ -1557,6 +1581,7 @@ export function ConfiguracionNotificaciones() {
 
                   <td className="px-4 py-3">
                     <Select
+                      key={`plantilla-select-${tipo}-${config.plantilla_id ?? 'none'}`}
                       value={
                         config.plantilla_id
                           ? String(config.plantilla_id)

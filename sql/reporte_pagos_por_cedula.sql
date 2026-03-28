@@ -1,6 +1,10 @@
--- =============================================================================
+﻿-- =============================================================================
 -- Reporte de pagos por cedula (PostgreSQL). Reutilizable: cambia solo params.
 -- Ejecutar cada bloque por separado si el cliente SQL no admite varios SELECT.
+--
+-- Semantica alineada al negocio de estado de cuenta / amortizacion: ver
+-- backend/docs/ESTADO_CUENTA_FUENTE_UNICA.md y app/services/estado_cuenta_datos.py
+-- (GET /api/v1/prestamos/{id}/estado-cuenta para el mismo payload que el PDF).
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------

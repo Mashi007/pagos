@@ -68,7 +68,6 @@ from app.models.configuracion import Configuracion
 
 from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 
-from app.models.pago_reportado import PagoReportado
 
 from app.models.pago import Pago
 
@@ -82,6 +81,7 @@ from app.core.email_config_holder import get_email_activo_servicio
 
 
 
+from app.services.estado_cuenta_datos import obtener_recibos_cliente_estado_cuenta
 from app.services.estado_cuenta_pdf import (
     generar_pdf_estado_cuenta,
     obtener_datos_estado_cuenta_cliente,
@@ -241,81 +241,6 @@ def _cedula_lookup(cedula_input: str) -> str:
 
 
 
-def _obtener_recibos_cliente(db: Session, cedula_lookup: str) -> List[dict]:
-
-    """Pagos reportados del cliente (cedula sin guion) con recibo PDF, para enlaces en estado de cuenta."""
-
-    from sqlalchemy import and_
-
-    cedula_concat = func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula)
-
-    rows = db.execute(
-
-        select(PagoReportado)
-
-        .where(and_(
-
-            cedula_concat == cedula_lookup,
-
-            PagoReportado.recibo_pdf.isnot(None),
-
-        ))
-
-        .order_by(PagoReportado.fecha_pago.desc())
-
-    ).scalars().all()
-
-    out = []
-
-    for row in rows:
-
-        pr = row[0] if hasattr(row, "__getitem__") else row
-
-        fp = getattr(pr, "fecha_pago", None)
-
-        fecha_str = fp.isoformat() if fp else ""
-
-        out.append({
-
-            "id": pr.id,
-
-            "referencia_interna": getattr(pr, "referencia_interna", "") or "",
-
-            "fecha_pago": fecha_str,
-
-            "monto": float(getattr(pr, "monto", 0) or 0),
-
-            "moneda": getattr(pr, "moneda", "BS") or "BS",
-
-            "aplicado_a_cuotas": False,
-
-        })
-
-    if out:
-
-        num_docs = ["COB-" + (r["referencia_interna"] or "")[:90] for r in out]
-
-        pagos_aplicados = set(
-
-            row[0] for row in db.execute(
-
-                select(Pago.numero_documento).where(
-
-                    Pago.numero_documento.in_(num_docs),
-
-                    Pago.estado == "PAGADO",
-
-                )
-
-            ).all()
-
-        )
-
-        for r in out:
-
-            r["aplicado_a_cuotas"] = ("COB-" + (r["referencia_interna"] or "")) in pagos_aplicados
-
-    return out
 
 
 
@@ -950,7 +875,7 @@ def verificar_codigo_estado_cuenta(
 
             return VerificarCodigoResponse(ok=False, error="Error al generar el documento.")
 
-        recibos = _obtener_recibos_cliente(db, cedula_lookup)
+        recibos = obtener_recibos_cliente_estado_cuenta(db, cedula_lookup)
 
         recibo_token = create_recibo_token(cedula_lookup, expire_hours=2)
 
@@ -1144,7 +1069,7 @@ def solicitar_estado_cuenta(
 
     amortizaciones_por_prestamo = datos.get("amortizaciones_por_prestamo") or []
 
-    recibos = _obtener_recibos_cliente(db, cedula_lookup)
+    recibos = obtener_recibos_cliente_estado_cuenta(db, cedula_lookup)
 
     base_url = str(request.base_url).rstrip("/")
 

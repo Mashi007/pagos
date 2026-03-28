@@ -4748,6 +4748,25 @@ def resolver_prestamo_error(error_id: int, db: Session = Depends(get_db)):
 
 
 
+
+@router.get("/{prestamo_id}/estado-cuenta")
+def get_estado_cuenta_prestamo_json(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Mismo payload que el PDF de estado de cuenta, en JSON serializable. Fuente: estado_cuenta_datos."""
+    from app.services.estado_cuenta_datos import (
+        obtener_datos_estado_cuenta_prestamo,
+        serializar_estado_cuenta_payload_json,
+    )
+
+    datos = obtener_datos_estado_cuenta_prestamo(db, prestamo_id)
+    if not datos:
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+    return serializar_estado_cuenta_payload_json(datos)
+
+
 @router.get("/{prestamo_id}/estado-cuenta/pdf")
 
 def get_estado_cuenta_prestamo_pdf(
@@ -4764,7 +4783,8 @@ def get_estado_cuenta_prestamo_pdf(
 
     """Genera PDF de estado de cuenta para un prestamo especifico."""
 
-    from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta, obtener_datos_estado_cuenta_prestamo
+    from app.services.estado_cuenta_datos import obtener_datos_estado_cuenta_prestamo
+    from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 
     
 

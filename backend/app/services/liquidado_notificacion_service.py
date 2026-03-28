@@ -20,10 +20,8 @@ from app.core.database import SessionLocal
 from app.core.email import mask_email_for_log, send_email
 from app.models.envio_notificacion import EnvioNotificacion
 from app.services.envio_notificacion_snapshot import persistir_snapshot_envio_notificacion
-from app.services.estado_cuenta_pdf import (
-    generar_pdf_estado_cuenta,
-    obtener_datos_estado_cuenta_prestamo,
-)
+from app.services.estado_cuenta_datos import obtener_datos_estado_cuenta_prestamo
+from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 
 logger = logging.getLogger(__name__)
 
