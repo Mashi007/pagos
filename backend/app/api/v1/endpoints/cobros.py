@@ -176,6 +176,10 @@ def _generar_recibo_desde_pago(db: Session, pr: PagoReportado) -> bytes:
             tasa_cambio = float(tasa_obj.tasa_oficial) if tasa_obj else None
         except Exception:
             pass
+    fecha_reporte_aprobacion_display = None
+    u = getattr(pr, "updated_at", None)
+    if u and hasattr(u, "strftime"):
+        fecha_reporte_aprobacion_display = u.strftime("%d/%m/%Y %H:%M")
     return generar_recibo_pago_reportado(
         referencia_interna=pr.referencia_interna,
         nombres=pr.nombres,
@@ -186,6 +190,7 @@ def _generar_recibo_desde_pago(db: Session, pr: PagoReportado) -> bytes:
         monto=_monto_con_moneda(pr),
         numero_operacion=pr.numero_operacion,
         fecha_pago=pr.fecha_pago,
+        fecha_reporte_aprobacion_display=fecha_reporte_aprobacion_display,
         aplicado_a_cuotas=cuotas_txt,
         saldo_inicial=saldo_init,
         saldo_final=saldo_fin,

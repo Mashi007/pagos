@@ -10,7 +10,7 @@ import copy
 import logging
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
@@ -120,25 +120,44 @@ def obtener_pago_para_recibo_cuota(db: Session, cuota: Cuota) -> Optional[Pago]:
 
 def texto_institucion_recibo_cuota(db: Session, pago: Optional[Pago]) -> str:
     """
-    Texto de banco para el PDF: columna pagos.institucion_bancaria, o pagos_reportados.institucion_financiera
-    si numero_documento/referencia_pago es COB-{referencia_interna} y la columna del pago viene vacia.
+    Texto de banco para el PDF: pagos.institucion_bancaria; si vacio, pagos_reportados por
+    COB-{referencia_interna} en documento/referencia, o por numero_operacion igual al del pago
+    (cargas donde la operacion coincide con el reporte pero la columna banco en pagos quedo null).
     """
     if pago is None:
         return "N/A"
     ib = (getattr(pago, "institucion_bancaria", None) or "").strip()
     if ib:
         return ib[:100]
+    seen_ref: set[str] = set()
     for raw in (getattr(pago, "numero_documento", None), getattr(pago, "referencia_pago", None)):
         doc = (raw or "").strip()
         up = doc.upper()
         if not up.startswith("COB-"):
             continue
         ref = doc[4:].strip()
-        if not ref:
+        if not ref or ref in seen_ref:
             continue
+        seen_ref.add(ref)
         fin = db.execute(
             select(PagoReportado.institucion_financiera)
             .where(PagoReportado.referencia_interna == ref)
+            .order_by(desc(PagoReportado.id))
+            .limit(1)
+        ).scalar_one_or_none()
+        s = (fin or "").strip() if fin is not None else ""
+        if s:
+            return s[:100]
+    seen_op: set[str] = set()
+    for raw in (getattr(pago, "referencia_pago", None), getattr(pago, "numero_documento", None)):
+        op = (raw or "").strip()
+        if not op or op.upper().startswith("COB-") or op in seen_op:
+            continue
+        seen_op.add(op)
+        fin = db.execute(
+            select(PagoReportado.institucion_financiera)
+            .where(PagoReportado.numero_operacion == op)
+            .order_by(desc(PagoReportado.id))
             .limit(1)
         ).scalar_one_or_none()
         s = (fin or "").strip() if fin is not None else ""

@@ -2007,7 +2007,12 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
         institucion = texto_institucion_recibo_cuota(db, pago)
 
-        numero_operacion = (pago.numero_documento or pago.referencia_pago or referencia)[:100]
+        nd = (pago.numero_documento or "").strip()
+        rp = (pago.referencia_pago or "").strip()
+        if nd.upper().startswith("COB-") and rp and not rp.upper().startswith("COB-"):
+            numero_operacion = rp[:100]
+        else:
+            numero_operacion = (nd or rp or referencia)[:100]
 
         if pago.fecha_pago:
 
@@ -2045,6 +2050,12 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
         fpd = fecha_pago_date.strftime("%d/%m/%Y")
 
+    fecha_reporte_aprobacion_display = None
+    if pago:
+        f_rep = getattr(pago, "fecha_conciliacion", None) or getattr(pago, "fecha_registro", None)
+        if f_rep and hasattr(f_rep, "strftime"):
+            fecha_reporte_aprobacion_display = f_rep.strftime("%d/%m/%Y %H:%M")
+
     ctx = contexto_moneda_montos_recibo_cuota(db, prestamo, cuota, pago)
 
     pdf_bytes = generar_recibo_cuota_amortizacion(
@@ -2064,6 +2075,8 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
         fecha_recepcion=fecha_recep,
 
         fecha_pago=fecha_pago_date,
+
+        fecha_reporte_aprobacion_display=fecha_reporte_aprobacion_display,
 
         moneda=ctx.moneda,
 

@@ -158,6 +158,7 @@ def generar_recibo_pago_reportado(
     numero_operacion: str,
     fecha_recepcion: Optional[object] = None,
     fecha_pago: Optional[date] = None,
+    fecha_reporte_aprobacion_display: Optional[str] = None,
     aplicado_a_cuotas: Optional[str] = None,
     saldo_inicial: Optional[str] = None,
     saldo_final: Optional[str] = None,
@@ -175,7 +176,7 @@ def generar_recibo_pago_reportado(
     from reportlab.lib.units import inch
     from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-    del fecha_recepcion  # No se usa; fecha de emision = hoy en America/Caracas.
+    del fecha_recepcion  # No se usa en plantilla; ver fecha_reporte_aprobacion_display.
 
     # Paleta corporativa (documento formal)
     _c = {
@@ -197,7 +198,9 @@ def generar_recibo_pago_reportado(
     saldo_fin_display = (saldo_final or "").strip() or "-"
     cuota_num_display = f"Cuota {numero_cuota}" if numero_cuota else "-"
 
-    fecha_emision_str = fecha_hoy_caracas().strftime("%d/%m/%Y")
+    fecha_reporte_str = (fecha_reporte_aprobacion_display or "").strip() or fecha_hoy_caracas().strftime(
+        "%d/%m/%Y"
+    )
     fecha_pago_str = fecha_pago.strftime("%d/%m/%Y") if fecha_pago else "-"
 
     nombre_completo = f"{(nombres or '').strip()} {(apellidos or '').strip()}".strip()
@@ -387,8 +390,8 @@ def generar_recibo_pago_reportado(
 
     info = [
         [
-            Paragraph("FECHA DE EMISIÓN", label_style),
-            Paragraph(fecha_emision_str, value_style),
+            Paragraph("Fecha de reporte de pago", label_style),
+            Paragraph(fecha_reporte_str, value_style),
             Paragraph("FECHA DE PAGO", label_style),
             Paragraph(fecha_pago_str, value_style),
         ],
@@ -405,7 +408,7 @@ def generar_recibo_pago_reportado(
             Paragraph(numero_op or "-", value_style),
         ],
         [
-            Paragraph("MONTO REPORTADO", label_style),
+            Paragraph("Monto pagado", label_style),
             Paragraph(f"<b>{monto_display}</b>", value_emphasis_style),
             Paragraph("", label_style),
             Paragraph("", label_style),
@@ -433,7 +436,7 @@ def generar_recibo_pago_reportado(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
     ]
 
-    # Etiquetas (cols 0 y 2): ancho suficiente para no partir palabras (FECHA DE EMISIÓN, MONTO REPORTADO, etc.).
+    # Etiquetas (cols 0 y 2): ancho suficiente para no partir palabras largas (fecha de reporte, monto pagado, etc.).
     # Col 3: valores largos (número de operación) pueden partirse; col 1: titular.
     _info_col_w = [
         _content_w * 0.20,
