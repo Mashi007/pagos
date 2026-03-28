@@ -192,6 +192,8 @@ def _job_auditoria_cartera_prestamos() -> None:
             skip=0,
             limit=None,
             incluir_filas=False,
+            excluir_marcar_ok=False,
+            codigo_control=None,
         )
         persistir_meta_ejecucion(
             db,

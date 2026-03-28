@@ -642,11 +642,12 @@ export function AuditoriaCarteraTab() {
 
         <CardContent className="space-y-3 text-sm text-amber-950/90">
           <p>
-            Cuando el caso es valido por negociacion con el cliente pero la regla automatica
-            sigue en <strong>SI</strong>, use <strong>Aceptar excepcion</strong>: se guarda en
-            bitacora con <strong>nota obligatoria</strong> y ese control deja de contar en la
-            cola y en los KPIs de esta pantalla (modo normal). Sigue existiendo trazabilidad en{' '}
-            <strong>Historial revisiones</strong> y el motor interno no se modifica.
+            En la vista normal, un caso <strong>solo</strong> deja de mostrarse como alarma pendiente
+            si (1) se <strong>acepta excepcion</strong> (bitacora con nota obligatoria) o (2) se
+            corrige la <strong>causa raiz</strong> en datos y el motor ya no marca <strong>SI</strong>.
+            No hay otro mecanismo de ocultacion. Si el motor sigue en SI y no hay aceptacion, el caso
+            sigue en cola. Trazabilidad en <strong>Historial revisiones</strong>; aceptar no altera
+            el calculo objetivo del motor.
           </p>
 
           <label className="flex cursor-pointer items-start gap-2.5">
@@ -682,7 +683,12 @@ export function AuditoriaCarteraTab() {
           Recargar
         </Button>
 
-        <Button size="sm" onClick={ejecutarAhora} disabled={running || loading}>
+        <Button
+          size="sm"
+          onClick={ejecutarAhora}
+          disabled={running || loading}
+          title="Recalcula controles desde la BD (motor objetivo) y guarda KPIs en configuracion. Igual criterio que el job 03:00; sin usar MARCAR_OK en esos totales."
+        >
           {running ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
@@ -988,7 +994,9 @@ export function AuditoriaCarteraTab() {
               control, la tabla y la paginacion se cargan <strong>solo</strong> con
               prestamos que tienen esa alerta (ya no se mezcla con la primera
               pagina de &quot;cualquier&quot; alerta). Excepciones MARCAR_OK se
-              excluyen salvo <strong>Ver motor completo</strong>.
+              omiten pares con excepcion aceptada (MARCAR_OK); si el motor ya no
+              marca SI, el caso no aparece en absoluto. Use{' '}
+              <strong>Ver motor completo</strong> para el motor sin ese filtro.
             </p>
 
             <ol className="list-decimal space-y-1.5 pl-5 text-sm text-slate-800">
@@ -1034,10 +1042,10 @@ export function AuditoriaCarteraTab() {
           <CardContent className="pt-6">
             {visibleRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
-                En esta pagina no quedan alertas pendientes (o todas tienen
-                excepcion aceptada en bitacora). Pulse <strong>Recargar</strong> o{' '}
-                <strong>Ver motor completo</strong> si necesita ver el detalle
-                bruto del motor.
+                En esta pagina no quedan filas (paginacion, filtro de control, o
+                casos fuera de cola por aceptacion o motor ya en NO). Pulse{' '}
+                <strong>Recargar</strong> o <strong>Ver motor completo</strong>{' '}
+                para revisar el motor sin filtro operativo.
               </p>
             ) : displayRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">

@@ -371,6 +371,14 @@ class AuditoriaCarteraResumenResponse(BaseModel):
 
 
 def _persistir_meta_desde_resumen_cartera(db: Session, resumen: dict[str, Any]) -> None:
+    if resumen.get("excluye_marcar_ok") is True:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "No se persiste meta de auditoria de cartera con exclusion MARCAR_OK: "
+                "los KPIs guardados deben reflejar solo el motor objetivo sobre la BD."
+            ),
+        )
     raw_conteos = resumen.get("conteos_por_control")
     persistir_meta_ejecucion(
         db,
@@ -418,8 +426,9 @@ def resumen_auditoria_cartera(
     excluir_marcar_ok: bool = Query(
         False,
         description=(
-            "Si true, excluye alertas con ultimo MARCAR_OK en bitacora (excepciones aceptadas). "
-            "Recomendado en UI operativa; false conserva conteos motor (compat. y job 03:00)."
+            "Vista operativa: si true, la cola excluye solo pares con ultimo MARCAR_OK (aceptado); "
+            "fuera de eso un caso sale de la lista solo si el motor ya no marca SI (causa raiz). "
+            "Meta persistida (job/manual ejecutar) usa siempre motor sin esta capa."
         ),
     ),
     codigo_control: Optional[str] = Query(
@@ -467,8 +476,9 @@ def listar_chequeos_cartera(
     excluir_marcar_ok: bool = Query(
         False,
         description=(
-            "Si true, omite prestamos/controles con excepcion aceptada (ultimo MARCAR_OK en bitacora). "
-            "Ajusta paginacion y conteos. UI operativa: true."
+            "Cola operativa: si true, omite solo (prestamo, control) con ultimo MARCAR_OK; "
+            "el resto solo desaparece si el motor deja SI. No altera SI/NO del motor. "
+            "Job 03:00 y meta persistida usan false."
         ),
     ),
     codigo_control: Optional[str] = Query(
@@ -480,6 +490,7 @@ def listar_chequeos_cartera(
     """
     Revision de cartera en tiempo real desde tablas prestamos, clientes, cuotas, pagos, cuota_pagos.
     Cada control devuelve alerta SI/NO (SI = revisar por un humano).
+    Con `excluir_marcar_ok=true`, un caso deja de listarse solo por aceptacion MARCAR_OK o porque el motor ya no marca SI.
     """
     cod_cc = _codigo_control_cartera_opcional(codigo_control)
     rows, resumen = ejecutar_auditoria_cartera(
@@ -514,6 +525,9 @@ def ejecutar_y_persistir_auditoria_cartera(
     """
     Alinea `cuotas.estado` con la regla de negocio (misma que la auditoria), recalcula chequeos,
     persiste metadatos de ejecucion y devuelve alertas restantes.
+
+    La evaluacion y la meta persistida son siempre el **motor objetivo** (`excluir_marcar_ok=false`):
+    la bitacora MARCAR_OK no altera conteos guardados en `configuracion`.
     """
     _ = solo_alertas  # compat. API; ejecutar_auditoria_cartera ya solo devuelve filas con alerta SI
     from app.services.cuota_estado import sincronizar_estado_cuotas_cartera
@@ -524,6 +538,8 @@ def ejecutar_y_persistir_auditoria_cartera(
         solo_con_alerta=False,
         skip=0,
         limit=None,
+        excluir_marcar_ok=False,
+        codigo_control=None,
     )
     _persistir_meta_desde_resumen_cartera(db, resumen)
     meta = leer_meta_ejecucion(db)
@@ -561,6 +577,8 @@ def corregir_auditoria_cartera(
             solo_con_alerta=False,
             skip=0,
             limit=None,
+            excluir_marcar_ok=False,
+            codigo_control=None,
         )
         pids = prestamos_ids_alerta_total_pagos_vs_aplicado(rows_pre)[: int(body.max_reaplicaciones)]
         for pid in pids:
@@ -585,6 +603,8 @@ def corregir_auditoria_cartera(
         solo_con_alerta=False,
         skip=0,
         limit=None,
+        excluir_marcar_ok=False,
+        codigo_control=None,
     )
     _persistir_meta_desde_resumen_cartera(db, resumen)
     meta = leer_meta_ejecucion(db)
@@ -605,8 +625,8 @@ def crear_revision_cartera(
 ):
     """
     Registra revision humana (append-only). `MARCAR_OK` documenta excepcion de negocio aceptada:
-    requiere nota (min. 15 caracteres); con `excluir_marcar_ok` en GET chequeos/resumen deja de contar
-    en la cola operativa hasta un tipo distinto futuro (p. ej. revertir).
+    requiere nota (min. 15 caracteres). Es una de las dos vias legitimas para que el caso deje la cola
+    operativa (la otra es que el motor deje de marcar SI tras corregir datos). No borra la condicion del motor.
     """
     cod = body.codigo_control.strip()
     if cod not in CONTROLES_CARTERA_VALIDOS:

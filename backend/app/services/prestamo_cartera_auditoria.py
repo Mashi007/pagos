@@ -1,6 +1,15 @@
 """
 Auditoria de cartera por prestamo: controles desde tablas reales (prestamos, clientes, cuotas, pagos, cuota_pagos).
 
+Independencia del motor (objetivo): los SI/NO se calculan solo con reglas deterministicas sobre la BD.
+La bitacora `auditoria_cartera_revision` (MARCAR_OK) no altera esos calculos; solo puede filtrarse en
+GET chequeos/resumen cuando `excluir_marcar_ok=true` (vista operativa). Job 03:00, POST ejecutar y POST
+corregir deben llamar siempre con `excluir_marcar_ok=False` para persistir KPIs objetivos en `configuracion`.
+
+Regla de negocio (cola operativa con `excluir_marcar_ok=true`): un par (prestamo, control) deja de mostrarse
+como alarma pendiente solo si (1) existe aceptacion documentada con ultimo evento MARCAR_OK en bitacora, o
+(2) el motor ya no evalua ese control en SI (causa raiz corregida en datos; no hay otro camino de ocultacion).
+
 Totales pagos/aplicado en USD: solo pagos operativos (excluye anulados, reversados, duplicados declarados,
 cancelado/rechazado). Comparacion agregada con tolerancia 0.02 USD; conversion BS->USD fila a fila sin tolerancia
 (2 decimales). Pagos en BS alertan si falta `tasas_cambio_diaria` para la fecha del pago.
@@ -88,6 +97,8 @@ def persistir_meta_ejecucion(
         payload["conteos_por_control"] = conteos_por_control
     if reglas_version:
         payload["reglas_version"] = reglas_version
+    # Siempre: KPIs guardados = motor sobre tablas reales, sin aplicar revision humana MARCAR_OK.
+    payload["criterio_evaluacion_persistido"] = "motor_tablas_sin_excepciones_bitacora"
     resumen = json.dumps(payload, ensure_ascii=False)
     _upsert_config_valor(db, CFG_ULTIMA, now)
     _upsert_config_valor(db, CFG_RESUMEN, resumen)
@@ -179,8 +190,8 @@ def ejecutar_auditoria_cartera(
     prestamo_id / cedula_contiene: acotan que prestamos se evaluan (misma logica de controles sobre el universo completo).
     skip / limit: paginacion sobre la lista de prestamos con alerta (despues de filtrar por prestamo/cedula).
     incluir_filas: si False, no construye la lista de prestamos (ahorra memoria); resumen y conteos igual.
-    excluir_marcar_ok: si True, omite (prestamo_id, codigo_control) cuyo ultimo evento en bitacora es MARCAR_OK
-        (excepciones de negocio aceptadas); ajusta conteos, listados y paginacion. Job 03:00 y persistencia usan False.
+    excluir_marcar_ok: si True, omite solo pares con ultimo MARCAR_OK en bitacora (aceptacion); el resto de filas
+        desaparecen del listado unicamente cuando el motor deja de marcar SI. Job 03:00 y persistencia usan False.
     codigo_control: si se indica, solo entran prestamos con ese control en SI; la paginacion skip/limit aplica a esa lista.
         Los conteos por control en meta siguen siendo globales (para el desplegable de filtros).
     """

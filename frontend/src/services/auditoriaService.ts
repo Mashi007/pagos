@@ -129,7 +129,10 @@ export interface CarteraChequeosQuery {
 
   cedula?: string
 
-  /** Excluir alertas con ultimo MARCAR_OK (excepciones aceptadas). Recomendado true en operacion. */
+  /**
+   * Vista operativa: true = no listar (prestamo, control) con ultimo MARCAR_OK.
+   * Fuera de eso, un caso solo sale de la lista si el motor deja SI (datos corregidos).
+   */
   excluir_marcar_ok?: boolean
 
   /** Lista y paginacion solo sobre prestamos con este control en SI (conteos en resumen siguen globales). */
