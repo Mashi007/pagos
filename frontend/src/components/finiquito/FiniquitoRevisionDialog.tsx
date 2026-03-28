@@ -189,7 +189,7 @@ function estadoPrestamoBadgeClass(estado: string): string {
   if (e === 'APROBADO') return 'bg-green-100 text-green-800'
   if (e === 'LIQUIDADO') return 'bg-gray-100 text-gray-800'
   if (e === 'EN_REVISION') return 'bg-yellow-100 text-yellow-800'
-  if (e === 'DESISTIMIENTO') return 'bg-slate-200 text-slate-800'
+  if (e === 'DESISTIMIENTO') return 'bg-orange-100 text-orange-900'
   if (e === 'RECHAZADO') return 'bg-red-100 text-red-800'
   if (e === 'EVALUADO') return 'bg-blue-100 text-blue-800'
   return 'bg-gray-100 text-gray-800'

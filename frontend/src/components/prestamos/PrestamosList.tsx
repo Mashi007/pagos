@@ -444,7 +444,7 @@ export function PrestamosList() {
 
       LIQUIDADO: 'bg-gray-100 text-gray-800 border-gray-300',
 
-      DESISTIMIENTO: 'bg-slate-200 text-slate-800 border-slate-400',
+      DESISTIMIENTO: 'bg-orange-100 text-orange-900 border-orange-400',
 
       RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
     }

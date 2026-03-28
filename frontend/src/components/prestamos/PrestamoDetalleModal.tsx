@@ -155,6 +155,8 @@ export function PrestamoDetalleModal({
 
       LIQUIDADO: 'bg-gray-100 text-gray-800 border-gray-300',
 
+      DESISTIMIENTO: 'bg-orange-100 text-orange-900 border-orange-400',
+
       RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
     }
 
@@ -170,6 +172,8 @@ export function PrestamoDetalleModal({
       APROBADO: 'Aprobado',
 
       LIQUIDADO: 'Liquidado',
+
+      DESISTIMIENTO: 'Desistimiento',
 
       RECHAZADO: 'Rechazado',
     }
