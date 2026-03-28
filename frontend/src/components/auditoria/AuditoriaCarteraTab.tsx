@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   BarChart3,
@@ -79,12 +79,77 @@ function csvEscapeCell(val: string): string {
 
 type FiltrosApi = { cedula: string; prestamo_id?: number }
 
+const SESSION_CACHE_KEY = 'auditoria_cartera_ui_v1'
+
+type CarteraSessionCacheV1 = {
+  v: 1
+  items: PrestamoCarteraChequeo[]
+  resumen: Record<string, unknown>
+  filtrosApi: FiltrosApi
+  page: number
+  filtroControlCodigo: string
+  ocultosKeys: string[]
+}
+
+function loadCarteraSessionCache(): CarteraSessionCacheV1 | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_CACHE_KEY)
+    if (!raw) return null
+    const c = JSON.parse(raw) as Partial<CarteraSessionCacheV1>
+    if (c.v !== 1 || !Array.isArray(c.items) || !c.filtrosApi) return null
+    return {
+      v: 1,
+      items: c.items,
+      resumen: (c.resumen && typeof c.resumen === 'object' ? c.resumen : {}) as Record<
+        string,
+        unknown
+      >,
+      filtrosApi: {
+        cedula: typeof c.filtrosApi.cedula === 'string' ? c.filtrosApi.cedula : '',
+        prestamo_id: c.filtrosApi.prestamo_id,
+      },
+      page: typeof c.page === 'number' && c.page >= 1 ? c.page : 1,
+      filtroControlCodigo:
+        typeof c.filtroControlCodigo === 'string' ? c.filtroControlCodigo : '',
+      ocultosKeys: Array.isArray(c.ocultosKeys) ? c.ocultosKeys : [],
+    }
+  } catch {
+    return null
+  }
+}
+
+function saveCarteraSessionCache(payload: {
+  items: PrestamoCarteraChequeo[]
+  resumen: Record<string, unknown>
+  filtrosApi: FiltrosApi
+  page: number
+  filtroControlCodigo: string
+  ocultosKeys: string[]
+}) {
+  try {
+    const row: CarteraSessionCacheV1 = {
+      v: 1,
+      items: payload.items,
+      resumen: payload.resumen,
+      filtrosApi: payload.filtrosApi,
+      page: payload.page,
+      filtroControlCodigo: payload.filtroControlCodigo,
+      ocultosKeys: payload.ocultosKeys,
+    }
+    sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(row))
+  } catch {
+    /* quota o modo privado */
+  }
+}
+
 export function AuditoriaCarteraTab() {
   const { user } = useSimpleAuth()
 
   const esAdmin = (user?.rol || 'operativo') === 'administrador'
 
-  const [loading, setLoading] = useState(true)
+  const boot = useMemo(() => loadCarteraSessionCache(), [])
+
+  const [loading, setLoading] = useState(() => boot === null)
 
   const [running, setRunning] = useState(false)
 
@@ -92,12 +157,18 @@ export function AuditoriaCarteraTab() {
 
   const [exportando, setExportando] = useState(false)
 
-  const [items, setItems] = useState<PrestamoCarteraChequeo[]>([])
+  const [items, setItems] = useState<PrestamoCarteraChequeo[]>(
+    () => boot?.items ?? []
+  )
 
-  const [resumen, setResumen] = useState<Record<string, unknown> | null>(null)
+  const [resumen, setResumen] = useState<Record<string, unknown> | null>(
+    () => boot?.resumen ?? null
+  )
 
   /** Claves `prestamo_id:codigo_control` con ultimo MARCAR_OK en BD (POST ocultos). */
-  const [ocultosKeys, setOcultosKeys] = useState<Set<string>>(() => new Set())
+  const [ocultosKeys, setOcultosKeys] = useState<Set<string>>(
+    () => new Set(boot?.ocultosKeys ?? [])
+  )
 
   const [historialOpen, setHistorialOpen] = useState(false)
 
@@ -107,17 +178,27 @@ export function AuditoriaCarteraTab() {
 
   const [historialLoading, setHistorialLoading] = useState(false)
 
-  const [cedulaInput, setCedulaInput] = useState('')
+  const [cedulaInput, setCedulaInput] = useState(
+    () => boot?.filtrosApi.cedula ?? ''
+  )
 
-  const [prestamoInput, setPrestamoInput] = useState('')
+  const [prestamoInput, setPrestamoInput] = useState(() =>
+    boot?.filtrosApi.prestamo_id != null
+      ? String(boot.filtrosApi.prestamo_id)
+      : ''
+  )
 
-  const [filtrosApi, setFiltrosApi] = useState<FiltrosApi>({ cedula: '' })
+  const [filtrosApi, setFiltrosApi] = useState<FiltrosApi>(
+    () => boot?.filtrosApi ?? { cedula: '' }
+  )
 
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(() => boot?.page ?? 1)
 
   const [pageSize] = useState(PAGE_SIZE_DEFAULT)
 
-  const [filtroControlCodigo, setFiltroControlCodigo] = useState('')
+  const [filtroControlCodigo, setFiltroControlCodigo] = useState(
+    () => boot?.filtroControlCodigo ?? ''
+  )
 
   const [loadingKpis, setLoadingKpis] = useState(false)
 
@@ -131,63 +212,101 @@ export function AuditoriaCarteraTab() {
     unknown
   > | null>(null)
 
-  const syncOcultosConItems = useCallback(async (list: PrestamoCarteraChequeo[]) => {
-    const ids = [...new Set(list.map(r => r.prestamo_id))]
-    if (ids.length === 0) {
-      setOcultosKeys(new Set())
-      return
-    }
-    try {
-      const r = await auditoriaService.listarRevisionesOcultos(ids)
-      const s = new Set(
-        (r.ocultos || []).map(o => `${o.prestamo_id}:${o.codigo_control}`)
-      )
-      setOcultosKeys(s)
-    } catch (e: unknown) {
-      setOcultosKeys(new Set())
-      const msg =
-        e && typeof e === 'object' && 'message' in e
-          ? String((e as { message?: string }).message)
-          : 'Error al cargar revisiones en BD (tabla migrada?)'
-      toast.error(msg)
-    }
-  }, [])
+  const syncOcultosConItems = useCallback(
+    async (list: PrestamoCarteraChequeo[]): Promise<Set<string>> => {
+      const ids = [...new Set(list.map(r => r.prestamo_id))]
+      if (ids.length === 0) {
+        const empty = new Set<string>()
+        setOcultosKeys(empty)
+        return empty
+      }
+      try {
+        const r = await auditoriaService.listarRevisionesOcultos(ids)
+        const s = new Set(
+          (r.ocultos || []).map(o => `${o.prestamo_id}:${o.codigo_control}`)
+        )
+        setOcultosKeys(s)
+        return s
+      } catch (e: unknown) {
+        const empty = new Set<string>()
+        setOcultosKeys(empty)
+        const msg =
+          e && typeof e === 'object' && 'message' in e
+            ? String((e as { message?: string }).message)
+            : 'Error al cargar revisiones en BD (tabla migrada?)'
+        toast.error(msg)
+        return empty
+      }
+    },
+    []
+  )
 
-  const fetchLista = useCallback(async () => {
-    try {
-      setLoading(true)
+  const fetchLista = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true
+      try {
+        if (!silent) setLoading(true)
 
-      const cheq = await auditoriaService.listarCarteraChequeos({
-        skip: (page - 1) * pageSize,
-        limit: pageSize,
-        cedula: filtrosApi.cedula.trim() || undefined,
-        prestamo_id: filtrosApi.prestamo_id,
-      })
+        const cheq = await auditoriaService.listarCarteraChequeos({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          cedula: filtrosApi.cedula.trim() || undefined,
+          prestamo_id: filtrosApi.prestamo_id,
+        })
 
-      setItems(cheq.items || [])
+        const nextItems = cheq.items || []
+        const nextResumen = (cheq.resumen as Record<string, unknown>) || {}
 
-      setResumen((cheq.resumen as Record<string, unknown>) || {})
+        setItems(nextItems)
+        setResumen(nextResumen)
 
-      await syncOcultosConItems(cheq.items || [])
-    } catch (e: unknown) {
-      const msg =
-        e && typeof e === 'object' && 'message' in e
-          ? String((e as { message?: string }).message)
-          : 'Error al cargar auditoria de cartera'
+        const ocultos = await syncOcultosConItems(nextItems)
+        saveCarteraSessionCache({
+          items: nextItems,
+          resumen: nextResumen,
+          filtrosApi,
+          page,
+          filtroControlCodigo,
+          ocultosKeys: [...ocultos],
+        })
+      } catch (e: unknown) {
+        const msg =
+          e && typeof e === 'object' && 'message' in e
+            ? String((e as { message?: string }).message)
+            : 'Error al cargar auditoria de cartera'
 
-      toast.error(msg)
+        toast.error(msg)
 
-      setItems([])
+        if (!silent) {
+          setItems([])
+          setResumen(null)
+          setOcultosKeys(new Set())
+        }
+      } finally {
+        if (!silent) setLoading(false)
+      }
+    },
+    [
+      page,
+      pageSize,
+      filtrosApi,
+      filtroControlCodigo,
+      syncOcultosConItems,
+    ]
+  )
 
-      setResumen(null)
-
-      setOcultosKeys(new Set())
-    } finally {
-      setLoading(false)
-    }
-  }, [page, pageSize, filtrosApi, syncOcultosConItems])
+  const primeraCargaRef = useRef(true)
+  const bootRef = useRef(boot)
+  bootRef.current = boot
 
   useEffect(() => {
+    const b = bootRef.current
+    if (primeraCargaRef.current && b) {
+      primeraCargaRef.current = false
+      void fetchLista({ silent: true })
+      return
+    }
+    primeraCargaRef.current = false
     void fetchLista()
   }, [fetchLista])
 
@@ -361,7 +480,18 @@ export function AuditoriaCarteraTab() {
         codigo_control: codigo,
       })
       const k = controlDismissKey(prestamoId, codigo)
-      setOcultosKeys(prev => new Set([...prev, k]))
+      setOcultosKeys(prev => {
+        const next = new Set([...prev, k])
+        saveCarteraSessionCache({
+          items,
+          resumen: resumen ?? {},
+          filtrosApi,
+          page,
+          filtroControlCodigo,
+          ocultosKeys: [...next],
+        })
+        return next
+      })
       toast.success('Revision guardada en base de datos')
     } catch (e: unknown) {
       const msg =
@@ -449,6 +579,7 @@ export function AuditoriaCarteraTab() {
           size="sm"
           onClick={() => recargarCompleta()}
           disabled={loading}
+          title="Vuelve a pedir la lista al servidor (siempre lee la BD en tiempo real)."
         >
           {loading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -483,6 +614,13 @@ export function AuditoriaCarteraTab() {
             Corregir desajuste pagos (cascada)
           </Button>
         ) : null}
+
+        <p className="w-full text-xs text-muted-foreground">
+          La vista de cartera permanece en memoria al cambiar de pestaña. En la misma sesion del
+          navegador se restaura la ultima lista y filtros; al volver se actualiza en segundo plano.
+          Los chequeos se calculan en vivo contra la BD; el job 03:00 actualiza la meta guardada
+          (KPIs en configuracion), no sustituye una recarga manual si hubo cambios despues.
+        </p>
 
         {hayAlertas && !loading ? (
           <Button

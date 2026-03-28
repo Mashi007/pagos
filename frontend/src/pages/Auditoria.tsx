@@ -324,7 +324,7 @@ export function Auditoria() {
           <TabsTrigger value="sistema">Registro del sistema</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="cartera" className="mt-4">
+        <TabsContent value="cartera" className="mt-4" forceMount>
           <AuditoriaCarteraTab />
         </TabsContent>
 

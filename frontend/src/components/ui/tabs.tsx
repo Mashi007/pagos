@@ -86,18 +86,25 @@ TabsTrigger.displayName = 'TabsTrigger'
 
 interface TabsContentProps extends React.HTMLAttributes<HTMLDivElement> {
   value: string
+
+  /** Si true, el panel sigue montado al cambiar de pestaña (evita perder estado y refetch al volver). */
+  forceMount?: boolean
 }
 
 const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
-  ({ className, value, children, ...props }, ref) => {
+  ({ className, value, children, forceMount, ...props }, ref) => {
     const { value: activeValue } = React.useContext(TabsContext)
 
-    if (activeValue !== value) return null
+    const isActive = activeValue === value
+
+    if (!forceMount && !isActive) return null
 
     return (
       <div
         ref={ref}
         role="tabpanel"
+        hidden={forceMount ? !isActive : undefined}
+        aria-hidden={!isActive}
         className={cn(
           'mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 
