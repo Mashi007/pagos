@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -26,8 +25,6 @@ _TOL = Decimal("0.02")
 CFG_ULTIMA = "auditoria_cartera_ultima_ejecucion"
 CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
-_EMAIL_OK = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
 
 def _dec(x: Any) -> Decimal:
     if x is None:
@@ -35,18 +32,6 @@ def _dec(x: Any) -> Decimal:
     if isinstance(x, Decimal):
         return x
     return Decimal(str(x))
-
-
-def _email_alerta(email: str | None) -> tuple[str, str]:
-    """Retorna (SI|NO, detalle). SI = hay problema de calidad."""
-    if email is None or not str(email).strip():
-        return "SI", "Email vacio"
-    e = str(email).strip()
-    if re.search(r"\s", e):
-        return "SI", "Contiene espacios"
-    if not _EMAIL_OK.match(e):
-        return "SI", "Formato de email dudoso"
-    return "NO", ""
 
 
 def _upsert_config_valor(db: Session, clave: str, valor: str) -> None:
@@ -96,9 +81,12 @@ def ejecutar_auditoria_cartera(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Evalua prestamos en estados operativos. Retorna (filas, resumen).
-    Cada fila incluye `controles`: lista de {codigo, titulo, alerta, detalle}.
-    `alerta` es SI|NO (SI = requiere revision humana).
+    Solo se devuelven prestamos con al menos un control en alerta SI.
+    En cada fila, `controles` solo incluye entradas con alerta SI (no se exponen los NO).
+    Param solo_con_alerta: reservado por compatibilidad con la API; no altera el resultado.
     """
+    _ = solo_con_alerta
+
     hoy = hoy_negocio()
 
     rows_p = db.execute(
@@ -133,6 +121,34 @@ def ejecutar_auditoria_cartera(
         )
     ).fetchall()
     dup_cedulas = {str(r[0]).strip() for r in dup_cedulas_rows if r[0]}
+
+    # Misma cedula + mismo nombre + mismo dia de fecha_registro (varios prestamos activos)
+    dup_nombre_cedula_fecha_rows = db.execute(
+        text(
+            """
+            SELECT DISTINCT p.id
+            FROM prestamos p
+            INNER JOIN (
+              SELECT
+                UPPER(TRIM(BOTH FROM cedula)) AS ced,
+                UPPER(TRIM(BOTH FROM nombres)) AS nom,
+                CAST(fecha_registro AS date) AS fd,
+                COUNT(*) AS cnt
+              FROM prestamos
+              WHERE estado IN ('APROBADO', 'LIQUIDADO')
+              GROUP BY
+                UPPER(TRIM(BOTH FROM cedula)),
+                UPPER(TRIM(BOTH FROM nombres)),
+                CAST(fecha_registro AS date)
+              HAVING COUNT(*) > 1
+            ) d ON UPPER(TRIM(BOTH FROM p.cedula)) = d.ced
+               AND UPPER(TRIM(BOTH FROM p.nombres)) = d.nom
+               AND CAST(p.fecha_registro AS date) = d.fd
+            WHERE p.estado IN ('APROBADO', 'LIQUIDADO')
+            """
+        )
+    ).fetchall()
+    prestamos_dup_nombre_cedula_fecha = {int(r[0]) for r in dup_nombre_cedula_fecha_rows if r[0] is not None}
 
     # Pagos duplicados mismo dia y monto (posible fraude / doble registro)
     dup_pagos_rows = db.execute(
@@ -258,9 +274,6 @@ def ejecutar_auditoria_cartera(
                 }
             )
 
-        ea, det_e = _email_alerta(email_c)
-        add_control("email_cliente", "Calidad de email del cliente", ea, det_e)
-
         nc_p = normalizar_cedula_almacenamiento(cedula_p) or ""
         nc_c = normalizar_cedula_almacenamiento(cedula_c) or ""
         ced_mismatch = "SI" if nc_p != nc_c else "NO"
@@ -278,6 +291,18 @@ def ejecutar_auditoria_cartera(
             "Varios prestamos activos (APROBADO/LIQUIDADO) misma cedula",
             dup_prest,
             "Existe otro prestamo en cartera con la misma cedula" if dup_prest == "SI" else "Unico o sin duplicado activo",
+        )
+
+        dup_triple = "SI" if pid in prestamos_dup_nombre_cedula_fecha else "NO"
+        add_control(
+            "prestamos_duplicados_nombre_cedula_fecha_registro",
+            "Prestamos duplicados (mismo nombre, cedula y fecha de registro)",
+            dup_triple,
+            (
+                "Otro prestamo APROBADO/LIQUIDADO comparte cedula, nombres y el mismo dia de fecha_registro"
+                if dup_triple == "SI"
+                else "Sin duplicado por nombre+cedula+dia de registro"
+            ),
         )
 
         dup_pay = "SI" if pid in prestamos_pagos_duplicados else "NO"
@@ -367,30 +392,13 @@ def ejecutar_auditoria_cartera(
             "; ".join(det_parts[:5]) + ("..." if len(det_parts) > 5 else "") if estado_cuotas_mal else "Columna alineada con calculo",
         )
 
-        # Prestamo APROBADO con cuotas vencidas/mora (riesgo operativo)
-        tiene_venc_mora = False
-        for cu in cuotas_por_prestamo.get(pid, []):
-            calc = clasificar_estado_cuota(
-                float(cu[3] or 0),
-                float(cu[2] or 0),
-                cu[4],
-                hoy,
-            )
-            if calc in ("VENCIDO", "MORA"):
-                tiene_venc_mora = True
-                break
-        add_control(
-            "cuotas_vencidas_o_mora",
-            "Existen cuotas vencidas o en mora (hoy Caracas)",
-            "SI" if tiene_venc_mora else "NO",
-            "Revisar cobranza y coherencia con estado del prestamo" if tiene_venc_mora else "Sin vencido/mora al dia de hoy",
-        )
 
-        tiene_alerta = any(c["alerta"] == "SI" for c in controles)
+        controles_si = [c for c in controles if c.get("alerta") == "SI"]
+        tiene_alerta = bool(controles_si)
         if tiene_alerta:
             con_alerta_count += 1
 
-        if solo_con_alerta and not tiene_alerta:
+        if not controles_si:
             continue
 
         out.append(
@@ -401,8 +409,8 @@ def ejecutar_auditoria_cartera(
                 "nombres": nombres,
                 "estado_prestamo": estado_p,
                 "cliente_email": email_c or "",
-                "tiene_alerta": tiene_alerta,
-                "controles": controles,
+                "tiene_alerta": True,
+                "controles": controles_si,
             }
         )
 

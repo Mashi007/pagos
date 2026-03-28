@@ -279,7 +279,10 @@ def meta_auditoria_cartera(db: Session = Depends(get_db)):
 
 @router.get("/prestamos/cartera/chequeos", response_model=PrestamoCarteraChequeoResponse)
 def listar_chequeos_cartera(
-    solo_alertas: bool = Query(True, description="Si false, incluye prestamos sin alerta (puede ser pesado)."),
+    solo_alertas: bool = Query(
+        True,
+        description="Reservado por compatibilidad. La respuesta solo incluye prestamos con al menos un control SI y solo esos controles.",
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -306,7 +309,10 @@ def listar_chequeos_cartera(
 
 @router.post("/prestamos/cartera/ejecutar", response_model=PrestamoCarteraChequeoResponse)
 def ejecutar_y_persistir_auditoria_cartera(
-    solo_alertas: bool = Query(True),
+    solo_alertas: bool = Query(
+        True,
+        description="Reservado por compatibilidad. Igual que GET chequeos: solo prestamos y controles con alerta SI.",
+    ),
     db: Session = Depends(get_db),
 ):
     """Recalcula toda la cartera, persiste metadatos de ejecucion y devuelve el mismo cuerpo que GET chequeos."""

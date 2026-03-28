@@ -242,22 +242,16 @@ class AuditoriaService {
     return response
   }
 
-  async listarCarteraChequeos(
-    soloAlertas = true
-  ): Promise<PrestamoCarteraChequeoResponse> {
+  async listarCarteraChequeos(): Promise<PrestamoCarteraChequeoResponse> {
     return apiClient.get<PrestamoCarteraChequeoResponse>(
-      `${this.baseUrl}/prestamos/cartera/chequeos`,
-      { params: { solo_alertas: soloAlertas } }
+      `${this.baseUrl}/prestamos/cartera/chequeos`
     )
   }
 
-  async ejecutarCartera(
-    soloAlertas = true
-  ): Promise<PrestamoCarteraChequeoResponse> {
+  async ejecutarCartera(): Promise<PrestamoCarteraChequeoResponse> {
     return apiClient.post<PrestamoCarteraChequeoResponse>(
       `${this.baseUrl}/prestamos/cartera/ejecutar`,
-      undefined,
-      { params: { solo_alertas: soloAlertas } }
+      undefined
     )
   }
 

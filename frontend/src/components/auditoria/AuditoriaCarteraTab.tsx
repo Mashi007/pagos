@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { Check, Loader2, RefreshCw } from 'lucide-react'
 
 import { Button } from '../ui/button'
 
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
+import { Card, CardContent } from '../ui/card'
+
+import { Input } from '../ui/input'
+
+import { Label } from '../ui/label'
 
 import { Badge } from '../ui/badge'
 
@@ -26,6 +30,14 @@ import { toast } from 'sonner'
 
 import { Link } from 'react-router-dom'
 
+function controlDismissKey(prestamoId: number, codigo: string) {
+  return `${prestamoId}:${codigo}`
+}
+
+function normalizarCedulaBusqueda(valor: string) {
+  return valor.trim().toUpperCase().replace(/\s+/g, '')
+}
+
 export function AuditoriaCarteraTab() {
   const [loading, setLoading] = useState(true)
 
@@ -35,25 +47,22 @@ export function AuditoriaCarteraTab() {
 
   const [resumen, setResumen] = useState<Record<string, unknown> | null>(null)
 
-  const [meta, setMeta] = useState<Record<string, unknown> | null>(null)
+  /** Controles ocultados con OK en esta sesion; se limpia al Recargar / Ejecutar auditoria. */
+  const [dismissed, setDismissed] = useState<Record<string, true>>({})
 
-  const [soloAlertas, setSoloAlertas] = useState(true)
+  const [cedulaFiltro, setCedulaFiltro] = useState('')
 
   const cargar = useCallback(async () => {
     try {
       setLoading(true)
 
-      const [cheq, m] = await Promise.all([
-        auditoriaService.listarCarteraChequeos(soloAlertas),
-
-        auditoriaService.metaCartera(),
-      ])
+      const cheq = await auditoriaService.listarCarteraChequeos()
 
       setItems(cheq.items || [])
 
       setResumen((cheq.resumen as Record<string, unknown>) || {})
 
-      setMeta(m || {})
+      setDismissed({})
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
@@ -65,12 +74,10 @@ export function AuditoriaCarteraTab() {
       setItems([])
 
       setResumen(null)
-
-      setMeta(null)
     } finally {
       setLoading(false)
     }
-  }, [soloAlertas])
+  }, [])
 
   useEffect(() => {
     cargar()
@@ -80,13 +87,13 @@ export function AuditoriaCarteraTab() {
     try {
       setRunning(true)
 
-      const cheq = await auditoriaService.ejecutarCartera(soloAlertas)
+      const cheq = await auditoriaService.ejecutarCartera()
 
       setItems(cheq.items || [])
 
       setResumen((cheq.resumen as Record<string, unknown>) || {})
 
-      setMeta((cheq.meta_ultima_corrida as Record<string, unknown>) || {})
+      setDismissed({})
 
       toast.success('Auditoria ejecutada y metadatos actualizados')
     } catch (e: unknown) {
@@ -101,68 +108,37 @@ export function AuditoriaCarteraTab() {
     }
   }
 
-  const ultima =
-    (meta?.ultima_ejecucion_utc as string | undefined) ||
-    (meta?.ultima_ejecucion as string | undefined)
+  const visibleRows = useMemo(() => {
+    return items
+      .map(row => ({
+        ...row,
+        controles: row.controles.filter(
+          c => !dismissed[controlDismissKey(row.prestamo_id, c.codigo)]
+        ),
+      }))
+      .filter(row => row.controles.length > 0)
+  }, [items, dismissed])
+
+  const cedulaFiltroNorm = normalizarCedulaBusqueda(cedulaFiltro)
+
+  const displayRows = useMemo(() => {
+    if (!cedulaFiltroNorm) return visibleRows
+    return visibleRows.filter(row => {
+      const c = normalizarCedulaBusqueda(row.cedula || '')
+      return c.includes(cedulaFiltroNorm)
+    })
+  }, [visibleRows, cedulaFiltroNorm])
+
+  const marcarControlOk = (prestamoId: number, codigo: string) => {
+    const k = controlDismissKey(prestamoId, codigo)
+    setDismissed(prev => ({ ...prev, [k]: true }))
+  }
+
+  const hayAlertas = items.length > 0
 
   return (
     <div className="space-y-6">
-      <Card className="border-amber-200 bg-amber-50/60">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base text-amber-950">
-            <AlertTriangle className="h-5 w-5 text-amber-700" />
-            Como leer esta auditoria
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-2 text-sm text-amber-950/90">
-          <p>
-            Los controles se calculan en tiempo real desde las tablas de la base
-            de datos (prestamos, clientes, cuotas, pagos, cuota_pagos). Cada
-            control muestra <strong>SI</strong> o <strong>NO</strong>:{' '}
-            <strong>SI</strong> significa que hay una posible inconsistencia o
-            riesgo y conviene revision humana; no es una sentencia juridica ni
-            contable.
-          </p>
-
-          <p>
-            A las <strong>03:00</strong> (America/Caracas) el servidor vuelve a
-            evaluar toda la cartera y guarda la fecha de la ultima corrida. Si
-            corrige los datos en la BD, al recargar desapareceran las alertas;
-            si el problema persiste, el prestamo seguira apareciendo.
-          </p>
-
-          {ultima ? (
-            <p className="text-xs text-amber-900/80">
-              Ultima corrida automatica registrada (UTC):{' '}
-              <span className="font-mono">{ultima}</span>
-            </p>
-          ) : (
-            <p className="text-xs text-amber-900/80">
-              Aun no hay registro de corrida automatica; use &quot;Ejecutar
-              ahora&quot; o espere el job nocturno.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
       <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant={soloAlertas ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setSoloAlertas(true)}
-        >
-          Solo con alertas
-        </Button>
-
-        <Button
-          variant={!soloAlertas ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setSoloAlertas(false)}
-        >
-          Todos los prestamos (puede ser lento)
-        </Button>
-
         <Button
           variant="outline"
           size="sm"
@@ -186,7 +162,25 @@ export function AuditoriaCarteraTab() {
           Ejecutar ahora y guardar meta
         </Button>
 
-        {resumen ? (
+        {hayAlertas && !loading ? (
+          <div className="flex w-full min-w-[200px] max-w-sm flex-col gap-1 sm:w-auto">
+            <Label htmlFor="auditoria-cedula-filtro" className="text-xs text-gray-600">
+              Filtrar por cedula
+            </Label>
+
+            <Input
+              id="auditoria-cedula-filtro"
+              type="search"
+              placeholder="Ej. V12345678"
+              value={cedulaFiltro}
+              onChange={e => setCedulaFiltro(e.target.value)}
+              autoComplete="off"
+              className="h-9"
+            />
+          </div>
+        ) : null}
+
+        {hayAlertas && resumen ? (
           <span className="text-sm text-gray-600">
             Evaluados:{' '}
             <strong>{String(resumen.prestamos_evaluados ?? '-')}</strong>
@@ -202,93 +196,112 @@ export function AuditoriaCarteraTab() {
         ) : null}
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          {loading ? (
+      {loading ? (
+        <Card>
+          <CardContent className="pt-6">
             <div className="flex items-center justify-center py-12 text-gray-500">
               <Loader2 className="mr-2 h-6 w-6 animate-spin" />
               Analizando cartera...
             </div>
-          ) : items.length === 0 ? (
-            <p className="py-8 text-center text-gray-600">
-              No hay filas que mostrar con el filtro actual. Si eligio solo
-              alertas, la cartera esta consistente con estos controles.
-            </p>
-          ) : (
-            <div className="space-y-8">
-              {items.map(row => (
-                <div
-                  key={row.prestamo_id}
-                  className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-                >
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="text-lg font-semibold text-slate-900">
-                        Prestamo #{row.prestamo_id}{' '}
-                        <span className="text-slate-500">· {row.nombres}</span>
-                      </div>
+          </CardContent>
+        </Card>
+      ) : !hayAlertas ? (
+        <p className="py-6 text-center text-sm text-gray-600">
+          No hay prestamos con controles en SI segun estos criterios. La cartera esta
+          alineada con lo que aqui se revisa, o no hay prestamos APROBADO/LIQUIDADO.
+        </p>
+      ) : (
+        <Card>
+          <CardContent className="pt-6">
+            {visibleRows.length === 0 ? (
+              <p className="py-8 text-center text-gray-600">
+                Oculto todos los controles con <strong>OK</strong> en esta sesion. Pulse{' '}
+                <strong>Recargar</strong> o <strong>Ejecutar ahora</strong> para volver a
+                evaluar desde la base de datos; lo que siga en alerta volvera a mostrarse.
+              </p>
+            ) : displayRows.length === 0 ? (
+              <p className="py-8 text-center text-gray-600">
+                Ningun prestamo visible coincide con la cedula indicada. Pruebe otro fragmento
+                o deje el filtro vacio para ver todos.
+              </p>
+            ) : (
+              <div className="space-y-8">
+                {displayRows.map(row => (
+                  <div
+                    key={row.prestamo_id}
+                    className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-lg font-semibold text-slate-900">
+                          Prestamo #{row.prestamo_id}{' '}
+                          <span className="text-slate-500">· {row.nombres}</span>
+                        </div>
 
-                      <div className="text-sm text-slate-600">
-                        Cedula: <span className="font-mono">{row.cedula}</span>
-                        {' · '}
-                        Estado:{' '}
-                        <Badge variant="secondary">{row.estado_prestamo}</Badge>
-                        {' · '}
-                        <Link
-                          className="text-blue-600 underline"
-                          to="/prestamos"
-                        >
-                          Ir a prestamos
-                        </Link>
+                        <div className="text-sm text-slate-600">
+                          Cedula: <span className="font-mono">{row.cedula}</span>
+                          {' · '}
+                          Estado:{' '}
+                          <Badge variant="secondary">{row.estado_prestamo}</Badge>
+                          {' · '}
+                          <Link
+                            className="text-blue-600 underline"
+                            to="/prestamos"
+                          >
+                            Ir a prestamos
+                          </Link>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[240px]">Control</TableHead>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[280px]">Control (alerta SI)</TableHead>
 
-                        <TableHead className="w-[100px] text-center">
-                          Alerta
-                        </TableHead>
+                          <TableHead>Detalle</TableHead>
 
-                        <TableHead>Detalle</TableHead>
-                      </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                      {row.controles.map(c => (
-                        <TableRow key={`${row.prestamo_id}-${c.codigo}`}>
-                          <TableCell className="align-top text-sm font-medium">
-                            {c.titulo}
-                          </TableCell>
-
-                          <TableCell className="text-center align-top">
-                            <Badge
-                              className={
-                                c.alerta === 'SI'
-                                  ? 'bg-red-600 hover:bg-red-600'
-                                  : 'bg-emerald-600 hover:bg-emerald-600'
-                              }
-                            >
-                              {c.alerta}
-                            </Badge>
-                          </TableCell>
-
-                          <TableCell className="align-top text-sm text-slate-700">
-                            {c.detalle || '-'}
-                          </TableCell>
+                          <TableHead className="w-[100px] text-right">Accion</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                      </TableHeader>
+
+                      <TableBody>
+                        {row.controles.map(c => (
+                          <TableRow key={`${row.prestamo_id}-${c.codigo}`}>
+                            <TableCell className="align-top text-sm font-medium">
+                              {c.titulo}
+                            </TableCell>
+
+                            <TableCell className="align-top text-sm text-slate-700">
+                              {c.detalle || '-'}
+                            </TableCell>
+
+                            <TableCell className="align-top text-right">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-1"
+                                aria-label={`Marcar como revisado y ocultar: ${c.titulo}`}
+                                onClick={() =>
+                                  marcarControlOk(row.prestamo_id, c.codigo)
+                                }
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                OK
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
