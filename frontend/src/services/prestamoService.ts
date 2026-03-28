@@ -602,6 +602,15 @@ class PrestamoService {
     return response
   }
 
+  // Recalcular fechas de vencimiento de cuotas (cuando cambia fecha de aprobación)
+  async recalcularFechasAmortizacion(prestamoId: number): Promise<any> {
+    const response = await apiClient.post<any>(
+      `${this.baseUrl}/${prestamoId}/recalcular-fechas-amortizacion`
+    )
+
+    return response
+  }
+
   /**
 
 

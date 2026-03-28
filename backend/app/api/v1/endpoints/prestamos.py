@@ -1872,6 +1872,64 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
     return creadas
 
 
+def _recalcular_fechas_vencimiento_cuotas(db: Session, p: Prestamo, fecha_base: date) -> dict:
+    """
+    Recalcula SOLO las fechas de vencimiento de las cuotas existentes.
+    Mantiene: montos, pagos, saldos de capital.
+    Recalcula: fecha_vencimiento y estado de cuota (VENCIDO, PENDIENTE, MOROSO, etc.).
+    
+    Regla: fecha_base debe ser la nueva fecha de aprobación del préstamo.
+    
+    Returns: dict con estadísticas de actualización.
+    """
+    from app.services.cuota_estado import clasificar_estado_cuota, hoy_negocio
+    
+    cuotas = db.query(Cuota).filter(Cuota.prestamo_id == p.id).order_by(Cuota.numero_cuota).all()
+    
+    if not cuotas:
+        return {"message": "Sin cuotas para recalcular", "actualizadas": 0}
+    
+    modalidad = (p.modalidad_pago or "MENSUAL").upper()
+    delta_dias = 15 if modalidad == "QUINCENAL" else (7 if modalidad == "SEMANAL" else None)
+    hoy = hoy_negocio()
+    
+    actualizadas = 0
+    
+    for cuota in cuotas:
+        numero_cuota = cuota.numero_cuota
+        
+        # Calcular nueva fecha de vencimiento usando mismo algoritmo que generación
+        if modalidad == "MENSUAL":
+            nueva_fecha = _fecha_base_mas_meses(fecha_base, numero_cuota)
+        else:
+            # QUINCENAL: 15*n-1 días; SEMANAL: 7*n-1
+            nueva_fecha = fecha_base + timedelta(days=delta_dias * numero_cuota - 1)
+        
+        # Actualizar fecha de vencimiento
+        cuota.fecha_vencimiento = nueva_fecha
+        
+        # Recalcular estado de cuota según nueva fecha de vencimiento y pagos existentes
+        total_pagado = float(getattr(cuota, "total_pagado", None) or 0)
+        monto_cuota = float(getattr(cuota, "monto", None) or 0)
+        
+        nuevo_estado = clasificar_estado_cuota(
+            total_pagado,
+            monto_cuota,
+            nueva_fecha,
+            hoy
+        )
+        
+        cuota.estado = nuevo_estado
+        
+        db.add(cuota)
+        actualizadas += 1
+    
+    db.commit()
+    
+    return {
+        "message": "Fechas de vencimiento recalculadas exitosamente",
+        "actualizadas": actualizadas
+    }
 
 
 
@@ -2512,6 +2570,51 @@ def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
 
 
 
+
+
+@router.post("/{prestamo_id}/recalcular-fechas-amortizacion", response_model=dict)
+def recalcular_fechas_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
+    """
+    Recalcula SOLO las fechas de vencimiento de las cuotas existentes cuando cambia la fecha de aprobación.
+    
+    Mantiene:
+    - Montos de cuota iguales
+    - Pagos asociados a cada cuota
+    - Saldos de capital iniciales y finales
+    
+    Recalcula:
+    - Fechas de vencimiento (desde nueva fecha de aprobación)
+    - Estados de cuota (VENCIDO, PENDIENTE, MOROSO, etc.) según nueva fecha de vencimiento
+    
+    Debe llamarse después de actualizar fecha_aprobacion del préstamo.
+    """
+    p = db.get(Prestamo, prestamo_id)
+    
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    # Validar que existe fecha de aprobación
+    fecha_base = _fecha_aprobacion_para_amortizacion(p)
+    
+    if not fecha_base:
+        raise HTTPException(
+            status_code=400,
+            detail="El préstamo debe tener fecha de aprobación para recalcular fechas de vencimiento."
+        )
+    
+    # Verificar que existen cuotas
+    existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
+    
+    if existentes == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="El préstamo no tiene cuotas para recalcular."
+        )
+    
+    # Recalcular fechas y estados
+    resultado = _recalcular_fechas_vencimiento_cuotas(db, p, fecha_base)
+    
+    return resultado
 
 
 @router.post("/{prestamo_id}/aplicar-condiciones-aprobacion", response_model=PrestamoResponse)

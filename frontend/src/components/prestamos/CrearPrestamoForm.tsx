@@ -317,6 +317,12 @@ export function CrearPrestamoForm({
 
   const [showConfirmCreate, setShowConfirmCreate] = useState(false)
 
+  const [isRecalculatingAmortizacion, setIsRecalculatingAmortizacion] = useState(false)
+
+  const [fechaAprobacionAnterior, setFechaAprobacionAnterior] = useState<string | undefined>(
+    prestamo?.fecha_aprobacion ? fechaInputYmd(prestamo.fecha_aprobacion) : undefined
+  )
+
   useEffect(() => {
     if (!prestamo?.id) return
     const mv = modeloTextoDesdePrestamo(prestamo)
@@ -710,6 +716,55 @@ export function CrearPrestamoForm({
       if (import.meta.env.DEV) {
         console.error('Error saving loan:', error)
       }
+    }
+  }
+
+  const recalcularAmortizacion = async () => {
+    if (!prestamo?.id) {
+      toast.error('No se encontró el ID del préstamo')
+      return
+    }
+
+    const nuevaFechaAprobacion = formData.fecha_aprobacion
+    if (!nuevaFechaAprobacion) {
+      toast.error('La fecha de aprobación es requerida')
+      return
+    }
+
+    if (nuevaFechaAprobacion === fechaAprobacionAnterior) {
+      toast.info('La fecha de aprobación no cambió')
+      return
+    }
+
+    setIsRecalculatingAmortizacion(true)
+    try {
+      // 1. Primero actualizar la fecha de aprobación del préstamo
+      const prestamoDataUpdate = {
+        fecha_aprobacion: `${nuevaFechaAprobacion}T00:00:00`
+      }
+
+      await updatePrestamo.mutateAsync({
+        id: prestamo.id,
+        data: prestamoDataUpdate as Partial<PrestamoForm>
+      })
+
+      // 2. Luego recalcular las fechas de vencimiento de las cuotas
+      const resultado = await prestamoService.recalcularFechasAmortizacion(prestamo.id)
+
+      setFechaAprobacionAnterior(nuevaFechaAprobacion)
+
+      toast.success(`Amortización recalculada: ${resultado.data.actualizadas} cuota(s) actualizadas`)
+
+      onSuccess()
+    } catch (error: any) {
+      const mensajeError = error?.response?.data?.detail || 'Error al recalcular amortización'
+      toast.error(mensajeError)
+
+      if (import.meta.env.DEV) {
+        console.error('Error recalculando amortización:', error)
+      }
+    } finally {
+      setIsRecalculatingAmortizacion(false)
     }
   }
 
@@ -1314,18 +1369,37 @@ export function CrearPrestamoForm({
                         Fecha de aprobación
                       </label>
 
-                      <Input
-                        type="date"
-                        value={formData.fecha_aprobacion || ''}
-                        onChange={e =>
-                          setFormData({
-                            ...formData,
+                      <div className="mb-3 flex gap-2">
+                        <Input
+                          type="date"
+                          value={formData.fecha_aprobacion || ''}
+                          onChange={e =>
+                            setFormData({
+                              ...formData,
 
-                            fecha_aprobacion: e.target.value || undefined,
-                          })
-                        }
-                        disabled={isReadOnly}
-                      />
+                              fecha_aprobacion: e.target.value || undefined,
+                            })
+                          }
+                          disabled={isReadOnly}
+                          className="flex-1"
+                        />
+
+                        {prestamo.estado === 'APROBADO' &&
+                          formData.fecha_aprobacion &&
+                          formData.fecha_aprobacion !== fechaAprobacionAnterior && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={recalcularAmortizacion}
+                              disabled={isRecalculatingAmortizacion || isReadOnly}
+                              className="whitespace-nowrap"
+                            >
+                              {isRecalculatingAmortizacion
+                                ? 'Recalculando...'
+                                : 'Recalcular Amortización'}
+                            </Button>
+                          )}
+                      </div>
 
                       <p className="mt-1 text-xs text-gray-500">
                         Se guarda en BD al confirmar. Debe ser igual o posterior
