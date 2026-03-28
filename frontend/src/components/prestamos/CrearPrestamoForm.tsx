@@ -83,7 +83,14 @@ function fechaInputYmd(v: unknown): string {
   return s.length >= 10 ? s.slice(0, 10) : s
 }
 
-/** Texto de modelo guardado en BD/API (modelo_vehiculo o alias modelo). */
+/** Colapsa espacios para comparar modelo guardado vs catalogo. */
+function normalizarTextoModelo(s: string): string {
+  return String(s || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+/** Texto de modelo guardado en BD/API (modelo_vehiculo, alias modelo o producto). */
 function modeloTextoDesdePrestamo(p?: Prestamo): string {
   if (!p) return ''
   const mv =
@@ -92,7 +99,10 @@ function modeloTextoDesdePrestamo(p?: Prestamo): string {
       : ''
   if (mv) return mv
   const m = (p as { modelo?: string | null }).modelo
-  return m != null && String(m).trim() !== '' ? String(m).trim() : ''
+  if (m != null && String(m).trim() !== '') return String(m).trim()
+  const prod = (p.producto || '').trim()
+  if (prod) return prod
+  return ''
 }
 
 interface CrearPrestamoFormProps {
@@ -202,16 +212,59 @@ export function CrearPrestamoForm({
 
   type ModeloCat = { id: number; modelo: string; precio?: number | null }
 
-  const modelosParaSelect = useMemo((): ModeloCat[] => {
+  /** Texto efectivo del modelo en edicion: formulario o lo que trae el prestamo (API). */
+  const textoModeloGuardado = useMemo(() => {
+    const fromForm = (formData.modelo_vehiculo || '').trim()
+    if (fromForm) return fromForm
+    return modeloTextoDesdePrestamo(prestamo).trim()
+  }, [formData.modelo_vehiculo, prestamo])
+
+  const { modelosParaSelect, valorSelectModelo } = useMemo(() => {
     const base = (modelosVehiculos || []) as ModeloCat[]
-    const guardado = (formData.modelo_vehiculo || '').trim()
-    if (guardado && !base.some(m => String(m.modelo).trim() === guardado)) {
-      return [{ id: -1, modelo: guardado, precio: null }, ...base]
+    const g = textoModeloGuardado
+    if (!g) {
+      return {
+        modelosParaSelect: base,
+        valorSelectModelo: undefined as string | undefined,
+      }
     }
-    return base
-  }, [modelosVehiculos, formData.modelo_vehiculo])
+    const gn = normalizarTextoModelo(g)
+    const matchCat = base.find(
+      m => normalizarTextoModelo(String(m.modelo)) === gn
+    )
+    if (matchCat) {
+      return {
+        modelosParaSelect: base,
+        valorSelectModelo: matchCat.modelo,
+      }
+    }
+    return {
+      modelosParaSelect: [{ id: -1, modelo: g, precio: null }, ...base],
+      valorSelectModelo: g,
+    }
+  }, [modelosVehiculos, textoModeloGuardado])
 
   const { user } = useSimpleAuth()
+  useEffect(() => {
+    if (!prestamo?.id || !textoModeloGuardado) return
+    const base = (modelosVehiculos || []) as ModeloCat[]
+    if (!base.length) return
+    const gn = normalizarTextoModelo(textoModeloGuardado)
+    const matchCat = base.find(
+      m => normalizarTextoModelo(String(m.modelo)) === gn
+    )
+    if (!matchCat) return
+    setFormData(prev => {
+      const cur = (prev.modelo_vehiculo || '').trim()
+      if (normalizarTextoModelo(cur) === gn && cur === matchCat.modelo) {
+        return prev
+      }
+      if (cur !== '' && normalizarTextoModelo(cur) !== gn) {
+        return prev
+      }
+      return { ...prev, modelo_vehiculo: matchCat.modelo }
+    })
+  }, [prestamo?.id, modelosVehiculos, textoModeloGuardado])
 
   // Errores de carga de configuración (sin bloquear renderizado; solo en desarrollo se puede loguear)
 
@@ -726,7 +779,7 @@ export function CrearPrestamoForm({
                   </label>
 
                   <Select
-                    value={formData.modelo_vehiculo ?? ''}
+                    value={valorSelectModelo}
                     onValueChange={value => {
                       setFormData({
                         ...formData,
@@ -734,9 +787,9 @@ export function CrearPrestamoForm({
                         modelo_vehiculo: value,
                       })
 
-                      const modeloSel = modelosVehiculos.find(
-                        (m: any) => m.modelo === value
-                      )
+                      const modeloSel =
+                        modelosVehiculos.find((m: any) => m.modelo === value) ||
+                        modelosParaSelect.find((m: any) => m.modelo === value)
 
                       if (modeloSel && modeloSel.precio != null) {
                         const precioNum =
