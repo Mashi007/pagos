@@ -897,6 +897,8 @@ def verificar_codigo_estado_cuenta(
 
             amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
 
+            pagos_realizados=datos.get("pagos_realizados") or [],
+
             recibos=recibos,
 
             recibo_token=recibo_token,
@@ -1090,6 +1092,8 @@ def solicitar_estado_cuenta(
         fecha_corte=fecha_corte,
 
         amortizaciones_por_prestamo=amortizaciones_por_prestamo,
+
+        pagos_realizados=datos.get("pagos_realizados") or [],
 
         recibos=recibos,
 

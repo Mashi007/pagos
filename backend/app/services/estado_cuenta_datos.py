@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
+from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
 from app.models.pago_reportado import PagoReportado
 from app.models.prestamo import Prestamo
@@ -73,6 +74,101 @@ def obtener_recibos_cliente_estado_cuenta(db: Session, cedula_lookup: str) -> Li
         for r in out:
             r["aplicado_a_cuotas"] = ("COB-" + (r["referencia_interna"] or "")) in pagos_aplicados
     return out
+
+def _fmt_fecha_hora_pago_estado_cuenta(dt) -> str:
+    if dt is None:
+        return "-"
+    try:
+        if hasattr(dt, "strftime"):
+            return dt.strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        pass
+    return str(dt)
+
+
+def _prestamo_cuota_recibo_desde_pago(db: Session, pago_id: int):
+    row = db.execute(
+        select(Cuota.prestamo_id, Cuota.id)
+        .where(Cuota.pago_id == pago_id)
+        .order_by(Cuota.numero_cuota.asc())
+        .limit(1)
+    ).first()
+    if row:
+        return int(row[0]), int(row[1])
+    row = db.execute(
+        select(Cuota.prestamo_id, Cuota.id)
+        .join(CuotaPago, CuotaPago.cuota_id == Cuota.id)
+        .where(CuotaPago.pago_id == pago_id)
+        .order_by(Cuota.numero_cuota.asc())
+        .limit(1)
+    ).first()
+    if row:
+        return int(row[0]), int(row[1])
+    return None
+
+
+def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) -> List[dict]:
+    """Pagos PAGADO en tabla pagos; subtotal_usd = monto_pagado (USD cartera)."""
+    if not prestamo_ids:
+        return []
+    ids = sorted({int(x) for x in prestamo_ids if x is not None})
+    if not ids:
+        return []
+    rows = db.execute(
+        select(Pago)
+        .where(
+            Pago.prestamo_id.in_(ids),
+            func.upper(func.coalesce(Pago.estado, "")) == "PAGADO",
+        )
+        .order_by(Pago.fecha_pago.desc(), Pago.id.desc())
+    ).scalars().all()
+    resultado: List[dict] = []
+    for raw in rows:
+        pg = raw[0] if hasattr(raw, "__getitem__") else raw
+        pago_id = int(getattr(pg, "id", 0) or 0)
+        prestamo_id = getattr(pg, "prestamo_id", None)
+        banco = (getattr(pg, "institucion_bancaria", None) or "").strip() or "no disponible"
+        fp = getattr(pg, "fecha_pago", None)
+        fr = getattr(pg, "fecha_registro", None)
+        moneda_raw = (getattr(pg, "moneda_registro", None) or "").strip().upper()
+        es_bs = moneda_raw in ("BS", "BOLIVAR", "BOLIVARES")
+        monto_usd = float(getattr(pg, "monto_pagado", 0) or 0)
+        monto_bs_val = getattr(pg, "monto_bs_original", None)
+        monto_bs_f = float(monto_bs_val) if monto_bs_val is not None else None
+        tasa_val = getattr(pg, "tasa_cambio_bs_usd", None)
+        tasa_f = float(tasa_val) if tasa_val is not None else None
+        if es_bs:
+            if monto_bs_f is not None:
+                monto_display = f"{monto_bs_f:,.2f} Bs"
+            else:
+                monto_display = "Bs (monto no disponible en BD)"
+            tasa_display = f"{tasa_f:,.6f}" if tasa_f is not None else "-"
+        else:
+            monto_display = f"{monto_usd:,.2f} USD"
+            tasa_display = "-"
+        rec = _prestamo_cuota_recibo_desde_pago(db, pago_id)
+        if rec:
+            rp, rc = rec
+        else:
+            rp = int(prestamo_id) if prestamo_id is not None else None
+            rc = None
+        resultado.append(
+            {
+                "pago_id": pago_id,
+                "prestamo_id": int(prestamo_id) if prestamo_id is not None else None,
+                "banco": banco,
+                "fecha_pago_display": _fmt_fecha_hora_pago_estado_cuenta(fp),
+                "fecha_registro_display": _fmt_fecha_hora_pago_estado_cuenta(fr),
+                "monto_display": monto_display,
+                "tasa_display": tasa_display,
+                "subtotal_usd": monto_usd,
+                "es_bs": es_bs,
+                "recibo_prestamo_id": rp,
+                "recibo_cuota_id": rc,
+            }
+        )
+    return resultado
+
 
 
 def _cargar_prestamo_para_estado_cuenta(db, prestamo_id: int):
@@ -348,6 +444,7 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
         "fecha_corte": fecha_corte_dt,
 
         "amortizaciones_por_prestamo": amortizaciones_por_prestamo,
+        "pagos_realizados": listar_pagos_realizados_estado_cuenta(db, [prestamo_id]),
 
     }
 
@@ -414,6 +511,7 @@ def obtener_datos_estado_cuenta_cliente(db, cedula_lookup: str):
         "total_pendiente": 0.0,
         "fecha_corte": hoy_negocio(),
         "amortizaciones_por_prestamo": [],
+        "pagos_realizados": [],
     }
 
     for pid in prestamo_ids:
@@ -425,6 +523,8 @@ def obtener_datos_estado_cuenta_cliente(db, cedula_lookup: str):
         merged["cuotas_pendientes"].extend(part["cuotas_pendientes"])
         merged["total_pendiente"] += float(part["total_pendiente"] or 0)
         merged["amortizaciones_por_prestamo"].extend(part["amortizaciones_por_prestamo"])
+
+    merged["pagos_realizados"] = listar_pagos_realizados_estado_cuenta(db, prestamo_ids)
 
     return merged
 

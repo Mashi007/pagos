@@ -255,6 +255,7 @@ Equipo RapiCredit"""
                 total_pendiente=float(datos.get("total_pendiente") or 0),
                 fecha_corte=datos.get("fecha_corte") or date.today(),
                 amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
+                pagos_realizados=datos.get("pagos_realizados") or [],
             )
         except Exception as e:
             logger.error(

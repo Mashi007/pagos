@@ -4868,6 +4868,8 @@ def get_estado_cuenta_prestamo_pdf(
 
             amortizaciones_por_prestamo=amortizaciones_por_prestamo,
 
+            pagos_realizados=datos.get("pagos_realizados") or [],
+
             recibos=None,
 
             recibo_token=recibo_token,

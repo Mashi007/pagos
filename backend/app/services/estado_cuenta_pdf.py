@@ -58,6 +58,8 @@ def generar_pdf_estado_cuenta(
 
     amortizaciones_por_prestamo: Optional[List[dict]] = None,
 
+    pagos_realizados: Optional[List[dict]] = None,
+
     recibos: Optional[List[dict]] = None,
 
     recibo_token: Optional[str] = None,
