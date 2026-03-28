@@ -98,6 +98,12 @@ export interface PrestamoCarteraChequeo {
   controles: ControlCartera[]
 }
 
+export interface AuditoriaCarteraResumenResponse {
+  resumen: Record<string, unknown>
+
+  meta_ultima_corrida: Record<string, unknown>
+}
+
 export interface PrestamoCarteraChequeoResponse {
   items: PrestamoCarteraChequeo[]
   resumen: Record<string, unknown>
@@ -111,6 +117,45 @@ export interface PrestamoCarteraChequeoResponse {
 
 export interface CarteraCorreccionResponse extends PrestamoCarteraChequeoResponse {
   reaplicar_cascada?: Array<Record<string, unknown>>
+}
+
+/** Query GET /auditoria/prestamos/cartera/chequeos (paginacion y filtros en servidor). */
+export interface CarteraChequeosQuery {
+  skip?: number
+
+  limit?: number
+
+  prestamo_id?: number
+
+  cedula?: string
+}
+
+export interface CarteraRevisionOcultoPar {
+  prestamo_id: number
+
+  codigo_control: string
+}
+
+export interface CarteraRevisionOcultosResponse {
+  ocultos: CarteraRevisionOcultoPar[]
+}
+
+export interface CarteraRevisionItem {
+  id: number
+
+  prestamo_id: number
+
+  codigo_control: string
+
+  tipo: string
+
+  usuario_id: number
+
+  usuario_email?: string
+
+  nota?: string
+
+  creado_en: string
 }
 
 class AuditoriaService {
@@ -213,9 +258,64 @@ class AuditoriaService {
     return response
   }
 
-  async listarCarteraChequeos(): Promise<PrestamoCarteraChequeoResponse> {
+  async listarCarteraChequeos(
+    query?: CarteraChequeosQuery
+  ): Promise<PrestamoCarteraChequeoResponse> {
     return apiClient.get<PrestamoCarteraChequeoResponse>(
-      `${this.baseUrl}/prestamos/cartera/chequeos`
+      `${this.baseUrl}/prestamos/cartera/chequeos`,
+      { params: query }
+    )
+  }
+
+  /** GET resumen sin items: mismos filtros opcionales que cartera (cedula, prestamo_id). */
+  async obtenerCarteraResumen(params?: {
+    cedula?: string
+
+    prestamo_id?: number
+  }): Promise<AuditoriaCarteraResumenResponse> {
+    return apiClient.get<AuditoriaCarteraResumenResponse>(
+      `${this.baseUrl}/prestamos/cartera/resumen`,
+      { params }
+    )
+  }
+
+  /** POST: pares (prestamo_id, codigo_control) con ultimo evento MARCAR_OK en bitacora. */
+  async listarRevisionesOcultos(
+    prestamoIds: number[]
+  ): Promise<CarteraRevisionOcultosResponse> {
+    return apiClient.post<CarteraRevisionOcultosResponse>(
+      `${this.baseUrl}/prestamos/cartera/revisiones/ocultos`,
+      { prestamo_ids: prestamoIds }
+    )
+  }
+
+  async crearRevisionCartera(body: {
+    prestamo_id: number
+
+    codigo_control: string
+
+    tipo?: string
+
+    nota?: string
+  }): Promise<CarteraRevisionItem> {
+    return apiClient.post<CarteraRevisionItem>(
+      `${this.baseUrl}/prestamos/cartera/revisiones`,
+      {
+        prestamo_id: body.prestamo_id,
+        codigo_control: body.codigo_control,
+        tipo: body.tipo ?? 'MARCAR_OK',
+        nota: body.nota,
+      }
+    )
+  }
+
+  async historialRevisionesCartera(
+    prestamoId: number,
+    limit = 100
+  ): Promise<CarteraRevisionItem[]> {
+    return apiClient.get<CarteraRevisionItem[]>(
+      `${this.baseUrl}/prestamos/cartera/revisiones/historial`,
+      { params: { prestamo_id: prestamoId, limit } }
     )
   }
 

@@ -1,6 +1,10 @@
 """
 Auditoria de cartera por prestamo: controles desde tablas reales (prestamos, clientes, cuotas, pagos, cuota_pagos).
 
+Totales pagos/aplicado en USD: solo pagos operativos (excluye anulados, reversados, duplicados declarados,
+cancelado/rechazado). Comparacion agregada con tolerancia 0.02 USD; conversion BS->USD fila a fila sin tolerancia
+(2 decimales). Pagos en BS alertan si falta `tasas_cambio_diaria` para la fecha del pago.
+
 La lista de alertas es orientativa; debe revisarla un humano. La corrida automatica (03:00 America/Caracas)
 alinea antes `cuotas.estado` con `clasificar_estado_cuota`, luego evalua y actualiza metadatos en
 `configuracion`; el GET del API recalcula en tiempo real para reflejar la BD actual.
@@ -11,7 +15,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
@@ -25,6 +29,26 @@ logger = logging.getLogger(__name__)
 _TOL = Decimal("0.02")
 CFG_ULTIMA = "auditoria_cartera_ultima_ejecucion"
 CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
+
+# Identificador estable de la definicion de controles en este modulo (14 reglas en add_control).
+# Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
+AUDITORIA_CARTERA_REGLAS_VERSION = "14controles-2026-03-27"
+
+
+def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
+    """
+    Pagos que no deben contar en totales ni en coherencia BS/USD (anulados, reversados, duplicados, etc.).
+    `alias` es el identificador SQL de la tabla pagos en la consulta (ej. p, pg).
+    """
+    a = alias.strip()
+    if not a.replace("_", "").isalnum():
+        raise ValueError("alias SQL invalido")
+    return f"""(
+      UPPER(COALESCE({a}.estado, '')) IN ('ANULADO_IMPORT', 'DUPLICADO', 'CANCELADO', 'RECHAZADO', 'REVERSADO')
+      OR UPPER(COALESCE({a}.estado, '')) LIKE '%ANUL%'
+      OR UPPER(COALESCE({a}.estado, '')) LIKE '%REVERS%'
+      OR LOWER(COALESCE({a}.estado, '')) IN ('cancelado', 'rechazado')
+    )"""
 
 
 def _dec(x: Any) -> Decimal:
@@ -48,18 +72,22 @@ def persistir_meta_ejecucion(
     *,
     total_evaluados: int,
     con_alerta: int,
+    conteos_por_control: Optional[dict[str, Any]] = None,
+    reglas_version: Optional[str] = None,
     commit: bool = True,
 ) -> None:
     """Guarda hora y resumen de la ultima corrida (job 03:00 o manual)."""
     now = datetime.now(timezone.utc).isoformat()
-    resumen = json.dumps(
-        {
-            "ultima_ejecucion_utc": now,
-            "prestamos_evaluados": total_evaluados,
-            "prestamos_con_alerta": con_alerta,
-        },
-        ensure_ascii=False,
-    )
+    payload: dict[str, Any] = {
+        "ultima_ejecucion_utc": now,
+        "prestamos_evaluados": total_evaluados,
+        "prestamos_con_alerta": con_alerta,
+    }
+    if conteos_por_control is not None:
+        payload["conteos_por_control"] = conteos_por_control
+    if reglas_version:
+        payload["reglas_version"] = reglas_version
+    resumen = json.dumps(payload, ensure_ascii=False)
     _upsert_config_valor(db, CFG_ULTIMA, now)
     _upsert_config_valor(db, CFG_RESUMEN, resumen)
     if commit:
@@ -75,16 +103,35 @@ def leer_meta_ejecucion(db: Session) -> dict[str, Any]:
         return {}
 
 
+def _cedula_prestamo_coincide_fragmento(row_prestamo: Any, fragmento: str) -> bool:
+    """True si el fragmento (mayusculas, sin espacios) aparece en cedula del prestamo (normalizada o cruda)."""
+    q = fragmento.strip().upper().replace(" ", "")
+    if not q:
+        return True
+    raw = (row_prestamo[2] or "").strip()
+    nc = (normalizar_cedula_almacenamiento(raw) or raw).upper().replace(" ", "")
+    raw_u = raw.upper().replace(" ", "")
+    return q in nc or q in raw_u
+
+
 def ejecutar_auditoria_cartera(
     db: Session,
     *,
     solo_con_alerta: bool = True,
+    prestamo_id: Optional[int] = None,
+    cedula_contiene: Optional[str] = None,
+    skip: int = 0,
+    limit: Optional[int] = None,
+    incluir_filas: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Evalua prestamos en estados operativos. Retorna (filas, resumen).
     Solo se devuelven prestamos con al menos un control en alerta SI.
     En cada fila, `controles` solo incluye entradas con alerta SI (no se exponen los NO).
     Param solo_con_alerta: reservado por compatibilidad con la API; no altera el resultado.
+    prestamo_id / cedula_contiene: acotan que prestamos se evaluan (misma logica de controles sobre el universo completo).
+    skip / limit: paginacion sobre la lista de prestamos con alerta (despues de filtrar por prestamo/cedula).
+    incluir_filas: si False, no construye la lista de prestamos (ahorra memoria); resumen y conteos igual.
     """
     _ = solo_con_alerta
 
@@ -103,8 +150,24 @@ def ejecutar_auditoria_cartera(
         )
     ).fetchall()
 
+    if prestamo_id is not None:
+        rows_p = [r for r in rows_p if int(r[0]) == prestamo_id]
+
+    if cedula_contiene and str(cedula_contiene).strip():
+        rows_p = [r for r in rows_p if _cedula_prestamo_coincide_fragmento(r, str(cedula_contiene))]
+
     if not rows_p:
-        meta = {"prestamos_evaluados": 0, "prestamos_con_alerta": 0, "fecha_referencia": str(hoy)}
+        meta: dict[str, Any] = {
+            "prestamos_evaluados": 0,
+            "prestamos_con_alerta": 0,
+            "prestamos_listados_total": 0,
+            "prestamos_listados": 0,
+            "conteos_por_control": {},
+            "fecha_referencia": str(hoy),
+            "pagina_skip": max(0, skip),
+            "pagina_limit": limit,
+            "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
+        }
         return [], meta
 
     prestamo_ids = [int(r[0]) for r in rows_p]
@@ -151,16 +214,19 @@ def ejecutar_auditoria_cartera(
     ).fetchall()
     prestamos_dup_nombre_cedula_fecha = {int(r[0]) for r in dup_nombre_cedula_fecha_rows if r[0] is not None}
 
-    # Pagos duplicados mismo dia y monto (posible fraude / doble registro)
+    excl_p = _sql_fragment_pago_excluido_cartera("p")
+    excl_pg = _sql_fragment_pago_excluido_cartera("pg")
+
+    # Pagos duplicados mismo dia y monto (posible fraude / doble registro); excluye anulados/reversados
     dup_pagos_rows = db.execute(
         text(
-            """
+            f"""
             SELECT DISTINCT prestamo_id
             FROM (
-              SELECT prestamo_id, CAST(fecha_pago AS date) AS fd, monto_pagado, COUNT(*) AS cnt
-              FROM pagos
-              WHERE prestamo_id IS NOT NULL
-              GROUP BY prestamo_id, CAST(fecha_pago AS date), monto_pagado
+              SELECT p.prestamo_id, CAST(p.fecha_pago AS date) AS fd, p.monto_pagado, COUNT(*) AS cnt
+              FROM pagos p
+              WHERE p.prestamo_id IS NOT NULL AND NOT {excl_p}
+              GROUP BY p.prestamo_id, CAST(p.fecha_pago AS date), p.monto_pagado
               HAVING COUNT(*) > 1
             ) t
             """
@@ -168,33 +234,94 @@ def ejecutar_auditoria_cartera(
     ).fetchall()
     prestamos_pagos_duplicados = {int(r[0]) for r in dup_pagos_rows if r[0] is not None}
 
-    # Pagos con monto no positivo
+    # Pagos con monto no positivo (solo pagos operativos)
     bad_monto_rows = db.execute(
         text(
-            """
-            SELECT DISTINCT prestamo_id FROM pagos
-            WHERE prestamo_id IS NOT NULL AND monto_pagado <= 0
+            f"""
+            SELECT DISTINCT prestamo_id FROM pagos p
+            WHERE p.prestamo_id IS NOT NULL AND p.monto_pagado <= 0 AND NOT {excl_p}
             """
         )
     ).fetchall()
     prestamos_monto_mal = {int(r[0]) for r in bad_monto_rows if r[0] is not None}
 
+    # Pago en BS sin fila en tasas_cambio_diaria para la fecha del pago (bloqueo operativo / auditoria)
+    bs_sin_tasa_rows = db.execute(
+        text(
+            f"""
+            SELECT DISTINCT p.prestamo_id
+            FROM pagos p
+            WHERE p.prestamo_id IS NOT NULL
+              AND UPPER(COALESCE(p.moneda_registro, '')) = 'BS'
+              AND NOT {excl_p}
+              AND NOT EXISTS (
+                SELECT 1 FROM tasas_cambio_diaria t
+                WHERE t.fecha = CAST(p.fecha_pago AS date)
+              )
+            """
+        )
+    ).fetchall()
+    prestamos_bs_sin_tasa_diaria = {int(r[0]) for r in bs_sin_tasa_rows if r[0] is not None}
+
+    # BS: monto_pagado (USD) debe cuadrar con monto_bs / tasa almacenados, sin tolerancia (2 decimales)
+    bs_conv_mal_rows = db.execute(
+        text(
+            f"""
+            SELECT DISTINCT p.prestamo_id
+            FROM pagos p
+            WHERE p.prestamo_id IS NOT NULL
+              AND UPPER(COALESCE(p.moneda_registro, '')) = 'BS'
+              AND NOT {excl_p}
+              AND (
+                p.monto_bs_original IS NULL
+                OR p.tasa_cambio_bs_usd IS NULL
+                OR p.tasa_cambio_bs_usd = 0
+                OR ROUND((p.monto_bs_original / NULLIF(p.tasa_cambio_bs_usd, 0))::numeric, 2)
+                   <> ROUND(p.monto_pagado::numeric, 2)
+              )
+            """
+        )
+    ).fetchall()
+    prestamos_bs_conversion_incoherente = {int(r[0]) for r in bs_conv_mal_rows if r[0] is not None}
+
+    # Pago operativo con monto > 0 sin filas en cuota_pagos o con saldo sin aplicar > tolerancia USD
+    huerfanos_rows = db.execute(
+        text(
+            f"""
+            SELECT DISTINCT p.prestamo_id
+            FROM pagos p
+            WHERE p.prestamo_id IS NOT NULL
+              AND p.monto_pagado > 0
+              AND NOT {excl_p}
+              AND (
+                NOT EXISTS (SELECT 1 FROM cuota_pagos cp WHERE cp.pago_id = p.id)
+                OR COALESCE((
+                     SELECT SUM(cp2.monto_aplicado) FROM cuota_pagos cp2 WHERE cp2.pago_id = p.id
+                   ), 0) < (p.monto_pagado::numeric - 0.02)
+              )
+            """
+        )
+    ).fetchall()
+    prestamos_pagos_huerfanos = {int(r[0]) for r in huerfanos_rows if r[0] is not None}
+
     tot_sql = (
         text(
-            """
+            f"""
             SELECT p.id,
               COALESCE(sp.s, 0) AS sum_pagos,
               COALESCE(sa.s, 0) AS sum_aplicado,
               COALESCE(sc.s, 0) AS sum_cuotas
             FROM prestamos p
             LEFT JOIN LATERAL (
-              SELECT SUM(monto_pagado) AS s FROM pagos WHERE prestamo_id = p.id
+              SELECT SUM(pg.monto_pagado) AS s FROM pagos pg
+              WHERE pg.prestamo_id = p.id AND NOT {excl_pg}
             ) sp ON true
             LEFT JOIN LATERAL (
               SELECT SUM(cp.monto_aplicado) AS s
               FROM cuotas cu
               JOIN cuota_pagos cp ON cp.cuota_id = cu.id
-              WHERE cu.prestamo_id = p.id
+              JOIN pagos pg ON pg.id = cp.pago_id
+              WHERE cu.prestamo_id = p.id AND NOT {excl_pg}
             ) sa ON true
             LEFT JOIN LATERAL (
               SELECT SUM(monto_cuota) AS s FROM cuotas cu WHERE cu.prestamo_id = p.id
@@ -251,6 +378,7 @@ def ejecutar_auditoria_cartera(
 
     out: list[dict[str, Any]] = []
     con_alerta_count = 0
+    control_counts: dict[str, int] = {}
 
     for r in rows_p:
         pid = int(r[0])
@@ -289,7 +417,7 @@ def ejecutar_auditoria_cartera(
         dup_prest = "SI" if ced_norm_upper in dup_cedulas else "NO"
         add_control(
             "prestamos_duplicados_misma_cedula",
-            "Varios prestamos activos (APROBADO/APROBADO) misma cedula",
+            "Varios prestamos APROBADO misma cedula (duplicidad activa)",
             dup_prest,
             "Existe otro prestamo APROBADO en cartera con la misma cedula" if dup_prest == "SI" else "Unico o sin otro APROBADO duplicado por cedula",
         )
@@ -329,7 +457,11 @@ def ejecutar_auditoria_cartera(
             "total_pagado_vs_aplicado_cuotas",
             "Total pagos vs total aplicado a cuotas (cuota_pagos)",
             alert_ap,
-            f"Suma pagos={sp} aplicado cuotas={sa} diff={diff_ap}" if alert_ap == "SI" else f"Cuadrado dentro de tolerancia (diff={diff_ap})",
+            (
+                f"Suma pagos(operativos)={sp} aplicado(desde pagos operativos)={sa} diff={diff_ap}"
+                if alert_ap == "SI"
+                else f"Cuadrado USD tol={_TOL} (diff={diff_ap}); excluye anulados/reversados/duplicado en sumas"
+            ),
         )
 
         diff_tf = abs(total_fin - sc)
@@ -393,6 +525,33 @@ def ejecutar_auditoria_cartera(
             "; ".join(det_parts[:5]) + ("..." if len(det_parts) > 5 else "") if estado_cuotas_mal else "Columna alineada con calculo",
         )
 
+        bs_st = "SI" if pid in prestamos_bs_sin_tasa_diaria else "NO"
+        add_control(
+            "pago_bs_sin_tasa_cambio_diaria",
+            "Pago en bolivares sin tasa oficial del dia (tasas_cambio_diaria)",
+            bs_st,
+            "Falta fila en tasas_cambio_diaria para la fecha del pago (BS)" if bs_st == "SI" else "OK",
+        )
+
+        bs_cv = "SI" if pid in prestamos_bs_conversion_incoherente else "NO"
+        add_control(
+            "conversion_bs_a_usd_incoherente",
+            "Conversion BS a USD incoherente (cero tolerancia en 2 decimales)",
+            bs_cv,
+            "monto_pagado no cuadra con monto_bs_original/tasa_cambio_bs_usd o faltan campos BS"
+            if bs_cv == "SI"
+            else "OK",
+        )
+
+        hrf = "SI" if pid in prestamos_pagos_huerfanos else "NO"
+        add_control(
+            "pagos_sin_aplicacion_a_cuotas",
+            "Pagos operativos sin aplicacion a cuotas o con saldo sin aplicar",
+            hrf,
+            "Revisar cuota_pagos: cargar aplicacion o corregir montos (tol USD 0.02)"
+            if hrf == "SI"
+            else "OK",
+        )
 
         controles_si = [c for c in controles if c.get("alerta") == "SI"]
         tiene_alerta = bool(controles_si)
@@ -402,26 +561,58 @@ def ejecutar_auditoria_cartera(
         if not controles_si:
             continue
 
-        out.append(
-            {
-                "prestamo_id": pid,
-                "cliente_id": cliente_id,
-                "cedula": cedula_p,
-                "nombres": nombres,
-                "estado_prestamo": estado_p,
-                "cliente_email": email_c or "",
-                "tiene_alerta": True,
-                "controles": controles_si,
-            }
-        )
+        for c in controles_si:
+            cod = str(c.get("codigo") or "")
+            if cod:
+                control_counts[cod] = control_counts.get(cod, 0) + 1
+
+        if incluir_filas:
+            out.append(
+                {
+                    "prestamo_id": pid,
+                    "cliente_id": cliente_id,
+                    "cedula": cedula_p,
+                    "nombres": nombres,
+                    "estado_prestamo": estado_p,
+                    "cliente_email": email_c or "",
+                    "tiene_alerta": True,
+                    "controles": controles_si,
+                }
+            )
+
+    listados_total = con_alerta_count
+
+    if not incluir_filas:
+        meta = {
+            "prestamos_evaluados": len(rows_p),
+            "prestamos_con_alerta": con_alerta_count,
+            "prestamos_listados_total": listados_total,
+            "prestamos_listados": 0,
+            "conteos_por_control": control_counts,
+            "fecha_referencia": str(hoy),
+            "pagina_skip": 0,
+            "pagina_limit": None,
+            "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
+        }
+        return [], meta
+
+    skip_clamped = max(0, int(skip))
+    page = out[skip_clamped:] if skip_clamped else out
+    if limit is not None:
+        page = page[: int(limit)]
 
     meta = {
         "prestamos_evaluados": len(rows_p),
         "prestamos_con_alerta": con_alerta_count,
-        "prestamos_listados": len(out),
+        "prestamos_listados_total": listados_total,
+        "prestamos_listados": len(page),
+        "conteos_por_control": control_counts,
         "fecha_referencia": str(hoy),
+        "pagina_skip": skip_clamped,
+        "pagina_limit": limit,
+        "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
     }
-    return out, meta
+    return page, meta
 
 
 def prestamos_ids_alerta_total_pagos_vs_aplicado(rows: list[dict[str, Any]]) -> list[int]:

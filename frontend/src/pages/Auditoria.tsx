@@ -147,21 +147,7 @@ export function Auditoria() {
         orden: filtros.orden,
       }
 
-      console.log(
-        '[Auditoria] Llamando a API: /api/v1/auditoria con params:',
-        params
-      )
-
       const response = await auditoriaService.listarAuditoria(params)
-
-      console.log('Respuesta API:', response)
-
-      console.log(
-        '[Auditoria] Items recibidos:',
-        response.items?.length || 0,
-        'Total:',
-        response.total
-      )
 
       if (response.items && response.items.length > 0) {
         setAuditorias(response.items)
@@ -171,16 +157,8 @@ export function Auditoria() {
         setAuditorias([])
 
         setTotal(response.total || 0)
-
-        if (response.total === 0) {
-          console.warn(
-            '[Auditoria] No hay registros de auditoría en la base de datos'
-          )
-        }
       }
     } catch (err: any) {
-      console.error('[Auditoria] Error API:', err)
-
       const errorMessage =
         err?.response?.data?.detail ||
         err?.message ||
@@ -200,11 +178,7 @@ export function Auditoria() {
 
   const cargarEstadisticas = async (mostrarToast = false) => {
     try {
-      console.log('[Auditoria] Cargando estadísticas de auditoría...')
-
       const response = await auditoriaService.obtenerEstadisticas()
-
-      console.log('Estadísticas recibidas:', response)
 
       setStats(response)
 
@@ -212,14 +186,10 @@ export function Auditoria() {
         toast.success('KPIs actualizados correctamente')
       }
     } catch (err: any) {
-      console.error('[Auditoria] Error cargando estadísticas:', err)
-
       const errorMessage =
         err?.response?.data?.detail ||
         err?.message ||
         'Error al cargar estadísticas'
-
-      console.error('[Auditoria] Detalles del error:', errorMessage)
 
       // Establecer valores por defecto en caso de error
 
@@ -288,8 +258,6 @@ export function Auditoria() {
       toast.success('Auditoría exportada exitosamente')
     } catch (err) {
       toast.error('Error al exportar auditoría')
-
-      console.error('Error:', err)
     }
   }
 

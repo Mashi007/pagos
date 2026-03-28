@@ -15,7 +15,7 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
   {
     n: 2,
     codigo: 'prestamos_duplicados_misma_cedula',
-    titulo: 'Varios prestamos activos (APROBADO/APROBADO) misma cedula',
+    titulo: 'Varios prestamos APROBADO misma cedula (duplicidad activa)',
   },
   {
     n: 3,
@@ -61,6 +61,21 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     n: 11,
     codigo: 'estado_cuota_vs_calculo',
     titulo: 'Estado en tabla cuotas vs regla de negocio (vencimiento y pagos)',
+  },
+  {
+    n: 12,
+    codigo: 'pago_bs_sin_tasa_cambio_diaria',
+    titulo: 'Pago en bolivares sin tasa oficial del dia (tasas_cambio_diaria)',
+  },
+  {
+    n: 13,
+    codigo: 'conversion_bs_a_usd_incoherente',
+    titulo: 'Conversion BS a USD incoherente (cero tolerancia 2 decimales)',
+  },
+  {
+    n: 14,
+    codigo: 'pagos_sin_aplicacion_a_cuotas',
+    titulo: 'Pagos operativos sin aplicacion a cuotas o saldo sin aplicar',
   },
 ]
 

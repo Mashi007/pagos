@@ -1,6 +1,9 @@
 """
-Endpoints de auditoría. Datos reales desde la tabla auditoria (BD).
-GET listado, GET stats, GET exportar, GET /{id}, POST /registrar.
+Endpoints de auditoria.
+
+- Tabla `auditoria`: GET listado, GET stats, GET exportar, GET /{id}, POST /registrar.
+- Cartera (prestamos/cartera/*): chequeos paginados, resumen sin items, meta persistida, ejecutar/corregir.
+  Ver `docs/auditoria-api-cartera.md` para contrato y parametros (`solo_alertas` es historico y no filtra).
 """
 import io
 import json
@@ -16,7 +19,16 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.auditoria import Auditoria
+from app.models.auditoria_cartera_revision import AuditoriaCarteraRevision
+from app.models.prestamo import Prestamo
+from app.models.user import User
 from app.schemas.auth import UserResponse
+from app.services.auditoria_cartera_revision_service import (
+    CONTROLES_CARTERA_VALIDOS,
+    TIPOS_REVISION_VALIDOS,
+    iso_utc,
+    listar_ocultos_marcar_ok,
+)
 from app.services.prestamo_cartera_auditoria import (
     ejecutar_auditoria_cartera,
     leer_meta_ejecucion,
@@ -269,7 +281,13 @@ class PrestamoCarteraChequeoItem(BaseModel):
 
 class PrestamoCarteraChequeoResponse(BaseModel):
     items: List[PrestamoCarteraChequeoItem]
-    resumen: dict
+    resumen: dict = Field(
+        ...,
+        description=(
+            "Totales de la corrida: prestamos_evaluados, prestamos_con_alerta, prestamos_listados_total, "
+            "prestamos_listados (pagina), conteos_por_control, reglas_version, fecha_referencia, pagina_skip, pagina_limit."
+        ),
+    )
     meta_ultima_corrida: dict
     sincronizar_estado_cuotas: Optional[dict[str, Any]] = Field(
         default=None,
@@ -287,10 +305,69 @@ class CarteraCorregirBody(BaseModel):
 
 class CarteraCorreccionResponse(BaseModel):
     items: List[PrestamoCarteraChequeoItem]
-    resumen: dict
+    resumen: dict = Field(
+        ...,
+        description="Igual estructura que en GET `/prestamos/cartera/chequeos` (respuesta completa, sin paginar).",
+    )
     meta_ultima_corrida: dict
     sincronizar_estado_cuotas: Optional[dict[str, Any]] = None
     reaplicar_cascada: List[dict[str, Any]] = Field(default_factory=list)
+
+
+class CarteraRevisionCrearBody(BaseModel):
+    prestamo_id: int = Field(..., ge=1)
+    codigo_control: str = Field(..., max_length=80)
+    tipo: str = Field("MARCAR_OK", max_length=30)
+    nota: Optional[str] = Field(None, max_length=2000)
+
+
+class CarteraRevisionOcultoPar(BaseModel):
+    prestamo_id: int
+    codigo_control: str
+
+
+class CarteraRevisionOcultosResponse(BaseModel):
+    ocultos: List[CarteraRevisionOcultoPar]
+
+
+class CarteraRevisionOcultosBody(BaseModel):
+    prestamo_ids: List[int] = Field(
+        default_factory=list,
+        description="IDs de prestamos de la pagina actual (maximo 500 recomendado).",
+    )
+
+
+class CarteraRevisionItemResponse(BaseModel):
+    id: int
+    prestamo_id: int
+    codigo_control: str
+    tipo: str
+    usuario_id: int
+    usuario_email: Optional[str] = None
+    nota: Optional[str] = None
+    creado_en: str
+
+
+class AuditoriaCarteraResumenResponse(BaseModel):
+    """Respuesta sin items: solo KPIs y conteos por control (GET /prestamos/cartera/resumen)."""
+
+    resumen: dict = Field(
+        ...,
+        description="Misma forma que `resumen` en GET chequeos, con prestamos_listados=0 y sin filas.",
+    )
+    meta_ultima_corrida: dict
+
+
+def _persistir_meta_desde_resumen_cartera(db: Session, resumen: dict[str, Any]) -> None:
+    raw_conteos = resumen.get("conteos_por_control")
+    persistir_meta_ejecucion(
+        db,
+        total_evaluados=int(resumen.get("prestamos_evaluados") or 0),
+        con_alerta=int(resumen.get("prestamos_con_alerta") or 0),
+        conteos_por_control=raw_conteos if isinstance(raw_conteos, dict) else None,
+        reglas_version=str(resumen.get("reglas_version") or ""),
+        commit=True,
+    )
 
 
 def _prestamos_cartera_dicts_a_items(rows: List[dict[str, Any]]) -> List[PrestamoCarteraChequeoItem]:
@@ -311,15 +388,55 @@ def _prestamos_cartera_dicts_a_items(rows: List[dict[str, Any]]) -> List[Prestam
 
 @router.get("/prestamos/cartera/meta")
 def meta_auditoria_cartera(db: Session = Depends(get_db)):
-    """Ultima corrida automatica (03:00) y totales guardados en configuracion."""
+    """Ultima corrida automatica (03:00) y totales guardados en `configuracion` (JSON en clave auditoria_cartera_ultima_resumen)."""
     return leer_meta_ejecucion(db)
+
+
+@router.get("/prestamos/cartera/resumen", response_model=AuditoriaCarteraResumenResponse)
+def resumen_auditoria_cartera(
+    prestamo_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Opcional. Acota la evaluacion a un prestamo APROBADO/LIQUIDADO.",
+    ),
+    cedula: Optional[str] = Query(
+        None,
+        description="Opcional. Fragmento de cedula del prestamo (misma regla que GET chequeos).",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Misma logica que GET `/prestamos/cartera/chequeos`, pero **sin** devolver la lista de prestamos.
+    Util para KPIs o dashboards con menos payload; el coste de CPU en BD es el mismo que una corrida completa.
+    """
+    _rows, resumen = ejecutar_auditoria_cartera(
+        db,
+        solo_con_alerta=True,
+        prestamo_id=prestamo_id,
+        cedula_contiene=cedula,
+        skip=0,
+        limit=None,
+        incluir_filas=False,
+    )
+    meta = leer_meta_ejecucion(db)
+    return AuditoriaCarteraResumenResponse(resumen=resumen, meta_ultima_corrida=meta)
 
 
 @router.get("/prestamos/cartera/chequeos", response_model=PrestamoCarteraChequeoResponse)
 def listar_chequeos_cartera(
     solo_alertas: bool = Query(
         True,
-        description="Sin efecto (compat. API). Siempre se devuelven solo prestamos con al menos un control SI y solo esos controles.",
+        description=(
+            "Parametro historico sin efecto en el resultado: siempre solo prestamos con alerta SI "
+            "y solo controles en SI. Mantener en clientes legacy."
+        ),
+    ),
+    skip: int = Query(0, ge=0, description="Offset sobre la lista de prestamos con alerta (orden por id)."),
+    limit: int = Query(100, ge=1, le=5000, description="Tamano de pagina; hasta 5000 (export masivo)."),
+    prestamo_id: Optional[int] = Query(None, ge=1, description="Solo evaluar este prestamo si esta APROBADO/LIQUIDADO."),
+    cedula: Optional[str] = Query(
+        None,
+        description="Fragmento de cedula del prestamo (coincidencia parcial, sin normalizar al cliente).",
     ),
     db: Session = Depends(get_db),
 ):
@@ -327,7 +444,14 @@ def listar_chequeos_cartera(
     Revision de cartera en tiempo real desde tablas prestamos, clientes, cuotas, pagos, cuota_pagos.
     Cada control devuelve alerta SI/NO (SI = revisar por un humano).
     """
-    rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=solo_alertas)
+    rows, resumen = ejecutar_auditoria_cartera(
+        db,
+        solo_con_alerta=solo_alertas,
+        prestamo_id=prestamo_id,
+        cedula_contiene=cedula,
+        skip=skip,
+        limit=limit,
+    )
     meta = leer_meta_ejecucion(db)
     return PrestamoCarteraChequeoResponse(
         items=_prestamos_cartera_dicts_a_items(rows),
@@ -340,7 +464,10 @@ def listar_chequeos_cartera(
 def ejecutar_y_persistir_auditoria_cartera(
     solo_alertas: bool = Query(
         True,
-        description="Sin efecto (compat. API). Igual que GET chequeos: solo prestamos y controles con alerta SI.",
+        description=(
+            "Parametro historico sin efecto: respuesta completa de alertas (sin paginar en este POST). "
+            "Igual que GET en cuanto a criterios SI/NO."
+        ),
     ),
     db: Session = Depends(get_db),
 ):
@@ -352,10 +479,13 @@ def ejecutar_y_persistir_auditoria_cartera(
     from app.services.cuota_estado import sincronizar_estado_cuotas_cartera
 
     sync_stats = sincronizar_estado_cuotas_cartera(db, commit=True)
-    rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
-    con_alerta = int(resumen.get("prestamos_con_alerta") or 0)
-    total_ev = int(resumen.get("prestamos_evaluados") or 0)
-    persistir_meta_ejecucion(db, total_evaluados=total_ev, con_alerta=con_alerta, commit=True)
+    rows, resumen = ejecutar_auditoria_cartera(
+        db,
+        solo_con_alerta=False,
+        skip=0,
+        limit=None,
+    )
+    _persistir_meta_desde_resumen_cartera(db, resumen)
     meta = leer_meta_ejecucion(db)
     return PrestamoCarteraChequeoResponse(
         items=_prestamos_cartera_dicts_a_items(rows),
@@ -386,7 +516,12 @@ def corregir_auditoria_cartera(
 
     reaplicar_resultados: list[dict[str, Any]] = []
     if body.reaplicar_cascada_desajuste_pagos:
-        rows_pre, _ = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
+        rows_pre, _ = ejecutar_auditoria_cartera(
+            db,
+            solo_con_alerta=False,
+            skip=0,
+            limit=None,
+        )
         pids = prestamos_ids_alerta_total_pagos_vs_aplicado(rows_pre)[: int(body.max_reaplicaciones)]
         for pid in pids:
             try:
@@ -405,10 +540,13 @@ def corregir_auditoria_cartera(
     if body.sincronizar_estados:
         sync_stats = sincronizar_estado_cuotas_cartera(db, commit=True)
 
-    rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
-    con_alerta = int(resumen.get("prestamos_con_alerta") or 0)
-    total_ev = int(resumen.get("prestamos_evaluados") or 0)
-    persistir_meta_ejecucion(db, total_evaluados=total_ev, con_alerta=con_alerta, commit=True)
+    rows, resumen = ejecutar_auditoria_cartera(
+        db,
+        solo_con_alerta=False,
+        skip=0,
+        limit=None,
+    )
+    _persistir_meta_desde_resumen_cartera(db, resumen)
     meta = leer_meta_ejecucion(db)
     return CarteraCorreccionResponse(
         items=_prestamos_cartera_dicts_a_items(rows),
@@ -417,6 +555,105 @@ def corregir_auditoria_cartera(
         sincronizar_estado_cuotas=sync_stats,
         reaplicar_cascada=reaplicar_resultados,
     )
+
+
+@router.post("/prestamos/cartera/revisiones", response_model=CarteraRevisionItemResponse)
+def crear_revision_cartera(
+    body: CarteraRevisionCrearBody,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Registra revision humana (append-only). Por defecto `MARCAR_OK` oculta ese control en la UI
+    hasta que exista un tipo distinto en el futuro (p. ej. revertir).
+    """
+    cod = body.codigo_control.strip()
+    if cod not in CONTROLES_CARTERA_VALIDOS:
+        raise HTTPException(
+            status_code=400,
+            detail="codigo_control no es un control de cartera conocido",
+        )
+    tipo_u = (body.tipo or "MARCAR_OK").strip().upper()
+    if tipo_u not in TIPOS_REVISION_VALIDOS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"tipo no permitido en esta version: {tipo_u}",
+        )
+    if not db.get(Prestamo, body.prestamo_id):
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+    nota_val = (body.nota or "").strip() or None
+    row = AuditoriaCarteraRevision(
+        prestamo_id=body.prestamo_id,
+        codigo_control=cod,
+        tipo=tipo_u,
+        usuario_id=current_user.id,
+        nota=nota_val,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    u = db.get(User, row.usuario_id)
+    email = u.email if u else None
+    return CarteraRevisionItemResponse(
+        id=row.id,
+        prestamo_id=row.prestamo_id,
+        codigo_control=row.codigo_control,
+        tipo=row.tipo,
+        usuario_id=row.usuario_id,
+        usuario_email=email,
+        nota=row.nota,
+        creado_en=iso_utc(row.creado_en),
+    )
+
+
+@router.post("/prestamos/cartera/revisiones/ocultos", response_model=CarteraRevisionOcultosResponse)
+def ocultos_revision_cartera(
+    body: CarteraRevisionOcultosBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Pares (prestamo_id, codigo_control) cuyo **ultimo** evento en bitacora es `MARCAR_OK`.
+    POST (no GET) para enviar muchos `prestamo_ids` sin limites de URL.
+    """
+    ids = body.prestamo_ids or []
+    if len(ids) > 5000:
+        raise HTTPException(status_code=400, detail="Maximo 5000 prestamo_ids por solicitud")
+    ocultos = listar_ocultos_marcar_ok(db, ids)
+    return CarteraRevisionOcultosResponse(
+        ocultos=[CarteraRevisionOcultoPar(**x) for x in ocultos]
+    )
+
+
+@router.get("/prestamos/cartera/revisiones/historial", response_model=List[CarteraRevisionItemResponse])
+def historial_revision_cartera(
+    prestamo_id: int = Query(..., ge=1),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    """Historial cronologico descendente de revisiones para un prestamo."""
+    rows = (
+        db.query(AuditoriaCarteraRevision, User.email)
+        .outerjoin(User, User.id == AuditoriaCarteraRevision.usuario_id)
+        .filter(AuditoriaCarteraRevision.prestamo_id == prestamo_id)
+        .order_by(AuditoriaCarteraRevision.creado_en.desc())
+        .limit(limit)
+        .all()
+    )
+    out: List[CarteraRevisionItemResponse] = []
+    for r, email in rows:
+        out.append(
+            CarteraRevisionItemResponse(
+                id=r.id,
+                prestamo_id=r.prestamo_id,
+                codigo_control=r.codigo_control,
+                tipo=r.tipo,
+                usuario_id=r.usuario_id,
+                usuario_email=email,
+                nota=r.nota,
+                creado_en=iso_utc(r.creado_en),
+            )
+        )
+    return out
 
 
 @router.get("/{auditoria_id}", response_model=AuditoriaItem)

@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { Check, Loader2, RefreshCw } from 'lucide-react'
+import {
+  BarChart3,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FileText,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react'
 
 import { Button } from '../ui/button'
 
@@ -30,8 +39,16 @@ import {
 } from '../ui/select'
 
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog'
+
+import {
   auditoriaService,
   PrestamoCarteraChequeo,
+  type CarteraRevisionItem,
 } from '../../services/auditoriaService'
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
@@ -49,11 +66,18 @@ function controlDismissKey(prestamoId: number, codigo: string) {
   return `${prestamoId}:${codigo}`
 }
 
-function normalizarCedulaBusqueda(valor: string) {
-  return valor.trim().toUpperCase().replace(/\s+/g, '')
+const COD_DESAJUSTE_PAGOS = 'total_pagado_vs_aplicado_cuotas'
+
+const PAGE_SIZE_DEFAULT = 25
+
+function csvEscapeCell(val: string): string {
+  if (/[",\n\r]/.test(val)) {
+    return `"${val.replace(/"/g, '""')}"`
+  }
+  return val
 }
 
-const COD_DESAJUSTE_PAGOS = 'total_pagado_vs_aplicado_cuotas'
+type FiltrosApi = { cedula: string; prestamo_id?: number }
 
 export function AuditoriaCarteraTab() {
   const { user } = useSimpleAuth()
@@ -66,33 +90,85 @@ export function AuditoriaCarteraTab() {
 
   const [corrigiendo, setCorrigiendo] = useState(false)
 
+  const [exportando, setExportando] = useState(false)
+
   const [items, setItems] = useState<PrestamoCarteraChequeo[]>([])
 
   const [resumen, setResumen] = useState<Record<string, unknown> | null>(null)
 
-  /** Controles ocultados con OK en esta sesion; se limpia al Recargar / Ejecutar auditoria. */
-  const [dismissed, setDismissed] = useState<Record<string, true>>({})
+  /** Claves `prestamo_id:codigo_control` con ultimo MARCAR_OK en BD (POST ocultos). */
+  const [ocultosKeys, setOcultosKeys] = useState<Set<string>>(() => new Set())
 
-  const [cedulaFiltro, setCedulaFiltro] = useState('')
+  const [historialOpen, setHistorialOpen] = useState(false)
 
-  /** '' = todos los controles; si no, solo prestamos con alerta SI en ese codigo. */
+  const [historialPid, setHistorialPid] = useState<number | null>(null)
+
+  const [historialRows, setHistorialRows] = useState<CarteraRevisionItem[]>([])
+
+  const [historialLoading, setHistorialLoading] = useState(false)
+
+  const [cedulaInput, setCedulaInput] = useState('')
+
+  const [prestamoInput, setPrestamoInput] = useState('')
+
+  const [filtrosApi, setFiltrosApi] = useState<FiltrosApi>({ cedula: '' })
+
+  const [page, setPage] = useState(1)
+
+  const [pageSize] = useState(PAGE_SIZE_DEFAULT)
+
   const [filtroControlCodigo, setFiltroControlCodigo] = useState('')
 
-  const cargar = useCallback(async () => {
+  const [loadingKpis, setLoadingKpis] = useState(false)
+
+  /** Ultima respuesta GET /prestamos/cartera/resumen (mismos filtros que filtrosApi). */
+  const [panelKpis, setPanelKpis] = useState<Record<string, unknown> | null>(
+    null
+  )
+
+  const [metaUltimaCorridaPanel, setMetaUltimaCorridaPanel] = useState<Record<
+    string,
+    unknown
+  > | null>(null)
+
+  const syncOcultosConItems = useCallback(async (list: PrestamoCarteraChequeo[]) => {
+    const ids = [...new Set(list.map(r => r.prestamo_id))]
+    if (ids.length === 0) {
+      setOcultosKeys(new Set())
+      return
+    }
+    try {
+      const r = await auditoriaService.listarRevisionesOcultos(ids)
+      const s = new Set(
+        (r.ocultos || []).map(o => `${o.prestamo_id}:${o.codigo_control}`)
+      )
+      setOcultosKeys(s)
+    } catch (e: unknown) {
+      setOcultosKeys(new Set())
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al cargar revisiones en BD (tabla migrada?)'
+      toast.error(msg)
+    }
+  }, [])
+
+  const fetchLista = useCallback(async () => {
     try {
       setLoading(true)
 
-      const cheq = await auditoriaService.listarCarteraChequeos()
+      const cheq = await auditoriaService.listarCarteraChequeos({
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
+        cedula: filtrosApi.cedula.trim() || undefined,
+        prestamo_id: filtrosApi.prestamo_id,
+      })
 
       setItems(cheq.items || [])
 
       setResumen((cheq.resumen as Record<string, unknown>) || {})
 
-      setDismissed({})
-
-      setCedulaFiltro('')
-
-      setFiltroControlCodigo('')
+      await syncOcultosConItems(cheq.items || [])
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
@@ -104,14 +180,71 @@ export function AuditoriaCarteraTab() {
       setItems([])
 
       setResumen(null)
+
+      setOcultosKeys(new Set())
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page, pageSize, filtrosApi, syncOcultosConItems])
 
   useEffect(() => {
-    cargar()
-  }, [cargar])
+    void fetchLista()
+  }, [fetchLista])
+
+  const resetFiltrosUiYSesion = useCallback(() => {
+    setFiltroControlCodigo('')
+    setCedulaInput('')
+    setPrestamoInput('')
+    setFiltrosApi({ cedula: '' })
+    setPage(1)
+    setPanelKpis(null)
+    setMetaUltimaCorridaPanel(null)
+    setHistorialOpen(false)
+    setHistorialPid(null)
+    setHistorialRows([])
+  }, [])
+
+  const recargarCompleta = useCallback(() => {
+    resetFiltrosUiYSesion()
+  }, [resetFiltrosUiYSesion])
+
+  const aplicarFiltros = useCallback(() => {
+    let pid: number | undefined
+    const p = prestamoInput.trim()
+    if (p) {
+      const n = parseInt(p, 10)
+      if (!Number.isFinite(n) || n < 1) {
+        toast.error('ID de prestamo invalido')
+        return
+      }
+      pid = n
+    }
+    setFiltrosApi({ cedula: cedulaInput.trim(), prestamo_id: pid })
+    setPage(1)
+  }, [cedulaInput, prestamoInput])
+
+  const soloKpisResumen = async () => {
+    try {
+      setLoadingKpis(true)
+      const r = await auditoriaService.obtenerCarteraResumen({
+        cedula: filtrosApi.cedula.trim() || undefined,
+        prestamo_id: filtrosApi.prestamo_id,
+      })
+      setPanelKpis((r.resumen as Record<string, unknown>) || {})
+      setMetaUltimaCorridaPanel(
+        (r.meta_ultima_corrida as Record<string, unknown>) || {}
+      )
+      toast.success('Resumen KPI actualizado (sin cargar lista de prestamos).')
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al obtener resumen de cartera'
+      toast.error(msg)
+    } finally {
+      setLoadingKpis(false)
+    }
+  }
 
   const ejecutarAhora = async () => {
     try {
@@ -119,15 +252,7 @@ export function AuditoriaCarteraTab() {
 
       const cheq = await auditoriaService.ejecutarCartera()
 
-      setItems(cheq.items || [])
-
-      setResumen((cheq.resumen as Record<string, unknown>) || {})
-
-      setDismissed({})
-
-      setCedulaFiltro('')
-
-      setFiltroControlCodigo('')
+      resetFiltrosUiYSesion()
 
       const s = cheq.sincronizar_estado_cuotas
       const extra =
@@ -147,60 +272,143 @@ export function AuditoriaCarteraTab() {
     }
   }
 
+  const exportarCsv = async () => {
+    try {
+      setExportando(true)
+      const cheq = await auditoriaService.listarCarteraChequeos({
+        skip: 0,
+        limit: 5000,
+        cedula: filtrosApi.cedula.trim() || undefined,
+        prestamo_id: filtrosApi.prestamo_id,
+      })
+      const header =
+        'prestamo_id,cedula,nombres,estado_prestamo,codigo_control,titulo_control,detalle'
+      const lines = [`\ufeff${header}`]
+      for (const row of cheq.items || []) {
+        for (const c of row.controles) {
+          if (filtroControlCodigo && c.codigo !== filtroControlCodigo) {
+            continue
+          }
+          lines.push(
+            [
+              String(row.prestamo_id),
+              csvEscapeCell(row.cedula || ''),
+              csvEscapeCell(row.nombres || ''),
+              csvEscapeCell(row.estado_prestamo || ''),
+              csvEscapeCell(c.codigo),
+              csvEscapeCell(c.titulo),
+              csvEscapeCell(c.detalle || ''),
+            ].join(',')
+          )
+        }
+      }
+      const blob = new Blob([lines.join('\r\n')], {
+        type: 'text/csv;charset=utf-8',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `auditoria_cartera_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success('CSV descargado (hasta 5000 prestamos con alerta).')
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al exportar CSV'
+      toast.error(msg)
+    } finally {
+      setExportando(false)
+    }
+  }
+
   const visibleRows = useMemo(() => {
     return items
       .map(row => ({
         ...row,
         controles: row.controles.filter(
-          c => !dismissed[controlDismissKey(row.prestamo_id, c.codigo)]
+          c => !ocultosKeys.has(controlDismissKey(row.prestamo_id, c.codigo))
         ),
       }))
       .filter(row => row.controles.length > 0)
-  }, [items, dismissed])
-
-  const cedulaFiltroNorm = normalizarCedulaBusqueda(cedulaFiltro)
+  }, [items, ocultosKeys])
 
   const conteosPorControlCodigo = useMemo(() => {
-    const m: Record<string, number> = {}
-    for (const row of visibleRows) {
-      for (const c of row.controles) {
-        const k = c.codigo
-        m[k] = (m[k] || 0) + 1
-      }
+    const raw = resumen?.conteos_por_control
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      return raw as Record<string, number>
     }
-    return m
-  }, [visibleRows])
-
-  const filasTrasCedula = useMemo(() => {
-    if (!cedulaFiltroNorm) return visibleRows
-    return visibleRows.filter(row => {
-      const c = normalizarCedulaBusqueda(row.cedula || '')
-      return c.includes(cedulaFiltroNorm)
-    })
-  }, [visibleRows, cedulaFiltroNorm])
+    return {}
+  }, [resumen])
 
   const displayRows = useMemo(() => {
-    if (!filtroControlCodigo) return filasTrasCedula
-    return filasTrasCedula
+    if (!filtroControlCodigo) return visibleRows
+    return visibleRows
       .filter(row => row.controles.some(c => c.codigo === filtroControlCodigo))
       .map(row => ({
         ...row,
         controles: row.controles.filter(c => c.codigo === filtroControlCodigo),
       }))
-  }, [filasTrasCedula, filtroControlCodigo])
+  }, [visibleRows, filtroControlCodigo])
 
-  const marcarControlOk = (prestamoId: number, codigo: string) => {
-    const k = controlDismissKey(prestamoId, codigo)
-    setDismissed(prev => ({ ...prev, [k]: true }))
+  const marcarControlOk = async (prestamoId: number, codigo: string) => {
+    try {
+      await auditoriaService.crearRevisionCartera({
+        prestamo_id: prestamoId,
+        codigo_control: codigo,
+      })
+      const k = controlDismissKey(prestamoId, codigo)
+      setOcultosKeys(prev => new Set([...prev, k]))
+      toast.success('Revision guardada en base de datos')
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al registrar revision'
+      toast.error(msg)
+    }
   }
 
-  const hayAlertas = items.length > 0
+  const abrirHistorialRevisiones = async (pid: number) => {
+    setHistorialPid(pid)
+    setHistorialOpen(true)
+    setHistorialLoading(true)
+    setHistorialRows([])
+    try {
+      const rows = await auditoriaService.historialRevisionesCartera(pid, 100)
+      setHistorialRows(Array.isArray(rows) ? rows : [])
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al cargar historial'
+      toast.error(msg)
+    } finally {
+      setHistorialLoading(false)
+    }
+  }
+
+  const totalListados = Number(
+    resumen?.prestamos_listados_total ?? resumen?.prestamos_con_alerta ?? 0
+  )
+
+  const hayAlertas = totalListados > 0
+
+  const totalPages = Math.max(1, Math.ceil(totalListados / pageSize))
+
+  const skipActual = (page - 1) * pageSize
+
+  const rangoDesde =
+    totalListados === 0 ? 0 : Math.min(skipActual + 1, totalListados)
+
+  const rangoHasta = Math.min(skipActual + items.length, totalListados)
 
   const hayDesajustePagosVsAplicado = useMemo(() => {
-    return items.some(row =>
-      row.controles.some(c => c.codigo === COD_DESAJUSTE_PAGOS)
-    )
-  }, [items])
+    return (conteosPorControlCodigo[COD_DESAJUSTE_PAGOS] ?? 0) > 0
+  }, [conteosPorControlCodigo])
 
   const corregirDesajustePagos = async () => {
     try {
@@ -210,11 +418,7 @@ export function AuditoriaCarteraTab() {
         reaplicar_cascada_desajuste_pagos: true,
         max_reaplicaciones: 100,
       })
-      setItems(res.items || [])
-      setResumen((res.resumen as Record<string, unknown>) || {})
-      setDismissed({})
-      setCedulaFiltro('')
-      setFiltroControlCodigo('')
+      resetFiltrosUiYSesion()
       const ok = (res.reaplicar_cascada || []).filter(
         (x: Record<string, unknown>) => x.ok === true
       ).length
@@ -243,7 +447,7 @@ export function AuditoriaCarteraTab() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => cargar()}
+          onClick={() => recargarCompleta()}
           disabled={loading}
         >
           {loading ? (
@@ -281,83 +485,137 @@ export function AuditoriaCarteraTab() {
         ) : null}
 
         {hayAlertas && !loading ? (
-          <>
-            <div className="flex w-full min-w-[200px] max-w-sm flex-col gap-1 sm:w-auto">
-              <Label
-                htmlFor="auditoria-cedula-filtro"
-                className="text-xs text-gray-600"
-              >
-                Filtrar por cedula
-              </Label>
-
-              <Input
-                id="auditoria-cedula-filtro"
-                type="search"
-                placeholder="Ej. V12345678"
-                value={cedulaFiltro}
-                onChange={e => setCedulaFiltro(e.target.value)}
-                autoComplete="off"
-                className="h-9"
-              />
-            </div>
-
-            <div className="flex w-full min-w-[240px] max-w-xl flex-col gap-1 sm:w-auto">
-              <Label
-                htmlFor="auditoria-control-filtro"
-                className="text-xs text-gray-600"
-              >
-                Filtrar por control
-              </Label>
-
-              <Select
-                value={filtroControlCodigo || '__todos__'}
-                onValueChange={v =>
-                  setFiltroControlCodigo(v === '__todos__' ? '' : v)
-                }
-              >
-                <SelectTrigger
-                  id="auditoria-control-filtro"
-                  className="h-9 w-full"
-                >
-                  <SelectValue placeholder="Todos los controles" />
-                </SelectTrigger>
-
-                <SelectContent>
-                  <SelectItem value="__todos__">
-                    Todos los controles (cualquier alerta)
-                  </SelectItem>
-
-                  {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => {
-                    const cnt = conteosPorControlCodigo[def.codigo] ?? 0
-
-                    return (
-                      <SelectItem
-                        key={def.codigo}
-                        value={def.codigo}
-                        title={def.titulo}
-                      >
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {def.n}.
-                        </span>{' '}
-                        {def.titulo}
-                        {cnt > 0 ? (
-                          <span className="text-muted-foreground">
-                            {' '}
-                            ({cnt})
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground"> (0)</span>
-                        )}
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          </>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void exportarCsv()}
+            disabled={exportando}
+          >
+            {exportando ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Exportar CSV
+          </Button>
         ) : null}
 
-        {hayAlertas && resumen ? (
+        <div className="flex w-full min-w-[200px] max-w-sm flex-col gap-1 sm:w-auto">
+          <Label
+            htmlFor="auditoria-cedula-filtro"
+            className="text-xs text-gray-600"
+          >
+            Cedula (fragmento)
+          </Label>
+
+          <Input
+            id="auditoria-cedula-filtro"
+            type="search"
+            placeholder="Ej. V12345678"
+            value={cedulaInput}
+            onChange={e => setCedulaInput(e.target.value)}
+            autoComplete="off"
+            className="h-9"
+          />
+        </div>
+
+        <div className="flex w-full min-w-[140px] max-w-xs flex-col gap-1 sm:w-auto">
+          <Label
+            htmlFor="auditoria-prestamo-filtro"
+            className="text-xs text-gray-600"
+          >
+            ID prestamo
+          </Label>
+
+          <Input
+            id="auditoria-prestamo-filtro"
+            inputMode="numeric"
+            placeholder="Opcional"
+            value={prestamoInput}
+            onChange={e => setPrestamoInput(e.target.value)}
+            autoComplete="off"
+            className="h-9"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2 pb-0.5">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={aplicarFiltros}
+            disabled={loading}
+          >
+            Aplicar filtros
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void soloKpisResumen()}
+            disabled={loading || loadingKpis}
+            title="Misma logica que la lista pero sin devolver prestamos (GET .../cartera/resumen). Usa filtros ya aplicados."
+          >
+            {loadingKpis ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <BarChart3 className="mr-2 h-4 w-4" />
+            )}
+            Solo KPIs
+          </Button>
+        </div>
+
+        {hayAlertas && !loading ? (
+          <div className="flex w-full min-w-[240px] max-w-xl flex-col gap-1 sm:w-auto">
+            <Label
+              htmlFor="auditoria-control-filtro"
+              className="text-xs text-gray-600"
+            >
+              Filtrar por control
+            </Label>
+
+            <Select
+              value={filtroControlCodigo || '__todos__'}
+              onValueChange={v =>
+                setFiltroControlCodigo(v === '__todos__' ? '' : v)
+              }
+            >
+              <SelectTrigger
+                id="auditoria-control-filtro"
+                className="h-9 w-full"
+              >
+                <SelectValue placeholder="Todos los controles" />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="__todos__">
+                  Todos los controles (cualquier alerta)
+                </SelectItem>
+
+                {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => {
+                  const cnt = conteosPorControlCodigo[def.codigo] ?? 0
+
+                  return (
+                    <SelectItem
+                      key={def.codigo}
+                      value={def.codigo}
+                      title={def.titulo}
+                    >
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {def.n}.
+                      </span>{' '}
+                      {def.titulo}
+                      <span className="text-muted-foreground"> ({cnt})</span>
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
+
+        {resumen && !loading ? (
           <span className="text-sm text-gray-600">
             Evaluados:{' '}
             <strong>{String(resumen.prestamos_evaluados ?? '-')}</strong>
@@ -365,10 +623,11 @@ export function AuditoriaCarteraTab() {
             Con alerta:{' '}
             <strong>{String(resumen.prestamos_con_alerta ?? '-')}</strong>
             {' · '}
-            Listados:{' '}
+            Mostrando:{' '}
             <strong>
-              {String(resumen.prestamos_listados ?? items.length)}
-            </strong>
+              {rangoDesde}-{rangoHasta}
+            </strong>{' '}
+            de <strong>{totalListados}</strong>
             {resumen.fecha_referencia ? (
               <>
                 {' · '}
@@ -378,9 +637,109 @@ export function AuditoriaCarteraTab() {
                 </strong>
               </>
             ) : null}
+            {resumen.reglas_version ? (
+              <>
+                {' · '}
+                Version reglas:{' '}
+                <strong className="font-mono text-xs">
+                  {String(resumen.reglas_version)}
+                </strong>
+              </>
+            ) : null}
           </span>
         ) : null}
       </div>
+
+      {panelKpis ? (
+        <Card className="border-dashed border-blue-200 bg-blue-50/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-slate-800">
+              Resumen solo KPIs (GET /prestamos/cartera/resumen)
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent className="space-y-2 text-sm text-slate-700">
+            <p>
+              Evaluados:{' '}
+              <strong>{String(panelKpis.prestamos_evaluados ?? '-')}</strong>
+              {' · '}
+              Con alerta:{' '}
+              <strong>{String(panelKpis.prestamos_con_alerta ?? '-')}</strong>
+              {' · '}
+              Version reglas:{' '}
+              <strong className="font-mono text-xs">
+                {String(panelKpis.reglas_version ?? '-')}
+              </strong>
+            </p>
+
+            {metaUltimaCorridaPanel &&
+            metaUltimaCorridaPanel.ultima_ejecucion_utc ? (
+              <p className="text-xs text-slate-600">
+                Ultima corrida guardada en BD (meta):{' '}
+                <span className="font-mono">
+                  {String(metaUltimaCorridaPanel.ultima_ejecucion_utc)}
+                </span>
+                {metaUltimaCorridaPanel.reglas_version ? (
+                  <>
+                    {' '}
+                    · version persistida:{' '}
+                    <span className="font-mono">
+                      {String(metaUltimaCorridaPanel.reglas_version)}
+                    </span>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+
+            <div className="max-h-36 overflow-y-auto rounded border border-slate-200 bg-white p-2 font-mono text-xs">
+              {(() => {
+                const c = panelKpis.conteos_por_control
+                if (!c || typeof c !== 'object' || Array.isArray(c)) {
+                  return <span className="text-slate-500">Sin conteos</span>
+                }
+                const entries = Object.entries(c as Record<string, number>)
+                if (entries.length === 0) {
+                  return <span className="text-slate-500">Sin conteos</span>
+                }
+                return entries.map(([k, v]) => (
+                  <div key={k}>
+                    {k}: {String(v)}
+                  </div>
+                ))
+              })()}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {hayAlertas && !loading && totalPages > 1 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Anterior
+          </Button>
+          <span className="text-sm text-gray-600">
+            Pagina <strong>{page}</strong> de <strong>{totalPages}</strong> (
+            {pageSize} por pagina)
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+          >
+            Siguiente
+            <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
+      ) : null}
 
       {hayAlertas && !loading ? (
         <Card className="border-slate-200 bg-slate-50/80">
@@ -392,10 +751,10 @@ export function AuditoriaCarteraTab() {
 
           <CardContent>
             <p className="mb-3 text-xs text-slate-600">
-              Use el desplegable <strong>Filtrar por control</strong> arriba: al
-              elegir el control N, solo verá los préstamos que tienen alerta{' '}
-              <strong>SI</strong> en esa regla. Con <strong>Todos</strong> se
-              muestran todas las alertas de cada préstamo.
+              Los conteos reflejan todos los prestamos con alerta bajo los
+              filtros aplicados (no solo la pagina). Use el desplegable{' '}
+              <strong>Filtrar por control</strong> para ver solo una regla en la
+              tabla.
             </p>
 
             <ol className="list-decimal space-y-1.5 pl-5 text-sm text-slate-800">
@@ -405,13 +764,13 @@ export function AuditoriaCarteraTab() {
                   {conteosPorControlCodigo[def.codigo] ? (
                     <span className="text-muted-foreground">
                       {' '}
-                      - {conteosPorControlCodigo[def.codigo]} préstamo(s) con
-                      esta alerta en vista actual
+                      - {conteosPorControlCodigo[def.codigo]} prestamo(s) con
+                      esta alerta
                     </span>
                   ) : (
                     <span className="text-muted-foreground">
                       {' '}
-                      - sin casos en vista actual
+                      - sin casos con filtros actuales
                     </span>
                   )}
                 </li>
@@ -434,31 +793,31 @@ export function AuditoriaCarteraTab() {
         <p className="py-6 text-center text-sm text-gray-600">
           No hay prestamos con controles en SI segun estos criterios. La cartera
           esta alineada con lo que aqui se revisa, o no hay prestamos
-          APROBADO/LIQUIDADO.
+          APROBADO/LIQUIDADO que cumplan el filtro.
         </p>
       ) : (
         <Card>
           <CardContent className="pt-6">
             {visibleRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
-                Oculto todos los controles con <strong>OK</strong> en esta
-                sesion. Pulse <strong>Recargar</strong> o{' '}
-                <strong>Ejecutar ahora</strong> para volver a evaluar desde la
-                base de datos; lo que siga en alerta volvera a mostrarse.
+                Todos los controles visibles estan marcados con <strong>OK</strong>{' '}
+                en base de datos para esta pagina, o no hay alertas. Pulse{' '}
+                <strong>Recargar</strong> o <strong>Ejecutar ahora</strong> para
+                reevaluar; si la alerta desaparecio en BD, no volvera a mostrarse.
               </p>
             ) : displayRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
-                {filtroControlCodigo && filasTrasCedula.length > 0 ? (
+                {filtroControlCodigo && visibleRows.length > 0 ? (
                   <>
                     Ningun prestamo cumple el{' '}
-                    <strong>control seleccionado</strong> en esta vista (puede
-                    haberlo ocultado con <strong>OK</strong> o no hay casos).
-                    Pruebe <strong>Todos los controles</strong> u otro numero.
+                    <strong>control seleccionado</strong> en esta pagina (puede
+                    estar oculto por <strong>OK</strong> en BD o no hay casos).
+                    Pruebe <strong>Todos los controles</strong> u otra pagina.
                   </>
                 ) : (
                   <>
-                    Ningun prestamo visible coincide con la cedula indicada.
-                    Pruebe otro fragmento o deje el filtro vacio para ver todos.
+                    Sin filas en esta pagina. Pruebe otra pagina o ajuste
+                    filtros.
                   </>
                 )}
               </p>
@@ -493,6 +852,15 @@ export function AuditoriaCarteraTab() {
                           >
                             Abrir prestamo
                           </Link>
+                          {' · '}
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-blue-600 underline"
+                            onClick={() => void abrirHistorialRevisiones(row.prestamo_id)}
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            Historial revisiones (BD)
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -542,9 +910,9 @@ export function AuditoriaCarteraTab() {
                                   variant="outline"
                                   size="sm"
                                   className="gap-1"
-                                  aria-label={`Marcar como revisado y ocultar: ${c.titulo}`}
+                                  aria-label={`Marcar como revisado en BD: ${c.titulo}`}
                                   onClick={() =>
-                                    marcarControlOk(row.prestamo_id, c.codigo)
+                                    void marcarControlOk(row.prestamo_id, c.codigo)
                                   }
                                 >
                                   <Check className="h-3.5 w-3.5" />
@@ -563,6 +931,59 @@ export function AuditoriaCarteraTab() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={historialOpen}
+        onOpenChange={open => {
+          setHistorialOpen(open)
+          if (!open) {
+            setHistorialPid(null)
+            setHistorialRows([])
+          }
+        }}
+      >
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Historial revisiones cartera
+              {historialPid != null ? ` · Prestamo #${historialPid}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+
+          {historialLoading ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-slate-600">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Cargando...
+            </div>
+          ) : historialRows.length === 0 ? (
+            <p className="py-4 text-sm text-slate-600">
+              Sin registros en bitacora para este prestamo.
+            </p>
+          ) : (
+            <ul className="space-y-3 text-sm">
+              {historialRows.map(h => (
+                <li
+                  key={h.id}
+                  className="rounded-md border border-slate-200 bg-slate-50/80 p-3"
+                >
+                  <div className="font-mono text-xs text-slate-500">
+                    {h.creado_en}
+                  </div>
+                  <div>
+                    <strong>{h.codigo_control}</strong> · {h.tipo}
+                  </div>
+                  <div className="text-slate-600">
+                    {h.usuario_email || `usuario_id=${h.usuario_id}`}
+                  </div>
+                  {h.nota ? (
+                    <div className="mt-1 text-slate-700">Nota: {h.nota}</div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -186,11 +186,21 @@ def _job_auditoria_cartera_prestamos() -> None:
         from app.services.prestamo_cartera_auditoria import ejecutar_auditoria_cartera, persistir_meta_ejecucion
 
         sync = sincronizar_estado_cuotas_cartera(db, commit=True)
-        _rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
+        _rows, resumen = ejecutar_auditoria_cartera(
+            db,
+            solo_con_alerta=False,
+            skip=0,
+            limit=None,
+            incluir_filas=False,
+        )
         persistir_meta_ejecucion(
             db,
             total_evaluados=int(resumen.get("prestamos_evaluados") or 0),
             con_alerta=int(resumen.get("prestamos_con_alerta") or 0),
+            conteos_por_control=resumen.get("conteos_por_control")
+            if isinstance(resumen.get("conteos_por_control"), dict)
+            else None,
+            reglas_version=str(resumen.get("reglas_version") or ""),
             commit=True,
         )
         logger.info(
