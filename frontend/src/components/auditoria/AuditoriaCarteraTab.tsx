@@ -63,6 +63,8 @@ export function AuditoriaCarteraTab() {
       setResumen((cheq.resumen as Record<string, unknown>) || {})
 
       setDismissed({})
+
+      setCedulaFiltro('')
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
@@ -94,6 +96,8 @@ export function AuditoriaCarteraTab() {
       setResumen((cheq.resumen as Record<string, unknown>) || {})
 
       setDismissed({})
+
+      setCedulaFiltro('')
 
       toast.success('Auditoria ejecutada y metadatos actualizados')
     } catch (e: unknown) {
@@ -164,7 +168,10 @@ export function AuditoriaCarteraTab() {
 
         {hayAlertas && !loading ? (
           <div className="flex w-full min-w-[200px] max-w-sm flex-col gap-1 sm:w-auto">
-            <Label htmlFor="auditoria-cedula-filtro" className="text-xs text-gray-600">
+            <Label
+              htmlFor="auditoria-cedula-filtro"
+              className="text-xs text-gray-600"
+            >
               Filtrar por cedula
             </Label>
 
@@ -192,6 +199,15 @@ export function AuditoriaCarteraTab() {
             <strong>
               {String(resumen.prestamos_listados ?? items.length)}
             </strong>
+            {resumen.fecha_referencia ? (
+              <>
+                {' · '}
+                Fecha referencia (Caracas):{' '}
+                <strong className="font-mono">
+                  {String(resumen.fecha_referencia)}
+                </strong>
+              </>
+            ) : null}
           </span>
         ) : null}
       </div>
@@ -207,22 +223,24 @@ export function AuditoriaCarteraTab() {
         </Card>
       ) : !hayAlertas ? (
         <p className="py-6 text-center text-sm text-gray-600">
-          No hay prestamos con controles en SI segun estos criterios. La cartera esta
-          alineada con lo que aqui se revisa, o no hay prestamos APROBADO/LIQUIDADO.
+          No hay prestamos con controles en SI segun estos criterios. La cartera
+          esta alineada con lo que aqui se revisa, o no hay prestamos
+          APROBADO/LIQUIDADO.
         </p>
       ) : (
         <Card>
           <CardContent className="pt-6">
             {visibleRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
-                Oculto todos los controles con <strong>OK</strong> en esta sesion. Pulse{' '}
-                <strong>Recargar</strong> o <strong>Ejecutar ahora</strong> para volver a
-                evaluar desde la base de datos; lo que siga en alerta volvera a mostrarse.
+                Oculto todos los controles con <strong>OK</strong> en esta
+                sesion. Pulse <strong>Recargar</strong> o{' '}
+                <strong>Ejecutar ahora</strong> para volver a evaluar desde la
+                base de datos; lo que siga en alerta volvera a mostrarse.
               </p>
             ) : displayRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
-                Ningun prestamo visible coincide con la cedula indicada. Pruebe otro fragmento
-                o deje el filtro vacio para ver todos.
+                Ningun prestamo visible coincide con la cedula indicada. Pruebe
+                otro fragmento o deje el filtro vacio para ver todos.
               </p>
             ) : (
               <div className="space-y-8">
@@ -235,20 +253,25 @@ export function AuditoriaCarteraTab() {
                       <div>
                         <div className="text-lg font-semibold text-slate-900">
                           Prestamo #{row.prestamo_id}{' '}
-                          <span className="text-slate-500">· {row.nombres}</span>
+                          <span className="text-slate-500">
+                            · {row.nombres}
+                          </span>
                         </div>
 
                         <div className="text-sm text-slate-600">
-                          Cedula: <span className="font-mono">{row.cedula}</span>
+                          Cedula:{' '}
+                          <span className="font-mono">{row.cedula}</span>
                           {' · '}
                           Estado:{' '}
-                          <Badge variant="secondary">{row.estado_prestamo}</Badge>
+                          <Badge variant="secondary">
+                            {row.estado_prestamo}
+                          </Badge>
                           {' · '}
                           <Link
                             className="text-blue-600 underline"
-                            to="/prestamos"
+                            to={`/prestamos?prestamo_id=${row.prestamo_id}`}
                           >
-                            Ir a prestamos
+                            Abrir prestamo
                           </Link>
                         </div>
                       </div>
@@ -257,11 +280,15 @@ export function AuditoriaCarteraTab() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[280px]">Control (alerta SI)</TableHead>
+                          <TableHead className="w-[280px]">
+                            Control (alerta SI)
+                          </TableHead>
 
                           <TableHead>Detalle</TableHead>
 
-                          <TableHead className="w-[100px] text-right">Accion</TableHead>
+                          <TableHead className="w-[100px] text-right">
+                            Accion
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
 
@@ -276,7 +303,7 @@ export function AuditoriaCarteraTab() {
                               {c.detalle || '-'}
                             </TableCell>
 
-                            <TableCell className="align-top text-right">
+                            <TableCell className="text-right align-top">
                               <Button
                                 type="button"
                                 variant="outline"

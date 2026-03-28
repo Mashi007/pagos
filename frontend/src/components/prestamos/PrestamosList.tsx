@@ -141,8 +141,10 @@ export function PrestamosList() {
       ? estadoFromUrl
       : undefined
 
+  const searchFromUrl = (searchParams.get('search') ?? '').trim()
+
   const [filters, setFilters] = useState<PrestamoFilters>({
-    search: '',
+    search: searchFromUrl,
 
     estado: estadoValidInit,
 
@@ -191,6 +193,8 @@ export function PrestamosList() {
         ? estadoParam
         : undefined
 
+    const searchParam = (searchParams.get('search') ?? '').trim()
+
     setFilters(prev => ({
       ...prev,
 
@@ -199,6 +203,8 @@ export function PrestamosList() {
       cliente_id: cidValid,
 
       estado: estadoValid,
+
+      search: searchParam,
     }))
   }, [searchParams])
 
@@ -231,6 +237,48 @@ export function PrestamosList() {
   const perPageRevisar = 20
 
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    const raw = searchParams.get('prestamo_id')?.trim()
+
+    if (!raw || !/^\d+$/.test(raw)) {
+      return
+    }
+
+    const id = parseInt(raw, 10)
+
+    if (Number.isNaN(id) || id < 1) {
+      return
+    }
+
+    if (showDetalle && viewingPrestamo?.id === id) {
+      return
+    }
+
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const p = await prestamoService.getPrestamo(id)
+
+        if (cancelled) {
+          return
+        }
+
+        setViewingPrestamo(p)
+
+        setShowDetalle(true)
+      } catch {
+        if (!cancelled) {
+          toast.error('No se pudo abrir el prestamo indicado en la URL')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [searchParams, showDetalle, viewingPrestamo?.id])
 
   const { data, isLoading, error } = usePrestamos(filters, page, perPage)
 
@@ -597,6 +645,14 @@ export function PrestamosList() {
           setShowDetalle(false)
 
           setViewingPrestamo(null)
+
+          if (searchParams.get('prestamo_id')) {
+            const next = new URLSearchParams(searchParams)
+
+            next.delete('prestamo_id')
+
+            setSearchParams(next, { replace: true })
+          }
         }}
       />
     )

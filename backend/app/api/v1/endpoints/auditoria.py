@@ -271,6 +271,22 @@ class PrestamoCarteraChequeoResponse(BaseModel):
     meta_ultima_corrida: dict
 
 
+def _prestamos_cartera_dicts_a_items(rows: List[dict[str, Any]]) -> List[PrestamoCarteraChequeoItem]:
+    return [
+        PrestamoCarteraChequeoItem(
+            prestamo_id=r["prestamo_id"],
+            cliente_id=r["cliente_id"],
+            cedula=r["cedula"],
+            nombres=r["nombres"],
+            estado_prestamo=r["estado_prestamo"],
+            cliente_email=r["cliente_email"],
+            tiene_alerta=r["tiene_alerta"],
+            controles=[ControlCarteraItem(**c) for c in r["controles"]],
+        )
+        for r in rows
+    ]
+
+
 @router.get("/prestamos/cartera/meta")
 def meta_auditoria_cartera(db: Session = Depends(get_db)):
     """Ultima corrida automatica (03:00) y totales guardados en configuracion."""
@@ -281,7 +297,7 @@ def meta_auditoria_cartera(db: Session = Depends(get_db)):
 def listar_chequeos_cartera(
     solo_alertas: bool = Query(
         True,
-        description="Reservado por compatibilidad. La respuesta solo incluye prestamos con al menos un control SI y solo esos controles.",
+        description="Sin efecto (compat. API). Siempre se devuelven solo prestamos con al menos un control SI y solo esos controles.",
     ),
     db: Session = Depends(get_db),
 ):
@@ -291,51 +307,33 @@ def listar_chequeos_cartera(
     """
     rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=solo_alertas)
     meta = leer_meta_ejecucion(db)
-    items = [
-        PrestamoCarteraChequeoItem(
-            prestamo_id=r["prestamo_id"],
-            cliente_id=r["cliente_id"],
-            cedula=r["cedula"],
-            nombres=r["nombres"],
-            estado_prestamo=r["estado_prestamo"],
-            cliente_email=r["cliente_email"],
-            tiene_alerta=r["tiene_alerta"],
-            controles=[ControlCarteraItem(**c) for c in r["controles"]],
-        )
-        for r in rows
-    ]
-    return PrestamoCarteraChequeoResponse(items=items, resumen=resumen, meta_ultima_corrida=meta)
+    return PrestamoCarteraChequeoResponse(
+        items=_prestamos_cartera_dicts_a_items(rows),
+        resumen=resumen,
+        meta_ultima_corrida=meta,
+    )
 
 
 @router.post("/prestamos/cartera/ejecutar", response_model=PrestamoCarteraChequeoResponse)
 def ejecutar_y_persistir_auditoria_cartera(
     solo_alertas: bool = Query(
         True,
-        description="Reservado por compatibilidad. Igual que GET chequeos: solo prestamos y controles con alerta SI.",
+        description="Sin efecto (compat. API). Igual que GET chequeos: solo prestamos y controles con alerta SI.",
     ),
     db: Session = Depends(get_db),
 ):
     """Recalcula toda la cartera, persiste metadatos de ejecucion y devuelve el mismo cuerpo que GET chequeos."""
-    rows_full, resumen_full = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
-    con_alerta = int(resumen_full.get("prestamos_con_alerta") or 0)
-    total_ev = int(resumen_full.get("prestamos_evaluados") or 0)
+    _ = solo_alertas  # compat. API; ejecutar_auditoria_cartera ya solo devuelve filas con alerta SI
+    rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
+    con_alerta = int(resumen.get("prestamos_con_alerta") or 0)
+    total_ev = int(resumen.get("prestamos_evaluados") or 0)
     persistir_meta_ejecucion(db, total_evaluados=total_ev, con_alerta=con_alerta, commit=True)
-    rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=solo_alertas)
     meta = leer_meta_ejecucion(db)
-    items = [
-        PrestamoCarteraChequeoItem(
-            prestamo_id=r["prestamo_id"],
-            cliente_id=r["cliente_id"],
-            cedula=r["cedula"],
-            nombres=r["nombres"],
-            estado_prestamo=r["estado_prestamo"],
-            cliente_email=r["cliente_email"],
-            tiene_alerta=r["tiene_alerta"],
-            controles=[ControlCarteraItem(**c) for c in r["controles"]],
-        )
-        for r in rows
-    ]
-    return PrestamoCarteraChequeoResponse(items=items, resumen=resumen, meta_ultima_corrida=meta)
+    return PrestamoCarteraChequeoResponse(
+        items=_prestamos_cartera_dicts_a_items(rows),
+        resumen=resumen,
+        meta_ultima_corrida=meta,
+    )
 
 
 @router.get("/{auditoria_id}", response_model=AuditoriaItem)

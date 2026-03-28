@@ -1,4 +1,4 @@
-import { apiClient, ApiResponse } from './api'
+import { apiClient } from './api'
 
 export interface Auditoria {
   id: number
@@ -112,57 +112,26 @@ class AuditoriaService {
   async listarAuditoria(
     filters?: AuditoriaFilters
   ): Promise<AuditoriaListResponse> {
-    try {
-      console.log('🔍 Filtros enviados:', filters)
+    const response = await apiClient.get<AuditoriaListResponse>(this.baseUrl, {
+      params: filters,
+    })
 
-      const response = await apiClient.get<AuditoriaListResponse>(
-        this.baseUrl,
-        { params: filters }
-      )
+    if (!response || typeof response !== 'object') {
+      throw new Error('Respuesta invalida del servidor')
+    }
 
-      console.log('📦 Respuesta recibida del servidor:', response)
+    return {
+      items: Array.isArray(response.items) ? response.items : [],
 
-      // Validar que la respuesta tenga la estructura esperada
+      total: typeof response.total === 'number' ? response.total : 0,
 
-      if (!response || typeof response !== 'object') {
-        console.error('❌ Respuesta inválida:', response)
+      page: typeof response.page === 'number' ? response.page : 1,
 
-        throw new Error('Respuesta inválida del servidor')
-      }
+      page_size:
+        typeof response.page_size === 'number' ? response.page_size : 10,
 
-      // Asegurar que tenga la estructura esperada
-
-      const validResponse: AuditoriaListResponse = {
-        items: Array.isArray(response.items) ? response.items : [],
-
-        total: typeof response.total === 'number' ? response.total : 0,
-
-        page: typeof response.page === 'number' ? response.page : 1,
-
-        page_size:
-          typeof response.page_size === 'number' ? response.page_size : 10,
-
-        total_pages:
-          typeof response.total_pages === 'number' ? response.total_pages : 1,
-      }
-
-      console.log('✅ Respuesta validada:', validResponse)
-
-      return validResponse
-    } catch (error: any) {
-      console.error('❌ Error en listarAuditoria:', error)
-
-      console.error('❌ Detalles del error:', {
-        message: error?.message,
-
-        response: error?.response?.data,
-
-        status: error?.response?.status,
-      })
-
-      // Re-lanzar el error para que el componente pueda manejarlo
-
-      throw error
+      total_pages:
+        typeof response.total_pages === 'number' ? response.total_pages : 1,
     }
   }
 
@@ -232,13 +201,6 @@ class AuditoriaService {
       params
     )
 
-    return response
-  }
-
-  async metaCartera(): Promise<Record<string, unknown>> {
-    const response = await apiClient.get<Record<string, unknown>>(
-      `${this.baseUrl}/prestamos/cartera/meta`
-    )
     return response
   }
 
