@@ -16,6 +16,39 @@ def normalizar_cedula_almacenamiento(value: Optional[str]) -> Optional[str]:
     return s.upper() if s else None
 
 
+def normalizar_cedula_clave_cupo(value: Optional[str]) -> str:
+    """
+    Clave canonica para cupo de prestamos APROBADO por documento: trim, mayusculas,
+    sin guiones ni espacios (ej. V-123 y V123 coinciden).
+    """
+    if value is None:
+        return ""
+    s = str(value).strip().upper().replace("-", "").replace(" ", "")
+    return s
+
+
+def prefijo_politica_cupo_aprobados(clave: str) -> Optional[str]:
+    """
+    Primer caracter de la clave normalizada. Solo E, V, J son validos para cupo.
+    None si vacio o prefijo no permitido.
+    """
+    if not clave:
+        return None
+    c0 = clave[0]
+    if c0 in ("E", "V", "J"):
+        return c0
+    return None
+
+
+def max_aprobados_permitidos_por_prefijo(prefijo: Optional[str]) -> Optional[int]:
+    """E/V: 1 APROBADO por clave; J: 2. None si prefijo invalido."""
+    if prefijo in ("E", "V"):
+        return 1
+    if prefijo == "J":
+        return 2
+    return None
+
+
 def alinear_cedulas_clientes_existentes(db: Session, cedulas: Iterable[Optional[str]]) -> None:
     """
     Pone clientes.cedula en mayusculas cuando coincide en mayusculas con la clave canonica.

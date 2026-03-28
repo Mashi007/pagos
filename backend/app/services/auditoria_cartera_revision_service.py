@@ -38,6 +38,7 @@ CONTROLES_CARTERA_VALIDOS = frozenset(
     {
         "cedula_cliente_vs_prestamo",
         "prestamos_duplicados_misma_cedula",
+        "cupo_cedula_aprobados_politica",
         "prestamos_duplicados_nombre_cedula_fecha_registro",
         "pagos_mismo_dia_monto",
         "pagos_monto_no_positivo",

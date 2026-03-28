@@ -97,6 +97,7 @@ from app.services.cuota_estado import (
     sincronizar_columna_estado_cuotas,
 )
 
+from app.services.prestamos.cupo_cedula_aprobados import validar_cupo_nuevo_prestamo_aprobado
 from app.services.prestamos.prestamo_huella import ensure_no_duplicate_aprobado_huella
 
 from app.services.prestamo_estado_coherencia import (
@@ -2687,6 +2688,8 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
 
         p.fecha_aprobacion = datetime.combine(fa, datetime.min.time())
 
+    validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
+
     ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
 
     _registrar_en_revision_manual(db, prestamo_id)
@@ -2843,6 +2846,8 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
 
     p.estado = "APROBADO"
 
+    validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
+
     ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
 
     _registrar_en_revision_manual(db, prestamo_id)
@@ -2996,6 +3001,8 @@ def aprobar_manual(
         p.usuario_aprobador = current_user.email
 
         p.estado = "APROBADO"
+
+        validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
 
         ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
 
@@ -3755,6 +3762,8 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
         ensure_no_duplicate_aprobado_huella(db, row, exclude_prestamo_id=None)
 
+    validar_cupo_nuevo_prestamo_aprobado(db, row.cedula or "", exclude_prestamo_id=None)
+
     db.add(row)
 
     db.commit()
@@ -3980,6 +3989,8 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
     try:
 
         if (row.estado or "").upper() == "APROBADO":
+
+            validar_cupo_nuevo_prestamo_aprobado(db, row.cedula or "", exclude_prestamo_id=row.id)
 
             ensure_no_duplicate_aprobado_huella(db, row, exclude_prestamo_id=row.id)
 
@@ -4494,6 +4505,54 @@ async def upload_prestamos_excel(
                 cliente_id = clientes_cedulas[cedula]
 
                 cliente = db.get(Cliente, cliente_id)
+
+                try:
+
+                    validar_cupo_nuevo_prestamo_aprobado(
+                        db, cliente.cedula or "", exclude_prestamo_id=None
+                    )
+
+                except HTTPException as cupo_exc:
+
+                    cupo_msg = str(cupo_exc.detail)
+
+                    prestamo_error = PrestamoConError(
+
+                        cedula_cliente=cedula,
+
+                        total_financiamiento=monto,
+
+                        modalidad_pago=modalidad,
+
+                        numero_cuotas=cuotas,
+
+                        producto=producto,
+
+                        analista=analista,
+
+                        concesionario=concesionario,
+
+                        estado="PENDIENTE",
+
+                        errores_descripcion=cupo_msg,
+
+                        fila_origen=idx,
+
+                        usuario_registro=usuario_email,
+
+                    )
+
+                    db.add(prestamo_error)
+
+                    registros_con_error += 1
+
+                    prestamos_con_errores.append(
+
+                        {"cedula": cedula, "fila": idx, "errores": cupo_msg}
+
+                    )
+
+                    continue
 
                 
 

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import Counter
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
@@ -32,7 +33,12 @@ from sqlalchemy.orm import Session
 from app.models.configuracion import Configuracion
 from app.services.auditoria_cartera_revision_service import pares_ultimo_evento_marcar_ok
 from app.services.cuota_estado import clasificar_estado_cuota, hoy_negocio
-from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
+from app.utils.cedula_almacenamiento import (
+    max_aprobados_permitidos_por_prefijo,
+    normalizar_cedula_almacenamiento,
+    normalizar_cedula_clave_cupo,
+    prefijo_politica_cupo_aprobados,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +46,9 @@ _TOL = Decimal("0.02")
 CFG_ULTIMA = "auditoria_cartera_ultima_ejecucion"
 CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
-# Identificador estable de la definicion de controles en este modulo (14 reglas en add_control).
+# Identificador estable de la definicion de controles en este modulo (15 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "14controles-2026-03-27"
+AUDITORIA_CARTERA_REGLAS_VERSION = "15controles-2026-03-28"
 
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
@@ -440,6 +446,14 @@ def ejecutar_auditoria_cartera(
         pid = int(cr[1])
         cuotas_por_prestamo.setdefault(pid, []).append(cr)
 
+    counts_aprobado_clave: Counter[str] = Counter()
+    for _r in rows_p:
+        if str(_r[4] or "").strip() != "APROBADO":
+            continue
+        _ck = normalizar_cedula_clave_cupo(_r[2] or "")
+        if _ck:
+            counts_aprobado_clave[_ck] += 1
+
     out: list[dict[str, Any]] = []
     con_alerta_count = 0
     control_counts: dict[str, int] = {}
@@ -485,6 +499,33 @@ def ejecutar_auditoria_cartera(
             "Varios prestamos APROBADO misma cedula (duplicidad activa)",
             dup_prest,
             "Existe otro prestamo APROBADO en cartera con la misma cedula" if dup_prest == "SI" else "Unico o sin otro APROBADO duplicado por cedula",
+        )
+
+        if estado_p == "APROBADO":
+            clave_cupo = normalizar_cedula_clave_cupo(cedula_p)
+            pref_cupo = prefijo_politica_cupo_aprobados(clave_cupo)
+            max_cupo = max_aprobados_permitidos_por_prefijo(pref_cupo)
+            if max_cupo is None or not clave_cupo:
+                cupo_si = "SI"
+                cupo_det = (
+                    "Cedula vacia o prefijo no permitido (solo E, V, J tras normalizar guiones y espacios)."
+                )
+            else:
+                n_clave = int(counts_aprobado_clave.get(clave_cupo, 0))
+                cupo_si = "SI" if n_clave > max_cupo else "NO"
+                cupo_det = (
+                    f"Clave={clave_cupo} prefijo={pref_cupo} APROBADOS_misma_clave={n_clave} max_permitido={max_cupo}"
+                    if cupo_si == "SI"
+                    else f"OK clave={clave_cupo} n={n_clave} max={max_cupo}"
+                )
+        else:
+            cupo_si = "NO"
+            cupo_det = "Solo aplica a prestamos APROBADO"
+        add_control(
+            "cupo_cedula_aprobados_politica",
+            "Cupo cedula: E/V max 1 APROBADO, J max 2, prefijos validos E V J",
+            cupo_si,
+            cupo_det,
         )
 
         dup_triple = "SI" if pid in prestamos_dup_nombre_cedula_fecha else "NO"
