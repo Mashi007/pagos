@@ -54,11 +54,25 @@ export interface PagoExcelRow {
 
   conciliado: boolean
 
+  /** Banco / institución (columna Excel "Banco", compatible con plantilla) */
+
+  institucion_bancaria?: string | null
+
   /** Opcional: columnas moneda / tasa en plantilla Excel */
 
   moneda_registro?: 'USD' | 'BS'
 
   tasa_cambio_manual?: number
+}
+
+/** Valor para API: string recortado o null si vacío (máx. 255). */
+
+export function institucionBancariaDesdeExcel(
+  v: string | null | undefined
+): string | null {
+  const s = (v ?? '').toString().trim()
+
+  return s ? s.slice(0, 255) : null
 }
 
 export function convertirFechaExcelPago(val: unknown): string {

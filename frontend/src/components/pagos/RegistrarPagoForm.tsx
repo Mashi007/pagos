@@ -817,12 +817,10 @@ export function RegistrarPagoForm({
               </div>
             </div>
 
-            {/* Institución Bancaria */}
+            {/* Banco (misma variable que plantilla Excel / listado) */}
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Institución Bancaria
-              </label>
+              <label className="text-sm font-medium text-gray-700">Banco</label>
 
               <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
@@ -837,7 +835,7 @@ export function RegistrarPagoForm({
                     })
                   }
                   className="pl-10"
-                  placeholder="Banco de Venezuela, Banesco, etc."
+                  placeholder="Ej. BINANCE, BNC, Banesco, Banco de Venezuela"
                 />
               </div>
             </div>

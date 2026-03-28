@@ -605,6 +605,10 @@ export function TablaEditablePagos({
             <tr>
               <th className="w-12 border-r p-2 text-center font-semibold">#</th>
 
+              <th className="min-w-[120px] border-r p-2 text-left font-semibold">
+                Banco
+              </th>
+
               <th className="min-w-[140px] border-r p-2 text-left font-semibold">
                 Cédula
               </th>
@@ -651,6 +655,18 @@ export function TablaEditablePagos({
               >
                 <td className="border-r p-2 text-center text-gray-500">
                   {row._rowIndex}
+                </td>
+
+                {/* Banco (plantilla Excel) */}
+
+                <td className="border-r p-2">
+                  <CeldaEditable
+                    value={row.institucion_bancaria ?? ''}
+                    isValid={row._validation.institucion_bancaria?.isValid}
+                    errorMsg={row._validation.institucion_bancaria?.message}
+                    placeholder="BINANCE, BNC..."
+                    onChange={v => onUpdateCell(row, 'institucion_bancaria', v)}
+                  />
                 </td>
 
                 {/* Cédula */}

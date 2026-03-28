@@ -63,6 +63,7 @@ import {
   cedulaLookupParaFila,
   looksLikeDocumentNotCedula,
   parsePrestamoIdFromNumeroCredito,
+  institucionBancariaDesdeExcel,
 } from '../utils/pagoExcelValidation'
 
 import { readExcelToJSON } from '../types/exceljs'
@@ -860,7 +861,9 @@ export function useExcelUploadPagos({
 
           numero_documento: numeroDoc || '',
 
-          institucion_bancaria: null,
+          institucion_bancaria: institucionBancariaDesdeExcel(
+            row.institucion_bancaria ?? undefined
+          ),
 
           notas: null,
 
@@ -953,7 +956,9 @@ export function useExcelUploadPagos({
 
               numero_documento: numeroDoc || null,
 
-              institucion_bancaria: null,
+              institucion_bancaria: institucionBancariaDesdeExcel(
+                row.institucion_bancaria ?? undefined
+              ),
 
               notas: null,
 
@@ -1032,7 +1037,9 @@ export function useExcelUploadPagos({
               numero_documento:
                 normalizarNumeroDocumento(row.numero_documento) || null,
 
-              institucion_bancaria: null,
+              institucion_bancaria: institucionBancariaDesdeExcel(
+                row.institucion_bancaria ?? undefined
+              ),
 
               notas: null,
 
@@ -1117,7 +1124,9 @@ export function useExcelUploadPagos({
 
             numero_documento: numeroDoc || null,
 
-            institucion_bancaria: null,
+            institucion_bancaria: institucionBancariaDesdeExcel(
+              row.institucion_bancaria ?? undefined
+            ),
 
             notas: null,
 
@@ -1171,7 +1180,9 @@ export function useExcelUploadPagos({
 
             numero_documento: numeroDoc || null,
 
-            institucion_bancaria: null,
+            institucion_bancaria: institucionBancariaDesdeExcel(
+              row.institucion_bancaria ?? undefined
+            ),
 
             notas: null,
 
@@ -1280,7 +1291,9 @@ export function useExcelUploadPagos({
             new Date().toISOString().split('T')[0],
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
-          institucion_bancaria: null,
+          institucion_bancaria: institucionBancariaDesdeExcel(
+            row.institucion_bancaria ?? undefined
+          ),
           notas: null,
           conciliado: !!row.conciliado,
           observaciones:
@@ -1310,7 +1323,9 @@ export function useExcelUploadPagos({
             new Date().toISOString().split('T')[0],
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
-          institucion_bancaria: null,
+          institucion_bancaria: institucionBancariaDesdeExcel(
+            row.institucion_bancaria ?? undefined
+          ),
           notas: null,
           conciliado: !!row.conciliado,
           observaciones: obs || undefined,
@@ -1403,7 +1418,9 @@ export function useExcelUploadPagos({
             new Date().toISOString().split('T')[0],
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
-          institucion_bancaria: null,
+          institucion_bancaria: institucionBancariaDesdeExcel(
+            row.institucion_bancaria ?? undefined
+          ),
           notas: null,
           conciliado: !!row.conciliado,
           observaciones:
@@ -1433,7 +1450,9 @@ export function useExcelUploadPagos({
             new Date().toISOString().split('T')[0],
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
-          institucion_bancaria: null,
+          institucion_bancaria: institucionBancariaDesdeExcel(
+            row.institucion_bancaria ?? undefined
+          ),
           notas: null,
           conciliado: !!row.conciliado,
           observaciones: obs || undefined,
@@ -1597,7 +1616,9 @@ export function useExcelUploadPagos({
 
         numero_documento: normalizarNumeroDocumento(row.numero_documento) || '',
 
-        institucion_bancaria: null,
+        institucion_bancaria: institucionBancariaDesdeExcel(
+          row.institucion_bancaria ?? undefined
+        ),
 
         notas: null,
 
@@ -2012,6 +2033,8 @@ export function useExcelUploadPagos({
 
           let tasaCol = -1
 
+          let bancoCol = -1
+
           let cedulaHeaderMatched = false
 
           for (let i = 0; i < Math.max(headerRow.length, 8); i++) {
@@ -2021,6 +2044,8 @@ export function useExcelUploadPagos({
                 i,
                 'cedula',
                 'cédula',
+                'cedula dep',
+                'cédula dep',
                 'dni',
                 'identificacion',
                 'identificación',
@@ -2070,6 +2095,19 @@ export function useExcelUploadPagos({
             if (match(i, 'moneda', 'currency')) monedaCol = i
 
             if (match(i, 'tasa', 'tasa_cambio', 'tc', 'bcv')) tasaCol = i
+
+            if (
+              match(
+                i,
+                'banco',
+                'institucion',
+                'institución',
+                'institucion bancaria',
+                'institución bancaria',
+                'entidad'
+              )
+            )
+              bancoCol = i
           }
 
           return {
@@ -2081,6 +2119,7 @@ export function useExcelUploadPagos({
             conciliacion,
             monedaCol,
             tasaCol,
+            bancoCol,
           }
         })()
 
@@ -2188,6 +2227,11 @@ export function useExcelUploadPagos({
             if (Number.isFinite(tr) && tr > 0) tasa_cambio_manual = tr
           }
 
+          const institucion_bancaria =
+            cols.bancoCol >= 0 && row[cols.bancoCol] != null
+              ? institucionBancariaDesdeExcel(String(row[cols.bancoCol]))
+              : null
+
           const numeroDocStr =
             numeroDoc && numeroDoc !== 'NaN'
               ? (
@@ -2217,6 +2261,8 @@ export function useExcelUploadPagos({
             moneda_registro,
 
             tasa_cambio_manual,
+
+            institucion_bancaria,
           }
 
           // Validaciones locales inmediatas (fecha, monto; documentos duplicados se validan despues)
@@ -2239,6 +2285,8 @@ export function useExcelUploadPagos({
             prestamo_id: { isValid: true },
 
             conciliado: { isValid: true },
+
+            institucion_bancaria: { isValid: true },
           }
 
           rowData._hasErrors =

@@ -18,7 +18,7 @@
 
 
 
- * Formatos de columnas soportados: D) Cédula | Monto | Fecha | Documento (recomendado);
+ * Formatos (fila 1 = encabezados): opcional columna Banco / institución; D) Cédula | Monto | Fecha | Documento;
 
 
 

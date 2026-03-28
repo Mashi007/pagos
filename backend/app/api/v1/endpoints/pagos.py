@@ -976,6 +976,8 @@ async def upload_excel_pagos(
 
     - Formato D (principal): Cédula | Monto | Fecha | Nº documento
 
+    - Formato E: Banco | Cédula | Fecha | Monto [, Nº documento] (antes que A si col.1 es cédula y col.2 es fecha)
+
     - Formato A: Documento | Cédula | Fecha | Monto
 
     - Formato B: Fecha | Cédula | Monto | Documento
@@ -1104,6 +1106,40 @@ async def upload_excel_pagos(
 
 
 
+        def _celda_parece_banco_excel(v: Any) -> bool:
+
+            """Primera columna tipo nombre de banco (p. ej. BINANCE, BNC), no cédula ni fecha ni referencia larga."""
+
+            if v is None:
+
+                return False
+
+            s = str(v).strip()
+
+            if not s or len(s) > 80:
+
+                return False
+
+            if _looks_like_date(v):
+
+                return False
+
+            if _looks_like_cedula(v):
+
+                return False
+
+            if re.search(r"\d{10,}", s):
+
+                return False
+
+            if len(s) > 28 and re.search(r"\d{4,}", s):
+
+                return False
+
+            return True
+
+
+
         def _extraer_documento_de_fila(row: tuple, col_documento: Optional[int]) -> str:
 
             """Obtiene el valor de documento: primero columna indicada; si vacío, busca en todas las celdas (fallback)."""
@@ -1204,6 +1240,8 @@ async def upload_excel_pagos(
 
                 col_doc: Optional[int] = None
 
+                institucion_bancaria: Optional[str] = None
+
                 # Formato D (PRINCIPAL): Cédula, Monto, Fecha, Nº documento
 
                 if len(row) >= 4 and _looks_like_cedula(row[0]) and row[1] is not None and _looks_like_date(row[2]):
@@ -1241,6 +1279,59 @@ async def upload_excel_pagos(
                     numero_doc = _celda_a_string_documento(row[3]) if len(row) > 3 else ""
 
                     col_doc = 3
+
+                    prestamo_id = None
+
+                # Formato E: Banco, Cédula, Fecha, Monto [, Nº documento]
+
+                elif (
+                    len(row) >= 4
+                    and _celda_parece_banco_excel(row[0])
+                    and _looks_like_cedula(row[1])
+                    and _looks_like_date(row[2])
+                ):
+
+                    _banco_raw = str(row[0]).strip()[:255]
+
+                    institucion_bancaria = _banco_raw or None
+
+                    cedula = str(row[1]).strip()
+
+                    fecha_val = row[2]
+
+                    es_valido, monto, err_msg = _validar_monto(row[3])
+
+
+
+                    if not es_valido and monto != 0.0:
+
+                        errores.append(f'Fila {i + 2} (Formato E - Banco): {err_msg}')
+
+                        pagos_con_error_list.append({
+
+                            "fila_idx": i + 2,
+
+                            "cedula": cedula,
+
+                            "prestamo_id": None,
+
+                            "fecha_val": fecha_val,
+
+                            "monto": monto,
+
+                            "numero_doc": "",
+
+                            "errores": [err_msg],
+
+                            "institucion_bancaria": institucion_bancaria,
+
+                        })
+
+                        continue
+
+                    numero_doc = _celda_a_string_documento(row[4]) if len(row) > 4 else ""
+
+                    col_doc = 4 if len(row) > 4 else None
 
                     prestamo_id = None
 
@@ -1474,6 +1565,8 @@ async def upload_excel_pagos(
 
                     "numero_doc_raw": (numero_doc or "").strip(),
 
+                    "institucion_bancaria": institucion_bancaria,
+
                 })
 
             except Exception as e:
@@ -1541,6 +1634,16 @@ async def upload_excel_pagos(
             monto = item["monto"]
 
             numero_doc = item["numero_doc_raw"]
+
+            ib_carga = item.get("institucion_bancaria")
+
+            if isinstance(ib_carga, str):
+
+                ib_carga = ib_carga.strip()[:255] or None
+
+            else:
+
+                ib_carga = None
 
 
 
@@ -1708,6 +1811,8 @@ async def upload_excel_pagos(
 
                     numero_documento=numero_doc_norm,
 
+                    institucion_bancaria=ib_carga,
+
                     estado="PAGADO" if conciliado else "PENDIENTE",
 
                     referencia_pago=ref_pago,
@@ -1775,6 +1880,16 @@ async def upload_excel_pagos(
                     monto_pagado=pce_data["monto"],
 
                     numero_documento=normalize_documento(pce_data.get("numero_doc")),
+
+                    institucion_bancaria=(
+
+                        None
+
+                        if pce_data.get("institucion_bancaria") in (None, "")
+
+                        else str(pce_data.get("institucion_bancaria")).strip()[:255] or None
+
+                    ),
 
                     estado="PAGADO" if conciliado else "PENDIENTE",
 
