@@ -84,6 +84,7 @@ from app.core.email_config_holder import get_email_activo_servicio
 from app.services.estado_cuenta_datos import (
     desglose_aplicacion_cuotas_por_pago,
     obtener_pago_para_recibo_cuota,
+    texto_institucion_recibo_cuota,
 )
 from app.services.cobros.recibo_pdf import _formato_monto_venezolano
 from app.services.cobros.recibo_pago_cartera_pdf import generar_recibo_pago_cartera_pdf
@@ -400,7 +401,7 @@ def get_recibo_cuota_publico(
 
     if pago:
 
-        institucion = (pago.institucion_bancaria or "N/A")[:100]
+        institucion = texto_institucion_recibo_cuota(db, pago)
 
         numero_operacion = (pago.numero_documento or pago.referencia_pago or referencia)[:100]
 

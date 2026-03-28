@@ -89,21 +89,62 @@ def _fmt_fecha_hora_pago_estado_cuenta(dt) -> str:
 def obtener_pago_para_recibo_cuota(db: Session, cuota: Cuota) -> Optional[Pago]:
     """
     Pago con el que enriquecer el recibo de cuota (banco, operacion, fechas).
-    Prioriza cuota.pago_id; si falta, el ultimo registro en cuota_pagos para esa cuota.
+    Reune cuota.pago_id y todos los pagos enlazados en cuota_pagos (deduplicados).
+    Prefiere un Pago con institucion_bancaria no vacia para alinear con la tabla de pagos del estado de cuenta.
     """
+    seen: set[int] = set()
+    ordered: List[Pago] = []
+
     pid = getattr(cuota, "pago_id", None)
     if pid:
         p = db.get(Pago, pid)
-        if p:
-            return p
-    row = db.execute(
+        if p is not None and p.id not in seen:
+            seen.add(p.id)
+            ordered.append(p)
+
+    for p in db.execute(
         select(Pago)
         .join(CuotaPago, CuotaPago.pago_id == Pago.id)
         .where(CuotaPago.cuota_id == cuota.id)
         .order_by(CuotaPago.id.desc())
-        .limit(1)
-    ).scalar_one_or_none()
-    return row
+    ).scalars().all():
+        if p.id not in seen:
+            seen.add(p.id)
+            ordered.append(p)
+
+    for cand in ordered:
+        if (getattr(cand, "institucion_bancaria", None) or "").strip():
+            return cand
+    return ordered[0] if ordered else None
+
+
+def texto_institucion_recibo_cuota(db: Session, pago: Optional[Pago]) -> str:
+    """
+    Texto de banco para el PDF: columna pagos.institucion_bancaria, o pagos_reportados.institucion_financiera
+    si numero_documento/referencia_pago es COB-{referencia_interna} y la columna del pago viene vacia.
+    """
+    if pago is None:
+        return "N/A"
+    ib = (getattr(pago, "institucion_bancaria", None) or "").strip()
+    if ib:
+        return ib[:100]
+    for raw in (getattr(pago, "numero_documento", None), getattr(pago, "referencia_pago", None)):
+        doc = (raw or "").strip()
+        up = doc.upper()
+        if not up.startswith("COB-"):
+            continue
+        ref = doc[4:].strip()
+        if not ref:
+            continue
+        fin = db.execute(
+            select(PagoReportado.institucion_financiera)
+            .where(PagoReportado.referencia_interna == ref)
+            .limit(1)
+        ).scalar_one_or_none()
+        s = (fin or "").strip() if fin is not None else ""
+        if s:
+            return s[:100]
+    return "N/A"
 
 
 def _prestamo_cuota_recibo_desde_pago(db: Session, pago_id: int):

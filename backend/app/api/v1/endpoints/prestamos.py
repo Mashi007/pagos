@@ -77,7 +77,7 @@ from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdat
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
-from app.services.estado_cuenta_datos import obtener_pago_para_recibo_cuota
+from app.services.estado_cuenta_datos import obtener_pago_para_recibo_cuota, texto_institucion_recibo_cuota
 from app.services.pagos_cuotas_reaplicacion import (
     integridad_cuotas_prestamo,
     reset_y_reaplicar_cascada_prestamo,
@@ -2005,7 +2005,7 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
     if pago:
 
-        institucion = (pago.institucion_bancaria or "N/A")[:100]
+        institucion = texto_institucion_recibo_cuota(db, pago)
 
         numero_operacion = (pago.numero_documento or pago.referencia_pago or referencia)[:100]
 
