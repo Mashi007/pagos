@@ -4324,28 +4324,6 @@ def crear_pagos_batch(
 
             existing_docs.update({r for r in rows_pe if r})
 
-        # Preload: ids de préstamos válidos (una sola consulta)
-
-        prestamo_ids = [p.prestamo_id for p in pagos_list if p.prestamo_id]
-
-        valid_prestamo_ids: set[int] = set()
-
-        if prestamo_ids:
-
-            ids_rows = db.execute(select(Prestamo.id).where(Prestamo.id.in_(prestamo_ids))).scalars().all()
-
-            valid_prestamo_ids = {r for r in ids_rows if r is not None}
-        prestamo_estado_por_id: dict[int, str] = {}
-
-        if prestamo_ids:
-
-            er_rows = db.execute(select(Prestamo.id, Prestamo.estado).where(Prestamo.id.in_(prestamo_ids))).all()
-
-            prestamo_estado_por_id = {int(r[0]): (r[1] or "") for r in er_rows if r[0] is not None}
-
-
-        # Preload: cédulas que tienen al menos un préstamo (normalizadas)
-
         cedulas_payload = list(
 
             {
@@ -4360,6 +4338,67 @@ def crear_pagos_batch(
 
         )
 
+        # Preload: ids de préstamos válidos (una sola consulta)
+
+        prestamo_ids = [p.prestamo_id for p in pagos_list if p.prestamo_id]
+
+        pc_prest = func.upper(func.replace(Prestamo.cedula, "-", ""))
+
+        prestamos_activos_por_cedula: dict[str, list[int]] = {}
+
+        if cedulas_payload:
+
+            rows_act = db.execute(
+
+                select(Prestamo.id, pc_prest)
+
+                .where(pc_prest.in_(cedulas_payload))
+
+                .where(Prestamo.estado.in_(("APROBADO", "DESEMBOLSADO")))
+
+            ).all()
+
+            for pid, ccell in rows_act:
+
+                if pid is None:
+
+                    continue
+
+                ck = (str(ccell) if ccell is not None else "").strip().replace("-", "").upper()
+
+                if ck:
+
+                    prestamos_activos_por_cedula.setdefault(ck, []).append(int(pid))
+
+            for _ck in prestamos_activos_por_cedula:
+
+                prestamos_activos_por_cedula[_ck] = sorted(set(prestamos_activos_por_cedula[_ck]))
+
+        all_pids_batch: set[int] = set(int(x) for x in prestamo_ids if x is not None)
+
+        for _ids in prestamos_activos_por_cedula.values():
+
+            all_pids_batch.update(_ids)
+
+        valid_prestamo_ids: set[int] = set()
+
+        if all_pids_batch:
+
+            ids_rows = db.execute(select(Prestamo.id).where(Prestamo.id.in_(all_pids_batch))).scalars().all()
+
+            valid_prestamo_ids = {int(r) for r in ids_rows if r is not None}
+
+        prestamo_estado_por_id: dict[int, str] = {}
+
+        if all_pids_batch:
+
+            er_rows = db.execute(select(Prestamo.id, Prestamo.estado).where(Prestamo.id.in_(all_pids_batch))).all()
+
+            prestamo_estado_por_id = {int(r[0]): (r[1] or "") for r in er_rows if r[0] is not None}
+
+
+        # Preload: cédulas que tienen al menos un préstamo (normalizadas)
+
         valid_cedulas_prestamo: set[str] = set()
 
         if cedulas_payload:
@@ -4370,9 +4409,7 @@ def crear_pagos_batch(
 
             valid_cedulas_prestamo = {(r or "").strip().replace("-", "").upper() for r in ced_rows if r}
 
-        # Compat: cliente existe cuando el payload trae prestamo_id explícito
-
-        cedulas_con_prestamo = list(
+        todas_cedulas_upper = list(
 
             {
 
@@ -4380,7 +4417,7 @@ def crear_pagos_batch(
 
                 for p in pagos_list
 
-                if (p.cedula_cliente or "").strip() and p.prestamo_id
+                if (p.cedula_cliente or "").strip()
 
             }
 
@@ -4388,11 +4425,11 @@ def crear_pagos_batch(
 
         valid_cedulas: set[str] = set()
 
-        if cedulas_con_prestamo:
+        if todas_cedulas_upper:
 
             ced_rows_c = db.execute(
 
-                select(Cliente.cedula).where(func.upper(Cliente.cedula).in_(cedulas_con_prestamo))
+                select(Cliente.cedula).where(func.upper(Cliente.cedula).in_(todas_cedulas_upper))
 
             ).scalars().all()
 
@@ -4401,6 +4438,8 @@ def crear_pagos_batch(
         # Fase 1: validacion (sin insertar). Errores por indice; las filas validas se insertan en fase 2.
 
         errors_by_index: dict[int, dict] = {}
+
+        resolved_prestamo_id_by_index: dict[int, int] = {}
 
         docs_added_in_batch: set[str] = set()
 
@@ -4434,13 +4473,63 @@ def crear_pagos_batch(
 
                 continue
 
-            if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
+            activos_ced = prestamos_activos_por_cedula.get(ced_norm_prest, [])
 
-                errors_by_index[idx] = {"error": f"Credito #{payload.prestamo_id} no existe.", "status_code": 400}
+            effective_prestamo_id: Optional[int] = None
+
+            raw_pid = getattr(payload, "prestamo_id", None)
+
+            if raw_pid is not None and int(raw_pid) > 0:
+
+                effective_prestamo_id = int(raw_pid)
+
+            elif len(activos_ced) == 1:
+
+                effective_prestamo_id = activos_ced[0]
+
+            elif len(activos_ced) == 0:
+
+                errors_by_index[idx] = {
+
+                    "error": (
+
+                        f"Sin credito activo (APROBADO/DESEMBOLSADO) para {cedula_normalizada}; "
+
+                        "indique prestamo_id o asocie un credito."
+
+                    ),
+
+                    "status_code": 400,
+
+                }
 
                 continue
 
-            if payload.prestamo_id and (prestamo_estado_por_id.get(payload.prestamo_id) or "").strip().upper() == "DESISTIMIENTO":
+            else:
+
+                errors_by_index[idx] = {
+
+                    "error": (
+
+                        f"La cedula {cedula_normalizada} tiene varios creditos activos; "
+
+                        "elija prestamo_id en la columna Credito (obligatorio en lote)."
+
+                    ),
+
+                    "status_code": 400,
+
+                }
+
+                continue
+
+            if effective_prestamo_id not in valid_prestamo_ids:
+
+                errors_by_index[idx] = {"error": f"Credito #{effective_prestamo_id} no existe.", "status_code": 400}
+
+                continue
+
+            if (prestamo_estado_por_id.get(effective_prestamo_id) or "").strip().upper() == "DESISTIMIENTO":
 
                 errors_by_index[idx] = {
 
@@ -4452,11 +4541,13 @@ def crear_pagos_batch(
 
                 continue
 
-            if cedula_normalizada and payload.prestamo_id and cedula_normalizada not in valid_cedulas:
+            if cedula_normalizada and cedula_normalizada not in valid_cedulas:
 
                 errors_by_index[idx] = {"error": f"No existe cliente con cedula {cedula_normalizada}", "status_code": 404}
 
                 continue
+
+            resolved_prestamo_id_by_index[idx] = effective_prestamo_id
 
             if num_doc:
 
@@ -4524,7 +4615,13 @@ def crear_pagos_batch(
 
                 fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
 
-                conciliado = payload.conciliado if payload.conciliado is not None else (True if payload.prestamo_id else False)
+                _pid_res = resolved_prestamo_id_by_index.get(idx)
+
+                if _pid_res is None:
+
+                    raise HTTPException(status_code=500, detail=f"Lote fila {idx + 1}: falta prestamo_id resuelto (error interno).")
+
+                conciliado = payload.conciliado if payload.conciliado is not None else True
 
                 cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
 
@@ -4564,7 +4661,7 @@ def crear_pagos_batch(
 
                     cedula_cliente=cedula_normalizada,
 
-                    prestamo_id=payload.prestamo_id,
+                    prestamo_id=_pid_res,
 
                     fecha_pago=fecha_pago_ts,
 
