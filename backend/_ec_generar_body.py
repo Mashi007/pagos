@@ -1,45 +1,3 @@
-"""
-PDF de estado de cuenta (ReportLab).
-
-Datos canonicos: app.services.estado_cuenta_datos (ver backend/docs/ESTADO_CUENTA_FUENTE_UNICA.md).
-"""
-
-import io
-import logging
-
-from datetime import date
-
-from pathlib import Path
-
-from typing import List, Optional
-
-from app.services.cuota_estado import etiqueta_estado_cuota
-
-logger = logging.getLogger(__name__)
-
-
-# Ruta al logo: backend/static/logo.png (desde app/services/ subimos a backend)
-
-_LOGO_PATH = Path(__file__).resolve().parent.parent.parent / "static" / "logo.png"
-
-
-
-# Paleta documento (legible en impresion y pantalla)
-
-COLOR_HEADER = "#0c2444"
-
-COLOR_ACCENT = "#b8942e"
-
-COLOR_HEADER_BG = "#0f2d52"
-
-COLOR_ROW_ALT = "#f1f5f9"
-
-COLOR_BORDER = "#cbd5e1"
-
-COLOR_TEXT_MUTED = "#64748b"
-
-COLOR_SURFACE = "#f8fafc"
-
 def generar_pdf_estado_cuenta(
     cedula: str,
     nombre: str,
@@ -255,16 +213,17 @@ def generar_pdf_estado_cuenta(
         total_usd = 0.0
         for pr in pagos_realizados:
             total_usd += float(pr.get("subtotal_usd") or 0)
-            pago_row_id = pr.get("pago_id")
-            puede_rec = bool(pago_row_id and base_url and recibo_token)
-            if puede_rec:
-                url_r = f"{base_url}/api/v1/estado-cuenta/public/recibo-pago?token={recibo_token}&pago_id={pago_row_id}"
+            pid = pr.get("recibo_prestamo_id")
+            cid = pr.get("recibo_cuota_id")
+            puede = bool(pid and cid and base_url and recibo_token)
+            if puede:
+                url_r = f"{base_url}/api/v1/estado-cuenta/public/recibo-cuota?token={recibo_token}&prestamo_id={pid}&cuota_id={cid}"
                 rec_cell = Paragraph(
                     f'<a href="{url_r}" color="{COLOR_ACCENT}">Ver recibo</a>',
                     styles["EC_Link"],
                 )
             else:
-                rec_cell = Paragraph('<font color="#94a3b8">-</font>', styles["EC_Link"])
+                rec_cell = Paragraph('<font color="#94a3b8">—</font>', styles["EC_Link"])
             rows_p.append(
                 [
                     str(pr.get("banco") or "no disponible")[:28],
@@ -478,32 +437,3 @@ def generar_pdf_estado_cuenta(
 
     doc.build(story)
     return buf.getvalue()
-
-
-# Re-export: datos canonicos viven en estado_cuenta_datos (compatibilidad imports historicos).
-from app.services.estado_cuenta_datos import (  # noqa: E402
-    ESTADOS_PRESTAMO_TABLA_AMORTIZACION,
-    obtener_datos_estado_cuenta_cliente,
-    obtener_datos_estado_cuenta_prestamo,
-    obtener_recibos_cliente_estado_cuenta,
-    prestamo_muestra_tabla_amortizacion,
-    serializar_estado_cuenta_payload_json,
-)
-
-__all__ = [
-    "COLOR_ACCENT",
-    "COLOR_BORDER",
-    "COLOR_HEADER",
-    "COLOR_HEADER_BG",
-    "COLOR_ROW_ALT",
-    "COLOR_SURFACE",
-    "COLOR_TEXT_MUTED",
-    "ESTADOS_PRESTAMO_TABLA_AMORTIZACION",
-    "generar_pdf_estado_cuenta",
-    "obtener_datos_estado_cuenta_cliente",
-    "obtener_datos_estado_cuenta_prestamo",
-    "obtener_recibos_cliente_estado_cuenta",
-    "prestamo_muestra_tabla_amortizacion",
-    "serializar_estado_cuenta_payload_json",
-]
-

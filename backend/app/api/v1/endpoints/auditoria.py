@@ -16,6 +16,11 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.auditoria import Auditoria
+from app.services.prestamo_cartera_auditoria import (
+    ejecutar_auditoria_cartera,
+    leer_meta_ejecucion,
+    persistir_meta_ejecucion,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -240,6 +245,91 @@ def exportar_auditoria(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=auditoria.xlsx"},
     )
+
+
+class ControlCarteraItem(BaseModel):
+    codigo: str
+    titulo: str
+    alerta: str
+    detalle: str
+
+
+class PrestamoCarteraChequeoItem(BaseModel):
+    prestamo_id: int
+    cliente_id: int
+    cedula: str
+    nombres: str
+    estado_prestamo: str
+    cliente_email: str
+    tiene_alerta: bool
+    controles: List[ControlCarteraItem]
+
+
+class PrestamoCarteraChequeoResponse(BaseModel):
+    items: List[PrestamoCarteraChequeoItem]
+    resumen: dict
+    meta_ultima_corrida: dict
+
+
+@router.get("/prestamos/cartera/meta")
+def meta_auditoria_cartera(db: Session = Depends(get_db)):
+    """Ultima corrida automatica (03:00) y totales guardados en configuracion."""
+    return leer_meta_ejecucion(db)
+
+
+@router.get("/prestamos/cartera/chequeos", response_model=PrestamoCarteraChequeoResponse)
+def listar_chequeos_cartera(
+    solo_alertas: bool = Query(True, description="Si false, incluye prestamos sin alerta (puede ser pesado)."),
+    db: Session = Depends(get_db),
+):
+    """
+    Revision de cartera en tiempo real desde tablas prestamos, clientes, cuotas, pagos, cuota_pagos.
+    Cada control devuelve alerta SI/NO (SI = revisar por un humano).
+    """
+    rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=solo_alertas)
+    meta = leer_meta_ejecucion(db)
+    items = [
+        PrestamoCarteraChequeoItem(
+            prestamo_id=r["prestamo_id"],
+            cliente_id=r["cliente_id"],
+            cedula=r["cedula"],
+            nombres=r["nombres"],
+            estado_prestamo=r["estado_prestamo"],
+            cliente_email=r["cliente_email"],
+            tiene_alerta=r["tiene_alerta"],
+            controles=[ControlCarteraItem(**c) for c in r["controles"]],
+        )
+        for r in rows
+    ]
+    return PrestamoCarteraChequeoResponse(items=items, resumen=resumen, meta_ultima_corrida=meta)
+
+
+@router.post("/prestamos/cartera/ejecutar", response_model=PrestamoCarteraChequeoResponse)
+def ejecutar_y_persistir_auditoria_cartera(
+    solo_alertas: bool = Query(True),
+    db: Session = Depends(get_db),
+):
+    """Recalcula toda la cartera, persiste metadatos de ejecucion y devuelve el mismo cuerpo que GET chequeos."""
+    rows_full, resumen_full = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
+    con_alerta = int(resumen_full.get("prestamos_con_alerta") or 0)
+    total_ev = int(resumen_full.get("prestamos_evaluados") or 0)
+    persistir_meta_ejecucion(db, total_evaluados=total_ev, con_alerta=con_alerta, commit=True)
+    rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=solo_alertas)
+    meta = leer_meta_ejecucion(db)
+    items = [
+        PrestamoCarteraChequeoItem(
+            prestamo_id=r["prestamo_id"],
+            cliente_id=r["cliente_id"],
+            cedula=r["cedula"],
+            nombres=r["nombres"],
+            estado_prestamo=r["estado_prestamo"],
+            cliente_email=r["cliente_email"],
+            tiene_alerta=r["tiene_alerta"],
+            controles=[ControlCarteraItem(**c) for c in r["controles"]],
+        )
+        for r in rows
+    ]
+    return PrestamoCarteraChequeoResponse(items=items, resumen=resumen, meta_ultima_corrida=meta)
 
 
 @router.get("/{auditoria_id}", response_model=AuditoriaItem)

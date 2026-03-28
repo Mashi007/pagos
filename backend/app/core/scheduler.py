@@ -11,6 +11,7 @@ ActualizaciÃ³n periÃ³dica de informes y reportes:
 - 16:30  Informe de pagos por email.
 - * cada 15 min (:00,:15,:30,:45)  Envio automatico por hora configurada (programador en notificaciones_envios; America/Caracas).
 - 01:10  Emails credito liquidado: PDF estado de cuenta (dias 1 y 2 despues de fecha_liquidado; America/Caracas).
+- 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 02:00  Finiquito: refrescar tabla finiquito_casos (total_financiamiento = sum cuotas.total_pagado exacto).
 
 Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
@@ -175,6 +176,36 @@ def _job_finiquito_refresh() -> None:
         db.close()
 
 
+
+
+def _job_auditoria_cartera_prestamos() -> None:
+    """Job 03:00. Evalua prestamos (cartera) y persiste metadatos en configuracion (ultima ejecucion)."""
+    db = SessionLocal()
+    try:
+        from app.services.prestamo_cartera_auditoria import ejecutar_auditoria_cartera, persistir_meta_ejecucion
+
+        _rows, resumen = ejecutar_auditoria_cartera(db, solo_con_alerta=False)
+        persistir_meta_ejecucion(
+            db,
+            total_evaluados=int(resumen.get("prestamos_evaluados") or 0),
+            con_alerta=int(resumen.get("prestamos_con_alerta") or 0),
+            commit=True,
+        )
+        logger.info(
+            "Auditoria cartera prestamos: evaluados=%s con_alerta=%s",
+            resumen.get("prestamos_evaluados"),
+            resumen.get("prestamos_con_alerta"),
+        )
+    except Exception as e:
+        logger.exception("Error en job auditoria_cartera_prestamos: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 def _job_limpiar_estado_cuenta_codigos() -> None:
     """Job 4:00. Borra cÃ³digos de estado de cuenta expirados o usados hace mÃ¡s de 24 h."""
     db = SessionLocal()
@@ -255,6 +286,13 @@ def start_scheduler() -> None:
         CronTrigger(hour=2, minute=0, timezone=SCHEDULER_TZ),
         id="finiquito_refresh_0200",
         name="Finiquito: refrescar casos 02:00",
+    )
+
+    _scheduler.add_job(
+        _job_auditoria_cartera_prestamos,
+        CronTrigger(hour=3, minute=0, timezone=SCHEDULER_TZ),
+        id="auditoria_cartera_prestamos_0300",
+        name="Auditoria cartera prestamos 03:00",
     )
     # 1:00 y 13:00 - Reportes cobranzas (actualizaciÃ³n automÃ¡tica de informes)
     _scheduler.add_job(

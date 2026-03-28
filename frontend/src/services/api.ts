@@ -793,6 +793,7 @@ class ApiClient {
       url.includes('/ml-riesgo/modelos') ||
       url.includes('/ai/training/') ||
       url.includes('/cobranzas/') ||
+      url.includes('/auditoria/prestamos/cartera') ||
       url.includes('/pagos/kpis') ||
       url.includes('/pagos/stats') ||
       url.includes('/revision-manual/') || // Render cold start + consulta pesada

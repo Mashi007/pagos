@@ -145,6 +145,8 @@ import EmbudoConcesionarios from './pages/EmbudoConcesionarios'
 
 import RevisionManual from './pages/RevisionManual'
 
+import Auditoria from './pages/Auditoria'
+
 import EditarRevisionManual from './pages/EditarRevisionManual'
 
 // Ventas: en pausa (ruta redirige a /pagos)
@@ -397,6 +399,8 @@ function App() {
               path="revision-manual/editar/:prestamoId"
               element={<EditarRevisionManual />}
             />
+
+            <Route path="auditoria" element={<Auditoria />} />
 
             {/* Notificaciones (dentro de CRM en sidebar) */}
 

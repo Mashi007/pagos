@@ -80,6 +80,30 @@ export interface AuditoriaFilters {
   orden?: string
 }
 
+export interface ControlCartera {
+  codigo: string
+  titulo: string
+  alerta: 'SI' | 'NO'
+  detalle: string
+}
+
+export interface PrestamoCarteraChequeo {
+  prestamo_id: number
+  cliente_id: number
+  cedula: string
+  nombres: string
+  estado_prestamo: string
+  cliente_email: string
+  tiene_alerta: boolean
+  controles: ControlCartera[]
+}
+
+export interface PrestamoCarteraChequeoResponse {
+  items: PrestamoCarteraChequeo[]
+  resumen: Record<string, unknown>
+  meta_ultima_corrida: Record<string, unknown>
+}
+
 class AuditoriaService {
   private baseUrl = '/api/v1/auditoria'
 
@@ -209,6 +233,32 @@ class AuditoriaService {
     )
 
     return response
+  }
+
+  async metaCartera(): Promise<Record<string, unknown>> {
+    const response = await apiClient.get<Record<string, unknown>>(
+      `${this.baseUrl}/prestamos/cartera/meta`
+    )
+    return response
+  }
+
+  async listarCarteraChequeos(
+    soloAlertas = true
+  ): Promise<PrestamoCarteraChequeoResponse> {
+    return apiClient.get<PrestamoCarteraChequeoResponse>(
+      `${this.baseUrl}/prestamos/cartera/chequeos`,
+      { params: { solo_alertas: soloAlertas } }
+    )
+  }
+
+  async ejecutarCartera(
+    soloAlertas = true
+  ): Promise<PrestamoCarteraChequeoResponse> {
+    return apiClient.post<PrestamoCarteraChequeoResponse>(
+      `${this.baseUrl}/prestamos/cartera/ejecutar`,
+      undefined,
+      { params: { solo_alertas: soloAlertas } }
+    )
   }
 
   // Descargar archivo Excel

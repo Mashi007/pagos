@@ -223,6 +223,14 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
 
     {
+      title: 'Auditoría',
+
+      href: '/auditoria',
+
+      icon: Shield,
+    },
+
+    {
       title: 'Cobros',
 
       icon: DollarSign,

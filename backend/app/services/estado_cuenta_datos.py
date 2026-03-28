@@ -104,7 +104,38 @@ def _prestamo_cuota_recibo_desde_pago(db: Session, pago_id: int):
     ).first()
     if row:
         return int(row[0]), int(row[1])
-    return None
+
+
+
+def desglose_aplicacion_cuotas_por_pago(db: Session, pago_id: int) -> List[dict]:
+    """CuotaPago por pago: monto aplicado a cada cuota vs monto de cuota (pago total puede ser mayor)."""
+    rows = db.execute(
+        select(Cuota, CuotaPago.monto_aplicado)
+        .join(CuotaPago, CuotaPago.cuota_id == Cuota.id)
+        .where(CuotaPago.pago_id == pago_id)
+        .order_by(Cuota.numero_cuota.asc())
+    ).all()
+    out: List[dict] = []
+    for row in rows:
+        c = row[0]
+        apl_raw = row[1]
+        m_cuota = float(getattr(c, "monto", 0) or 0)
+        apl = float(apl_raw or 0)
+        pct_n = (apl / m_cuota * 100.0) if m_cuota > 0.0001 else 0.0
+        if abs(pct_n - round(pct_n)) < 0.051:
+            pct_str = f"{int(round(pct_n))}%"
+        else:
+            pct_str = f"{pct_n:.1f}%".replace(".", ",")
+        out.append(
+            {
+                "numero_cuota": int(getattr(c, "numero_cuota", 0) or 0),
+                "monto_cuota": m_cuota,
+                "monto_aplicado": apl,
+                "porcentaje_cuota": pct_str,
+            }
+        )
+    return out
+
 
 
 def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) -> List[dict]:
@@ -152,6 +183,11 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
         else:
             rp = int(prestamo_id) if prestamo_id is not None else None
             rc = None
+        doc = (getattr(pg, "numero_documento", None) or "").strip()
+        refp = (getattr(pg, "referencia_pago", None) or "").strip()
+        referencia_tabla = (doc or refp or f"Pago #{pago_id}")[:32]
+        cedula_comprobante = (getattr(pg, "cedula_cliente", None) or "").strip() or "-"
+        aplicacion_cuotas = desglose_aplicacion_cuotas_por_pago(db, pago_id)
         resultado.append(
             {
                 "pago_id": pago_id,
@@ -165,6 +201,11 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
                 "es_bs": es_bs,
                 "recibo_prestamo_id": rp,
                 "recibo_cuota_id": rc,
+                "referencia_tabla": referencia_tabla,
+                "numero_documento": doc or None,
+                "referencia_pago": refp or None,
+                "cedula_comprobante": cedula_comprobante,
+                "aplicacion_cuotas": aplicacion_cuotas,
             }
         )
     return resultado
