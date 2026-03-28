@@ -6,15 +6,16 @@ import logging
 import threading
 import time
 from collections import Counter
-from datetime import date, datetime, time as dt_time
+from datetime import date, datetime, time as dt_time, timedelta
+from zoneinfo import ZoneInfo
 from decimal import Decimal
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Tuple, Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, and_, case, delete
+from sqlalchemy import select, func, or_, and_, case, delete, text
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
 from app.core.database import get_db
@@ -117,6 +118,23 @@ class AprobarRechazarBody(BaseModel):
 
 class MarcarExportadosBody(BaseModel):
     pago_reportado_ids: Optional[List[int]] = None
+
+
+class TendenciaFalloGeminiPunto(BaseModel):
+    fecha: str
+    fallos_no: int
+    verificados_gemini: int
+    pct_fallo: Optional[float] = None
+
+
+class TendenciaFallosGeminiResponse(BaseModel):
+    puntos: List[TendenciaFalloGeminiPunto]
+    fecha_desde: str
+    fecha_hasta: str
+    dias: int
+    zona: str = "America/Caracas"
+    nota: str
+
 
 # Mensaje genérico al rechazar: indicar que se comuniquen por WhatsApp (424-4579934)
 MENSAJE_RECHAZO_GENERICO = (
@@ -703,6 +721,81 @@ def list_pagos_reportados_y_kpis(
         institucion=institucion,
     )
     return {**lista, "kpis": kpis}
+
+
+@router.get(
+    "/pagos-reportados/tendencia-fallos-gemini",
+    response_model=TendenciaFallosGeminiResponse,
+)
+def tendencia_fallos_gemini_por_dia(
+    db: Session = Depends(get_db),
+    dias: int = Query(
+        90,
+        ge=7,
+        le=366,
+        description="Ventana hacia atras en dias calendario (zona Caracas).",
+    ),
+):
+    """
+    Serie diaria por fecha de creacion del reporte: fallos cuando la verificacion automatica
+    respondio NO (gemini_coincide_exacto = false), frente al total con respuesta true/false ese dia.
+    """
+    tz = ZoneInfo("America/Caracas")
+    hoy = datetime.now(tz).date()
+    desde = hoy - timedelta(days=dias - 1)
+
+    rows = db.execute(
+        text(
+            """
+            SELECT CAST(created_at AS date) AS dia,
+              COUNT(*) FILTER (
+                WHERE LOWER(TRIM(COALESCE(gemini_coincide_exacto, ''))) = 'false'
+              )::int AS fallos_no,
+              COUNT(*) FILTER (
+                WHERE LOWER(TRIM(COALESCE(gemini_coincide_exacto, ''))) IN ('true', 'false')
+              )::int AS verificados_gemini
+            FROM pagos_reportados
+            WHERE CAST(created_at AS date) >= :desde
+            GROUP BY 1
+            ORDER BY 1
+            """
+        ),
+        {"desde": desde},
+    ).mappings().all()
+
+    by_day: Dict[date, Tuple[int, int]] = {
+        r["dia"]: (int(r["fallos_no"]), int(r["verificados_gemini"])) for r in rows
+    }
+
+    puntos: List[TendenciaFalloGeminiPunto] = []
+    d = desde
+    while d <= hoy:
+        fallos_no, verif = by_day.get(d, (0, 0))
+        pct: Optional[float] = None
+        if verif > 0:
+            pct = round(100.0 * fallos_no / verif, 1)
+        puntos.append(
+            TendenciaFalloGeminiPunto(
+                fecha=d.isoformat(),
+                fallos_no=fallos_no,
+                verificados_gemini=verif,
+                pct_fallo=pct,
+            )
+        )
+        d += timedelta(days=1)
+
+    return TendenciaFallosGeminiResponse(
+        puntos=puntos,
+        fecha_desde=desde.isoformat(),
+        fecha_hasta=hoy.isoformat(),
+        dias=dias,
+        zona="America/Caracas",
+        nota=(
+            "Fallos (NO): gemini_coincide_exacto = false. "
+            "Verificados: respuesta true o false (sin null/vacio). "
+            "Agrupado por dia de creacion del reporte (BD)."
+        ),
+    )
 
 
 @router.get("/pagos-reportados/exportar-aprobados-excel")

@@ -4,7 +4,7 @@ import { Check, Loader2, RefreshCw } from 'lucide-react'
 
 import { Button } from '../ui/button'
 
-import { Card, CardContent } from '../ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 
 import { Input } from '../ui/input'
 
@@ -22,6 +22,14 @@ import {
 } from '../ui/table'
 
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select'
+
+import {
   auditoriaService,
   PrestamoCarteraChequeo,
 } from '../../services/auditoriaService'
@@ -29,6 +37,11 @@ import {
 import { toast } from 'sonner'
 
 import { Link } from 'react-router-dom'
+
+import {
+  AUDITORIA_CARTERA_CONTROLES_CATALOGO,
+  numeroControlAuditoriaCartera,
+} from './auditoriaCarteraControlesCatalogo'
 
 function controlDismissKey(prestamoId: number, codigo: string) {
   return `${prestamoId}:${codigo}`
@@ -52,6 +65,9 @@ export function AuditoriaCarteraTab() {
 
   const [cedulaFiltro, setCedulaFiltro] = useState('')
 
+  /** '' = todos los controles; si no, solo prestamos con alerta SI en ese codigo. */
+  const [filtroControlCodigo, setFiltroControlCodigo] = useState('')
+
   const cargar = useCallback(async () => {
     try {
       setLoading(true)
@@ -65,6 +81,8 @@ export function AuditoriaCarteraTab() {
       setDismissed({})
 
       setCedulaFiltro('')
+
+      setFiltroControlCodigo('')
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
@@ -99,6 +117,8 @@ export function AuditoriaCarteraTab() {
 
       setCedulaFiltro('')
 
+      setFiltroControlCodigo('')
+
       toast.success('Auditoria ejecutada y metadatos actualizados')
     } catch (e: unknown) {
       const msg =
@@ -125,13 +145,34 @@ export function AuditoriaCarteraTab() {
 
   const cedulaFiltroNorm = normalizarCedulaBusqueda(cedulaFiltro)
 
-  const displayRows = useMemo(() => {
+  const conteosPorControlCodigo = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const row of visibleRows) {
+      for (const c of row.controles) {
+        const k = c.codigo
+        m[k] = (m[k] || 0) + 1
+      }
+    }
+    return m
+  }, [visibleRows])
+
+  const filasTrasCedula = useMemo(() => {
     if (!cedulaFiltroNorm) return visibleRows
     return visibleRows.filter(row => {
       const c = normalizarCedulaBusqueda(row.cedula || '')
       return c.includes(cedulaFiltroNorm)
     })
   }, [visibleRows, cedulaFiltroNorm])
+
+  const displayRows = useMemo(() => {
+    if (!filtroControlCodigo) return filasTrasCedula
+    return filasTrasCedula
+      .filter(row => row.controles.some(c => c.codigo === filtroControlCodigo))
+      .map(row => ({
+        ...row,
+        controles: row.controles.filter(c => c.codigo === filtroControlCodigo),
+      }))
+  }, [filasTrasCedula, filtroControlCodigo])
 
   const marcarControlOk = (prestamoId: number, codigo: string) => {
     const k = controlDismissKey(prestamoId, codigo)
@@ -167,24 +208,80 @@ export function AuditoriaCarteraTab() {
         </Button>
 
         {hayAlertas && !loading ? (
-          <div className="flex w-full min-w-[200px] max-w-sm flex-col gap-1 sm:w-auto">
-            <Label
-              htmlFor="auditoria-cedula-filtro"
-              className="text-xs text-gray-600"
-            >
-              Filtrar por cedula
-            </Label>
+          <>
+            <div className="flex w-full min-w-[200px] max-w-sm flex-col gap-1 sm:w-auto">
+              <Label
+                htmlFor="auditoria-cedula-filtro"
+                className="text-xs text-gray-600"
+              >
+                Filtrar por cedula
+              </Label>
 
-            <Input
-              id="auditoria-cedula-filtro"
-              type="search"
-              placeholder="Ej. V12345678"
-              value={cedulaFiltro}
-              onChange={e => setCedulaFiltro(e.target.value)}
-              autoComplete="off"
-              className="h-9"
-            />
-          </div>
+              <Input
+                id="auditoria-cedula-filtro"
+                type="search"
+                placeholder="Ej. V12345678"
+                value={cedulaFiltro}
+                onChange={e => setCedulaFiltro(e.target.value)}
+                autoComplete="off"
+                className="h-9"
+              />
+            </div>
+
+            <div className="flex w-full min-w-[240px] max-w-xl flex-col gap-1 sm:w-auto">
+              <Label
+                htmlFor="auditoria-control-filtro"
+                className="text-xs text-gray-600"
+              >
+                Filtrar por control
+              </Label>
+
+              <Select
+                value={filtroControlCodigo || '__todos__'}
+                onValueChange={v =>
+                  setFiltroControlCodigo(v === '__todos__' ? '' : v)
+                }
+              >
+                <SelectTrigger
+                  id="auditoria-control-filtro"
+                  className="h-9 w-full"
+                >
+                  <SelectValue placeholder="Todos los controles" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="__todos__">
+                    Todos los controles (cualquier alerta)
+                  </SelectItem>
+
+                  {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => {
+                    const cnt = conteosPorControlCodigo[def.codigo] ?? 0
+
+                    return (
+                      <SelectItem
+                        key={def.codigo}
+                        value={def.codigo}
+                        title={def.titulo}
+                      >
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {def.n}.
+                        </span>{' '}
+                        {def.titulo}
+                        {cnt > 0 ? (
+                          <span className="text-muted-foreground">
+                            {' '}
+                            ({cnt})
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground"> (0)</span>
+                        )}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
         ) : null}
 
         {hayAlertas && resumen ? (
@@ -211,6 +308,45 @@ export function AuditoriaCarteraTab() {
           </span>
         ) : null}
       </div>
+
+      {hayAlertas && !loading ? (
+        <Card className="border-slate-200 bg-slate-50/80">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-slate-800">
+              Controles numerados (mismo orden que la auditoria en servidor)
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent>
+            <p className="mb-3 text-xs text-slate-600">
+              Use el desplegable <strong>Filtrar por control</strong> arriba: al
+              elegir el control N, solo verá los préstamos que tienen alerta{' '}
+              <strong>SI</strong> en esa regla. Con <strong>Todos</strong> se
+              muestran todas las alertas de cada préstamo.
+            </p>
+
+            <ol className="list-decimal space-y-1.5 pl-5 text-sm text-slate-800">
+              {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => (
+                <li key={def.codigo}>
+                  <span className="font-medium">{def.titulo}</span>
+                  {conteosPorControlCodigo[def.codigo] ? (
+                    <span className="text-muted-foreground">
+                      {' '}
+                      — {conteosPorControlCodigo[def.codigo]} préstamo(s) con
+                      esta alerta en vista actual
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {' '}
+                      — sin casos en vista actual
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {loading ? (
         <Card>
@@ -239,8 +375,19 @@ export function AuditoriaCarteraTab() {
               </p>
             ) : displayRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
-                Ningun prestamo visible coincide con la cedula indicada. Pruebe
-                otro fragmento o deje el filtro vacio para ver todos.
+                {filtroControlCodigo && filasTrasCedula.length > 0 ? (
+                  <>
+                    Ningun prestamo cumple el{' '}
+                    <strong>control seleccionado</strong> en esta vista (puede
+                    haberlo ocultado con <strong>OK</strong> o no hay casos).
+                    Pruebe <strong>Todos los controles</strong> u otro numero.
+                  </>
+                ) : (
+                  <>
+                    Ningun prestamo visible coincide con la cedula indicada.
+                    Pruebe otro fragmento o deje el filtro vacio para ver todos.
+                  </>
+                )}
               </p>
             ) : (
               <div className="space-y-8">
@@ -293,33 +440,47 @@ export function AuditoriaCarteraTab() {
                       </TableHeader>
 
                       <TableBody>
-                        {row.controles.map(c => (
-                          <TableRow key={`${row.prestamo_id}-${c.codigo}`}>
-                            <TableCell className="align-top text-sm font-medium">
-                              {c.titulo}
-                            </TableCell>
+                        {row.controles.map(c => {
+                          const numCtrl = numeroControlAuditoriaCartera(
+                            c.codigo
+                          )
 
-                            <TableCell className="align-top text-sm text-slate-700">
-                              {c.detalle || '-'}
-                            </TableCell>
+                          return (
+                            <TableRow key={`${row.prestamo_id}-${c.codigo}`}>
+                              <TableCell className="align-top text-sm font-medium">
+                                {numCtrl != null ? (
+                                  <span
+                                    className="mr-2 inline-flex h-5 min-w-[1.35rem] items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1 font-mono text-xs text-slate-700"
+                                    title={`Control ${numCtrl}`}
+                                  >
+                                    {numCtrl}
+                                  </span>
+                                ) : null}
+                                {c.titulo}
+                              </TableCell>
 
-                            <TableCell className="text-right align-top">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="gap-1"
-                                aria-label={`Marcar como revisado y ocultar: ${c.titulo}`}
-                                onClick={() =>
-                                  marcarControlOk(row.prestamo_id, c.codigo)
-                                }
-                              >
-                                <Check className="h-3.5 w-3.5" />
-                                OK
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                              <TableCell className="align-top text-sm text-slate-700">
+                                {c.detalle || '-'}
+                              </TableCell>
+
+                              <TableCell className="text-right align-top">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1"
+                                  aria-label={`Marcar como revisado y ocultar: ${c.titulo}`}
+                                  onClick={() =>
+                                    marcarControlOk(row.prestamo_id, c.codigo)
+                                  }
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  OK
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
                       </TableBody>
                     </Table>
                   </div>

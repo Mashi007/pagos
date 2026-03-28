@@ -1,0 +1,71 @@
+/**
+ * Orden fijo igual a backend `prestamo_cartera_auditoria.py` (add_control).
+ * Sirve para numerar y filtrar por control en la UI.
+ */
+export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
+  n: number
+  codigo: string
+  titulo: string
+}> = [
+  {
+    n: 1,
+    codigo: 'cedula_cliente_vs_prestamo',
+    titulo: 'Cedula cliente vs prestamo',
+  },
+  {
+    n: 2,
+    codigo: 'prestamos_duplicados_misma_cedula',
+    titulo: 'Varios prestamos activos (APROBADO/APROBADO) misma cedula',
+  },
+  {
+    n: 3,
+    codigo: 'prestamos_duplicados_nombre_cedula_fecha_registro',
+    titulo: 'Prestamos duplicados (mismo nombre, cedula y fecha de registro)',
+  },
+  {
+    n: 4,
+    codigo: 'pagos_mismo_dia_monto',
+    titulo: 'Pagos duplicados (misma fecha y monto)',
+  },
+  {
+    n: 5,
+    codigo: 'pagos_monto_no_positivo',
+    titulo: 'Pagos con monto cero o negativo',
+  },
+  {
+    n: 6,
+    codigo: 'total_pagado_vs_aplicado_cuotas',
+    titulo: 'Total pagos vs total aplicado a cuotas (cuota_pagos)',
+  },
+  {
+    n: 7,
+    codigo: 'total_financiamiento_vs_suma_cuotas',
+    titulo: 'Total financiamiento vs suma de cuotas',
+  },
+  {
+    n: 8,
+    codigo: 'sin_cuotas',
+    titulo: 'Prestamo aprobado sin filas en cuotas',
+  },
+  {
+    n: 9,
+    codigo: 'numero_cuotas_inconsistente',
+    titulo: 'Numero de cuotas configurado vs filas en BD',
+  },
+  {
+    n: 10,
+    codigo: 'liquidado_con_cuota_pendiente',
+    titulo: 'LIQUIDADO con cuota sin cubrir al 100%',
+  },
+  {
+    n: 11,
+    codigo: 'estado_cuota_vs_calculo',
+    titulo: 'Estado en tabla cuotas vs regla de negocio (vencimiento y pagos)',
+  },
+]
+
+export function numeroControlAuditoriaCartera(
+  codigo: string
+): number | undefined {
+  return AUDITORIA_CARTERA_CONTROLES_CATALOGO.find(c => c.codigo === codigo)?.n
+}

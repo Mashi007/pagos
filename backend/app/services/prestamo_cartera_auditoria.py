@@ -108,13 +108,13 @@ def ejecutar_auditoria_cartera(
 
     prestamo_ids = [int(r[0]) for r in rows_p]
 
-    # Cedulas con mas de un prestamo activo (APROBADO o LIQUIDADO)
+    # Cedulas con mas de un prestamo en APROBADO (misma cedula)
     dup_cedulas_rows = db.execute(
         text(
             """
             SELECT UPPER(TRIM(BOTH FROM cedula)) AS ced_norm, COUNT(*) AS n
             FROM prestamos
-            WHERE estado IN ('APROBADO', 'LIQUIDADO')
+            WHERE estado = 'APROBADO'
             GROUP BY UPPER(TRIM(BOTH FROM cedula))
             HAVING COUNT(*) > 1
             """
@@ -288,9 +288,9 @@ def ejecutar_auditoria_cartera(
         dup_prest = "SI" if ced_norm_upper in dup_cedulas else "NO"
         add_control(
             "prestamos_duplicados_misma_cedula",
-            "Varios prestamos activos (APROBADO/LIQUIDADO) misma cedula",
+            "Varios prestamos activos (APROBADO/APROBADO) misma cedula",
             dup_prest,
-            "Existe otro prestamo en cartera con la misma cedula" if dup_prest == "SI" else "Unico o sin duplicado activo",
+            "Existe otro prestamo APROBADO en cartera con la misma cedula" if dup_prest == "SI" else "Unico o sin otro APROBADO duplicado por cedula",
         )
 
         dup_triple = "SI" if pid in prestamos_dup_nombre_cedula_fecha else "NO"

@@ -380,6 +380,44 @@ export async function getPagosReportadosKpis(
   return data
 }
 
+export interface TendenciaFalloGeminiPunto {
+  fecha: string
+
+  fallos_no: number
+
+  verificados_gemini: number
+
+  pct_fallo: number | null
+}
+
+export interface TendenciaFallosGeminiResponse {
+  puntos: TendenciaFalloGeminiPunto[]
+
+  fecha_desde: string
+
+  fecha_hasta: string
+
+  dias: number
+
+  zona: string
+
+  nota: string
+}
+
+export async function getTendenciaFallosGemini(
+  dias?: number
+): Promise<TendenciaFallosGeminiResponse> {
+  const q = new URLSearchParams()
+
+  if (dias != null) q.set('dias', String(dias))
+
+  const qs = q.toString()
+
+  return apiClient.get<TendenciaFallosGeminiResponse>(
+    `${BASE_COBROS}/pagos-reportados/tendencia-fallos-gemini${qs ? `?${qs}` : ''}`
+  )
+}
+
 export async function listPagosReportados(params: {
   estado?: string
 
