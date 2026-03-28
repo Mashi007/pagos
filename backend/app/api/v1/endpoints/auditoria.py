@@ -403,6 +403,13 @@ def resumen_auditoria_cartera(
         None,
         description="Opcional. Fragmento de cedula del prestamo (misma regla que GET chequeos).",
     ),
+    excluir_marcar_ok: bool = Query(
+        False,
+        description=(
+            "Si true, excluye alertas con ultimo MARCAR_OK en bitacora (excepciones aceptadas). "
+            "Recomendado en UI operativa; false conserva conteos motor (compat. y job 03:00)."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -417,6 +424,7 @@ def resumen_auditoria_cartera(
         skip=0,
         limit=None,
         incluir_filas=False,
+        excluir_marcar_ok=excluir_marcar_ok,
     )
     meta = leer_meta_ejecucion(db)
     return AuditoriaCarteraResumenResponse(resumen=resumen, meta_ultima_corrida=meta)
@@ -438,6 +446,13 @@ def listar_chequeos_cartera(
         None,
         description="Fragmento de cedula del prestamo (coincidencia parcial, sin normalizar al cliente).",
     ),
+    excluir_marcar_ok: bool = Query(
+        False,
+        description=(
+            "Si true, omite prestamos/controles con excepcion aceptada (ultimo MARCAR_OK en bitacora). "
+            "Ajusta paginacion y conteos. UI operativa: true."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -451,6 +466,7 @@ def listar_chequeos_cartera(
         cedula_contiene=cedula,
         skip=skip,
         limit=limit,
+        excluir_marcar_ok=excluir_marcar_ok,
     )
     meta = leer_meta_ejecucion(db)
     return PrestamoCarteraChequeoResponse(
@@ -564,8 +580,9 @@ def crear_revision_cartera(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    Registra revision humana (append-only). Por defecto `MARCAR_OK` oculta ese control en la UI
-    hasta que exista un tipo distinto en el futuro (p. ej. revertir).
+    Registra revision humana (append-only). `MARCAR_OK` documenta excepcion de negocio aceptada:
+    requiere nota (min. 15 caracteres); con `excluir_marcar_ok` en GET chequeos/resumen deja de contar
+    en la cola operativa hasta un tipo distinto futuro (p. ej. revertir).
     """
     cod = body.codigo_control.strip()
     if cod not in CONTROLES_CARTERA_VALIDOS:
@@ -582,6 +599,12 @@ def crear_revision_cartera(
     if not db.get(Prestamo, body.prestamo_id):
         raise HTTPException(status_code=404, detail="Prestamo no encontrado")
     nota_val = (body.nota or "").strip() or None
+    if tipo_u == "MARCAR_OK":
+        if not nota_val or len(nota_val) < 15:
+            raise HTTPException(
+                status_code=400,
+                detail="MARCAR_OK requiere nota (minimo 15 caracteres) documentando la excepcion de negocio.",
+            )
     row = AuditoriaCarteraRevision(
         prestamo_id=body.prestamo_id,
         codigo_control=cod,

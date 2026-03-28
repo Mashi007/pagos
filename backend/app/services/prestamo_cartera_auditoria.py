@@ -21,6 +21,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from app.models.configuracion import Configuracion
+from app.services.auditoria_cartera_revision_service import pares_ultimo_evento_marcar_ok
 from app.services.cuota_estado import clasificar_estado_cuota, hoy_negocio
 from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
@@ -114,6 +115,50 @@ def _cedula_prestamo_coincide_fragmento(row_prestamo: Any, fragmento: str) -> bo
     return q in nc or q in raw_u
 
 
+def _filtrar_filas_marcar_ok(
+    rows: list[dict[str, Any]],
+    ok_pairs: set[tuple[int, str]],
+) -> list[dict[str, Any]]:
+    if not ok_pairs:
+        return rows
+    dedup: list[dict[str, Any]] = []
+    for row in rows:
+        pid = int(row["prestamo_id"])
+        ctrls = [
+            c
+            for c in row.get("controles", [])
+            if (pid, str(c.get("codigo") or "").strip()) not in ok_pairs
+        ]
+        if ctrls:
+            new_row = dict(row)
+            new_row["controles"] = ctrls
+            dedup.append(new_row)
+    return dedup
+
+
+def _recompute_conteos_desde_filas(rows: list[dict[str, Any]]) -> dict[str, int]:
+    cc: dict[str, int] = {}
+    for row in rows:
+        for c in row.get("controles", []):
+            cod = str(c.get("codigo") or "").strip()
+            if cod:
+                cc[cod] = cc.get(cod, 0) + 1
+    return cc
+
+
+def _ajuste_conteos_sin_filas(
+    control_counts: dict[str, int],
+    pares_alerta_si: set[tuple[int, str]],
+    ok_pairs: set[tuple[int, str]],
+) -> tuple[dict[str, int], int]:
+    inter = {(p, c) for p, c in pares_alerta_si if (p, c) in ok_pairs}
+    cc = dict(control_counts)
+    for _p, c in inter:
+        cc[c] = max(0, cc.get(c, 0) - 1)
+    pids_restantes = {p for p, c in pares_alerta_si if (p, c) not in ok_pairs}
+    return cc, len(pids_restantes)
+
+
 def ejecutar_auditoria_cartera(
     db: Session,
     *,
@@ -123,6 +168,7 @@ def ejecutar_auditoria_cartera(
     skip: int = 0,
     limit: Optional[int] = None,
     incluir_filas: bool = True,
+    excluir_marcar_ok: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Evalua prestamos en estados operativos. Retorna (filas, resumen).
@@ -132,6 +178,8 @@ def ejecutar_auditoria_cartera(
     prestamo_id / cedula_contiene: acotan que prestamos se evaluan (misma logica de controles sobre el universo completo).
     skip / limit: paginacion sobre la lista de prestamos con alerta (despues de filtrar por prestamo/cedula).
     incluir_filas: si False, no construye la lista de prestamos (ahorra memoria); resumen y conteos igual.
+    excluir_marcar_ok: si True, omite (prestamo_id, codigo_control) cuyo ultimo evento en bitacora es MARCAR_OK
+        (excepciones de negocio aceptadas); ajusta conteos, listados y paginacion. Job 03:00 y persistencia usan False.
     """
     _ = solo_con_alerta
 
@@ -167,6 +215,7 @@ def ejecutar_auditoria_cartera(
             "pagina_skip": max(0, skip),
             "pagina_limit": limit,
             "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
+            "excluye_marcar_ok": excluir_marcar_ok,
         }
         return [], meta
 
@@ -379,6 +428,7 @@ def ejecutar_auditoria_cartera(
     out: list[dict[str, Any]] = []
     con_alerta_count = 0
     control_counts: dict[str, int] = {}
+    pares_alerta_si: set[tuple[int, str]] = set()
 
     for r in rows_p:
         pid = int(r[0])
@@ -565,6 +615,7 @@ def ejecutar_auditoria_cartera(
             cod = str(c.get("codigo") or "")
             if cod:
                 control_counts[cod] = control_counts.get(cod, 0) + 1
+                pares_alerta_si.add((pid, cod))
 
         if incluir_filas:
             out.append(
@@ -580,19 +631,39 @@ def ejecutar_auditoria_cartera(
                 }
             )
 
-    listados_total = con_alerta_count
+    ok_pairs: set[tuple[int, str]] = set()
+    if excluir_marcar_ok:
+        ok_pairs = pares_ultimo_evento_marcar_ok(db, prestamo_ids)
+
+    if incluir_filas and excluir_marcar_ok:
+        out = _filtrar_filas_marcar_ok(out, ok_pairs)
+        control_counts_eff = _recompute_conteos_desde_filas(out)
+        con_alerta_eff = len(out)
+    elif incluir_filas:
+        control_counts_eff = dict(control_counts)
+        con_alerta_eff = con_alerta_count
+    elif excluir_marcar_ok:
+        control_counts_eff, con_alerta_eff = _ajuste_conteos_sin_filas(
+            control_counts, pares_alerta_si, ok_pairs
+        )
+    else:
+        control_counts_eff = dict(control_counts)
+        con_alerta_eff = con_alerta_count
+
+    listados_total = con_alerta_eff
 
     if not incluir_filas:
         meta = {
             "prestamos_evaluados": len(rows_p),
-            "prestamos_con_alerta": con_alerta_count,
+            "prestamos_con_alerta": con_alerta_eff,
             "prestamos_listados_total": listados_total,
             "prestamos_listados": 0,
-            "conteos_por_control": control_counts,
+            "conteos_por_control": control_counts_eff,
             "fecha_referencia": str(hoy),
             "pagina_skip": 0,
             "pagina_limit": None,
             "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
+            "excluye_marcar_ok": excluir_marcar_ok,
         }
         return [], meta
 
@@ -603,14 +674,15 @@ def ejecutar_auditoria_cartera(
 
     meta = {
         "prestamos_evaluados": len(rows_p),
-        "prestamos_con_alerta": con_alerta_count,
+        "prestamos_con_alerta": con_alerta_eff,
         "prestamos_listados_total": listados_total,
         "prestamos_listados": len(page),
-        "conteos_por_control": control_counts,
+        "conteos_por_control": control_counts_eff,
         "fecha_referencia": str(hoy),
         "pagina_skip": skip_clamped,
         "pagina_limit": limit,
         "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
+        "excluye_marcar_ok": excluir_marcar_ok,
     }
     return page, meta
 

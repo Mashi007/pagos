@@ -128,6 +128,9 @@ export interface CarteraChequeosQuery {
   prestamo_id?: number
 
   cedula?: string
+
+  /** Excluir alertas con ultimo MARCAR_OK (excepciones aceptadas). Recomendado true en operacion. */
+  excluir_marcar_ok?: boolean
 }
 
 export interface CarteraRevisionOcultoPar {
@@ -272,6 +275,8 @@ class AuditoriaService {
     cedula?: string
 
     prestamo_id?: number
+
+    excluir_marcar_ok?: boolean
   }): Promise<AuditoriaCarteraResumenResponse> {
     return apiClient.get<AuditoriaCarteraResumenResponse>(
       `${this.baseUrl}/prestamos/cartera/resumen`,

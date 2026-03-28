@@ -41,9 +41,12 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog'
+
+import { Textarea } from '../ui/textarea'
 
 import {
   auditoriaService,
@@ -70,6 +73,8 @@ const COD_DESAJUSTE_PAGOS = 'total_pagado_vs_aplicado_cuotas'
 
 const PAGE_SIZE_DEFAULT = 25
 
+const NOTA_EXCEPCION_MIN_LEN = 15
+
 function csvEscapeCell(val: string): string {
   if (/[",\n\r]/.test(val)) {
     return `"${val.replace(/"/g, '""')}"`
@@ -89,6 +94,8 @@ type CarteraSessionCacheV1 = {
   page: number
   filtroControlCodigo: string
   ocultosKeys: string[]
+  /** true = ver tambien excepciones ya aceptadas (motor completo). */
+  vista_motor_crudo?: boolean
 }
 
 function loadCarteraSessionCache(): CarteraSessionCacheV1 | null {
@@ -112,6 +119,7 @@ function loadCarteraSessionCache(): CarteraSessionCacheV1 | null {
       filtroControlCodigo:
         typeof c.filtroControlCodigo === 'string' ? c.filtroControlCodigo : '',
       ocultosKeys: Array.isArray(c.ocultosKeys) ? c.ocultosKeys : [],
+      vista_motor_crudo: c.vista_motor_crudo === true,
     }
   } catch {
     return null
@@ -125,6 +133,7 @@ function saveCarteraSessionCache(payload: {
   page: number
   filtroControlCodigo: string
   ocultosKeys: string[]
+  vista_motor_crudo: boolean
 }) {
   try {
     const row: CarteraSessionCacheV1 = {
@@ -135,6 +144,7 @@ function saveCarteraSessionCache(payload: {
       page: payload.page,
       filtroControlCodigo: payload.filtroControlCodigo,
       ocultosKeys: payload.ocultosKeys,
+      vista_motor_crudo: payload.vista_motor_crudo,
     }
     sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(row))
   } catch {
@@ -200,7 +210,23 @@ export function AuditoriaCarteraTab() {
     () => boot?.filtroControlCodigo ?? ''
   )
 
+  const [vistaMotorCrudo, setVistaMotorCrudo] = useState(
+    () => boot?.vista_motor_crudo === true
+  )
+
   const [loadingKpis, setLoadingKpis] = useState(false)
+
+  const [okDialogOpen, setOkDialogOpen] = useState(false)
+
+  const [okTarget, setOkTarget] = useState<{
+    prestamoId: number
+    codigo: string
+    titulo: string
+  } | null>(null)
+
+  const [okNota, setOkNota] = useState('')
+
+  const [okSubmitting, setOkSubmitting] = useState(false)
 
   /** Ultima respuesta GET /prestamos/cartera/resumen (mismos filtros que filtrosApi). */
   const [panelKpis, setPanelKpis] = useState<Record<string, unknown> | null>(
@@ -252,6 +278,7 @@ export function AuditoriaCarteraTab() {
           limit: pageSize,
           cedula: filtrosApi.cedula.trim() || undefined,
           prestamo_id: filtrosApi.prestamo_id,
+          excluir_marcar_ok: !vistaMotorCrudo,
         })
 
         const nextItems = cheq.items || []
@@ -260,7 +287,13 @@ export function AuditoriaCarteraTab() {
         setItems(nextItems)
         setResumen(nextResumen)
 
-        const ocultos = await syncOcultosConItems(nextItems)
+        const exclSrv = nextResumen.excluye_marcar_ok === true
+        const ocultos = exclSrv
+          ? new Set<string>()
+          : await syncOcultosConItems(nextItems)
+        if (exclSrv) {
+          setOcultosKeys(new Set())
+        }
         saveCarteraSessionCache({
           items: nextItems,
           resumen: nextResumen,
@@ -268,6 +301,7 @@ export function AuditoriaCarteraTab() {
           page,
           filtroControlCodigo,
           ocultosKeys: [...ocultos],
+          vista_motor_crudo: vistaMotorCrudo,
         })
       } catch (e: unknown) {
         const msg =
@@ -291,6 +325,7 @@ export function AuditoriaCarteraTab() {
       pageSize,
       filtrosApi,
       filtroControlCodigo,
+      vistaMotorCrudo,
       syncOcultosConItems,
     ]
   )
@@ -348,6 +383,7 @@ export function AuditoriaCarteraTab() {
       const r = await auditoriaService.obtenerCarteraResumen({
         cedula: filtrosApi.cedula.trim() || undefined,
         prestamo_id: filtrosApi.prestamo_id,
+        excluir_marcar_ok: !vistaMotorCrudo,
       })
       setPanelKpis((r.resumen as Record<string, unknown>) || {})
       setMetaUltimaCorridaPanel(
@@ -399,6 +435,7 @@ export function AuditoriaCarteraTab() {
         limit: 5000,
         cedula: filtrosApi.cedula.trim() || undefined,
         prestamo_id: filtrosApi.prestamo_id,
+        excluir_marcar_ok: !vistaMotorCrudo,
       })
       const header =
         'prestamo_id,cedula,nombres,estado_prestamo,codigo_control,titulo_control,detalle'
@@ -444,16 +481,21 @@ export function AuditoriaCarteraTab() {
     }
   }
 
+  const servidorExcluyeMarcarOk = resumen?.excluye_marcar_ok === true
+
   const visibleRows = useMemo(() => {
     return items
       .map(row => ({
         ...row,
-        controles: row.controles.filter(
-          c => !ocultosKeys.has(controlDismissKey(row.prestamo_id, c.codigo))
-        ),
+        controles: servidorExcluyeMarcarOk
+          ? row.controles
+          : row.controles.filter(
+              c =>
+                !ocultosKeys.has(controlDismissKey(row.prestamo_id, c.codigo))
+            ),
       }))
       .filter(row => row.controles.length > 0)
-  }, [items, ocultosKeys])
+  }, [items, ocultosKeys, servidorExcluyeMarcarOk])
 
   const conteosPorControlCodigo = useMemo(() => {
     const raw = resumen?.conteos_por_control
@@ -473,32 +515,47 @@ export function AuditoriaCarteraTab() {
       }))
   }, [visibleRows, filtroControlCodigo])
 
-  const marcarControlOk = async (prestamoId: number, codigo: string) => {
+  const abrirDialogoExcepcion = (
+    prestamoId: number,
+    codigo: string,
+    titulo: string
+  ) => {
+    setOkTarget({ prestamoId, codigo, titulo })
+    setOkNota('')
+    setOkDialogOpen(true)
+  }
+
+  const confirmarExcepcionOk = async () => {
+    if (!okTarget) return
+    const nota = okNota.trim()
+    if (nota.length < NOTA_EXCEPCION_MIN_LEN) {
+      toast.error(
+        `Indique motivo de la excepcion (minimo ${NOTA_EXCEPCION_MIN_LEN} caracteres), ej. acuerdo con cliente o referencia interna.`
+      )
+      return
+    }
     try {
+      setOkSubmitting(true)
       await auditoriaService.crearRevisionCartera({
-        prestamo_id: prestamoId,
-        codigo_control: codigo,
+        prestamo_id: okTarget.prestamoId,
+        codigo_control: okTarget.codigo,
+        nota,
       })
-      const k = controlDismissKey(prestamoId, codigo)
-      setOcultosKeys(prev => {
-        const next = new Set([...prev, k])
-        saveCarteraSessionCache({
-          items,
-          resumen: resumen ?? {},
-          filtrosApi,
-          page,
-          filtroControlCodigo,
-          ocultosKeys: [...next],
-        })
-        return next
-      })
-      toast.success('Revision guardada en base de datos')
+      setOkDialogOpen(false)
+      setOkTarget(null)
+      setOkNota('')
+      toast.success(
+        'Excepcion guardada en bitacora. Deja de contar en la cola operativa (vista normal).'
+      )
+      void fetchLista({ silent: true })
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
           ? String((e as { message?: string }).message)
           : 'Error al registrar revision'
       toast.error(msg)
+    } finally {
+      setOkSubmitting(false)
     }
   }
 
@@ -573,6 +630,39 @@ export function AuditoriaCarteraTab() {
 
   return (
     <div className="space-y-6">
+      <Card className="border-amber-200 bg-amber-50/60">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base text-amber-950">
+            Excepciones operativas (acuerdos de negocio)
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="space-y-3 text-sm text-amber-950/90">
+          <p>
+            Cuando el caso es valido por negociacion con el cliente pero la regla automatica
+            sigue en <strong>SI</strong>, use <strong>Aceptar excepcion</strong>: se guarda en
+            bitacora con <strong>nota obligatoria</strong> y ese control deja de contar en la
+            cola y en los KPIs de esta pantalla (modo normal). Sigue existiendo trazabilidad en{' '}
+            <strong>Historial revisiones</strong> y el motor interno no se modifica.
+          </p>
+
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 shrink-0 rounded border-amber-300"
+              checked={vistaMotorCrudo}
+              onChange={e => setVistaMotorCrudo(e.target.checked)}
+            />
+
+            <span>
+              <strong>Ver motor completo</strong>: mostrar tambien alertas ya cubiertas por
+              excepcion (misma data que el informe crudo; desactiva el filtro{' '}
+              <span className="font-mono text-xs">excluir_marcar_ok</span> en la API).
+            </span>
+          </label>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="outline"
@@ -889,10 +979,11 @@ export function AuditoriaCarteraTab() {
 
           <CardContent>
             <p className="mb-3 text-xs text-slate-600">
-              Los conteos reflejan todos los prestamos con alerta bajo los
-              filtros aplicados (no solo la pagina). Use el desplegable{' '}
-              <strong>Filtrar por control</strong> para ver solo una regla en la
-              tabla.
+              Los conteos reflejan prestamos con alerta bajo los filtros (no solo
+              la pagina), <strong>sin</strong> los controles aceptados como
+              excepcion salvo que active <strong>Ver motor completo</strong>. Use
+              el desplegable <strong>Filtrar por control</strong> para ver solo una
+              regla en la tabla.
             </p>
 
             <ol className="list-decimal space-y-1.5 pl-5 text-sm text-slate-800">
@@ -938,10 +1029,10 @@ export function AuditoriaCarteraTab() {
           <CardContent className="pt-6">
             {visibleRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
-                Todos los controles visibles estan marcados con <strong>OK</strong>{' '}
-                en base de datos para esta pagina, o no hay alertas. Pulse{' '}
-                <strong>Recargar</strong> o <strong>Ejecutar ahora</strong> para
-                reevaluar; si la alerta desaparecio en BD, no volvera a mostrarse.
+                En esta pagina no quedan alertas pendientes (o todas tienen
+                excepcion aceptada en bitacora). Pulse <strong>Recargar</strong> o{' '}
+                <strong>Ver motor completo</strong> si necesita ver el detalle
+                bruto del motor.
               </p>
             ) : displayRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
@@ -1048,13 +1139,17 @@ export function AuditoriaCarteraTab() {
                                   variant="outline"
                                   size="sm"
                                   className="gap-1"
-                                  aria-label={`Marcar como revisado en BD: ${c.titulo}`}
+                                  aria-label={`Aceptar excepcion para control: ${c.titulo}`}
                                   onClick={() =>
-                                    void marcarControlOk(row.prestamo_id, c.codigo)
+                                    abrirDialogoExcepcion(
+                                      row.prestamo_id,
+                                      c.codigo,
+                                      c.titulo
+                                    )
                                   }
                                 >
                                   <Check className="h-3.5 w-3.5" />
-                                  OK
+                                  Aceptar excepcion
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -1069,6 +1164,72 @@ export function AuditoriaCarteraTab() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={okDialogOpen}
+        onOpenChange={open => {
+          setOkDialogOpen(open)
+          if (!open) {
+            setOkTarget(null)
+            setOkNota('')
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Registrar excepcion aceptada</DialogTitle>
+          </DialogHeader>
+
+          {okTarget ? (
+            <p className="text-sm text-slate-600">
+              Prestamo <strong>#{okTarget.prestamoId}</strong> ·{' '}
+              <strong>{okTarget.titulo}</strong>
+            </p>
+          ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="auditoria-ok-nota">
+              Motivo, acuerdo con cliente o referencia interna (minimo{' '}
+              {NOTA_EXCEPCION_MIN_LEN} caracteres)
+            </Label>
+
+            <Textarea
+              id="auditoria-ok-nota"
+              value={okNota}
+              onChange={e => setOkNota(e.target.value)}
+              rows={4}
+              placeholder="Ej. Acuerdo de pago firmado 12/03/2026; cliente J.Perez; no reaplicar cuota 5..."
+              className="resize-y"
+            />
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOkDialogOpen(false)}
+              disabled={okSubmitting}
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => void confirmarExcepcionOk()}
+              disabled={okSubmitting}
+            >
+              {okSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar en bitacora'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={historialOpen}

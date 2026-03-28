@@ -7,6 +7,32 @@ from typing import Any, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+
+def pares_ultimo_evento_marcar_ok(db: Session, prestamo_ids: list[int]) -> set[tuple[int, str]]:
+    """
+    Pares (prestamo_id, codigo_control) cuyo ultimo evento en bitacora es MARCAR_OK.
+    Usado para excluir esas alertas de listados operativos (excepciones de negocio aceptadas).
+    """
+    ids = sorted({int(x) for x in prestamo_ids if x is not None})
+    if not ids:
+        return set()
+    q = text(
+        """
+        SELECT u.prestamo_id, u.codigo_control FROM (
+            SELECT DISTINCT ON (r.prestamo_id, r.codigo_control)
+              r.prestamo_id,
+              r.codigo_control,
+              UPPER(TRIM(BOTH FROM COALESCE(r.tipo, ''))) AS tipo_u
+            FROM auditoria_cartera_revision r
+            WHERE r.prestamo_id = ANY(:pids)
+            ORDER BY r.prestamo_id, r.codigo_control, r.creado_en DESC
+        ) u
+        WHERE u.tipo_u = 'MARCAR_OK'
+        """
+    )
+    rows = db.execute(q, {"pids": ids}).fetchall()
+    return {(int(r[0]), str(r[1] or "").strip()) for r in rows}
+
 # Codigos emitidos por prestamo_cartera_auditoria.add_control (deben alinearse con el catalogo frontend).
 CONTROLES_CARTERA_VALIDOS = frozenset(
     {
