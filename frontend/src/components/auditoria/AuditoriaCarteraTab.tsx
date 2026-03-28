@@ -279,6 +279,7 @@ export function AuditoriaCarteraTab() {
           cedula: filtrosApi.cedula.trim() || undefined,
           prestamo_id: filtrosApi.prestamo_id,
           excluir_marcar_ok: !vistaMotorCrudo,
+          codigo_control: filtroControlCodigo.trim() || undefined,
         })
 
         const nextItems = cheq.items || []
@@ -384,6 +385,7 @@ export function AuditoriaCarteraTab() {
         cedula: filtrosApi.cedula.trim() || undefined,
         prestamo_id: filtrosApi.prestamo_id,
         excluir_marcar_ok: !vistaMotorCrudo,
+        codigo_control: filtroControlCodigo.trim() || undefined,
       })
       setPanelKpis((r.resumen as Record<string, unknown>) || {})
       setMetaUltimaCorridaPanel(
@@ -436,6 +438,7 @@ export function AuditoriaCarteraTab() {
         cedula: filtrosApi.cedula.trim() || undefined,
         prestamo_id: filtrosApi.prestamo_id,
         excluir_marcar_ok: !vistaMotorCrudo,
+        codigo_control: filtroControlCodigo.trim() || undefined,
       })
       const header =
         'prestamo_id,cedula,nombres,estado_prestamo,codigo_control,titulo_control,detalle'
@@ -805,9 +808,10 @@ export function AuditoriaCarteraTab() {
 
             <Select
               value={filtroControlCodigo || '__todos__'}
-              onValueChange={v =>
+              onValueChange={v => {
+                setPage(1)
                 setFiltroControlCodigo(v === '__todos__' ? '' : v)
-              }
+              }}
             >
               <SelectTrigger
                 id="auditoria-control-filtro"
@@ -979,11 +983,12 @@ export function AuditoriaCarteraTab() {
 
           <CardContent>
             <p className="mb-3 text-xs text-slate-600">
-              Los conteos reflejan prestamos con alerta bajo los filtros (no solo
-              la pagina), <strong>sin</strong> los controles aceptados como
-              excepcion salvo que active <strong>Ver motor completo</strong>. Use
-              el desplegable <strong>Filtrar por control</strong> para ver solo una
-              regla en la tabla.
+              Los numeros entre parentesis son <strong>totales</strong> por control
+              (toda la cartera con los filtros cedula/prestamo). Al elegir un
+              control, la tabla y la paginacion se cargan <strong>solo</strong> con
+              prestamos que tienen esa alerta (ya no se mezcla con la primera
+              pagina de &quot;cualquier&quot; alerta). Excepciones MARCAR_OK se
+              excluyen salvo <strong>Ver motor completo</strong>.
             </p>
 
             <ol className="list-decimal space-y-1.5 pl-5 text-sm text-slate-800">

@@ -39,6 +39,18 @@ from app.services.prestamo_cartera_auditoria import (
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
+def _codigo_control_cartera_opcional(raw: Optional[str]) -> Optional[str]:
+    if raw is None or not str(raw).strip():
+        return None
+    c = str(raw).strip()
+    if c not in CONTROLES_CARTERA_VALIDOS:
+        raise HTTPException(
+            status_code=400,
+            detail="codigo_control no es un control de cartera conocido",
+        )
+    return c
+
+
 # --- Schemas (compatibles con frontend) ---
 
 class AuditoriaItem(BaseModel):
@@ -410,12 +422,17 @@ def resumen_auditoria_cartera(
             "Recomendado en UI operativa; false conserva conteos motor (compat. y job 03:00)."
         ),
     ),
+    codigo_control: Optional[str] = Query(
+        None,
+        description="Opcional. Acota prestamos_con_alerta al subconjunto con este control en SI (conteos_por_control siguen globales).",
+    ),
     db: Session = Depends(get_db),
 ):
     """
     Misma logica que GET `/prestamos/cartera/chequeos`, pero **sin** devolver la lista de prestamos.
     Util para KPIs o dashboards con menos payload; el coste de CPU en BD es el mismo que una corrida completa.
     """
+    cod_cc = _codigo_control_cartera_opcional(codigo_control)
     _rows, resumen = ejecutar_auditoria_cartera(
         db,
         solo_con_alerta=True,
@@ -425,6 +442,7 @@ def resumen_auditoria_cartera(
         limit=None,
         incluir_filas=False,
         excluir_marcar_ok=excluir_marcar_ok,
+        codigo_control=cod_cc,
     )
     meta = leer_meta_ejecucion(db)
     return AuditoriaCarteraResumenResponse(resumen=resumen, meta_ultima_corrida=meta)
@@ -453,12 +471,17 @@ def listar_chequeos_cartera(
             "Ajusta paginacion y conteos. UI operativa: true."
         ),
     ),
+    codigo_control: Optional[str] = Query(
+        None,
+        description="Opcional. Lista y paginacion solo sobre prestamos con este control en SI; conteos_por_control siguen globales.",
+    ),
     db: Session = Depends(get_db),
 ):
     """
     Revision de cartera en tiempo real desde tablas prestamos, clientes, cuotas, pagos, cuota_pagos.
     Cada control devuelve alerta SI/NO (SI = revisar por un humano).
     """
+    cod_cc = _codigo_control_cartera_opcional(codigo_control)
     rows, resumen = ejecutar_auditoria_cartera(
         db,
         solo_con_alerta=solo_alertas,
@@ -467,6 +490,7 @@ def listar_chequeos_cartera(
         skip=skip,
         limit=limit,
         excluir_marcar_ok=excluir_marcar_ok,
+        codigo_control=cod_cc,
     )
     meta = leer_meta_ejecucion(db)
     return PrestamoCarteraChequeoResponse(

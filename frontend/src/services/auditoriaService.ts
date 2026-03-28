@@ -131,6 +131,9 @@ export interface CarteraChequeosQuery {
 
   /** Excluir alertas con ultimo MARCAR_OK (excepciones aceptadas). Recomendado true en operacion. */
   excluir_marcar_ok?: boolean
+
+  /** Lista y paginacion solo sobre prestamos con este control en SI (conteos en resumen siguen globales). */
+  codigo_control?: string
 }
 
 export interface CarteraRevisionOcultoPar {
@@ -277,6 +280,8 @@ class AuditoriaService {
     prestamo_id?: number
 
     excluir_marcar_ok?: boolean
+
+    codigo_control?: string
   }): Promise<AuditoriaCarteraResumenResponse> {
     return apiClient.get<AuditoriaCarteraResumenResponse>(
       `${this.baseUrl}/prestamos/cartera/resumen`,

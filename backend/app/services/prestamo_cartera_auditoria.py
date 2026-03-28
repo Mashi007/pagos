@@ -169,6 +169,7 @@ def ejecutar_auditoria_cartera(
     limit: Optional[int] = None,
     incluir_filas: bool = True,
     excluir_marcar_ok: bool = False,
+    codigo_control: Optional[str] = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Evalua prestamos en estados operativos. Retorna (filas, resumen).
@@ -180,6 +181,8 @@ def ejecutar_auditoria_cartera(
     incluir_filas: si False, no construye la lista de prestamos (ahorra memoria); resumen y conteos igual.
     excluir_marcar_ok: si True, omite (prestamo_id, codigo_control) cuyo ultimo evento en bitacora es MARCAR_OK
         (excepciones de negocio aceptadas); ajusta conteos, listados y paginacion. Job 03:00 y persistencia usan False.
+    codigo_control: si se indica, solo entran prestamos con ese control en SI; la paginacion skip/limit aplica a esa lista.
+        Los conteos por control en meta siguen siendo globales (para el desplegable de filtros).
     """
     _ = solo_con_alerta
 
@@ -216,6 +219,7 @@ def ejecutar_auditoria_cartera(
             "pagina_limit": limit,
             "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
             "excluye_marcar_ok": excluir_marcar_ok,
+            "filtrado_por_codigo_control": (codigo_control or "").strip() or None,
         }
         return [], meta
 
@@ -650,6 +654,32 @@ def ejecutar_auditoria_cartera(
         control_counts_eff = dict(control_counts)
         con_alerta_eff = con_alerta_count
 
+    conteos_globales_meta = dict(control_counts_eff)
+    codigo_f = (codigo_control or "").strip() or None
+
+    if incluir_filas and codigo_f:
+        out = [
+            {
+                **r,
+                "controles": [
+                    c
+                    for c in r.get("controles", [])
+                    if str(c.get("codigo") or "").strip() == codigo_f
+                ],
+            }
+            for r in out
+            if any(
+                str(c.get("codigo") or "").strip() == codigo_f
+                for c in r.get("controles", [])
+            )
+        ]
+        con_alerta_eff = len(out)
+    elif not incluir_filas and codigo_f:
+        pares_cod = {(p, c) for p, c in pares_alerta_si if c == codigo_f}
+        if excluir_marcar_ok:
+            pares_cod -= {(p, c) for p, c in pares_cod if (p, c) in ok_pairs}
+        con_alerta_eff = len({p for p, _ in pares_cod})
+
     listados_total = con_alerta_eff
 
     if not incluir_filas:
@@ -658,12 +688,13 @@ def ejecutar_auditoria_cartera(
             "prestamos_con_alerta": con_alerta_eff,
             "prestamos_listados_total": listados_total,
             "prestamos_listados": 0,
-            "conteos_por_control": control_counts_eff,
+            "conteos_por_control": conteos_globales_meta,
             "fecha_referencia": str(hoy),
             "pagina_skip": 0,
             "pagina_limit": None,
             "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
             "excluye_marcar_ok": excluir_marcar_ok,
+            "filtrado_por_codigo_control": codigo_f,
         }
         return [], meta
 
@@ -677,12 +708,13 @@ def ejecutar_auditoria_cartera(
         "prestamos_con_alerta": con_alerta_eff,
         "prestamos_listados_total": listados_total,
         "prestamos_listados": len(page),
-        "conteos_por_control": control_counts_eff,
+        "conteos_por_control": conteos_globales_meta,
         "fecha_referencia": str(hoy),
         "pagina_skip": skip_clamped,
         "pagina_limit": limit,
         "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
         "excluye_marcar_ok": excluir_marcar_ok,
+        "filtrado_por_codigo_control": codigo_f,
     }
     return page, meta
 
