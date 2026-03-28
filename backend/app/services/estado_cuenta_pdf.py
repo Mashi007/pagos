@@ -761,13 +761,15 @@ def _cargar_prestamo_para_estado_cuenta_pdf(db, prestamo_id: int):
     return SimpleNamespace(**dict(rowm))
 
 
-def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
+def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool = True):
 
     """
 
     Obtiene datos formateados para generar PDF de estado de cuenta de UN prestamo especifico.
 
-    Reutilizable desde endpoints privados (autenticados).
+    Reutilizable desde endpoints privados (autenticados) y desde obtener_datos_estado_cuenta_cliente.
+
+    Si sincronizar es False, el llamador debe haber llamado ya sincronizar_pagos_pendientes_a_prestamos.
 
     """
 
@@ -807,21 +809,23 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
 
     
 
-    try:
+    if sincronizar:
 
-        sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
+        try:
 
-    except Exception as sync_exc:
+            sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
 
-        logger.warning(
+        except Exception as sync_exc:
 
-            "obtener_datos_estado_cuenta_prestamo: sincronizar_pagos_pendientes_a_prestamos prestamo_id=%s: %s",
+            logger.warning(
 
-            prestamo_id,
+                "obtener_datos_estado_cuenta_prestamo: sincronizar_pagos_pendientes_a_prestamos prestamo_id=%s: %s",
 
-            sync_exc,
+                prestamo_id,
 
-        )
+                sync_exc,
+
+            )
 
     
 
@@ -1007,3 +1011,79 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
 
     }
 
+def obtener_datos_estado_cuenta_cliente(db, cedula_lookup: str):
+    """
+    Arma el mismo dict que consume generar_pdf_estado_cuenta para todos los prestamos
+    del cliente (cedula normalizada sin guiones). Reutiliza obtener_datos_estado_cuenta_prestamo
+    por cada prestamo para que cuotas pendientes, totales y amortizacion coincidan con
+    GET /prestamos/{id}/estado-cuenta/pdf y notificaciones liquidado.
+    """
+    from sqlalchemy import func, select
+
+    from app.models.cliente import Cliente
+    from app.models.prestamo import Prestamo
+    from app.services.cuota_estado import hoy_negocio
+    from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
+
+    cedula_lookup = (cedula_lookup or "").strip()
+    if not cedula_lookup:
+        return None
+
+    cliente_row = db.execute(
+        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+    ).scalars().first()
+
+    if not cliente_row:
+        return None
+
+    cliente = cliente_row[0] if hasattr(cliente_row, "__getitem__") else cliente_row
+    cliente_id = getattr(cliente, "id", None)
+    if not cliente_id:
+        return None
+
+    nombre = (getattr(cliente, "nombres", None) or "").strip()
+    email = (getattr(cliente, "email", None) or "").strip()
+    cedula_display = (getattr(cliente, "cedula", None) or "").strip()
+
+    prestamos_rows = db.execute(
+        select(Prestamo).where(Prestamo.cliente_id == cliente_id)
+    ).scalars().all()
+
+    prestamo_ids = []
+    for row in prestamos_rows:
+        p = row[0] if hasattr(row, "__getitem__") else row
+        prestamo_ids.append(p.id)
+
+    if prestamo_ids:
+        try:
+            sincronizar_pagos_pendientes_a_prestamos(db, prestamo_ids)
+        except Exception as sync_exc:
+            logger.warning(
+                "obtener_datos_estado_cuenta_cliente: sincronizar_pagos_pendientes_a_prestamos "
+                "cliente_id=%s: %s",
+                cliente_id,
+                sync_exc,
+            )
+
+    merged = {
+        "cedula_display": cedula_display,
+        "nombre": nombre,
+        "email": email,
+        "prestamos_list": [],
+        "cuotas_pendientes": [],
+        "total_pendiente": 0.0,
+        "fecha_corte": hoy_negocio(),
+        "amortizaciones_por_prestamo": [],
+    }
+
+    for pid in prestamo_ids:
+        part = obtener_datos_estado_cuenta_prestamo(db, pid, sincronizar=False)
+        if not part:
+            continue
+        merged["fecha_corte"] = part["fecha_corte"]
+        merged["prestamos_list"].extend(part["prestamos_list"])
+        merged["cuotas_pendientes"].extend(part["cuotas_pendientes"])
+        merged["total_pendiente"] += float(part["total_pendiente"] or 0)
+        merged["amortizaciones_por_prestamo"].extend(part["amortizaciones_por_prestamo"])
+
+    return merged
