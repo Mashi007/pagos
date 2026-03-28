@@ -77,6 +77,7 @@ from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdat
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
+from app.services.estado_cuenta_datos import obtener_pago_para_recibo_cuota
 from app.services.pagos_cuotas_reaplicacion import (
     integridad_cuotas_prestamo,
     reset_y_reaplicar_cascada_prestamo,
@@ -2000,23 +2001,19 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
     fecha_pago_date = None
 
-    pago = None
+    pago = obtener_pago_para_recibo_cuota(db, cuota)
 
-    if cuota.pago_id:
+    if pago:
 
-        pago = db.get(Pago, cuota.pago_id)
+        institucion = (pago.institucion_bancaria or "N/A")[:100]
 
-        if pago:
+        numero_operacion = (pago.numero_documento or pago.referencia_pago or referencia)[:100]
 
-            institucion = (pago.institucion_bancaria or "N/A")[:100]
+        if pago.fecha_pago:
 
-            numero_operacion = (pago.numero_documento or pago.referencia_pago or referencia)[:100]
+            fecha_recep = pago.fecha_pago
 
-            if pago.fecha_pago:
-
-                fecha_recep = pago.fecha_pago
-
-                fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") else pago.fecha_pago
+            fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") else pago.fecha_pago
 
     if not fecha_recep and cuota.fecha_pago:
 

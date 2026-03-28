@@ -81,7 +81,10 @@ from app.core.email_config_holder import get_email_activo_servicio
 
 
 
-from app.services.estado_cuenta_datos import desglose_aplicacion_cuotas_por_pago
+from app.services.estado_cuenta_datos import (
+    desglose_aplicacion_cuotas_por_pago,
+    obtener_pago_para_recibo_cuota,
+)
 from app.services.cobros.recibo_pdf import _formato_monto_venezolano
 from app.services.cobros.recibo_pago_cartera_pdf import generar_recibo_pago_cartera_pdf
 from app.services.estado_cuenta_pdf import (
@@ -393,23 +396,19 @@ def get_recibo_cuota_publico(
 
     fecha_pago_date = None
 
-    pago = None
+    pago = obtener_pago_para_recibo_cuota(db, cuota)
 
-    if cuota.pago_id:
+    if pago:
 
-        pago = db.get(Pago, cuota.pago_id)
+        institucion = (pago.institucion_bancaria or "N/A")[:100]
 
-        if pago:
+        numero_operacion = (pago.numero_documento or pago.referencia_pago or referencia)[:100]
 
-            institucion = (pago.institucion_bancaria or "N/A")[:100]
+        if pago.fecha_pago:
 
-            numero_operacion = (pago.numero_documento or pago.referencia_pago or referencia)[:100]
+            fecha_recep = pago.fecha_pago
 
-            if pago.fecha_pago:
-
-                fecha_recep = pago.fecha_pago
-
-                fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") else pago.fecha_pago
+            fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") else pago.fecha_pago
 
     if not fecha_recep and cuota.fecha_pago:
 

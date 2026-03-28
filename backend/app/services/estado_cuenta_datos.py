@@ -86,6 +86,26 @@ def _fmt_fecha_hora_pago_estado_cuenta(dt) -> str:
     return str(dt)
 
 
+def obtener_pago_para_recibo_cuota(db: Session, cuota: Cuota) -> Optional[Pago]:
+    """
+    Pago con el que enriquecer el recibo de cuota (banco, operacion, fechas).
+    Prioriza cuota.pago_id; si falta, el ultimo registro en cuota_pagos para esa cuota.
+    """
+    pid = getattr(cuota, "pago_id", None)
+    if pid:
+        p = db.get(Pago, pid)
+        if p:
+            return p
+    row = db.execute(
+        select(Pago)
+        .join(CuotaPago, CuotaPago.pago_id == Pago.id)
+        .where(CuotaPago.cuota_id == cuota.id)
+        .order_by(CuotaPago.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    return row
+
+
 def _prestamo_cuota_recibo_desde_pago(db: Session, pago_id: int):
     row = db.execute(
         select(Cuota.prestamo_id, Cuota.id)
