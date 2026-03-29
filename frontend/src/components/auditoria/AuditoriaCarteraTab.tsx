@@ -97,6 +97,27 @@ function etiquetaCasosControl(n: number): string {
   return `${n} casos`
 }
 
+/** Solo el numero en color: verde si 0, naranja si hay casos (texto "caso(s)" sin color). */
+function ConteoCasosResaltado({ n }: { n: number }) {
+  const numCls = n === 0 ? '!text-green-600' : '!text-orange-600'
+  return (
+    <>
+      <span className={`tabular-nums ${numCls}`}>{n}</span>
+      {n === 1 ? ' caso' : ' casos'}
+    </>
+  )
+}
+
+function ConteoPrestamosAlertaResaltado({ n }: { n: number }) {
+  const numCls = n === 0 ? '!text-green-600' : '!text-orange-600'
+  return (
+    <>
+      <span className={`tabular-nums ${numCls}`}>{n}</span>
+      {n === 1 ? ' prestamo con alerta' : ' prestamos con alerta'}
+    </>
+  )
+}
+
 function etiquetaPrestamosConAlerta(n: number): string {
   if (n === 1) return '1 prestamo con alerta'
   return `${n} prestamos con alerta`
@@ -880,9 +901,14 @@ export function AuditoriaCarteraTab() {
                     className="w-max min-w-full whitespace-nowrap pr-10"
                   >
                     Todos los controles (cola completa)
-                    {prestamosConAlertaNum != null
-                      ? ` · ${etiquetaPrestamosConAlerta(prestamosConAlertaNum)}`
-                      : ''}
+                    {prestamosConAlertaNum != null ? (
+                      <>
+                        {' · '}
+                        <ConteoPrestamosAlertaResaltado
+                          n={prestamosConAlertaNum}
+                        />
+                      </>
+                    ) : null}
                   </SelectItem>
                   {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => {
                     const cnt = conteosEfectivosPorControl[def.codigo] ?? 0
@@ -892,7 +918,7 @@ export function AuditoriaCarteraTab() {
                         value={def.codigo}
                         className="w-max min-w-full whitespace-nowrap pr-10"
                       >
-                        {def.n}. {def.titulo} · {etiquetaCasosControl(cnt)}
+                        {def.n}. {def.titulo} · <ConteoCasosResaltado n={cnt} />
                       </SelectItem>
                     )
                   })}
