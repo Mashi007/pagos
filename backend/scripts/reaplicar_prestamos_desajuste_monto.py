@@ -61,9 +61,9 @@ def main() -> None:
     ap.add_argument("--skip", type=int, default=0, help="Saltar los primeros N del orden")
     args = ap.parse_args()
 
-    db: Session = SessionLocal()
+    db_list: Session = SessionLocal()
     try:
-        rows = db.execute(text(SQL_IDS)).scalars().all()
+        rows = db_list.execute(text(SQL_IDS)).scalars().all()
         ids = [int(r) for r in rows]
         if args.skip:
             ids = ids[args.skip :]
@@ -73,9 +73,16 @@ def main() -> None:
         if args.dry_run:
             print("primeros_20:", ids[:20])
             return
-        ok_n = 0
-        fail_n = 0
-        for i, pid in enumerate(ids, start=1):
+    finally:
+        db_list.close()
+
+    # Una sesion por prestamo: si PostgreSQL corta SSL u operacion falla a medias,
+    # la siguiente iteracion no hereda transaccion invalida (PendingRollbackError).
+    ok_n = 0
+    fail_n = 0
+    for i, pid in enumerate(ids, start=1):
+        db: Session = SessionLocal()
+        try:
             r = reset_y_reaplicar_cascada_prestamo(db, pid)
             if r.get("ok"):
                 db.commit()
@@ -85,9 +92,17 @@ def main() -> None:
                 db.rollback()
                 fail_n += 1
                 print(f"[{i}/{len(ids)}] FAIL prestamo_id={pid} {r}")
-        print(f"resumen: ok={ok_n} fail={fail_n}")
-    finally:
-        db.close()
+        except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            fail_n += 1
+            print(f"[{i}/{len(ids)}] ERROR prestamo_id={pid} {e!r}")
+        finally:
+            db.close()
+
+    print(f"resumen: ok={ok_n} fail={fail_n}")
 
 
 if __name__ == "__main__":
