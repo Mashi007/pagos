@@ -695,44 +695,6 @@ export function AuditoriaCarteraTab() {
 
   return (
     <div className="space-y-6">
-      <Card className="rounded-lg border-amber-200/90 bg-amber-50/70 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base text-amber-950">
-            Excepciones operativas (acuerdos de negocio)
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-3 text-sm text-amber-950/90">
-          <p>
-            En la vista normal, un caso <strong>solo</strong> deja de mostrarse
-            como alarma pendiente si (1) se <strong>acepta excepcion</strong>{' '}
-            (bitacora con nota obligatoria) o (2) se corrige la{' '}
-            <strong>causa raiz</strong> en datos y el motor ya no marca{' '}
-            <strong>SI</strong>. No hay otro mecanismo de ocultacion. Si el
-            motor sigue en SI y no hay aceptacion, el caso sigue en cola.
-            Trazabilidad en <strong>Historial revisiones</strong>; aceptar no
-            altera el calculo objetivo del motor.
-          </p>
-
-          <label className="flex cursor-pointer items-start gap-2.5">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 shrink-0 rounded border-amber-300"
-              checked={vistaMotorCrudo}
-              onChange={e => setVistaMotorCrudo(e.target.checked)}
-            />
-
-            <span>
-              <strong>Ver motor completo</strong>: mostrar tambien alertas ya
-              cubiertas por excepcion (misma data que el informe crudo;
-              desactiva el filtro{' '}
-              <span className="font-mono text-xs">excluir_marcar_ok</span> en la
-              API).
-            </span>
-          </label>
-        </CardContent>
-      </Card>
-
       <Card className="overflow-hidden border-slate-200/90 shadow-sm">
         <CardHeader className="space-y-1 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white py-3 sm:py-4">
           <div className="flex items-center gap-2">
@@ -748,11 +710,7 @@ export function AuditoriaCarteraTab() {
                 <strong className="font-medium text-slate-700">
                   Solo KPIs
                 </strong>{' '}
-                (panel inferior) con los mismos filtros cedula/prestamo.{' '}
-                <strong className="font-medium text-slate-700">
-                  Ver motor completo
-                </strong>{' '}
-                incluye excepciones MARCAR_OK en la API.
+                (panel inferior) con los mismos filtros cedula/prestamo.
               </p>
             </div>
           </div>
@@ -944,6 +902,18 @@ export function AuditoriaCarteraTab() {
                 )}
                 Solo KPIs
               </Button>
+              <label
+                className="flex cursor-pointer items-center gap-2 pb-0.5 text-xs text-slate-600"
+                title="Incluye alertas cubiertas por excepcion (informe crudo); desactiva excluir_marcar_ok en la API."
+              >
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 rounded border-slate-300"
+                  checked={vistaMotorCrudo}
+                  onChange={e => setVistaMotorCrudo(e.target.checked)}
+                />
+                <span className="select-none">Ver motor completo</span>
+              </label>
             </div>
           </div>
 
