@@ -781,11 +781,34 @@ export function AuditoriaCarteraTab() {
             ) : null}
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            La lista se guarda en la sesion del navegador; los chequeos son en
-            vivo contra la BD. El job 03:00 actualiza la meta en configuracion,
-            no sustituye una recarga manual si hubo cambios despues.
-          </p>
+          <div
+            className="rounded-md border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-xs text-amber-950"
+            role="note"
+          >
+            <p className="font-medium text-amber-900">
+              LIQUIDADO y cuadre operativo
+            </p>
+            <ul className="mt-1 list-inside list-disc space-y-0.5 text-amber-900/90">
+              <li>
+                Por defecto, LIQUIDADO sigue la cobertura de cuotas; puede haber
+                diferencia entre suma de pagos operativos y total aplicado en
+                cuotas. El control 7 lo detecta siempre; el control 17 solo
+                cuando el prestamo ya esta LIQUIDADO.
+              </li>
+              <li>
+                Evitar PAGADO con monto 0: use anulacion donde corresponda
+                (control 6).
+              </li>
+              <li>
+                Modo estricto en el servidor:{' '}
+                <code className="rounded bg-amber-100/90 px-1 font-mono text-[11px]">
+                  LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS=true
+                </code>{' '}
+                impide marcar LIQUIDADO hasta cuadrar pagos vs aplicado (0.02
+                USD).
+              </li>
+            </ul>
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
             <div className="flex flex-col gap-1.5 sm:col-span-1 lg:col-span-2">

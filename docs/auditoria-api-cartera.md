@@ -31,6 +31,13 @@ Campos habituales:
 - `prestamos_listados`: tamano de la pagina devuelta (GET chequeos); 0 en GET resumen.
 - `conteos_por_control`: mapa `codigo_control -> cantidad de prestamos` con esa alerta SI.
 - `reglas_version`: identificador de la definicion de reglas en codigo (`AUDITORIA_CARTERA_REGLAS_VERSION` en `prestamo_cartera_auditoria.py`). Subir cuando se agregue o quite un control.
+
+## LIQUIDADO vs cuadre pagos / aplicado
+
+- El flujo que marca **LIQUIDADO** (`_marcar_prestamo_liquidado_si_corresponde` en `pagos.py`) usa **cobertura de cuotas** (tolerancia 0.01 sobre `total_pagado` vs `monto_cuota`), no la suma agregada de `pagos.monto_pagado`, porque puede haber exceso operativo o registros que no impactan cupo.
+- El control **`total_pagado_vs_aplicado_cuotas`** compara suma de pagos operativos vs suma aplicada vía `cuota_pagos` (tol 0.02 USD).
+- El control **`liquidado_descuadre_total_pagos_vs_aplicado_cuotas`** repite el mismo umbral **solo** cuando `prestamos.estado = LIQUIDADO`, para filtrar en KPIs y revision los liquidados con descuadre operativo.
+- Variable de entorno **`LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS`** (defecto `false`): si `true`, no se asigna LIQUIDADO hasta que pagos operativos y aplicado cuadren (misma SQL/tolerancia que auditoria).
 - `fecha_referencia`, `pagina_skip`, `pagina_limit` segun corresponda.
 
 ## Conciliación externa (decisión 3.5)

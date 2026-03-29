@@ -87,6 +87,12 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     codigo: 'pagos_huella_funcional_duplicada',
     titulo: 'Pagos con misma huella funcional (fecha, monto, ref_norm)',
   },
+  {
+    n: 17,
+    codigo: 'liquidado_descuadre_total_pagos_vs_aplicado_cuotas',
+    titulo:
+      'LIQUIDADO con descuadre: total pagos operativos vs aplicado a cuotas',
+  },
 ]
 
 export function numeroControlAuditoriaCartera(

@@ -46,9 +46,9 @@ _TOL = Decimal("0.02")
 CFG_ULTIMA = "auditoria_cartera_ultima_ejecucion"
 CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
-# Identificador estable de la definicion de controles en este modulo (16 reglas en add_control).
+# Identificador estable de la definicion de controles en este modulo (17 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "16controles-2026-03-29"
+AUDITORIA_CARTERA_REGLAS_VERSION = "17controles-2026-03-27"
 
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
@@ -73,6 +73,43 @@ def _dec(x: Any) -> Decimal:
     if isinstance(x, Decimal):
         return x
     return Decimal(str(x))
+
+
+def totales_pagos_operativos_y_aplicado_cuotas_prestamo(
+    db: Session, prestamo_id: int
+) -> tuple[Decimal, Decimal]:
+    """
+    Suma `monto_pagado` de pagos operativos y suma `monto_aplicado` vía cuota_pagos,
+    mismo criterio de exclusion que la auditoria de cartera (anulados, reversados, etc.).
+    """
+    excl_pg = _sql_fragment_pago_excluido_cartera("pg")
+    q = text(
+        f"""
+        SELECT
+          COALESCE(
+            (SELECT SUM(pg.monto_pagado) FROM pagos pg
+             WHERE pg.prestamo_id = :pid AND NOT ({excl_pg})), 0),
+          COALESCE(
+            (SELECT SUM(cp.monto_aplicado)
+             FROM cuotas cu
+             JOIN cuota_pagos cp ON cp.cuota_id = cu.id
+             JOIN pagos pg ON pg.id = cp.pago_id
+             WHERE cu.prestamo_id = :pid AND NOT ({excl_pg})), 0)
+        """
+    )
+    row = db.execute(q, {"pid": prestamo_id}).fetchone()
+    if not row:
+        return Decimal("0"), Decimal("0")
+    return _dec(row[0]), _dec(row[1])
+
+
+def prestamo_cuadrado_pagos_operativos_vs_aplicado(
+    db: Session, prestamo_id: int, tol: Optional[Decimal] = None
+) -> bool:
+    """True si |suma pagos operativos - suma aplicado| <= tolerancia (defecto 0.02 USD)."""
+    t = tol if tol is not None else _TOL
+    sp, sa = totales_pagos_operativos_y_aplicado_cuotas_prestamo(db, prestamo_id)
+    return abs(sp - sa) <= t
 
 
 def _upsert_config_valor(db: Session, clave: str, valor: str) -> None:
@@ -606,6 +643,27 @@ def ejecutar_auditoria_cartera(
                 if alert_ap == "SI"
                 else f"Cuadrado USD tol={_TOL} (diff={diff_ap}); excluye anulados/reversados/duplicado en sumas"
             ),
+        )
+
+        if (estado_p or "").strip().upper() == "LIQUIDADO":
+            liq_des = "SI" if diff_ap > _TOL else "NO"
+            if liq_des == "SI":
+                neto = sp - sa
+                liq_det = (
+                    f"LIQUIDADO con suma operativa pagos={sp} y aplicado cuotas={sa} (diff={diff_ap} USD). "
+                    f"Neto operativo-aplicado={neto}. Revisar BS mal cargados como USD, pagos duplicados, "
+                    f"filas sin anular o aplicacion en cuota_pagos (controles 7 y 15)."
+                )
+            else:
+                liq_det = f"Cuadrado con tolerancia {_TOL} (diff={diff_ap})."
+        else:
+            liq_des = "NO"
+            liq_det = "Solo aplica cuando el prestamo esta en LIQUIDADO."
+        add_control(
+            "liquidado_descuadre_total_pagos_vs_aplicado_cuotas",
+            "LIQUIDADO con descuadre: total pagos operativos vs aplicado a cuotas",
+            liq_des,
+            liq_det,
         )
 
         diff_tf = abs(total_fin - sc)

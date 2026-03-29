@@ -190,6 +190,14 @@ class Settings(BaseSettings):
         default="1,2",
         description="CSV de enteros >=1: dias despues de fecha_liquidado para enviar emails liquidado+PDF",
     )
+    # Cartera / liquidacion: si True, no marcar LIQUIDADO hasta cuadrar suma pagos operativos vs cuota_pagos (tol 0.02 USD, mismo criterio que auditoria).
+    LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS: bool = Field(
+        default=False,
+        description=(
+            "Si True: no marcar prestamo LIQUIDADO hasta que suma pagos operativos y suma aplicada en "
+            "cuota_pagos cuadren (0.02 USD). Por defecto False: basta cobertura de cuotas."
+        ),
+    )
 
     # ============================================
     # AI / OpenRouter (clave solo en backend, nunca en frontend)

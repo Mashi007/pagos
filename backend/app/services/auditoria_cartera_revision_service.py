@@ -52,6 +52,7 @@ CONTROLES_CARTERA_VALIDOS = frozenset(
         "pago_bs_sin_tasa_cambio_diaria",
         "conversion_bs_a_usd_incoherente",
         "pagos_sin_aplicacion_a_cuotas",
+        "liquidado_descuadre_total_pagos_vs_aplicado_cuotas",
     }
 )
 

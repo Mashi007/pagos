@@ -57,6 +57,8 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.core.database import get_db
 
+from app.core.config import settings
+
 from app.core.deps import get_current_user
 
 from app.core.documento import normalize_documento
@@ -5419,6 +5421,9 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
     Equivale a que la suma aplicada en cuotas cubra el financiamiento; no usa sum(pagos)
     porque puede haber montos duplicados o sobrantes sin cupo en cuotas.
 
+    Opcional (settings.LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS): ademas exige que la suma de
+    pagos operativos cuadre con el total aplicado en cuota_pagos (tol 0.02 USD, misma regla que auditoria).
+
     - Todas las cuotas cubiertas y estado APROBADO -> LIQUIDADO (+ fecha_liquidado).
     - Alguna cuota con saldo y estado LIQUIDADO -> APROBADO (fecha_liquidado NULL).
 
@@ -5448,6 +5453,26 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
     if pendientes == 0:
 
         if est == "APROBADO":
+
+            if settings.LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS:
+                from app.services.prestamo_cartera_auditoria import (
+                    prestamo_cuadrado_pagos_operativos_vs_aplicado,
+                    totales_pagos_operativos_y_aplicado_cuotas_prestamo,
+                )
+
+                if not prestamo_cuadrado_pagos_operativos_vs_aplicado(db, prestamo_id):
+                    sp_t, sa_t = totales_pagos_operativos_y_aplicado_cuotas_prestamo(
+                        db, prestamo_id
+                    )
+                    logger.warning(
+                        "Prestamo id=%s: cuotas cubiertas pero pagos operativos no cuadran con aplicado "
+                        "(sum_pagos=%s sum_aplicado=%s). No se marca LIQUIDADO "
+                        "(LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS=true).",
+                        prestamo_id,
+                        sp_t,
+                        sa_t,
+                    )
+                    return
 
             prestamo.estado = "LIQUIDADO"
 
