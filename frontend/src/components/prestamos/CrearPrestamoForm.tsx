@@ -317,10 +317,15 @@ export function CrearPrestamoForm({
 
   const [showConfirmCreate, setShowConfirmCreate] = useState(false)
 
-  const [isRecalculatingAmortizacion, setIsRecalculatingAmortizacion] = useState(false)
+  const [isRecalculatingAmortizacion, setIsRecalculatingAmortizacion] =
+    useState(false)
 
-  const [fechaAprobacionAnterior, setFechaAprobacionAnterior] = useState<string | undefined>(
-    prestamo?.fecha_aprobacion ? fechaInputYmd(prestamo.fecha_aprobacion) : undefined
+  const [fechaAprobacionAnterior, setFechaAprobacionAnterior] = useState<
+    string | undefined
+  >(
+    prestamo?.fecha_aprobacion
+      ? fechaInputYmd(prestamo.fecha_aprobacion)
+      : undefined
   )
 
   useEffect(() => {
@@ -740,24 +745,29 @@ export function CrearPrestamoForm({
     try {
       // 1. Primero actualizar la fecha de aprobación del préstamo
       const prestamoDataUpdate = {
-        fecha_aprobacion: `${nuevaFechaAprobacion}T00:00:00`
+        fecha_aprobacion: `${nuevaFechaAprobacion}T00:00:00`,
       }
 
       await updatePrestamo.mutateAsync({
         id: prestamo.id,
-        data: prestamoDataUpdate as Partial<PrestamoForm>
+        data: prestamoDataUpdate as Partial<PrestamoForm>,
       })
 
       // 2. Luego recalcular las fechas de vencimiento de las cuotas
-      const resultado = await prestamoService.recalcularFechasAmortizacion(prestamo.id)
+      const resultado = await prestamoService.recalcularFechasAmortizacion(
+        prestamo.id
+      )
 
       setFechaAprobacionAnterior(nuevaFechaAprobacion)
 
-      toast.success(`Amortización recalculada: ${resultado.data.actualizadas} cuota(s) actualizadas`)
+      toast.success(
+        `Amortización recalculada: ${resultado.data.actualizadas} cuota(s) actualizadas`
+      )
 
       onSuccess()
     } catch (error: any) {
-      const mensajeError = error?.response?.data?.detail || 'Error al recalcular amortización'
+      const mensajeError =
+        error?.response?.data?.detail || 'Error al recalcular amortización'
       toast.error(mensajeError)
 
       if (import.meta.env.DEV) {
@@ -1386,12 +1396,15 @@ export function CrearPrestamoForm({
 
                         {prestamo.estado === 'APROBADO' &&
                           formData.fecha_aprobacion &&
-                          formData.fecha_aprobacion !== fechaAprobacionAnterior && (
+                          formData.fecha_aprobacion !==
+                            fechaAprobacionAnterior && (
                             <Button
                               type="button"
                               size="sm"
                               onClick={recalcularAmortizacion}
-                              disabled={isRecalculatingAmortizacion || isReadOnly}
+                              disabled={
+                                isRecalculatingAmortizacion || isReadOnly
+                              }
                               className="whitespace-nowrap"
                             >
                               {isRecalculatingAmortizacion

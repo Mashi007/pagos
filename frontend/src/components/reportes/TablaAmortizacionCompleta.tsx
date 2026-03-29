@@ -125,6 +125,10 @@ export function TablaAmortizacionCompleta() {
 
   const [fechaBaseCalculo, setFechaBaseCalculo] = useState<string>('')
 
+  /** Evita doble ejecucion del flujo generar cuotas + aplicar pagos (varias peticiones en cadena). */
+  const [procesandoGenerarCuotasYPagos, setProcesandoGenerarCuotasYPagos] =
+    useState(false)
+
   const queryClient = useQueryClient()
 
   // Buscar cliente por cédula
@@ -586,6 +590,8 @@ export function TablaAmortizacionCompleta() {
       return
     }
 
+    setProcesandoGenerarCuotasYPagos(true)
+
     try {
       // Paso 1: Actualizar fecha_base_calculo en el préstamo
 
@@ -660,6 +666,8 @@ export function TablaAmortizacionCompleta() {
       toast.error(
         `Error: ${error?.response?.data?.detail || error?.message || 'Error desconocido'}`
       )
+    } finally {
+      setProcesandoGenerarCuotasYPagos(false)
     }
   }
 
@@ -1972,11 +1980,13 @@ export function TablaAmortizacionCompleta() {
               disabled={
                 !fechaBaseCalculo ||
                 mutationGenerarAmortizacion.isPending ||
-                mutationActualizarPrestamo.isPending
+                mutationActualizarPrestamo.isPending ||
+                procesandoGenerarCuotasYPagos
               }
             >
               {mutationGenerarAmortizacion.isPending ||
-              mutationActualizarPrestamo.isPending ? (
+              mutationActualizarPrestamo.isPending ||
+              procesandoGenerarCuotasYPagos ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Procesando...

@@ -76,7 +76,7 @@ import {
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
-import { getErrorMessage } from '../../types/errors'
+import { getErrorMessage, isAxiosError } from '../../types/errors'
 import { useSearchParams, Link } from 'react-router-dom'
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
@@ -1617,7 +1617,9 @@ export function PagosList() {
                                                   await pagoService.aplicarPagoACuotas(
                                                     pago.id
                                                   )
-                                                if (
+                                                if (res.ya_aplicado) {
+                                                  toast.success(res.message)
+                                                } else if (
                                                   res.cuotas_completadas > 0 ||
                                                   res.cuotas_parciales > 0
                                                 ) {
@@ -1629,10 +1631,20 @@ export function PagosList() {
                                                     'Pago marcado como conciliado'
                                                   )
                                                 }
-                                              } catch {
-                                                toast.success(
-                                                  'Pago marcado como conciliado'
-                                                )
+                                              } catch (applyErr) {
+                                                if (
+                                                  isAxiosError(applyErr) &&
+                                                  applyErr.response?.status ===
+                                                    409
+                                                ) {
+                                                  toast.error(
+                                                    getErrorMessage(applyErr)
+                                                  )
+                                                } else {
+                                                  toast.success(
+                                                    'Pago marcado como conciliado'
+                                                  )
+                                                }
                                               }
                                             } else {
                                               toast.success(

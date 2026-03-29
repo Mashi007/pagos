@@ -101,12 +101,12 @@ function loadCarteraSessionCache(): CarteraSessionCacheV1 | null {
     return {
       v: 1,
       items: c.items,
-      resumen: (c.resumen && typeof c.resumen === 'object' ? c.resumen : {}) as Record<
-        string,
-        unknown
-      >,
+      resumen: (c.resumen && typeof c.resumen === 'object'
+        ? c.resumen
+        : {}) as Record<string, unknown>,
       filtrosApi: {
-        cedula: typeof c.filtrosApi.cedula === 'string' ? c.filtrosApi.cedula : '',
+        cedula:
+          typeof c.filtrosApi.cedula === 'string' ? c.filtrosApi.cedula : '',
         prestamo_id: c.filtrosApi.prestamo_id,
       },
       page: typeof c.page === 'number' && c.page >= 1 ? c.page : 1,
@@ -310,13 +310,7 @@ export function AuditoriaCarteraTab() {
         if (!silent) setLoading(false)
       }
     },
-    [
-      page,
-      pageSize,
-      filtrosApi,
-      vistaMotorCrudo,
-      syncOcultosConItems,
-    ]
+    [page, pageSize, filtrosApi, vistaMotorCrudo, syncOcultosConItems]
   )
 
   const primeraCargaRef = useRef(true)
@@ -614,12 +608,14 @@ export function AuditoriaCarteraTab() {
 
         <CardContent className="space-y-3 text-sm text-amber-950/90">
           <p>
-            En la vista normal, un caso <strong>solo</strong> deja de mostrarse como alarma pendiente
-            si (1) se <strong>acepta excepcion</strong> (bitacora con nota obligatoria) o (2) se
-            corrige la <strong>causa raiz</strong> en datos y el motor ya no marca <strong>SI</strong>.
-            No hay otro mecanismo de ocultacion. Si el motor sigue en SI y no hay aceptacion, el caso
-            sigue en cola. Trazabilidad en <strong>Historial revisiones</strong>; aceptar no altera
-            el calculo objetivo del motor.
+            En la vista normal, un caso <strong>solo</strong> deja de mostrarse
+            como alarma pendiente si (1) se <strong>acepta excepcion</strong>{' '}
+            (bitacora con nota obligatoria) o (2) se corrige la{' '}
+            <strong>causa raiz</strong> en datos y el motor ya no marca{' '}
+            <strong>SI</strong>. No hay otro mecanismo de ocultacion. Si el
+            motor sigue en SI y no hay aceptacion, el caso sigue en cola.
+            Trazabilidad en <strong>Historial revisiones</strong>; aceptar no
+            altera el calculo objetivo del motor.
           </p>
 
           <label className="flex cursor-pointer items-start gap-2.5">
@@ -631,9 +627,11 @@ export function AuditoriaCarteraTab() {
             />
 
             <span>
-              <strong>Ver motor completo</strong>: mostrar tambien alertas ya cubiertas por
-              excepcion (misma data que el informe crudo; desactiva el filtro{' '}
-              <span className="font-mono text-xs">excluir_marcar_ok</span> en la API).
+              <strong>Ver motor completo</strong>: mostrar tambien alertas ya
+              cubiertas por excepcion (misma data que el informe crudo;
+              desactiva el filtro{' '}
+              <span className="font-mono text-xs">excluir_marcar_ok</span> en la
+              API).
             </span>
           </label>
         </CardContent>
@@ -650,10 +648,15 @@ export function AuditoriaCarteraTab() {
                 Consulta y controles de cartera
               </CardTitle>
               <p className="text-xs font-normal text-muted-foreground">
-                Totales por control: use <strong className="font-medium text-slate-700">Solo KPIs</strong>{' '}
+                Totales por control: use{' '}
+                <strong className="font-medium text-slate-700">
+                  Solo KPIs
+                </strong>{' '}
                 (panel inferior) con los mismos filtros cedula/prestamo.{' '}
-                <strong className="font-medium text-slate-700">Ver motor completo</strong> incluye
-                excepciones MARCAR_OK en la API.
+                <strong className="font-medium text-slate-700">
+                  Ver motor completo
+                </strong>{' '}
+                incluye excepciones MARCAR_OK en la API.
               </p>
             </div>
           </div>
@@ -725,9 +728,9 @@ export function AuditoriaCarteraTab() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            La lista se guarda en la sesion del navegador; los chequeos son en vivo contra la BD. El
-            job 03:00 actualiza la meta en configuracion, no sustituye una recarga manual si hubo
-            cambios despues.
+            La lista se guarda en la sesion del navegador; los chequeos son en
+            vivo contra la BD. El job 03:00 actualiza la meta en configuracion,
+            no sustituye una recarga manual si hubo cambios despues.
           </p>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
@@ -793,7 +796,6 @@ export function AuditoriaCarteraTab() {
                 Solo KPIs
               </Button>
             </div>
-
           </div>
 
           {resumen && !loading ? (
@@ -906,7 +908,7 @@ export function AuditoriaCarteraTab() {
                             {def.n}.
                           </span>
                           <span className="min-w-0 flex-1">{def.titulo}</span>
-                          <span className="shrink-0 tabular-nums font-medium text-slate-900">
+                          <span className="shrink-0 font-medium tabular-nums text-slate-900">
                             {v}
                           </span>
                         </li>
@@ -970,9 +972,9 @@ export function AuditoriaCarteraTab() {
             {visibleRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
                 En esta pagina no quedan filas (paginacion o casos fuera de cola
-                por aceptacion o motor ya en NO). Pulse <strong>Recargar</strong>{' '}
-                o <strong>Ver motor completo</strong> para revisar el motor sin
-                filtro operativo.
+                por aceptacion o motor ya en NO). Pulse{' '}
+                <strong>Recargar</strong> o <strong>Ver motor completo</strong>{' '}
+                para revisar el motor sin filtro operativo.
               </p>
             ) : (
               <div className="space-y-8">
@@ -1009,7 +1011,9 @@ export function AuditoriaCarteraTab() {
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 text-blue-600 underline"
-                            onClick={() => void abrirHistorialRevisiones(row.prestamo_id)}
+                            onClick={() =>
+                              void abrirHistorialRevisiones(row.prestamo_id)
+                            }
                           >
                             <FileText className="h-3.5 w-3.5" />
                             Historial revisiones (BD)

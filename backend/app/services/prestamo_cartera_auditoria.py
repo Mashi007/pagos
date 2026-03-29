@@ -564,7 +564,9 @@ def ejecutar_auditoria_cartera(
             "Total pagos vs total aplicado a cuotas (cuota_pagos)",
             alert_ap,
             (
-                f"Suma pagos(operativos)={sp} aplicado(desde pagos operativos)={sa} diff={diff_ap}"
+                f"Suma pagos(operativos)={sp} aplicado(desde pagos operativos)={sa} diff={diff_ap}. "
+                f"Es total del prestamo; si diff es grande, revisar pagos donde monto_pagado <> sum(cuota_pagos) "
+                f"por pago_id (el control 15 marca saldo sin aplicar por pago)."
                 if alert_ap == "SI"
                 else f"Cuadrado USD tol={_TOL} (diff={diff_ap}); excluye anulados/reversados/duplicado en sumas"
             ),

@@ -240,6 +240,7 @@ class PagoService {
 
   async aplicarPagoACuotas(pagoId: number): Promise<{
     success: boolean
+    ya_aplicado?: boolean
     cuotas_completadas: number
     cuotas_parciales: number
     message: string

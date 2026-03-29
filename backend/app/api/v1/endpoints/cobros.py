@@ -1067,7 +1067,10 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
     db.add(row)
     db.flush()
     db.refresh(row)
-    _aplicar_pago_a_cuotas_interno(row, db)
+    try:
+        _aplicar_pago_a_cuotas_interno(row, db)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     row.estado = "PAGADO"
     logger.info("[COBROS] Aprobar ref=%s: creado pago id=%s y aplicado a cuotas del prestamo %s.", pr.referencia_interna, row.id, prestamo.id)
 
