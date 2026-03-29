@@ -7,4 +7,9 @@ if [ ! -f "$LSJS" ]; then
   echo "husky: falta lint-staged. En la raiz del repo ejecute: npm install" >&2
   exit 1
 fi
+# Solo hay reglas bajo frontend/ en package.json; si el indice no incluye ninguno,
+# saltar lint-staged (evita stderr "No staged files found" y ruido en PowerShell en git commit --amend).
+if ! git diff --cached --name-only --diff-filter=ACM | grep -qE '^frontend/'; then
+  exit 0
+fi
 exec node "$LSJS"
