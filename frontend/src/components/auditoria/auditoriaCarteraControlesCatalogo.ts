@@ -82,6 +82,11 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     codigo: 'pagos_sin_aplicacion_a_cuotas',
     titulo: 'Pagos operativos sin aplicacion a cuotas o saldo sin aplicar',
   },
+  {
+    n: 16,
+    codigo: 'pagos_huella_funcional_duplicada',
+    titulo: 'Pagos con misma huella funcional (fecha, monto, ref_norm)',
+  },
 ]
 
 export function numeroControlAuditoriaCartera(

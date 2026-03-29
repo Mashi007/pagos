@@ -46,9 +46,9 @@ _TOL = Decimal("0.02")
 CFG_ULTIMA = "auditoria_cartera_ultima_ejecucion"
 CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
-# Identificador estable de la definicion de controles en este modulo (15 reglas en add_control).
+# Identificador estable de la definicion de controles en este modulo (16 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "15controles-2026-03-28"
+AUDITORIA_CARTERA_REGLAS_VERSION = "16controles-2026-03-29"
 
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
@@ -304,6 +304,29 @@ def ejecutar_auditoria_cartera(
     ).fetchall()
     prestamos_pagos_duplicados = {int(r[0]) for r in dup_pagos_rows if r[0] is not None}
 
+    # Misma huella funcional que el indice ux_pagos_fingerprint_activos (prestamo, dia, monto, ref_norm)
+    dup_huella_rows = db.execute(
+        text(
+            f"""
+            SELECT DISTINCT prestamo_id
+            FROM (
+              SELECT p.prestamo_id, COUNT(*) AS cnt
+              FROM pagos p
+              WHERE p.prestamo_id IS NOT NULL
+                AND NOT {excl_p}
+                AND TRIM(COALESCE(p.ref_norm, '')) <> ''
+              GROUP BY
+                p.prestamo_id,
+                CAST(p.fecha_pago AS date),
+                p.monto_pagado,
+                TRIM(COALESCE(p.ref_norm, ''))
+              HAVING COUNT(*) > 1
+            ) t
+            """
+        )
+    ).fetchall()
+    prestamos_huella_funcional_dup = {int(r[0]) for r in dup_huella_rows if r[0] is not None}
+
     # Pagos con monto no positivo (solo pagos operativos)
     bad_monto_rows = db.execute(
         text(
@@ -546,6 +569,19 @@ def ejecutar_auditoria_cartera(
             "Pagos duplicados (misma fecha y monto)",
             dup_pay,
             "Dos o mas pagos el mismo dia con igual monto" if dup_pay == "SI" else "Sin duplicados por fecha+monto",
+        )
+
+        dup_huella = "SI" if pid in prestamos_huella_funcional_dup else "NO"
+        add_control(
+            "pagos_huella_funcional_duplicada",
+            "Pagos con misma huella funcional (fecha, monto, ref_norm)",
+            dup_huella,
+            (
+                "Dos o mas pagos activos: mismo prestamo, dia, monto y ref_norm (colision de indice; "
+                "p. ej. BNC/REF y REF sin prefijo)."
+                if dup_huella == "SI"
+                else "Sin colision de huella funcional"
+            ),
         )
 
         bad_m = "SI" if pid in prestamos_monto_mal else "NO"

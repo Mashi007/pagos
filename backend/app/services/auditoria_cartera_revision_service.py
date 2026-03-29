@@ -41,6 +41,7 @@ CONTROLES_CARTERA_VALIDOS = frozenset(
         "cupo_cedula_aprobados_politica",
         "prestamos_duplicados_nombre_cedula_fecha_registro",
         "pagos_mismo_dia_monto",
+        "pagos_huella_funcional_duplicada",
         "pagos_monto_no_positivo",
         "total_pagado_vs_aplicado_cuotas",
         "total_financiamiento_vs_suma_cuotas",

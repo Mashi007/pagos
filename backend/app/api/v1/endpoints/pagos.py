@@ -18,6 +18,9 @@ Nº documento / referencia de pago:
 
 - Se aceptan TODOS los formatos (BNC/, BINANCE, VE/, ZELLE/, numérico, REF, etc.). Límite 100 caracteres. Varias filas sin documento (vacío) se permiten. Única regla: no duplicados.
 
+- Huella funcional (prestamo + fecha + monto + ref_norm normalizada): no duplicar respecto a pagos
+  operativos (409), alineado con ux_pagos_fingerprint_activos.
+
 """
 
 import calendar
@@ -109,6 +112,17 @@ from app.services.tasa_cambio_service import (
 from app.services.pago_registro_moneda import (
     resolver_monto_registro_pago,
     preload_autorizados_bs,
+)
+from app.services.pago_huella_funcional import (
+    conflicto_huella_para_creacion,
+    contar_prestamos_con_huella_funcional_duplicada,
+    existe_otro_pago_misma_huella_funcional,
+    HTTP_409_DETAIL_HUELLA_FUNCIONAL,
+    ref_norm_desde_campos,
+)
+from app.services.pago_huella_metricas import (
+    registrar_rechazo_huella_funcional,
+    snapshot_rechazos_huella_funcional,
 )
 
 from app.services.cobros.cedula_reportar_bs_service import (
@@ -1625,6 +1639,8 @@ async def upload_excel_pagos(
 
         pagos_con_prestamo: list[Pago] = []
 
+        huellas_lote_excel: set[tuple[int, str, str, str]] = set()
+
         for item in FilasParseadas:
 
             i = item["fila_idx"]
@@ -1798,6 +1814,47 @@ async def upload_excel_pagos(
                 ref_pago = ((numero_doc_norm or (numero_doc or "").strip()) or "Carga")[:_MAX_LEN_NUMERO_DOCUMENTO]
 
                 usuario_registro = _usuario_registro_desde_current_user(current_user)
+
+                if prestamo_id:
+                    msg_h_excel = conflicto_huella_para_creacion(
+                        db,
+                        prestamo_id=prestamo_id,
+                        fecha_pago=fecha_pago,
+                        monto_pagado=monto,
+                        numero_documento=numero_doc_norm,
+                        referencia_pago=ref_pago,
+                        huellas_en_mismo_lote=huellas_lote_excel,
+                    )
+                    if msg_h_excel:
+                        registrar_rechazo_huella_funcional()
+                        err_msg = msg_h_excel
+                        errores.append(f"Fila {i}: {err_msg}")
+                        errores_detalle.append(
+                            {
+                                "fila": i,
+                                "cedula": cedula,
+                                "error": err_msg,
+                                "datos": {
+                                    "cedula": cedula,
+                                    "prestamo_id": prestamo_id,
+                                    "fecha_pago": fecha_val,
+                                    "monto_pagado": monto,
+                                    "numero_documento": numero_doc or "",
+                                },
+                            }
+                        )
+                        pagos_con_error_list.append(
+                            {
+                                "fila_idx": i,
+                                "cedula": cedula or "",
+                                "prestamo_id": prestamo_id,
+                                "fecha_val": fecha_val,
+                                "monto": monto,
+                                "numero_doc": numero_doc or "",
+                                "errores": [err_msg],
+                            }
+                        )
+                        continue
 
                 # Autoconciliar: pagos creados por carga Excel se marcan conciliados (aplicados a cuotas después)
 
@@ -2030,6 +2087,8 @@ def importar_un_pago_reportado_a_pagos(
     docs_en_lote: set[str],
 
     registrar_error_en_tabla: bool = True,
+
+    huellas_funcional_lote: Optional[set[tuple[int, str, str, str]]] = None,
 
 ) -> dict:
 
@@ -2271,6 +2330,28 @@ def importar_un_pago_reportado_a_pagos(
 
     ahora_imp = datetime.now(ZoneInfo(TZ_NEGOCIO))
 
+    fecha_huella_cobros = (
+        pr.fecha_pago
+        if pr.fecha_pago is not None
+        else datetime.now(ZoneInfo(TZ_NEGOCIO)).date()
+    )
+
+    monto_dec_cobros = Decimal(str(round(monto, 2)))
+
+    msg_h_cobros = conflicto_huella_para_creacion(
+        db,
+        prestamo_id=prestamo_id,
+        fecha_pago=fecha_huella_cobros,
+        monto_pagado=monto_dec_cobros,
+        numero_documento=numero_doc_norm,
+        referencia_pago=ref_pago,
+        huellas_en_mismo_lote=huellas_funcional_lote,
+    )
+
+    if msg_h_cobros:
+        registrar_rechazo_huella_funcional()
+        return _err_con_pce(msg_h_cobros, cedula_cliente=cedula_raw, prestamo_id=prestamo_id)
+
     p = Pago(
 
         cedula_cliente=cedula_raw,
@@ -2279,7 +2360,7 @@ def importar_un_pago_reportado_a_pagos(
 
         fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
 
-        monto_pagado=Decimal(str(round(monto, 2))),
+        monto_pagado=monto_dec_cobros,
 
         numero_documento=numero_doc_norm,
 
@@ -2414,6 +2495,8 @@ def importar_reportados_aprobados_a_pagos(
 
     docs_en_lote: set[str] = set()
 
+    huellas_funcional_lote_cobros: set[tuple[int, str, str, str]] = set()
+
     pagos_creados: list[Pago] = []
 
 
@@ -2433,6 +2516,8 @@ def importar_reportados_aprobados_a_pagos(
             docs_en_lote=docs_en_lote,
 
             registrar_error_en_tabla=True,
+
+            huellas_funcional_lote=huellas_funcional_lote_cobros,
 
         )
 
@@ -3388,6 +3473,18 @@ def guardar_fila_editable(
 
         )
 
+        msg_h_fila = conflicto_huella_para_creacion(
+            db,
+            prestamo_id=prestamo_id,
+            fecha_pago=fecha_pago,
+            monto_pagado=monto_usd_g,
+            numero_documento=numero_doc_norm,
+            referencia_pago=ref_pago,
+        )
+        if msg_h_fila:
+            registrar_rechazo_huella_funcional()
+            raise HTTPException(status_code=409, detail=msg_h_fila)
+
         pago = Pago(
 
             cedula_cliente=cedula_fk,
@@ -3962,6 +4059,26 @@ def get_pagos_kpis(
 
         anio_resp = anio if anio is not None else inicio_mes.year
 
+        n_prestamos_huella_dup = contar_prestamos_con_huella_funcional_duplicada(db)
+
+        calidad_huella = {
+
+            **snapshot_rechazos_huella_funcional(),
+
+            "prestamos_con_alerta_control_huella_funcional_duplicada": n_prestamos_huella_dup,
+
+            "codigo_control_auditoria": "pagos_huella_funcional_duplicada",
+
+            "nota": (
+
+                "rechazos_409_* cuenta rechazos API desde el ultimo arranque del proceso; "
+
+                "prestamos_con_alerta_* es conteo en tiempo real en BD (misma regla que auditoria cartera)."
+
+            ),
+
+        }
+
         return {
 
             "montoACobrarMes": _safe_float(monto_a_cobrar_mes),
@@ -3974,13 +4091,13 @@ def get_pagos_kpis(
 
             "anio": anio_resp,
 
-            "anio": anio_resp,
-
             "saldoPorCobrar": _safe_float(cartera_pendiente),
 
             "clientesEnMora": clientes_en_mora,
 
             "clientesAlDia": clientes_al_dia,
+
+            "calidad_carga_pagos_huella": calidad_huella,
 
         }
 
@@ -4010,13 +4127,23 @@ def get_pagos_kpis(
 
             "anio": anio if anio is not None else hoy.year,
 
-            "anio": anio if anio is not None else hoy.year,
-
             "saldoPorCobrar": 0.0,
 
             "clientesEnMora": 0,
 
             "clientesAlDia": 0,
+
+            "calidad_carga_pagos_huella": {
+
+                **snapshot_rechazos_huella_funcional(),
+
+                "prestamos_con_alerta_control_huella_funcional_duplicada": None,
+
+                "codigo_control_auditoria": "pagos_huella_funcional_duplicada",
+
+                "nota": "KPI principal no disponible por error; conteo BD omitido en este fallback.",
+
+            },
 
         }
 
@@ -4597,6 +4724,8 @@ def crear_pagos_batch(
 
             autorizados_bs = preload_autorizados_bs(db)
 
+            huellas_lote_batch: set[tuple[int, str, str, str]] = set()
+
             for idx, payload in enumerate(pagos_list):
 
                 num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
@@ -4668,6 +4797,22 @@ def crear_pagos_batch(
                     d = e.detail if isinstance(e.detail, str) else str(e.detail)
 
                     raise HTTPException(status_code=e.status_code, detail=f"Lote fila {idx + 1}: {d}") from e
+
+                msg_h_batch = conflicto_huella_para_creacion(
+                    db,
+                    prestamo_id=_pid_res,
+                    fecha_pago=payload.fecha_pago,
+                    monto_pagado=monto_usd_b,
+                    numero_documento=num_doc,
+                    referencia_pago=ref,
+                    huellas_en_mismo_lote=huellas_lote_batch,
+                )
+                if msg_h_batch:
+                    registrar_rechazo_huella_funcional()
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Lote fila {idx + 1}: {msg_h_batch}",
+                    )
 
                 row = Pago(
 
@@ -4919,6 +5064,18 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         )
 
+        msg_huella = conflicto_huella_para_creacion(
+            db,
+            prestamo_id=payload.prestamo_id,
+            fecha_pago=payload.fecha_pago,
+            monto_pagado=monto_usd,
+            numero_documento=num_doc,
+            referencia_pago=ref,
+        )
+        if msg_huella:
+            registrar_rechazo_huella_funcional()
+            raise HTTPException(status_code=409, detail=msg_huella)
+
         row = Pago(
 
             cedula_cliente=cedula_normalizada,
@@ -4995,11 +5152,13 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             if "ux_pagos_fingerprint_activos" in constraint:
 
+                registrar_rechazo_huella_funcional()
+
                 raise HTTPException(
 
                     status_code=409,
 
-                    detail="Pago duplicado detectado por huella funcional (prestamo, fecha, monto y referencia).",
+                    detail=HTTP_409_DETAIL_HUELLA_FUNCIONAL,
 
                 )
 
@@ -5129,6 +5288,38 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             setattr(row, k, v)
 
+    fp_row = row.fecha_pago
+
+    if isinstance(fp_row, datetime):
+
+        fecha_huella_up = fp_row.date()
+
+    elif isinstance(fp_row, date):
+
+        fecha_huella_up = fp_row
+
+    else:
+
+        fecha_huella_up = None
+
+    rn_up = ref_norm_desde_campos(row.numero_documento, row.referencia_pago).strip()
+
+    if row.prestamo_id and fecha_huella_up is not None and rn_up:
+
+        if existe_otro_pago_misma_huella_funcional(
+            db,
+            prestamo_id=int(row.prestamo_id),
+            fecha_pago=fecha_huella_up,
+            monto_pagado=row.monto_pagado,
+            ref_norm=rn_up,
+            exclude_pago_id=pago_id,
+        ):
+            db.rollback()
+
+            registrar_rechazo_huella_funcional()
+
+            raise HTTPException(status_code=409, detail=HTTP_409_DETAIL_HUELLA_FUNCIONAL)
+
     try:
 
         db.commit()
@@ -5140,6 +5331,14 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         db.rollback()
 
         if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
+
+            cname = getattr(getattr(getattr(e, "orig", None), "diag", None), "constraint_name", "") or ""
+
+            if "ux_pagos_fingerprint_activos" in cname:
+
+                registrar_rechazo_huella_funcional()
+
+                raise HTTPException(status_code=409, detail=HTTP_409_DETAIL_HUELLA_FUNCIONAL)
 
             raise HTTPException(
 
