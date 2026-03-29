@@ -92,6 +92,16 @@ type FiltrosApi = {
 
 const VALOR_TODOS_CONTROLES = '__todos__'
 
+function etiquetaCasosControl(n: number): string {
+  if (n === 1) return '1 caso'
+  return `${n} casos`
+}
+
+function etiquetaPrestamosConAlerta(n: number): string {
+  if (n === 1) return '1 prestamo con alerta'
+  return `${n} prestamos con alerta`
+}
+
 const SESSION_CACHE_KEY = 'auditoria_cartera_ui_v1'
 
 type CarteraSessionCacheV1 = {
@@ -519,6 +529,57 @@ export function AuditoriaCarteraTab() {
     return {}
   }, [resumen])
 
+  const conteosEfectivosPorControl = useMemo(() => {
+    const rawPanel = panelKpis?.conteos_por_control
+    const fromPanel =
+      rawPanel && typeof rawPanel === 'object' && !Array.isArray(rawPanel)
+        ? (rawPanel as Record<string, unknown>)
+        : {}
+    const out: Record<string, number> = {}
+    for (const def of AUDITORIA_CARTERA_CONTROLES_CATALOGO) {
+      const c = def.codigo
+      const fromR = conteosPorControlCodigo[c]
+      const r =
+        typeof fromR === 'number' && !Number.isNaN(fromR) ? fromR : undefined
+      const rawP = fromPanel[c]
+      const pNum =
+        typeof rawP === 'number'
+          ? rawP
+          : rawP != null && rawP !== ''
+            ? Number(rawP)
+            : NaN
+      const p = !Number.isNaN(pNum) ? pNum : undefined
+      out[c] = r !== undefined ? r : p !== undefined ? p : 0
+    }
+    return out
+  }, [conteosPorControlCodigo, panelKpis])
+
+  const prestamosConAlertaNum = useMemo(() => {
+    const raw = resumen?.prestamos_con_alerta ?? panelKpis?.prestamos_con_alerta
+    if (raw == null || raw === '') return null
+    const n = Number(raw)
+    return Number.isNaN(n) ? null : n
+  }, [resumen, panelKpis])
+
+  const etiquetaControlFiltroSeleccion = useMemo(() => {
+    const cod = filtrosApi.codigo_control?.trim()
+    if (!cod) {
+      const suf =
+        prestamosConAlertaNum != null
+          ? ` · ${etiquetaPrestamosConAlerta(prestamosConAlertaNum)}`
+          : ''
+      return `Todos los controles (cola completa)${suf}`
+    }
+    const def = AUDITORIA_CARTERA_CONTROLES_CATALOGO.find(d => d.codigo === cod)
+    if (!def) return cod
+    const cnt = conteosEfectivosPorControl[cod] ?? 0
+    return `${def.n}. ${def.titulo} · ${etiquetaCasosControl(cnt)}`
+  }, [
+    filtrosApi.codigo_control,
+    conteosEfectivosPorControl,
+    prestamosConAlertaNum,
+  ])
+
   const abrirDialogoExcepcion = (
     prestamoId: number,
     codigo: string,
@@ -819,8 +880,7 @@ export function AuditoriaCarteraTab() {
                     : VALOR_TODOS_CONTROLES
                 }
                 onValueChange={v => {
-                  const cod =
-                    v === VALOR_TODOS_CONTROLES ? undefined : v
+                  const cod = v === VALOR_TODOS_CONTROLES ? undefined : v
                   setFiltrosApi(prev => ({ ...prev, codigo_control: cod }))
                   setPage(1)
                 }}
@@ -829,18 +889,32 @@ export function AuditoriaCarteraTab() {
                   id="auditoria-control-filtro"
                   className="h-9 border-slate-200"
                   disabled={loading}
+                  title={etiquetaControlFiltroSeleccion}
                 >
                   <SelectValue placeholder="Todos los controles" />
                 </SelectTrigger>
-                <SelectContent className="max-h-[min(70vh,380px)]">
-                  <SelectItem value={VALOR_TODOS_CONTROLES}>
+                <SelectContent wide>
+                  <SelectItem
+                    value={VALOR_TODOS_CONTROLES}
+                    className="w-max min-w-full whitespace-nowrap pr-10"
+                  >
                     Todos los controles (cola completa)
+                    {prestamosConAlertaNum != null
+                      ? ` · ${etiquetaPrestamosConAlerta(prestamosConAlertaNum)}`
+                      : ''}
                   </SelectItem>
-                  {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => (
-                    <SelectItem key={def.codigo} value={def.codigo}>
-                      {def.n}. {def.titulo}
-                    </SelectItem>
-                  ))}
+                  {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => {
+                    const cnt = conteosEfectivosPorControl[def.codigo] ?? 0
+                    return (
+                      <SelectItem
+                        key={def.codigo}
+                        value={def.codigo}
+                        className="w-max min-w-full whitespace-nowrap pr-10"
+                      >
+                        {def.n}. {def.titulo} · {etiquetaCasosControl(cnt)}
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
             </div>
