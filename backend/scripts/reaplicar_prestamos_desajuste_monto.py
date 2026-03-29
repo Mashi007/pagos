@@ -23,6 +23,23 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
 
+
+def _mensaje_duplicado_huella_pago(exc: Exception) -> str | None:
+    """Si el fallo es por ux_pagos_fingerprint_activos, devuelve texto de ayuda."""
+    s = f"{type(exc).__name__}: {exc!s}"
+    if "ux_pagos_fingerprint_activos" not in s and "UniqueViolation" not in s:
+        return None
+    return (
+        "Huella duplicada (prestamo + fecha_pago + monto + ref_norm): hay dos pagos "
+        "activos que normalizan a la misma referencia. Corrija datos: distinto "
+        "numero_documento o referencia_pago en uno de los pagos (el modelo recalcula "
+        "ref_norm al guardar). Consulta ejemplo:\n"
+        "  SELECT id, prestamo_id, cedula, fecha_pago::date, monto_pagado, "
+        "numero_documento, referencia_pago, ref_norm, estado, conciliado\n"
+        "  FROM pagos WHERE prestamo_id = 1822  /* sustituya 1822 por su prestamo_id */\n"
+        "  ORDER BY id;"
+    )
+
 SQL_IDS = """
 WITH desajuste AS (
   SELECT
@@ -99,6 +116,9 @@ def main() -> None:
                 pass
             fail_n += 1
             print(f"[{i}/{len(ids)}] ERROR prestamo_id={pid} {e!r}")
+            hint = _mensaje_duplicado_huella_pago(e)
+            if hint:
+                print(hint)
         finally:
             db.close()
 
