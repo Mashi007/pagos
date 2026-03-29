@@ -14,6 +14,13 @@ Uso (desde carpeta backend):
 Opcional:
   --max-diff-usd 100   (solo gaps estrictamente menores; defecto 100)
   --min-diff-usd 0.02  (ignora diferencias de ruido; defecto 0.02)
+  --prestamo-id 253    (repite flag para varios; ignora SQL de rango y solo esos IDs)
+
+Bandas ejemplo (misma consulta que auditoria):
+  gap < 100 USD (defecto):  python scripts/reaplicar_prestamos_liquidado_gap_menor_100.py
+  [100, 350):               --min-diff-usd 100 --max-diff-usd 350
+  [350, 5000):              --min-diff-usd 350 --max-diff-usd 5000
+  Un solo coloso:           --prestamo-id 253
 """
 from __future__ import annotations
 
@@ -78,33 +85,54 @@ def main() -> None:
     ap.add_argument("--skip", type=int, default=0)
     ap.add_argument("--max-diff-usd", type=float, default=100.0)
     ap.add_argument("--min-diff-usd", type=float, default=0.02)
+    ap.add_argument(
+        "--prestamo-id",
+        type=int,
+        action="append",
+        dest="prestamo_ids",
+        default=None,
+        help="Solo estos prestamo_id (repetir flag). Omite el filtro por rango de gap.",
+    )
     args = ap.parse_args()
 
-    if args.max_diff_usd <= args.min_diff_usd:
-        print("max-diff-usd debe ser mayor que min-diff-usd")
-        sys.exit(1)
-
-    q = text(sql_ids(args.max_diff_usd, args.min_diff_usd))
-    db_list: Session = SessionLocal()
-    try:
-        rows = db_list.execute(
-            q, {"min_diff": args.min_diff_usd, "max_diff": args.max_diff_usd}
-        ).fetchall()
-        ids = [int(r[0]) for r in rows]
+    if args.prestamo_ids:
+        ids = sorted({int(x) for x in args.prestamo_ids if x is not None})
         if args.skip:
             ids = ids[args.skip :]
         if args.limit is not None:
             ids = ids[: args.limit]
         print(
-            f"prestamos_a_procesar={len(ids)} "
-            f"(total_en_criterio={len(rows)} skip={args.skip} "
-            f"gap en ({args.min_diff_usd}, {args.max_diff_usd}) USD LIQUIDADO)"
+            f"prestamos_a_procesar={len(ids)} (modo --prestamo-id explicito, skip={args.skip})"
         )
         if args.dry_run:
-            print("ordenados por gap ascendente:", ids)
+            print("ids:", ids)
             return
-    finally:
-        db_list.close()
+    else:
+        if args.max_diff_usd <= args.min_diff_usd:
+            print("max-diff-usd debe ser mayor que min-diff-usd")
+            sys.exit(1)
+
+        q = text(sql_ids(args.max_diff_usd, args.min_diff_usd))
+        db_list: Session = SessionLocal()
+        try:
+            rows = db_list.execute(
+                q, {"min_diff": args.min_diff_usd, "max_diff": args.max_diff_usd}
+            ).fetchall()
+            ids = [int(r[0]) for r in rows]
+            if args.skip:
+                ids = ids[args.skip :]
+            if args.limit is not None:
+                ids = ids[: args.limit]
+            print(
+                f"prestamos_a_procesar={len(ids)} "
+                f"(total_en_criterio={len(rows)} skip={args.skip} "
+                f"gap en ({args.min_diff_usd}, {args.max_diff_usd}) USD LIQUIDADO)"
+            )
+            if args.dry_run:
+                print("ordenados por gap ascendente:", ids)
+                return
+        finally:
+            db_list.close()
 
     ok_n = 0
     fail_n = 0
