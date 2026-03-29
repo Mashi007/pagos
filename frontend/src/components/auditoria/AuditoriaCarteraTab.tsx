@@ -20,6 +20,14 @@ import { Input } from '../ui/input'
 
 import { Label } from '../ui/label'
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select'
+
 import { Badge } from '../ui/badge'
 
 import {
@@ -75,7 +83,14 @@ function csvEscapeCell(val: string): string {
   return val
 }
 
-type FiltrosApi = { cedula: string; prestamo_id?: number }
+type FiltrosApi = {
+  cedula: string
+  prestamo_id?: number
+  /** Filtro servidor: solo prestamos con este control en SI (opcional). */
+  codigo_control?: string
+}
+
+const VALOR_TODOS_CONTROLES = '__todos__'
 
 const SESSION_CACHE_KEY = 'auditoria_cartera_ui_v1'
 
@@ -192,9 +207,19 @@ export function AuditoriaCarteraTab() {
       : ''
   )
 
-  const [filtrosApi, setFiltrosApi] = useState<FiltrosApi>(
-    () => boot?.filtrosApi ?? { cedula: '' }
-  )
+  const [filtrosApi, setFiltrosApi] = useState<FiltrosApi>(() => {
+    if (!boot?.filtrosApi) return { cedula: '' }
+    const codLegacy =
+      boot.filtroControlCodigo && String(boot.filtroControlCodigo).trim()
+        ? String(boot.filtroControlCodigo).trim()
+        : undefined
+    const prevCod = (boot.filtrosApi as Partial<FiltrosApi>).codigo_control
+    return {
+      cedula: boot.filtrosApi.cedula ?? '',
+      prestamo_id: boot.filtrosApi.prestamo_id,
+      codigo_control: codLegacy ?? prevCod,
+    }
+  })
 
   const [page, setPage] = useState(() => boot?.page ?? 1)
 
@@ -268,6 +293,7 @@ export function AuditoriaCarteraTab() {
           limit: pageSize,
           cedula: filtrosApi.cedula.trim() || undefined,
           prestamo_id: filtrosApi.prestamo_id,
+          codigo_control: filtrosApi.codigo_control?.trim() || undefined,
           excluir_marcar_ok: !vistaMotorCrudo,
         })
 
@@ -289,7 +315,7 @@ export function AuditoriaCarteraTab() {
           resumen: nextResumen,
           filtrosApi,
           page,
-          filtroControlCodigo: '',
+          filtroControlCodigo: filtrosApi.codigo_control?.trim() || '',
           ocultosKeys: [...ocultos],
           vista_motor_crudo: vistaMotorCrudo,
         })
@@ -312,6 +338,9 @@ export function AuditoriaCarteraTab() {
     },
     [page, pageSize, filtrosApi, vistaMotorCrudo, syncOcultosConItems]
   )
+
+  /** Mientras la BD responde lento (p. ej. script masivo), no ocultar resumen ni tabla en cache. */
+  const bloqueoListaCompleta = loading && items.length === 0
 
   const primeraCargaRef = useRef(true)
   const bootRef = useRef(boot)
@@ -355,7 +384,11 @@ export function AuditoriaCarteraTab() {
       }
       pid = n
     }
-    setFiltrosApi({ cedula: cedulaInput.trim(), prestamo_id: pid })
+    setFiltrosApi(prev => ({
+      ...prev,
+      cedula: cedulaInput.trim(),
+      prestamo_id: pid,
+    }))
     setPage(1)
   }, [cedulaInput, prestamoInput])
 
@@ -365,6 +398,7 @@ export function AuditoriaCarteraTab() {
       const r = await auditoriaService.obtenerCarteraResumen({
         cedula: filtrosApi.cedula.trim() || undefined,
         prestamo_id: filtrosApi.prestamo_id,
+        codigo_control: filtrosApi.codigo_control?.trim() || undefined,
         excluir_marcar_ok: !vistaMotorCrudo,
       })
       setPanelKpis((r.resumen as Record<string, unknown>) || {})
@@ -417,6 +451,7 @@ export function AuditoriaCarteraTab() {
         limit: 5000,
         cedula: filtrosApi.cedula.trim() || undefined,
         prestamo_id: filtrosApi.prestamo_id,
+        codigo_control: filtrosApi.codigo_control?.trim() || undefined,
         excluir_marcar_ok: !vistaMotorCrudo,
       })
       const header =
@@ -693,7 +728,7 @@ export function AuditoriaCarteraTab() {
               Ejecutar ahora y guardar meta
             </Button>
 
-            {esAdmin && hayDesajustePagosVsAplicado && !loading ? (
+            {esAdmin && hayDesajustePagosVsAplicado && !bloqueoListaCompleta ? (
               <Button
                 variant="secondary"
                 size="sm"
@@ -710,7 +745,7 @@ export function AuditoriaCarteraTab() {
               </Button>
             ) : null}
 
-            {hayAlertas && !loading ? (
+            {hayAlertas && !bloqueoListaCompleta ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -770,6 +805,46 @@ export function AuditoriaCarteraTab() {
               />
             </div>
 
+            <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-5">
+              <Label
+                htmlFor="auditoria-control-filtro"
+                className="text-xs font-medium text-slate-700"
+              >
+                Control a revisar
+              </Label>
+              <Select
+                value={
+                  filtrosApi.codigo_control?.trim()
+                    ? filtrosApi.codigo_control.trim()
+                    : VALOR_TODOS_CONTROLES
+                }
+                onValueChange={v => {
+                  const cod =
+                    v === VALOR_TODOS_CONTROLES ? undefined : v
+                  setFiltrosApi(prev => ({ ...prev, codigo_control: cod }))
+                  setPage(1)
+                }}
+              >
+                <SelectTrigger
+                  id="auditoria-control-filtro"
+                  className="h-9 border-slate-200"
+                  disabled={loading}
+                >
+                  <SelectValue placeholder="Todos los controles" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,380px)]">
+                  <SelectItem value={VALOR_TODOS_CONTROLES}>
+                    Todos los controles (cola completa)
+                  </SelectItem>
+                  {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => (
+                    <SelectItem key={def.codigo} value={def.codigo}>
+                      {def.n}. {def.titulo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
               <Button
                 type="button"
@@ -798,7 +873,7 @@ export function AuditoriaCarteraTab() {
             </div>
           </div>
 
-          {resumen && !loading ? (
+          {resumen ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm text-slate-700">
               <span>
                 Evaluados:{' '}
@@ -922,7 +997,7 @@ export function AuditoriaCarteraTab() {
         </Card>
       ) : null}
 
-      {hayAlertas && !loading && totalPages > 1 ? (
+      {hayAlertas && !bloqueoListaCompleta && totalPages > 1 ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
@@ -951,7 +1026,7 @@ export function AuditoriaCarteraTab() {
         </div>
       ) : null}
 
-      {loading ? (
+      {bloqueoListaCompleta ? (
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-center py-12 text-gray-500">
@@ -969,6 +1044,17 @@ export function AuditoriaCarteraTab() {
       ) : (
         <Card>
           <CardContent className="pt-6">
+            {loading && items.length > 0 ? (
+              <div
+                className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm text-amber-950"
+                role="status"
+              >
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                Actualizando lista desde la base de datos (puede tardar si hay
+                carga pesada en el servidor). La tabla muestra la ultima
+                respuesta recibida.
+              </div>
+            ) : null}
             {visibleRows.length === 0 ? (
               <p className="py-8 text-center text-gray-600">
                 En esta pagina no quedan filas (paginacion o casos fuera de cola
