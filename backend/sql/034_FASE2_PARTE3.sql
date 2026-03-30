@@ -9,14 +9,14 @@ SELECT
     COUNT(*) as total_pagos,
     COUNT(CASE WHEN estado='PAGADO' THEN 1 END) as pagos_completados,
     ROUND(
-        COUNT(CASE WHEN estado='PAGADO' THEN 1 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 
+        (COUNT(CASE WHEN estado='PAGADO' THEN 1 END)::NUMERIC / NULLIF(COUNT(*), 0) * 100)::NUMERIC, 
         2
     ) as porcentaje_pagado,
     SUM(CASE WHEN estado='PAGADO' THEN monto_pagado ELSE 0 END) as monto_total_pagado,
     ROUND(
         AVG(CASE WHEN estado='PAGADO' AND fecha_conciliacion IS NOT NULL 
             THEN EXTRACT(DAY FROM fecha_conciliacion - fecha_pago) 
-            ELSE NULL END),
+            ELSE NULL END)::NUMERIC,
         2
     ) as dias_promedio_conciliacion,
     DATE_TRUNC('day', NOW()) as fecha_snapshot
