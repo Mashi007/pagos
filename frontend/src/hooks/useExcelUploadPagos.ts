@@ -412,6 +412,14 @@ export function useExcelUploadPagos({
             map[cedula.toUpperCase()] = arr
 
             map[cedula.toLowerCase()] = arr
+
+            // Si la cédula es V+dígitos, también guardar sin V (para búsquedas que vienen sin V)
+            if (/^V\d{6,11}$/i.test(cedula)) {
+              const sinV = cedula.slice(1)
+              map[sinV] = arr
+              map[sinV.toUpperCase()] = arr
+              map[sinV.toLowerCase()] = arr
+            }
           })
 
           return map
@@ -540,6 +548,14 @@ export function useExcelUploadPagos({
             map[cedula.toUpperCase()] = arr
 
             map[cedula.toLowerCase()] = arr
+
+            // Si la cédula es V+dígitos, también guardar sin V (para búsquedas que vienen sin V)
+            if (/^V\d{6,11}$/i.test(cedula)) {
+              const sinV = cedula.slice(1)
+              map[sinV] = arr
+              map[sinV.toUpperCase()] = arr
+              map[sinV.toLowerCase()] = arr
+            }
           })
 
           setPrestamosPorCedula(prev => ({ ...prev, ...map }))
@@ -2322,6 +2338,14 @@ export function useExcelUploadPagos({
                 map[cedula.toUpperCase()] = arr
 
                 map[cedula.toLowerCase()] = arr
+
+                // Si la cédula es V+dígitos, también guardar sin V
+                if (/^V\d{6,11}$/i.test(cedula)) {
+                  const sinV = cedula.slice(1)
+                  map[sinV] = arr
+                  map[sinV.toUpperCase()] = arr
+                  map[sinV.toLowerCase()] = arr
+                }
               })
             } else {
               const batch = batchOrResults as Record<string, any[]>
@@ -2351,6 +2375,14 @@ export function useExcelUploadPagos({
                 map[cedula.toUpperCase()] = arr
 
                 map[cedula.toLowerCase()] = arr
+
+                // Si la cédula es V+dígitos, también guardar sin V
+                if (/^V\d{6,11}$/i.test(cedula)) {
+                  const sinV = cedula.slice(1)
+                  map[sinV] = arr
+                  map[sinV.toUpperCase()] = arr
+                  map[sinV.toLowerCase()] = arr
+                }
               })
             }
 

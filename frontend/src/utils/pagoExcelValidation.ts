@@ -159,6 +159,9 @@ export function cedulaParaLookup(val: unknown): string {
 
   if (match) return match[0].replace(/-/g, '')
 
+  // Si es número plano (6-11 dígitos sin prefijo), normalizar a V+dígitos
+  if (/^\d{6,11}$/.test(sinGuion)) return 'V' + sinGuion
+
   if (/^\d{8}$/.test(sinGuion)) return 'V' + sinGuion
 
   return s
