@@ -5,6 +5,7 @@ import {
   Download,
   Eye,
   Loader2,
+  Lock,
   RefreshCw,
   Search,
   X,
@@ -55,6 +56,8 @@ import {
 import { prestamoService } from '../services/prestamoService'
 
 import { cn, formatDate } from '../utils'
+import { usePermissions } from '../hooks/usePermissions'
+import { Card, CardContent } from '../components/ui/card'
 
 function textoUltimoPago(iso: string | null | undefined): string {
   if (iso == null || String(iso).trim() === '') return '-'
@@ -115,6 +118,8 @@ export function FiniquitoGestionPage() {
     setDescargandoEstadoCuentaPrestamoId,
   ] = useState<number | null>(null)
 
+  const { isFiniquitador } = usePermissions()
+
   useEffect(() => {
     const t = window.setTimeout(
       () => setCedulaBusqueda(cedulaInput.trim()),
@@ -122,6 +127,28 @@ export function FiniquitoGestionPage() {
     )
     return () => window.clearTimeout(t)
   }, [cedulaInput])
+
+  // Verificar acceso: solo finiquitador o administrador
+  if (!isFiniquitador) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-8 py-12">
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <Lock className="h-5 w-5 text-red-600" />
+              <div>
+                <p className="font-semibold text-red-800">Acceso Restringido</p>
+                <p className="mt-1 text-sm text-red-700">
+                  No tienes permisos para acceder a la gestión de finiquitos.
+                  Contacta al administrador.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   const cargarListas = useCallback(async () => {
     setLoading(true)

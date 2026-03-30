@@ -1,7 +1,10 @@
 """
 Modelo SQLAlchemy para Usuario (auth y gestión de usuarios).
 Tabla: usuarios. Campos: email, password_hash, nombre, apellido, cargo, rol, is_active, timestamps.
-Rol: 'administrador' | 'operativo'.
+Rol: 'administrador' | 'operativo' | 'finiquitador'.
+  - administrador: acceso total
+  - operativo: acceso limitado a reportes y préstamos
+  - finiquitador: acceso exclusivo a finiquito gestion (/pagos/finiquitos/gestion)
 """
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
 

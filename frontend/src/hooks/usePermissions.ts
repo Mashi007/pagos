@@ -44,6 +44,16 @@ export function usePermissions() {
   }
 
   /**
+   * Verifica si el usuario puede acceder a finiquito gestion
+   * - Solo finiquitador o administrador
+   */
+
+  const isFiniquitador = (): boolean => {
+    const rol = (user?.rol || 'operativo').toLowerCase()
+    return rol === 'finiquitador' || rol === 'administrador'
+  }
+
+  /**
 
 
 
@@ -325,6 +335,8 @@ export function usePermissions() {
     user,
 
     isAdmin: isAdmin(),
+
+    isFiniquitador: isFiniquitador(),
 
     canEditPrestamo,
 

@@ -100,6 +100,19 @@ def require_administrador(
     return current
 
 
+def require_finiquitador(
+    current: UserResponse = Depends(get_current_user),
+) -> UserResponse:
+    """Solo rol finiquitador o administrador (acceso exclusivo a finiquito gestion)."""
+    rol = (current.rol or "").lower()
+    if rol not in ("administrador", "finiquitador"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo finiquitadores y administradores pueden acceder a este recurso.",
+        )
+    return current
+
+
 def require_auditoria_cartera_access(
     current_user: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
