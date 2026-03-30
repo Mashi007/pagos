@@ -272,7 +272,7 @@ function App() {
                 isAuthenticated ? (
                   <Navigate to="/dashboard/menu" replace />
                 ) : (
-                  <Navigate to="/login" replace />
+                  <Navigate to="/acceso-limitado" replace />
                 )
               }
             />
