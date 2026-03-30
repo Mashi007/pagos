@@ -44,7 +44,6 @@ WHERE estado != 'CANCELADA';
 -- Verificar que todos los índices fueron creados exitosamente:
 SELECT 
     schemaname,
-    tablename,
     indexname,
     indexdef
 FROM pg_indexes
@@ -55,7 +54,7 @@ WHERE indexname IN (
     'idx_pago_reportado_cedula_estado',
     'idx_cuota_prestamo'
 )
-ORDER BY tablename, indexname;
+ORDER BY indexname;
 
 -- ============================================================================
 -- ESTADÍSTICAS DE ÍNDICES (ejecutar después de un tiempo de uso)
@@ -64,7 +63,6 @@ ORDER BY tablename, indexname;
 -- Verificar uso de índices:
 SELECT 
     schemaname,
-    tablename,
     indexname,
     idx_scan as num_scans,
     idx_tup_read as tuples_read,
