@@ -12,7 +12,7 @@ warnings.filterwarnings("ignore", message=".*urllib3.*chardet.*", category=UserW
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from app.core.config import settings
 from app.api.v1 import api_router
 from app.middleware.audit_middleware import AuditMiddleware
@@ -465,6 +465,43 @@ async def health_check_db():
 async def health_check_head():
     """Endpoint de salud para HEAD requests"""
     return
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    """Sirve robots.txt para indicarle a los bots que no indexen APIs sensibles."""
+    return """# Bloquear bots (incluido Google) de acceder a APIs públicas sensibles
+# Razón: tokens JWT y datos personales no deben ser indexados
+
+User-agent: *
+Disallow: /api/v1/estado-cuenta/public/
+Disallow: /api/v1/cobros/public/
+Disallow: /admin/
+Disallow: /health/
+Disallow: /docs
+Disallow: /openapi.json
+Disallow: /redoc
+
+# Google-specific
+User-agent: Googlebot
+Disallow: /api/v1/estado-cuenta/public/
+Disallow: /api/v1/cobros/public/
+
+User-agent: Bingbot
+Disallow: /api/
+
+User-agent: DuckDuckBot
+Disallow: /api/
+
+User-agent: Mediapartners-Google
+Disallow: /
+
+User-agent: *-bot
+Disallow: /api/
+
+Crawl-delay: 10
+Request-rate: 1/10s
+"""
 
 
 

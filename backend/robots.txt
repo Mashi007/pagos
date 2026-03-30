@@ -1,0 +1,38 @@
+# Bloquear bots (incluido Google) de acceder a APIs públicas sensibles
+# Razón: tokens JWT y datos personales no deben ser indexados
+
+User-agent: *
+Disallow: /api/v1/estado-cuenta/public/
+Disallow: /api/v1/cobros/public/
+Disallow: /admin/
+Disallow: /health/
+Disallow: /docs
+Disallow: /openapi.json
+Disallow: /redoc
+
+# Google-specific: usar google-specific disallow
+User-agent: Googlebot
+Disallow: /api/v1/estado-cuenta/public/
+Disallow: /api/v1/cobros/public/
+
+# Permitir acceso indexación a página pública de estado de cuenta (formulario)
+# si tiene una URL específica que no sea API
+# User-agent: *
+# Allow: /formulario-estado-cuenta
+
+# Otros bots
+User-agent: Bingbot
+Disallow: /api/
+
+User-agent: DuckDuckBot
+Disallow: /api/
+
+# Crawlers personalizados (Google Read Aloud, etc.)
+User-agent: Mediapartners-Google
+Disallow: /
+
+User-agent: *-bot
+Disallow: /api/
+
+Crawl-delay: 10
+Request-rate: 1/10s

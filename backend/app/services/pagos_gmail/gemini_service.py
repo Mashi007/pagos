@@ -1,4 +1,4 @@
-﻿"""
+"""
 Gemini: enviar imagen o PDF, extraer datos de comprobantes.
 Usa el paquete google-genai (google.genai) — sucesor de google-generativeai.
 Configuración única para todo el sistema: GEMINI_API_KEY y GEMINI_MODEL (app.core.config.settings).
@@ -507,7 +507,11 @@ def compare_form_with_image(
     Usa el mismo cliente Gemini del sistema (_gemini_client + GEMINI_API_KEY y GEMINI_MODEL).
     Retorna: {"coincide_exacto": bool, "requiere_revision_humana": bool, "comentario": str}
     Si coincide_exacto es True → se puede aprobar automáticamente. Si no → en_revision humana.
+    
+    Implementa caché en memoria (24h TTL) para evitar re-procesar comprobantes duplicados.
     """
+    from app.services.pagos_gmail.gemini_cache import cache_get, cache_set
+    
     key = api_key or getattr(settings, "GEMINI_API_KEY", None)
     default_result = {
         "coincide_exacto": False,
@@ -517,6 +521,11 @@ def compare_form_with_image(
     if not key or not str(key).strip():
         logger.warning("[COBROS] GEMINI_API_KEY no configurado para comparar formulario vs imagen.")
         return default_result
+    
+    cached_result = cache_get(image_bytes, form_data)
+    if cached_result:
+        logger.info("[COBROS] Gemini: resultado desde caché (SHA256 imagen + form_data)")
+        return cached_result
     # Cédula: formato estándar sin guión (tipo + dígitos); normalizar número sin ceros a la izquierda para comparar
     tipo_c = (form_data.get("tipo_cedula") or "").strip().upper()
     num_c = (form_data.get("numero_cedula") or "").strip()
@@ -590,14 +599,22 @@ def compare_form_with_image(
                         )
                         if solo_banco and _is_recibo_alias(form_data.get("institucion_financiera")):
                             coincide = True
-                            comentario = ""
-                            logger.info("[COBROS] Gemini: divergencia solo Banco con Recibo/Recibos; ignorada.")
-                    return {
+                    comentario = ""
+                    logger.info("[COBROS] Gemini: divergencia solo Banco con Recibo/Recibos; ignorada.")
+                    result = {
                         "coincide_exacto": coincide,
                         "requiere_revision_humana": not coincide,
                         "comentario": comentario,
                     }
-                return default_result
+                    cache_set(image_bytes, form_data, result)
+                    return result
+                result = {
+                    "coincide_exacto": coincide,
+                    "requiere_revision_humana": not coincide,
+                    "comentario": comentario,
+                }
+                cache_set(image_bytes, form_data, result)
+                return result
             except Exception as e:
                 last_error = e
                 if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:

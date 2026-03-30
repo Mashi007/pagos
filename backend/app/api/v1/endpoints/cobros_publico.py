@@ -1181,9 +1181,11 @@ async def enviar_reporte_publico(
 
 def get_recibo_publico(
 
-    token: str = Query(..., description="Token de sesion estado de cuenta"),
+    token: str = Query(None, description="Token en query (deprecated: usar Authorization header)"),
 
     pago_id: int = Query(..., description="ID del pago reportado"),
+
+    request: Request = None,
 
     db: Session = Depends(get_db),
 
@@ -1194,10 +1196,24 @@ def get_recibo_publico(
     Devuelve el PDF del recibo del pago reportado. Requiere token valido (emitido al verificar codigo en estado de cuenta).
 
     Publico, sin auth; la seguridad es el token (cedula + expiracion).
+    
+    Token puede venir en:
+    - Header: Authorization: Bearer <token>
+    - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
 
     """
 
-    payload = decode_token(token)
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token_from_header = None
+    if auth_header.lower().startswith("bearer "):
+        token_from_header = auth_header[7:].strip()
+    
+    token_to_use = token_from_header or token
+    
+    if not token_to_use:
+        raise HTTPException(status_code=401, detail="Token requerido (Authorization header o query param ?token=...).")
+
+    payload = decode_token(token_to_use)
 
     if not payload or payload.get("type") != "recibo":
 
@@ -1700,9 +1716,11 @@ async def enviar_reporte_infopagos(
 
 def get_recibo_infopagos(
 
-    token: str = Query(..., description="Token de descarga emitido tras registrar el pago"),
+    token: str = Query(None, description="Token de descarga (deprecated: usar Authorization header)"),
 
     pago_id: int = Query(..., description="ID del pago reportado"),
+
+    request: Request = None,
 
     db: Session = Depends(get_db),
 
@@ -1713,10 +1731,24 @@ def get_recibo_infopagos(
     Devuelve el PDF del recibo del pago registrado por Infopagos. Requiere el token devuelto
 
     en la respuesta de enviar-reporte (válido 2 horas) para que el colaborador descargue el recibo.
+    
+    Token puede venir en:
+    - Header: Authorization: Bearer <token>
+    - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
 
     """
 
-    payload = decode_token(token)
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token_from_header = None
+    if auth_header.lower().startswith("bearer "):
+        token_from_header = auth_header[7:].strip()
+    
+    token_to_use = token_from_header or token
+    
+    if not token_to_use:
+        raise HTTPException(status_code=401, detail="Token requerido (Authorization header o query param ?token=...).")
+
+    payload = decode_token(token_to_use)
 
     if not payload or payload.get("type") != "recibo_infopagos":
 

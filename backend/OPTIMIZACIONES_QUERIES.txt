@@ -1,0 +1,69 @@
+"""
+Optimizaciones de consultas N+1 para endpoints públicos.
+"""
+
+-- ÍNDICES RECOMENDADOS para endpoints /api/v1/estado-cuenta/public/
+
+-- 1. Estado de Cuenta: validar-cedula
+-- Query: SELECT cliente WHERE cedula = ?
+-- Índice existente: verificar con SELECT * FROM pg_indexes WHERE tablename = 'clientes'
+CREATE INDEX IF NOT EXISTS idx_cliente_cedula ON clientes (cedula);
+
+-- 2. Estado de Cuenta: solicitar-codigo y verificar-codigo
+-- Query: SELECT EstadoCuentaCodigo WHERE cedula_normalizada = ? AND usado = FALSE AND expira_en > now()
+CREATE INDEX IF NOT EXISTS idx_estado_cuenta_codigo_cedula_activo 
+ON estado_cuenta_codigos (cedula_normalizada, usado, expira_en);
+
+-- 3. Cobros público: validar-cedula
+-- Query: SELECT cliente WHERE cedula = ? (mismo índice que arriba)
+-- Índice reutilizable: idx_cliente_cedula
+
+-- 4. Cobros público: enviar-reporte (Gemini validate)
+-- Query: SELECT prestamo WHERE cliente_id = ? AND estado = 'APROBADO'
+CREATE INDEX IF NOT EXISTS idx_prestamo_cliente_estado 
+ON prestamos (cliente_id, estado);
+
+-- MEJORAS DE CÓDIGO:
+
+1. En estado_cuenta_datos.py::obtener_datos_estado_cuenta_cliente
+   - PROBLEMA: Iter sobre prestamos -> foreach cuota (N+1)
+   - SOLUCIÓN: usar eager loading o cargar todas las cuotas de una vez con WHERE prestamo_id IN (...)
+   
+2. En estado_cuenta_publico.py::verificar_codigo_estado_cuenta
+   - Generar PDF llama a obtener_datos_estado_cuenta_cliente
+   - Latencia observada: 236-1170ms en logs
+   - SOLUCIÓN: agregar caché Redis opcional para PDFs (15 min TTL) por cedula_normalizada + fecha_corte
+   - ALTERNATIVA: pre-generar PDFs cada noche para clientes activos
+
+3. Cobros público: enviar-reporte
+   - LATENCIA ACTUAL: 8.8s (Gemini) -> aceptable, es por inference API
+   - Pero: validaciones de BD también toman tiempo
+   - SOLUCIÓN: usar índices recomendados arriba
+
+4. Recibo de cuota público
+   - Query: SELECT prestamo, cuota, pago
+   - PROBLEMA: N queries si hay muchas cuotas
+   - SOLUCIÓN: usar eager loading en db.get(Cuota, cuota_id)
+"""
+
+# IMPLEMENTACIÓN EN PYTHON:
+
+# En estado_cuenta_datos.py, función obtener_datos_estado_cuenta_cliente:
+# CAMBIAR:
+# for prestamo in prestamos:
+#     for cuota in db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id):
+#         # procesar cuota
+
+# POR:
+# prestamo_ids = [p.id for p in prestamos]
+# cuotas = db.query(Cuota).filter(Cuota.prestamo_id.in_(prestamo_ids)).all()  # una query!
+# # agrupar por prestamo_id
+# cuotas_por_prestamo = {}
+# for cuota in cuotas:
+#     if cuota.prestamo_id not in cuotas_por_prestamo:
+#         cuotas_por_prestamo[cuota.prestamo_id] = []
+#     cuotas_por_prestamo[cuota.prestamo_id].append(cuota)
+# for prestamo in prestamos:
+#     cuotas_del_prestamo = cuotas_por_prestamo.get(prestamo.id, [])
+#     for cuota in cuotas_del_prestamo:
+#         # procesar cuota

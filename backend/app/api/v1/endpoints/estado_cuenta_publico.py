@@ -331,11 +331,13 @@ def _obtener_datos_pdf(db: Session, cedula_lookup: str):
 
 def get_recibo_cuota_publico(
 
-    token: str = Query(..., description="Token de estado de cuenta"),
+    token: str = Query(None, description="Token en query (deprecated: usar Authorization header)"),
 
     prestamo_id: int = Query(..., description="ID del préstamo"),
 
     cuota_id: int = Query(..., description="ID de la cuota"),
+
+    request: Request = None,
 
     db: Session = Depends(get_db),
 
@@ -346,10 +348,24 @@ def get_recibo_cuota_publico(
     Devuelve el PDF del recibo de una cuota. Requiere token válido (emitido al verificar código).
 
     Público; la seguridad es el token (cédula + expiración). Para enlaces en el PDF de estado de cuenta.
+    
+    Token puede venir en:
+    - Header: Authorization: Bearer <token>
+    - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
 
     """
-
-    payload = decode_token(token)
+    
+    from fastapi import Header
+    
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token_from_header = None
+    if auth_header.lower().startswith("bearer "):
+        token_from_header = auth_header[7:].strip()
+    
+    token_to_use = token_from_header or token
+    
+    if not token_to_use:
+        raise HTTPException(status_code=401, detail="Token requerido (Authorization header o query param ?token=...).")
 
     if not payload or payload.get("type") != "recibo":
 
@@ -484,15 +500,30 @@ def get_recibo_cuota_publico(
 
 @router.get("/recibo-pago")
 def get_recibo_pago_cartera_publico(
-    token: str = Query(..., description="Token de sesion estado de cuenta"),
+    token: str = Query(None, description="Token en query (deprecated: usar Authorization header)"),
     pago_id: int = Query(..., description="ID del pago en tabla pagos (cartera)"),
+    request: Request = None,
     db: Session = Depends(get_db),
 ):
     """
     PDF del recibo anclado al pago PAGADO de cartera (tabla pagos).
     Token: misma cedula que el titular del prestamo del pago.
+    
+    Token puede venir en:
+    - Header: Authorization: Bearer <token>
+    - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
     """
-    payload = decode_token(token)
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token_from_header = None
+    if auth_header.lower().startswith("bearer "):
+        token_from_header = auth_header[7:].strip()
+    
+    token_to_use = token_from_header or token
+    
+    if not token_to_use:
+        raise HTTPException(status_code=401, detail="Token requerido (Authorization header o query param ?token=...).")
+    
+    payload = decode_token(token_to_use)
     if not payload or payload.get("type") != "recibo":
         raise HTTPException(status_code=401, detail="Token invalido o expirado.")
     cedula_token = (payload.get("sub") or "").strip().replace("-", "").replace(" ", "")
