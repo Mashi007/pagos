@@ -82,7 +82,6 @@ from app.core.email_config_holder import get_email_activo_servicio
 
 
 from app.services.estado_cuenta_datos import (
-    desglose_aplicacion_cuotas_por_pago,
     obtener_pago_para_recibo_cuota,
     texto_institucion_recibo_cuota,
 )
@@ -562,18 +561,10 @@ def get_recibo_pago_cartera_publico(
     es_bs = moneda_raw in ("BS", "BOLIVAR", "BOLIVARES")
     monto_usd = float(getattr(pago, "monto_pagado", 0) or 0)
     monto_bs_val = getattr(pago, "monto_bs_original", None)
-    tasa_val = getattr(pago, "tasa_cambio_bs_usd", None)
     if es_bs and monto_bs_val is not None:
         monto_pagado_texto = f"{_formato_monto_venezolano(float(monto_bs_val))} Bs."
-        tf = float(tasa_val) if tasa_val is not None else None
-        nota_moneda = (
-            f"Equivalente en cartera: <b>{_formato_monto_venezolano(monto_usd)} USD</b>."
-            + (f" Tasa Bs/USD del registro: {tf:,.6f}." if tf else "")
-        )
     else:
         monto_pagado_texto = f"{_formato_monto_venezolano(monto_usd)} USD"
-        nota_moneda = "Monto reconocido en cartera en dolares estadounidenses (USD)."
-    filas = desglose_aplicacion_cuotas_por_pago(db, pago_id)
     pdf_bytes = generar_recibo_pago_cartera_pdf(
         referencia_documento=referencia,
         fecha_reporte_aprobacion_display=fecha_reporte_aprobacion_display,
@@ -584,8 +575,6 @@ def get_recibo_pago_cartera_publico(
         banco=banco,
         numero_operacion=num_op,
         monto_pagado_texto=monto_pagado_texto,
-        nota_moneda=nota_moneda,
-        filas_aplicacion=filas,
     )
     return Response(
         content=bytes(pdf_bytes),

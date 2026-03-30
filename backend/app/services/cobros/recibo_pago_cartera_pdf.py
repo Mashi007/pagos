@@ -1,19 +1,13 @@
 """
 Recibo PDF por pago de cartera (tabla pagos, estado PAGADO).
-Enfasis: monto reconocido/aprobado vs desglose por cuota (monto cuota / aplicado / %).
+Enfasis: monto reconocido/aprobado en cartera.
 """
 from __future__ import annotations
 
 import io
 from pathlib import Path
-from typing import List, Optional
 
-from app.services.cobros.recibo_pdf import (
-    CONTACTO_COBRANZA,
-    WHATSAPP_DISPLAY,
-    WHATSAPP_LINK,
-    _formato_monto_venezolano,
-)
+from app.services.cobros.recibo_pdf import CONTACTO_COBRANZA, WHATSAPP_DISPLAY, WHATSAPP_LINK
 _LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "logo.png"
 
 
@@ -28,18 +22,14 @@ def generar_recibo_pago_cartera_pdf(
     banco: str,
     numero_operacion: str,
     monto_pagado_texto: str,
-    nota_moneda: str,
-    filas_aplicacion: Optional[List[dict]] = None,
 ) -> bytes:
-    """filas_aplicacion: numero_cuota, monto_cuota, monto_aplicado, porcentaje_cuota (numeric + str)."""
+    """Comprobante de pago reconocido en cartera (sin tabla de desglose por cuota)."""
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
     from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-
-    filas_aplicacion = filas_aplicacion or []
 
     _c = {
         "ink": colors.HexColor("#0f172a"),
@@ -51,7 +41,6 @@ def generar_recibo_pago_cartera_pdf(
         "row_white": colors.white,
         "accent": colors.HexColor("#0d9488"),
         "accent_dark": colors.HexColor("#115e59"),
-        "panel": colors.HexColor("#f1f5f9"),
         "table_head": colors.HexColor("#1e293b"),
     }
 
@@ -125,34 +114,6 @@ def generar_recibo_pago_cartera_pdf(
         alignment=TA_JUSTIFY,
         fontName="Helvetica",
     )
-    head_cell = ParagraphStyle(
-        "CarteraH",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=8,
-        leading=10,
-        textColor=colors.white,
-        alignment=TA_CENTER,
-    )
-    cell_r = ParagraphStyle(
-        "CarteraCR",
-        parent=styles["Normal"],
-        fontSize=9,
-        leading=12,
-        textColor=_c["ink"],
-        alignment=TA_RIGHT,
-        fontName="Helvetica",
-    )
-    cell_c = ParagraphStyle(
-        "CarteraCC",
-        parent=styles["Normal"],
-        fontSize=9,
-        leading=12,
-        textColor=_c["ink"],
-        alignment=TA_CENTER,
-        fontName="Helvetica",
-    )
-
     story = []
     if _LOGO_PATH.exists():
         logo = Image(str(_LOGO_PATH), width=1.2 * inch, height=1.2 * inch)
@@ -188,8 +149,8 @@ def generar_recibo_pago_cartera_pdf(
         [
             Paragraph("CEDULA EN COMPROBANTE", label_style),
             Paragraph(cedula_comprobante or "-", value_style),
-            Paragraph("(papeleta)", label_style),
-            Paragraph("Puede diferir del titular del prestamo.", value_style),
+            Paragraph("", label_style),
+            Paragraph("", label_style),
         ],
         [
             Paragraph("BANCO / INSTITUCION", label_style),
@@ -209,6 +170,7 @@ def generar_recibo_pago_cartera_pdf(
         ("ROUNDEDCORNERS", [6, 6, 6, 6]),
         ("ROWBACKGROUNDS", (0, 0), (-1, -1), [_c["row_white"], _c["row_alt"]]),
         ("GRID", (0, 0), (-1, -1), 0.35, _c["border"]),
+        ("SPAN", (1, 2), (3, 2)),
         ("SPAN", (1, 4), (3, 4)),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 10),
@@ -220,78 +182,6 @@ def generar_recibo_pago_cartera_pdf(
     story.append(Table(info, colWidths=colw))
     story[-1].setStyle(TableStyle(_info_style))
     story.append(Spacer(1, 14))
-
-    story.append(Paragraph("Aplicacion al cronograma (cuotas)", section_style))
-    if filas_aplicacion:
-        rows = [
-            [
-                Paragraph("CUOTA", head_cell),
-                Paragraph("MONTO CUOTA", head_cell),
-                Paragraph("APLICADO", head_cell),
-                Paragraph("% SOBRE CUOTA", head_cell),
-            ]
-        ]
-        for f in filas_aplicacion:
-            mc = float(f.get("monto_cuota") or 0)
-            ma = float(f.get("monto_aplicado") or 0)
-            rows.append(
-                [
-                    Paragraph(str(f.get("numero_cuota", "")), cell_c),
-                    Paragraph(f"{_formato_monto_venezolano(mc)} USD", cell_r),
-                    Paragraph(f"{_formato_monto_venezolano(ma)} USD", cell_r),
-                    Paragraph(str(f.get("porcentaje_cuota", "")), cell_c),
-                ]
-            )
-        t_apl = Table(rows, colWidths=[0.7 * inch, 1.35 * inch, 1.35 * inch, 1.2 * inch])
-        t_apl.setStyle(
-            TableStyle(
-                [
-                    ("BOX", (0, 0), (-1, -1), 1, _c["border_strong"]),
-                    ("BACKGROUND", (0, 0), (-1, 0), _c["table_head"]),
-                    ("GRID", (0, 0), (-1, -1), 0.35, _c["border"]),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_c["row_white"], _c["row_alt"]]),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 7),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                ]
-            )
-        )
-        story.append(t_apl)
-    else:
-        story.append(
-            Paragraph(
-                "<i>Aun no consta desglose por cuota en cartera para este pago, o esta pendiente de "
-                "conciliacion con el cronograma.</i>",
-                value_style,
-            )
-        )
-
-    aclaracion = (
-        "El <b>monto pagado</b> es lo reconocido en cartera por cobranza. La suma de la columna "
-        "<b>Aplicado</b> distribuye ese pago entre las cuotas segun reglas internas; "
-        "puede ser menor, igual o mayor que una cuota individual. "
-        "No implica que el excedente se pierda: se aplicara a las cuotas siguientes segun el cronograma."
-    )
-    if nota_moneda:
-        aclaracion += " " + nota_moneda
-    panel = Table([[Paragraph(aclaracion, body_style)]], colWidths=[_content_w])
-    panel.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), _c["panel"]),
-                ("BOX", (0, 0), (-1, -1), 0.75, _c["border"]),
-                ("ROUNDEDCORNERS", [5, 5, 5, 5]),
-                ("LEFTPADDING", (0, 0), (-1, -1), 12),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-                ("TOPPADDING", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-            ]
-        )
-    )
-    story.append(Spacer(1, 12))
-    story.append(panel)
 
     foot = Table(
         [

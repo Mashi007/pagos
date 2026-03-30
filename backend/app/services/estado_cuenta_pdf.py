@@ -243,7 +243,6 @@ def generar_pdf_estado_cuenta(
         story.append(Paragraph("Pagos realizados", styles["EC_Section"]))
         rows_p = [
             [
-                "Banco",
                 "Fecha de pago",
                 "Fecha ingreso sistema",
                 "Monto",
@@ -267,7 +266,6 @@ def generar_pdf_estado_cuenta(
                 rec_cell = Paragraph('<font color="#94a3b8">-</font>', styles["EC_Link"])
             rows_p.append(
                 [
-                    str(pr.get("banco") or "no disponible")[:28],
                     str(pr.get("fecha_pago_display") or "-")[:16],
                     str(pr.get("fecha_registro_display") or "-")[:16],
                     str(pr.get("monto_display") or "-")[:22],
@@ -288,12 +286,12 @@ def generar_pdf_estado_cuenta(
             ]
         )
         nrp = len(rows_p)
-        tp = Table(rows_p, colWidths=[74, 56, 56, 64, 40, 54, 48])
+        tp = Table(rows_p, colWidths=[70, 70, 76, 50, 70, 60])
         extras_p = [
-            ("ALIGN", (5, 0), (5, nrp - 2), "RIGHT"),
-            ("ALIGN", (5, nrp - 1), (5, nrp - 1), "RIGHT"),
-            ("SPAN", (0, nrp - 1), (4, nrp - 1)),
-            ("ALIGN", (0, nrp - 1), (4, nrp - 1), "RIGHT"),
+            ("ALIGN", (4, 0), (4, nrp - 2), "RIGHT"),
+            ("ALIGN", (4, nrp - 1), (4, nrp - 1), "RIGHT"),
+            ("SPAN", (0, nrp - 1), (3, nrp - 1)),
+            ("ALIGN", (0, nrp - 1), (3, nrp - 1), "RIGHT"),
             ("FONTNAME", (0, nrp - 1), (-1, nrp - 1), "Helvetica-Bold"),
             ("BACKGROUND", (0, nrp - 1), (-1, nrp - 1), surf),
         ]
@@ -371,7 +369,6 @@ def generar_pdf_estado_cuenta(
                     "Saldo",
                     "Pago",
                     "Estado",
-                    "Recibo",
                 ]
             ]
             for c in cuotas:
@@ -391,18 +388,6 @@ def generar_pdf_estado_cuenta(
                             total_aplicado = float(str(disp).replace(",", ""))
                         except ValueError:
                             total_aplicado = 0.0
-                # Enlace solo si la fila tiene pago aplicado (coherente con columna Pago).
-                puede_recibo = bool(
-                    total_aplicado > 0 and cuota_id and base_url and recibo_token
-                )
-                if puede_recibo:
-                    url_recibo = f"{base_url}/api/v1/estado-cuenta/public/recibo-cuota?token={recibo_token}&prestamo_id={prestamo_id}&cuota_id={cuota_id}"
-                    recibo_cell = Paragraph(
-                        f'<a href="{url_recibo}" color="{COLOR_ACCENT}">Ver recibo</a>',
-                        styles["EC_Link"],
-                    )
-                else:
-                    recibo_cell = Paragraph('<font color="#94a3b8">—</font>', styles["EC_Link"])
                 rows.append(
                     [
                         str(c.get("numero_cuota", "")),
@@ -413,7 +398,6 @@ def generar_pdf_estado_cuenta(
                         f"{float(c.get('saldo_capital_final') or 0):,.2f}",
                         c.get("pago_conciliado_display", "-"),
                         estado_etiqueta[:20],
-                        recibo_cell,
                     ]
                 )
             t = Table(
@@ -426,8 +410,7 @@ def generar_pdf_estado_cuenta(
                     1.00 * inch,
                     0.82 * inch,
                     0.76 * inch,
-                    0.78 * inch,
-                    0.70 * inch,
+                    1.00 * inch,
                 ],
             )
             t.setStyle(
@@ -439,11 +422,10 @@ def generar_pdf_estado_cuenta(
                         # Encabezado: Capital, Interes, Total centrados (referencia visual).
                         ("ALIGN", (2, 0), (4, 0), "CENTER"),
                         ("ALIGN", (0, 0), (1, 0), "CENTER"),
-                        ("ALIGN", (5, 0), (8, 0), "CENTER"),
+                        ("ALIGN", (5, 0), (7, 0), "CENTER"),
                         ("ALIGN", (0, 1), (0, -1), "CENTER"),
                         ("ALIGN", (2, 1), (6, -1), "RIGHT"),
                         ("ALIGN", (7, 1), (7, -1), "CENTER"),
-                        ("ALIGN", (8, 1), (8, -1), "CENTER"),
                     ],
                 )
             )
