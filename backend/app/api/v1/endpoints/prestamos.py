@@ -3795,16 +3795,13 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
     )
 
-    # Validación de coherencia: fecha_requerimiento debe ser anterior a fecha_aprobacion
+    # Auto-ajuste de coherencia: si fecha_requerimiento > fecha_aprobacion, ajustar automáticamente.
     if row.fecha_aprobacion and row.fecha_requerimiento:
         ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
         req_date = row.fecha_requerimiento
         if req_date > ap_date:
-            raise HTTPException(
-                status_code=400,
-                detail=f"La fecha de requerimiento ({req_date}) no puede ser posterior a la fecha de aprobación ({ap_date})."
-            )
-        logger.info(f"[create_prestamo] Validación de coherencia OK: req_date={req_date} < ap_date={ap_date}")
+            logger.info(f"[create_prestamo] Auto-ajuste: fecha_requerimiento ({req_date}) > fecha_aprobacion ({ap_date}). Ajustando.")
+            row.fecha_requerimiento = ap_date
 
     try:
 
@@ -4009,28 +4006,17 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
     logger.info(f"[update_prestamo] BD después de aplicar cambios: fecha_requerimiento={row.fecha_requerimiento} (type={type(row.fecha_requerimiento).__name__}), fecha_aprobacion={row.fecha_aprobacion} (type={type(row.fecha_aprobacion).__name__})")
 
-    # Coherencia: si hay fecha de aprobación, la fecha de requerimiento no puede ser posterior
-
+    # Auto-ajuste de coherencia: si fecha_requerimiento > fecha_aprobacion, ajustar automáticamente.
+    # Esto sucede frecuentemente en préstamos de carga masiva donde fecha_requerimiento se asignó
+    # como date.today() en el momento de la carga, pero fecha_aprobacion corresponde a una fecha
+    # histórica anterior.
     if row.fecha_aprobacion and row.fecha_requerimiento:
-
-        # Normalizar ambas fechas a date para comparación correcta
         ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
-        req_date = row.fecha_requerimiento  # Esto ya es date (desde BD)
-
-        logger.info(f"[update_prestamo] Validación de coherencia: req_date={req_date} ({type(req_date).__name__}), ap_date={ap_date} ({type(ap_date).__name__})")
-        logger.info(f"[update_prestamo] Comparación: {req_date} > {ap_date} ? {req_date > ap_date}")
+        req_date = row.fecha_requerimiento
 
         if req_date > ap_date:
-
-            logger.error(f"[update_prestamo] VALIDACION FALLIDA: fecha_requerimiento ({req_date}) > fecha_aprobacion ({ap_date})")
-
-            raise HTTPException(
-
-                status_code=400,
-
-                detail=f"La fecha de requerimiento ({req_date}) no puede ser posterior a la fecha de aprobación ({ap_date}).",
-
-            )
+            logger.info(f"[update_prestamo] Auto-ajuste: fecha_requerimiento ({req_date}) > fecha_aprobacion ({ap_date}). Ajustando fecha_requerimiento = fecha_aprobacion.")
+            row.fecha_requerimiento = ap_date
 
     est_despues = (row.estado or "").strip().upper()
 
@@ -4681,6 +4667,7 @@ async def upload_prestamos_excel(
                 
 
                 # Carga masiva: préstamo APROBADO y fecha_aprobacion = hoy; cuotas en base a esa fecha
+                # fecha_requerimiento = fecha_aprobacion (misma fecha) para mantener coherencia
 
                 prestamo = Prestamo(
 
