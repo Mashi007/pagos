@@ -28,6 +28,9 @@ from app.core.deps import (
 )
 from app.core.email import mask_email_for_log, send_email
 from app.core.email_cuentas import SERVICIO_FINIQUITO
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_por_desistimiento,
+)
 from app.core.email_config_holder import (
     get_email_activo,
     get_email_activo_servicio,
@@ -499,6 +502,18 @@ def finiquito_public_solicitar_codigo(
             "(Configuracion > Email: interruptor general o Finiquito/Estado de cuenta desactivado).",
             master_on,
             finiquito_on,
+        )
+        return FiniquitoSolicitarCodigoResponse(
+            ok=True,
+            message="Si los datos son correctos, recibira un codigo en su correo.",
+        )
+
+    if cliente_bloqueado_por_desistimiento(db, email=email):
+        db.rollback()
+        finiquito_otp_bump("envio_bloqueado_desistimiento")
+        logger.info(
+            "finiquito solicitar-codigo: bloqueo por DESISTIMIENTO dest_MASK=%s",
+            mask_email_for_log(email),
         )
         return FiniquitoSolicitarCodigoResponse(
             ok=True,

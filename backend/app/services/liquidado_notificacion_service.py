@@ -22,6 +22,9 @@ from app.models.envio_notificacion import EnvioNotificacion
 from app.services.envio_notificacion_snapshot import persistir_snapshot_envio_notificacion
 from app.services.estado_cuenta_datos import obtener_datos_estado_cuenta_prestamo
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_tiene_prestamo_desistimiento,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +97,14 @@ class LiquidadoNotificacionService:
                 capital_bd,
                 _pid,
             ) = result
+
+            if cliente_tiene_prestamo_desistimiento(db, cliente_id):
+                logger.warning(
+                    "[LIQUIDADO_NOTIF] Omitido prestamo=%s cliente=%s (regla: cliente con prestamo DESISTIMIENTO)",
+                    prestamo_id,
+                    cliente_id,
+                )
+                return False
 
             sum_row = db.execute(
                 text(

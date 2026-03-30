@@ -53,6 +53,9 @@ from app.services.notificaciones_envios_store import (
     coerce_modo_pruebas_notificaciones,
     get_notificaciones_envios_dict,
 )
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_por_desistimiento,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -850,6 +853,13 @@ def enviar_con_plantilla(
     correo = (cliente.email or "").strip()
     if not correo or "@" not in correo:
         raise HTTPException(status_code=400, detail="El cliente no tiene email vÃƒÂ¡lido")
+    if cliente_bloqueado_por_desistimiento(
+        db, cliente_id=cliente.id, cedula=cliente.cedula, email=correo
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Envio bloqueado: cliente con prestamo en estado DESISTIMIENTO.",
+        )
     if not get_email_activo_servicio("notificaciones"):
         raise HTTPException(status_code=400, detail="El envio de email para notificaciones esta desactivado. Activalo en Configuracion > Email.")
     tipo_tab = (getattr(p, "tipo", None) or "").strip() or None
@@ -1805,12 +1815,14 @@ def get_notificaciones_tabs_data(db: Session):
     prejudicial: List[dict] = []
     subq = (
         select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(
             Cuota.fecha_pago.is_(None),
             CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
             Cuota.fecha_vencimiento < hoy,
             Cuota.cliente_id.isnot(None),
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
         )
         .group_by(Cuota.cliente_id)
         .having(func.count(Cuota.id) >= 3)
@@ -1823,12 +1835,14 @@ def get_notificaciones_tabs_data(db: Session):
         # Primera cuota atrasada para mostrar en la tarjeta
         primera = db.execute(
             select(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
                 Cuota.cliente_id == cliente_id,
                 Cuota.fecha_pago.is_(None),
                 CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
                 Cuota.fecha_vencimiento < hoy,
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+                ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
             )
             .order_by(Cuota.fecha_vencimiento.asc())
             .limit(1)

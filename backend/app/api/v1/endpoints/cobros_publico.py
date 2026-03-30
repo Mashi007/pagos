@@ -77,6 +77,9 @@ from app.services.tasa_cambio_service import (
 from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
 
 from app.core.email import send_email
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_por_desistimiento,
+)
 
 from app.core.security import decode_token, create_recibo_infopagos_token
 
@@ -1106,6 +1109,15 @@ async def enviar_reporte_publico(
             pr.recibo_pdf = pdf_bytes
 
             to_email = (cliente.email or "").strip()
+            if cliente_bloqueado_por_desistimiento(
+                db, cliente_id=cliente.id, cedula=cliente.cedula, email=to_email
+            ):
+                logger.info(
+                    "[COBROS_PUBLIC] Bloqueo recibo ref=%s: cliente_id=%s con prestamo DESISTIMIENTO",
+                    referencia,
+                    cliente.id,
+                )
+                to_email = ""
 
             if to_email:
 
@@ -1591,6 +1603,15 @@ async def enviar_reporte_infopagos(
             pr.recibo_pdf = pdf_bytes
 
             to_email = (cliente.email or "").strip()
+            if cliente_bloqueado_por_desistimiento(
+                db, cliente_id=cliente.id, cedula=cliente.cedula, email=to_email
+            ):
+                logger.info(
+                    "[INFOPAGOS] Bloqueo recibo ref=%s: cliente_id=%s con prestamo DESISTIMIENTO",
+                    referencia,
+                    cliente.id,
+                )
+                to_email = ""
 
             if to_email:
 

@@ -30,6 +30,9 @@ from app.models.pago import Pago
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK, WHATSAPP_DISPLAY
 from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
 from app.core.email import send_email
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_por_desistimiento,
+)
 from app.core.email_config_holder import get_email_activo_servicio
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
@@ -1162,6 +1165,13 @@ def aprobar_pago_reportado(
         raise HTTPException(status_code=500, detail=f"Error al generar el recibo PDF: {e!s}")
     pr.recibo_pdf = pdf_bytes
     to_email = _email_cliente_pago_reportado(db, pr)
+    cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
+    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+        logger.info(
+            "[COBROS] Bloqueo correo ref=%s: cliente con prestamo DESISTIMIENTO",
+            pr.referencia_interna,
+        )
+        to_email = ""
     if not pr.correo_enviado_a and to_email:
         pr.correo_enviado_a = to_email
     mensaje_final = (
@@ -1218,6 +1228,13 @@ def rechazar_pago_reportado(
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     to_email = _email_cliente_pago_reportado(db, pr)
+    cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
+    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+        logger.info(
+            "[COBROS] Bloqueo correo rechazo ref=%s: cliente con prestamo DESISTIMIENTO",
+            pr.referencia_interna,
+        )
+        to_email = ""
     notif_activo = get_email_activo_servicio("notificaciones")
     rechazo_correo_enviado: Optional[bool] = None
     rechazo_correo_error: Optional[str] = None
@@ -1371,6 +1388,13 @@ def enviar_recibo_manual(
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     to_email = _email_cliente_pago_reportado(db, pr)
+    cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
+    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+        logger.info(
+            "[COBROS] Bloqueo enviar-recibo ref=%s: cliente con prestamo DESISTIMIENTO",
+            pr.referencia_interna,
+        )
+        to_email = ""
     if not to_email:
         raise HTTPException(status_code=400, detail="No hay correo del cliente para este pago. Registre el correo en el detalle del pago o en la ficha del cliente.")
     if not get_email_activo_servicio("cobros"):
@@ -1663,6 +1687,13 @@ def cambiar_estado_pago(
         pdf_bytes = _generar_recibo_desde_pago(db, pr)
         pr.recibo_pdf = pdf_bytes
         to_email = _email_cliente_pago_reportado(db, pr)
+        cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
+        if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+            logger.info(
+                "[COBROS] Bloqueo PATCH aprobado ref=%s: cliente con prestamo DESISTIMIENTO",
+                pr.referencia_interna,
+            )
+            to_email = ""
         if not pr.correo_enviado_a and to_email:
             pr.correo_enviado_a = to_email
         cobros_correo_activo = get_email_activo_servicio("cobros")
@@ -1700,6 +1731,13 @@ def cambiar_estado_pago(
 
     elif body.estado == "rechazado":
         to_email = _email_cliente_pago_reportado(db, pr)
+        cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
+        if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+            logger.info(
+                "[COBROS] Bloqueo PATCH rechazado ref=%s: cliente con prestamo DESISTIMIENTO",
+                pr.referencia_interna,
+            )
+            to_email = ""
         notif_activo = get_email_activo_servicio("notificaciones")
         logger.info(
             "[COBROS] PATCH estado=rechazado ref=%s: destino=%s servicio_notificaciones_activo=%s.",

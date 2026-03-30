@@ -163,15 +163,17 @@ def log_envio_resumen(
     fallidos_whatsapp: int,
     modo_pruebas: bool = False,
     omitidos_paquete_incompleto: int = 0,
+    omitidos_desistimiento: int = 0,
 ) -> None:
     """Indicador: resumen del lote (indicadores de funcionamiento). modo_pruebas para compaginar con envíos en prueba."""
     logger.info(
-        "[%s] Resumen: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s omitidos_paquete=%s whatsapp_ok=%s whatsapp_fallo=%s modo_pruebas=%s",
+        "[%s] Resumen: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s omitidos_desistimiento=%s omitidos_paquete=%s whatsapp_ok=%s whatsapp_fallo=%s modo_pruebas=%s",
         FASE_ENVIO_RESUMEN,
         enviados,
         fallidos,
         sin_email,
         omitidos_config,
+        omitidos_desistimiento,
         omitidos_paquete_incompleto,
         enviados_whatsapp,
         fallidos_whatsapp,
@@ -182,6 +184,7 @@ def log_envio_resumen(
             fallidos=fallidos,
             sin_email=sin_email,
             omitidos_config=omitidos_config,
+            omitidos_desistimiento=omitidos_desistimiento,
             omitidos_paquete_incompleto=omitidos_paquete_incompleto,
             enviados_whatsapp=enviados_whatsapp,
             fallidos_whatsapp=fallidos_whatsapp,

@@ -318,6 +318,9 @@ def _run_envio_lotes(campana_id: int) -> None:
         destinatarios = _get_destinatarios_para_campana(db, campana)
         from app.core.email import send_email
         from app.core.email_config_holder import get_email_activo_servicio
+        from app.services.notificaciones_exclusion_desistimiento import (
+            cliente_bloqueado_por_desistimiento,
+        )
 
         cc_list: List[str] = []
         if campana.cc_emails and campana.cc_emails.strip():
@@ -340,6 +343,26 @@ def _run_envio_lotes(campana_id: int) -> None:
             if not get_email_activo_servicio("campanas"):
                 continue
             for cliente_id, email, _ in lote:
+                if cliente_bloqueado_por_desistimiento(
+                    db, cliente_id=cliente_id, email=email
+                ):
+                    logger.info(
+                        "Campaña %s: omitir cliente_id=%s por DESISTIMIENTO",
+                        campana_id,
+                        cliente_id,
+                    )
+                    registro = CampanaEnvioCrm(
+                        campana_id=campana_id,
+                        cliente_id=cliente_id,
+                        email=email,
+                        estado="fallido",
+                        fecha_envio=datetime.utcnow(),
+                        error_mensaje="Bloqueado por regla DESISTIMIENTO",
+                    )
+                    db.add(registro)
+                    fallidos += 1
+                    db.commit()
+                    continue
                 ok, err = send_email(
                     [email],
                     campana.asunto,

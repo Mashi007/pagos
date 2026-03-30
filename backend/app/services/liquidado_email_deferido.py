@@ -27,6 +27,9 @@ from app.models.envio_notificacion import EnvioNotificacion
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import hoy_negocio
 from app.services.liquidado_notificacion_service import LiquidadoNotificacionService
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_tiene_prestamo_desistimiento,
+)
 from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquidado
 
 logger = logging.getLogger(__name__)
@@ -100,6 +103,12 @@ def ejecutar_emails_liquidado_diferidos(db: Session) -> dict:
             rep_id = min(pids)
             if _ya_enviado_exito(db, rep_id, seq):
                 omitidos_dup += 1
+                continue
+            if cliente_tiene_prestamo_desistimiento(db, _cid):
+                logger.info(
+                    "[LIQUIDADO_DEFERIDO] Omitido cliente_id=%s (prestamo DESISTIMIENTO; sin correo liquidado)",
+                    _cid,
+                )
                 continue
             ok = LiquidadoNotificacionService.enviar_correo_liquidacion_pdf(
                 db, rep_id, recordatorio_seq=seq

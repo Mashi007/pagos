@@ -512,8 +512,6 @@ export default function EstadoCuentaPublicoPage() {
 
   // Paso 0: Bienvenida (logo y colores RapiCredit: azul oscuro, naranja/marrón)
 
-  const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
-
   if (step === 0) {
     return (
       <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
@@ -532,20 +530,13 @@ export default function EstadoCuentaPublicoPage() {
             {/* Sección izquierda: Branding */}
             <div className="flex flex-col justify-center space-y-6 px-2 sm:px-0">
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={LOGO_PUBLIC_SRC}
-                    alt="RapiCredit"
-                    className="h-12 object-contain sm:h-14"
-                  />
-                  <div>
-                    <p className="text-2xl font-bold text-white sm:text-3xl">
-                      RapiCredit
-                    </p>
-                    <p className="text-xs text-slate-400 sm:text-sm">
-                      Consulta de Informes
-                    </p>
-                  </div>
+                <div>
+                  <p className="text-2xl font-bold text-white sm:text-3xl">
+                    RapiCredit
+                  </p>
+                  <p className="text-xs text-slate-400 sm:text-sm">
+                    Consulta de Informes
+                  </p>
                 </div>
               </div>
 

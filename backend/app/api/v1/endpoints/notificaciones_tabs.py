@@ -36,6 +36,9 @@ from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
 from app.services.envio_notificacion_snapshot import persistir_snapshot_envio_notificacion
 from app.services.notificaciones_envios_store import coerce_modo_pruebas_notificaciones
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_tiene_prestamo_desistimiento,
+)
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
 from app.services.notificacion_logging import (
@@ -199,11 +202,22 @@ def _enviar_correos_items(
     omitidos_paquete_incompleto = 0
     enviados_whatsapp = 0
     fallidos_whatsapp = 0
+    omitidos_desistimiento = 0
     registros_envio: List[Tuple[EnvioNotificacion, Optional[List[Tuple[str, bytes]]]]] = []
     correlativos_en_batch = {}
     for idx, item in enumerate(items):
         item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
         tipo = get_tipo_for_item(item)
+        cid = item.get("cliente_id")
+        if db and cliente_tiene_prestamo_desistimiento(db, cid):
+            logger.info(
+                "[notif_excl_desist] Omitido cliente_id=%s item=%s tipo=%s (prestamo DESISTIMIENTO)",
+                cid,
+                item_id_log,
+                tipo,
+            )
+            omitidos_desistimiento += 1
+            continue
         tipo_cfg = config_envios.get(tipo) or {}
         # Masivos: nunca carta PDF de cobranza ni contexto de préstamo (comunicación general).
         if tipo == "MASIVOS":
@@ -470,6 +484,7 @@ def _enviar_correos_items(
         fallidos_whatsapp=fallidos_whatsapp,
         modo_pruebas=modo_pruebas,
         omitidos_paquete_incompleto=omitidos_paquete_incompleto,
+        omitidos_desistimiento=omitidos_desistimiento,
     )
     if enviados == 0 and len(items) > 0:
         log = logging.getLogger(__name__)
@@ -505,6 +520,7 @@ def _enviar_correos_items(
         "sin_email": sin_email,
         "fallidos": fallidos,
         "omitidos_config": omitidos_config,
+        "omitidos_desistimiento": omitidos_desistimiento,
         "omitidos_paquete_incompleto": omitidos_paquete_incompleto,
         "enviados_whatsapp": enviados_whatsapp,
         "fallidos_whatsapp": fallidos_whatsapp,
@@ -694,7 +710,11 @@ def get_items_masivos(db: Session) -> List[dict]:
                     "estado": "COMUNICACION_GENERAL",
                 }
             )
-        return items
+        return [
+            it
+            for it in items
+            if not cliente_tiene_prestamo_desistimiento(db, it.get("cliente_id"))
+        ]
     except Exception:
         logger.warning(
             "get_items_masivos: vista vw_notificaciones_masivos_contactos no disponible; usando fallback clientes",
@@ -723,7 +743,11 @@ def get_items_masivos(db: Session) -> List[dict]:
                 "estado": "COMUNICACION_GENERAL",
             }
         )
-    return items
+    return [
+        it
+        for it in items
+        if not cliente_tiene_prestamo_desistimiento(db, it.get("cliente_id"))
+    ]
 
 
 def _tipo_masivos(_item: dict) -> str:

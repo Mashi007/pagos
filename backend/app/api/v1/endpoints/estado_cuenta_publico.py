@@ -78,6 +78,9 @@ from app.core.security import create_recibo_token, decode_token
 from app.core.email import send_email
 
 from app.core.email_config_holder import get_email_activo_servicio
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_por_desistimiento,
+)
 
 
 
@@ -831,8 +834,16 @@ def solicitar_codigo_estado_cuenta(
     asunto, cuerpo = _get_plantilla_email_codigo(db, nombre=nombre, codigo=codigo)
 
     email_enviado = False
+    bloquear_email = cliente_bloqueado_por_desistimiento(
+        db, cedula=cedula_lookup, email=email
+    )
 
-    if not get_email_activo_servicio("estado_cuenta"):
+    if not get_email_activo_servicio("estado_cuenta") or bloquear_email:
+        if bloquear_email:
+            logger.info(
+                "estado_cuenta solicitar: bloqueo por DESISTIMIENTO cedula_suffix=***%s",
+                cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
+            )
 
         logger.warning(
 
@@ -1224,7 +1235,12 @@ def solicitar_estado_cuenta(
 
 
 
-    enviar_por_email = email and getattr(body, "origen", None) != "informes"
+    bloquear_email = cliente_bloqueado_por_desistimiento(
+        db, cedula=cedula_lookup, email=email
+    )
+    enviar_por_email = (
+        email and not bloquear_email and getattr(body, "origen", None) != "informes"
+    )
 
     if enviar_por_email:
 
