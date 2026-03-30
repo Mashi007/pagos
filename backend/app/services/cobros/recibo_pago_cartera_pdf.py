@@ -129,7 +129,7 @@ def generar_recibo_pago_cartera_pdf(
         )
         story.append(lt)
 
-    story.append(Paragraph("COMPROBANTE DE PAGO (CARTERA)", doc_kind_style))
+    story.append(Paragraph("COMPROBANTE DE PAGO", doc_kind_style))
     story.append(Paragraph(f"Ref. {referencia_documento}", ref_style))
     story.append(Spacer(1, 10))
 

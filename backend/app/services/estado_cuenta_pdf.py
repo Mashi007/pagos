@@ -240,6 +240,20 @@ def generar_pdf_estado_cuenta(
     # ----- Pagos realizados (tabla pagos) -----
     pagos_realizados = pagos_realizados or []
     if pagos_realizados:
+        # Ordenar por fecha de pago descendente (más actual a más vieja)
+        from datetime import datetime as dt_parse
+        def parse_fecha(fecha_str):
+            try:
+                if fecha_str and len(fecha_str) >= 10:
+                    return dt_parse.strptime(fecha_str[:10], "%Y-%m-%d")
+            except (ValueError, AttributeError):
+                pass
+            return dt_parse.min
+        pagos_realizados = sorted(
+            pagos_realizados,
+            key=lambda x: parse_fecha(x.get("fecha_pago") or ""),
+            reverse=True
+        )
         story.append(Paragraph("Pagos realizados", styles["EC_Section"]))
         rows_p = [
             [
