@@ -1,0 +1,126 @@
+# 🚀 MIGRACIÓN SQL - GUÍA RÁPIDA
+
+## 📦 Archivos generados
+
+```
+backend/sql/
+├── 033_MIGRACION_INDICES_PUBLICOS_2026_03_30.sql
+├── aplicar_migracion.sh
+├── aplicar_migracion.ps1
+└── GUIA_MIGRACION_INDICES.md
+```
+
+---
+
+## ⚡ OPCIÓN 1: SQL PURO (Más rápido)
+
+### Para Linux/Mac:
+```bash
+psql $DATABASE_URL < backend/sql/033_MIGRACION_INDICES_PUBLICOS_2026_03_30.sql
+```
+
+### Para Windows PowerShell:
+```powershell
+$sql = Get-Content backend/sql/033_MIGRACION_INDICES_PUBLICOS_2026_03_30.sql
+$sql | psql $env:DATABASE_URL
+```
+
+### Para DBeaver/pgAdmin:
+1. Abrir Query Editor
+2. Copy-paste contenido de `033_MIGRACION_INDICES_PUBLICOS_2026_03_30.sql`
+3. Ejecutar (F5)
+
+---
+
+## 🔧 OPCIÓN 2: SCRIPT BASH
+
+```bash
+chmod +x backend/sql/aplicar_migracion.sh
+DATABASE_URL="postgresql://user:pass@localhost/pagos" ./backend/sql/aplicar_migracion.sh
+```
+
+**Ventaja:** Output completo con verificación
+
+---
+
+## 🪟 OPCIÓN 3: SCRIPT POWERSHELL
+
+```powershell
+$env:DATABASE_URL = "postgresql://user:pass@localhost/pagos"
+.\backend\sql\aplicar_migracion.ps1
+```
+
+**Con dry-run (preview):**
+```powershell
+.\backend\sql\aplicar_migracion.ps1 -DryRun
+```
+
+---
+
+## ✅ VERIFICACIÓN INMEDIATA
+
+Después de ejecutar (cualquier opción):
+
+```sql
+-- Verificar que los 5 índices fueron creados
+SELECT COUNT(*) as indices_creados
+FROM pg_indexes
+WHERE indexname IN (
+    'idx_cliente_cedula',
+    'idx_estado_cuenta_codigo_cedula_activo',
+    'idx_prestamo_cliente_estado',
+    'idx_pago_reportado_cedula_estado',
+    'idx_cuota_prestamo'
+);
+
+-- Resultado esperado: 5
+```
+
+---
+
+## 📊 ÍNDICES CREADOS
+
+| Nombre | Tabla | Columnas | Beneficio |
+|--------|-------|----------|-----------|
+| `idx_cliente_cedula` | clientes | cedula | /validar-cedula: 271ms → 50ms |
+| `idx_estado_cuenta_codigo_cedula_activo` | estado_cuenta_codigos | cedula_normalizada, usado, expira_en | Códigos: 500ms → 100ms |
+| `idx_prestamo_cliente_estado` | prestamos | cliente_id, estado | Validación: instant |
+| `idx_pago_reportado_cedula_estado` | pagos_reportados | tipo_cedula, numero_cedula, estado | Listados: 918ms → 300ms |
+| `idx_cuota_prestamo` | cuotas | prestamo_id, numero_cuota | PDFs: 1170ms → 300ms |
+
+---
+
+## 🎯 PRÓXIMOS PASOS
+
+```bash
+# 1. Ejecutar VACUUM ANALYZE
+psql $DATABASE_URL -c "VACUUM ANALYZE;"
+
+# 2. Monitorear endpoints públicos
+# - GET /validar-cedula
+# - GET /recibo-cuota
+# - GET /pagos-reportados/listado-y-kpis
+
+# 3. Verificar en logs
+grep "elapsed_ms" /var/log/app/production.log | tail -100
+
+# 4. Commit en git
+git add -A
+git commit -m "feat: aplicar índices de optimización"
+```
+
+---
+
+## ⚠️ IMPORTANTE
+
+- ✅ Los índices son **idempotentes** (crear 2x es seguro)
+- ✅ No afecta usuarios conectados
+- ✅ Reversible (DROP INDEX si es necesario)
+- ⏱️ Tiempo: 2-5 minutos según tamaño BD
+
+**Hacer backup recomendado antes de ejecutar en producción**
+
+---
+
+**Commit:** 7d0def67  
+**Fecha:** 2026-03-30
