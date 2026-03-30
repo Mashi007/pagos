@@ -3775,6 +3775,17 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
     )
 
+    # Validación de coherencia: fecha_requerimiento debe ser anterior a fecha_aprobacion
+    if row.fecha_aprobacion and row.fecha_requerimiento:
+        ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
+        req_date = row.fecha_requerimiento
+        if req_date > ap_date:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La fecha de requerimiento ({req_date}) no puede ser posterior a la fecha de aprobación ({ap_date})."
+            )
+        logger.info(f"[create_prestamo] Validación de coherencia OK: req_date={req_date} < ap_date={ap_date}")
+
     try:
 
         asegurar_prestamo_alineado_con_cliente(
