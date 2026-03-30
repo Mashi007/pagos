@@ -58,7 +58,7 @@ function RootLayoutWrapper() {
   // Esto previene que intenten acceder al dashboard quitando /infopagos de la URL
 
   if (!isLoading && !isAuthenticated) {
-    return <Navigate to="/pagos/acceso-limitado" replace />
+    return <Navigate to="/acceso-limitado" replace />
   }
 
   const esGestionFiniquito = pathname === '/finiquitos/gestion'
