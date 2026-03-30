@@ -257,8 +257,11 @@ export function useExcelUploadPagos({
 
   // Incluir todas las columnas relevantes del Excel
 
-  const looksLikeCedula = (c: string) =>
-    /^[VEJZ]\d{6,11}$/i.test((c || '').replace(/-/g, '').trim())
+  const looksLikeCedula = (c: string) => {
+    const normalized = (c || '').replace(/-/g, '').trim()
+    // Aceptar: V/E/J/Z + dígitos, O solo dígitos (para búsquedas fallback)
+    return /^[VEJZ]\d{6,11}$/i.test(normalized) || /^\d{6,11}$/.test(normalized)
+  }
 
   const cedulasUnicas = useMemo(() => {
     const candidates = new Set<string>()
