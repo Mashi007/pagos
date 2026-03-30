@@ -11,13 +11,13 @@ SELECT
     c.id, 
     c.cedula, 
     COUNT(*) as cuotas_retrasadas,
-    SUM(cu.monto) as monto_total_retrasado,
-    MIN(cu.fecha_pago) as fecha_mas_antigua,
-    MAX(cu.fecha_pago) as fecha_mas_reciente
+    SUM(cu.monto_cuota) as monto_total_retrasado,
+    MIN(cu.fecha_vencimiento) as fecha_mas_antigua,
+    MAX(cu.fecha_vencimiento) as fecha_mas_reciente
 FROM clientes c
 JOIN prestamos p ON c.id = p.cliente_id
 JOIN cuotas cu ON p.id = cu.prestamo_id
-WHERE cu.fecha_pago < CURRENT_DATE
+WHERE cu.fecha_vencimiento < CURRENT_DATE
   AND cu.estado != 'CANCELADA'
 GROUP BY c.id, c.cedula;
 
