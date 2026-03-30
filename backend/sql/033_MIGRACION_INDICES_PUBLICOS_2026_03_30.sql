@@ -63,13 +63,13 @@ ORDER BY indexname;
 -- Verificar uso de índices:
 SELECT 
     schemaname,
-    indexname,
+    indexrelname,
     idx_scan as num_scans,
     idx_tup_read as tuples_read,
     idx_tup_fetch as tuples_fetched,
     pg_size_pretty(pg_relation_size(indexrelid)) as index_size
 FROM pg_stat_user_indexes
-WHERE indexname IN (
+WHERE indexrelname IN (
     'idx_cliente_cedula',
     'idx_estado_cuenta_codigo_cedula_activo',
     'idx_prestamo_cliente_estado',
