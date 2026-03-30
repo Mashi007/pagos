@@ -20,7 +20,7 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
   {
     n: 3,
     codigo: 'cupo_cedula_aprobados_politica',
-    titulo: 'Cupo cedula: E/V max 1 APROBADO, J max 2, prefijos validos E V J',
+    titulo: 'Cupo cedula: E/V max 1 APROBADO, J max 5 APROBADO, prefijos validos E V J',
   },
   {
     n: 4,

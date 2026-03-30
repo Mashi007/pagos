@@ -1,4 +1,4 @@
-"""Cupo de prestamos APROBADO por cedula (politica E/V max 1, J max 2, solo prefijos E V J)."""
+"""Cupo de prestamos APROBADO por cedula (politica E/V max 1, J max 5, solo prefijos E V J)."""
 from __future__ import annotations
 
 from typing import Optional

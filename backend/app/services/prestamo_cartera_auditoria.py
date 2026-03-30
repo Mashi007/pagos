@@ -48,7 +48,7 @@ CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
 # Identificador estable de la definicion de controles en este modulo (17 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "17controles-2026-03-27"
+AUDITORIA_CARTERA_REGLAS_VERSION = "18cupo-j-max5-2026-03-29"
 
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
@@ -583,7 +583,7 @@ def ejecutar_auditoria_cartera(
             cupo_det = "Solo aplica a prestamos APROBADO"
         add_control(
             "cupo_cedula_aprobados_politica",
-            "Cupo cedula: E/V max 1 APROBADO, J max 2, prefijos validos E V J",
+            "Cupo cedula: E/V max 1 APROBADO, J max 5 APROBADO, prefijos validos E V J",
             cupo_si,
             cupo_det,
         )

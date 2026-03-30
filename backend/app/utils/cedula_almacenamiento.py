@@ -41,11 +41,11 @@ def prefijo_politica_cupo_aprobados(clave: str) -> Optional[str]:
 
 
 def max_aprobados_permitidos_por_prefijo(prefijo: Optional[str]) -> Optional[int]:
-    """E/V: 1 APROBADO por clave; J: 2. None si prefijo invalido."""
+    """E/V: 1 APROBADO por clave; J: hasta 5 APROBADO por clave. None si prefijo invalido."""
     if prefijo in ("E", "V"):
         return 1
     if prefijo == "J":
-        return 2
+        return 5
     return None
 
 
