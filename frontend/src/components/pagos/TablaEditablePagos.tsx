@@ -281,7 +281,7 @@ function CreditoCell({
     return <span className="text-xs italic text-gray-500">Sin crédito</span>
   }
 
-  // 1 crédito: vacío en Excel = sin inventar ID; válido = verde; inválido = ámbar (corrección solo si no está vacío).
+  // 1 crédito: si está vacío, mostrar el ID automáticamente (ya debería estar en el estado del padre gracias al useEffect).
 
   if (prestamos.length === 1) {
     const correctId = prestamos[0].id
@@ -292,10 +292,10 @@ function CreditoCell({
       return (
         <input
           type="text"
-          value=""
+          value={String(correctId)}
           readOnly
-          className="w-full rounded border border-dashed border-gray-300 bg-white p-1 text-sm text-gray-500"
-          title="Indique el ID de préstamo en el archivo; vacío genera error de validación"
+          className="w-full rounded border border-green-200 bg-green-50 p-1 text-sm font-medium text-green-800"
+          title="ID de préstamo auto-llenado (único crédito activo)"
         />
       )
     }
@@ -603,11 +603,11 @@ export function TablaEditablePagos({
           pagos/cuotas.
         </p>
 
-        <p className="mt-1 text-xs text-blue-700">
-          <strong>Crédito:</strong> el ID de préstamo debe venir en el archivo (o
-          elegir en la lista si hay varios). Un solo crédito activo no rellena
-          la celda sola: vacío = error de validación. &quot;Sin crédito&quot;
-          cuando el cliente no tiene préstamos activos.
+                <p className="mt-1 text-xs text-blue-700">
+          <strong>Crédito:</strong> si hay un único crédito activo, se carga
+          automáticamente. Si hay varios, elige en la lista. Si no hay créditos
+          activos, aparece "Sin crédito". El ID se completa por cédula desde la
+          base de datos.
         </p>
 
         <p className="mt-1 text-xs text-blue-700">
@@ -836,7 +836,7 @@ export function TablaEditablePagos({
                         []
 
                       const sinCreditoElegido =
-                        prestamos.length > 0 &&
+                        prestamos.length > 1 &&
                         prestamoIdVacio(row.prestamo_id)
 
                       const sinCreditosActivos = prestamos.length === 0
@@ -871,7 +871,7 @@ export function TablaEditablePagos({
                         : sinCreditosActivos
                           ? 'Sin créditos activos para esta cédula; use Revisar Pagos'
                           : sinCreditoElegido
-                            ? 'Indique el ID de préstamo en el archivo (obligatorio)'
+                            ? 'Debe elegir un crédito de los disponibles'
                             : 'Guardar esta fila'
 
                       return (
