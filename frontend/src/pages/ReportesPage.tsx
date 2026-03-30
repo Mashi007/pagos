@@ -2,11 +2,13 @@ import { useState } from 'react'
 
 import { motion } from 'framer-motion'
 
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, FileText } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Badge } from '../components/ui/badge'
+
+import { Button } from '../components/ui/button'
 
 export function ReportesPage() {
   const [loading, setLoading] = useState(false)
@@ -36,29 +38,68 @@ export function ReportesPage() {
 
       {/* Contenido Principal */}
 
-      <div className="grid gap-6">
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Estado de Cuenta - Link Directo */}
+        <Card className="border-emerald-200 hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-emerald-600" />
+                  Estado de Cuenta
+                </CardTitle>
+              </div>
+              <Badge className="bg-emerald-600 hover:bg-emerald-700">
+                Disponible
+              </Badge>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-3">
+                Accede a tu estado de cuenta, préstamos activos y cuotas pendientes. Genera PDF al instante.
+              </p>
+
+              <div className="space-y-2 text-sm text-muted-foreground mb-4">
+                <p>✓ Consulta tu información financiera</p>
+
+                <p>✓ Descarga estado de cuenta en PDF</p>
+
+                <p>✓ Información disponible al instante</p>
+              </div>
+            </div>
+
+            <Button
+              className="w-full bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => window.location.href = '/pagos/informes'}
+            >
+              Acceder a Informes
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Reportes - Próximamente */}
         <Card>
           <CardHeader>
-            <CardTitle>Reportes</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Reportes Avanzados
+            </CardTitle>
           </CardHeader>
 
           <CardContent>
             <div className="py-8 text-center">
-              <div className="mb-4 flex justify-center">
-                <BarChart3 className="h-16 w-16 text-muted-foreground" />
-              </div>
-
-              <h3 className="mb-2 text-xl font-semibold">
-                Página en Desarrollo
+              <h3 className="mb-2 text-lg font-semibold">
+                En Desarrollo
               </h3>
 
-              <p className="mb-4 text-muted-foreground">
-                Esta funcionalidad está siendo implementada y estará disponible
-                próximamente.
+              <p className="mb-4 text-sm text-muted-foreground">
+                Próximamente disponibles reportes avanzados con análisis detallado.
               </p>
 
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p>• Reportes PDF</p>
+                <p>• Reportes PDF personalizados</p>
 
                 <p>• Análisis de datos</p>
 
