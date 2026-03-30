@@ -528,6 +528,21 @@ class PagoService {
     })
   }
 
+  /** Elimina una cédula de la lista (ya no podrá reportar en Bs). */
+
+  async removeCedulaReportarBs(cedula: string): Promise<{
+    eliminada: boolean
+    cedula: string
+    total: number
+    mensaje: string
+  }> {
+    return await apiClient.delete(`${this.baseUrl}/cedulas-reportar-bs/eliminar`, {
+      data: {
+        cedula,
+      },
+    })
+  }
+
   /** Carga Excel con columna 'cedula' para definir quiénes pueden reportar en Bs. */
 
   async uploadCedulasReportarBs(

@@ -5629,6 +5629,92 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
     return None
 
 
+@router.get("/diagnostico/pago/{pago_id}", response_model=dict)
+def diagnostico_pago(pago_id: int, db: Session = Depends(get_db)):
+    """Verifica si un pago existe en BD y muestra sus dependencias."""
+    info: dict = {"pago_id": pago_id, "existe_en_pagos": False, "dependencias": {}}
+
+    row = db.execute(
+        text("SELECT id, prestamo_id, cedula_cliente, monto_pagado, fecha_pago, numero_documento, estado, ref_norm FROM pagos WHERE id = :pid"),
+        {"pid": pago_id},
+    ).first()
+
+    if row:
+        info["existe_en_pagos"] = True
+        info["pago"] = {
+            "id": row[0], "prestamo_id": row[1], "cedula": row[2],
+            "monto": float(row[3]) if row[3] else None,
+            "fecha": str(row[4]) if row[4] else None,
+            "documento": row[5], "estado": row[6], "ref_norm": row[7],
+        }
+
+    cp = db.execute(text("SELECT COUNT(*) FROM cuota_pagos WHERE pago_id = :pid"), {"pid": pago_id}).scalar()
+    info["dependencias"]["cuota_pagos"] = cp or 0
+
+    acm = db.execute(text("SELECT COUNT(*) FROM auditoria_conciliacion_manual WHERE pago_id = :pid"), {"pid": pago_id}).scalar()
+    info["dependencias"]["auditoria_conciliacion_manual"] = acm or 0
+
+    cuotas_ref = db.execute(text("SELECT COUNT(*) FROM cuotas WHERE pago_id = :pid"), {"pid": pago_id}).scalar()
+    info["dependencias"]["cuotas_con_pago_id"] = cuotas_ref or 0
+
+    rp = db.execute(text("SELECT COUNT(*) FROM revisar_pagos WHERE pago_id = :pid"), {"pid": pago_id}).scalar()
+    info["dependencias"]["revisar_pagos"] = rp or 0
+
+    return info
+
+
+@router.delete("/forzar-eliminar/{pago_id}", response_model=dict)
+def forzar_eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
+    """Eliminacion forzada: limpia TODAS las dependencias y borra el pago con SQL directo."""
+    import logging
+    log = logging.getLogger(__name__)
+
+    existe = db.execute(text("SELECT id FROM pagos WHERE id = :pid"), {"pid": pago_id}).first()
+    if not existe:
+        return {"ok": False, "detail": f"Pago {pago_id} no existe en tabla pagos"}
+
+    try:
+        r1 = db.execute(text("DELETE FROM cuota_pagos WHERE pago_id = :pid"), {"pid": pago_id})
+        r2 = db.execute(text("DELETE FROM auditoria_conciliacion_manual WHERE pago_id = :pid"), {"pid": pago_id})
+        r3 = db.execute(text("UPDATE cuotas SET pago_id = NULL WHERE pago_id = :pid"), {"pid": pago_id})
+        r4 = db.execute(text("DELETE FROM revisar_pagos WHERE pago_id = :pid"), {"pid": pago_id})
+
+        # Buscar cualquier otra FK que referencie pagos.id
+        fk_check = db.execute(text("""
+            SELECT tc.table_name, kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+            WHERE ccu.table_name = 'pagos' AND ccu.column_name = 'id'
+              AND tc.constraint_type = 'FOREIGN KEY'
+              AND tc.table_name NOT IN ('cuota_pagos', 'auditoria_conciliacion_manual', 'cuotas', 'revisar_pagos')
+        """)).fetchall()
+
+        extra_cleaned = []
+        for fk_row in fk_check:
+            tbl, col = fk_row[0], fk_row[1]
+            db.execute(text(f'DELETE FROM "{tbl}" WHERE "{col}" = :pid'), {"pid": pago_id})
+            extra_cleaned.append(f"{tbl}.{col}")
+
+        r5 = db.execute(text("DELETE FROM pagos WHERE id = :pid"), {"pid": pago_id})
+        db.commit()
+
+        log.info("Pago %s eliminado forzadamente. cuota_pagos=%s acm=%s cuotas=%s revisar=%s pagos=%s extra=%s",
+                 pago_id, r1.rowcount, r2.rowcount, r3.rowcount, r4.rowcount, r5.rowcount, extra_cleaned)
+
+        return {
+            "ok": True,
+            "eliminado": {
+                "cuota_pagos": r1.rowcount, "auditoria_conciliacion_manual": r2.rowcount,
+                "cuotas_nulled": r3.rowcount, "revisar_pagos": r4.rowcount,
+                "pagos": r5.rowcount, "extra_fks": extra_cleaned,
+            },
+        }
+    except Exception as e:
+        db.rollback()
+        log.error("Error forzar-eliminar pago %s: %s", pago_id, e)
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)[:300]}") from e
+
 
 
 
@@ -6445,6 +6531,89 @@ def upload_cedulas_reportar_bs(
         "mensaje": f"Se cargaron {len(cedulas_unicas)} cédula(s). Solo ellas pueden reportar pagos en Bs en RapiCredit Cobros e Infopagos.",
 
     }
+
+
+@router.delete("/cedulas-reportar-bs/eliminar", response_model=dict)
+
+def eliminar_cedula_reportar_bs(
+
+    payload: AgregarCedulaReportarBsBody,
+
+    db: Session = Depends(get_db),
+
+):
+
+    """
+
+    Elimina una cédula de la lista de quienes pueden reportar en Bs.
+
+    La cédula se normaliza (V/E/J/G + dígitos) antes de eliminar.
+
+    """
+
+    cedula_norm = normalize_cedula_para_almacenar_lista_bs(payload.cedula)
+
+    if not cedula_norm:
+
+        raise HTTPException(
+
+            status_code=400,
+
+            detail="Cédula inválida. Use letra V, E, J o G seguida de 6 a 11 dígitos (ej: V12345678).",
+
+        )
+
+    try:
+
+        # Buscar y eliminar la cédula
+
+        cedula_encontrada = db.query(CedulaReportarBs).filter(
+
+            CedulaReportarBs.cedula == cedula_norm
+
+        ).first()
+
+        if not cedula_encontrada:
+
+            total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
+
+            return {
+
+                "eliminada": False,
+
+                "cedula": cedula_norm,
+
+                "total": total,
+
+                "mensaje": f"La cédula {cedula_norm} no se encontró en la lista.",
+
+            }
+
+        db.delete(cedula_encontrada)
+
+        db.commit()
+
+        total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
+
+        return {
+
+            "eliminada": True,
+
+            "cedula": cedula_norm,
+
+            "total": total,
+
+            "mensaje": f"Cédula {cedula_norm} eliminada. Ya no podrá reportar pagos en Bs en Cobros e Infopagos.",
+
+        }
+
+    except Exception as e:
+
+        db.rollback()
+
+        logger.exception("Error eliminando cedula_reportar_bs: %s", e)
+
+        raise HTTPException(status_code=500, detail="Error al eliminar la cédula.") from e
 
 # Compat: nombre historico
 # Compat: nombre historico (importaciones antiguas).

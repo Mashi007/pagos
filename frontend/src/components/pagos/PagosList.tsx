@@ -145,6 +145,7 @@ export function PagosList() {
   >(null)
   const [isUploadingCedulasBs, setIsUploadingCedulasBs] = useState(false)
   const [isAgregandoCedulaBs, setIsAgregandoCedulaBs] = useState(false)
+  const [isEliminandoCedulaBs, setIsEliminandoCedulaBs] = useState(false)
   const [nuevaCedulaBs, setNuevaCedulaBs] = useState('')
   const [consultaCedulaBs, setConsultaCedulaBs] = useState('')
   const [consultaCedulaBsResultado, setConsultaCedulaBsResultado] = useState<{
@@ -659,6 +660,50 @@ export function PagosList() {
                     <Plus className="mr-1 h-4 w-4" />
                   )}
                   Agregar cédula
+                </Button>
+              </div>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+                <Input
+                  placeholder="Ej: V12345678 (eliminar)"
+                  value={consultaCedulaBs}
+                  onChange={e => setConsultaCedulaBs(e.target.value)}
+                  className="w-full min-w-0 border-red-300 sm:w-44 sm:max-w-xs"
+                  maxLength={20}
+                  aria-label="Cédula a eliminar de la lista"
+                  onKeyDown={e =>
+                    e.key === 'Enter' &&
+                    (e.preventDefault(),
+                    document.getElementById('btn-eliminar-cedula-bs')?.click())
+                  }
+                />
+                <Button
+                  id="btn-eliminar-cedula-bs"
+                  variant="outline"
+                  size="sm"
+                  className="border-red-400 text-red-800 hover:bg-red-100"
+                  disabled={isEliminandoCedulaBs || !consultaCedulaBs.trim()}
+                  onClick={async () => {
+                    const ced = consultaCedulaBs.trim()
+                    if (!ced) return
+                    setIsEliminandoCedulaBs(true)
+                    try {
+                      const res = await pagoService.removeCedulaReportarBs(ced)
+                      setCedulasReportarBsTotal(res.total)
+                      setConsultaCedulaBs('')
+                      toast.success(res.mensaje)
+                    } catch (err) {
+                      toast.error(getErrorMessage(err))
+                    } finally {
+                      setIsEliminandoCedulaBs(false)
+                    }
+                  }}
+                >
+                  {isEliminandoCedulaBs ? (
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-1 h-4 w-4" />
+                  )}
+                  Eliminar cédula
                 </Button>
               </div>
               <input
