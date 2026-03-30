@@ -27,9 +27,6 @@ const PUBLIC_PATHS = [
   '/login',
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
-  '/finiquitos',
-  '/finiquitos/acceso',
-  '/finiquitos/panel',
 ]
 
 /** En rutas pblicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
@@ -290,19 +287,7 @@ function App() {
 
             {/* Finiquito: portal OTP y gestion comparten URL /finiquitos/gestion (gate); panel redirige */}
 
-            <Route path="finiquitos" element={<FiniquitoRootPage />} />
-
-            <Route path="finiquitos/acceso" element={<FiniquitoAccesoPage />} />
-
-            <Route
-              path="finiquitos/panel"
-              element={<Navigate to="/finiquitos/gestion" replace />}
-            />
-
-            <Route
-              path="finiquitos/gestion"
-              element={<FiniquitoGestionGatePage />}
-            />
+            {/* Nota: Rutas de finiquitos han sido movidas a sección protegida (después de login) */}
 
             {/* Login: misma pantalla que index cuando no autenticado */}
 
@@ -389,6 +374,22 @@ function App() {
             {/* Informes: generador de estado de cuenta (requiere login) */}
 
             <Route path="informes" element={<EstadoCuentaPublicoPage />} />
+
+            {/* Finiquitos: portal de finiquitos (requiere login) */}
+
+            <Route path="finiquitos" element={<FiniquitoRootPage />} />
+
+            <Route path="finiquitos/acceso" element={<FiniquitoAccesoPage />} />
+
+            <Route
+              path="finiquitos/panel"
+              element={<Navigate to="/finiquitos/gestion" replace />}
+            />
+
+            <Route
+              path="finiquitos/gestion"
+              element={<FiniquitoGestionGatePage />}
+            />
 
             {/* Reportes */}
 
