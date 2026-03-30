@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_auditoria_cartera_access
 from app.models.auditoria import Auditoria
 from app.models.auditoria_cartera_revision import AuditoriaCarteraRevision
 from app.models.prestamo import Prestamo
@@ -25,9 +25,16 @@ from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.services.auditoria_cartera_revision_service import (
     CONTROLES_CARTERA_VALIDOS,
+    NOTA_MIN_REVOCAR_OK,
     TIPOS_REVISION_VALIDOS,
     iso_utc,
+    listar_codigos_control_con_excepcion_historica,
     listar_ocultos_marcar_ok,
+    ultimo_tipo_revision_par,
+)
+from app.services.auditoria_cartera_revision_snapshot import (
+    construir_payload_snapshot_marcar_ok,
+    payload_minimo_revocar_ok,
 )
 from app.services.prestamo_cartera_auditoria import (
     ejecutar_auditoria_cartera,
@@ -358,6 +365,7 @@ class CarteraRevisionItemResponse(BaseModel):
     usuario_email: Optional[str] = None
     nota: Optional[str] = None
     creado_en: str
+    payload_snapshot: Optional[Any] = None
 
 
 class AuditoriaCarteraResumenResponse(BaseModel):
@@ -407,7 +415,10 @@ def _prestamos_cartera_dicts_a_items(rows: List[dict[str, Any]]) -> List[Prestam
 
 
 @router.get("/prestamos/cartera/meta")
-def meta_auditoria_cartera(db: Session = Depends(get_db)):
+def meta_auditoria_cartera(
+    db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
+):
     """Ultima corrida automatica (03:00) y totales guardados en `configuracion` (JSON en clave auditoria_cartera_ultima_resumen)."""
     return leer_meta_ejecucion(db)
 
@@ -436,6 +447,7 @@ def resumen_auditoria_cartera(
         description="Opcional. Acota prestamos_con_alerta al subconjunto con este control en SI (conteos_por_control siguen globales).",
     ),
     db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
 ):
     """
     Misma logica que GET `/prestamos/cartera/chequeos`, pero **sin** devolver la lista de prestamos.
@@ -486,6 +498,7 @@ def listar_chequeos_cartera(
         description="Opcional. Lista y paginacion solo sobre prestamos con este control en SI; conteos_por_control siguen globales.",
     ),
     db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
 ):
     """
     Revision de cartera en tiempo real desde tablas prestamos, clientes, cuotas, pagos, cuota_pagos.
@@ -521,6 +534,7 @@ def ejecutar_y_persistir_auditoria_cartera(
         ),
     ),
     db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
 ):
     """
     Alinea `cuotas.estado` con la regla de negocio (misma que la auditoria), recalcula chequeos,
@@ -555,7 +569,7 @@ def ejecutar_y_persistir_auditoria_cartera(
 def corregir_auditoria_cartera(
     body: CarteraCorregirBody,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(require_auditoria_cartera_access),
 ):
     """
     Opciones de correccion acotadas: sincronizar estados de cuota en cartera y/o reaplicar cascada
@@ -621,12 +635,13 @@ def corregir_auditoria_cartera(
 def crear_revision_cartera(
     body: CarteraRevisionCrearBody,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = Depends(require_auditoria_cartera_access),
 ):
     """
     Registra revision humana (append-only). `MARCAR_OK` documenta excepcion de negocio aceptada:
     requiere nota (min. 15 caracteres). Es una de las dos vias legitimas para que el caso deje la cola
     operativa (la otra es que el motor deje de marcar SI tras corregir datos). No borra la condicion del motor.
+    `REVOCAR_OK` anula la vigencia operativa de la ultima aceptacion (ultimo evento debe ser MARCAR_OK).
     """
     cod = body.codigo_control.strip()
     if cod not in CONTROLES_CARTERA_VALIDOS:
@@ -643,18 +658,38 @@ def crear_revision_cartera(
     if not db.get(Prestamo, body.prestamo_id):
         raise HTTPException(status_code=404, detail="Prestamo no encontrado")
     nota_val = (body.nota or "").strip() or None
+    payload_snap: Optional[Any] = None
     if tipo_u == "MARCAR_OK":
         if not nota_val or len(nota_val) < 15:
             raise HTTPException(
                 status_code=400,
                 detail="MARCAR_OK requiere nota (minimo 15 caracteres) documentando la excepcion de negocio.",
             )
+        payload_snap = construir_payload_snapshot_marcar_ok(
+            db, prestamo_id=body.prestamo_id, codigo_control=cod
+        )
+    elif tipo_u == "REVOCAR_OK":
+        if not nota_val or len(nota_val) < NOTA_MIN_REVOCAR_OK:
+            raise HTTPException(
+                status_code=400,
+                detail=f"REVOCAR_OK requiere nota (minimo {NOTA_MIN_REVOCAR_OK} caracteres).",
+            )
+        ult = ultimo_tipo_revision_par(db, body.prestamo_id, cod)
+        if ult != "MARCAR_OK":
+            raise HTTPException(
+                status_code=400,
+                detail="No hay excepcion vigente (ultimo evento del par no es MARCAR_OK).",
+            )
+        payload_snap = payload_minimo_revocar_ok(
+            prestamo_id=body.prestamo_id, codigo_control=cod
+        )
     row = AuditoriaCarteraRevision(
         prestamo_id=body.prestamo_id,
         codigo_control=cod,
         tipo=tipo_u,
         usuario_id=current_user.id,
         nota=nota_val,
+        payload_snapshot=payload_snap,
     )
     db.add(row)
     db.commit()
@@ -670,6 +705,7 @@ def crear_revision_cartera(
         usuario_email=email,
         nota=row.nota,
         creado_en=iso_utc(row.creado_en),
+        payload_snapshot=row.payload_snapshot,
     )
 
 
@@ -677,6 +713,7 @@ def crear_revision_cartera(
 def ocultos_revision_cartera(
     body: CarteraRevisionOcultosBody,
     db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
 ):
     """
     Pares (prestamo_id, codigo_control) cuyo **ultimo** evento en bitacora es `MARCAR_OK`.
@@ -691,11 +728,94 @@ def ocultos_revision_cartera(
     )
 
 
+@router.get(
+    "/prestamos/cartera/revisiones/controles-con-excepciones",
+    response_model=List[str],
+)
+def listar_controles_con_excepciones_historicas(
+    db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
+):
+    """Codigos de control con al menos un MARCAR_OK en bitacora (historico)."""
+    return listar_codigos_control_con_excepcion_historica(db)
+
+
+@router.get("/prestamos/cartera/revisiones/export-excel")
+def exportar_revisiones_cartera_excel(
+    codigo_control: str = Query(..., min_length=1, max_length=80),
+    db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
+):
+    """
+    Descarga Excel con **todas** las filas de bitacora del control indicado (todos los tipos),
+    incluyendo snapshot JSON cuando exista.
+    """
+    cod = codigo_control.strip()
+    if cod not in CONTROLES_CARTERA_VALIDOS:
+        raise HTTPException(
+            status_code=400,
+            detail="codigo_control no es un control de cartera conocido",
+        )
+    import openpyxl
+    from openpyxl.utils import get_column_letter
+
+    rows = (
+        db.query(AuditoriaCarteraRevision, User.email)
+        .outerjoin(User, User.id == AuditoriaCarteraRevision.usuario_id)
+        .filter(AuditoriaCarteraRevision.codigo_control == cod)
+        .order_by(AuditoriaCarteraRevision.creado_en.asc())
+        .all()
+    )
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "revisiones"
+    headers = [
+        "id",
+        "prestamo_id",
+        "codigo_control",
+        "tipo",
+        "usuario_email",
+        "nota",
+        "creado_en",
+        "payload_snapshot_json",
+    ]
+    ws.append(headers)
+    for r, email in rows:
+        snap = r.payload_snapshot
+        snap_txt = json.dumps(snap, ensure_ascii=False) if snap is not None else ""
+        ws.append(
+            [
+                r.id,
+                r.prestamo_id,
+                r.codigo_control,
+                r.tipo,
+                email or "",
+                r.nota or "",
+                iso_utc(r.creado_en),
+                snap_txt,
+            ]
+        )
+    for col in range(1, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(col)].width = 18
+    ws.column_dimensions[get_column_letter(len(headers))].width = 80
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    safe_cod = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in cod)[:60]
+    fname = f"auditoria_cartera_revisiones_{safe_cod}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.get("/prestamos/cartera/revisiones/historial", response_model=List[CarteraRevisionItemResponse])
 def historial_revision_cartera(
     prestamo_id: int = Query(..., ge=1),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
 ):
     """Historial cronologico descendente de revisiones para un prestamo."""
     rows = (
@@ -718,6 +838,7 @@ def historial_revision_cartera(
                 usuario_email=email,
                 nota=r.nota,
                 creado_en=iso_utc(r.creado_en),
+                payload_snapshot=r.payload_snapshot,
             )
         )
     return out

@@ -24,6 +24,9 @@ security_optional_bearer = HTTPBearer(auto_error=False)
 
 logger = logging.getLogger(__name__)
 
+# Roles sin acceso a auditoria de cartera (API bajo /auditoria/prestamos/cartera/*).
+ROLES_BLOQUEADOS_AUDITORIA_CARTERA = frozenset({"operativo", "usuario", "usuarios"})
+
 
 def _fake_user_response(email: str) -> UserResponse:
     """Usuario mínimo cuando no existe en BD (admin desde env)."""
@@ -95,6 +98,19 @@ def require_administrador(
             detail="Solo administradores pueden acceder a este recurso.",
         )
     return current
+
+
+def require_auditoria_cartera_access(
+    current_user: UserResponse = Depends(get_current_user),
+) -> UserResponse:
+    """Auditoria de cartera: denegado a rol operativo / usuario(s) basico."""
+    r = (current_user.rol or "").strip().lower()
+    if r in ROLES_BLOQUEADOS_AUDITORIA_CARTERA:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="La auditoria de cartera no esta disponible para su rol.",
+        )
+    return current_user
 
 
 def get_finiquito_usuario_acceso(

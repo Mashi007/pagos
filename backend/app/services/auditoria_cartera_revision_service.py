@@ -56,7 +56,44 @@ CONTROLES_CARTERA_VALIDOS = frozenset(
     }
 )
 
-TIPOS_REVISION_VALIDOS = frozenset({"MARCAR_OK"})
+TIPOS_REVISION_VALIDOS = frozenset({"MARCAR_OK", "REVOCAR_OK"})
+
+NOTA_MIN_REVOCAR_OK = 10
+
+
+def ultimo_tipo_revision_par(
+    db: Session, prestamo_id: int, codigo_control: str
+) -> Optional[str]:
+    """Ultimo tipo registrado para (prestamo_id, codigo_control), o None."""
+    q = text(
+        """
+        SELECT UPPER(TRIM(BOTH FROM COALESCE(r.tipo, '')))
+        FROM auditoria_cartera_revision r
+        WHERE r.prestamo_id = :pid AND r.codigo_control = :cod
+        ORDER BY r.creado_en DESC
+        LIMIT 1
+        """
+    )
+    row = db.execute(
+        q, {"pid": int(prestamo_id), "cod": str(codigo_control).strip()}
+    ).fetchone()
+    if not row or row[0] is None:
+        return None
+    return str(row[0]).strip() or None
+
+
+def listar_codigos_control_con_excepcion_historica(db: Session) -> list[str]:
+    """Codigos de control con al menos un evento MARCAR_OK en la bitacora."""
+    q = text(
+        """
+        SELECT DISTINCT TRIM(BOTH FROM r.codigo_control) AS c
+        FROM auditoria_cartera_revision r
+        WHERE UPPER(TRIM(BOTH FROM COALESCE(r.tipo, ''))) = 'MARCAR_OK'
+        ORDER BY 1
+        """
+    )
+    rows = db.execute(q).fetchall()
+    return [str(r[0]).strip() for r in rows if r[0]]
 
 
 def parches_ocultos_por_ultima_revision(

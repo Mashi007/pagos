@@ -165,6 +165,9 @@ export interface CarteraRevisionItem {
   nota?: string
 
   creado_en: string
+
+  /** Snapshot al MARCAR_OK o metadatos minimos en REVOCAR_OK. */
+  payload_snapshot?: Record<string, unknown> | null
 }
 
 class AuditoriaService {
@@ -329,6 +332,23 @@ class AuditoriaService {
     return apiClient.get<CarteraRevisionItem[]>(
       `${this.baseUrl}/prestamos/cartera/revisiones/historial`,
       { params: { prestamo_id: prestamoId, limit } }
+    )
+  }
+
+  /** Controles con al menos un MARCAR_OK historico (para export). */
+  async listarControlesConExcepcionesHistoricas(): Promise<string[]> {
+    return apiClient.get<string[]>(
+      `${this.baseUrl}/prestamos/cartera/revisiones/controles-con-excepciones`
+    )
+  }
+
+  async descargarRevisionesCarteraExcel(codigoControl: string): Promise<Blob> {
+    return apiClient.get<Blob>(
+      `${this.baseUrl}/prestamos/cartera/revisiones/export-excel`,
+      {
+        params: { codigo_control: codigoControl },
+        responseType: 'blob',
+      }
     )
   }
 

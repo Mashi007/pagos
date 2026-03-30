@@ -9,6 +9,7 @@ import {
   Filter,
   Loader2,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react'
 
 import { Button } from '../ui/button'
@@ -74,6 +75,14 @@ const COD_DESAJUSTE_PAGOS = 'total_pagado_vs_aplicado_cuotas'
 const PAGE_SIZE_DEFAULT = 25
 
 const NOTA_EXCEPCION_MIN_LEN = 15
+
+const NOTA_REVOCACION_MIN_LEN = 10
+
+const ROLES_SIN_AUDITORIA_CARTERA = new Set([
+  'operativo',
+  'usuario',
+  'usuarios',
+])
 
 function csvEscapeCell(val: string): string {
   if (/[",\n\r]/.test(val)) {
@@ -196,6 +205,11 @@ export function AuditoriaCarteraTab() {
 
   const esAdmin = (user?.rol || 'operativo') === 'administrador'
 
+  const puedeAuditoriaCartera = useMemo(() => {
+    const r = (user?.rol || 'operativo').trim().toLowerCase()
+    return !ROLES_SIN_AUDITORIA_CARTERA.has(r)
+  }, [user?.rol])
+
   const boot = useMemo(() => loadCarteraSessionCache(), [])
 
   const [loading, setLoading] = useState(() => boot === null)
@@ -271,6 +285,45 @@ export function AuditoriaCarteraTab() {
 
   const [okSubmitting, setOkSubmitting] = useState(false)
 
+  const [controlesConExcHist, setControlesConExcHist] = useState<string[]>([])
+
+  const [exportCodigoHist, setExportCodigoHist] = useState('')
+
+  const [exportandoHist, setExportandoHist] = useState(false)
+
+  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false)
+
+  const [revokeTarget, setRevokeTarget] = useState<{
+    prestamoId: number
+    codigo: string
+    titulo: string
+  } | null>(null)
+
+  const [revokeNota, setRevokeNota] = useState('')
+
+  const [revokeSubmitting, setRevokeSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!puedeAuditoriaCartera) return
+    let cancel = false
+    void (async () => {
+      try {
+        const c =
+          await auditoriaService.listarControlesConExcepcionesHistoricas()
+        if (!cancel) {
+          setControlesConExcHist(Array.isArray(c) ? c : [])
+        }
+      } catch {
+        if (!cancel) {
+          setControlesConExcHist([])
+        }
+      }
+    })()
+    return () => {
+      cancel = true
+    }
+  }, [puedeAuditoriaCartera])
+
   const syncOcultosConItems = useCallback(
     async (list: PrestamoCarteraChequeo[]): Promise<Set<string>> => {
       const ids = [...new Set(list.map(r => r.prestamo_id))]
@@ -302,6 +355,9 @@ export function AuditoriaCarteraTab() {
 
   const fetchLista = useCallback(
     async (opts?: { silent?: boolean }) => {
+      if (!puedeAuditoriaCartera) {
+        return
+      }
       const silent = opts?.silent === true
       try {
         if (!silent) setLoading(true)
@@ -354,7 +410,14 @@ export function AuditoriaCarteraTab() {
         if (!silent) setLoading(false)
       }
     },
-    [page, pageSize, filtrosApi, vistaMotorCrudo, syncOcultosConItems]
+    [
+      page,
+      pageSize,
+      filtrosApi,
+      vistaMotorCrudo,
+      syncOcultosConItems,
+      puedeAuditoriaCartera,
+    ]
   )
 
   /** Mientras la BD responde lento (p. ej. script masivo), no ocultar resumen ni tabla en cache. */
@@ -581,6 +644,13 @@ export function AuditoriaCarteraTab() {
         'Excepcion guardada en bitacora. Deja de contar en la cola operativa (vista normal).'
       )
       void fetchLista({ silent: true })
+      try {
+        const c =
+          await auditoriaService.listarControlesConExcepcionesHistoricas()
+        setControlesConExcHist(Array.isArray(c) ? c : [])
+      } catch {
+        /* opcional */
+      }
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
@@ -589,6 +659,80 @@ export function AuditoriaCarteraTab() {
       toast.error(msg)
     } finally {
       setOkSubmitting(false)
+    }
+  }
+
+  const abrirDialogoRevocacion = (
+    prestamoId: number,
+    codigo: string,
+    titulo: string
+  ) => {
+    setRevokeTarget({ prestamoId, codigo, titulo })
+    setRevokeNota('')
+    setRevokeDialogOpen(true)
+  }
+
+  const confirmarRevocacion = async () => {
+    if (!revokeTarget) return
+    const nota = revokeNota.trim()
+    if (nota.length < NOTA_REVOCACION_MIN_LEN) {
+      toast.error(
+        `Indique motivo de la revocacion (minimo ${NOTA_REVOCACION_MIN_LEN} caracteres).`
+      )
+      return
+    }
+    try {
+      setRevokeSubmitting(true)
+      await auditoriaService.crearRevisionCartera({
+        prestamo_id: revokeTarget.prestamoId,
+        codigo_control: revokeTarget.codigo,
+        tipo: 'REVOCAR_OK',
+        nota,
+      })
+      setRevokeDialogOpen(false)
+      setRevokeTarget(null)
+      setRevokeNota('')
+      toast.success(
+        'Revocacion registrada. El caso vuelve a la cola operativa si el motor sigue en SI.'
+      )
+      void fetchLista({ silent: true })
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al revocar excepcion'
+      toast.error(msg)
+    } finally {
+      setRevokeSubmitting(false)
+    }
+  }
+
+  const descargarHistoricoExcel = async () => {
+    const cod = exportCodigoHist.trim()
+    if (!cod) {
+      toast.error('Elija un control con excepciones en historico.')
+      return
+    }
+    try {
+      setExportandoHist(true)
+      const blob = await auditoriaService.descargarRevisionesCarteraExcel(cod)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `auditoria_cartera_revisiones_${cod.replace(/[^a-zA-Z0-9_-]/g, '_')}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      toast.success('Descarga iniciada.')
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al exportar'
+      toast.error(msg)
+    } finally {
+      setExportandoHist(false)
     }
   }
 
@@ -654,6 +798,17 @@ export function AuditoriaCarteraTab() {
     }
   }
 
+  if (!puedeAuditoriaCartera) {
+    return (
+      <Card className="border-amber-200 bg-amber-50/40">
+        <CardContent className="py-8 text-center text-sm text-slate-700">
+          No tiene permisos para la auditoria de cartera. Esta seccion esta
+          restringida a roles distintos de operativo / usuario(s) basico.
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <Card className="overflow-hidden border-slate-200/90 shadow-sm">
@@ -675,6 +830,57 @@ export function AuditoriaCarteraTab() {
         </CardHeader>
 
         <CardContent className="space-y-4 pt-4">
+          <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50/60 p-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="min-w-[200px] flex-1">
+              <Label
+                htmlFor="auditoria-export-hist-control"
+                className="text-xs font-medium text-slate-700"
+              >
+                Exportar historico de bitacora (Excel)
+              </Label>
+              <p className="mb-1.5 text-[11px] text-muted-foreground">
+                Todos los eventos del control elegido (MARCAR_OK, REVOCAR_OK,
+                etc.), con columna de snapshot JSON.
+              </p>
+              <Select
+                value={exportCodigoHist || '__none__'}
+                onValueChange={v =>
+                  setExportCodigoHist(v === '__none__' ? '' : v)
+                }
+              >
+                <SelectTrigger
+                  id="auditoria-export-hist-control"
+                  className="h-9 border-slate-200 bg-white"
+                >
+                  <SelectValue placeholder="Elija control" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Elija control...</SelectItem>
+                  {controlesConExcHist.map(cod => (
+                    <SelectItem key={cod} value={cod}>
+                      {cod}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="shrink-0 gap-1"
+              disabled={exportandoHist || !exportCodigoHist.trim()}
+              onClick={() => void descargarHistoricoExcel()}
+            >
+              {exportandoHist ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Descargar Excel
+            </Button>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
@@ -1012,23 +1218,46 @@ export function AuditoriaCarteraTab() {
                               </TableCell>
 
                               <TableCell className="text-right align-top">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="gap-1"
-                                  aria-label={`Aceptar excepcion para control: ${c.titulo}`}
-                                  onClick={() =>
-                                    abrirDialogoExcepcion(
-                                      row.prestamo_id,
-                                      c.codigo,
-                                      c.titulo
-                                    )
-                                  }
-                                >
-                                  <Check className="h-3.5 w-3.5" />
-                                  Aceptar excepcion
-                                </Button>
+                                <div className="flex flex-col items-end gap-1.5">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1"
+                                    aria-label={`Aceptar excepcion para control: ${c.titulo}`}
+                                    onClick={() =>
+                                      abrirDialogoExcepcion(
+                                        row.prestamo_id,
+                                        c.codigo,
+                                        c.titulo
+                                      )
+                                    }
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                    Aceptar excepcion
+                                  </Button>
+                                  {ocultosKeys.has(
+                                    controlDismissKey(row.prestamo_id, c.codigo)
+                                  ) ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="gap-1 text-amber-900 hover:bg-amber-100/80"
+                                      aria-label={`Revocar excepcion para control: ${c.titulo}`}
+                                      onClick={() =>
+                                        abrirDialogoRevocacion(
+                                          row.prestamo_id,
+                                          c.codigo,
+                                          c.titulo
+                                        )
+                                      }
+                                    >
+                                      <RotateCcw className="h-3.5 w-3.5" />
+                                      Revocar excepcion
+                                    </Button>
+                                  ) : null}
+                                </div>
                               </TableCell>
                             </TableRow>
                           )
@@ -1155,10 +1384,82 @@ export function AuditoriaCarteraTab() {
                   {h.nota ? (
                     <div className="mt-1 text-slate-700">Nota: {h.nota}</div>
                   ) : null}
+                  {h.payload_snapshot &&
+                  Object.keys(h.payload_snapshot).length > 0 ? (
+                    <pre className="mt-2 max-h-40 overflow-auto rounded border border-slate-200 bg-white p-2 font-mono text-[10px] leading-snug text-slate-800">
+                      {JSON.stringify(h.payload_snapshot, null, 2)}
+                    </pre>
+                  ) : null}
                 </li>
               ))}
             </ul>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={revokeDialogOpen}
+        onOpenChange={open => {
+          setRevokeDialogOpen(open)
+          if (!open) {
+            setRevokeTarget(null)
+            setRevokeNota('')
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Revocar excepcion aceptada</DialogTitle>
+          </DialogHeader>
+
+          {revokeTarget ? (
+            <p className="text-sm text-slate-600">
+              Prestamo <strong>#{revokeTarget.prestamoId}</strong> ·{' '}
+              <strong>{revokeTarget.titulo}</strong>
+            </p>
+          ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="auditoria-revoke-nota">
+              Motivo de la revocacion (minimo {NOTA_REVOCACION_MIN_LEN}{' '}
+              caracteres)
+            </Label>
+
+            <Textarea
+              id="auditoria-revoke-nota"
+              value={revokeNota}
+              onChange={e => setRevokeNota(e.target.value)}
+              rows={4}
+              placeholder="Ej. Se corrigen datos en sistema; la excepcion ya no aplica..."
+              className="resize-y"
+            />
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRevokeDialogOpen(false)}
+              disabled={revokeSubmitting}
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => void confirmarRevocacion()}
+              disabled={revokeSubmitting}
+            >
+              {revokeSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Registrar revocacion'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
