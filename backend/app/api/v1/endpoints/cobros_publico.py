@@ -1620,6 +1620,18 @@ async def enviar_reporte_infopagos(
 
                     )
 
+                else:
+
+                    logger.info(
+
+                        "[INFOPAGOS] Recibo ref=%s: correo enviado a %s.",
+
+                        referencia,
+
+                        to_email,
+
+                    )
+
             recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
 
             db.commit()
