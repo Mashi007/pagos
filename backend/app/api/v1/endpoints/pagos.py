@@ -787,6 +787,173 @@ def listar_pagos(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.get("/sin-prestamo/sugerir", response_model=dict)
+def sugerir_prestamos_sin_asignar(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna pagos sin prestamo_id y sugiere asignación automática si el cliente tiene exactamente 1 crédito activo.
+    
+    Respuesta incluye:
+    - pago_id: ID del pago
+    - cedula_cliente: Cédula del cliente
+    - prestamo_sugerido: ID del crédito (si hay exactamente 1) o None
+    - num_creditos_activos: Cantidad de créditos activos del cliente
+    - acciones_necesarias: "auto" si puede auto-asignarse, "manual" si requiere intervención
+    """
+    try:
+        # Contar pagos sin prestamo_id
+        count_q = select(func.count()).select_from(Pago).where(Pago.prestamo_id.is_(None))
+        total = db.scalar(count_q) or 0
+        
+        # Obtener pagos sin prestamo_id
+        q = select(Pago).where(Pago.prestamo_id.is_(None)).order_by(Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
+        pagos_sin_prestamo = db.execute(q).scalars().all()
+        
+        sugerencias = []
+        
+        for pago in pagos_sin_prestamo:
+            cedula_norm = pago.cedula_cliente.strip().upper() if pago.cedula_cliente else ""
+            
+            prestamos_activos = []
+            prestamo_sugerido = None
+            num_creditos = 0
+            acciones = "manual"
+            
+            if cedula_norm:
+                # Buscar créditos activos para esta cédula
+                prestamos_activos = db.execute(
+                    select(Prestamo.id)
+                    .select_from(Prestamo)
+                    .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                    .where(
+                        Cliente.cedula == cedula_norm,
+                        Prestamo.estado == "APROBADO",
+                    )
+                    .order_by(Prestamo.id)
+                ).scalars().all()
+                
+                num_creditos = len(prestamos_activos)
+                
+                # Si exactamente 1 crédito activo → sugerencia automática
+                if num_creditos == 1:
+                    prestamo_sugerido = prestamos_activos[0]
+                    acciones = "auto"
+            
+            sugerencias.append({
+                "pago_id": pago.id,
+                "cedula_cliente": pago.cedula_cliente,
+                "fecha_pago": pago.fecha_pago.isoformat() if pago.fecha_pago else None,
+                "monto_pagado": float(pago.monto_pagado) if pago.monto_pagado else 0,
+                "numero_documento": pago.numero_documento,
+                "prestamo_sugerido": prestamo_sugerido,
+                "num_creditos_activos": num_creditos,
+                "acciones_necesarias": acciones,
+            })
+        
+        total_pages = (total + per_page - 1) // per_page if total else 0
+        
+        return {
+            "sugerencias": sugerencias,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+            "resumen": {
+                "total_pagos_sin_prestamo": total,
+                "can_auto_asignar": sum(1 for s in sugerencias if s["acciones_necesarias"] == "auto"),
+                "requieren_manual": sum(1 for s in sugerencias if s["acciones_necesarias"] == "manual"),
+            }
+        }
+    
+    except Exception as e:
+        logger.exception("Error en GET /pagos/sin-prestamo/sugerir: %s", e)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/sin-prestamo/asignar-automatico", response_model=dict)
+def asignar_automaticamente_prestamos(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Auto-asigna prestamo_id a pagos que:
+    1. Tienen prestamo_id = NULL
+    2. El cliente tiene EXACTAMENTE 1 crédito activo (APROBADO)
+    
+    Retorna cantidad de pagos actualizados y detalles.
+    """
+    try:
+        # Obtener todos los pagos sin prestamo_id
+        pagos_sin_prestamo = db.execute(
+            select(Pago).where(Pago.prestamo_id.is_(None))
+        ).scalars().all()
+        
+        asignados = []
+        no_asignables = []
+        
+        for pago in pagos_sin_prestamo:
+            cedula_norm = pago.cedula_cliente.strip().upper() if pago.cedula_cliente else ""
+            
+            if not cedula_norm:
+                no_asignables.append({
+                    "pago_id": pago.id,
+                    "razon": "Cédula vacía"
+                })
+                continue
+            
+            # Buscar créditos activos
+            prestamos_activos = db.execute(
+                select(Prestamo.id)
+                .select_from(Prestamo)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Cliente.cedula == cedula_norm,
+                    Prestamo.estado == "APROBADO",
+                )
+                .order_by(Prestamo.id)
+            ).scalars().all()
+            
+            if len(prestamos_activos) == 1:
+                # Auto-asignar
+                pago.prestamo_id = prestamos_activos[0]
+                db.add(pago)
+                asignados.append({
+                    "pago_id": pago.id,
+                    "cedula_cliente": pago.cedula_cliente,
+                    "prestamo_id_asignado": prestamos_activos[0],
+                })
+            else:
+                no_asignables.append({
+                    "pago_id": pago.id,
+                    "cedula_cliente": pago.cedula_cliente,
+                    "razon": f"Cliente tiene {len(prestamos_activos)} créditos activos (requiere intervención manual)" if len(prestamos_activos) > 1 else "Cliente sin créditos activos"
+                })
+        
+        # Commit
+        db.commit()
+        
+        logger.info(
+            "Auto-asignación de prestamos: %d asignados, %d no asignables",
+            len(asignados),
+            len(no_asignables)
+        )
+        
+        return {
+            "asignados": len(asignados),
+            "no_asignables": len(no_asignables),
+            "detalles_asignados": asignados[:50],  # Limitar a 50 para la respuesta
+            "detalles_no_asignables": no_asignables[:50],
+            "mensaje": f"Se asignaron {len(asignados)} pagos automáticamente. {len(no_asignables)} requieren intervención manual.",
+        }
+    
+    except Exception as e:
+        logger.exception("Error en POST /pagos/sin-prestamo/asignar-automatico: %s", e)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 

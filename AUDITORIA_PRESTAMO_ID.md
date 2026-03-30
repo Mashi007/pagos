@@ -1,257 +1,175 @@
-# Auditoría Integral: Auto-Llenar prestamo_id en Carga Masiva
+# Auditoría: Carga Automática de ID de Crédito (prestamo_id)
 
-## Problema Reportado
+**Problema Reportado**: En https://rapicredit.onrender.com/pagos/pagos, no se carga automáticamente el `id_credito` (prestamo_id) en todas las filas de la tabla de pagos.
 
-En https://rapicredit.onrender.com/pagos/pagos, la carga masiva **NO auto-llena el ID de préstamo** para todas las filas, incluso cuando hay un único crédito activo.
+**Imagen**: Muestra 4 filas donde solo 2 tienen ID de crédito y 2 muestran "Sin asignar".
 
-Imagen adjunta muestra:
-- Filas con cédulas válidas pero SIN crédito auto-llenado (mostrando "Sin crédito")
-- Filas con cédulas válidas CON crédito auto-llenado (2801, 3147)
-- Filas con cédulas que NO existen en la BD (error rojo)
+---
 
-## Análisis del Flujo
+## 1. Análisis del Código
 
-### 1. **Ingreso de Datos (Excel)**
+### 1.1 Frontend - Visualización Correcta ✅
+- **Archivo**: `frontend/src/components/pagos/PagosList.tsx`
+- **Líneas**: 1397-1407
+- El frontend **sí renderiza correctamente** el `prestamo_id`:
+  ```tsx
+  {pago.prestamo_id ? (
+    <span className="text-sm font-medium">
+      #{pago.prestamo_id}
+    </span>
+  ) : (
+    <span className="text-sm text-amber-600">
+      Sin asignar
+    </span>
+  )}
+  ```
+- **Conclusión**: El frontend no es el problema.
 
-**Archivo:** `frontend/src/hooks/useExcelUploadPagos.ts` (línea ~1908-2440)
+### 1.2 Backend API - Retorna Datos Correcto ✅
+- **Archivo**: `backend/app/api/v1/endpoints/pagos.py`
+- **Línea**: 647 - Endpoint `GET /api/v1/pagos`
+- **Función**: `_pago_to_response()` línea 567
+- El backend retorna `prestamo_id` correctamente:
+  ```python
+  "prestamo_id": row.prestamo_id,  # línea 581
+  ```
+- **Conclusión**: El backend devuelve los datos tal como están en BD.
 
-Proceso:
-1. Se carga el Excel con cédulas en la columna "Cédula"
-2. Se parsean los datos en `processExcelFile()`
-3. Se **construyen cédulas únicas** (línea 266-289)
+### 1.3 Modelo de Base de Datos ✅
+- **Archivo**: `backend/app/models/pago.py`
+- **Línea**: 20
+- ```python
+  prestamo_id = Column(Integer, ForeignKey("prestamos.id", ondelete="SET NULL"), nullable=True, index=True)
+  ```
+- **Conclusión**: El campo permite NULL, por lo que los pagos pueden existir sin crédito asignado.
 
-**PROBLEMA #1: Cédulas no se normalizan correctamente**
+---
 
-```typescript
-// Línea 266-289
-const cedulasUnicas = useMemo(() => {
-  const candidates = new Set<string>()
-  excelData.forEach(r => {
-    const fromCedula = cedulaParaLookup(r.cedula)       // ← Usa LOOKS_LIKE_CEDULA solo VEJZ
-    const fromDoc = cedulaParaLookup(r.numero_documento) // ← Usa LOOKS_LIKE_CEDULA solo VEJZ
-    const lookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
-    
-    ;[fromCedula, fromDoc, lookup].forEach(c => {
-      if (c && c.length >= 5 && looksLikeCedula(c)) candidates.add(c)  // ← Aquí SÍ acepta números planos
-    })
-  })
-  
-  return [...candidates]
-    .map(c => (c || '').trim().replace(/-/g, ''))
-    .filter(c => c.length >= 5 && looksLikeCedula(c))  // ← Pero aquí lo filtra con números planos
-}, [excelData])
+## 2. Flujos donde se CREAN Pagos
+
+### 2.1 Upload de Excel (POST /pagos/upload) ⚠️
+**Archivo**: `backend/app/api/v1/endpoints/pagos.py`
+**Líneas**: 987-2000 aprox.
+
+**Lógica de asignación de `prestamo_id`**:
+- Línea 1259: Se inicializa `prestamo_id = None` en cada iteración
+- Línea 1754-1814: **Solo si** la cédula tiene EXACTAMENTE 1 crédito activo (APROBADO), se asigna automáticamente
+- Línea 1784-1790: **Si** la cédula tiene > 1 créditos, se RECHAZA la fila con error: _"Esta persona tiene X préstamos. Debe indicar el ID del préstamo."_
+
+**Problema Identificado**:
+- Si un cliente tiene 0 ó 2+ créditos activos, el pago se crea **SIN `prestamo_id`** (queda NULL)
+- Esto explica por qué hay pagos sin crédito asignado en la tabla
+
+### 2.2 Crear Pago Individual (POST /pagos/) ⚠️
+**Archivo**: `backend/app/api/v1/endpoints/pagos.py`
+**Líneas**: 4987-5140
+
+**Lógica**:
+```python
+if payload.prestamo_id is None:
+    raise HTTPException(status_code=400, detail="prestamo_id es obligatorio para crear pagos.")
 ```
 
-**Inconsistencia detectada:**
+- **El endpoint REQUIERE `prestamo_id`** obligatoriamente (línea 4991-4993)
+- Si no se proporciona → Error 400
+- **Conclusión**: Por este flujo NO se crean pagos sin `prestamo_id`
 
-1. **`cedulaParaLookup()`** (en `pagoExcelValidation.ts` línea 147-165):
-   - Usa `LOOKS_LIKE_CEDULA = /^[VEJZ]\d{6,11}$/i` (SOLO VEJZ + dígitos)
-   - Si recibe "123947215", devuelve como está (sin el prefijo V/E/J/Z)
-   - Pero luego falla la validación porque no match con LOOKS_LIKE_CEDULA
-
-2. **`looksLikeCedula()`** (en `useExcelUploadPagos.ts` línea 260-264):
-   - Acepta: `[VEJZ]\d{6,11}` O `\d{6,11}` (números planos)
-   - Mucho más permisivo
-
-**Resultado:** Los números planos (123947215) pasan por `looksLikeCedula()` pero NO por `cedulaParaLookup()`, creando una inconsistencia.
+### 2.3 Otros Flujos
+- `crear_pagos_batch()` (línea 4462): También maneja `prestamo_id`, con lógica similar a Excel
+- Uploads de conciliación, etc.: Comportamiento similar
 
 ---
 
-### 2. **Búsqueda de Préstamos en Backend**
+## 3. Raíz del Problema
 
-**Archivo:** `frontend/src/services/prestamoService.ts` (línea 414-450)
+**El problema es que los pagos fueron creados POR EXCEL sin `prestamo_id` asignado**, porque:
 
-```typescript
-async getPrestamosByCedulasBatch(cedulas: string[]): Promise<Record<string, Prestamo[]>> {
-  const cedulasNorm = [
-    ...new Set(
-      (cedulas || [])
-        .map(c => (c || '').trim().replace(/-/g, ''))
-        .filter(c => c.length >= 5)
-    ),
-  ]
-  
-  // Se envía al backend: POST /api/v1/prestamos/cedula/batch
-  const response = await apiClient.post<{ prestamos: Record<string, any[]> }>(
-    `${this.baseUrl}/cedula/batch`,
-    { cedulas: cedulasNorm },
-    { timeout: 60000 }
-  )
-  
-  const prestamos = (response as any)?.prestamos || {}
-  // ...
-}
+1. El cliente tiene **0 créditos activos** (APROBADO) en la BD, O
+2. El cliente tiene **2+ créditos activos** → el sistema requiere indicar cuál manualmente (rechazo intencional)
+3. Algún otro flujo más antiguo no validaba esto
+
+**Evidencia**: En la imagen, los pagos sin asignar probablemente corresponden a clientes con:
+- Múltiples créditos (rechazados pero guardados de todos modos)
+- O sin créditos activos
+- O créditos en estado diferente a "APROBADO"
+
+---
+
+## 4. Soluciones Propuestas
+
+### Solución A: Auto-asignación Inteligente (RECOMENDADA)
+**Cuando se muestra la tabla en `/pagos/pagos`**, implementar endpoint que:
+1. Identifique pagos SIN `prestamo_id`
+2. Para cada pago, busque créditos del cliente (por cédula)
+3. Si encuentra EXACTAMENTE 1 crédito → asignar automáticamente
+4. Si encuentra 0 ó 2+ → dejar como está (usuario elige manualmente)
+
+**Ventajas**:
+- No toca BD por ahora (no es destructivo)
+- Información en tiempo real
+- Usuario puede desambiguar si hay múltiples créditos
+
+### Solución B: Trigger en BD + Auto-asignación Post-Carga
+1. Crear trigger en `pagos` que, ante INSERT con `prestamo_id = NULL`, intente asignar automáticamente
+2. Modificar Excel upload para ejecutar lógica post-insert
+
+**Ventajas**:
+- Automático en todos los flujos
+- Consistencia en nivel BD
+
+**Desventajas**:
+- Más invasivo
+- Puede ocultar problemas
+
+### Solución C: Mejora del Upload Excel
+Modificar `POST /pagos/upload` para:
+1. En lugar de rechazar si múltiples créditos → guardar en `revisar_pagos` (tabla de validación)
+2. Permitir al usuario asignar `prestamo_id` manualmente en UI
+3. Luego validar y pasar a `pagos`
+
+---
+
+## 5. Recomendaciones
+
+1. **Corto Plazo**: Implementar Solución A (auto-asignación en lectura)
+2. **Mediano Plazo**: Mejorar Excel upload (Solución C)
+3. **Largo Plazo**: Auditar pagos históricos y limpiar datos inconsistentes
+
+---
+
+## 6. Queries SQL para Inspeccionar
+
+```sql
+-- Pagos sin prestamo_id
+SELECT id, cedula_cliente, fecha_pago, monto_pagado, prestamo_id 
+FROM pagos 
+WHERE prestamo_id IS NULL 
+LIMIT 10;
+
+-- Cédulas con múltiples créditos activos
+SELECT c.cedula, COUNT(p.id) as num_creditos
+FROM clientes c
+JOIN prestamos p ON p.cliente_id = c.id
+WHERE p.estado = 'APROBADO'
+GROUP BY c.cedula
+HAVING COUNT(p.id) > 1;
+
+-- Pagos de cédulas con múltiples créditos pero sin prestamo_id asignado
+SELECT pa.id, pa.cedula_cliente, pa.prestamo_id, COUNT(p.id) as num_creditos_activos
+FROM pagos pa
+LEFT JOIN clientes c ON UPPER(pa.cedula_cliente) = c.cedula
+LEFT JOIN prestamos p ON p.cliente_id = c.id AND p.estado = 'APROBADO'
+WHERE pa.prestamo_id IS NULL
+GROUP BY pa.id, pa.cedula_cliente, pa.prestamo_id
+HAVING COUNT(p.id) > 1;
 ```
 
-**Pregunta crítica:** ¿El backend acepta números planos (123947215) o requiere prefijo (V123947215)?
-
-**Flujo en backend para búsqueda:**
-- Si recibe "123947215", ¿normaliza a "V123947215" automáticamente?
-- ¿O requiere que el frontend envíe "V123947215"?
-
 ---
 
-### 3. **Mapeo de Préstamos en Frontend**
+## 7. Siguiente Paso
 
-**Archivo:** `frontend/src/hooks/useExcelUploadPagos.ts` (línea 385-418)
-
-```typescript
-prestamoService
-  .getPrestamosByCedulasBatch(cedulasUnicas)
-  .then(batch => {
-    const map: Record<string, Array<{ id: number; estado: string }>> = {}
-    
-    cedulasUnicas.forEach(cedula => {
-      const prestamos = (
-        batch[cedula] ||                          // ← Busca con cédula tal como está
-        batch[cedula.replace(/-/g, '')] ||       // ← O sin guiones
-        []
-      ).filter(...)
-      
-      map[cedula] = arr
-      map[cedula.replace(/-/g, '')] = arr         // ← Agrega variación sin guiones
-      map[cedula.toUpperCase()] = arr             // ← Agrega variación mayúscula
-      map[cedula.toLowerCase()] = arr             // ← Agrega variación minúscula
-    })
-    
-    return map
-  })
-```
-
-**PROBLEMA #2: El mapa no contiene todas las variaciones**
-
-Si el backend busca con "V123947215" pero el frontend envía "123947215":
-- El mapa tendrá key: "123947215"
-- El backend devuelve: key: "V123947215"
-- **No coinciden** → Sin créditos encontrados
-
----
-
-### 4. **Renderización en Tabla**
-
-**Archivo:** `frontend/src/components/pagos/TablaEditablePagos.tsx` (línea 247-357)
-
-```typescript
-function CreditoCell({ row, prestamosPorCedula, onUpdateCell }) {
-  const lookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
-  const sinGuion = lookup.replace(/-/g, '')
-  
-  const prestamos =
-    prestamosPorCedula[lookup] ||
-    prestamosPorCedula[sinGuion] ||
-    prestamosPorCedula[lookup?.toUpperCase()] ||
-    prestamosPorCedula[lookup?.toLowerCase()] ||
-    []
-  
-  // Si no hay prestamos, muestra "Sin crédito"
-  if (prestamos.length === 0) {
-    return <span className="text-xs italic text-gray-500">Sin crédito</span>
-  }
-}
-```
-
-**PROBLEMA #3: Búsqueda en mapa con claves inconsistentes**
-
-Si `cedulaLookupParaFila()` devuelve "V123947215" pero el mapa tiene "123947215", no encuentra nada.
-
----
-
-## Root Causes Identificados
-
-### Causa #1: Doble Validación de Cédulas Inconsistente
-
-- `LOOKS_LIKE_CEDULA` en `pagoExcelValidation.ts` → VEJZ + dígitos
-- `looksLikeCedula()` en `useExcelUploadPagos.ts` → VEJZ + dígitos O números planos
-
-**Impacto:** Números planos se aceptan en `looksLikeCedula()` pero falla en `cedulaParaLookup()`.
-
-### Causa #2: Backend envía respuestas con claves diferentes
-
-Si el backend normaliza "123947215" → "V123947215" pero el frontend esperaba la clave original, no coinciden.
-
-### Causa #3: Mapa de búsqueda no es exhaustivo
-
-El mapa construido en línea 385-418 no cubre todas las variaciones posibles que podría devolver el backend.
-
----
-
-## Soluciones Propuestas
-
-### Solución 1: Uniformizar la validación de cédulas
-
-**Opción A: Aceptar números planos en `cedulaParaLookup()`**
-
-```typescript
-// En pagoExcelValidation.ts, línea 145
-// CAMBIAR de:
-const LOOKS_LIKE_CEDULA = /^[VEJZ]\d{6,11}$/i
-
-// A:
-const LOOKS_LIKE_CEDULA = /^[VEJZ]\d{6,11}$/i
-const LOOKS_LIKE_CEDULA_LOOSE = /^(\d{6,11}|[VEJZ]\d{6,11})$/i  // Incluye números planos
-
-// Y actualizar cedulaParaLookup():
-export function cedulaParaLookup(val: unknown): string {
-  const sinGuion = s.replace(/-/g, '').replace(/\s+/g, '')
-  
-  if (LOOKS_LIKE_CEDULA.test(sinGuion)) return sinGuion
-  
-  // SI es número plano, añadir V automáticamente
-  if (/^\d{8,11}$/.test(sinGuion) && !sinGuion.startsWith('V')) {
-    return 'V' + sinGuion  // Normalizar a V+dígitos
-  }
-  
-  return sinGuion
-}
-```
-
-**Impacto:** Todas las cédulas se normalizan a "V+dígitos", asegurando consistencia.
-
-### Solución 2: Aumentar cobertura del mapa de búsqueda
-
-```typescript
-// En useExcelUploadPagos.ts línea 385-418
-// Después de construir el mapa, agregar más claves:
-
-cedulasUnicas.forEach(cedula => {
-  // ... lógica existente ...
-  
-  // AGREGAR: si la cédula es V+dígitos, también guardar sin V
-  if (cedula.startsWith('V') || cedula.startsWith('v')) {
-    const sinV = cedula.slice(1)
-    map[sinV] = arr
-  }
-})
-```
-
-**Impacto:** El mapa será más forgiving con variaciones de entrada.
-
-### Solución 3: Sincronizar normalizaciones en backend y frontend
-
-**Validar con backend:**
-- ¿Cómo normaliza el backend las cédulas?
-- ¿Devuelve siempre "V+dígitos" o puede devolver "números planos"?
-- ¿Requiere siempre "V+dígitos" o acepta "números planos"?
-
----
-
-## Pasos Recomendados
-
-1. **INMEDIATO:** Implementar Solución 1 (uniformizar validación)
-2. **INMEDIATO:** Implementar Solución 2 (aumentar cobertura del mapa)
-3. **VALIDATION:** Confirmar cómo el backend normaliza cédulas
-4. **TEST:** Cargar Excel con números planos y verificar auto-llenar
-
----
-
-## Archivos Afectados
-
-- `frontend/src/utils/pagoExcelValidation.ts` (línea 145, función `cedulaParaLookup`)
-- `frontend/src/hooks/useExcelUploadPagos.ts` (línea 260-264, función `looksLikeCedula`; línea 385-418, construcción del mapa)
-- `frontend/src/components/pagos/TablaEditablePagos.tsx` (línea 247-357, búsqueda en mapa)
-
----
-
-## Estado: EN INVESTIGACIÓN
-
-Se requiere confirmación del comportamiento del backend antes de implementar soluciones.
+Validar en base de datos:
+1. Cuántos pagos tienen `prestamo_id = NULL`
+2. Para esos pagos, cuántos clientes tienen 1 crédito activo (podrían auto-asignarse)
+3. Cuántos tienen múltiples (requieren intervención)
+4. Cuántos tienen 0 (error de datos)

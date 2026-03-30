@@ -136,6 +136,61 @@ class PagoService {
     }>(url)
   }
 
+  async sugerirPagosConPréstamoFaltante(
+    page = 1,
+    perPage = 20
+  ): Promise<{
+    sugerencias: Array<{
+      pago_id: number
+      cedula_cliente: string
+      fecha_pago: string | null
+      monto_pagado: number
+      numero_documento: string
+      prestamo_sugerido: number | null
+      num_creditos_activos: number
+      acciones_necesarias: 'auto' | 'manual'
+    }>
+    total: number
+    page: number
+    per_page: number
+    total_pages: number
+    resumen: {
+      total_pagos_sin_prestamo: number
+      can_auto_asignar: number
+      requieren_manual: number
+    }
+  }> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      per_page: perPage.toString(),
+    })
+
+    return await apiClient.get<any>(
+      `${this.baseUrl}/sin-prestamo/sugerir?${params.toString()}`
+    )
+  }
+
+  async asignarAutomáticamentePréstamos(): Promise<{
+    asignados: number
+    no_asignables: number
+    detalles_asignados: Array<{
+      pago_id: number
+      cedula_cliente: string
+      prestamo_id_asignado: number
+    }>
+    detalles_no_asignables: Array<{
+      pago_id: number
+      cedula_cliente: string
+      razon: string
+    }>
+    mensaje: string
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/sin-prestamo/asignar-automatico`,
+      {}
+    )
+  }
+
   /** Mueve pagos exportados a revisar_pagos (dejan de mostrarse en Revisar Pagos) */
 
   async moverARevisarPagos(
