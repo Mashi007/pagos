@@ -915,96 +915,19 @@ export default function ReportePagoPage({
                   {steps.map((item, i) => (
                     <li
                       key={i}
-                      className="flex items-start gap-2.5 rounded-lg bg-slate-50 p-2.5 hover:bg-slate-100 transition-colors"
+                      className="flex items-center gap-2.5 rounded-lg bg-slate-50 p-2.5 hover:bg-slate-100 transition-colors"
                     >
                       <span
-                        className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#1e3a5f] text-xs font-semibold text-white"
+                        className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#1e3a5f] text-xs font-semibold text-white"
                         aria-hidden
                       >
                         {i + 1}
                       </span>
-                      <div className="min-w-0 flex-1 py-0.5">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold text-slate-900 leading-tight">
                           {item.text}
                         </p>
-                        <p className="text-xs text-slate-500 leading-tight mt-0.5">{item.desc}</p>
-                      </div>
-                      <div className="flex-shrink-0 mt-0.5">
-                        {item.icon === 'id' && (
-                          <svg
-                            className="h-4 w-4 text-slate-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"
-                            />
-                          </svg>
-                        )}
-                        {item.icon === 'path' && (
-                          <svg
-                            className="h-4 w-4 text-slate-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 4v5m-3 3l3-3 3 3M12 9v11M7 20h10"
-                            />
-                          </svg>
-                        )}
-                        {item.icon === 'bank' && (
-                          <svg
-                            className="h-4 w-4 text-slate-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                            />
-                          </svg>
-                        )}
-                        {item.icon === 'file' && (
-                          <svg
-                            className="h-4 w-4 text-slate-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                            />
-                          </svg>
-                        )}
-                        {item.icon === 'check' && (
-                          <svg
-                            className="h-4 w-4 text-slate-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                        )}
+                        <p className="text-xs text-slate-500 leading-tight">{item.desc}</p>
                       </div>
                     </li>
                   ))}
