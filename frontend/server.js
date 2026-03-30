@@ -434,6 +434,15 @@ app.get('/prestamos/*', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/prestamos' + subpath + qs(req));
 });
 
+// Ruta pública: estado de cuenta sin código (acceso directo con solo cédula) sin base -> redirigir a /pagos/rapicredit-estadocuenta-publico
+app.get('/rapicredit-estadocuenta-publico', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/rapicredit-estadocuenta-publico' + qs(req));
+});
+app.get('/rapicredit-estadocuenta-publico/*', (req, res) => {
+  const subpath = req.path.slice('/rapicredit-estadocuenta-publico'.length);
+  res.redirect(302, FRONTEND_BASE + '/rapicredit-estadocuenta-publico' + subpath + qs(req));
+});
+
 // Ruta pública: informes (estado de cuenta público) sin base -> redirigir a /pagos/informes
 app.get('/informes', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/informes' + qs(req));

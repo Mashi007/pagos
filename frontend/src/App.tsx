@@ -30,6 +30,7 @@ const PUBLIC_PATHS = [
   '/acceso-limitado',
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
+  '/rapicredit-estadocuenta-publico',
   '/informes',
 ]
 
@@ -305,6 +306,11 @@ function App() {
             <Route
               path="rapicredit-estadocuenta"
               element={<EstadoCuentaPublicoPage />}
+            />
+
+            <Route
+              path="rapicredit-estadocuenta-publico"
+              element={<EstadoCuentaPublicoSinCodigoPage />}
             />
 
             {/* Infopagos: formulario de ingreso de pagos para colaboradores (sin login) */}

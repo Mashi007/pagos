@@ -126,7 +126,7 @@ export function EstadoCuentaPublicoSinCodigoPage() {
       }
 
       setCedulaValidada(norm.valorParaEnviar!)
-      setCliente({ nombres: resultado.nombres, email: resultado.email })
+      setCliente({ nombres: resultado.nombre, email: resultado.email })
       setPaso('cliente')
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Error al validar'
