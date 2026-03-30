@@ -3873,6 +3873,11 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
+    # Debug logging
+    logger.info(f"[update_prestamo] Inicio: prestamo_id={prestamo_id}")
+    logger.info(f"[update_prestamo] Payload recibido: fecha_requerimiento={payload.fecha_requerimiento}, fecha_aprobacion={payload.fecha_aprobacion}")
+    logger.info(f"[update_prestamo] BD antes: fecha_requerimiento={row.fecha_requerimiento}, fecha_aprobacion={row.fecha_aprobacion}")
+
     est_antes = (row.estado or "").strip().upper()
 
     if est_antes == "DESISTIMIENTO":
@@ -3971,6 +3976,8 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         row.tasa_interes = payload.tasa_interes
 
+    logger.info(f"[update_prestamo] BD después de aplicar cambios: fecha_requerimiento={row.fecha_requerimiento}, fecha_aprobacion={row.fecha_aprobacion}")
+
     # Coherencia: si hay fecha de aprobación, la fecha de requerimiento no puede ser posterior
 
     if row.fecha_aprobacion and row.fecha_requerimiento:
@@ -3978,6 +3985,8 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
         # Normalizar ambas fechas a date para comparación correcta
         ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
         req_date = row.fecha_requerimiento  # Esto ya es date (desde BD)
+
+        logger.info(f"[update_prestamo] Validación de coherencia: req_date={req_date} ({type(req_date)}), ap_date={ap_date} ({type(ap_date)})")
 
         if req_date > ap_date:
 

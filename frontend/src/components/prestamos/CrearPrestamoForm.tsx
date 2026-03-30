@@ -706,11 +706,20 @@ export function CrearPrestamoForm({
       }
 
       if (import.meta.env.DEV) {
-        console.log('[CrearPrestamoForm] Enviando fechas:', {
+        console.log('[CrearPrestamoForm] Fechas en formData:', {
+          'formData.fecha_requerimiento': formData.fecha_requerimiento,
+          'formData.fecha_aprobacion': formData.fecha_aprobacion,
+        })
+        console.log('[CrearPrestamoForm] Fechas procesadas:', {
           fechaReq,
           fechaApr,
           fecha_requerimiento: prestamoData.fecha_requerimiento,
           fecha_aprobacion: prestamoData.fecha_aprobacion,
+        })
+        console.log('[CrearPrestamoForm] Prestamo anterior:', {
+          'prestamo?.id': prestamo?.id,
+          'prestamo?.fecha_requerimiento': prestamo?.fecha_requerimiento,
+          'prestamo?.fecha_aprobacion': prestamo?.fecha_aprobacion,
         })
       }
 
