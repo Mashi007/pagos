@@ -35,6 +35,7 @@ import {
   openReciboPdfInNewTab,
   type PagoReportadoDetalleResponse,
   type CambiarEstadoPagoResponse,
+  etiquetaCanalReportado,
 } from '../services/cobrosService'
 
 import { Button } from '../components/ui/button'
@@ -254,6 +255,14 @@ export default function CobrosDetallePage() {
         </CardHeader>
 
         <CardContent className="space-y-2 text-sm">
+          <p className="text-xs text-muted-foreground">
+            <strong>Origen:</strong>{' '}
+            {etiquetaCanalReportado(detalle.canal_ingreso)}
+            <span className="ml-1">
+              (Infopagos y formulario publico usan la misma cola y validadores.)
+            </span>
+          </p>
+
           <p>
             <strong>Nombre:</strong> {detalle.nombres} {detalle.apellidos}
           </p>

@@ -33,6 +33,11 @@ from app.core.email import send_email
 from app.core.email_config_holder import get_email_activo_servicio
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
+from app.services.cobros.pago_reportado_documento import (
+    documento_numero_desde_pago_reportado,
+    primer_pago_id_si_existe_para_claves_reportado,
+    reportado_toca_claves_canonicas_en_pagos,
+)
 from app.services.cobros.pagos_pendiente_descargar_service import obtener_pagos_aprobados_pendientes, vaciar_tabla_pendiente_descargar, obtener_datos_excel
 from app.services.cobros.cedula_reportar_bs_service import (
     load_autorizados_bs_claves,
@@ -84,6 +89,10 @@ class PagoReportadoListItem(BaseModel):
     correo_enviado_a: Optional[str] = None
     tiene_recibo_pdf: bool
     tiene_comprobante: bool
+    canal_ingreso: Optional[str] = Field(
+        None,
+        description="infopagos | cobros_publico | null (historico). Misma cola operativa y reglas para todos.",
+    )
 
 
 class PagoReportadoDetalle(BaseModel):
@@ -110,6 +119,10 @@ class PagoReportadoDetalle(BaseModel):
     created_at: datetime
     updated_at: datetime
     historial: List[PagoReportadoHistorialItem]
+    canal_ingreso: Optional[str] = Field(
+        None,
+        description="infopagos | cobros_publico | null (historico).",
+    )
 
 
 class AprobarRechazarBody(BaseModel):
@@ -377,10 +390,9 @@ def _observacion_reglas_carga(
         moneda = (r.moneda or "BS").strip().upper()
         if moneda == "BS" and cedula_norm and not cedula_coincide_autorizados_bs(cedula_norm, cedulas_bolivares):
             partes.append("No pag Bs.")
-        num_op = (r.numero_operacion or "").strip()
-        n_doc = normalize_documento(num_op) if num_op else None
-        dup_pagos = bool(n_doc and n_doc in claves_doc_en_pagos)
-        dup_misma_vista = bool(n_doc and conteo_norm_en_pagina.get(n_doc, 0) > 1)
+        dup_pagos = reportado_toca_claves_canonicas_en_pagos(r, claves_doc_en_pagos)
+        n_doc_eff = documento_numero_desde_pago_reportado(r)[1]
+        dup_misma_vista = bool(n_doc_eff and conteo_norm_en_pagina.get(n_doc_eff, 0) > 1)
         if dup_pagos or dup_misma_vista:
             partes.append("DUPLICADO")
         result.append(partes)
@@ -413,8 +425,8 @@ def _pago_reportado_list_items_from_rows(
     claves_doc_en_pagos = _pagos_documentos_canonicos_cached(db)
     norm_por_fila = []
     for r in rows:
-        num_op = (r.numero_operacion or "").strip()
-        norm_por_fila.append(normalize_documento(num_op) if num_op else None)
+        _, n_eff = documento_numero_desde_pago_reportado(r)
+        norm_por_fila.append(n_eff if n_eff else None)
     conteo_norm_en_pagina = Counter(n for n in norm_por_fila if n)
 
     partes_por_fila = _observacion_reglas_carga(
@@ -450,6 +462,7 @@ def _pago_reportado_list_items_from_rows(
             correo_enviado_a=r.correo_enviado_a,
             tiene_recibo_pdf=bool(r.recibo_pdf),
             tiene_comprobante=bool(r.comprobante),
+            canal_ingreso=getattr(r, "canal_ingreso", None),
         ))
     return items
 
@@ -658,7 +671,12 @@ def list_pagos_reportados(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=300),
 ):
-    """Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados, importados y rechazados (cola operativa)."""
+    """
+    Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados, importados y rechazados (cola operativa).
+
+    Incluye sin distincion reportes de Infopagos (`canal_ingreso=infopagos`) y del formulario publico del deudor
+    (`cobros_publico`); mismas reglas de edicion, aprobacion, rechazo e import a `pagos`.
+    """
     return _list_pagos_reportados_payload(
         db,
         estado=estado,
@@ -943,6 +961,7 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         created_at=pr.created_at,
         updated_at=pr.updated_at,
         historial=historial,
+        canal_ingreso=getattr(pr, "canal_ingreso", None),
     )
 
 
@@ -1006,9 +1025,14 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
             status_code=400,
             detail="El cliente no tiene un préstamo APROBADO activo. No se puede actualizar estado de cuenta.",
         )
-    num_doc = ("COB-" + pr.referencia_interna)[:100]
-    if db.execute(select(Pago.id).where(Pago.numero_documento == num_doc)).scalar() is not None:
-        logger.info("[COBROS] Aprobar ref=%s: ya existe pago con documento %s; omitir creacion (idempotente).", pr.referencia_interna, num_doc)
+    num_doc_raw, num_doc = documento_numero_desde_pago_reportado(pr)
+    ya = primer_pago_id_si_existe_para_claves_reportado(db, pr)
+    if ya is not None:
+        logger.info(
+            "[COBROS] Aprobar ref=%s: ya existe pago id=%s (claves reporte); omitir creacion (idempotente).",
+            pr.referencia_interna,
+            ya,
+        )
         return
     fecha_ts = datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now()
     moneda_pr = ((getattr(pr, "moneda", None) or "USD") or "").strip().upper()
@@ -1045,6 +1069,11 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
     monto = Decimal(str(round(monto_float, 2)))
     if monto <= 0:
         raise HTTPException(status_code=400, detail="El monto del reporte debe ser mayor que cero.")
+    ref_pago = (num_doc or num_doc_raw or "Cobros")[:100]
+    rpc_tr = (pr.referencia_interna or "").strip()[:100]
+    notas_pago = None
+    if rpc_tr and num_doc_raw and rpc_tr != num_doc_raw:
+        notas_pago = f"Ref. interna reporte: {rpc_tr}"
     row = Pago(
         cedula_cliente=cedula_norm,
         prestamo_id=prestamo.id,
@@ -1054,7 +1083,8 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
         institucion_bancaria=(pr.institucion_financiera or "").strip()[:255] or None,
         # Se crea conciliado y se aplica en cascada en la misma transaccion; no debe nacer como PENDIENTE.
         estado="PAGADO",
-        referencia_pago=num_doc,
+        referencia_pago=ref_pago,
+        notas=notas_pago,
         usuario_registro=usuario_email or "cobros@rapicredit.com",
         conciliado=True,
         fecha_conciliacion=datetime.now(),

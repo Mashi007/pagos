@@ -1009,7 +1009,8 @@ def _compute_recibos_pagos_mensual_usd(
 ) -> dict:
     """
     Solo reportes en bolívares (moneda BS) con recibo: equivalente USD por mes.
-    Conversión: monto conciliado en tabla pagos (COB-ref) si existe; si no, monto BS / tasa oficial del día.
+    Conversión: monto en tabla pagos si existe (enlace por COB-RPC legacy, numero_operacion o RPC en documento);
+    si no, monto BS / tasa oficial del día.
     Serie recortada sin meses vacíos al inicio/fin; incluye estadística agregada.
     """
     if fecha_inicio and fecha_fin:
@@ -1037,10 +1038,31 @@ def _compute_recibos_pagos_mensual_usd(
     buckets: dict[tuple[int, int], dict[str, float]] = {}
     try:
         # Agregación en BD: evita transferir N filas + IN masivo a pagos (timeout ~60s en Render).
-        doc_key = func.substr(
+        # Enlace pagos ↔ reportado: legacy COB-RPC, operación bancaria, o RPC solo (sin subir duplicados por OR en JOIN).
+        P_doc = aliased(Pago)
+        doc_cob = func.substr(
             func.concat("COB-", func.coalesce(PagoReportado.referencia_interna, "")),
             1,
             100,
+        )
+        op_trim = func.nullif(func.trim(func.coalesce(PagoReportado.numero_operacion, "")), "")
+        ref_trim = func.nullif(func.trim(func.coalesce(PagoReportado.referencia_interna, "")), "")
+        pago_en_reportado = or_(
+            P_doc.numero_documento == doc_cob,
+            and_(op_trim.isnot(None), P_doc.numero_documento == op_trim),
+            and_(
+                op_trim.is_(None),
+                ref_trim.isnot(None),
+                P_doc.numero_documento == ref_trim,
+            ),
+        )
+        monto_pago_en_usd = (
+            select(cast(P_doc.monto_pagado, Float))
+            .where(pago_en_reportado)
+            .order_by(P_doc.id.desc())
+            .limit(1)
+            .correlate(PagoReportado)
+            .scalar_subquery()
         )
         mon_raw = func.upper(func.trim(func.coalesce(PagoReportado.moneda, "BS")))
         mon_norm = case((mon_raw == "USDT", literal("USD")), else_=mon_raw)
@@ -1057,7 +1079,7 @@ def _compute_recibos_pagos_mensual_usd(
             else_=literal(0.0),
         )
         bs_en_usd_expr = case(
-            (Pago.monto_pagado.isnot(None), cast(Pago.monto_pagado, Float)),
+            (monto_pago_en_usd.isnot(None), monto_pago_en_usd),
             else_=bs_from_tasa,
         )
 
@@ -1079,7 +1101,6 @@ def _compute_recibos_pagos_mensual_usd(
                 func.count(PagoReportado.id).label("cantidad"),
             )
             .select_from(PagoReportado)
-            .outerjoin(Pago, Pago.numero_documento == doc_key)
             .outerjoin(TasaCambioDiaria, TasaCambioDiaria.fecha == PagoReportado.fecha_pago)
             .where(
                 tiene_recibo,

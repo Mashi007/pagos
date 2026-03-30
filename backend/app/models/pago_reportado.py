@@ -1,6 +1,9 @@
 """
-Modelo para reportes de pago del formulario público (módulo Cobros).
-Tabla: pagos_reportados. Datos e imágenes/PDF almacenados en BD (comprobante, recibo_pdf).
+Reportes de pago web (misma tabla para todo canal de entrada).
+
+- Formulario publico del deudor y Infopagos escriben aqui; la cola en Cobros > Pagos reportados
+  lista y gestiona todos por igual (aprobar, rechazar, editar, import a `pagos`).
+- `canal_ingreso`: infopagos | cobros_publico | NULL (historico).
 """
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Date, LargeBinary
 from sqlalchemy.sql import func
@@ -39,6 +42,8 @@ class PagoReportado(Base):
     # Resultado Gemini: coincide_exacto (si True → aprobado automático)
     gemini_coincide_exacto = Column(String(10), nullable=True)  # true/false/null
     gemini_comentario = Column(Text, nullable=True)
+    # infopagos | cobros_publico | NULL (historico u otros)
+    canal_ingreso = Column(String(32), nullable=True, index=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now(), onupdate=func.now())
 

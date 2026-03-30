@@ -47,6 +47,8 @@ import {
 
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 
+import { TEXTO_AVISO_NUMERO_OPERACION_FORMULARIO } from '../constants/reporteCobrosDocumento'
+
 import { Button } from '../components/ui/button'
 
 import { Input } from '../components/ui/input'
@@ -1391,6 +1393,9 @@ export default function ReportePagoPage({
               <CardTitle className="text-lg sm:text-xl">
                 Número de documento / operación
               </CardTitle>
+              <p className="text-xs leading-snug text-slate-600">
+                {TEXTO_AVISO_NUMERO_OPERACION_FORMULARIO}
+              </p>
             </CardHeader>
 
             <CardContent className="space-y-4 px-4 sm:px-6">
@@ -1711,6 +1716,12 @@ export default function ReportePagoPage({
 
           {isInfopagos ? (
             <>
+              <p className="text-left text-xs leading-snug text-slate-600">
+                En RapiCredit (menú Pagos, Cobros, Pagos reportados) aparece la
+                misma fila que cualquier otro reporte web: mismas reglas de
+                revisión, aprobación y anti-duplicado.
+              </p>
+
               {infopagosEnRevision ? (
                 <p className="text-sm text-gray-600">
                   El comprobante quedó en revisión manual en Pagos reportados.

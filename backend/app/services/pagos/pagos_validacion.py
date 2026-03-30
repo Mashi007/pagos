@@ -1,18 +1,15 @@
 """Servicios de validación para pagos."""
 
 from typing import Optional
+
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 
 from app.models.cliente import Cliente
-from app.models.cuenta import Cuenta
-from app.models.pago import Pago
-from app.core.documento import normalize_documento
+from app.services.pago_numero_documento import numero_documento_ya_registrado
 from .pagos_excepciones import (
     PagoValidationError,
     PagoConflictError,
     ClienteNotFoundError,
-    CuentaNotFoundError,
 )
 
 
@@ -28,13 +25,6 @@ class PagosValidacion:
         if not cliente:
             raise ClienteNotFoundError(cliente_id)
         return cliente
-
-    def validar_cuenta_existe(self, cuenta_id: int) -> Cuenta:
-        """Valida que la cuenta existe en la BD."""
-        cuenta = self.db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
-        if not cuenta:
-            raise CuentaNotFoundError(cuenta_id)
-        return cuenta
 
     def validar_monto(self, monto: float) -> bool:
         """Valida que el monto sea válido (> 0)."""
@@ -55,25 +45,16 @@ class PagosValidacion:
         self, documento: str, excluir_pago_id: Optional[int] = None
     ) -> bool:
         """
-        Valida que el documento no esté duplicado en la BD.
-        Si excluir_pago_id es proporcionado, lo excluye de la búsqueda (para actualizaciones).
+        Misma regla que POST /pagos: `numero_documento` canónico único en `pagos` y `pagos_con_errores`.
         """
         if not documento or not documento.strip():
-            # Documentos vacíos son permitidos (múltiples filas sin documento)
             return True
 
-        documento_normalizado = normalize_documento(documento)
-        query = self.db.query(Pago).filter(
-            Pago.documento_normalizado == documento_normalizado
-        )
-
-        if excluir_pago_id:
-            query = query.filter(Pago.id != excluir_pago_id)
-
-        duplicado = query.first()
-        if duplicado:
+        if numero_documento_ya_registrado(
+            self.db, documento, exclude_pago_id=excluir_pago_id
+        ):
             raise PagoConflictError(
-                f"Documento '{documento}' ya existe. NAº documentos no pueden duplicarse."
+                f"Documento '{documento}' ya existe. Los numeros de documento no pueden duplicarse."
             )
 
         return True
@@ -85,10 +66,28 @@ class PagosValidacion:
         return True
 
     def validar_estado_pago(self, estado: str) -> bool:
-        """Valida que el estado sea un estado válido."""
-        estados_validos = ["pendiente", "aplicado", "rechazado", "cancelado"]
-        if estado not in estados_validos:
-            raise PagoValidationError("estado", f"Estado debe ser uno de: {', '.join(estados_validos)}")
+        """Estados usados en tabla `pagos` (mayusculas) y valores legados en minuscula."""
+        e = (estado or "").strip()
+        if not e:
+            raise PagoValidationError("estado", "Estado vacio")
+        estados_validos = (
+            "PENDIENTE",
+            "PAGADO",
+            "ANULADO_IMPORT",
+            "DUPLICADO",
+            "CANCELADO",
+            "RECHAZADO",
+            "REVERSADO",
+            "pendiente",
+            "aplicado",
+            "rechazado",
+            "cancelado",
+        )
+        if e not in estados_validos:
+            raise PagoValidationError(
+                "estado",
+                f"Estado no reconocido: {e!r}. Use valores de la tabla pagos (ej. PAGADO, PENDIENTE).",
+            )
         return True
 
     def validar_datos_pago_completos(self, datos: dict) -> bool:

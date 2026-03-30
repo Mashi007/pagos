@@ -91,6 +91,11 @@ from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 
 from app.schemas.auth import UserResponse
 
+from app.services.cobros.pago_reportado_documento import (
+    claves_documento_pago_para_reportado,
+    claves_documento_para_lote_reportados,
+    documento_numero_desde_pago_reportado,
+)
 from app.services.cuota_estado import (
     clasificar_estado_cuota,
     dias_retraso_desde_vencimiento,
@@ -2098,6 +2103,9 @@ def importar_un_pago_reportado_a_pagos(
 
     Crea un Pago desde un PagoReportado con las mismas validaciones que importar-desde-cobros.
 
+    El Nº documento del pago toma `numero_operacion` del reporte cuando viene informado;
+    si no, `referencia_interna` (RPC-…), para alinear duplicados con el comprobante real.
+
     No hace commit ni aplica a cuotas (el lote o el caller aplican después).
 
     Retorna {"ok": True, "pago": Pago} o {"ok": False, "error": str, "referencia": ..., "pce_id": int|None}.
@@ -2105,6 +2113,8 @@ def importar_un_pago_reportado_a_pagos(
     """
 
     ref_display = (pr.referencia_interna or "").strip()[:100] or None
+
+    conciliado_reportado = True
 
 
 
@@ -2132,9 +2142,9 @@ def importar_un_pago_reportado_a_pagos(
 
             monto_pagado=float(pr.monto or 0),
 
-            numero_documento=(pr.referencia_interna or "")[:100],
+            numero_documento=(documento_numero_desde_pago_reportado(pr)[0] or pr.referencia_interna or "")[:100],
 
-            estado="PAGADO" if conciliado else "PENDIENTE",
+            estado="PAGADO" if conciliado_reportado else "PENDIENTE",
 
             referencia_pago=ref,
 
@@ -2176,17 +2186,31 @@ def importar_un_pago_reportado_a_pagos(
 
 
 
-    numero_doc_raw = (pr.referencia_interna or "").strip()[:100]
+    numero_doc_raw, numero_doc_norm = documento_numero_desde_pago_reportado(pr)
 
-    numero_doc_norm = normalize_documento(numero_doc_raw)
+    claves_pr = claves_documento_pago_para_reportado(pr)
 
-    if numero_doc_norm and numero_doc_norm in documentos_ya_en_bd:
+    if claves_pr:
 
-        return _err_con_pce("Ya existe un pago con ese Nº documento (duplicado en BD)", cedula_cliente=cedula_raw)
+        if any(k in documentos_ya_en_bd for k in claves_pr):
 
-    if numero_doc_norm and numero_doc_norm in docs_en_lote:
+            return _err_con_pce(
 
-        return _err_con_pce("Nº documento duplicado en este lote", cedula_cliente=cedula_raw)
+                "Ya existe un pago enlazado a este comprobante o referencia (duplicado en BD)",
+
+                cedula_cliente=cedula_raw,
+
+            )
+
+        if any(k in docs_en_lote for k in claves_pr):
+
+            return _err_con_pce(
+
+                "Duplicado en este lote: mismo comprobante o referencia que otra fila",
+
+                cedula_cliente=cedula_raw,
+
+            )
 
 
 
@@ -2354,6 +2378,11 @@ def importar_un_pago_reportado_a_pagos(
         registrar_rechazo_huella_funcional()
         return _err_con_pce(msg_h_cobros, cedula_cliente=cedula_raw, prestamo_id=prestamo_id)
 
+    rpc_tr = (pr.referencia_interna or "").strip()[:100]
+    notas_pago = None
+    if rpc_tr and numero_doc_raw and rpc_tr != numero_doc_raw:
+        notas_pago = f"Ref. interna reporte: {rpc_tr}"
+
     p = Pago(
 
         cedula_cliente=cedula_raw,
@@ -2370,6 +2399,8 @@ def importar_un_pago_reportado_a_pagos(
         estado="PAGADO",
 
         referencia_pago=ref_pago,
+
+        notas=notas_pago,
 
         usuario_registro=usuario_email,
 
@@ -2393,11 +2424,13 @@ def importar_un_pago_reportado_a_pagos(
 
     db.flush()
 
-    if numero_doc_norm:
+    for _k in claves_pr:
 
-        docs_en_lote.add(numero_doc_norm)
+        if _k:
 
-        documentos_ya_en_bd.add(numero_doc_norm)
+            docs_en_lote.add(_k)
+
+            documentos_ya_en_bd.add(_k)
 
     return {"ok": True, "pago": p, "referencia": ref_display, "pce_id": None}
 
@@ -2479,13 +2512,25 @@ def importar_reportados_aprobados_a_pagos(
 
     documentos_ya_en_bd: set[str] = set()
 
-    docs_reportados = [normalize_documento(pr.referencia_interna) for pr in reportados if (pr.referencia_interna or "").strip()]
+    todas_claves_lote = claves_documento_para_lote_reportados(reportados)
 
-    if docs_reportados:
+    if todas_claves_lote:
 
-        existentes = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(docs_reportados))).scalars().all()
+        cl_list = list(todas_claves_lote)
 
-        documentos_ya_en_bd = {str(d) for d in existentes if d}
+        _chunk_claves = 800
+
+        for i in range(0, len(cl_list), _chunk_claves):
+
+            chunk = cl_list[i : i + _chunk_claves]
+
+            existentes = db.execute(
+
+                select(Pago.numero_documento).where(Pago.numero_documento.in_(chunk))
+
+            ).scalars().all()
+
+            documentos_ya_en_bd.update(str(d) for d in existentes if d)
 
 
 

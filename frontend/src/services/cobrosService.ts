@@ -318,6 +318,17 @@ export interface PagoReportadoItem {
   /** Imagen/PDF del comprobante cargado por el cliente */
 
   tiene_comprobante?: boolean
+
+  /** infopagos | cobros_publico | ausente (historico) */
+
+  canal_ingreso?: string | null
+}
+
+/** Etiqueta legible para columna Origen en Pagos reportados. */
+export function etiquetaCanalReportado(canalIngreso?: string | null): string {
+  if (canalIngreso === 'infopagos') return 'Infopagos'
+  if (canalIngreso === 'cobros_publico') return 'Formulario público'
+  return '-'
 }
 
 export interface ListPagosReportadosResponse {
@@ -577,6 +588,8 @@ export interface PagoReportadoDetalleResponse {
     motivo?: string
     created_at: string
   }>
+
+  canal_ingreso?: string | null
 }
 
 export async function getPagoReportadoDetalle(

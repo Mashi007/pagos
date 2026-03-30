@@ -38,6 +38,7 @@ import {
   type CambiarEstadoPagoResponse,
   type TendenciaFalloGeminiPunto,
   type TendenciaFallosGeminiResponse,
+  etiquetaCanalReportado,
 } from '../services/cobrosService'
 
 import { Button } from '../components/ui/button'
@@ -95,6 +96,8 @@ import {
 } from 'recharts'
 
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
+
+import { TEXTO_AVISO_PAGOS_REPORTADOS_ADMIN } from '../constants/reporteCobrosDocumento'
 
 import {
   Dialog,
@@ -471,8 +474,14 @@ export default function CobrosPagosReportadosPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Pagos Reportados</h1>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-2xl font-semibold">Pagos Reportados</h1>
+
+          <p className="max-w-3xl text-xs leading-relaxed text-slate-600">
+            {TEXTO_AVISO_PAGOS_REPORTADOS_ADMIN}
+          </p>
+        </div>
 
         <a
           href={
@@ -483,7 +492,7 @@ export default function CobrosPagosReportadosPage() {
           }
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-blue-600 hover:underline"
+          className="shrink-0 text-sm text-blue-600 hover:underline"
         >
           Link al formulario público
         </a>
@@ -856,9 +865,9 @@ export default function CobrosPagosReportadosPage() {
             <p className="text-gray-500">No hay registros.</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[1100px] table-fixed text-sm">
+              <table className="w-full min-w-[1180px] table-fixed text-sm">
                 <colgroup>
-                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '10%' }} />
 
                   <col style={{ width: '8%' }} />
 
@@ -872,13 +881,15 @@ export default function CobrosPagosReportadosPage() {
 
                   <col style={{ width: '7%' }} />
 
-                  <col style={{ width: '9%' }} />
-
-                  <col style={{ width: '11%' }} />
-
                   <col style={{ width: '7%' }} />
 
-                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '8%' }} />
+
+                  <col style={{ width: '9%' }} />
+
+                  <col style={{ width: '6%' }} />
+
+                  <col style={{ width: '13%' }} />
                 </colgroup>
 
                 <thead>
@@ -907,6 +918,10 @@ export default function CobrosPagosReportadosPage() {
 
                     <th className="px-3 py-3 text-left font-semibold">
                       Fecha reporte
+                    </th>
+
+                    <th className="px-3 py-3 text-left font-semibold">
+                      Origen
                     </th>
 
                     <th className="px-3 py-3 text-center font-semibold">
@@ -1004,6 +1019,13 @@ export default function CobrosPagosReportadosPage() {
 
                       <td className="whitespace-nowrap px-3 py-3 align-top">
                         {new Date(row.fecha_reporte).toLocaleDateString()}
+                      </td>
+
+                      <td
+                        className="min-w-0 px-3 py-3 align-top text-xs"
+                        title="Infopagos y formulario publico comparten esta cola y las mismas reglas."
+                      >
+                        {etiquetaCanalReportado(row.canal_ingreso)}
                       </td>
 
                       <td className="px-2 py-3 align-middle">

@@ -301,27 +301,24 @@ def _intentar_importar_reportado_automatico(
 
         from app.models.pago import Pago
 
-        from app.core.documento import normalize_documento
-
         from app.api.v1.endpoints.pagos import importar_un_pago_reportado_a_pagos, _aplicar_pago_a_cuotas_interno
-
-
+        from app.services.cobros.pago_reportado_documento import claves_documento_pago_para_reportado
 
         db.refresh(pr)
 
-        doc_raw = (pr.referencia_interna or "").strip()[:100]
-
-        doc_norm = normalize_documento(doc_raw)
+        claves_pr = claves_documento_pago_para_reportado(pr)
 
         docs_bd: set[str] = set()
 
-        if doc_norm:
+        if claves_pr:
 
-            row = db.execute(select(Pago.numero_documento).where(Pago.numero_documento == doc_norm)).scalars().first()
+            rows = db.execute(
 
-            if row:
+                select(Pago.numero_documento).where(Pago.numero_documento.in_(claves_pr))
 
-                docs_bd.add(str(row))
+            ).scalars().all()
+
+            docs_bd = {str(x) for x in rows if x}
 
         usuario = "infopagos@rapicredit" if log_tag == "INFOPAGOS" else "cobros-publico@rapicredit"
 
@@ -1009,6 +1006,8 @@ async def enviar_reporte_publico(
 
                     estado="pendiente",
 
+                    canal_ingreso="cobros_publico",
+
                 )
 
                 db.add(pr)
@@ -1477,6 +1476,8 @@ async def enviar_reporte_infopagos(
                     correo_enviado_a=cliente.email,
 
                     estado="pendiente",
+
+                    canal_ingreso="infopagos",
 
                 )
 

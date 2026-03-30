@@ -1,4 +1,10 @@
 -- =============================================================================
+-- Vínculo pagos ↔ pagos_reportados (ON en consultas de este archivo)
+-- -----------------------------------------------------------------------------
+-- Además de COB-||referencia_interna y documento = referencia (histórico), las
+-- filas nuevas pueden tener pagos.numero_documento = trim(numero_operacion)
+-- del reporte (mismo criterio que la app: pago_reportado_documento).
+-- =============================================================================
 -- Criterio de negocio (actual)
 -- -----------------------------------------------------------------------------
 -- Un reporte en bolívares (pagos_reportados.moneda = BS) debe reflejarse en
@@ -49,6 +55,10 @@ WITH base AS (
       ON (
             p.numero_documento = ('COB-' || pr.referencia_interna)
          OR TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.referencia_interna)
+         OR (
+                TRIM(BOTH FROM COALESCE(pr.numero_operacion, '')) <> ''
+            AND TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.numero_operacion)
+            )
       )
      AND LENGTH(COALESCE(p.numero_documento, '')) <= 100
     LEFT JOIN tasas_cambio_diaria tc ON tc.fecha = pr.fecha_pago
@@ -100,6 +110,10 @@ WITH esperado AS (
       ON (
             p.numero_documento = ('COB-' || pr.referencia_interna)
          OR TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.referencia_interna)
+         OR (
+                TRIM(BOTH FROM COALESCE(pr.numero_operacion, '')) <> ''
+            AND TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.numero_operacion)
+            )
       )
      AND LENGTH(COALESCE(p.numero_documento, '')) <= 100
     JOIN tasas_cambio_diaria tc ON tc.fecha = pr.fecha_pago
@@ -143,6 +157,10 @@ JOIN pagos_reportados pr
   ON (
         p.numero_documento = ('COB-' || pr.referencia_interna)
      OR TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.referencia_interna)
+     OR (
+            TRIM(BOTH FROM COALESCE(pr.numero_operacion, '')) <> ''
+        AND TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.numero_operacion)
+        )
   )
 LEFT JOIN tasas_cambio_diaria tc ON tc.fecha = pr.fecha_pago
 WHERE UPPER(TRIM(pr.moneda)) = 'BS'
@@ -173,6 +191,10 @@ FROM (
       ON (
             p2.numero_documento = ('COB-' || pr.referencia_interna)
          OR TRIM(BOTH FROM p2.numero_documento) = TRIM(BOTH FROM pr.referencia_interna)
+         OR (
+                TRIM(BOTH FROM COALESCE(pr.numero_operacion, '')) <> ''
+            AND TRIM(BOTH FROM p2.numero_documento) = TRIM(BOTH FROM pr.numero_operacion)
+            )
       )
     JOIN tasas_cambio_diaria tc ON tc.fecha = pr.fecha_pago
     WHERE UPPER(TRIM(pr.moneda)) = 'BS'
@@ -246,6 +268,10 @@ JOIN pagos p
   ON (
         p.numero_documento = ('COB-' || pr.referencia_interna)
      OR TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.referencia_interna)
+     OR (
+            TRIM(BOTH FROM COALESCE(pr.numero_operacion, '')) <> ''
+        AND TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.numero_operacion)
+        )
   )
 WHERE UPPER(TRIM(pr.moneda)) = 'BS'
   AND pr.estado IN ('aprobado', 'importado')
@@ -275,6 +301,10 @@ WHERE UPPER(TRIM(pr.moneda)) = 'BS'
   AND (
         p.numero_documento = ('COB-' || pr.referencia_interna)
      OR TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.referencia_interna)
+     OR (
+            TRIM(BOTH FROM COALESCE(pr.numero_operacion, '')) <> ''
+        AND TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.numero_operacion)
+        )
   );
 */
 

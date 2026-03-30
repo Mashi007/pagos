@@ -1,3 +1,5 @@
+# Script one-off historico (COB-+RPC). La app usa documento efectivo en cobros.py
+# (pago_reportado_documento). No ejecutar salvo migracion puntual; conservar solo referencia.
 # Script to add helper and call in cobros.py - run once then delete
 from pathlib import Path
 

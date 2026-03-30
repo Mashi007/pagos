@@ -1,12 +1,8 @@
 """
-Adaptador de compatibilidad para endpoints.
+Compatibilidad con codigo que aun instancia PagosService.
 
-Este módulo proporciona funciones de compatibilidad que permiten que los endpoints
-existentes en pagos.py continúen funcionando sin cambios mientras se utiliza la
-nueva arquitectura de servicios bajo el capó.
-
-IMPORTANTE: Esto es una capa de compatibilidad TEMPORAL.
-En sprints futuros, los endpoints serán refactorizados para usar directamente los servicios.
+- Lectura/validacion: alineado al modelo real `Pago` (prestamo_id, monto_pagado, numero_documento, etc.).
+- Alta de pagos: no usar `PagosService.crear_pago`; lanza PagoValidationError pidiendo POST /pagos o cobros/import.
 """
 
 from typing import Callable, Any, Optional
@@ -14,8 +10,8 @@ from functools import wraps
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.services.pagos import (
-    PagosService,
+from app.services.pagos import PagosService
+from app.services.pagos.pagos_excepciones import (
     PagoNotFoundError,
     PagoValidationError,
     PagoConflictError,
@@ -151,16 +147,18 @@ class AdaptadorPagosLegacy:
         return self.service.obtener_resumen_pagos(cliente_id)
     
     def _serializar_pago(self, pago) -> dict:
-        """Convierte modelo de pago a dict para JSON."""
+        """Convierte modelo `Pago` (tabla pagos) a dict para JSON."""
+        fp = getattr(pago, "fecha_pago", None)
+        mp = getattr(pago, "monto_pagado", None)
         return {
-            'id': pago.id,
-            'cliente_id': pago.cliente_id,
-            'monto': float(pago.monto),
-            'monto_dolares': float(pago.monto_dolares) if pago.monto_dolares else None,
-            'estado': pago.estado,
-            'documento': pago.documento,
-            'referencia_pago': pago.referencia_pago,
-            'fecha_pago': pago.fecha_pago.isoformat() if hasattr(pago, 'fecha_pago') else None,
+            "id": pago.id,
+            "prestamo_id": getattr(pago, "prestamo_id", None),
+            "cedula_cliente": getattr(pago, "cedula_cliente", None),
+            "monto_pagado": float(mp) if mp is not None else None,
+            "estado": getattr(pago, "estado", None),
+            "numero_documento": getattr(pago, "numero_documento", None),
+            "referencia_pago": getattr(pago, "referencia_pago", None),
+            "fecha_pago": fp.isoformat() if fp is not None else None,
         }
 
 

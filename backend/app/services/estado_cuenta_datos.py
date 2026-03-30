@@ -19,6 +19,7 @@ from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
 from app.models.pago_reportado import PagoReportado
 from app.models.prestamo import Prestamo
+from app.services.cobros.pago_reportado_documento import claves_documento_pago_para_reportado
 from app.services.cuota_estado import etiqueta_estado_cuota, estado_cuota_para_mostrar, hoy_negocio
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 
@@ -46,10 +47,12 @@ def obtener_recibos_cliente_estado_cuenta(db: Session, cedula_lookup: str) -> Li
         .order_by(PagoReportado.fecha_pago.desc())
     ).scalars().all()
     out = []
+    claves_por_fila: list[list[str]] = []
     for row in rows:
         pr = row[0] if hasattr(row, "__getitem__") else row
         fp = getattr(pr, "fecha_pago", None)
         fecha_str = fp.isoformat() if fp else ""
+        claves_por_fila.append(claves_documento_pago_para_reportado(pr))
         out.append(
             {
                 "id": pr.id,
@@ -61,18 +64,23 @@ def obtener_recibos_cliente_estado_cuenta(db: Session, cedula_lookup: str) -> Li
             }
         )
     if out:
-        num_docs = ["COB-" + (r["referencia_interna"] or "")[:90] for r in out]
-        pagos_aplicados = set(
-            row[0]
-            for row in db.execute(
-                select(Pago.numero_documento).where(
-                    Pago.numero_documento.in_(num_docs),
-                    Pago.estado == "PAGADO",
-                )
-            ).all()
-        )
-        for r in out:
-            r["aplicado_a_cuotas"] = ("COB-" + (r["referencia_interna"] or "")) in pagos_aplicados
+        flat: list[str] = []
+        for ks in claves_por_fila:
+            flat.extend(ks)
+        num_docs = list(dict.fromkeys(flat))
+        pagos_aplicados: set[str] = set()
+        if num_docs:
+            pagos_aplicados = set(
+                row[0]
+                for row in db.execute(
+                    select(Pago.numero_documento).where(
+                        Pago.numero_documento.in_(num_docs),
+                        Pago.estado == "PAGADO",
+                    )
+                ).all()
+            )
+        for r, ks in zip(out, claves_por_fila):
+            r["aplicado_a_cuotas"] = bool(ks) and any(k in pagos_aplicados for k in ks)
     return out
 
 def _fmt_fecha_hora_pago_estado_cuenta(dt) -> str:

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  BarChart3,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -260,8 +259,6 @@ export function AuditoriaCarteraTab() {
     () => boot?.vista_motor_crudo === true
   )
 
-  const [loadingKpis, setLoadingKpis] = useState(false)
-
   const [okDialogOpen, setOkDialogOpen] = useState(false)
 
   const [okTarget, setOkTarget] = useState<{
@@ -273,16 +270,6 @@ export function AuditoriaCarteraTab() {
   const [okNota, setOkNota] = useState('')
 
   const [okSubmitting, setOkSubmitting] = useState(false)
-
-  /** Ultima respuesta GET /prestamos/cartera/resumen (mismos filtros que filtrosApi). */
-  const [panelKpis, setPanelKpis] = useState<Record<string, unknown> | null>(
-    null
-  )
-
-  const [metaUltimaCorridaPanel, setMetaUltimaCorridaPanel] = useState<Record<
-    string,
-    unknown
-  > | null>(null)
 
   const syncOcultosConItems = useCallback(
     async (list: PrestamoCarteraChequeo[]): Promise<Set<string>> => {
@@ -393,8 +380,6 @@ export function AuditoriaCarteraTab() {
     setPrestamoInput('')
     setFiltrosApi({ cedula: '' })
     setPage(1)
-    setPanelKpis(null)
-    setMetaUltimaCorridaPanel(null)
     setHistorialOpen(false)
     setHistorialPid(null)
     setHistorialRows([])
@@ -422,31 +407,6 @@ export function AuditoriaCarteraTab() {
     }))
     setPage(1)
   }, [cedulaInput, prestamoInput])
-
-  const soloKpisResumen = async () => {
-    try {
-      setLoadingKpis(true)
-      const r = await auditoriaService.obtenerCarteraResumen({
-        cedula: filtrosApi.cedula.trim() || undefined,
-        prestamo_id: filtrosApi.prestamo_id,
-        codigo_control: filtrosApi.codigo_control?.trim() || undefined,
-        excluir_marcar_ok: !vistaMotorCrudo,
-      })
-      setPanelKpis((r.resumen as Record<string, unknown>) || {})
-      setMetaUltimaCorridaPanel(
-        (r.meta_ultima_corrida as Record<string, unknown>) || {}
-      )
-      toast.success('Resumen KPI actualizado (sin cargar lista de prestamos).')
-    } catch (e: unknown) {
-      const msg =
-        e && typeof e === 'object' && 'message' in e
-          ? String((e as { message?: string }).message)
-          : 'Error al obtener resumen de cartera'
-      toast.error(msg)
-    } finally {
-      setLoadingKpis(false)
-    }
-  }
 
   const ejecutarAhora = async () => {
     try {
@@ -551,36 +511,23 @@ export function AuditoriaCarteraTab() {
   }, [resumen])
 
   const conteosEfectivosPorControl = useMemo(() => {
-    const rawPanel = panelKpis?.conteos_por_control
-    const fromPanel =
-      rawPanel && typeof rawPanel === 'object' && !Array.isArray(rawPanel)
-        ? (rawPanel as Record<string, unknown>)
-        : {}
     const out: Record<string, number> = {}
     for (const def of AUDITORIA_CARTERA_CONTROLES_CATALOGO) {
       const c = def.codigo
       const fromR = conteosPorControlCodigo[c]
       const r =
         typeof fromR === 'number' && !Number.isNaN(fromR) ? fromR : undefined
-      const rawP = fromPanel[c]
-      const pNum =
-        typeof rawP === 'number'
-          ? rawP
-          : rawP != null && rawP !== ''
-            ? Number(rawP)
-            : NaN
-      const p = !Number.isNaN(pNum) ? pNum : undefined
-      out[c] = r !== undefined ? r : p !== undefined ? p : 0
+      out[c] = r !== undefined ? r : 0
     }
     return out
-  }, [conteosPorControlCodigo, panelKpis])
+  }, [conteosPorControlCodigo])
 
   const prestamosConAlertaNum = useMemo(() => {
-    const raw = resumen?.prestamos_con_alerta ?? panelKpis?.prestamos_con_alerta
+    const raw = resumen?.prestamos_con_alerta
     if (raw == null || raw === '') return null
     const n = Number(raw)
     return Number.isNaN(n) ? null : n
-  }, [resumen, panelKpis])
+  }, [resumen])
 
   const etiquetaControlFiltroSeleccion = useMemo(() => {
     const cod = filtrosApi.codigo_control?.trim()
@@ -672,13 +619,6 @@ export function AuditoriaCarteraTab() {
 
   const totalPages = Math.max(1, Math.ceil(totalListados / pageSize))
 
-  const skipActual = (page - 1) * pageSize
-
-  const rangoDesde =
-    totalListados === 0 ? 0 : Math.min(skipActual + 1, totalListados)
-
-  const rangoHasta = Math.min(skipActual + items.length, totalListados)
-
   const hayDesajustePagosVsAplicado = useMemo(() => {
     return (conteosPorControlCodigo[COD_DESAJUSTE_PAGOS] ?? 0) > 0
   }, [conteosPorControlCodigo])
@@ -727,11 +667,8 @@ export function AuditoriaCarteraTab() {
                 Consulta y controles de cartera
               </CardTitle>
               <p className="text-xs font-normal text-muted-foreground">
-                Totales por control: use{' '}
-                <strong className="font-medium text-slate-700">
-                  Solo KPIs
-                </strong>{' '}
-                (panel inferior) con los mismos filtros cedula/prestamo.
+                Filtre por cedula, ID de prestamo o control; los conteos en el
+                desplegable vienen del ultimo resumen de la lista cargada.
               </p>
             </div>
           </div>
@@ -758,7 +695,7 @@ export function AuditoriaCarteraTab() {
               size="sm"
               onClick={ejecutarAhora}
               disabled={running || loading}
-              title="Recalcula controles desde la BD (motor objetivo) y guarda KPIs en configuracion. Igual criterio que el job 03:00; sin usar MARCAR_OK en esos totales."
+              title="Recalcula controles desde la BD (motor objetivo) y guarda metadatos en configuracion. Igual criterio que el job 03:00; sin usar MARCAR_OK en esos totales."
             >
               {running ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -800,35 +737,6 @@ export function AuditoriaCarteraTab() {
                 Exportar CSV
               </Button>
             ) : null}
-          </div>
-
-          <div
-            className="rounded-md border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-xs text-amber-950"
-            role="note"
-          >
-            <p className="font-medium text-amber-900">
-              LIQUIDADO y cuadre operativo
-            </p>
-            <ul className="mt-1 list-inside list-disc space-y-0.5 text-amber-900/90">
-              <li>
-                Por defecto, LIQUIDADO sigue la cobertura de cuotas; puede haber
-                diferencia entre suma de pagos operativos y total aplicado en
-                cuotas. El control 7 lo detecta siempre; el control 17 solo
-                cuando el prestamo ya esta LIQUIDADO.
-              </li>
-              <li>
-                Evitar PAGADO con monto 0: use anulacion donde corresponda
-                (control 6).
-              </li>
-              <li>
-                Modo estricto en el servidor:{' '}
-                <code className="rounded bg-amber-100/90 px-1 font-mono text-[11px]">
-                  LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS=true
-                </code>{' '}
-                impide marcar LIQUIDADO hasta cuadrar pagos vs aplicado (0.02
-                USD).
-              </li>
-            </ul>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
@@ -936,21 +844,6 @@ export function AuditoriaCarteraTab() {
               >
                 Aplicar filtros
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void soloKpisResumen()}
-                disabled={loading || loadingKpis}
-                title="Misma logica que la lista pero sin devolver prestamos (GET .../cartera/resumen)."
-              >
-                {loadingKpis ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <BarChart3 className="mr-2 h-4 w-4" />
-                )}
-                Solo KPIs
-              </Button>
               <label
                 className="flex cursor-pointer items-center gap-2 pb-0.5 text-xs text-slate-600"
                 title="Incluye alertas cubiertas por excepcion (informe crudo); desactiva excluir_marcar_ok en la API."
@@ -965,130 +858,8 @@ export function AuditoriaCarteraTab() {
               </label>
             </div>
           </div>
-
-          {resumen ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm text-slate-700">
-              <span>
-                Evaluados:{' '}
-                <strong className="text-slate-900">
-                  {String(resumen.prestamos_evaluados ?? '-')}
-                </strong>
-              </span>
-              <span className="text-slate-300" aria-hidden>
-                |
-              </span>
-              <span>
-                Con alerta:{' '}
-                <strong className="text-slate-900">
-                  {String(resumen.prestamos_con_alerta ?? '-')}
-                </strong>
-              </span>
-              <span className="text-slate-300" aria-hidden>
-                |
-              </span>
-              <span>
-                Mostrando{' '}
-                <strong className="text-slate-900">
-                  {rangoDesde}-{rangoHasta}
-                </strong>{' '}
-                de <strong className="text-slate-900">{totalListados}</strong>
-              </span>
-              {resumen.fecha_referencia ? (
-                <>
-                  <span className="text-slate-300" aria-hidden>
-                    |
-                  </span>
-                  <span className="font-mono text-xs">
-                    Ref. {String(resumen.fecha_referencia)}
-                  </span>
-                </>
-              ) : null}
-              {resumen.reglas_version ? (
-                <>
-                  <span className="text-slate-300" aria-hidden>
-                    |
-                  </span>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {String(resumen.reglas_version)}
-                  </span>
-                </>
-              ) : null}
-            </div>
-          ) : null}
         </CardContent>
       </Card>
-
-      {panelKpis ? (
-        <Card className="border-dashed border-blue-200 bg-blue-50/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base text-slate-800">
-              Resumen solo KPIs (GET /prestamos/cartera/resumen)
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-2 text-sm text-slate-700">
-            <p>
-              Evaluados:{' '}
-              <strong>{String(panelKpis.prestamos_evaluados ?? '-')}</strong>
-              {' · '}
-              Con alerta:{' '}
-              <strong>{String(panelKpis.prestamos_con_alerta ?? '-')}</strong>
-              {' · '}
-              Version reglas:{' '}
-              <strong className="font-mono text-xs">
-                {String(panelKpis.reglas_version ?? '-')}
-              </strong>
-            </p>
-
-            {metaUltimaCorridaPanel &&
-            metaUltimaCorridaPanel.ultima_ejecucion_utc ? (
-              <p className="text-xs text-slate-600">
-                Ultima corrida guardada en BD (meta):{' '}
-                <span className="font-mono">
-                  {String(metaUltimaCorridaPanel.ultima_ejecucion_utc)}
-                </span>
-                {metaUltimaCorridaPanel.reglas_version ? (
-                  <>
-                    {' '}
-                    · version persistida:{' '}
-                    <span className="font-mono">
-                      {String(metaUltimaCorridaPanel.reglas_version)}
-                    </span>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
-
-            <div className="max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white p-2 text-xs">
-              {(() => {
-                const c = panelKpis.conteos_por_control
-                if (!c || typeof c !== 'object' || Array.isArray(c)) {
-                  return <span className="text-slate-500">Sin conteos</span>
-                }
-                const map = c as Record<string, number>
-                return (
-                  <ul className="space-y-1 text-slate-700">
-                    {AUDITORIA_CARTERA_CONTROLES_CATALOGO.map(def => {
-                      const v = map[def.codigo] ?? 0
-                      return (
-                        <li key={def.codigo} className="flex gap-2">
-                          <span className="shrink-0 font-mono text-muted-foreground">
-                            {def.n}.
-                          </span>
-                          <span className="min-w-0 flex-1">{def.titulo}</span>
-                          <span className="shrink-0 font-medium tabular-nums text-slate-900">
-                            {v}
-                          </span>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )
-              })()}
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
 
       {hayAlertas && !bloqueoListaCompleta && totalPages > 1 ? (
         <div className="flex flex-wrap items-center gap-2">

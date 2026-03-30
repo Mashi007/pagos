@@ -1,6 +1,10 @@
 -- =============================================================================
 -- Eliminar pago duplicado: referencia sola (RPC-…) cuando ya existe COB-RPC-…
 -- =============================================================================
+-- Caso legacy (Aprobar/import antiguo). Con el modelo actual el documento en
+-- pagos suele ser numero_operacion del comprobante; duplicados distintos (p. ej.
+-- operación vs COB-RPC) requieren análisis manual, no solo este script.
+-- =============================================================================
 -- Conserva: numero_documento = 'COB-' || referencia_interna (flujo Aprobar Cobros).
 -- Borra:    numero_documento = referencia_interna (mismo texto sin prefijo COB-).
 -- Caso típico: borra pago_id 57844, conserva 57519 (mismo reporte BS).

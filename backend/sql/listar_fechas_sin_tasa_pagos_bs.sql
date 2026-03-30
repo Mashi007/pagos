@@ -3,7 +3,8 @@
 -- =============================================================================
 -- Lista cada fecha_pago del reporte que NO tiene fila en tasas_cambio_diaria.
 -- Cargar la tasa oficial (Bs. por 1 USD) para cada fecha antes del UPDATE masivo.
--- Mismo criterio de vínculo pago↔reporte que en backfill_pagos_bs_mal_importados_desde_cobros.sql (0a).
+-- Mismo criterio de vínculo pago↔reporte que en backfill_pagos_bs_mal_importados_desde_cobros.sql (0a):
+-- COB-RPC, documento = referencia, o documento = trim(numero_operacion) cuando viene informado.
 --
 -- Tras obtener las fechas, registrar tasas con cualquiera de:
 --   - POST /admin/tasas-cambio/guardar-por-fecha  (admin; JSON: fecha, tasa_oficial)
@@ -19,6 +20,10 @@ JOIN pagos_reportados pr
   ON (
         p.numero_documento = ('COB-' || pr.referencia_interna)
      OR TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.referencia_interna)
+     OR (
+            TRIM(BOTH FROM COALESCE(pr.numero_operacion, '')) <> ''
+        AND TRIM(BOTH FROM p.numero_documento) = TRIM(BOTH FROM pr.numero_operacion)
+        )
   )
 LEFT JOIN tasas_cambio_diaria tc ON tc.fecha = pr.fecha_pago
 WHERE UPPER(TRIM(pr.moneda)) = 'BS'
