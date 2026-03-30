@@ -1443,13 +1443,15 @@ export function CrearPrestamoForm({
                     <Input
                       type="date"
                       value={formData.fecha_requerimiento}
-                      onChange={e =>
+                      onChange={e => {
+                        // Normalizar fecha al formato YYYY-MM-DD
+                        const valor = e.target.value
+                        const fechaNormalizada = normalizarFechaInput(valor)
                         setFormData({
                           ...formData,
-
-                          fecha_requerimiento: e.target.value,
+                          fecha_requerimiento: fechaNormalizada,
                         })
-                      }
+                      }}
                       disabled={isReadOnly}
                     />
                   </div>
