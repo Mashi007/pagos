@@ -66,7 +66,8 @@ function RootLayoutWrapper() {
   }
 
   // GUARD FINIQUITADOR: Si usuario es finiquitador puro, SOLO puede acceder a /finiquitos/gestion
-  const isPuroFiniquitador = user && (user.rol || 'operativo').toLowerCase() === 'finiquitador'
+  const isPuroFiniquitador =
+    user && (user.rol || 'operativo').toLowerCase() === 'finiquitador'
   if (isPuroFiniquitador && pathname !== '/finiquitos/gestion') {
     return <Navigate to="/finiquitos/gestion" replace />
   }

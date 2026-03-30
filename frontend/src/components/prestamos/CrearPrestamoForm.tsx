@@ -79,12 +79,12 @@ function fechaInputYmd(v: unknown): string {
   if (v == null || v === '') return ''
 
   const s = String(v).trim()
-  
+
   // Si ya está en formato YYYY-MM-DD, devolverlo
   if (s.match(/^\d{4}-\d{2}-\d{2}/)) {
     return s.slice(0, 10)
   }
-  
+
   // Si está en formato DD/MM/YYYY, convertir a YYYY-MM-DD
   if (s.match(/^\d{2}\/\d{2}\/\d{4}/)) {
     const parts = s.split('/')
@@ -95,7 +95,7 @@ function fechaInputYmd(v: unknown): string {
       return `${year}-${month}-${day}`
     }
   }
-  
+
   // Si está en formato DD-MM-YYYY, convertir a YYYY-MM-DD
   if (s.match(/^\d{2}-\d{2}-\d{4}/)) {
     const parts = s.split('-')
@@ -106,7 +106,7 @@ function fechaInputYmd(v: unknown): string {
       return `${year}-${month}-${day}`
     }
   }
-  
+
   // Fallback: tomar primeros 10 caracteres
   return s.length >= 10 ? s.slice(0, 10) : s
 }
@@ -117,42 +117,42 @@ function fechaInputYmd(v: unknown): string {
  */
 function normalizarFechaInput(valor: string): string {
   if (!valor) return ''
-  
+
   const s = valor.trim()
-  
+
   // Si ya está en formato YYYY-MM-DD, devolverlo
   if (s.match(/^\d{4}-\d{2}-\d{2}$/)) {
     return s
   }
-  
+
   // Si está en formato DD/MM/YYYY, convertir a YYYY-MM-DD
   if (s.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
     const [day, month, year] = s.split('/')
     return `${year}-${month}-${day}`
   }
-  
+
   // Si está en formato MM/DD/YYYY (formato EUA), convertir a YYYY-MM-DD
   // Detectar: si primer número > 12, es DD, sino intenta ambos órdenes
   if (s.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
     const parts = s.split('/')
     const num1 = parseInt(parts[0], 10)
     const num2 = parseInt(parts[1], 10)
-    
+
     // Si el primer número > 12, definitivamente es DD/MM/YYYY
     if (num1 > 12) {
       return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
     }
-    
+
     // Si el segundo número > 12, definitivamente es MM/DD/YYYY
     if (num2 > 12) {
       return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
     }
-    
+
     // Ambos son válidos como día y mes, asumir formato local del navegador
     // En este caso, devolver tal cual esperando que sea YYYY-MM-DD o dejar para Pydantic
     return s
   }
-  
+
   // Formato desconocido, devolver tal cual
   return s
 }
@@ -720,9 +720,10 @@ export function CrearPrestamoForm({
 
       // Fallback importante: si estamos editando y fecha_requerimiento está vacía en formData,
       // usar el valor del prestamo anterior para evitar que el backend use una valor inconsistente
-      const fechaReqFinal = !fechaReq && prestamo?.fecha_requerimiento
-        ? fechaInputYmd(prestamo.fecha_requerimiento)
-        : fechaReq
+      const fechaReqFinal =
+        !fechaReq && prestamo?.fecha_requerimiento
+          ? fechaInputYmd(prestamo.fecha_requerimiento)
+          : fechaReq
 
       const prestamoData: Record<string, unknown> = {
         ...formData,
@@ -775,7 +776,7 @@ export function CrearPrestamoForm({
       // IMPORTANTE: Para ediciones, SIEMPRE enviar fecha_requerimiento para evitar
       // que el backend use un valor antiguo incompatible con la nueva fecha_aprobacion
       if (fechaReqFinal !== '') {
-        prestamoData.fecha_requerimiento = fechaReqFinal  // Sin hora, solo YYYY-MM-DD
+        prestamoData.fecha_requerimiento = fechaReqFinal // Sin hora, solo YYYY-MM-DD
       } else if (!prestamo) {
         // Solo para nuevos préstamos, permitir omitir si está vacía
         delete prestamoData.fecha_requerimiento
@@ -811,8 +812,16 @@ export function CrearPrestamoForm({
 
       // Validación importante: si editamos y no incluimos fecha_requerimiento, el backend usará el valor antiguo
       // que podría ser incompatible con la nueva fecha_aprobacion
-      if (prestamo && prestamoData.fecha_aprobacion && !prestamoData.fecha_requerimiento && prestamo.fecha_requerimiento) {
-        console.warn('[CrearPrestamoForm] ADVERTENCIA: Se cambia fecha_aprobacion sin enviar fecha_requerimiento. El backend validará contra el valor antiguo:', prestamo.fecha_requerimiento)
+      if (
+        prestamo &&
+        prestamoData.fecha_aprobacion &&
+        !prestamoData.fecha_requerimiento &&
+        prestamo.fecha_requerimiento
+      ) {
+        console.warn(
+          '[CrearPrestamoForm] ADVERTENCIA: Se cambia fecha_aprobacion sin enviar fecha_requerimiento. El backend validará contra el valor antiguo:',
+          prestamo.fecha_requerimiento
+        )
       }
 
       if (prestamo) {
@@ -1505,7 +1514,7 @@ export function CrearPrestamoForm({
                   {prestamo ? (
                     <div>
                       <label className="mb-1 block text-sm font-medium">
-                        Fecha de aprobación
+                        Fecha de Aprobacion / Desembolso
                       </label>
 
                       <div className="mb-3 flex gap-2">
@@ -1513,7 +1522,6 @@ export function CrearPrestamoForm({
                           type="date"
                           value={formData.fecha_aprobacion || ''}
                           onChange={e => {
-                            // Normalizar fecha al formato YYYY-MM-DD
                             const valor = e.target.value
                             const fechaNormalizada = normalizarFechaInput(valor)
                             setFormData({
@@ -1540,137 +1548,21 @@ export function CrearPrestamoForm({
                             >
                               {isRecalculatingAmortizacion
                                 ? 'Recalculando...'
-                                : 'Recalcular Amortización'}
+                                : 'Recalcular Amortizacion'}
                             </Button>
                           )}
                       </div>
 
                       <p className="mt-1 text-xs text-gray-500">
-                        Se guarda en BD al confirmar. Debe ser igual o posterior
-                        a la fecha de requerimiento.
+                        Esta fecha determina las fechas de vencimiento de las
+                        cuotas. Al guardar con una fecha distinta, las fechas de
+                        la tabla de amortizacion se recalculan automaticamente.
                       </p>
                     </div>
                   ) : null}
                 </div>
 
-                {prestamo && prestamo.estado === 'APROBADO' && (
-                  <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
-                    <h4 className="mb-2 font-semibold text-blue-900">
-                      ðŸ"… Fecha de Desembolso (Día/Mes/Año)
-                    </h4>
-
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">
-                          Día <span className="text-red-500">*</span>
-                        </label>
-
-                        <Input
-                          type="number"
-                          min="1"
-                          max="31"
-                          value={
-                            formData.fecha_base_calculo
-                              ? formData.fecha_base_calculo.split('-')[2]
-                              : ''
-                          }
-                          onChange={e => {
-                            const dia = parseInt(e.target.value) || 1
-
-                            const fechaActual =
-                              formData.fecha_base_calculo || getCurrentDate()
-
-                            const [año, mes] = fechaActual.split('-')
-
-                            const nuevaFecha = `${año}-${mes}-${String(dia).padStart(2, '0')}`
-
-                            setFormData({
-                              ...formData,
-                              fecha_base_calculo: nuevaFecha,
-                            })
-                          }}
-                          disabled={isReadOnly}
-                          placeholder="DD"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">
-                          Mes <span className="text-red-500">*</span>
-                        </label>
-
-                        <Input
-                          type="number"
-                          min="1"
-                          max="12"
-                          value={
-                            formData.fecha_base_calculo
-                              ? formData.fecha_base_calculo.split('-')[1]
-                              : ''
-                          }
-                          onChange={e => {
-                            const mes = parseInt(e.target.value) || 1
-
-                            const fechaActual =
-                              formData.fecha_base_calculo || getCurrentDate()
-
-                            const [año, , dia] = fechaActual.split('-')
-
-                            const nuevaFecha = `${año}-${String(mes).padStart(2, '0')}-${dia}`
-
-                            setFormData({
-                              ...formData,
-                              fecha_base_calculo: nuevaFecha,
-                            })
-                          }}
-                          disabled={isReadOnly}
-                          placeholder="MM"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-1 block text-sm font-medium">
-                          Año <span className="text-red-500">*</span>
-                        </label>
-
-                        <Input
-                          type="number"
-                          min="2024"
-                          max="2030"
-                          value={
-                            formData.fecha_base_calculo
-                              ? formData.fecha_base_calculo.split('-')[0]
-                              : ''
-                          }
-                          onChange={e => {
-                            const año =
-                              parseInt(e.target.value) ||
-                              new Date().getFullYear()
-
-                            const fechaActual =
-                              formData.fecha_base_calculo || getCurrentDate()
-
-                            const [, mes, dia] = fechaActual.split('-')
-
-                            const nuevaFecha = `${año}-${mes}-${dia}`
-
-                            setFormData({
-                              ...formData,
-                              fecha_base_calculo: nuevaFecha,
-                            })
-                          }}
-                          disabled={isReadOnly}
-                          placeholder="YYYY"
-                        />
-                      </div>
-                    </div>
-
-                    <p className="mt-2 text-xs text-blue-700">
-                      Esta es la fecha desde la cual se calcularán las cuotas de
-                      la tabla de amortización
-                    </p>
-                  </div>
-                )}
+                {/* fecha_base_calculo es solo informativo; la amortizacion se calcula con fecha_aprobacion */}
 
                 {/* Eliminados campos duplicados de Producto y Analista Asignado */}
 

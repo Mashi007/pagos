@@ -6,7 +6,7 @@ import { usePermissions } from '../../hooks/usePermissions'
 /**
  * Guard para finiquitadores: redirige automáticamente a /finiquitos/gestion
  * y bloquea cualquier intento de acceder a otras rutas.
- * 
+ *
  * Un usuario con rol finiquitador:
  * - SOLO puede acceder a /finiquitos/gestion
  * - Cualquier otra ruta lo redirige a /finiquitos/gestion

@@ -2651,7 +2651,22 @@ def recalcular_fechas_amortizacion(prestamo_id: int, db: Session = Depends(get_d
     
     # Recalcular fechas y estados
     resultado = _recalcular_fechas_vencimiento_cuotas(db, p, fecha_base)
-    
+
+    audit_recalc = Auditoria(
+        usuario_id=1,
+        accion="RECALCULO_FECHAS_AMORTIZACION",
+        entidad="prestamos",
+        entidad_id=prestamo_id,
+        detalles=(
+            f"Recalculo manual de fechas de cuotas (endpoint). "
+            f"Fecha base: {fecha_base}. "
+            f"Cuotas actualizadas: {resultado.get('actualizadas', 0)}"
+        ),
+        exito=True,
+    )
+    db.add(audit_recalc)
+    db.commit()
+
     return resultado
 
 
@@ -3907,6 +3922,7 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
     logger.info(f"[update_prestamo] BD antes: fecha_requerimiento={row.fecha_requerimiento} (type={type(row.fecha_requerimiento).__name__}), fecha_aprobacion={row.fecha_aprobacion} (type={type(row.fecha_aprobacion).__name__})")
 
     est_antes = (row.estado or "").strip().upper()
+    fecha_aprobacion_antes = _fecha_aprobacion_para_amortizacion(row)
 
     if est_antes == "DESISTIMIENTO":
 
@@ -4075,10 +4091,9 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
     if row.estado == "APROBADO":
 
         existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
+        fecha_base = _fecha_aprobacion_para_amortizacion(row)
 
         if existentes == 0:
-
-            fecha_base = _fecha_aprobacion_para_amortizacion(row)
 
             if fecha_base:
 
@@ -4105,6 +4120,29 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
                         db.rollback()
 
                         raise
+
+        elif existentes > 0 and fecha_base and fecha_base != fecha_aprobacion_antes:
+            logger.info(
+                f"[update_prestamo] fecha_aprobacion cambió de {fecha_aprobacion_antes} a {fecha_base} — "
+                f"recalculando fechas de vencimiento de {existentes} cuota(s)"
+            )
+            resultado_recalc = _recalcular_fechas_vencimiento_cuotas(db, row, fecha_base)
+            audit_recalc = Auditoria(
+                usuario_id=1,
+                accion="RECALCULO_FECHAS_AMORTIZACION",
+                entidad="prestamos",
+                entidad_id=prestamo_id,
+                detalles=(
+                    f"Recalculo automatico de fechas de cuotas. "
+                    f"Fecha aprobacion anterior: {fecha_aprobacion_antes}, "
+                    f"nueva: {fecha_base}. "
+                    f"Cuotas actualizadas: {resultado_recalc.get('actualizadas', 0)}"
+                ),
+                exito=True,
+            )
+            db.add(audit_recalc)
+            db.commit()
+            db.refresh(row)
 
     return PrestamoResponse.model_validate(row)
 

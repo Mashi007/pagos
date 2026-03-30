@@ -413,7 +413,7 @@ export function EvaluacionRiesgoForm({
 
                           <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700">
-                              Fecha de Desembolso{' '}
+                              Fecha de Aprobacion / Desembolso{' '}
                               <span className="text-red-500">*</span>
                             </label>
 

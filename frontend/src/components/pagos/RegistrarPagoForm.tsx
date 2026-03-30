@@ -223,7 +223,8 @@ export function RegistrarPagoForm({
       // No borrar crédito al editar o si venía préstamo en pagoInicial (lista puede cargar tarde o Radix sin ítem).
       const preservarCredito =
         isEditing ||
-        (pagoInicial?.prestamo_id != null && Number(pagoInicial.prestamo_id) > 0)
+        (pagoInicial?.prestamo_id != null &&
+          Number(pagoInicial.prestamo_id) > 0)
       if (preservarCredito) {
         return
       }

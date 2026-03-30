@@ -182,6 +182,44 @@ export function cedulaLookupParaFila(
   return fromC || fromD
 }
 
+/**
+ * Busca prestamos en el mapa con fallbacks: con/sin prefijo V/E/J/Z,
+ * sin guiones, upper/lower. Evita mismatch entre "V28480006" y "28480006".
+ */
+export function buscarEnMapaPrestamos<T>(
+  lookup: string,
+  mapa: Record<string, T[]>
+): T[] {
+  if (!lookup) return []
+  const sinGuion = lookup.replace(/-/g, '')
+  const r1 =
+    mapa[lookup] ||
+    mapa[sinGuion] ||
+    mapa[lookup.toUpperCase()] ||
+    mapa[lookup.toLowerCase()] ||
+    []
+  if (r1.length > 0) return r1
+  const sinPrefijo = /^[VEJZ]/i.test(sinGuion) ? sinGuion.slice(1) : null
+  if (sinPrefijo) {
+    const r2 =
+      mapa[sinPrefijo] ||
+      mapa[sinPrefijo.toUpperCase()] ||
+      mapa[sinPrefijo.toLowerCase()] ||
+      []
+    if (r2.length > 0) return r2
+  }
+  const conV = /^\d{6,11}$/.test(sinGuion) ? 'V' + sinGuion : null
+  if (conV) {
+    const r3 =
+      mapa[conV] ||
+      mapa[conV.toUpperCase()] ||
+      mapa[conV.toLowerCase()] ||
+      []
+    if (r3.length > 0) return r3
+  }
+  return []
+}
+
 /** True si el valor parece Nº documento (ej. 10+ dígitos, BNC/ZELLE) y no cédula V/E/J/Z. */
 
 export function looksLikeDocumentNotCedula(val: unknown): boolean {

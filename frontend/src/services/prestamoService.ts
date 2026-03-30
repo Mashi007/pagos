@@ -350,8 +350,14 @@ class PrestamoService {
 
     // Debugging log para rastrear qué se envía
     if (import.meta.env.DEV) {
-      console.log('[prestamoService] Payload enviado al backend:', JSON.stringify(out, null, 2))
-      console.log('[prestamoService] Raw data antes de filtrado:', JSON.stringify(raw, null, 2))
+      console.log(
+        '[prestamoService] Payload enviado al backend:',
+        JSON.stringify(out, null, 2)
+      )
+      console.log(
+        '[prestamoService] Raw data antes de filtrado:',
+        JSON.stringify(raw, null, 2)
+      )
     }
 
     return out

@@ -33,6 +33,7 @@ import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
 import {
   cedulaLookupParaFila,
   convertirFechaParaBackendPago,
+  buscarEnMapaPrestamos,
 } from '../../utils/pagoExcelValidation'
 
 import { pagoService } from '../../services/pagoService'
@@ -218,6 +219,7 @@ function prestamoIdVacio(v: unknown): boolean {
   )
 }
 
+
 /**
 
 
@@ -266,16 +268,7 @@ function CreditoCell({
     row.numero_documento || ''
   )
 
-  const sinGuion = lookup.replace(/-/g, '')
-
-  const prestamos =
-    prestamosPorCedula[lookup] ||
-    prestamosPorCedula[sinGuion] ||
-    prestamosPorCedula[lookup?.toUpperCase()] ||
-    prestamosPorCedula[lookup?.toLowerCase()] ||
-    []
-
-  // 0 créditos: cliente puede no existir (cedula inválida) o existir sin créditos activos
+  const prestamos = buscarEnMapaPrestamos(lookup, prestamosPorCedula)
 
   if (prestamos.length === 0) {
     return <span className="text-xs italic text-gray-500">Sin crédito</span>
@@ -529,19 +522,7 @@ export function TablaEditablePagos({
         row.numero_documento || ''
       )
 
-      const sinGuion = lookup.replace(/-/g, '')
-
-      const prestamos =
-        prestamosPorCedula[lookup] ||
-        prestamosPorCedula[sinGuion] ||
-        prestamosPorCedula[lookup.toUpperCase()] ||
-        prestamosPorCedula[lookup.toLowerCase()] ||
-        []
-
-      // DEBUG: Log búsqueda en mapa
-      if (typeof window !== 'undefined' && prestamos.length === 0) {
-        console.log(`[TablaEditable] No encontrado para cédula "${lookup}". Claves en mapa:`, Object.keys(prestamosPorCedula).slice(0, 5))
-      }
+      const prestamos = buscarEnMapaPrestamos(lookup, prestamosPorCedula)
 
       if (prestamos.length === 1) {
         const correctId = prestamos[0].id
@@ -608,7 +589,7 @@ export function TablaEditablePagos({
           pagos/cuotas.
         </p>
 
-                <p className="mt-1 text-xs text-blue-700">
+        <p className="mt-1 text-xs text-blue-700">
           <strong>Crédito:</strong> si hay un único crédito activo, se carga
           automáticamente. Si hay varios, elige en la lista. Si no hay créditos
           activos, aparece "Sin crédito". El ID se completa por cédula desde la
@@ -831,18 +812,10 @@ export function TablaEditablePagos({
                         row.numero_documento || ''
                       )
 
-                      const sinGuion = lookup.replace(/-/g, '')
-
-                      const prestamos =
-                        prestamosPorCedula[lookup] ||
-                        prestamosPorCedula[sinGuion] ||
-                        prestamosPorCedula[lookup?.toUpperCase()] ||
-                        prestamosPorCedula[lookup?.toLowerCase()] ||
-                        []
+                      const prestamos = buscarEnMapaPrestamos(lookup, prestamosPorCedula)
 
                       const sinCreditoElegido =
-                        prestamos.length > 1 &&
-                        prestamoIdVacio(row.prestamo_id)
+                        prestamos.length > 1 && prestamoIdVacio(row.prestamo_id)
 
                       const sinCreditosActivos = prestamos.length === 0
 

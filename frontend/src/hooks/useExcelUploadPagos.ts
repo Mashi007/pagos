@@ -64,6 +64,7 @@ import {
   looksLikeDocumentNotCedula,
   parsePrestamoIdFromNumeroCredito,
   institucionBancariaDesdeExcel,
+  buscarEnMapaPrestamos,
 } from '../utils/pagoExcelValidation'
 
 import { readExcelToJSON } from '../types/exceljs'
@@ -412,7 +413,9 @@ export function useExcelUploadPagos({
 
             // DEBUG: Log de resultados por cédula
             if (typeof window !== 'undefined') {
-              console.log(`[ExcelUpload] Cédula ${cedula}: ${arr.length} préstamo(s) encontrado(s)`)
+              console.log(
+                `[ExcelUpload] Cédula ${cedula}: ${arr.length} préstamo(s) encontrado(s)`
+              )
             }
 
             map[cedula] = arr
@@ -435,7 +438,10 @@ export function useExcelUploadPagos({
           })
 
           if (typeof window !== 'undefined') {
-            console.log('[ExcelUpload] Mapa construido con claves:', Object.keys(map).slice(0, 10))
+            console.log(
+              '[ExcelUpload] Mapa construido con claves:',
+              Object.keys(map).slice(0, 10)
+            )
           }
 
           return map
@@ -443,45 +449,9 @@ export function useExcelUploadPagos({
 
         .then(map => {
           if (!cancelled) {
-            setPrestamosPorCedula(map)
+            setPrestamosPorCedula(prev => ({ ...prev, ...map }))
 
-            const keysMap = Object.keys(map)
-
-            const fallbackKey = keysMap.length === 1 ? keysMap[0] : null
-
-            setExcelData(prev =>
-              prev.map(r => {
-                const cedulaLookup = cedulaLookupParaFila(
-                  r.cedula || '',
-                  r.numero_documento || ''
-                )
-
-                const cedulaColNorm =
-                  cedulaParaLookup(r.cedula) ||
-                  (r.cedula || '').trim().replace(/-/g, '')
-
-                const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-
-                let prestamos =
-                  map[cedulaLookup] ||
-                  map[cedulaSinGuion] ||
-                  map[cedulaLookup.toUpperCase()] ||
-                  map[cedulaLookup.toLowerCase()] ||
-                  []
-
-                if (prestamos.length === 0 && cedulaColNorm)
-                  prestamos =
-                    map[cedulaColNorm] ||
-                    map[cedulaColNorm.toUpperCase()] ||
-                    map[cedulaColNorm.toLowerCase()] ||
-                    []
-
-                if (prestamos.length === 0 && fallbackKey)
-                  prestamos = map[fallbackKey] || []
-
-                return r
-              })
-            )
+            setExcelData(prev => prev.map(r => r))
           }
         })
 
@@ -518,14 +488,14 @@ export function useExcelUploadPagos({
       const cedulasFaltantes = cedulasUnicas.filter(cedula => {
         if (cedula.length < 5 || cedulasBuscando.has(cedula)) return false
 
-        const hasData =
-          (
-            prestamosPorCedula[cedula] ||
-            prestamosPorCedula[cedula?.replace(/-/g, '')] ||
-            []
-          ).length > 0
+        const sinGuion = cedula.replace(/-/g, '')
+        const alreadyQueried =
+          cedula in prestamosPorCedula ||
+          sinGuion in prestamosPorCedula ||
+          cedula.toUpperCase() in prestamosPorCedula ||
+          cedula.toLowerCase() in prestamosPorCedula
 
-        return !hasData
+        return !alreadyQueried
       })
 
       if (cedulasFaltantes.length === 0) return
@@ -633,14 +603,7 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
-      const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-
-      const prestamosActivos =
-        prestamosPorCedula[cedulaLookup] ||
-        prestamosPorCedula[cedulaSinGuion] ||
-        prestamosPorCedula[cedulaLookup.toUpperCase()] ||
-        prestamosPorCedula[cedulaLookup.toLowerCase()] ||
-        []
+      const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
 
       return prestamosActivos.length !== 1
     })
@@ -667,14 +630,7 @@ export function useExcelUploadPagos({
           row.numero_documento || ''
         )
 
-        const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-
-        const prestamosActivos =
-          prestamosPorCedula[cedulaLookup] ||
-          prestamosPorCedula[cedulaSinGuion] ||
-          prestamosPorCedula[cedulaLookup.toUpperCase()] ||
-          prestamosPorCedula[cedulaLookup.toLowerCase()] ||
-          []
+        const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
 
         let prestamoId: number | null = currentRow.prestamo_id
 
@@ -762,14 +718,7 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
-      const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-
-      const prestamosActivos =
-        prestamosPorCedula[cedulaLookup] ||
-        prestamosPorCedula[cedulaSinGuion] ||
-        prestamosPorCedula[cedulaLookup.toUpperCase()] ||
-        prestamosPorCedula[cedulaLookup.toLowerCase()] ||
-        []
+      const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
 
       if (prestamosActivos.length > 1 && !currentRow.prestamo_id) {
         addToast(
@@ -904,10 +853,7 @@ export function useExcelUploadPagos({
             row.numero_documento || ''
           )
 
-          const prestamosR =
-            prestamosPorCedula[cedulaR] ||
-            prestamosPorCedula[cedulaR?.replace(/-/g, '')] ||
-            []
+          const prestamosR = buscarEnMapaPrestamos(cedulaR, prestamosPorCedula)
 
           const prestamoIdRevisar =
             row.prestamo_id != null &&
@@ -984,10 +930,7 @@ export function useExcelUploadPagos({
             row.numero_documento || ''
           )
 
-          const prestamosR =
-            prestamosPorCedula[cedulaR] ||
-            prestamosPorCedula[cedulaR?.replace(/-/g, '')] ||
-            []
+          const prestamosR = buscarEnMapaPrestamos(cedulaR, prestamosPorCedula)
 
           const prestamoIdRevisar =
             row.prestamo_id != null &&
@@ -1120,14 +1063,7 @@ export function useExcelUploadPagos({
               row.numero_documento || ''
             )
 
-            const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-
-            const prestamos =
-              prestamosPorCedula[cedulaLookup] ||
-              prestamosPorCedula[cedulaSinGuion] ||
-              prestamosPorCedula[cedulaLookup.toUpperCase()] ||
-              prestamosPorCedula[cedulaLookup.toLowerCase()] ||
-              []
+            const prestamos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
 
             observaciones =
               prestamos.length === 0
@@ -1277,10 +1213,7 @@ export function useExcelUploadPagos({
         const obs = duplicadosPendientesRevisar.has(row._rowIndex)
           ? OBSERVACIONES_POR_CAMPO.numero_documento
           : (() => {
-              const ps =
-                prestamosPorCedula[cedulaLookup] ||
-                prestamosPorCedula[cedulaLookup?.replace(/-/g, '')] ||
-                []
+              const ps = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
               return ps.length === 0
                 ? OBSERVACION_SIN_CREDITO
                 : ps.length > 1
@@ -1404,10 +1337,7 @@ export function useExcelUploadPagos({
         const obs = duplicadosPendientesRevisar.has(row._rowIndex)
           ? OBSERVACIONES_POR_CAMPO.numero_documento
           : (() => {
-              const ps =
-                prestamosPorCedula[cedulaLookup] ||
-                prestamosPorCedula[cedulaLookup?.replace(/-/g, '')] ||
-                []
+              const ps = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
               return ps.length === 0
                 ? OBSERVACION_SIN_CREDITO
                 : ps.length > 1
@@ -1502,14 +1432,7 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
-      const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-
-      const prestamosActivos =
-        prestamosPorCedula[cedulaLookup] ||
-        prestamosPorCedula[cedulaSinGuion] ||
-        prestamosPorCedula[cedulaLookup.toUpperCase()] ||
-        prestamosPorCedula[cedulaLookup.toLowerCase()] ||
-        []
+      const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
 
       if (prestamosActivos.length > 1 && !row.prestamo_id) return false
 
@@ -1554,14 +1477,7 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
-      const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-
-      const prestamosActivos =
-        prestamosPorCedula[cedulaLookup] ||
-        prestamosPorCedula[cedulaSinGuion] ||
-        prestamosPorCedula[cedulaLookup.toUpperCase()] ||
-        prestamosPorCedula[cedulaLookup.toLowerCase()] ||
-        []
+      const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
 
       let prestamoId: number | null = row.prestamo_id ?? null
 
@@ -2418,45 +2334,7 @@ export function useExcelUploadPagos({
 
               setPrestamosPorCedula(map)
 
-              const keysMap = Object.keys(map)
-
-              const fallbackKey = keysMap.length === 1 ? keysMap[0] : null
-
-              // USAR validatedData (con validaciones) NO processed (sin validaciones)
-
-              const updated = validatedData.map(r => {
-                const cedulaLookup = cedulaLookupParaFila(
-                  r.cedula || '',
-                  r.numero_documento || ''
-                )
-
-                const cedulaColNorm =
-                  cedulaParaLookup(r.cedula) ||
-                  (r.cedula || '').trim().replace(/-/g, '')
-
-                const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-
-                let prestamos =
-                  map[cedulaLookup] ||
-                  map[cedulaSinGuion] ||
-                  map[cedulaLookup.toUpperCase()] ||
-                  map[cedulaLookup.toLowerCase()] ||
-                  []
-
-                if (prestamos.length === 0 && cedulaColNorm)
-                  prestamos =
-                    map[cedulaColNorm] ||
-                    map[cedulaColNorm.toUpperCase()] ||
-                    map[cedulaColNorm.toLowerCase()] ||
-                    []
-
-                if (prestamos.length === 0 && fallbackKey)
-                  prestamos = map[fallbackKey] || []
-
-                return r
-              })
-
-              setExcelData(updated)
+              setExcelData(validatedData)
             })
 
             .catch(() => {

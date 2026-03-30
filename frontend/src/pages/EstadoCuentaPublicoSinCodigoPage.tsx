@@ -1,11 +1,11 @@
 /**
  * Estado de Cuenta PÚBLICO - Sin código ni verificación
- * 
+ *
  * Flujo: bienvenida → ingresar cédula → ver datos cliente → descargar PDF
- * 
+ *
  * SIN login. SIN código. Acceso directo.
  * Cualquier persona con una cédula puede ver el estado de cuenta.
- * 
+ *
  * Rate limit: igual que EstadoCuentaPublicoPage
  * Seguridad: validación de cédula, rate limiting por IP
  */
@@ -90,13 +90,19 @@ export function EstadoCuentaPublicoSinCodigoPage() {
   // Session marker para indicar que vino de flujo público
   React.useEffect(() => {
     sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
-    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', 'rapicredit-estadocuenta-publico')
+    sessionStorage.setItem(
+      PUBLIC_FLOW_SESSION_KEY + '_path',
+      'rapicredit-estadocuenta-publico'
+    )
   }, [])
 
   const [paso, setPaso] = useState<'cedula' | 'cliente' | 'error'>('cedula')
   const [cedula, setCedula] = useState('')
   const [cedulaValidada, setCedulaValidada] = useState('')
-  const [cliente, setCliente] = useState<{ nombres?: string; email?: string } | null>(null)
+  const [cliente, setCliente] = useState<{
+    nombres?: string
+    email?: string
+  } | null>(null)
   const [recibos, setRecibos] = useState<ReciboCuotaItem[]>([])
 
   const [loading, setLoading] = useState(false)
@@ -110,7 +116,10 @@ export function EstadoCuentaPublicoSinCodigoPage() {
 
     const norm = normalizarCedulaParaProcesar(cedula)
     if (!norm.valido) {
-      setNotification({ type: 'error', message: norm.error || 'Cédula inválida' })
+      setNotification({
+        type: 'error',
+        message: norm.error || 'Cédula inválida',
+      })
       return
     }
 
@@ -119,7 +128,10 @@ export function EstadoCuentaPublicoSinCodigoPage() {
       const resultado = await validarCedulaEstadoCuenta(norm.valorParaEnviar!)
 
       if (!resultado.ok) {
-        setNotification({ type: 'error', message: resultado.error || 'Error al validar cédula' })
+        setNotification({
+          type: 'error',
+          message: resultado.error || 'Error al validar cédula',
+        })
         setPaso('error')
         setLoading(false)
         return
@@ -199,7 +211,9 @@ export function EstadoCuentaPublicoSinCodigoPage() {
       <div className="mx-auto max-w-md">
         {/* Header */}
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-slate-900">Estado de Cuenta</h1>
+          <h1 className="text-3xl font-bold text-slate-900">
+            Estado de Cuenta
+          </h1>
           <p className="mt-2 text-sm text-slate-600">
             Acceso público - Sin clave requerida
           </p>
@@ -231,8 +245,8 @@ export function EstadoCuentaPublicoSinCodigoPage() {
                   type="text"
                   placeholder="V12345678 o solo 12345678"
                   value={cedula}
-                  onChange={(e) => setCedula(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleValidarCedula()}
+                  onChange={e => setCedula(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleValidarCedula()}
                   className="mt-1"
                   autoFocus
                 />
@@ -321,9 +335,14 @@ export function EstadoCuentaPublicoSinCodigoPage() {
           <Card className="border-red-200 bg-red-50">
             <CardContent className="pt-6">
               <p className="text-sm text-red-800">
-                No se pudo validar la cédula. Verifica que esté correcta e intenta de nuevo.
+                No se pudo validar la cédula. Verifica que esté correcta e
+                intenta de nuevo.
               </p>
-              <Button onClick={handleVolver} variant="outline" className="mt-4 w-full">
+              <Button
+                onClick={handleVolver}
+                variant="outline"
+                className="mt-4 w-full"
+              >
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Volver
               </Button>
@@ -334,7 +353,8 @@ export function EstadoCuentaPublicoSinCodigoPage() {
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-slate-600">
           <p>
-            Este es un portal público. No requiere login ni código de verificación.
+            Este es un portal público. No requiere login ni código de
+            verificación.
           </p>
         </div>
       </div>
