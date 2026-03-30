@@ -835,8 +835,8 @@ export function CrearPrestamoForm({
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
                   La cédula del préstamo debe coincidir con la del cliente: el
-                  servidor copia la cédula de la ficha del cliente al guardar. Si
-                  el cliente no tiene cédula, no se puede crear un préstamo
+                  servidor copia la cédula de la ficha del cliente al guardar.
+                  Si el cliente no tiene cédula, no se puede crear un préstamo
                   APROBADO.
                 </p>
               </CardHeader>

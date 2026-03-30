@@ -53,6 +53,15 @@ function RootLayoutWrapper() {
 
   if (isPublic) return <Outlet />
 
+  // Detección de acceso limitado desde /infopagos a /pagos (dashboard)
+  const previousPath = location.state?.from?.pathname || ''
+  const isFromInfopagos = previousPath.includes('/infopagos')
+  const isDashboard = pathname === '/' || pathname === '/pagos'
+
+  if (isDashboard && isFromInfopagos && !isAuthenticated) {
+    return <Navigate to="/pagos/acceso-limitado" replace />
+  }
+
   const esGestionFiniquito = pathname === '/finiquitos/gestion'
 
   const tokenPortalFiniquito = getFiniquitoAccessToken()?.trim()
@@ -173,6 +182,8 @@ import CobrosHistoricoPage from './pages/CobrosHistoricoPage'
 
 import { AdminTasaCambioPage } from './pages/AdminTasaCambioPage'
 
+import AccesoLimitadoPage from './pages/AccesoLimitadoPage'
+
 // Todas las pginas ahora estn importadas desde archivos reales
 
 const NotFound = () => (
@@ -285,6 +296,14 @@ function App() {
               element={<EstadoCuentaPublicoPage />}
             />
 
+            {/* Infopagos: formulario de ingreso de pagos para colaboradores (sin login) */}
+
+            <Route path="infopagos" element={<InfopagosPage />} />
+
+            {/* Acceso limitado: se muestra cuando alguien intenta acceder a /pagos desde /infopagos */}
+
+            <Route path="acceso-limitado" element={<AccesoLimitadoPage />} />
+
             {/* Finiquito: portal OTP y gestion comparten URL /finiquitos/gestion (gate); panel redirige */}
 
             {/* Nota: Rutas de finiquitos han sido movidas a sección protegida (después de login) */}
@@ -366,10 +385,6 @@ function App() {
               path="cobros/historico-cliente"
               element={<CobrosHistoricoPage />}
             />
-
-            {/* Infopagos: formulario de ingreso de pagos para colaboradores (requiere login) */}
-
-            <Route path="infopagos" element={<InfopagosPage />} />
 
             {/* Informes: generador de estado de cuenta (requiere login) */}
 

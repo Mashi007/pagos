@@ -30,4 +30,5 @@ export const SEGMENTO_GESTION_PAGOS = 'pagos'
 export const RUTAS_REPORTE_PAGO_PUBLICO: readonly string[] = [
   `/${SEGMENTO_REPORTE_LEGACY}`,
   `/${SEGMENTO_REPORTE_COBROS}`,
+  `/${SEGMENTO_INFOPAGOS}`,
 ]

@@ -616,8 +616,10 @@ export default function EstadoCuentaPublicoPage() {
                       <p className="text-xs font-semibold text-slate-900">
                         Ingresa cédula
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {isInformesRoute ? 'Del cliente (V, E, G o J + dígitos)' : 'Tu cédula (V, E, G o J + dígitos)'}
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {isInformesRoute
+                          ? 'Del cliente (V, E, G o J + dígitos)'
+                          : 'Tu cédula (V, E, G o J + dígitos)'}
                       </p>
                     </div>
                   </div>
@@ -630,7 +632,7 @@ export default function EstadoCuentaPublicoPage() {
                       <p className="text-xs font-semibold text-slate-900">
                         Genera PDF
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <p className="mt-0.5 text-xs text-slate-500">
                         Estado de cuenta al instante
                       </p>
                     </div>
@@ -644,8 +646,10 @@ export default function EstadoCuentaPublicoPage() {
                       <p className="text-xs font-semibold text-slate-900">
                         Descarga o envío
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {isInformesRoute ? 'Descarga directa' : 'Se envía a tu correo'}
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {isInformesRoute
+                          ? 'Descarga directa'
+                          : 'Se envía a tu correo'}
                       </p>
                     </div>
                   </div>
@@ -654,7 +658,8 @@ export default function EstadoCuentaPublicoPage() {
                 {/* Info y CTA */}
                 <div className="space-y-3 border-t border-slate-100 pt-4">
                   <p className="text-xs leading-snug text-slate-500">
-                    Tus datos se almacenarán de forma segura y se utilizarán únicamente para generar tu estado de cuenta.
+                    Tus datos se almacenarán de forma segura y se utilizarán
+                    únicamente para generar tu estado de cuenta.
                   </p>
                   <Button
                     className="min-h-[48px] w-full touch-manipulation bg-[#1e3a5f] text-base font-semibold text-white shadow-md transition-all hover:bg-[#152a47] hover:shadow-lg"

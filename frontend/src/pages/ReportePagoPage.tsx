@@ -915,7 +915,7 @@ export default function ReportePagoPage({
                   {steps.map((item, i) => (
                     <li
                       key={i}
-                      className="flex items-center gap-2.5 rounded-lg bg-slate-50 p-2.5 hover:bg-slate-100 transition-colors"
+                      className="flex items-center gap-2.5 rounded-lg bg-slate-50 p-2.5 transition-colors hover:bg-slate-100"
                     >
                       <span
                         className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#1e3a5f] text-xs font-semibold text-white"
@@ -924,10 +924,12 @@ export default function ReportePagoPage({
                         {i + 1}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-slate-900 leading-tight">
+                        <p className="text-xs font-semibold leading-tight text-slate-900">
                           {item.text}
                         </p>
-                        <p className="text-xs text-slate-500 leading-tight">{item.desc}</p>
+                        <p className="text-xs leading-tight text-slate-500">
+                          {item.desc}
+                        </p>
                       </div>
                     </li>
                   ))}
@@ -1007,22 +1009,23 @@ export default function ReportePagoPage({
 
           <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                   1
                 </div>
-                <CardTitle className="text-lg sm:text-xl m-0">
+                <CardTitle className="m-0 text-lg sm:text-xl">
                   {isInfopagos ? 'Cédula del deudor' : 'Tu cédula'}
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                Formato: Letra (V, E, G o J) seguida de 6 a 11 dígitos. Sin puntos ni signos.
+                Formato: Letra (V, E, G o J) seguida de 6 a 11 dígitos. Sin
+                puntos ni signos.
               </p>
             </CardHeader>
 
             <CardContent className="space-y-4 px-5 sm:px-6">
               <Input
-                className="min-h-[48px] touch-manipulation bg-slate-50 border-slate-200"
+                className="min-h-[48px] touch-manipulation border-slate-200 bg-slate-50"
                 placeholder="Ej: V12345678 o 12345678"
                 value={cedula}
                 onChange={e => setCedula(normalizarCedulaInput(e.target.value))}
@@ -1038,7 +1041,7 @@ export default function ReportePagoPage({
                 {loading ? 'Verificando...' : 'Continuar'}
               </Button>
 
-              <p className="text-xs text-slate-500 text-center">
+              <p className="text-center text-xs text-slate-500">
                 Presiona Enter o haz clic en continuar
               </p>
             </CardContent>
@@ -1068,12 +1071,14 @@ export default function ReportePagoPage({
 
           <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                   2
                 </div>
-                <CardTitle className="text-lg sm:text-xl m-0">
-                  {isInfopagos ? `Deudor: ${nombre || '-'}` : `Hola, ${nombre || 'Cliente'}`}
+                <CardTitle className="m-0 text-lg sm:text-xl">
+                  {isInfopagos
+                    ? `Deudor: ${nombre || '-'}`
+                    : `Hola, ${nombre || 'Cliente'}`}
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
@@ -1100,7 +1105,7 @@ export default function ReportePagoPage({
                       Monto: 1 a 10M Bs. Tasa oficial del día.
                     </p>
                     {moneda === 'BS' && (
-                      <div className="absolute right-3 top-3 h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                      <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
                         <svg
                           className="h-3 w-3 text-white"
                           fill="currentColor"
@@ -1129,7 +1134,7 @@ export default function ReportePagoPage({
                       Monto: cualquier cantidad válida en USD.
                     </p>
                     {moneda === 'USD' && (
-                      <div className="absolute right-3 top-3 h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center">
+                      <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
                         <svg
                           className="h-3 w-3 text-white"
                           fill="currentColor"
@@ -1147,7 +1152,9 @@ export default function ReportePagoPage({
                 </div>
               ) : (
                 <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
-                  <p className="font-semibold text-amber-900">Solo dólares (USD)</p>
+                  <p className="font-semibold text-amber-900">
+                    Solo dólares (USD)
+                  </p>
                   <p className="mt-2 text-sm leading-snug text-amber-900/80">
                     Esta cédula no está autorizada para reportar en bolivares.
                     Por favor, reporta el monto en USD.
@@ -1188,11 +1195,11 @@ export default function ReportePagoPage({
 
           <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                   3
                 </div>
-                <CardTitle className="text-lg sm:text-xl m-0">
+                <CardTitle className="m-0 text-lg sm:text-xl">
                   Institución financiera
                 </CardTitle>
               </div>
@@ -1218,7 +1225,7 @@ export default function ReportePagoPage({
 
               {institucion === 'Otros' && (
                 <Input
-                  className="min-h-[48px] touch-manipulation bg-slate-50 border-slate-200"
+                  className="min-h-[48px] touch-manipulation border-slate-200 bg-slate-50"
                   placeholder="Nombre del banco o plataforma"
                   value={institucionOtros}
                   onChange={e => setInstitucionOtros(e.target.value)}
@@ -1226,7 +1233,7 @@ export default function ReportePagoPage({
                 />
               )}
 
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
+              <div className="flex flex-wrap gap-2 pt-2 sm:flex-nowrap">
                 <Button
                   variant="outline"
                   className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
@@ -1287,21 +1294,22 @@ export default function ReportePagoPage({
 
           <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                   4
                 </div>
-                <CardTitle className="text-lg sm:text-xl m-0">
+                <CardTitle className="m-0 text-lg sm:text-xl">
                   Fecha y monto
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                Modalidad: {moneda === 'BS' ? 'bolivares (Bs.)' : 'dólares (USD)'}
+                Modalidad:{' '}
+                {moneda === 'BS' ? 'bolivares (Bs.)' : 'dólares (USD)'}
               </p>
             </CardHeader>
 
             <CardContent className="space-y-4 px-5 sm:px-6">
-              <div className="rounded-lg bg-slate-50 p-3 border border-slate-200">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-medium text-slate-700">
                   {moneda === 'BS' ? (
                     <>
@@ -1324,7 +1332,7 @@ export default function ReportePagoPage({
                 </label>
                 <Input
                   type="date"
-                  className="min-h-[48px] w-full touch-manipulation bg-slate-50 border-slate-200"
+                  className="min-h-[48px] w-full touch-manipulation border-slate-200 bg-slate-50"
                   value={fechaPago}
                   onChange={e => setFechaPago(e.target.value)}
                   max={new Date().toISOString().slice(0, 10)}
@@ -1345,7 +1353,7 @@ export default function ReportePagoPage({
                     step="0.01"
                     min={moneda === 'BS' ? MIN_MONTO_BS_REPORTAR : MIN_MONTO}
                     placeholder={moneda === 'BS' ? 'Ej: 1500.00' : 'Ej: 150.50'}
-                    className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-50 border-slate-200"
+                    className="min-h-[48px] min-w-0 flex-1 touch-manipulation border-slate-200 bg-slate-50"
                     value={monto}
                     onChange={e => setMonto(e.target.value)}
                   />
@@ -1366,7 +1374,7 @@ export default function ReportePagoPage({
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
+              <div className="flex flex-wrap gap-2 pt-2 sm:flex-nowrap">
                 <Button
                   variant="outline"
                   className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
@@ -1436,11 +1444,11 @@ export default function ReportePagoPage({
 
           <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                   5
                 </div>
-                <CardTitle className="text-lg sm:text-xl m-0">
+                <CardTitle className="m-0 text-lg sm:text-xl">
                   Número de operación
                 </CardTitle>
               </div>
@@ -1451,7 +1459,7 @@ export default function ReportePagoPage({
 
             <CardContent className="space-y-4 px-5 sm:px-6">
               <Input
-                className="min-h-[48px] touch-manipulation bg-slate-50 border-slate-200"
+                className="min-h-[48px] touch-manipulation border-slate-200 bg-slate-50"
                 placeholder="Número de serie, transacción o referencia"
                 value={numeroDocumento}
                 onChange={e => setNumeroDocumento(e.target.value)}
@@ -1462,7 +1470,7 @@ export default function ReportePagoPage({
                 Máximo {MAX_LENGTH_NUMERO_OPERACION} caracteres
               </p>
 
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
+              <div className="flex flex-wrap gap-2 pt-2 sm:flex-nowrap">
                 <Button
                   variant="outline"
                   className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
@@ -1483,10 +1491,7 @@ export default function ReportePagoPage({
                     }
 
                     if (numeroDocumento.length > MAX_LENGTH_NUMERO_OPERACION) {
-                      showNotification(
-                        'error',
-                        'El número es demasiado largo.'
-                      )
+                      showNotification('error', 'El número es demasiado largo.')
                       return
                     }
 
@@ -1523,11 +1528,11 @@ export default function ReportePagoPage({
 
           <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                   6
                 </div>
-                <CardTitle className="text-lg sm:text-xl m-0">
+                <CardTitle className="m-0 text-lg sm:text-xl">
                   Comprobante de pago
                 </CardTitle>
               </div>
@@ -1576,10 +1581,11 @@ export default function ReportePagoPage({
               )}
 
               <p className="text-xs text-slate-600">
-                Carga el comprobante del pago realizado (factura de pago, captura de pantalla, etc.)
+                Carga el comprobante del pago realizado (factura de pago,
+                captura de pantalla, etc.)
               </p>
 
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
+              <div className="flex flex-wrap gap-2 pt-2 sm:flex-nowrap">
                 <Button
                   variant="outline"
                   className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
@@ -1634,11 +1640,11 @@ export default function ReportePagoPage({
 
           <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                   7
                 </div>
-                <CardTitle className="text-lg sm:text-xl m-0">
+                <CardTitle className="m-0 text-lg sm:text-xl">
                   Confirma tus datos
                 </CardTitle>
               </div>
@@ -1660,13 +1666,15 @@ export default function ReportePagoPage({
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Institución:</span>
-                  <span className="font-semibold text-slate-900 text-right">
+                  <span className="text-right font-semibold text-slate-900">
                     {institucionFinal}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Fecha:</span>
-                  <span className="font-semibold text-slate-900">{fechaPago}</span>
+                  <span className="font-semibold text-slate-900">
+                    {fechaPago}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Monto:</span>
@@ -1682,14 +1690,14 @@ export default function ReportePagoPage({
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Archivo:</span>
-                  <span className="font-semibold text-slate-900 text-right max-w-[150px] truncate">
+                  <span className="max-w-[150px] truncate text-right font-semibold text-slate-900">
                     {archivo?.name}
                   </span>
                 </div>
               </div>
 
               {/* Info note */}
-              <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                 <p className="text-xs leading-snug text-blue-900">
                   {isInfopagos ? (
                     <>
@@ -1709,7 +1717,7 @@ export default function ReportePagoPage({
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
+              <div className="flex flex-wrap gap-2 pt-2 sm:flex-nowrap">
                 <Button
                   variant="outline"
                   className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
@@ -1767,7 +1775,7 @@ export default function ReportePagoPage({
           </div>
 
           {/* Title */}
-          <div className="text-center space-y-2">
+          <div className="space-y-2 text-center">
             <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
               {isInfopagos
                 ? infopagosEnRevision
@@ -1787,7 +1795,7 @@ export default function ReportePagoPage({
             <p className="text-xs font-semibold uppercase text-slate-600">
               Número de referencia
             </p>
-            <p className="mt-2 break-all font-mono text-lg font-bold text-slate-900 select-all">
+            <p className="mt-2 select-all break-all font-mono text-lg font-bold text-slate-900">
               {referencia?.startsWith('#') ? referencia : `#${referencia}`}
             </p>
             <p className="mt-2 text-xs text-slate-500">
@@ -1801,13 +1809,15 @@ export default function ReportePagoPage({
               <p className="text-xs font-semibold text-blue-900">
                 Abono aplicado a:
               </p>
-              <p className="mt-1 font-mono text-sm text-blue-900">{aplicadoCuotas}</p>
+              <p className="mt-1 font-mono text-sm text-blue-900">
+                {aplicadoCuotas}
+              </p>
             </div>
           ) : null}
 
           {/* Status message */}
           {isInfopagos ? (
-            <div className="rounded-lg bg-amber-50 p-4 text-center border border-amber-200">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
               <p className="text-sm text-amber-900">
                 {infopagosEnRevision
                   ? 'Este reporte quedó en revisión manual. El recibo se enviará cuando sea aprobado.'
@@ -1815,7 +1825,7 @@ export default function ReportePagoPage({
               </p>
             </div>
           ) : (
-            <div className="rounded-lg bg-blue-50 p-4 text-center border border-blue-200">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-center">
               <p className="text-sm text-blue-900">
                 El recibo PDF será enviado a tu correo en los próximos minutos.
               </p>
@@ -1823,15 +1833,20 @@ export default function ReportePagoPage({
           )}
 
           {/* Download button */}
-          {isInfopagos && !infopagosEnRevision && reciboToken && pagoId != null && (
-            <Button
-              className="min-h-[48px] w-full touch-manipulation bg-blue-600 font-semibold text-white hover:bg-blue-700"
-              onClick={handleDescargarRecibo}
-              disabled={descargandoRecibo}
-            >
-              {descargandoRecibo ? 'Descargando...' : '⬇️ Descargar recibo (PDF)'}
-            </Button>
-          )}
+          {isInfopagos &&
+            !infopagosEnRevision &&
+            reciboToken &&
+            pagoId != null && (
+              <Button
+                className="min-h-[48px] w-full touch-manipulation bg-blue-600 font-semibold text-white hover:bg-blue-700"
+                onClick={handleDescargarRecibo}
+                disabled={descargandoRecibo}
+              >
+                {descargandoRecibo
+                  ? 'Descargando...'
+                  : '⬇️ Descargar recibo (PDF)'}
+              </Button>
+            )}
 
           {/* Action buttons */}
           <div className="flex flex-col gap-3 pt-4 sm:flex-row">

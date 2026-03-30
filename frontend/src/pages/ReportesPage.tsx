@@ -40,7 +40,7 @@ export function ReportesPage() {
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Estado de Cuenta - Link Directo */}
-        <Card className="border-emerald-200 hover:shadow-lg transition-shadow">
+        <Card className="border-emerald-200 transition-shadow hover:shadow-lg">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -57,11 +57,12 @@ export function ReportesPage() {
 
           <CardContent className="space-y-4">
             <div>
-              <p className="text-sm text-muted-foreground mb-3">
-                Accede a tu estado de cuenta, préstamos activos y cuotas pendientes. Genera PDF al instante.
+              <p className="mb-3 text-sm text-muted-foreground">
+                Accede a tu estado de cuenta, préstamos activos y cuotas
+                pendientes. Genera PDF al instante.
               </p>
 
-              <div className="space-y-2 text-sm text-muted-foreground mb-4">
+              <div className="mb-4 space-y-2 text-sm text-muted-foreground">
                 <p>✓ Consulta tu información financiera</p>
 
                 <p>✓ Descarga estado de cuenta en PDF</p>
@@ -72,7 +73,7 @@ export function ReportesPage() {
 
             <Button
               className="w-full bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => window.location.href = '/pagos/informes'}
+              onClick={() => (window.location.href = '/pagos/informes')}
             >
               Acceder a Informes
             </Button>
@@ -90,12 +91,11 @@ export function ReportesPage() {
 
           <CardContent>
             <div className="py-8 text-center">
-              <h3 className="mb-2 text-lg font-semibold">
-                En Desarrollo
-              </h3>
+              <h3 className="mb-2 text-lg font-semibold">En Desarrollo</h3>
 
               <p className="mb-4 text-sm text-muted-foreground">
-                Próximamente disponibles reportes avanzados con análisis detallado.
+                Próximamente disponibles reportes avanzados con análisis
+                detallado.
               </p>
 
               <div className="space-y-2 text-sm text-muted-foreground">
