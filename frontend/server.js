@@ -434,6 +434,15 @@ app.get('/prestamos/*', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/prestamos' + subpath + qs(req));
 });
 
+// Ruta pública: informes (estado de cuenta público) sin base -> redirigir a /pagos/informes
+app.get('/informes', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/informes' + qs(req));
+});
+app.get('/informes/*', (req, res) => {
+  const subpath = req.path.slice('/informes'.length);
+  res.redirect(302, FRONTEND_BASE + '/informes' + subpath + qs(req));
+});
+
 // Rutas SPA sin base: redirigir a /pagos/... para que Render sirva correctamente (ej. /chat-ai -> /pagos/chat-ai)
 app.get('/chat-ai', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/chat-ai' + qs(req));

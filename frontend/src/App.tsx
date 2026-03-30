@@ -30,6 +30,7 @@ const PUBLIC_PATHS = [
   '/acceso-limitado',
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
+  '/informes',
 ]
 
 /** En rutas pblicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
