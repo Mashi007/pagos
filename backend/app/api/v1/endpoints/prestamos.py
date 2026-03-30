@@ -1179,11 +1179,21 @@ def listar_prestamos_por_cedulas_batch(
 
         cedula_cli = (cli_cedula or p_cedula or "").strip()
 
-        if cedula_cli in cedulas_clean:
+        cedula_cli_norm = cedula_cli.replace("-", "").replace(" ", "").upper()
 
-            cedulas_encontradas.add(cedula_cli)
+        # Buscar coincidencia normalizada en cedulas_clean
+        cedula_encontrada = None
+        for ced_clean in cedulas_clean:
+            ced_clean_norm = ced_clean.replace("-", "").replace(" ", "").upper()
+            if cedula_cli_norm == ced_clean_norm:
+                cedula_encontrada = ced_clean
+                break
 
-            resultado[cedula_cli].append({
+        if cedula_encontrada:
+
+            cedulas_encontradas.add(cedula_encontrada)
+
+            resultado[cedula_encontrada].append({
 
                 "id": p_id,
 
