@@ -273,9 +273,17 @@ function CreditoCell({
   if (prestamos.length === 0) {
     const mapKeys = Object.keys(prestamosPorCedula).length
     return (
-      <span className="text-xs italic text-gray-500" title={`lookup=${lookup} mapKeys=${mapKeys}`}>
-        Sin crédito
-      </span>
+      <div>
+        <span
+          className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-700"
+          title={`lookup=${lookup} mapKeys=${mapKeys}`}
+        >
+          Sin credito
+        </span>
+        <p className="mt-0.5 text-[10px] leading-tight text-red-500">
+          No hay prestamos activos (APROBADO) para esta cedula
+        </p>
+      </div>
     )
   }
 
@@ -850,16 +858,26 @@ export function TablaEditablePagos({
                         sinCreditosActivos ||
                         bsBloqueado
 
-                      const title = row._hasErrors
-                        ? 'Corrija los errores de la fila para poder guardar'
+                      const motivoBloqueo = row._hasErrors
+                        ? Object.entries(row._validation || {})
+                            .filter(([, v]) => !v.isValid && v.message)
+                            .map(([, v]) => v.message)
+                            .join('; ') || 'Corrija los errores'
                         : sinCreditosActivos
-                          ? 'Sin créditos activos para esta cédula; use Revisar Pagos'
+                          ? 'Sin creditos activos para esta cedula'
                           : sinCreditoElegido
-                            ? 'Debe elegir un crédito de los disponibles'
-                            : 'Guardar esta fila'
+                            ? 'Elija un credito de los disponibles'
+                            : bsBloqueado
+                              ? 'Bs requiere tasa de cambio'
+                              : ''
 
                       return (
                         <div className="flex flex-col gap-1">
+                          {noPuedeGuardar && motivoBloqueo && (
+                            <p className="text-[10px] leading-tight text-red-600 font-medium">
+                              {motivoBloqueo}
+                            </p>
+                          )}
                           <button
                             type="button"
                             onClick={async () => {
@@ -884,7 +902,7 @@ export function TablaEditablePagos({
                               isSaving(row._rowIndex) ||
                               serviceStatus === 'offline'
                             }
-                            title={title}
+                            title={motivoBloqueo || 'Guardar esta fila'}
                             className={`inline-flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
                               noPuedeGuardar
                                 ? 'cursor-not-allowed bg-gray-100 text-gray-400'
