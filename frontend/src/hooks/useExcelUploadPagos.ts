@@ -397,12 +397,18 @@ export function useExcelUploadPagos({
         .then(batch => {
           const map: Record<string, Array<{ id: number; estado: string }>> = {}
 
+          console.log(
+            '[ExcelUpload v2.1] Batch response keys:',
+            Object.keys(batch || {}).slice(0, 15),
+            'total:',
+            Object.keys(batch || {}).length
+          )
+
           cedulasUnicas.forEach(cedula => {
-            const prestamos = (
-              batch[cedula] ||
-              batch[cedula.replace(/-/g, '')] ||
-              []
-            ).filter((p: any) =>
+            const raw =
+              batch[cedula] || batch[cedula.replace(/-/g, '')] || []
+
+            const prestamos = raw.filter((p: any) =>
               ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
             )
 
@@ -411,12 +417,10 @@ export function useExcelUploadPagos({
               estado: p.estado || '',
             }))
 
-            // DEBUG: Log de resultados por cédula
-            if (typeof window !== 'undefined') {
-              console.log(
-                `[ExcelUpload] Cédula ${cedula}: ${arr.length} préstamo(s) encontrado(s)`
-              )
-            }
+            console.log(
+              `[ExcelUpload v2.1] ${cedula}: raw=${raw.length} activos=${arr.length}`,
+              arr.map((a: { id: number; estado: string }) => `${a.id}(${a.estado})`).join(',')
+            )
 
             map[cedula] = arr
 
@@ -437,26 +441,36 @@ export function useExcelUploadPagos({
             }
           })
 
-          if (typeof window !== 'undefined') {
-            console.log(
-              '[ExcelUpload] Mapa construido con claves:',
-              Object.keys(map).slice(0, 10)
-            )
-          }
+          console.log(
+            '[ExcelUpload v2.1] Mapa construido, claves:',
+            Object.keys(map).length,
+            Object.keys(map).slice(0, 15)
+          )
 
           return map
         })
 
         .then(map => {
           if (!cancelled) {
-            setPrestamosPorCedula(prev => ({ ...prev, ...map }))
+            setPrestamosPorCedula(prev => {
+              const merged = { ...prev, ...map }
+              console.log(
+                '[ExcelUpload v2.1] prestamosPorCedula actualizado: prev=',
+                Object.keys(prev).length,
+                'new=',
+                Object.keys(map).length,
+                'merged=',
+                Object.keys(merged).length
+              )
+              return merged
+            })
 
             setExcelData(prev => prev.map(r => r))
           }
         })
 
-        .catch(() => {
-          if (!cancelled) setPrestamosPorCedula({})
+        .catch(err => {
+          console.error('[ExcelUpload] Error batch principal:', err)
         })
 
         .finally(() => {
@@ -1017,6 +1031,15 @@ export function useExcelUploadPagos({
       let numeroDoc = normalizarNumeroDocumento(row.numero_documento) || ''
 
       try {
+        const cedulaLk = cedulaLookupParaFila(
+          row.cedula || '',
+          row.numero_documento || ''
+        )
+        const prestamosRow = buscarEnMapaPrestamos(cedulaLk, prestamosPorCedula)
+        const autoPrestamoId =
+          row.prestamo_id ||
+          (prestamosRow.length === 1 ? prestamosRow[0].id : null)
+
         if (row._hasErrors) {
           const camposConProblema = Object.entries(row._validation || {})
             .filter(([, v]) => !v.isValid)
@@ -1025,12 +1048,9 @@ export function useExcelUploadPagos({
           const observaciones = observacionesDesdeCampos(camposConProblema)
 
           await pagoConErrorService.create({
-            cedula_cliente: cedulaLookupParaFila(
-              row.cedula || '',
-              row.numero_documento || ''
-            ),
+            cedula_cliente: cedulaLk,
 
-            prestamo_id: null,
+            prestamo_id: autoPrestamoId || null,
 
             fecha_pago:
               convertirFechaParaBackendPago(row.fecha_pago) ||
@@ -1058,28 +1078,18 @@ export function useExcelUploadPagos({
           if (duplicadosPendientesRevisar.has(row._rowIndex)) {
             observaciones = OBSERVACIONES_POR_CAMPO.numero_documento
           } else {
-            const cedulaLookup = cedulaLookupParaFila(
-              row.cedula || '',
-              row.numero_documento || ''
-            )
-
-            const prestamos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
-
             observaciones =
-              prestamos.length === 0
+              prestamosRow.length === 0
                 ? OBSERVACION_SIN_CREDITO
-                : prestamos.length > 1
+                : prestamosRow.length > 1
                   ? OBSERVACION_MULTIPLES_CREDITOS
                   : 'Revisar'
           }
 
           await pagoConErrorService.create({
-            cedula_cliente: cedulaLookupParaFila(
-              row.cedula || '',
-              row.numero_documento || ''
-            ),
+            cedula_cliente: cedulaLk,
 
-            prestamo_id: null,
+            prestamo_id: autoPrestamoId || null,
 
             fecha_pago:
               convertirFechaParaBackendPago(row.fecha_pago) ||
@@ -1187,6 +1197,11 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
+      const psDup = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
+      const autoIdDup =
+        row.prestamo_id ||
+        (psDup.length === 1 ? psDup[0].id : null)
+
       if (row._hasErrors) {
         const camposConProblema = Object.entries(row._validation || {})
           .filter(([, v]) => !v.isValid)
@@ -1194,7 +1209,7 @@ export function useExcelUploadPagos({
 
         pagosPayload.push({
           cedula_cliente: cedulaLookup,
-          prestamo_id: null,
+          prestamo_id: autoIdDup || null,
           fecha_pago:
             convertirFechaParaBackendPago(row.fecha_pago) ||
             new Date().toISOString().split('T')[0],
@@ -1213,17 +1228,16 @@ export function useExcelUploadPagos({
         const obs = duplicadosPendientesRevisar.has(row._rowIndex)
           ? OBSERVACIONES_POR_CAMPO.numero_documento
           : (() => {
-              const ps = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
-              return ps.length === 0
+              return psDup.length === 0
                 ? OBSERVACION_SIN_CREDITO
-                : ps.length > 1
+                : psDup.length > 1
                   ? OBSERVACION_MULTIPLES_CREDITOS
                   : 'Revisar'
             })()
 
         pagosPayload.push({
           cedula_cliente: cedulaLookup,
-          prestamo_id: null,
+          prestamo_id: autoIdDup || null,
           fecha_pago:
             convertirFechaParaBackendPago(row.fecha_pago) ||
             new Date().toISOString().split('T')[0],
@@ -1311,6 +1325,11 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
+      const psRow = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
+      const autoId =
+        row.prestamo_id ||
+        (psRow.length === 1 ? psRow[0].id : null)
+
       if (row._hasErrors) {
         const camposConProblema = Object.entries(row._validation || {})
           .filter(([, v]) => !v.isValid)
@@ -1318,7 +1337,7 @@ export function useExcelUploadPagos({
 
         pagosPayload.push({
           cedula_cliente: cedulaLookup,
-          prestamo_id: null,
+          prestamo_id: autoId || null,
           fecha_pago:
             convertirFechaParaBackendPago(row.fecha_pago) ||
             new Date().toISOString().split('T')[0],
@@ -1337,17 +1356,16 @@ export function useExcelUploadPagos({
         const obs = duplicadosPendientesRevisar.has(row._rowIndex)
           ? OBSERVACIONES_POR_CAMPO.numero_documento
           : (() => {
-              const ps = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
-              return ps.length === 0
+              return psRow.length === 0
                 ? OBSERVACION_SIN_CREDITO
-                : ps.length > 1
+                : psRow.length > 1
                   ? OBSERVACION_MULTIPLES_CREDITOS
                   : 'Revisar'
             })()
 
         pagosPayload.push({
           cedula_cliente: cedulaLookup,
-          prestamo_id: null,
+          prestamo_id: autoId || null,
           fecha_pago:
             convertirFechaParaBackendPago(row.fecha_pago) ||
             new Date().toISOString().split('T')[0],
@@ -2332,13 +2350,14 @@ export function useExcelUploadPagos({
             .then(map => {
               if (!isMounted()) return
 
-              setPrestamosPorCedula(map)
+              setPrestamosPorCedula(prev => ({ ...prev, ...map }))
 
               setExcelData(validatedData)
             })
 
-            .catch(() => {
-              if (isMounted()) setPrestamosPorCedula({})
+            .catch(err => {
+              console.error('[ExcelUpload] Error batch processExcelFile:', err)
+              if (isMounted()) setExcelData(validatedData)
             })
 
             .finally(() => {

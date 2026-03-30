@@ -271,7 +271,12 @@ function CreditoCell({
   const prestamos = buscarEnMapaPrestamos(lookup, prestamosPorCedula)
 
   if (prestamos.length === 0) {
-    return <span className="text-xs italic text-gray-500">Sin crédito</span>
+    const mapKeys = Object.keys(prestamosPorCedula).length
+    return (
+      <span className="text-xs italic text-gray-500" title={`lookup=${lookup} mapKeys=${mapKeys}`}>
+        Sin crédito
+      </span>
+    )
   }
 
   // 1 crédito: si está vacío, mostrar el ID automáticamente (ya debería estar en el estado del padre gracias al useEffect).
@@ -558,6 +563,7 @@ export function TablaEditablePagos({
       <div className="rounded-lg border border-blue-400 bg-blue-50 p-4">
         <h2 className="mb-2 text-lg font-bold text-blue-800">
           Indicadores (se actualizan al editar)
+          <span className="ml-2 text-[10px] font-normal text-gray-400">v2.1</span>
         </h2>
 
         <div className="flex flex-wrap gap-6 text-sm">
