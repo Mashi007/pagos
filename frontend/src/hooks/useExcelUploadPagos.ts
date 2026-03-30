@@ -283,9 +283,16 @@ export function useExcelUploadPagos({
 
     // Normalizar (sin guiones ni espacios extra)
 
-    return [...candidates]
+    const result = [...candidates]
       .map(c => (c || '').trim().replace(/-/g, ''))
       .filter(c => c.length >= 5 && looksLikeCedula(c))
+
+    // DEBUG: Log cédulas siendo buscadas
+    if (result.length > 0 && typeof window !== 'undefined') {
+      console.log('[ExcelUpload] Cédulas únicas para búsqueda:', result)
+    }
+
+    return result
   }, [excelData])
 
   const [prestamosPorCedula, setPrestamosPorCedula] = useState<
@@ -403,6 +410,11 @@ export function useExcelUploadPagos({
               estado: p.estado || '',
             }))
 
+            // DEBUG: Log de resultados por cédula
+            if (typeof window !== 'undefined') {
+              console.log(`[ExcelUpload] Cédula ${cedula}: ${arr.length} préstamo(s) encontrado(s)`)
+            }
+
             map[cedula] = arr
 
             const cedulaSinGuion = cedula.replace(/-/g, '')
@@ -421,6 +433,10 @@ export function useExcelUploadPagos({
               map[sinV.toLowerCase()] = arr
             }
           })
+
+          if (typeof window !== 'undefined') {
+            console.log('[ExcelUpload] Mapa construido con claves:', Object.keys(map).slice(0, 10))
+          }
 
           return map
         })

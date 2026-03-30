@@ -538,6 +538,11 @@ export function TablaEditablePagos({
         prestamosPorCedula[lookup.toLowerCase()] ||
         []
 
+      // DEBUG: Log búsqueda en mapa
+      if (typeof window !== 'undefined' && prestamos.length === 0) {
+        console.log(`[TablaEditable] No encontrado para cédula "${lookup}". Claves en mapa:`, Object.keys(prestamosPorCedula).slice(0, 5))
+      }
+
       if (prestamos.length === 1) {
         const correctId = prestamos[0].id
         const esVacio = prestamoIdVacio(row.prestamo_id)
