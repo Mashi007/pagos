@@ -17,6 +17,8 @@ from typing import Any, Dict, Optional
 
 GEMINI_RATE_LIMIT_RETRY_DELAY = 45
 GEMINI_RATE_LIMIT_MAX_RETRIES = 2
+GEMINI_SERVER_ERROR_RETRY_DELAY = 15  # Para 503 Server Unavailable
+GEMINI_SERVER_ERROR_MAX_RETRIES = 4  # Máximo 4 reintentos para 503
 
 from app.core.config import settings
 from app.services.pagos_gmail.helpers import get_mime_type
@@ -182,9 +184,15 @@ def extract_payment_data(
                 return result
             except Exception as e:
                 last_error = e
+                # Reintentos para 429 (rate limit)
                 if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
                     delay = _extract_retry_seconds(e)
                     logger.warning("[PAGOS_GMAIL] Gemini 429 (cuota), reintento en %ds (%d/%d)", delay, attempt + 1, GEMINI_RATE_LIMIT_MAX_RETRIES + 1)
+                    time.sleep(delay)
+                # Reintentos para 503 (server unavailable / high demand)
+                elif _is_server_error_503(e) and attempt < GEMINI_SERVER_ERROR_MAX_RETRIES:
+                    delay = GEMINI_SERVER_ERROR_RETRY_DELAY + (attempt * 5)  # Backoff: 15s, 20s, 25s, 30s
+                    logger.warning("[PAGOS_GMAIL] Gemini 503 (high demand), reintento en %ds (%d/%d)", delay, attempt + 1, GEMINI_SERVER_ERROR_MAX_RETRIES + 1)
                     time.sleep(delay)
                 else:
                     raise
@@ -256,9 +264,15 @@ def extract_cobranza_from_image(
                 return _parse_cobranza_json(text)
             except Exception as e:
                 last_error = e
+                # Reintentos para 429 (rate limit)
                 if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
                     delay = _extract_retry_seconds(e)
-                    logger.warning("[COBRANZA] Gemini 429, reintento en %ds", delay)
+                    logger.warning("[COBRANZA] Gemini 429, reintento en %ds (%d/%d)", delay, attempt + 1, GEMINI_RATE_LIMIT_MAX_RETRIES + 1)
+                    time.sleep(delay)
+                # Reintentos para 503 (server unavailable / high demand)
+                elif _is_server_error_503(e) and attempt < GEMINI_SERVER_ERROR_MAX_RETRIES:
+                    delay = GEMINI_SERVER_ERROR_RETRY_DELAY + (attempt * 5)  # Backoff: 15s, 20s, 25s, 30s
+                    logger.warning("[COBRANZA] Gemini 503 (high demand), reintento en %ds (%d/%d)", delay, attempt + 1, GEMINI_SERVER_ERROR_MAX_RETRIES + 1)
                     time.sleep(delay)
                 else:
                     raise
@@ -292,9 +306,15 @@ def check_gemini_available() -> Dict[str, Any]:
                 return {"ok": False, "error": "Gemini no devolvió texto"}
             except Exception as e:
                 last_error = e
+                # Reintentos para 429 (rate limit)
                 if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
                     delay = _extract_retry_seconds(e)
-                    logger.warning("[PAGOS_GMAIL] Gemini 429 en health check, reintento en %ds", delay)
+                    logger.warning("[PAGOS_GMAIL] Gemini 429 en health check, reintento en %ds (%d/%d)", delay, attempt + 1, GEMINI_RATE_LIMIT_MAX_RETRIES + 1)
+                    time.sleep(delay)
+                # Reintentos para 503 (server unavailable / high demand)
+                elif _is_server_error_503(e) and attempt < GEMINI_SERVER_ERROR_MAX_RETRIES:
+                    delay = GEMINI_SERVER_ERROR_RETRY_DELAY + (attempt * 5)  # Backoff: 15s, 20s, 25s, 30s
+                    logger.warning("[PAGOS_GMAIL] Gemini 503 (high demand) en health check, reintento en %ds (%d/%d)", delay, attempt + 1, GEMINI_SERVER_ERROR_MAX_RETRIES + 1)
                     time.sleep(delay)
                 else:
                     raise
@@ -414,6 +434,12 @@ def _parse_cobranza_json(text: str) -> Dict[str, Any]:
 def _is_rate_limit_error(exc: Exception) -> bool:
     msg = (getattr(exc, "message", "") or str(exc)) if exc else ""
     return "429" in msg or "quota" in msg.lower() or "rate" in msg.lower()
+
+
+def _is_server_error_503(exc: Exception) -> bool:
+    """Detecta errores 503 UNAVAILABLE (ServerError de Gemini por alta demanda)."""
+    msg = (getattr(exc, "message", "") or str(exc)) if exc else ""
+    return "503" in msg or "UNAVAILABLE" in msg or "high demand" in msg.lower()
 
 
 def _extract_retry_seconds(exc: Exception) -> int:
@@ -551,6 +577,8 @@ def compare_form_with_image(
         client = _gemini_client(key)
         image_part = _build_image_part(image_bytes, filename, mime)
         last_error = None
+        # Determinar número máximo de reintentos según si es 503 o 429
+        max_retries = GEMINI_RATE_LIMIT_MAX_RETRIES
         for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
             try:
                 response = client.models.generate_content(
@@ -617,9 +645,15 @@ def compare_form_with_image(
                 return result
             except Exception as e:
                 last_error = e
+                # Reintentos para 429 (rate limit)
                 if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
                     delay = _extract_retry_seconds(e)
-                    logger.warning("[COBROS] Gemini 429 en comparar, reintento en %ds", delay)
+                    logger.warning("[COBROS] Gemini 429 en comparar, reintento %d/%d en %ds", attempt + 1, GEMINI_RATE_LIMIT_MAX_RETRIES, delay)
+                    time.sleep(delay)
+                # Reintentos para 503 (server unavailable / high demand)
+                elif _is_server_error_503(e) and attempt < GEMINI_SERVER_ERROR_MAX_RETRIES:
+                    delay = GEMINI_SERVER_ERROR_RETRY_DELAY + (attempt * 5)  # Backoff: 15s, 20s, 25s, 30s
+                    logger.warning("[COBROS] Gemini 503 (high demand) en comparar, reintento %d/%d en %ds", attempt + 1, GEMINI_SERVER_ERROR_MAX_RETRIES, delay)
                     time.sleep(delay)
                 else:
                     raise
