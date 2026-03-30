@@ -149,18 +149,20 @@ def generar_pdf_estado_cuenta(
     )
     subt = Paragraph(
         f'<font size="9" color="{COLOR_TEXT_MUTED}">Corte al {fecha_corte.strftime("%d/%m/%Y")} &mdash; documento informativo</font>',
-        ParagraphStyle(name="EC_Sub", alignment=1, spaceAfter=0),
+        ParagraphStyle(name="EC_Sub", alignment=1, spaceAfter=8, leading=12),
     )
     if _LOGO_PATH.exists():
         logo = Image(str(_LOGO_PATH), width=1.45 * inch, height=1.45 * inch)
-        head_tbl = Table([[logo, [titulo, subt]]], colWidths=[1.85 * inch, 5.5 * inch])
+        head_tbl = Table([[logo, [titulo, subt]]], colWidths=[1.85 * inch, 5.5 * inch], rowHeights=[1.5 * inch])
         head_tbl.setStyle(
             TableStyle(
                 [
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("ALIGN", (1, 0), (1, 0), "CENTER"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
                     ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (1, 0), (1, 0), 12),
                 ]
             )
         )
@@ -299,7 +301,17 @@ def generar_pdf_estado_cuenta(
             ]
         )
         nrp = len(rows_p)
-        tp = Table(rows_p, colWidths=[70, 70, 76, 50, 70, 60])
+        tp = Table(
+            rows_p,
+            colWidths=[
+                1.1 * inch,
+                1.1 * inch,
+                1.2 * inch,
+                0.7 * inch,
+                1.1 * inch,
+                0.9 * inch,
+            ],
+        )
         extras_p = [
             ("ALIGN", (4, 0), (4, nrp - 2), "RIGHT"),
             ("ALIGN", (4, nrp - 1), (4, nrp - 1), "RIGHT"),
