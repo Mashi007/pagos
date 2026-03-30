@@ -25,6 +25,7 @@ import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 const PUBLIC_PATHS = [
   '/',
   '/login',
+  '/acceso-limitado',
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
 ]
@@ -53,12 +54,10 @@ function RootLayoutWrapper() {
 
   if (isPublic) return <Outlet />
 
-  // Detección de acceso limitado desde /infopagos a /pagos (dashboard)
-  const previousPath = location.state?.from?.pathname || ''
-  const isFromInfopagos = previousPath.includes('/infopagos')
-  const isDashboard = pathname === '/' || pathname === '/pagos'
+  // Si no está autenticado y NO está en una ruta pública: mostrar "Acceso limitado"
+  // Esto previene que intenten acceder al dashboard quitando /infopagos de la URL
 
-  if (isDashboard && isFromInfopagos && !isAuthenticated) {
+  if (!isLoading && !isAuthenticated) {
     return <Navigate to="/pagos/acceso-limitado" replace />
   }
 

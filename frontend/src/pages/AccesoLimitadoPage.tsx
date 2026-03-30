@@ -1,12 +1,33 @@
 import { AlertCircle, Lock, Key } from 'lucide-react'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
 
 export default function AccesoLimitadoPage() {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    // Bloquea el botón atrás del navegador
+    const handlePopState = (e: PopStateEvent) => {
+      e.preventDefault()
+      window.history.pushState(null, '', '/pagos/acceso-limitado')
+    }
+
+    window.addEventListener('popstate', handlePopState)
+
+    // Limpia el historial anterior para evitar retrocesos
+    window.history.replaceState(null, '', '/pagos/acceso-limitado')
+
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
   const handleLogin = () => {
     window.location.href = '/pagos/login'
   }
 
   const handleVolverAInfopagos = () => {
+    // Limpia el historial y redirige
+    window.history.replaceState(null, '', '/pagos/infopagos')
     window.location.href = '/pagos/infopagos'
   }
 
@@ -24,8 +45,8 @@ export default function AccesoLimitadoPage() {
         </h1>
 
         <p className="mb-6 text-center text-slate-600">
-          No tienes permiso para acceder a esta sección. Si deseas continuar,
-          debes iniciar sesión con tus credenciales.
+          No tienes permiso para acceder a esta sección. Debes iniciar sesión
+          con tus credenciales para continuar.
         </p>
 
         <div className="mb-8 rounded-lg bg-blue-50 p-4">
