@@ -200,75 +200,87 @@ def _listado_cuotas_prestamo_dicts(db: Session, prestamo_id: int) -> Optional[Li
     sincronizar_columna_estado_cuotas(db, cuotas, commit=True)
     resultado: List[dict] = []
     for c in cuotas:
-        pago_conciliado_flag = False
-        pago_monto_conciliado = 0.0
-        pago_verificado_concordancia = ""
-        pago_monto_conciliado = float(c.total_pagado or 0)
-        cp_links = db.execute(
-            select(Pago).join(CuotaPago, CuotaPago.pago_id == Pago.id).where(
-                CuotaPago.cuota_id == c.id,
-                or_(
-                    Pago.conciliado.is_(True),
-                    func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
-                ),
-            )
-        ).scalars().all()
-        if cp_links:
-            pago_conciliado_flag = True
-        if not pago_conciliado_flag and c.pago_id:
-            pago = db.get(Pago, c.pago_id)
-            if pago:
-                pago_conciliado_flag = bool(pago.conciliado)
-                pago_verificado_concordancia = str(pago.verificado_concordancia or "").strip().upper()
-                if pago_verificado_concordancia == "SI":
-                    pago_conciliado_flag = True
-        if not pago_conciliado_flag:
-            if c.fecha_vencimiento:
-                fecha_inicio = c.fecha_vencimiento - timedelta(days=15)
-                fecha_fin = c.fecha_vencimiento + timedelta(days=15)
-                pagos_en_rango = db.execute(
-                    select(Pago)
-                    .where(
-                        Pago.prestamo_id == prestamo_id,
-                        func.date(Pago.fecha_pago) >= fecha_inicio,
-                        func.date(Pago.fecha_pago) <= fecha_fin,
-                    )
-                    .order_by(Pago.fecha_pago.desc())
-                ).scalars().all()
-                for pago in pagos_en_rango:
-                    if pago.conciliado or (str(pago.verificado_concordancia or "").strip().upper() == "SI"):
+        try:
+            pago_conciliado_flag = False
+            pago_monto_conciliado = 0.0
+            pago_verificado_concordancia = ""
+            pago_monto_conciliado = float(c.total_pagado or 0)
+            cp_links = db.execute(
+                select(Pago).join(CuotaPago, CuotaPago.pago_id == Pago.id).where(
+                    CuotaPago.cuota_id == c.id,
+                    or_(
+                        Pago.conciliado.is_(True),
+                        func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
+                    ),
+                )
+            ).scalars().all()
+            if cp_links:
+                pago_conciliado_flag = True
+            if not pago_conciliado_flag and c.pago_id:
+                pago = db.get(Pago, c.pago_id)
+                if pago:
+                    pago_conciliado_flag = bool(pago.conciliado)
+                    pago_verificado_concordancia = str(pago.verificado_concordancia or "").strip().upper()
+                    if pago_verificado_concordancia == "SI":
                         pago_conciliado_flag = True
-                        break
-        monto_cuota_f = float(c.monto or 0)
-        total_pagado_f = float(c.total_pagado or 0)
-        fv = c.fecha_vencimiento
-        fv_date = fv.date() if fv and hasattr(fv, "date") else fv
-        estado_mostrar = estado_cuota_para_mostrar(total_pagado_f, monto_cuota_f, fv_date, hoy_negocio())
-        resultado.append(
-            {
-                "id": c.id,
-                "prestamo_id": c.prestamo_id,
-                "pago_id": c.pago_id,
-                "numero_cuota": c.numero_cuota,
-                "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
-                "monto": float(c.monto) if c.monto is not None else 0,
-                "monto_cuota": float(c.monto) if c.monto is not None else 0,
-                "monto_capital": float(c.monto_capital) if c.monto_capital is not None else 0,
-                "monto_interes": float(c.monto_interes) if c.monto_interes is not None else 0,
-                "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0,
-                "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0,
-                "capital_pagado": None,
-                "interes_pagado": None,
-                "total_pagado": float(c.total_pagado) if c.total_pagado is not None else 0,
-                "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
-                "estado": estado_mostrar,
-                "estado_etiqueta": etiqueta_estado_cuota(estado_mostrar),
-                "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
-                "dias_morosidad": c.dias_morosidad if c.dias_morosidad is not None else 0,
-                "pago_conciliado": pago_conciliado_flag,
-                "pago_monto_conciliado": pago_monto_conciliado,
-            }
-        )
+            if not pago_conciliado_flag:
+                if c.fecha_vencimiento:
+                    fecha_inicio = c.fecha_vencimiento - timedelta(days=15)
+                    fecha_fin = c.fecha_vencimiento + timedelta(days=15)
+                    pagos_en_rango = db.execute(
+                        select(Pago)
+                        .where(
+                            Pago.prestamo_id == prestamo_id,
+                            func.date(Pago.fecha_pago) >= fecha_inicio,
+                            func.date(Pago.fecha_pago) <= fecha_fin,
+                        )
+                        .order_by(Pago.fecha_pago.desc())
+                    ).scalars().all()
+                    for pago in pagos_en_rango:
+                        if pago.conciliado or (str(pago.verificado_concordancia or "").strip().upper() == "SI"):
+                            pago_conciliado_flag = True
+                            break
+            monto_cuota_f = float(c.monto or 0)
+            total_pagado_f = float(c.total_pagado or 0)
+            fv = c.fecha_vencimiento
+            fv_date = fv.date() if fv and hasattr(fv, "date") else fv
+            estado_mostrar = estado_cuota_para_mostrar(total_pagado_f, monto_cuota_f, fv_date, hoy_negocio())
+            resultado.append(
+                {
+                    "id": c.id,
+                    "prestamo_id": c.prestamo_id,
+                    "pago_id": c.pago_id,
+                    "numero_cuota": c.numero_cuota,
+                    "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
+                    "monto": float(c.monto) if c.monto is not None else 0,
+                    "monto_cuota": float(c.monto) if c.monto is not None else 0,
+                    "monto_capital": float(c.monto_capital) if c.monto_capital is not None else 0,
+                    "monto_interes": float(c.monto_interes) if c.monto_interes is not None else 0,
+                    "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0,
+                    "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0,
+                    "capital_pagado": None,
+                    "interes_pagado": None,
+                    "total_pagado": float(c.total_pagado) if c.total_pagado is not None else 0,
+                    "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
+                    "estado": estado_mostrar,
+                    "estado_etiqueta": etiqueta_estado_cuota(estado_mostrar),
+                    "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
+                    "dias_morosidad": c.dias_morosidad if c.dias_morosidad is not None else 0,
+                    "pago_conciliado": pago_conciliado_flag,
+                    "pago_monto_conciliado": pago_monto_conciliado,
+                }
+            )
+        except Exception as e:
+            logger.exception(
+                "Error procesando cuota %s del prestamo %s: %s",
+                c.id if hasattr(c, 'id') else 'unknown',
+                prestamo_id,
+                str(e)
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error procesando cuota del préstamo {prestamo_id}: {str(e)}"
+            )
     return resultado
 
 

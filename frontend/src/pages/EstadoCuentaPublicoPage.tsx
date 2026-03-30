@@ -516,7 +516,7 @@ export default function EstadoCuentaPublicoPage() {
 
   if (step === 0) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-100 via-[#e0eaf2] to-[#c9d6e8] p-4 sm:p-6">
+      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
         <div
           role="status"
           aria-live="polite"
@@ -526,83 +526,172 @@ export default function EstadoCuentaPublicoPage() {
           {stepAnnouncement}
         </div>
 
-        <Card className="mx-1 w-full min-w-0 max-w-lg overflow-hidden rounded-2xl border border-slate-200/90 shadow-2xl shadow-slate-300/40 ring-1 ring-slate-200/50 sm:mx-0">
-          <div className="border-b border-slate-100 bg-gradient-to-b from-white to-slate-50/80 px-6 py-6 text-center sm:px-8 sm:py-8">
-            <div className="inline-flex flex-col items-center justify-center">
-              <img
-                src={LOGO_PUBLIC_SRC}
-                alt="RapiCredit"
-                className="mx-auto h-16 object-contain drop-shadow-sm sm:h-20"
-              />
+        <div className="w-full max-w-4xl">
+          {/* Main container con layout responsive */}
+          <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+            {/* Sección izquierda: Branding */}
+            <div className="flex flex-col justify-center space-y-6 px-2 sm:px-0">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={LOGO_PUBLIC_SRC}
+                    alt="RapiCredit"
+                    className="h-12 object-contain sm:h-14"
+                  />
+                  <div>
+                    <p className="text-2xl font-bold text-white sm:text-3xl">
+                      RapiCredit
+                    </p>
+                    <p className="text-xs text-slate-400 sm:text-sm">
+                      Consulta de Informes
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-              <p className="mt-3 text-sm font-semibold tracking-wide text-[#b8954a] sm:text-base">
-                Consulta de estado de cuenta
-              </p>
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold text-white sm:text-4xl">
+                  {isInformesRoute ? 'Estado de cuenta' : 'Tus informes'}
+                </h1>
+                <p className="text-base leading-relaxed text-slate-300 sm:text-lg">
+                  {isInformesRoute
+                    ? 'Generación rápida de estado de cuenta. Ingrese la cédula del cliente y obtenga el PDF al instante.'
+                    : 'Accede a tu estado de cuenta y documentos financieros de forma segura y rápida.'}
+                </p>
+              </div>
+
+              {/* Info boxes */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-start gap-3 rounded-lg bg-white/10 p-3 backdrop-blur-sm">
+                  <svg
+                    className="h-5 w-5 flex-shrink-0 text-emerald-400 sm:h-6 sm:w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  <span className="text-sm text-slate-200 sm:text-base">
+                    Generación instantánea de PDF
+                  </span>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg bg-white/10 p-3 backdrop-blur-sm">
+                  <svg
+                    className="h-5 w-5 flex-shrink-0 text-emerald-400 sm:h-6 sm:w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                  <span className="text-sm text-slate-200 sm:text-base">
+                    Datos protegidos y confidenciales
+                  </span>
+                </div>
+              </div>
             </div>
+
+            {/* Sección derecha: Card con información */}
+            <Card className="mx-1 border-0 bg-white shadow-2xl sm:mx-0">
+              <CardContent className="space-y-4 p-5 sm:space-y-5 sm:p-6">
+                <div className="border-b border-slate-100 pb-4">
+                  <h2 className="text-xl font-semibold text-slate-900">
+                    {isInformesRoute ? 'Uso interno' : 'Acceso rápido'}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {isInformesRoute
+                      ? 'Generador de estado de cuenta para colaboradores'
+                      : 'Consulta tu información financiera'}
+                  </p>
+                </div>
+
+                {/* Características */}
+                <div className="space-y-3">
+                  <div className="flex gap-3 rounded-lg bg-slate-50 p-3">
+                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#1e3a5f] text-xs font-semibold text-white">
+                      1
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-900">
+                        Ingresa cédula
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {isInformesRoute ? 'Del cliente (V, E, G o J + dígitos)' : 'Tu cédula (V, E, G o J + dígitos)'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 rounded-lg bg-slate-50 p-3">
+                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#1e3a5f] text-xs font-semibold text-white">
+                      2
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-900">
+                        Genera PDF
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Estado de cuenta al instante
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 rounded-lg bg-slate-50 p-3">
+                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#1e3a5f] text-xs font-semibold text-white">
+                      3
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-900">
+                        Descarga o envío
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {isInformesRoute ? 'Descarga directa' : 'Se envía a tu correo'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info y CTA */}
+                <div className="space-y-3 border-t border-slate-100 pt-4">
+                  <p className="text-xs leading-snug text-slate-500">
+                    Tus datos se almacenarán de forma segura y se utilizarán únicamente para generar tu estado de cuenta.
+                  </p>
+                  <Button
+                    className="min-h-[48px] w-full touch-manipulation bg-[#1e3a5f] text-base font-semibold text-white shadow-md transition-all hover:bg-[#152a47] hover:shadow-lg"
+                    size="lg"
+                    onClick={() => goToStep(1)}
+                  >
+                    Iniciar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          <CardHeader className="px-4 pb-2 text-center sm:px-6">
-            <CardTitle className="text-2xl font-bold tracking-tight text-[#1e3a5f] sm:text-3xl">
-              {isInformesRoute ? 'Estado de cuenta' : 'Bienvenido'}
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-4 px-4 pb-6 sm:space-y-5 sm:px-6">
-            {isInformesRoute ? (
-              <>
-                <p className="text-center text-sm text-slate-700 sm:text-base">
-                  Generación de estado de cuenta para empleados. Ingrese la
-                  cédula del cliente y obtenga el PDF al instante. No se
-                  solicita código ni se envía correo.
-                </p>
-
-                <ul className="list-inside list-disc space-y-2 text-sm text-slate-600">
-                  <li>Ingrese la cédula (V, E, G o J + dígitos).</li>
-
-                  <li>Se generará el PDF y podrá descargarlo directamente.</li>
-                </ul>
-              </>
-            ) : (
-              <>
-                <p className="text-center text-sm text-slate-700 sm:text-base">
-                  Desde aquí puede consultar su estado de cuenta. Solo debe
-                  ingresar su cédula; el documento se generará y se enviará al
-                  correo registrado.
-                </p>
-
-                <ul className="list-inside list-disc space-y-2 text-sm text-slate-600">
-                  <li>Ingrese su número de cédula (V, E, G o J + dígitos).</li>
-
-                  <li>
-                    Se generará un PDF con sus préstamos y cuotas pendientes.
-                  </li>
-
-                  <li>
-                    Una copia se enviará al correo electrónico registrado.
-                  </li>
-                </ul>
-
-                <p className="text-center text-xs text-slate-500">
-                  Este servicio solo permite consultar su propio estado de
-                  cuenta. No da acceso a otros servicios.
-                </p>
-
-                <p className="text-center text-xs text-slate-500">
-                  Si desea consultar otra cédula, al finalizar use el botón
-                  «Consultar otra cédula» o reinicie el proceso.
-                </p>
-              </>
-            )}
-
-            <Button
-              className="min-h-[52px] w-full touch-manipulation rounded-xl bg-[#1e3a5f] py-6 text-base font-semibold text-white shadow-lg shadow-[#1e3a5f]/25 transition-all duration-200 hover:bg-[#152a47] hover:shadow-xl active:scale-[0.98]"
-              size="lg"
-              onClick={() => goToStep(1)}
-            >
-              Iniciar
-            </Button>
-          </CardContent>
-        </Card>
+          {/* Footer mínimo */}
+          <div className="mt-6 text-center text-xs text-slate-400">
+            <p>
+              ¿Preguntas? Contacta a soporte por
+              <a
+                href="https://wa.me/584244579934"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-1 text-emerald-400 underline hover:text-emerald-300"
+              >
+                WhatsApp
+              </a>
+            </p>
+          </div>
+        </div>
       </div>
     )
   }
