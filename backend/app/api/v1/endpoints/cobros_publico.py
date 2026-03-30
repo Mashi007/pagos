@@ -1076,15 +1076,24 @@ async def enviar_reporte_publico(
 
             logger.info("[COBROS_PUBLIC] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual", referencia)
 
-        gemini_result = compare_form_with_image(form_data, content, filename)
+        try:
+            gemini_result = compare_form_with_image(form_data, content, filename)
 
-        coincide = gemini_result.get("coincide_exacto", False)
+            coincide = gemini_result.get("coincide_exacto", False)
 
-        pr.gemini_coincide_exacto = "true" if coincide else "false"
+            pr.gemini_coincide_exacto = "true" if coincide else "false"
 
-        pr.gemini_comentario = gemini_result.get("comentario")
+            pr.gemini_comentario = gemini_result.get("comentario")
 
-
+        except Exception as gemini_err:
+            # Si Gemini falla (incluso tras reintentos), enviar a revisión manual
+            logger.warning(
+                "[COBROS_PUBLIC] Gemini error para ref=%s tras reintentos, enviando a revisión manual: %s",
+                referencia, str(gemini_err)
+            )
+            pr.gemini_coincide_exacto = "error"
+            pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
+            coincide = False  # Por seguridad, no aprobar si hay error
 
         if coincide:
 
@@ -1572,13 +1581,24 @@ async def enviar_reporte_infopagos(
 
             )
 
-        gemini_result = compare_form_with_image(form_data, content, filename)
+        try:
+            gemini_result = compare_form_with_image(form_data, content, filename)
 
-        coincide = gemini_result.get("coincide_exacto", False)
+            coincide = gemini_result.get("coincide_exacto", False)
 
-        pr.gemini_coincide_exacto = "true" if coincide else "false"
+            pr.gemini_coincide_exacto = "true" if coincide else "false"
 
-        pr.gemini_comentario = gemini_result.get("comentario")
+            pr.gemini_comentario = gemini_result.get("comentario")
+
+        except Exception as gemini_err:
+            # Si Gemini falla (incluso tras reintentos), enviar a revisión manual
+            logger.warning(
+                "[INFOPAGOS] Gemini error para ref=%s tras reintentos, enviando a revisión manual: %s",
+                referencia, str(gemini_err)
+            )
+            pr.gemini_coincide_exacto = "error"
+            pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
+            coincide = False  # Por seguridad, no aprobar si hay error
 
         if coincide:
 
