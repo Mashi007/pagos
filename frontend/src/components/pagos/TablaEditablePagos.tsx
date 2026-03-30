@@ -517,14 +517,13 @@ export function TablaEditablePagos({
   const isSaving = (rowIndex: number) =>
     !!savingProgress[rowIndex] || localSaving.has(rowIndex)
 
-  // Solo corregir prestamo_id cuando hay valor incorrecto (p. ej. nº de documento en columna crédito); nunca rellenar vacío.
+  // Auto-llenar prestamo_id cuando hay un único crédito válido (aunque esté vacío);
+  // También corregir cuando hay valor incorrecto (p. ej. nº de documento en columna crédito).
 
   useEffect(() => {
     if (!rows?.length || Object.keys(prestamosPorCedula).length === 0) return
 
     rows.forEach(row => {
-      if (prestamoIdVacio(row.prestamo_id)) return
-
       const lookup = cedulaLookupParaFila(
         row.cedula || '',
         row.numero_documento || ''
@@ -541,8 +540,13 @@ export function TablaEditablePagos({
 
       if (prestamos.length === 1) {
         const correctId = prestamos[0].id
-        if (Number(row.prestamo_id) === correctId) return
-        onUpdateCell(row, 'prestamo_id', correctId)
+        const esVacio = prestamoIdVacio(row.prestamo_id)
+        const esIncorrecto = Number(row.prestamo_id) !== correctId && !esVacio
+
+        // Auto-llenar si está vacío, o corregir si es incorrecto
+        if (esVacio || esIncorrecto) {
+          onUpdateCell(row, 'prestamo_id', correctId)
+        }
       }
     })
   }, [rows, prestamosPorCedula, onUpdateCell])
