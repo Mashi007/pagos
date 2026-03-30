@@ -369,6 +369,8 @@ def get_recibo_cuota_publico(
     if not token_to_use:
         raise HTTPException(status_code=401, detail="Token requerido (Authorization header o query param ?token=...).")
 
+    payload = decode_token(token_to_use)
+
     if not payload or payload.get("type") != "recibo":
 
         raise HTTPException(status_code=401, detail="Token inválido o expirado.")
