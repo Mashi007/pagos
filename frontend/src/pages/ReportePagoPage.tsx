@@ -747,58 +747,60 @@ export default function ReportePagoPage({
       ? [
           {
             icon: 'id' as const,
-            text: 'Ingrese la cédula del deudor (V, E, G o J + dígitos).',
+            text: 'Cédula del deudor',
+            desc: '(V, E, G o J + dígitos)',
           },
-
           {
             icon: 'path' as const,
-            text: 'Segun la cedula: si esta autorizada para bolivares podra elegir Bs. o USD; si no, solo USD.',
+            text: 'Seleccionar moneda',
+            desc: 'Bs. o USD según autorización',
           },
-
           {
             icon: 'bank' as const,
-            text: 'Indique institución financiera, fecha, monto y número de operación.',
+            text: 'Datos del pago',
+            desc: 'Institución, fecha, monto y operación',
           },
-
           {
             icon: 'file' as const,
-            text: 'Adjunte el comprobante de pago (JPG, PNG o PDF, máx. 5 MB).',
+            text: 'Comprobante',
+            desc: 'JPG, PNG o PDF, máx. 5 MB',
           },
-
           {
             icon: 'check' as const,
-            text: 'Al enviar, el recibo se enviará al correo del deudor y podrá descargarlo aquí.',
+            text: 'Confirmar y enviar',
+            desc: 'Recibo al correo registrado',
           },
         ]
       : [
           {
             icon: 'id' as const,
-            text: 'Ingrese su número de cédula (V, E, G o J + dígitos).',
+            text: 'Tu cédula',
+            desc: '(V, E, G o J + dígitos)',
           },
-
           {
             icon: 'path' as const,
-            text: 'Segun su cedula: autorizada en bolivares podra elegir Bs. o USD; de lo contrario, solo USD.',
+            text: 'Tu moneda',
+            desc: 'Bs. o USD según tu cuenta',
           },
-
           {
             icon: 'bank' as const,
-            text: 'Indique institución financiera, fecha, monto y número de operación.',
+            text: 'Datos del pago',
+            desc: 'Banco, fecha, monto y número',
           },
-
           {
             icon: 'file' as const,
-            text: 'Adjunte el comprobante de pago (JPG, PNG o PDF, máx. 5 MB).',
+            text: 'Comprobante',
+            desc: 'JPG, PNG o PDF, máx. 5 MB',
           },
-
           {
             icon: 'check' as const,
-            text: 'Revise los datos y envíe. Recibirá confirmación al correo registrado.',
+            text: 'Confirmar y enviar',
+            desc: 'Confirmación por correo',
           },
         ]
 
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-50 via-[#e8eef5] to-slate-100 p-3 sm:p-4">
+      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
         <div
           role="status"
           aria-live="polite"
@@ -808,160 +810,241 @@ export default function ReportePagoPage({
           {messageForScreenReader || stepAnnouncement}
         </div>
 
-        <Card className="mx-1 w-full min-w-0 max-w-lg overflow-hidden border border-slate-200/80 shadow-2xl sm:mx-0">
-          {/* Header con logo RapiCredit: fondo blanco para compatibilidad del logo */}
+        <div className="w-full max-w-4xl">
+          {/* Main container con layout responsive */}
+          <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+            {/* Sección izquierda: Branding */}
+            <div className="flex flex-col justify-center space-y-6 px-2 sm:px-0">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={LOGO_PUBLIC_SRC}
+                    alt="RapiCredit"
+                    className="h-12 object-contain sm:h-14"
+                  />
+                  <div>
+                    <p className="text-2xl font-bold text-white sm:text-3xl">
+                      RapiCredit
+                    </p>
+                    <p className="text-xs text-slate-400 sm:text-sm">
+                      Sistema de Cobranza
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-          <div className="rounded-t-lg border-b border-slate-100 bg-white px-4 py-5 text-center sm:px-6 sm:py-6">
-            <div className="inline-flex flex-col items-center justify-center">
-              <img
-                src={LOGO_PUBLIC_SRC}
-                alt="RapiCredit"
-                className="mx-auto h-14 object-contain sm:h-16"
-              />
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold text-white sm:text-4xl">
+                  {isInfopagos ? 'Registra pagos' : 'Reporta tu pago'}
+                </h1>
+                <p className="text-base leading-relaxed text-slate-300 sm:text-lg">
+                  {isInfopagos
+                    ? 'Registra el pago del deudor de forma segura. El recibo se enviará automáticamente al correo del deudor.'
+                    : 'Reporta tu pago de forma segura. Te enviaremos la confirmación al correo registrado en tu contrato.'}
+                </p>
+              </div>
 
-              <p className="mt-2 text-sm font-semibold text-[#c4a35a] sm:mt-3 sm:text-base">
-                {isInfopagos ? 'Infopagos' : 'Reporte de pago'}
-              </p>
+              {/* Info boxes */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-start gap-3 rounded-lg bg-white/10 p-3 backdrop-blur-sm">
+                  <svg
+                    className="h-5 w-5 flex-shrink-0 text-emerald-400 sm:h-6 sm:w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  <span className="text-sm text-slate-200 sm:text-base">
+                    Proceso rápido y seguro
+                  </span>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg bg-white/10 p-3 backdrop-blur-sm">
+                  <svg
+                    className="h-5 w-5 flex-shrink-0 text-emerald-400 sm:h-6 sm:w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                  <span className="text-sm text-slate-200 sm:text-base">
+                    Datos cifrados y protegidos
+                  </span>
+                </div>
+              </div>
             </div>
+
+            {/* Sección derecha: Card con pasos */}
+            <Card className="mx-1 border-0 bg-white shadow-2xl sm:mx-0">
+              <CardContent className="space-y-4 p-5 sm:space-y-5 sm:p-6">
+                <div className="border-b border-slate-100 pb-4">
+                  <h2 className="text-xl font-semibold text-slate-900">
+                    {isInfopagos ? 'Pasos del registro' : 'Cómo reportar'}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Sigue estos {steps.length} sencillos pasos
+                  </p>
+                </div>
+
+                {/* Progress dots */}
+                <div className="flex gap-1 sm:gap-1.5">
+                  {steps.map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-1 flex-1 rounded-full bg-slate-200"
+                    />
+                  ))}
+                </div>
+
+                {/* Steps list */}
+                <ul className="space-y-2.5" role="list">
+                  {steps.map((item, i) => (
+                    <li
+                      key={i}
+                      className="flex gap-3 rounded-lg bg-slate-50 p-3 hover:bg-slate-100 transition-colors"
+                    >
+                      <span
+                        className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#1e3a5f] text-xs font-semibold text-white"
+                        aria-hidden
+                      >
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {item.text}
+                        </p>
+                        <p className="text-xs text-slate-600">{item.desc}</p>
+                      </div>
+                      {item.icon === 'id' && (
+                        <svg
+                          className="h-5 w-5 flex-shrink-0 text-slate-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"
+                          />
+                        </svg>
+                      )}
+                      {item.icon === 'path' && (
+                        <svg
+                          className="h-5 w-5 flex-shrink-0 text-slate-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 4v5m-3 3l3-3 3 3M12 9v11M7 20h10"
+                          />
+                        </svg>
+                      )}
+                      {item.icon === 'bank' && (
+                        <svg
+                          className="h-5 w-5 flex-shrink-0 text-slate-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                          />
+                        </svg>
+                      )}
+                      {item.icon === 'file' && (
+                        <svg
+                          className="h-5 w-5 flex-shrink-0 text-slate-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                      )}
+                      {item.icon === 'check' && (
+                        <svg
+                          className="h-5 w-5 flex-shrink-0 text-slate-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Info y CTA */}
+                <div className="space-y-3 border-t border-slate-100 pt-4">
+                  <p className="text-xs leading-snug text-slate-500">
+                    Los datos se almacenarán de forma segura y se utilizarán
+                    únicamente para verificar tu pago.
+                  </p>
+                  <Button
+                    className="min-h-[48px] w-full touch-manipulation bg-[#1e3a5f] text-base font-semibold text-white shadow-md transition-all hover:bg-[#152a47] hover:shadow-lg"
+                    size="lg"
+                    onClick={() => setStep(1)}
+                  >
+                    {isInfopagos ? 'Comenzar' : 'Iniciar reportes'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          <CardContent className="space-y-5 p-4 sm:space-y-6 sm:p-6 md:p-8">
-            <div className="text-center">
-              <h2 className="text-lg font-semibold text-[#1e3a5f] sm:text-xl">
-                {isInfopagos ? 'Pago a nombre del deudor' : 'Bienvenido'}
-              </h2>
-
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                {isInfopagos
-                  ? 'Registre el pago del deudor. El recibo se enviará a su correo y podrá descargarlo aquí para compartirlo.'
-                  : 'Reporte su pago de forma segura para que sea verificado por cobranza.'}
-              </p>
-            </div>
-
-            <ul className="space-y-3" role="list">
-              {steps.map((item, i) => (
-                <li
-                  key={i}
-                  className="flex items-start gap-3 text-sm text-slate-700"
-                >
-                  <span
-                    className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f]"
-                    aria-hidden
-                  >
-                    {item.icon === 'id' && (
-                      <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"
-                        />
-                      </svg>
-                    )}
-
-                    {item.icon === 'bank' && (
-                      <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                        />
-                      </svg>
-                    )}
-
-                    {item.icon === 'path' && (
-                      <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 4v5m-3 3l3-3 3 3M12 9v11M7 20h10"
-                        />
-                      </svg>
-                    )}
-
-                    {item.icon === 'file' && (
-                      <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                    )}
-
-                    {item.icon === 'check' && (
-                      <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    )}
-                  </span>
-
-                  <span className="pt-1">{item.text}</span>
-                </li>
-              ))}
-            </ul>
-
-            <p className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-center text-xs text-slate-500">
-              Los datos se comprobarán y almacenarán únicamente para validación
-              del pago.
+          {/* Footer mínimo */}
+          <div className="mt-6 text-center text-xs text-slate-400">
+            <p>
+              ¿Preguntas? Contacta a cobranza por
+              <a
+                href={WHATSAPP_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-1 text-emerald-400 underline hover:text-emerald-300"
+              >
+                WhatsApp
+              </a>
             </p>
-
-            <p className="text-center text-xs text-slate-500">
-              Si desea reportar más de un pago, al finalizar cada envío use el
-              botón «Ingresar otro pago» o reinicie el proceso.
-            </p>
-
-            <Button
-              className="min-h-[48px] w-full touch-manipulation bg-[#1e3a5f] py-5 text-base font-semibold text-white shadow-md transition-all hover:bg-[#152a47] hover:shadow-lg sm:py-6"
-              size="lg"
-              onClick={() => setStep(1)}
-            >
-              {isInfopagos ? 'Registrar pago del deudor' : 'Iniciar reporte'}
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     )
   }
 
   if (step === 1) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 sm:p-4">
-        {/* Zona de mensajes para lectores de pantalla (aria-live) */}
-
+      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
         <div
           role="status"
           aria-live="polite"
@@ -970,8 +1053,6 @@ export default function ReportePagoPage({
         >
           {messageForScreenReader || stepAnnouncement}
         </div>
-
-        {/* Honeypot: campo oculto para usuarios, visible para bots. No usar en navegación ni leer en pantalla. */}
 
         <input
           ref={honeypotRef}
@@ -990,41 +1071,48 @@ export default function ReportePagoPage({
           }}
         />
 
-        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-3 px-1 sm:px-0">
+        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-1 sm:px-0">
           <NotificationBanner
             notification={notification}
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md">
-            <CardHeader className="px-4 pb-2 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">
-                {isInfopagos ? 'Cédula del deudor' : 'Reporte de pago'}
-              </CardTitle>
-
-              <p className="mt-1 text-sm text-gray-600">
-                Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni
-                signos. Si solo ingresa números se procesará con V.
+          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+            <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  1
+                </div>
+                <CardTitle className="text-lg sm:text-xl m-0">
+                  {isInfopagos ? 'Cédula del deudor' : 'Tu cédula'}
+                </CardTitle>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                Formato: Letra (V, E, G o J) seguida de 6 a 11 dígitos. Sin puntos ni signos.
               </p>
             </CardHeader>
 
-            <CardContent className="space-y-4 px-4 sm:px-6">
+            <CardContent className="space-y-4 px-5 sm:px-6">
               <Input
-                className="min-h-[44px] touch-manipulation"
-                placeholder="Ej: V12345678, E12345678 o 12345678"
+                className="min-h-[48px] touch-manipulation bg-slate-50 border-slate-200"
+                placeholder="Ej: V12345678 o 12345678"
                 value={cedula}
-                onChange={e => setCedula(e.target.value)}
+                onChange={e => setCedula(normalizarCedulaInput(e.target.value))}
                 onKeyDown={e => e.key === 'Enter' && handleValidarCedula()}
                 maxLength={20}
               />
 
               <Button
-                className="min-h-[48px] w-full touch-manipulation"
+                className="min-h-[48px] w-full touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                 onClick={handleValidarCedula}
                 disabled={loading}
               >
                 {loading ? 'Verificando...' : 'Continuar'}
               </Button>
+
+              <p className="text-xs text-slate-500 text-center">
+                Presiona Enter o haz clic en continuar
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -1034,7 +1122,7 @@ export default function ReportePagoPage({
 
   if (step === 2) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 sm:p-4">
+      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
         <div
           role="status"
           aria-live="polite"
@@ -1044,74 +1132,103 @@ export default function ReportePagoPage({
           {messageForScreenReader || stepAnnouncement}
         </div>
 
-        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-3 px-1 sm:px-0">
+        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-1 sm:px-0">
           <NotificationBanner
             notification={notification}
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">
-                {isInfopagos ? 'Deudor: ' : 'Hola, '}
-                {nombre || (isInfopagos ? '-' : 'Cliente')}
-              </CardTitle>
-
-              <p className="mt-2 text-sm text-gray-600">
+          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+            <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  2
+                </div>
+                <CardTitle className="text-lg sm:text-xl m-0">
+                  {isInfopagos ? `Deudor: ${nombre || '-'}` : `Hola, ${nombre || 'Cliente'}`}
+                </CardTitle>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
                 {isInfopagos
-                  ? 'Ingrese los datos del pago del deudor. El recibo se enviará a su correo registrado.'
-                  : 'Recuerda ingresar únicamente datos de tu pago que se comprobarán y almacenarán para fines de validación de pago.'}
+                  ? 'Verifica la moneda disponible para este deudor'
+                  : 'Selecciona la moneda en la que reportarás tu pago'}
               </p>
             </CardHeader>
 
-            <CardContent className="space-y-4 px-4 sm:px-6">
-              <div
-                role="region"
-                aria-label="Opciones de moneda segun su cedula"
-                className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm text-slate-700"
-              >
-                <p className="font-semibold text-[#1e3a5f]">
-                  Su camino de reporte (moneda)
-                </p>
-                {puedeReportarBs ? (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md border border-emerald-200 bg-white p-3 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
-                        Bolivares (Bs.)
-                      </p>
-                      <p className="mt-1 text-xs leading-snug text-slate-600">
-                        Puede reportar en bolivares. El recibo usara la tasa
-                        oficial del dia de su fecha de pago; en sistema se
-                        registra el equivalente en USD con esa misma tasa. Monto
-                        permitido: 1 a 10.000.000 Bs.
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[#1e3a5f]">
-                        Dolares (USD)
-                      </p>
-                      <p className="mt-1 text-xs leading-snug text-slate-600">
-                        Tambien puede reportar en USD. El monto y el recibo iran
-                        en dolares.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
-                      Solo dolares (USD)
+            <CardContent className="space-y-4 px-5 sm:px-6">
+              {puedeReportarBs ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    onClick={() => setMoneda('BS')}
+                    className={`relative rounded-lg border-2 p-4 text-left transition-all ${
+                      moneda === 'BS'
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <p className="font-semibold text-slate-900">Bolivares</p>
+                    <p className="mt-1 text-xs text-slate-600">Bs.</p>
+                    <p className="mt-2 text-xs leading-snug text-slate-500">
+                      Monto: 1 a 10M Bs. Tasa oficial del día.
                     </p>
-                    <p className="mt-1 text-xs leading-snug text-amber-950/90">
-                      Su cedula no esta en la lista para pagos en bolivares.
-                      Indique el monto en USD; el recibo y la verificacion seran
-                      en dolares.
+                    {moneda === 'BS' && (
+                      <div className="absolute right-3 top-3 h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                        <svg
+                          className="h-3 w-3 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setMoneda('USD')}
+                    className={`relative rounded-lg border-2 p-4 text-left transition-all ${
+                      moneda === 'USD'
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <p className="font-semibold text-slate-900">Dólares</p>
+                    <p className="mt-1 text-xs text-slate-600">USD / $</p>
+                    <p className="mt-2 text-xs leading-snug text-slate-500">
+                      Monto: cualquier cantidad válida en USD.
                     </p>
-                  </div>
-                )}
-              </div>
+                    {moneda === 'USD' && (
+                      <div className="absolute right-3 top-3 h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center">
+                        <svg
+                          className="h-3 w-3 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+                  <p className="font-semibold text-amber-900">Solo dólares (USD)</p>
+                  <p className="mt-2 text-sm leading-snug text-amber-900/80">
+                    Esta cédula no está autorizada para reportar en bolivares.
+                    Por favor, reporta el monto en USD.
+                  </p>
+                </div>
+              )}
 
               <Button
-                className="min-h-[48px] w-full touch-manipulation"
+                className="min-h-[48px] w-full touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                 onClick={() => setStep(3)}
               >
                 Continuar
@@ -1125,7 +1242,7 @@ export default function ReportePagoPage({
 
   if (step === 3) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 sm:p-4">
+      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
         <div
           role="status"
           aria-live="polite"
@@ -1135,28 +1252,35 @@ export default function ReportePagoPage({
           {messageForScreenReader || stepAnnouncement}
         </div>
 
-        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-3 px-1 sm:px-0">
+        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-1 sm:px-0">
           <NotificationBanner
             notification={notification}
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">
-                Institución financiera
-              </CardTitle>
+          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+            <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  3
+                </div>
+                <CardTitle className="text-lg sm:text-xl m-0">
+                  Institución financiera
+                </CardTitle>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                Selecciona el banco o plataforma donde se realizó el pago
+              </p>
             </CardHeader>
 
-            <CardContent className="space-y-4 px-4 sm:px-6">
+            <CardContent className="space-y-4 px-5 sm:px-6">
               <select
-                className="min-h-[44px] w-full min-w-0 touch-manipulation rounded-md border bg-white px-3 py-2.5 text-base"
+                className="min-h-[48px] w-full min-w-0 touch-manipulation rounded-lg border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium focus:border-slate-900 focus:outline-none"
                 value={institucion}
                 onChange={e => setInstitucion(e.target.value)}
                 aria-label="Seleccione la institución financiera"
               >
-                <option value="">Seleccione...</option>
-
+                <option value="">Selecciona una opción...</option>
                 {INSTITUCIONES.map(opt => (
                   <option key={opt} value={opt}>
                     {opt}
@@ -1166,41 +1290,39 @@ export default function ReportePagoPage({
 
               {institucion === 'Otros' && (
                 <Input
-                  className="min-h-[44px] touch-manipulation"
-                  placeholder="Nombre del banco"
+                  className="min-h-[48px] touch-manipulation bg-slate-50 border-slate-200"
+                  placeholder="Nombre del banco o plataforma"
                   value={institucionOtros}
                   onChange={e => setInstitucionOtros(e.target.value)}
                   maxLength={MAX_LENGTH_INSTITUCION}
                 />
               )}
 
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
                 <Button
                   variant="outline"
-                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
                   onClick={() => setStep(2)}
                 >
                   Atrás
                 </Button>
 
                 <Button
-                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
                     if (!institucionFinal.trim()) {
                       showNotification(
                         'error',
-                        'Seleccione la institución financiera.'
+                        'Selecciona la institución financiera.'
                       )
-
                       return
                     }
 
                     if (institucionFinal.length > MAX_LENGTH_INSTITUCION) {
                       showNotification(
                         'error',
-                        'Nombre de institución demasiado largo. Redúzcalo.'
+                        'El nombre es demasiado largo. Redúcelo.'
                       )
-
                       return
                     }
 
@@ -1219,7 +1341,7 @@ export default function ReportePagoPage({
 
   if (step === 4) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 sm:p-4">
+      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
         <div
           role="status"
           aria-live="polite"
@@ -1229,75 +1351,66 @@ export default function ReportePagoPage({
           {messageForScreenReader || stepAnnouncement}
         </div>
 
-        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-3 px-1 sm:px-0">
+        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-1 sm:px-0">
           <NotificationBanner
             notification={notification}
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md">
-            <CardHeader className="space-y-2 px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">
-                Fecha y monto del pago
-              </CardTitle>
-
-              <p className="text-sm font-medium text-[#1e3a5f]">
-                {moneda === 'BS'
-                  ? 'Camino activo: bolivares (Bs.)'
-                  : 'Camino activo: dolares (USD)'}
+          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+            <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  4
+                </div>
+                <CardTitle className="text-lg sm:text-xl m-0">
+                  Fecha y monto
+                </CardTitle>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                Modalidad: {moneda === 'BS' ? 'bolivares (Bs.)' : 'dólares (USD)'}
               </p>
             </CardHeader>
 
-            <CardContent className="space-y-4 px-4 sm:px-6">
-              <div
-                role="status"
-                className={
-                  moneda === 'BS'
-                    ? 'rounded-md border border-emerald-200 bg-emerald-50/80 p-3 text-xs leading-snug text-emerald-950'
-                    : 'rounded-md border border-slate-200 bg-white p-3 text-xs leading-snug text-slate-700'
-                }
-              >
-                {moneda === 'BS' ? (
-                  <p>
-                    Indique el monto de su comprobante en{' '}
-                    <strong>bolivares</strong>. El recibo mostrara el monto en
-                    Bs. y la{' '}
-                    <strong>tasa oficial del dia de la fecha de pago</strong>.
-                    En sistema se guarda el equivalente en USD con esa misma
-                    tasa.
-                  </p>
-                ) : (
-                  <p>
-                    Indique el monto en <strong>dolares (USD)</strong>. El
-                    recibo y la verificacion usaran USD.
-                  </p>
-                )}
+            <CardContent className="space-y-4 px-5 sm:px-6">
+              <div className="rounded-lg bg-slate-50 p-3 border border-slate-200">
+                <p className="text-xs font-medium text-slate-700">
+                  {moneda === 'BS' ? (
+                    <>
+                      Ingresa el monto en <strong>bolivares</strong>. El recibo
+                      mostrará la <strong>tasa oficial del día</strong> de la
+                      fecha de pago.
+                    </>
+                  ) : (
+                    <>
+                      Ingresa el monto en <strong>USD</strong>. El recibo y la
+                      verificación serán en dólares.
+                    </>
+                  )}
+                </p>
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Fecha de pago (obligatorio)
+                <label className="mb-2 block text-sm font-semibold text-slate-900">
+                  Fecha de pago
                 </label>
-
                 <Input
                   type="date"
-                  className="min-h-[44px] w-full touch-manipulation"
+                  className="min-h-[48px] w-full touch-manipulation bg-slate-50 border-slate-200"
                   value={fechaPago}
                   onChange={e => setFechaPago(e.target.value)}
                   max={new Date().toISOString().slice(0, 10)}
                   aria-label="Seleccione la fecha en el calendario"
                 />
-
-                <p className="mt-1 text-xs text-gray-500">
-                  Seleccione la fecha en el calendario. No puede ser futura.
+                <p className="mt-1 text-xs text-slate-500">
+                  No puede ser una fecha futura
                 </p>
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Monto (obligatorio)
+                <label className="mb-2 block text-sm font-semibold text-slate-900">
+                  Monto
                 </label>
-
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     type="number"
@@ -1305,47 +1418,43 @@ export default function ReportePagoPage({
                     min={moneda === 'BS' ? MIN_MONTO_BS_REPORTAR : MIN_MONTO}
                     max={moneda === 'BS' ? MAX_MONTO_BS_REPORTAR : MAX_MONTO}
                     placeholder={moneda === 'BS' ? 'Ej: 1500.00' : 'Ej: 150.50'}
-                    className="min-h-[44px] min-w-0 flex-1 touch-manipulation"
+                    className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-50 border-slate-200"
                     value={monto}
                     onChange={e => setMonto(e.target.value)}
                   />
-
                   <select
-                    className="min-h-[44px] w-full flex-shrink-0 touch-manipulation rounded-md border bg-white px-3 py-2.5 text-base sm:w-24"
+                    className="min-h-[48px] w-full flex-shrink-0 touch-manipulation rounded-lg border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium focus:border-slate-900 focus:outline-none sm:w-24"
                     value={moneda}
                     onChange={e => setMoneda(e.target.value as 'BS' | 'USD')}
                     aria-label="Moneda"
                   >
                     {puedeReportarBs && <option value="BS">Bs.</option>}
-
-                    <option value="USD">USD / $</option>
+                    <option value="USD">USD</option>
                   </select>
                 </div>
-
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-slate-500">
                   {moneda === 'BS'
-                    ? 'En bolivares: entre 1 y 10.000.000 Bs. La fecha de pago define la tasa en el recibo.'
-                    : 'En USD: mayor a 0. Maximo permitido 999.999.999,99.'}
+                    ? 'Entre 1 y 10.000.000 Bs.'
+                    : 'Máximo permitido: 999.999.999,99'}
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
                 <Button
                   variant="outline"
-                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
                   onClick={() => setStep(3)}
                 >
                   Atrás
                 </Button>
 
                 <Button
-                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
                     const vF = validarFechaPago(fechaPago)
 
                     if (!vF.valido) {
                       showNotification('error', vF.error ?? 'Fecha inválida.')
-
                       return
                     }
 
@@ -1353,7 +1462,6 @@ export default function ReportePagoPage({
 
                     if (!vM.valido) {
                       showNotification('error', vM.error ?? 'Monto inválido.')
-
                       return
                     }
 
@@ -1372,7 +1480,7 @@ export default function ReportePagoPage({
 
   if (step === 5) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 sm:p-4">
+      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
         <div
           role="status"
           aria-live="polite"
@@ -1382,62 +1490,65 @@ export default function ReportePagoPage({
           {messageForScreenReader || stepAnnouncement}
         </div>
 
-        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-3 px-1 sm:px-0">
+        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-1 sm:px-0">
           <NotificationBanner
             notification={notification}
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">
-                Número de documento / operación
-              </CardTitle>
-              <p className="text-xs leading-snug text-slate-600">
+          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+            <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  5
+                </div>
+                <CardTitle className="text-lg sm:text-xl m-0">
+                  Número de operación
+                </CardTitle>
+              </div>
+              <p className="mt-2 text-xs leading-snug text-slate-600">
                 {TEXTO_AVISO_NUMERO_OPERACION_FORMULARIO}
               </p>
             </CardHeader>
 
-            <CardContent className="space-y-4 px-4 sm:px-6">
+            <CardContent className="space-y-4 px-5 sm:px-6">
               <Input
-                className="min-h-[44px] touch-manipulation"
-                placeholder="Número de serie, operación o referencia"
+                className="min-h-[48px] touch-manipulation bg-slate-50 border-slate-200"
+                placeholder="Número de serie, transacción o referencia"
                 value={numeroDocumento}
                 onChange={e => setNumeroDocumento(e.target.value)}
                 maxLength={MAX_LENGTH_NUMERO_OPERACION}
               />
 
-              <p className="text-xs text-gray-500">
-                Máximo {MAX_LENGTH_NUMERO_OPERACION} caracteres.
+              <p className="text-xs text-slate-500">
+                Máximo {MAX_LENGTH_NUMERO_OPERACION} caracteres
               </p>
 
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
                 <Button
                   variant="outline"
-                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
                   onClick={() => setStep(4)}
                 >
                   Atrás
                 </Button>
 
                 <Button
-                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
                     if (!numeroDocumento.trim()) {
                       showNotification(
                         'error',
-                        'Ingrese el número de documento u operación.'
+                        'Ingresa el número de operación.'
                       )
-
                       return
                     }
 
                     if (numeroDocumento.length > MAX_LENGTH_NUMERO_OPERACION) {
                       showNotification(
                         'error',
-                        'Número de documento demasiado largo.'
+                        'El número es demasiado largo.'
                       )
-
                       return
                     }
 
@@ -1456,7 +1567,7 @@ export default function ReportePagoPage({
 
   if (step === 6) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 sm:p-4">
+      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
         <div
           role="status"
           aria-live="polite"
@@ -1466,57 +1577,74 @@ export default function ReportePagoPage({
           {messageForScreenReader || stepAnnouncement}
         </div>
 
-        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-3 px-1 sm:px-0">
+        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-1 sm:px-0">
           <NotificationBanner
             notification={notification}
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">
-                Comprobante de pago
-              </CardTitle>
-
-              <p className="text-sm text-gray-600">
-                Un solo archivo por envío. JPG, PNG o PDF. Máximo 5 MB.
-              </p>
-
-              <p className="mt-1 text-xs text-amber-700">
-                Si desea reportar otro pago, al finalizar use «Ingresar otro
-                pago» o reinicie el proceso.
+          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+            <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  6
+                </div>
+                <CardTitle className="text-lg sm:text-xl m-0">
+                  Comprobante de pago
+                </CardTitle>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                JPG, PNG o PDF. Máximo 5 MB.
               </p>
             </CardHeader>
 
-            <CardContent className="space-y-4 px-4 sm:px-6">
+            <CardContent className="space-y-4 px-5 sm:px-6">
               {archivo ? (
-                <>
-                  <div className="break-words rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700">
-                    <p className="font-medium">Comprobante seleccionado:</p>
-
-                    <p className="mt-1 break-all">
-                      {archivo.name} ({(archivo.size / 1024).toFixed(1)} KB)
-                    </p>
-
-                    <p className="mt-2 text-xs text-amber-700">
-                      No se puede agregar otra imagen en este envío. Para otro
-                      pago, finalice y use «Ingresar otro pago».
-                    </p>
+                <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-emerald-900">
+                        Archivo seleccionado
+                      </p>
+                      <p className="mt-1 break-all text-sm text-emerald-800">
+                        {archivo.name}
+                      </p>
+                      <p className="mt-1 text-xs text-emerald-700">
+                        {(archivo.size / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <svg
+                        className="h-5 w-5 text-emerald-600"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
                   </div>
-                </>
+                </div>
               ) : (
                 <Input
                   type="file"
-                  className="min-h-[44px] touch-manipulation file:mr-2 file:rounded-md file:border-0 file:bg-[#1e3a5f] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
+                  className="min-h-[48px] touch-manipulation file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
                   accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
                   onChange={e => setArchivo(e.target.files?.[0] || null)}
                 />
               )}
 
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+              <p className="text-xs text-slate-600">
+                Carga el comprobante del pago realizado (factura de pago, captura de pantalla, etc.)
+              </p>
+
+              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
                 <Button
                   variant="outline"
-                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
                   onClick={() => {
                     setArchivo(null)
                     setStep(5)
@@ -1526,13 +1654,12 @@ export default function ReportePagoPage({
                 </Button>
 
                 <Button
-                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
                     const v = validarArchivo(archivo)
 
                     if (!v.valido) {
                       showNotification('error', v.error ?? 'Archivo inválido.')
-
                       return
                     }
 
@@ -1551,7 +1678,7 @@ export default function ReportePagoPage({
 
   if (step === 7) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 sm:p-4">
+      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
         <div
           role="status"
           aria-live="polite"
@@ -1561,102 +1688,104 @@ export default function ReportePagoPage({
           {messageForScreenReader || stepAnnouncement}
         </div>
 
-        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-3 px-1 sm:px-0">
+        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-1 sm:px-0">
           <NotificationBanner
             notification={notification}
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">
-                Confirma los siguientes datos
-              </CardTitle>
+          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+            <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  7
+                </div>
+                <CardTitle className="text-lg sm:text-xl m-0">
+                  Confirma tus datos
+                </CardTitle>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                Revisa la información antes de enviar
+              </p>
             </CardHeader>
 
-            <CardContent className="space-y-2 break-words px-4 text-sm sm:px-6">
-              <p>
-                <strong>Cédula:</strong> {cedula}
-              </p>
+            <CardContent className="space-y-3 px-5 sm:px-6">
+              {/* Summary grid */}
+              <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Cédula:</span>
+                  <span className="font-semibold text-slate-900">{cedula}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Nombre:</span>
+                  <span className="font-semibold text-slate-900">{nombre}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Institución:</span>
+                  <span className="font-semibold text-slate-900 text-right">
+                    {institucionFinal}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Fecha:</span>
+                  <span className="font-semibold text-slate-900">{fechaPago}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Monto:</span>
+                  <span className="font-semibold text-slate-900">
+                    {monto} {moneda}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Operación:</span>
+                  <span className="font-semibold text-slate-900">
+                    {numeroDocumento}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Archivo:</span>
+                  <span className="font-semibold text-slate-900 text-right max-w-[150px] truncate">
+                    {archivo?.name}
+                  </span>
+                </div>
+              </div>
 
-              <p>
-                <strong>Nombre:</strong> {nombre}
-              </p>
+              {/* Info note */}
+              <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
+                <p className="text-xs leading-snug text-blue-900">
+                  {isInfopagos ? (
+                    <>
+                      El recibo se enviará a{' '}
+                      <strong className="break-all">
+                        {emailParaVerificacion || 'correo registrado'}
+                      </strong>
+                    </>
+                  ) : (
+                    <>
+                      Se enviará confirmación a{' '}
+                      <strong className="break-all">
+                        {emailParaVerificacion || 'tu correo registrado'}
+                      </strong>
+                    </>
+                  )}
+                </p>
+              </div>
 
-              <p>
-                <strong>Institución:</strong> {institucionFinal}
-              </p>
-
-              <p>
-                <strong>Fecha de pago:</strong> {fechaPago}
-              </p>
-
-              <p>
-                <strong>Monto:</strong> {monto} {moneda}
-              </p>
-
-              <p className="text-xs text-slate-600">
-                {moneda === 'BS'
-                  ? 'Recibo en bolivares; tasa oficial del dia de la fecha de pago. Equivalente USD en sistema con esa tasa.'
-                  : 'Recibo y registro en dolares (USD).'}
-              </p>
-
-              <p>
-                <strong>Número de operación:</strong> {numeroDocumento}
-              </p>
-
-              <p>
-                <strong>Comprobante:</strong> {archivo?.name}
-              </p>
-            </CardContent>
-
-            <CardContent className="space-y-3 px-4 pt-0 sm:px-6">
-              <p className="break-words text-sm text-gray-600">
-                {isInfopagos ? (
-                  <>
-                    Si el comprobante coincide con los datos, el recibo se
-                    enviará al correo del deudor (
-                    <span className="break-all rounded bg-blue-50 px-1.5 py-0.5 font-semibold text-[#1e3a5f]">
-                      {emailParaVerificacion || 'correo registrado'}
-                    </span>
-                    ) y podrá descargarlo aquí. Si queda en revisión manual
-                    (mismo flujo que Pagos reportados), no se envía recibo ni
-                    descarga hasta que cobranzas apruebe.
-                  </>
-                ) : (
-                  <>
-                    Tu pago se procesará y se enviará al correo registrado en tu
-                    contrato de financiamiento (
-                    <span className="break-all rounded bg-blue-50 px-1.5 py-0.5 font-semibold text-[#1e3a5f]">
-                      {emailParaVerificacion || 'correo registrado'}
-                    </span>
-                    ). Si tienes algún problema con el correo, contacta a{' '}
-                    <a
-                      href="mailto:cobranza@rapicreditca.com"
-                      className="break-all font-semibold text-[#1e3a5f] underline hover:no-underline"
-                    >
-                      cobranza@rapicreditca.com
-                    </a>{' '}
-                    o a tu asesor para actualización.
-                  </>
-                )}
-              </p>
-
-              <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+              <div className="flex flex-wrap gap-2 sm:flex-nowrap pt-2">
                 <Button
                   variant="outline"
-                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
                   onClick={() => setStep(6)}
                 >
-                  No, editar
+                  Editar
                 </Button>
 
                 <Button
-                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation"
+                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-emerald-600 font-semibold text-white hover:bg-emerald-700"
                   onClick={handleEnviar}
                   disabled={loading}
                 >
-                  {loading ? 'Enviando...' : 'Sí, enviar'}
+                  {loading ? 'Enviando...' : 'Confirmar y enviar'}
                 </Button>
               </div>
             </CardContent>
@@ -1666,10 +1795,9 @@ export default function ReportePagoPage({
     )
   }
 
-  // step === 8: confirmación final
-
+  // step === 8: pantalla final de confirmación
   return (
-    <div className="flex min-h-[100dvh] min-h-screen items-center justify-center overflow-x-hidden bg-slate-50 p-3 sm:p-4">
+    <div className="flex min-h-[100dvh] min-h-screen items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
       <div
         role="status"
         aria-live="polite"
@@ -1679,112 +1807,125 @@ export default function ReportePagoPage({
         {messageForScreenReader || stepAnnouncement}
       </div>
 
-      <Card className="mx-1 w-full min-w-0 max-w-md text-center sm:mx-0">
-        <CardHeader className="px-4 sm:px-6">
-          <CardTitle className="text-base text-green-700 sm:text-lg">
-            {isInfopagos
-              ? infopagosEnRevision
-                ? 'Reporte enviado - en revisión manual.'
-                : 'Pago registrado correctamente.'
-              : 'Tu reporte de pago fue recibido exitosamente.'}
-          </CardTitle>
-        </CardHeader>
+      <Card className="mx-1 w-full min-w-0 max-w-md border-0 bg-white shadow-2xl sm:mx-0">
+        <CardContent className="space-y-5 px-5 pt-6 sm:px-6 sm:pt-8">
+          {/* Success icon */}
+          <div className="flex justify-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 sm:h-20 sm:w-20">
+              <svg
+                className="h-8 w-8 text-emerald-600 sm:h-10 sm:w-10"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+          </div>
 
-        <CardContent className="space-y-4 px-4 sm:px-6">
-          <div className="break-words text-base sm:text-lg">
-            <p className="font-semibold">Número de referencia:</p>
-
-            <p
-              className="mt-1 inline-block select-all break-all rounded bg-gray-100 px-2 py-1 font-mono"
-              title="Copiar"
-            >
-              {referencia?.startsWith('#') ? referencia : `#${referencia}`}
+          {/* Title */}
+          <div className="text-center space-y-2">
+            <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
+              {isInfopagos
+                ? infopagosEnRevision
+                  ? 'Reporte registrado'
+                  : 'Pago confirmado'
+                : 'Envío exitoso'}
+            </h2>
+            <p className="text-sm text-slate-600">
+              {isInfopagos
+                ? 'El pago del deudor ha sido registrado correctamente'
+                : 'Tu pago ha sido recibido y se está procesando'}
             </p>
           </div>
 
+          {/* Reference number */}
+          <div className="rounded-lg bg-slate-50 p-4 text-center">
+            <p className="text-xs font-semibold uppercase text-slate-600">
+              Número de referencia
+            </p>
+            <p className="mt-2 break-all font-mono text-lg font-bold text-slate-900 select-all">
+              {referencia?.startsWith('#') ? referencia : `#${referencia}`}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              Guarda este número para seguimiento
+            </p>
+          </div>
+
+          {/* Cuotas info */}
           {isInfopagos && aplicadoCuotas ? (
-            <div className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-left text-sm">
-              <p className="font-semibold text-[#1e3a5f]">Abono aplicado a</p>
-
-              <p className="mt-1 font-mono text-slate-800">{aplicadoCuotas}</p>
-
-              <p className="mt-1 text-xs text-slate-600">
-                Mismo dato aparece en el PDF del recibo.
+            <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-3">
+              <p className="text-xs font-semibold text-blue-900">
+                Abono aplicado a:
               </p>
+              <p className="mt-1 font-mono text-sm text-blue-900">{aplicadoCuotas}</p>
             </div>
           ) : null}
 
+          {/* Status message */}
           {isInfopagos ? (
-            <>
-              <p className="text-left text-xs leading-snug text-slate-600">
-                En RapiCredit (menú Pagos, Cobros, Pagos reportados) aparece la
-                misma fila que cualquier otro reporte web: mismas reglas de
-                revisión, aprobación y anti-duplicado.
+            <div className="rounded-lg bg-amber-50 p-4 text-center border border-amber-200">
+              <p className="text-sm text-amber-900">
+                {infopagosEnRevision
+                  ? 'Este reporte quedó en revisión manual. El recibo se enviará cuando sea aprobado.'
+                  : 'Se envió el recibo al correo del deudor. Puedes descargarlo a continuación.'}
               </p>
-
-              {infopagosEnRevision ? (
-                <p className="text-sm text-gray-600">
-                  El comprobante quedó en revisión manual en Pagos reportados.
-                  No se envió recibo al deudor ni hay descarga aquí hasta que
-                  cobranzas apruebe. Use la referencia para dar seguimiento en
-                  el módulo de cobros.
-                </p>
-              ) : (
-                <>
-                  <p className="text-sm text-gray-600">
-                    Se envió el recibo al correo registrado del deudor (según
-                    cédula). Puede descargar el recibo aquí para compartirlo.
-                  </p>
-
-                  {reciboToken && pagoId != null && (
-                    <Button
-                      className="min-h-[48px] w-full touch-manipulation gap-2"
-                      onClick={handleDescargarRecibo}
-                      disabled={descargandoRecibo}
-                    >
-                      {descargandoRecibo
-                        ? 'Descargando...'
-                        : 'Descargar recibo (PDF)'}
-                    </Button>
-                  )}
-                </>
-              )}
-            </>
+            </div>
           ) : (
-            <p className="text-sm text-gray-600">
-              El recibo (PDF) se enviará a tu correo registrado en un plazo de
-              hasta 24 horas.
-            </p>
+            <div className="rounded-lg bg-blue-50 p-4 text-center border border-blue-200">
+              <p className="text-sm text-blue-900">
+                El recibo PDF será enviado a tu correo en los próximos minutos.
+              </p>
+            </div>
           )}
 
-          <p className="break-words text-sm">
-            Si necesitas información adicional, comunícate con nosotros por
-            WhatsApp:{' '}
-            <a
-              href={WHATSAPP_LINK}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 underline"
+          {/* Download button */}
+          {isInfopagos && !infopagosEnRevision && reciboToken && pagoId != null && (
+            <Button
+              className="min-h-[48px] w-full touch-manipulation bg-blue-600 font-semibold text-white hover:bg-blue-700"
+              onClick={handleDescargarRecibo}
+              disabled={descargandoRecibo}
             >
-              424-4579934
-            </a>
-          </p>
+              {descargandoRecibo ? 'Descargando...' : '⬇️ Descargar recibo (PDF)'}
+            </Button>
+          )}
 
+          {/* Action buttons */}
           <div className="flex flex-col gap-3 pt-4 sm:flex-row">
             <Button
               variant="outline"
-              className="min-h-[48px] flex-1 touch-manipulation"
+              className="min-h-[48px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
               onClick={() => resetForm(0)}
             >
-              {isInfopagos ? 'Terminar' : 'Termina'}
+              Terminar
             </Button>
 
             <Button
-              className="min-h-[48px] flex-1 touch-manipulation bg-[#1e3a5f] hover:bg-[#152a47]"
+              className="min-h-[48px] flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
               onClick={() => resetForm(1)}
             >
-              {isInfopagos ? 'Registrar otro pago' : 'Ingresar otro pago'}
+              {isInfopagos ? 'Otro pago' : 'Otro reporte'}
             </Button>
+          </div>
+
+          {/* Support info */}
+          <div className="border-t border-slate-100 pt-4 text-center">
+            <p className="text-xs text-slate-600">
+              ¿Necesitas ayuda?{' '}
+              <a
+                href={WHATSAPP_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-emerald-600 hover:text-emerald-700"
+              >
+                Contacta por WhatsApp
+              </a>
+            </p>
           </div>
         </CardContent>
       </Card>
