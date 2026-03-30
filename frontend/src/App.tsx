@@ -12,6 +12,8 @@ import { Layout } from './components/layout/Layout'
 
 import { SimpleProtectedRoute } from './components/auth/SimpleProtectedRoute'
 
+import { FiniquitadorGuard } from './components/auth/FiniquitadorGuard'
+
 import { useSimpleAuth } from './store/simpleAuthStore'
 
 import { getFiniquitoAccessToken } from './services/finiquitoService'
@@ -61,6 +63,12 @@ function RootLayoutWrapper() {
     return <Navigate to="/acceso-limitado" replace />
   }
 
+  // GUARD FINIQUITADOR: Si usuario es finiquitador puro, SOLO puede acceder a /finiquitos/gestion
+  const isPuroFiniquitador = user && (user.rol || 'operativo').toLowerCase() === 'finiquitador'
+  if (isPuroFiniquitador && pathname !== '/finiquitos/gestion') {
+    return <Navigate to="/finiquitos/gestion" replace />
+  }
+
   const esGestionFiniquito = pathname === '/finiquitos/gestion'
 
   const tokenPortalFiniquito = getFiniquitoAccessToken()?.trim()
@@ -96,7 +104,9 @@ function RootLayoutWrapper() {
 
   return (
     <SimpleProtectedRoute>
-      <Layout />
+      <FiniquitadorGuard>
+        <Layout />
+      </FiniquitadorGuard>
     </SimpleProtectedRoute>
   )
 }

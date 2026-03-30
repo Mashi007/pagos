@@ -54,6 +54,44 @@ export function usePermissions() {
   }
 
   /**
+   * Verifica si el usuario SOLO tiene acceso a finiquito (rol finiquitador puro)
+   * - Sin acceso a ninguna otra funcionalidad
+   */
+
+  const isPuroFiniquitador = (): boolean => {
+    const rol = (user?.rol || 'operativo').toLowerCase()
+    return rol === 'finiquitador'
+  }
+
+  /**
+   * Verifica si una ruta está permitida para el usuario actual
+   * - Finiquitador: SOLO /finiquitos/gestion
+   * - Administrador: todas
+   * - Operativo: reportes, préstamos, etc (excluyendo finiquito gestion)
+   */
+
+  const canAccessPath = (pathname: string): boolean => {
+    const rol = (user?.rol || 'operativo').toLowerCase()
+
+    // Finiquitador: solo acceso a /finiquitos/gestion
+    if (rol === 'finiquitador') {
+      return pathname === '/finiquitos/gestion'
+    }
+
+    // Administrador: acceso total
+    if (rol === 'administrador') {
+      return true
+    }
+
+    // Operativo: acceso a todo excepto finiquito gestion
+    if (rol === 'operativo') {
+      return pathname !== '/finiquitos/gestion'
+    }
+
+    return true
+  }
+
+  /**
 
 
 
@@ -337,6 +375,10 @@ export function usePermissions() {
     isAdmin: isAdmin(),
 
     isFiniquitador: isFiniquitador(),
+
+    isPuroFiniquitador: isPuroFiniquitador(),
+
+    canAccessPath,
 
     canEditPrestamo,
 
