@@ -161,12 +161,6 @@ function validarMonto(
       error: 'El monto debe ser mayor a ' + String(MIN_MONTO) + '.',
     }
 
-  if (num > MAX_MONTO)
-    return {
-      valido: false,
-      error: 'Monto demasiado alto. Revise el valor e intente de nuevo.',
-    }
-
   return { valido: true, valor: num }
 }
 function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
@@ -389,6 +383,8 @@ export default function ReportePagoPage({
 
   const [notification, setNotification] = useState<NotificationState>(null)
 
+  const [montoAltoConfirmado, setMontoAltoConfirmado] = useState(false)
+
   const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
@@ -422,6 +418,11 @@ export default function ReportePagoPage({
     },
     []
   )
+
+  // Resetear confirmación de monto alto cuando cambia el monto o moneda
+  useEffect(() => {
+    setMontoAltoConfirmado(false)
+  }, [monto, moneda])
 
   // Marcar flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver
 
@@ -471,6 +472,8 @@ export default function ReportePagoPage({
     setAplicadoCuotas(null)
 
     setInfopagosEnRevision(false)
+
+    setMontoAltoConfirmado(false)
 
     setStep(irAStep)
   }
@@ -1416,7 +1419,6 @@ export default function ReportePagoPage({
                     type="number"
                     step="0.01"
                     min={moneda === 'BS' ? MIN_MONTO_BS_REPORTAR : MIN_MONTO}
-                    max={moneda === 'BS' ? MAX_MONTO_BS_REPORTAR : MAX_MONTO}
                     placeholder={moneda === 'BS' ? 'Ej: 1500.00' : 'Ej: 150.50'}
                     className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-50 border-slate-200"
                     value={monto}
@@ -1435,7 +1437,7 @@ export default function ReportePagoPage({
                 <p className="mt-1 text-xs text-slate-500">
                   {moneda === 'BS'
                     ? 'Entre 1 y 10.000.000 Bs.'
-                    : 'Máximo permitido: 999.999.999,99'}
+                    : 'Ingresa el monto en USD (sin límite máximo)'}
                 </p>
               </div>
 
@@ -1462,6 +1464,17 @@ export default function ReportePagoPage({
 
                     if (!vM.valido) {
                       showNotification('error', vM.error ?? 'Monto inválido.')
+                      return
+                    }
+
+                    // Validar monto alto (>= 4000)
+                    const montoNumerico = vM.valor ?? 0
+                    if (montoNumerico >= 4000 && !montoAltoConfirmado) {
+                      showNotification(
+                        'error',
+                        '⚠️ Monto alto - Verifica que sea en Bs y no en USD.'
+                      )
+                      setMontoAltoConfirmado(true)
                       return
                     }
 
