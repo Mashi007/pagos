@@ -175,6 +175,7 @@ import ReportePagoPage from './pages/ReportePagoPage'
 import InfopagosPage from './pages/InfopagosPage'
 
 import EstadoCuentaPublicoPage from './pages/EstadoCuentaPublicoPage'
+import { EstadoCuentaPublicoSinCodigoPage } from './pages/EstadoCuentaPublicoSinCodigoPage'
 
 import { FiniquitoRootPage } from './pages/FiniquitoRootPage'
 
