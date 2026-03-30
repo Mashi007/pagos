@@ -5664,6 +5664,8 @@ def diagnostico_pago(pago_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/forzar-eliminar/{pago_id}", response_model=dict)
+@router.post("/forzar-eliminar/{pago_id}", response_model=dict)
+@router.get("/forzar-eliminar/{pago_id}", response_model=dict)
 def forzar_eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
     """Eliminacion forzada: limpia TODAS las dependencias y borra el pago con SQL directo."""
     import logging
