@@ -140,11 +140,43 @@ export function EstadoCuentaPublicoSinCodigoPage() {
   const handleDescargarPDF = async () => {
     setDescargando(true)
     try {
-      await solicitarEstadoCuenta(cedulaValidada)
-      setNotification({
-        type: 'success',
-        message: 'Estado de cuenta descargado. También se envió a tu email.',
-      })
+      const res = await solicitarEstadoCuenta(cedulaValidada)
+
+      if (!res.ok) {
+        setNotification({
+          type: 'error',
+          message: res.error || 'Error al descargar estado de cuenta',
+        })
+        setDescargando(false)
+        return
+      }
+
+      // Si tiene PDF en base64, descargar
+      if (res.pdf_base64) {
+        const bin = atob(res.pdf_base64)
+        const bytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+        const blob = new Blob([bytes], { type: 'application/pdf' })
+        const url = URL.createObjectURL(blob)
+
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `estado_cuenta_${cedulaValidada}.pdf`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+
+        setNotification({
+          type: 'success',
+          message: 'Estado de cuenta descargado. También se envió a tu email.',
+        })
+      } else {
+        setNotification({
+          type: 'success',
+          message: 'Estado de cuenta enviado a tu email.',
+        })
+      }
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Error al descargar'
       setNotification({ type: 'error', message: msg })
