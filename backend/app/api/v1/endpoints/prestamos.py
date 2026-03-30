@@ -3977,7 +3977,7 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         # Normalizar ambas fechas a date para comparación correcta
         ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
-        req_date = row.fecha_requerimiento.date() if hasattr(row.fecha_requerimiento, "date") else row.fecha_requerimiento
+        req_date = row.fecha_requerimiento  # Esto ya es date (desde BD)
 
         if req_date > ap_date:
 

@@ -690,15 +690,15 @@ export function CrearPrestamoForm({
         delete prestamoData.estado
       }
 
-      // Formatear fechas como ISO datetime completo
+      // Formatear fechas como ISO completo (datetime)
+      // fecha_requerimiento: solo date (YYYY-MM-DD) porque en BD es Date
       if (fechaReq !== '') {
-        prestamoData.fecha_requerimiento = `${fechaReq}T00:00:00`
+        prestamoData.fecha_requerimiento = fechaReq  // Sin hora, solo YYYY-MM-DD
       } else {
         delete prestamoData.fecha_requerimiento
       }
 
-      // No enviar fecha_aprobacion vacía: FastAPI rechaza "" como datetime (422).
-
+      // fecha_aprobacion: datetime completo porque en BD es DateTime
       if (fechaApr !== '') {
         prestamoData.fecha_aprobacion = `${fechaApr}T00:00:00`
       } else {
