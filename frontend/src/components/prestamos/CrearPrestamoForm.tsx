@@ -111,6 +111,52 @@ function fechaInputYmd(v: unknown): string {
   return s.length >= 10 ? s.slice(0, 10) : s
 }
 
+/**
+ * Normaliza entrada de fecha desde input type="date" al formato YYYY-MM-DD.
+ * El navegador puede devolver en diferentes formatos según localización.
+ */
+function normalizarFechaInput(valor: string): string {
+  if (!valor) return ''
+  
+  const s = valor.trim()
+  
+  // Si ya está en formato YYYY-MM-DD, devolverlo
+  if (s.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return s
+  }
+  
+  // Si está en formato DD/MM/YYYY, convertir a YYYY-MM-DD
+  if (s.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+    const [day, month, year] = s.split('/')
+    return `${year}-${month}-${day}`
+  }
+  
+  // Si está en formato MM/DD/YYYY (formato EUA), convertir a YYYY-MM-DD
+  // Detectar: si primer número > 12, es DD, sino intenta ambos órdenes
+  if (s.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+    const parts = s.split('/')
+    const num1 = parseInt(parts[0], 10)
+    const num2 = parseInt(parts[1], 10)
+    
+    // Si el primer número > 12, definitivamente es DD/MM/YYYY
+    if (num1 > 12) {
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+    }
+    
+    // Si el segundo número > 12, definitivamente es MM/DD/YYYY
+    if (num2 > 12) {
+      return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
+    }
+    
+    // Ambos son válidos como día y mes, asumir formato local del navegador
+    // En este caso, devolver tal cual esperando que sea YYYY-MM-DD o dejar para Pydantic
+    return s
+  }
+  
+  // Formato desconocido, devolver tal cual
+  return s
+}
+
 /** Colapsa espacios para comparar modelo guardado vs catalogo. */
 function normalizarTextoModelo(s: string): string {
   return String(s || '')
@@ -1466,13 +1512,15 @@ export function CrearPrestamoForm({
                         <Input
                           type="date"
                           value={formData.fecha_aprobacion || ''}
-                          onChange={e =>
+                          onChange={e => {
+                            // Normalizar fecha al formato YYYY-MM-DD
+                            const valor = e.target.value
+                            const fechaNormalizada = normalizarFechaInput(valor)
                             setFormData({
                               ...formData,
-
-                              fecha_aprobacion: e.target.value || undefined,
+                              fecha_aprobacion: fechaNormalizada || undefined,
                             })
-                          }
+                          }}
                           disabled={isReadOnly}
                           className="flex-1"
                         />
