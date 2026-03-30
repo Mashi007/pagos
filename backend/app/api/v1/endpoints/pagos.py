@@ -47,7 +47,7 @@ from fastapi.responses import StreamingResponse
 
 from pydantic import BaseModel, field_validator
 
-from sqlalchemy import and_, case, delete, exists, func, or_, select
+from sqlalchemy import and_, case, delete, exists, func, or_, select, text
 
 from sqlalchemy.orm import Session
 
@@ -5594,7 +5594,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
 def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
 
-    """Elimina un pago de la tabla pagos."""
+    """Elimina un pago de la tabla pagos y limpia dependencias."""
 
     row = db.get(Pago, pago_id)
 
@@ -5602,9 +5602,29 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
 
         raise HTTPException(status_code=404, detail="Pago no encontrado")
 
-    db.delete(row)
+    prestamo_id_previo = row.prestamo_id
 
-    db.commit()
+    try:
+        db.execute(text("DELETE FROM cuota_pagos WHERE pago_id = :pid"), {"pid": pago_id})
+        db.execute(text("DELETE FROM auditoria_conciliacion_manual WHERE pago_id = :pid"), {"pid": pago_id})
+        db.execute(text("UPDATE cuotas SET pago_id = NULL WHERE pago_id = :pid"), {"pid": pago_id})
+        db.execute(text("DELETE FROM revisar_pagos WHERE pago_id = :pid"), {"pid": pago_id})
+
+        db.delete(row)
+        db.flush()
+
+        if prestamo_id_previo:
+            _marcar_prestamo_liquidado_si_corresponde(prestamo_id_previo, db)
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).error("Error eliminando pago %s: %s", pago_id, e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al eliminar pago {pago_id}: {str(e)[:200]}"
+        ) from e
 
     return None
 
