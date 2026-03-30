@@ -2657,8 +2657,11 @@ def recalcular_fechas_amortizacion(
     # Recalcular fechas y estados
     resultado = _recalcular_fechas_vencimiento_cuotas(db, p, fecha_base)
 
+    _fallback_uid = db.execute(
+        text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")
+    ).scalar() or 1
     audit_recalc = Auditoria(
-        usuario_id=_audit_user_id(db, current_user),
+        usuario_id=_fallback_uid,
         accion="RECALCULO_FECHAS_AMORTIZACION",
         entidad="prestamos",
         entidad_id=prestamo_id,
@@ -4133,7 +4136,7 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
             )
             resultado_recalc = _recalcular_fechas_vencimiento_cuotas(db, row, fecha_base)
             _fallback_uid = db.execute(
-                text("SELECT id FROM public.usuarios WHERE is_active = true ORDER BY id LIMIT 1")
+                text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")
             ).scalar() or 1
             audit_recalc = Auditoria(
                 usuario_id=_fallback_uid,
