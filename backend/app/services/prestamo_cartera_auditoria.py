@@ -48,7 +48,7 @@ CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
 # Identificador estable de la definicion de controles en este modulo (17 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "18cupo-j-max5-2026-03-29"
+AUDITORIA_CARTERA_REGLAS_VERSION = "19dup-cedula-j-cupo-2026-03-29"
 
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
@@ -279,17 +279,32 @@ def ejecutar_auditoria_cartera(
 
     prestamo_ids = [int(r[0]) for r in rows_p]
 
-    # Cedulas con mas de un prestamo en APROBADO (misma cedula)
+    # Cedulas con mas prestamos APROBADO de los permitidos por prefijo (alineado a cupo E/V=1, J=5).
+    _j_max_dup = max_aprobados_permitidos_por_prefijo("J")
+    _ev_max_dup = max_aprobados_permitidos_por_prefijo("E")
+    if _j_max_dup is None:
+        _j_max_dup = 5
+    if _ev_max_dup is None:
+        _ev_max_dup = 1
     dup_cedulas_rows = db.execute(
         text(
             """
-            SELECT UPPER(TRIM(BOTH FROM cedula)) AS ced_norm, COUNT(*) AS n
-            FROM prestamos
-            WHERE estado = 'APROBADO'
-            GROUP BY UPPER(TRIM(BOTH FROM cedula))
-            HAVING COUNT(*) > 1
+            WITH agr AS (
+              SELECT UPPER(TRIM(BOTH FROM cedula)) AS ced_norm, COUNT(*)::int AS n
+              FROM prestamos
+              WHERE estado = 'APROBADO'
+              GROUP BY UPPER(TRIM(BOTH FROM cedula))
+            )
+            SELECT ced_norm FROM agr
+            WHERE ced_norm IS NOT NULL
+              AND TRIM(BOTH FROM ced_norm::text) <> ''
+              AND (
+                (SUBSTRING(agr.ced_norm FROM 1 FOR 1) = 'J' AND agr.n > :j_max)
+                OR (SUBSTRING(agr.ced_norm FROM 1 FOR 1) <> 'J' AND agr.n > :ev_max)
+              )
             """
-        )
+        ),
+        {"j_max": _j_max_dup, "ev_max": _ev_max_dup},
     ).fetchall()
     dup_cedulas = {str(r[0]).strip() for r in dup_cedulas_rows if r[0]}
 
@@ -556,9 +571,13 @@ def ejecutar_auditoria_cartera(
         dup_prest = "SI" if ced_norm_upper in dup_cedulas else "NO"
         add_control(
             "prestamos_duplicados_misma_cedula",
-            "Varios prestamos APROBADO misma cedula (duplicidad activa)",
+            "Prestamos APROBADO misma cedula por encima del cupo (E/V max 1, J max 5)",
             dup_prest,
-            "Existe otro prestamo APROBADO en cartera con la misma cedula" if dup_prest == "SI" else "Unico o sin otro APROBADO duplicado por cedula",
+            (
+                "Mas APROBADOS con esta cedula que el permitido (E/V mas de 1, J mas de 5)"
+                if dup_prest == "SI"
+                else "En cupo: hasta 1 APROBADO (E/V) o hasta 5 (J) con la misma cedula normalizada"
+            ),
         )
 
         if estado_p == "APROBADO":

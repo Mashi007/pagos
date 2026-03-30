@@ -15,7 +15,7 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
   {
     n: 2,
     codigo: 'prestamos_duplicados_misma_cedula',
-    titulo: 'Varios prestamos APROBADO misma cedula (duplicidad activa)',
+    titulo: 'Prestamos APROBADO misma cedula por encima del cupo (E/V max 1, J max 5)',
   },
   {
     n: 3,
