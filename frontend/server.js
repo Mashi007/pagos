@@ -407,6 +407,24 @@ app.get('/reportes/*', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/reportes' + subpath + qs(req));
 });
 
+// Ruta pública: estado de cuenta sin base -> redirigir a /pagos/rapicredit-estadocuenta
+app.get('/rapicredit-estadocuenta', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/rapicredit-estadocuenta' + qs(req));
+});
+app.get('/rapicredit-estadocuenta/*', (req, res) => {
+  const subpath = req.path.slice('/rapicredit-estadocuenta'.length);
+  res.redirect(302, FRONTEND_BASE + '/rapicredit-estadocuenta' + subpath + qs(req));
+});
+
+// Ruta pública: reporte de pagos sin base -> redirigir a /pagos/rapicredit-reporte-pagos
+app.get('/rapicredit-reporte-pagos', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/rapicredit-reporte-pagos' + qs(req));
+});
+app.get('/rapicredit-reporte-pagos/*', (req, res) => {
+  const subpath = req.path.slice('/rapicredit-reporte-pagos'.length);
+  res.redirect(302, FRONTEND_BASE + '/rapicredit-reporte-pagos' + subpath + qs(req));
+});
+
 // /prestamos sin base -> redirigir a /pagos/prestamos (evita 404 al abrir o compartir /prestamos)
 app.get('/prestamos', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/prestamos' + qs(req));
