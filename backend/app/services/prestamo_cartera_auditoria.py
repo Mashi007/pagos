@@ -48,7 +48,7 @@ CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
 # Identificador estable de la definicion de controles en este modulo (17 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "19dup-cedula-j-cupo-2026-03-29"
+AUDITORIA_CARTERA_REGLAS_VERSION = "20cedula-prestamo-cliente-api-2026-03-29"
 
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
@@ -562,7 +562,7 @@ def ejecutar_auditoria_cartera(
         ced_mismatch = "SI" if nc_p != nc_c else "NO"
         add_control(
             "cedula_cliente_vs_prestamo",
-            "Cedula cliente vs prestamo",
+            "Cedula cliente vs prestamo (API alinea al guardar)",
             ced_mismatch,
             f"Prestamo={nc_p or cedula_p} Cliente={nc_c or cedula_c}" if ced_mismatch == "SI" else "Coinciden",
         )

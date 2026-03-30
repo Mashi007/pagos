@@ -216,6 +216,12 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                     Observaciones
                   </p>
 
+                  <p className="mb-4 text-sm text-amber-900">
+                    La cédula de cada fila debe existir como cliente con la misma
+                    cédula en ficha: el préstamo se guarda con la cédula del
+                    cliente. Filas sin cédula en cliente serán rechazadas.
+                  </p>
+
                   <Button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessing}

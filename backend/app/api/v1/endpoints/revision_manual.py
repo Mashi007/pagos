@@ -22,6 +22,10 @@ from app.models.revision_manual_prestamo import RevisionManualPrestamo
 from app.models.estado_cliente import EstadoCliente
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 from app.services.prestamo_estado_coherencia import prestamo_bloquea_nuevas_cuotas_o_cambio_plazo
+from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
+    PrestamoCedulaClienteError,
+    asegurar_prestamo_alineado_con_cliente,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -583,9 +587,7 @@ def editar_prestamo_revision(
         cambios_dict['observaciones'] = (prestamo.observaciones, update_data.observaciones)
         prestamo.observaciones = update_data.observaciones
 
-    if update_data.cedula is not None and update_data.cedula.strip():
-        cambios_dict['cedula'] = (prestamo.cedula, update_data.cedula.strip())
-        prestamo.cedula = update_data.cedula.strip()
+    # La cedula del prestamo debe coincidir con la del cliente; no se edita aqui (use ficha cliente).
 
     if update_data.nombres is not None and update_data.nombres.strip():
         cambios_dict['nombres'] = (prestamo.nombres, update_data.nombres.strip())
@@ -665,6 +667,11 @@ def editar_prestamo_revision(
                 status_code=400,
                 detail=f"La fecha de aprobación ({ap_date}) debe ser igual o posterior a la fecha de requerimiento ({req_date}).",
             )
+
+    try:
+        asegurar_prestamo_alineado_con_cliente(db, prestamo)
+    except PrestamoCedulaClienteError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     prestamo.fecha_actualizacion = datetime.now()
     

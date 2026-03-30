@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
+from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 from app.models.cliente_con_error import ClienteConError
 from .prestamos_excepciones import (
     PrestamoValidationError,
@@ -263,20 +264,17 @@ class PrestamosValidacion:
 
     def validar_cedula_unica_por_cliente(self, cliente_id: int, cedula: str) -> bool:
         """
-        Valida que la cédula corresponda al cliente.
-        En la BD, cada cliente debe tener cédula consistente.
+        Valida que la cédula enviada coincida con la ficha del cliente (misma regla que auditoria).
         """
-        prestamos_cliente = self.db.query(Prestamo).filter(
-            Prestamo.cliente_id == cliente_id
-        ).all()
-
-        if prestamos_cliente:
-            cedula_registrada = prestamos_cliente[0].cedula
-            if cedula_registrada != cedula:
-                raise PrestamoConflictError(
-                    f"Cédula '{cedula}' no coincide con la registrada '{cedula_registrada}' para cliente {cliente_id}"
-                )
-
+        cliente = self.db.query(Cliente).filter(Cliente.id == cliente_id).first()
+        if not cliente:
+            raise ClienteNotFoundError(cliente_id)
+        n_in = normalizar_cedula_almacenamiento(cedula) or ""
+        n_cli = normalizar_cedula_almacenamiento(cliente.cedula) or ""
+        if n_in != n_cli:
+            raise PrestamoConflictError(
+                f"Cedula del prestamo debe coincidir con la del cliente (cliente_id={cliente_id})."
+            )
         return True
 
     def validar_codigo_ml_riesgo(self, codigo: Optional[str]) -> bool:

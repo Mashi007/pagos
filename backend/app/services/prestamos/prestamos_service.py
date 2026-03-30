@@ -10,6 +10,10 @@ from app.models.cliente import Cliente
 from .prestamos_validacion import PrestamosValidacion
 from .prestamos_calculo import PrestamosCalculo
 from .amortizacion_service import AmortizacionService
+from .prestamo_cedula_cliente_coherencia import (
+    PrestamoCedulaClienteError,
+    asegurar_prestamo_alineado_con_cliente,
+)
 from .prestamos_excepciones import (
     PrestamoNotFoundError,
     PrestamoValidationError,
@@ -71,10 +75,10 @@ class PrestamosService:
         modalidad = datos_prestamo.get('modalidad_pago', 'MENSUAL')
         self.validacion.validar_modalidad_pago(modalidad)
 
-        # Validar cédula
+        # Validar cédula (coherencia con ficha cliente; la persistida en prestamo sale del cliente)
         self.validacion.validar_cedula_unica_por_cliente(
             datos_prestamo['cliente_id'],
-            datos_prestamo['cedula']
+            cliente.cedula or "",
         )
 
         # Validar fechas si se proporcionan
@@ -110,10 +114,10 @@ class PrestamosService:
         if 'valor_activo' in datos_prestamo:
             self.validacion.validar_valor_activo(datos_prestamo['valor_activo'])
 
-        # Crear objeto Prestamo
+        # Crear objeto Prestamo (cedula siempre alineada al cliente)
         nuevo_prestamo = Prestamo(
             cliente_id=datos_prestamo['cliente_id'],
-            cedula=datos_prestamo['cedula'],
+            cedula=cliente.cedula or "",
             nombres=datos_prestamo['nombres'],
             total_financiamiento=total_financiamiento,
             fecha_requerimiento=datos_prestamo.get(
@@ -153,6 +157,16 @@ class PrestamosService:
             ),
             requiere_revision=datos_prestamo.get('requiere_revision', False),
         )
+
+        try:
+            asegurar_prestamo_alineado_con_cliente(
+                self.db,
+                nuevo_prestamo,
+                cliente=cliente,
+                estado_para_validar=estado,
+            )
+        except PrestamoCedulaClienteError as e:
+            raise PrestamoValidationError("cedula", str(e)) from e
 
         self.db.add(nuevo_prestamo)
         self.db.commit()
@@ -265,6 +279,11 @@ class PrestamosService:
             if hasattr(prestamo, campo):
                 setattr(prestamo, campo, valor)
 
+        try:
+            asegurar_prestamo_alineado_con_cliente(self.db, prestamo)
+        except PrestamoCedulaClienteError as e:
+            raise PrestamoValidationError("cedula", str(e)) from e
+
         self.db.add(prestamo)
         self.db.commit()
         self.db.refresh(prestamo)
@@ -316,6 +335,13 @@ class PrestamosService:
 
         if observaciones:
             prestamo.observaciones = observaciones
+
+        try:
+            asegurar_prestamo_alineado_con_cliente(
+                self.db, prestamo, estado_para_validar=nuevo_estado
+            )
+        except PrestamoCedulaClienteError as e:
+            raise PrestamoValidationError("cedula", str(e)) from e
 
         self.db.add(prestamo)
         self.db.commit()

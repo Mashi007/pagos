@@ -10,7 +10,7 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
   {
     n: 1,
     codigo: 'cedula_cliente_vs_prestamo',
-    titulo: 'Cedula cliente vs prestamo',
+    titulo: 'Cedula cliente vs prestamo (API alinea al guardar)',
   },
   {
     n: 2,

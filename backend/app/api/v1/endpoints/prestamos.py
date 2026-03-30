@@ -98,6 +98,11 @@ from app.services.cuota_estado import (
 )
 
 from app.services.prestamos.cupo_cedula_aprobados import validar_cupo_nuevo_prestamo_aprobado
+from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
+    PrestamoCedulaClienteError,
+    asegurar_prestamo_alineado_con_cliente,
+    exigir_cliente_cedula_para_prestamo_aprobado,
+)
 from app.services.prestamos.prestamo_huella import ensure_no_duplicate_aprobado_huella
 
 from app.services.prestamo_estado_coherencia import (
@@ -3758,6 +3763,16 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
     )
 
+    try:
+
+        asegurar_prestamo_alineado_con_cliente(
+            db, row, cliente=cliente, estado_para_validar=estado_inicial
+        )
+
+    except PrestamoCedulaClienteError as e:
+
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
     if not payload.omitir_validacion_huella_duplicada:
 
         ensure_no_duplicate_aprobado_huella(db, row, exclude_prestamo_id=None)
@@ -3987,6 +4002,14 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
             cli_des.estado = "FINALIZADO"
 
     try:
+
+        try:
+
+            asegurar_prestamo_alineado_con_cliente(db, row)
+
+        except PrestamoCedulaClienteError as e:
+
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         if (row.estado or "").upper() == "APROBADO":
 
@@ -4508,9 +4531,53 @@ async def upload_prestamos_excel(
 
                 try:
 
+                    exigir_cliente_cedula_para_prestamo_aprobado(cliente, "APROBADO")
+
                     validar_cupo_nuevo_prestamo_aprobado(
                         db, cliente.cedula or "", exclude_prestamo_id=None
                     )
+
+                except PrestamoCedulaClienteError as ced_exc:
+
+                    ced_msg = str(ced_exc)
+
+                    prestamo_error = PrestamoConError(
+
+                        cedula_cliente=cedula,
+
+                        total_financiamiento=monto,
+
+                        modalidad_pago=modalidad,
+
+                        numero_cuotas=cuotas,
+
+                        producto=producto,
+
+                        analista=analista,
+
+                        concesionario=concesionario,
+
+                        estado="PENDIENTE",
+
+                        errores_descripcion=ced_msg,
+
+                        fila_origen=idx,
+
+                        usuario_registro=usuario_email,
+
+                    )
+
+                    db.add(prestamo_error)
+
+                    registros_con_error += 1
+
+                    prestamos_con_errores.append(
+
+                        {"cedula": cedula, "fila": idx, "errores": ced_msg}
+
+                    )
+
+                    continue
 
                 except HTTPException as cupo_exc:
 
