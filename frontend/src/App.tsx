@@ -291,8 +291,6 @@ function App() {
 
             <Route path="informes" element={<EstadoCuentaPublicoPage />} />
 
-            <Route path="infopagos" element={<InfopagosPage />} />
-
             {/* Finiquito: portal OTP y gestion comparten URL /finiquitos/gestion (gate); panel redirige */}
 
             <Route path="finiquitos" element={<FiniquitoRootPage />} />
@@ -386,6 +384,10 @@ function App() {
               path="cobros/historico-cliente"
               element={<CobrosHistoricoPage />}
             />
+
+            {/* Infopagos: formulario de ingreso de pagos para colaboradores (requiere login) */}
+
+            <Route path="infopagos" element={<InfopagosPage />} />
 
             {/* Reportes */}
 
