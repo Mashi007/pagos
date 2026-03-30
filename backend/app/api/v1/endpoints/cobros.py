@@ -52,6 +52,7 @@ from app.services.tasa_cambio_service import (
     obtener_tasas_por_fechas,
     tasa_y_equivalente_usd_excel,
 )
+from app.services.pagos_gmail.gemini_service import compare_form_with_image
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -1910,3 +1911,88 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
             "Warning": '299 - "Use GET /pagos-reportados/exportar-aprobados-excel"',
         },
     )
+
+
+@router.post("/pagos-reportados/{pago_id}/re-analizar-gemini")
+def reanalizar_pago_con_gemini(
+    pago_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Re-analiza el comprobante de un pago reportado con Gemini.
+    Admin puede usar esto para forzar un nuevo escaneo si quiere revisar nuevamente.
+    
+    Actualiza:
+    - gemini_coincide_exacto (true/false/error)
+    - gemini_comentario (resultado del análisis)
+    
+    El estado (aprobado/en_revision) NO se cambia automáticamente.
+    Admin debe decidir manualmente luego de ver el nuevo resultado.
+    """
+    pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
+    if not pr:
+        raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
+    
+    # Verificar que hay comprobante guardado
+    if not pr.comprobante:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay comprobante guardado para este pago. No se puede re-analizar."
+        )
+    
+    # Preparar datos del formulario como estaban en el primer envío
+    form_data = {
+        "fecha_pago": str(pr.fecha_pago) if pr.fecha_pago else "",
+        "institucion_financiera": pr.institucion_financiera or "",
+        "numero_operacion": pr.numero_operacion or "",
+        "monto": str(pr.monto) if pr.monto else "",
+        "moneda": pr.moneda or "BS",
+        "tipo_cedula": pr.tipo_cedula or "",
+        "numero_cedula": pr.numero_cedula or "",
+    }
+    
+    logger.info(
+        "[COBROS] Re-analizar con Gemini: pago_id=%s ref=%s usuario=%s",
+        pago_id,
+        pr.referencia_interna,
+        current_user.get("email") if isinstance(current_user, dict) else "unknown",
+    )
+    
+    # Llamar a Gemini para re-analizar
+    try:
+        gemini_result = compare_form_with_image(
+            form_data,
+            pr.comprobante,
+            filename=f"comprobante_{pago_id}.jpg"
+        )
+        
+        coincide = gemini_result.get("coincide_exacto", False)
+        pr.gemini_coincide_exacto = "true" if coincide else "false"
+        pr.gemini_comentario = gemini_result.get("comentario")
+        
+        logger.info(
+            "[COBROS] Re-analizar Gemini OK: pago_id=%s coincide=%s",
+            pago_id, coincide
+        )
+        
+    except Exception as gemini_err:
+        # Si Gemini falla incluso tras reintentos
+        logger.warning(
+            "[COBROS] Re-analizar Gemini error pago_id=%s tras reintentos: %s",
+            pago_id, str(gemini_err)
+        )
+        pr.gemini_coincide_exacto = "error"
+        pr.gemini_comentario = f"Error Gemini en re-análisis (reintentado): {str(gemini_err)[:200]}"
+    
+    db.commit()
+    
+    # Retornar el nuevo resultado
+    return {
+        "ok": True,
+        "pago_id": pago_id,
+        "referencia_interna": pr.referencia_interna,
+        "gemini_coincide_exacto": pr.gemini_coincide_exacto,
+        "gemini_comentario": pr.gemini_comentario,
+        "mensaje": "Comprobante re-analizado. Verifica la observación antes de aprobar o rechazar.",
+    }
