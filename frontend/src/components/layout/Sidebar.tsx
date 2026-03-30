@@ -263,12 +263,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Reportes', href: '/reportes', icon: BarChart3 },
 
         {
-          title: 'Estado de cuenta',
-          href: '/informes',
-          icon: Download,
-        },
-
-        {
           title: 'Finiquito (gestión)',
           href: '/finiquitos/gestion',
           icon: Award,
