@@ -1,0 +1,58 @@
+# 🚀 EJECUTAR FASE 2 EN PARTES
+
+## ✅ 6 PARTES INDEPENDIENTES
+
+```bash
+# PARTE 1: Vista clientes_retrasados_mv
+psql $DATABASE_URL < backend/sql/034_FASE2_PARTE1.sql
+
+# PARTE 2: Tabla snapshot
+psql $DATABASE_URL < backend/sql/034_FASE2_PARTE2.sql
+
+# PARTE 3: Vista KPIs
+psql $DATABASE_URL < backend/sql/034_FASE2_PARTE3.sql
+
+# PARTE 4: Cachés en BD
+psql $DATABASE_URL < backend/sql/034_FASE2_PARTE4.sql
+
+# PARTE 5: Funciones y triggers
+psql $DATABASE_URL < backend/sql/034_FASE2_PARTE5.sql
+
+# PARTE 6: Índices adicionales
+psql $DATABASE_URL < backend/sql/034_FASE2_PARTE6.sql
+```
+
+---
+
+## 📊 QUÉ HACE CADA PARTE
+
+| Parte | Componentes | Latencia |
+|-------|------------|----------|
+| 1 | Vista clientes_retrasados_mv | 658ms → 50ms |
+| 2 | Tabla snapshot (acceso rápido) | Instant |
+| 3 | Vista KPIs (30 días) | 417ms → 50ms |
+| 4 | Cachés (adjuntos + email) | 760ms + 187ms → 200ms + 20ms |
+| 5 | Trigger automático + limpieza | Background |
+| 6 | Índices de optimización | Global |
+
+---
+
+## ✅ VERIFICACIÓN
+
+Al final de cada parte verás:
+```
+total_clientes_retrasados: 4266
+total: 0  (después actualizado)
+porcentaje_pagado: XX.XX
+...
+```
+
+---
+
+## 🎯 TIEMPO TOTAL
+
+~2-3 minutos (ejecutar secuencialmente)
+
+---
+
+**Commit:** `4bf82c35`
