@@ -280,7 +280,6 @@ def generar_pdf_estado_cuenta(
                 "",
                 "",
                 "",
-                "",
                 Paragraph(f"<b>{total_usd:,.2f}</b>", styles["Normal"]),
                 "",
             ]
