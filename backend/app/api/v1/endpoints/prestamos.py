@@ -3886,8 +3886,8 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
     # Debug logging
     logger.info(f"[update_prestamo] Inicio: prestamo_id={prestamo_id}")
-    logger.info(f"[update_prestamo] Payload recibido: fecha_requerimiento={payload.fecha_requerimiento}, fecha_aprobacion={payload.fecha_aprobacion}")
-    logger.info(f"[update_prestamo] BD antes: fecha_requerimiento={row.fecha_requerimiento}, fecha_aprobacion={row.fecha_aprobacion}")
+    logger.info(f"[update_prestamo] Payload raw recibido: fecha_requerimiento={payload.fecha_requerimiento} (type={type(payload.fecha_requerimiento).__name__}), fecha_aprobacion={payload.fecha_aprobacion} (type={type(payload.fecha_aprobacion).__name__})")
+    logger.info(f"[update_prestamo] BD antes: fecha_requerimiento={row.fecha_requerimiento} (type={type(row.fecha_requerimiento).__name__}), fecha_aprobacion={row.fecha_aprobacion} (type={type(row.fecha_aprobacion).__name__})")
 
     est_antes = (row.estado or "").strip().upper()
 
@@ -3987,7 +3987,7 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         row.tasa_interes = payload.tasa_interes
 
-    logger.info(f"[update_prestamo] BD después de aplicar cambios: fecha_requerimiento={row.fecha_requerimiento}, fecha_aprobacion={row.fecha_aprobacion}")
+    logger.info(f"[update_prestamo] BD después de aplicar cambios: fecha_requerimiento={row.fecha_requerimiento} (type={type(row.fecha_requerimiento).__name__}), fecha_aprobacion={row.fecha_aprobacion} (type={type(row.fecha_aprobacion).__name__})")
 
     # Coherencia: si hay fecha de aprobación, la fecha de requerimiento no puede ser posterior
 
@@ -3997,9 +3997,12 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
         ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
         req_date = row.fecha_requerimiento  # Esto ya es date (desde BD)
 
-        logger.info(f"[update_prestamo] Validación de coherencia: req_date={req_date} ({type(req_date)}), ap_date={ap_date} ({type(ap_date)})")
+        logger.info(f"[update_prestamo] Validación de coherencia: req_date={req_date} ({type(req_date).__name__}), ap_date={ap_date} ({type(ap_date).__name__})")
+        logger.info(f"[update_prestamo] Comparación: {req_date} > {ap_date} ? {req_date > ap_date}")
 
         if req_date > ap_date:
+
+            logger.error(f"[update_prestamo] VALIDACION FALLIDA: fecha_requerimiento ({req_date}) > fecha_aprobacion ({ap_date})")
 
             raise HTTPException(
 

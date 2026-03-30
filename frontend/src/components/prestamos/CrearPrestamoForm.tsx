@@ -78,8 +78,36 @@ import { ModalValidacionPrestamoExistente } from './ModalValidacionPrestamoExist
 function fechaInputYmd(v: unknown): string {
   if (v == null || v === '') return ''
 
-  const s = String(v)
-
+  const s = String(v).trim()
+  
+  // Si ya está en formato YYYY-MM-DD, devolverlo
+  if (s.match(/^\d{4}-\d{2}-\d{2}/)) {
+    return s.slice(0, 10)
+  }
+  
+  // Si está en formato DD/MM/YYYY, convertir a YYYY-MM-DD
+  if (s.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+    const parts = s.split('/')
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0')
+      const month = parts[1].padStart(2, '0')
+      const year = parts[2]
+      return `${year}-${month}-${day}`
+    }
+  }
+  
+  // Si está en formato DD-MM-YYYY, convertir a YYYY-MM-DD
+  if (s.match(/^\d{2}-\d{2}-\d{4}/)) {
+    const parts = s.split('-')
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0')
+      const month = parts[1].padStart(2, '0')
+      const year = parts[2]
+      return `${year}-${month}-${day}`
+    }
+  }
+  
+  // Fallback: tomar primeros 10 caracteres
   return s.length >= 10 ? s.slice(0, 10) : s
 }
 

@@ -85,19 +85,47 @@ class PrestamoUpdate(BaseModel):
     def parse_fechas_resiliente(cls, v):
         """
         Parsea fechas de manera resiliente.
-        Acepta: "2026-02-22", "2026-02-22T00:00:00", date, datetime.
+        Acepta múltiples formatos:
+        - YYYY-MM-DD (ISO)
+        - DD/MM/YYYY (formato local)
+        - YYYY-MM-DDTHH:MM:SS (ISO con hora)
+        - date/datetime objects
         """
         if v is None or v == "":
             return v
+        
         if isinstance(v, date) or isinstance(v, datetime):
             return v
+        
         if isinstance(v, str):
-            # Limpiar espacios
             v = v.strip()
+            
             # Si tiene hora, extraer solo fecha
-            if "T" in v or " " in v:
-                v = v.split("T")[0].split(" ")[0]
-            return v  # Pydantic parseará el string YYYY-MM-DD correctamente
+            if "T" in v:
+                v = v.split("T")[0]
+            elif " " in v:
+                v = v.split(" ")[0]
+            
+            # Intentar detectar y convertir DD/MM/YYYY a YYYY-MM-DD
+            if "/" in v:
+                try:
+                    parts = v.split("/")
+                    if len(parts) == 3:
+                        # Asumir DD/MM/YYYY si los valores parecen serlo
+                        day, month, year = parts
+                        day_int = int(day)
+                        month_int = int(month)
+                        year_int = int(year)
+                        
+                        # Validación básica
+                        if 1 <= day_int <= 31 and 1 <= month_int <= 12:
+                            # Convertir a YYYY-MM-DD para que Pydantic lo parsee
+                            v = f"{year_int:04d}-{month_int:02d}-{day_int:02d}"
+                except (ValueError, IndexError):
+                    pass  # Si falla, dejar el string original para que Pydantic lo intente
+            
+            return v  # Pydantic parseará el string correctamente
+        
         return v
 
     fecha_requerimiento: Optional[date] = None
