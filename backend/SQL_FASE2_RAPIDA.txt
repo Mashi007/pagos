@@ -1,0 +1,56 @@
+# 🚀 EJECUTAR MIGRACIÓN FASE 2
+
+## ⚡ OPCIÓN 1: SQL PURO (Recomendado)
+
+```bash
+psql $DATABASE_URL < backend/sql/034_FASE2_VISTAS_TRIGGERS_CACHE.sql
+```
+
+## ⚡ OPCIÓN 2: PowerShell (Windows)
+
+```powershell
+$sql = Get-Content backend/sql/034_FASE2_VISTAS_TRIGGERS_CACHE.sql
+$sql | psql $env:DATABASE_URL
+```
+
+## ⚡ OPCIÓN 3: DBeaver/pgAdmin
+
+1. Abrir Query Editor
+2. Copy-paste contenido de `034_FASE2_VISTAS_TRIGGERS_CACHE.sql`
+3. Ejecutar (F5)
+
+---
+
+## ✅ VERIFICACIÓN INMEDIATA
+
+```sql
+-- Debería mostrar:
+-- clientes_retrasados_mv: 4266 filas
+-- pagos_kpis_mv: 1 fila (últimos 30 días)
+
+SELECT * FROM clientes_retrasados_mv LIMIT 5;
+SELECT * FROM pagos_kpis_mv;
+```
+
+---
+
+## 📊 IMPACTO ESPERADO
+
+| Endpoint | Antes | Después | Mejora |
+|----------|-------|---------|--------|
+| `/clientes-retrasados` | 658ms | ~50ms | **-92%** |
+| `/dashboard/kpis` | 417ms | ~50ms | **-88%** |
+| Email config | 187ms | ~20ms | **-89%** |
+| Adjuntos fijos | 760ms | ~200ms | **-74%** |
+
+---
+
+## 🎯 COMMIT
+
+```
+b013a90b docs: agregar SQL puro para FASE 2
+```
+
+---
+
+**¡Listo para ejecutar ahora!** 🚀
