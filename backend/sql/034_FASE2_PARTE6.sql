@@ -8,7 +8,7 @@ WHERE estado = 'PAGADO';
 
 CREATE INDEX IF NOT EXISTS idx_cuotas_vencidas 
 ON cuotas (prestamo_id, fecha_vencimiento) 
-WHERE fecha_vencimiento < CURRENT_DATE AND estado != 'CANCELADA';
+WHERE estado != 'CANCELADA';
 
 CREATE INDEX IF NOT EXISTS idx_cliente_cedula_estado 
 ON clientes (cedula) 
