@@ -349,6 +349,22 @@ function App() {
 
             <Route path="prestamos" element={<Prestamos />} />
 
+            {/* Finiquitos: DEBE IR ANTES de /pagos para no ser capturado por <Route path="pagos"> */}
+
+            <Route path="finiquitos" element={<FiniquitoRootPage />} />
+
+            <Route path="finiquitos/acceso" element={<FiniquitoAccesoPage />} />
+
+            <Route
+              path="finiquitos/panel"
+              element={<Navigate to="/finiquitos/gestion" replace />}
+            />
+
+            <Route
+              path="finiquitos/gestion"
+              element={<FiniquitoGestionGatePage />}
+            />
+
             {/* Pagos (URL: /pagos/pagos con basename /pagos) */}
 
             <Route path="pagos">
@@ -388,22 +404,6 @@ function App() {
             {/* Informes: generador de estado de cuenta (requiere login) */}
 
             <Route path="informes" element={<EstadoCuentaPublicoPage />} />
-
-            {/* Finiquitos: portal de finiquitos (requiere login) */}
-
-            <Route path="finiquitos" element={<FiniquitoRootPage />} />
-
-            <Route path="finiquitos/acceso" element={<FiniquitoAccesoPage />} />
-
-            <Route
-              path="finiquitos/panel"
-              element={<Navigate to="/finiquitos/gestion" replace />}
-            />
-
-            <Route
-              path="finiquitos/gestion"
-              element={<FiniquitoGestionGatePage />}
-            />
 
             {/* Reportes */}
 
