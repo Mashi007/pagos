@@ -6,6 +6,8 @@
 
 -- 1. VISTA MATERIALIZADA: clientes_retrasados_mv
 -- ============================================================================
+DROP MATERIALIZED VIEW IF EXISTS clientes_retrasados_mv CASCADE;
+
 CREATE MATERIALIZED VIEW clientes_retrasados_mv AS
 SELECT 
     c.id, 
@@ -26,6 +28,8 @@ ON clientes_retrasados_mv (cedula);
 
 -- 2. TABLA SNAPSHOT: clientes_retraso_snapshot
 -- ============================================================================
+DROP TABLE IF EXISTS clientes_retraso_snapshot CASCADE;
+
 CREATE TABLE clientes_retraso_snapshot (
     cliente_id INT PRIMARY KEY,
     cedula VARCHAR(50),
@@ -44,6 +48,8 @@ ON clientes_retraso_snapshot (updated_at DESC);
 
 -- 3. VISTA MATERIALIZADA: pagos_kpis_mv
 -- ============================================================================
+DROP MATERIALIZED VIEW IF EXISTS pagos_kpis_mv CASCADE;
+
 CREATE MATERIALIZED VIEW pagos_kpis_mv AS
 SELECT 
     COUNT(*) as total_pagos,
@@ -68,6 +74,8 @@ ON pagos_kpis_mv (fecha_snapshot DESC);
 
 -- 4. TABLA CACHÉ: adjuntos_fijos_cache
 -- ============================================================================
+DROP TABLE IF EXISTS adjuntos_fijos_cache CASCADE;
+
 CREATE TABLE adjuntos_fijos_cache (
     id SERIAL PRIMARY KEY,
     caso VARCHAR(100) NOT NULL UNIQUE,
@@ -87,6 +95,8 @@ ON adjuntos_fijos_cache (created_at DESC);
 
 -- 5. TABLA CACHÉ: email_config_cache
 -- ============================================================================
+DROP TABLE IF EXISTS email_config_cache CASCADE;
+
 CREATE TABLE email_config_cache (
     id SERIAL PRIMARY KEY,
     config_key VARCHAR(100) NOT NULL UNIQUE,
