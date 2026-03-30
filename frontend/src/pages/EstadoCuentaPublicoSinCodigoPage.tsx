@@ -152,7 +152,10 @@ export function EstadoCuentaPublicoSinCodigoPage() {
   const handleDescargarPDF = async () => {
     setDescargando(true)
     try {
-      const res = await solicitarEstadoCuenta(cedulaValidada)
+      // Usar origen 'publico' para NO aplicar rate limit
+      const res = await solicitarEstadoCuenta(cedulaValidada, {
+        origen: 'publico',
+      })
 
       if (!res.ok) {
         setNotification({

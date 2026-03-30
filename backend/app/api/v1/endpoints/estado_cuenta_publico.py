@@ -1149,7 +1149,9 @@ def solicitar_estado_cuenta(
 
     ip = get_client_ip(request)
 
-    if (body.origen or "").strip().lower() != "informes":
+    # No aplicar rate limit si origen es 'informes' o 'publico' (acceso público sin límite)
+    origen = (body.origen or "").strip().lower()
+    if origen not in ("informes", "publico"):
 
         check_rate_limit_estado_cuenta_solicitar(ip)
 
@@ -1240,8 +1242,9 @@ def solicitar_estado_cuenta(
     bloquear_email = cliente_bloqueado_por_desistimiento(
         db, cedula=cedula_lookup, email=email
     )
+    # No enviar email si origen es 'informes' o 'publico' (solo devolver PDF)
     enviar_por_email = (
-        email and not bloquear_email and getattr(body, "origen", None) != "informes"
+        email and not bloquear_email and origen not in ("informes", "publico")
     )
 
     if enviar_por_email:
