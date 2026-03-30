@@ -80,6 +80,26 @@ class PrestamoUpdate(BaseModel):
         if v is None: return None
         return _normalizar_estado_prestamo(v)
 
+    @field_validator("fecha_requerimiento", "fecha_aprobacion", mode="before")
+    @classmethod
+    def parse_fechas_resiliente(cls, v):
+        """
+        Parsea fechas de manera resiliente.
+        Acepta: "2026-02-22", "2026-02-22T00:00:00", date, datetime.
+        """
+        if v is None or v == "":
+            return v
+        if isinstance(v, date) or isinstance(v, datetime):
+            return v
+        if isinstance(v, str):
+            # Limpiar espacios
+            v = v.strip()
+            # Si tiene hora, extraer solo fecha
+            if "T" in v or " " in v:
+                v = v.split("T")[0].split(" ")[0]
+            return v  # Pydantic parseará el string YYYY-MM-DD correctamente
+        return v
+
     fecha_requerimiento: Optional[date] = None
     fecha_aprobacion: Optional[datetime] = None
     cuota_periodo: Optional[Decimal] = None

@@ -705,6 +705,15 @@ export function CrearPrestamoForm({
         delete prestamoData.fecha_aprobacion
       }
 
+      if (import.meta.env.DEV) {
+        console.log('[CrearPrestamoForm] Enviando fechas:', {
+          fechaReq,
+          fechaApr,
+          fecha_requerimiento: prestamoData.fecha_requerimiento,
+          fecha_aprobacion: prestamoData.fecha_aprobacion,
+        })
+      }
+
       if (prestamo) {
         await updatePrestamo.mutateAsync({
           id: prestamo.id,
