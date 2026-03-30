@@ -123,8 +123,9 @@ from app.services.pago_registro_moneda import (
 from app.services.pago_huella_funcional import (
     conflicto_huella_para_creacion,
     contar_prestamos_con_huella_funcional_duplicada,
-    existe_otro_pago_misma_huella_funcional,
     HTTP_409_DETAIL_HUELLA_FUNCIONAL,
+    mensaje_409_huella_funcional_con_id,
+    primer_id_conflicto_huella_funcional,
     ref_norm_desde_campos,
 )
 from app.services.pago_huella_metricas import (
@@ -5353,19 +5354,20 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
     if row.prestamo_id and fecha_huella_up is not None and rn_up:
 
-        if existe_otro_pago_misma_huella_funcional(
+        cid_up = primer_id_conflicto_huella_funcional(
             db,
             prestamo_id=int(row.prestamo_id),
             fecha_pago=fecha_huella_up,
             monto_pagado=row.monto_pagado,
             ref_norm=rn_up,
             exclude_pago_id=pago_id,
-        ):
+        )
+        if cid_up is not None:
             db.rollback()
 
             registrar_rechazo_huella_funcional()
 
-            raise HTTPException(status_code=409, detail=HTTP_409_DETAIL_HUELLA_FUNCIONAL)
+            raise HTTPException(status_code=409, detail=mensaje_409_huella_funcional_con_id(cid_up))
 
     try:
 
