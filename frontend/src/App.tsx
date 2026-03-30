@@ -27,7 +27,6 @@ const PUBLIC_PATHS = [
   '/login',
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
-  '/informes',
   '/finiquitos',
   '/finiquitos/acceso',
   '/finiquitos/panel',
@@ -289,8 +288,6 @@ function App() {
               element={<EstadoCuentaPublicoPage />}
             />
 
-            <Route path="informes" element={<EstadoCuentaPublicoPage />} />
-
             {/* Finiquito: portal OTP y gestion comparten URL /finiquitos/gestion (gate); panel redirige */}
 
             <Route path="finiquitos" element={<FiniquitoRootPage />} />
@@ -388,6 +385,10 @@ function App() {
             {/* Infopagos: formulario de ingreso de pagos para colaboradores (requiere login) */}
 
             <Route path="infopagos" element={<InfopagosPage />} />
+
+            {/* Informes: generador de estado de cuenta (requiere login) */}
+
+            <Route path="informes" element={<EstadoCuentaPublicoPage />} />
 
             {/* Reportes */}
 
