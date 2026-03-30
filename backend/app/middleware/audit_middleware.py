@@ -1,11 +1,12 @@
 """
-Middleware de auditoría automático.
+Middleware de auditoria automatico.
 Intercepta todos los POST/PUT/DELETE/PATCH y registra en tabla auditoria.
 """
 import json
 import logging
+import re
 from datetime import datetime
-from typing import Callable
+from typing import Callable, Optional
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -13,23 +14,55 @@ from starlette.responses import Response
 
 from app.core.database import SessionLocal
 from app.models.auditoria import Auditoria
-from app.core.deps import get_current_user
 
 logger = logging.getLogger(__name__)
+
+_CACHED_FALLBACK_UID: Optional[int] = None
+
+
+def _get_fallback_usuario_id(db) -> int:
+    """
+    Devuelve un usuario_id valido que exista en la tabla usuarios.
+    Cachea el resultado en memoria para no consultar en cada request.
+    """
+    global _CACHED_FALLBACK_UID
+    if _CACHED_FALLBACK_UID is not None:
+        return _CACHED_FALLBACK_UID
+
+    from sqlalchemy import text
+
+    row = db.execute(
+        text(
+            "SELECT id FROM public.usuarios "
+            "WHERE is_active = true ORDER BY id LIMIT 1"
+        )
+    ).first()
+    uid = row[0] if row else 1
+    _CACHED_FALLBACK_UID = uid
+    return uid
+
+
+def _extract_entidad_id(path: str) -> Optional[int]:
+    """Extrae el ID numerico del path (ej. /api/v1/prestamos/123 -> 123)."""
+    m = re.search(r"/(\d+)(?:/|$)", path)
+    if m:
+        try:
+            return int(m.group(1))
+        except (ValueError, OverflowError):
+            pass
+    return None
 
 
 class AuditMiddleware(BaseHTTPMiddleware):
     """
-    Middleware que audita automáticamente todos los cambios (POST/PUT/DELETE/PATCH).
-    Registra en tabla auditoria: usuario, acción, entidad, detalles, fecha.
+    Middleware que audita automaticamente todos los cambios (POST/PUT/DELETE/PATCH).
+    Registra en tabla auditoria: usuario, accion, entidad, detalles, fecha.
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Solo auditar cambios, no GETs ni HEAD ni OPTIONS
         if request.method not in ["POST", "PUT", "DELETE", "PATCH"]:
             return await call_next(request)
 
-        # Capturar payload (body). No parsear como JSON si es multipart (ej. enviar-reporte con archivo)
         body_bytes = await request.body()
         content_type = (request.headers.get("content-type") or "").lower()
         body_data = {}
@@ -38,60 +71,55 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 body_data = json.loads(body_bytes.decode("utf-8", errors="replace"))
             except (json.JSONDecodeError, ValueError):
                 body_data = {}
-        elif body_bytes and ("multipart" in content_type or "application/octet-stream" in content_type):
+        elif body_bytes and (
+            "multipart" in content_type or "application/octet-stream" in content_type
+        ):
             body_data = {"_body": "[multipart/binary - no parseado]"}
 
-        # Guardar body en request para que call_next pueda usarlo
         async def receive():
             return {"type": "http.request", "body": body_bytes}
 
         request._receive = receive
 
-        # Ejecutar endpoint
         response: Response = await call_next(request)
 
-        # Solo auditar si fue exitoso (2xx, 3xx)
         if 200 <= response.status_code < 400:
             try:
-                # Extraer usuario (si está autenticado)
                 usuario_id = None
                 try:
-                    # Intentar obtener usuario del JWT (request.state si fue inyectado)
                     usuario_info = getattr(request.state, "user", None)
                     if usuario_info and hasattr(usuario_info, "id"):
                         usuario_id = usuario_info.id
                 except Exception:
                     pass
 
-                # Fallback a usuario admin (1)
-                if not usuario_id:
-                    usuario_id = 1
-
-                # Extraer detalles
                 path = request.url.path
                 method = request.method
-                entidad = path.split("/")[-2] if "/" in path else path
+                segments = [s for s in path.split("/") if s]
+                entidad = segments[-2] if len(segments) >= 2 else (segments[-1] if segments else path)
+                entidad_id = _extract_entidad_id(path)
 
-                # Crear entrada en auditoría
                 db = SessionLocal()
                 try:
+                    if not usuario_id:
+                        usuario_id = _get_fallback_usuario_id(db)
+
                     audit_entry = Auditoria(
                         usuario_id=usuario_id,
-                        accion=f"{method}",
+                        accion=method,
                         entidad=entidad,
-                        entidad_id=None,  # Podría extraerse del path (/pagos/123 → 123)
-                        detalles=json.dumps(body_data)[:500],  # Limitar a 500 chars
+                        entidad_id=entidad_id,
+                        detalles=json.dumps(body_data, default=str)[:500],
                         fecha=datetime.now(),
                     )
                     db.add(audit_entry)
                     db.commit()
                 except Exception as e:
-                    logger.warning(f"Error al registrar auditoría: {e}")
+                    logger.warning("Error al registrar auditoria: %s", e)
                     db.rollback()
                 finally:
                     db.close()
             except Exception as e:
-                # No romper la respuesta si la auditoría falla
-                logger.exception(f"Error en AuditMiddleware: {e}")
+                logger.exception("Error en AuditMiddleware: %s", e)
 
         return response

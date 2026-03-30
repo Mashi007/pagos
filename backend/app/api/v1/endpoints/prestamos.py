@@ -63,6 +63,7 @@ from app.models.user import User
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
 
 from app.models.auditoria_cambios_estado_prestamo import AuditoriaCambiosEstadoPrestamo
+from app.models.auditoria_cartera_revision import AuditoriaCarteraRevision
 
 from app.models.envio_notificacion import EnvioNotificacion
 
@@ -2611,7 +2612,11 @@ def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{prestamo_id}/recalcular-fechas-amortizacion", response_model=dict)
-def recalcular_fechas_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
+def recalcular_fechas_amortizacion(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
     """
     Recalcula SOLO las fechas de vencimiento de las cuotas existentes cuando cambia la fecha de aprobación.
     
@@ -2653,7 +2658,7 @@ def recalcular_fechas_amortizacion(prestamo_id: int, db: Session = Depends(get_d
     resultado = _recalcular_fechas_vencimiento_cuotas(db, p, fecha_base)
 
     audit_recalc = Auditoria(
-        usuario_id=1,
+        usuario_id=_audit_user_id(db, current_user),
         accion="RECALCULO_FECHAS_AMORTIZACION",
         entidad="prestamos",
         entidad_id=prestamo_id,
@@ -4127,8 +4132,11 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
                 f"recalculando fechas de vencimiento de {existentes} cuota(s)"
             )
             resultado_recalc = _recalcular_fechas_vencimiento_cuotas(db, row, fecha_base)
+            _fallback_uid = db.execute(
+                text("SELECT id FROM public.usuarios WHERE is_active = true ORDER BY id LIMIT 1")
+            ).scalar() or 1
             audit_recalc = Auditoria(
-                usuario_id=1,
+                usuario_id=_fallback_uid,
                 accion="RECALCULO_FECHAS_AMORTIZACION",
                 entidad="prestamos",
                 entidad_id=prestamo_id,
@@ -4173,6 +4181,12 @@ def delete_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
         db.execute(
             delete(AuditoriaCambiosEstadoPrestamo).where(
                 AuditoriaCambiosEstadoPrestamo.prestamo_id == prestamo_id
+            )
+        )
+
+        db.execute(
+            delete(AuditoriaCarteraRevision).where(
+                AuditoriaCarteraRevision.prestamo_id == prestamo_id
             )
         )
 
