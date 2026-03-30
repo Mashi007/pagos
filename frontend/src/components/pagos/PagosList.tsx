@@ -66,7 +66,6 @@ import {
 } from '../../services/pagoConErrorService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
-import { AsignarPrestamoAutomaticoDialog } from './AsignarPrestamoAutomaticoDialog'
 import {
   Dialog,
   DialogContent,
@@ -141,8 +140,6 @@ export function PagosList() {
     'unread' | 'read' | 'all'
   >('unread')
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
-  const [showAsignarPrestamoAutomatico, setShowAsignarPrestamoAutomatico] =
-    useState(false)
   const [cedulasReportarBsTotal, setCedulasReportarBsTotal] = useState<
     number | null
   >(null)
@@ -847,23 +844,6 @@ export function PagosList() {
                 <span>Pagos desde Excel</span>
                 <span className="ml-auto text-xs text-gray-500">
                   Revisar y editar
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-amber-50"
-                onClick={() => {
-                  setAgregarPagoOpen(false)
-                  setShowAsignarPrestamoAutomatico(true)
-                }}
-              >
-                <RefreshCw className="h-5 w-5 text-amber-600" />
-                <span className="text-amber-700 font-medium">
-                  Auto-asignar Préstamos
-                </span>
-                <span className="ml-auto text-xs text-amber-600">
-                  Pagos sin crédito
                 </span>
               </button>
 
@@ -1947,17 +1927,6 @@ export function PagosList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <AsignarPrestamoAutomaticoDialog
-        open={showAsignarPrestamoAutomatico}
-        onOpenChange={setShowAsignarPrestamoAutomatico}
-        onAsignacionCompleta={async () => {
-          await queryClient.invalidateQueries({
-            queryKey: ['pagos'],
-            exact: false,
-          })
-          toast.success('Préstamos asignados. La tabla se actualizará.')
-        }}
-      />
     </div>
   )
 }

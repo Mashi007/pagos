@@ -1215,23 +1215,33 @@ def listar_prestamos_por_cedulas_batch(
 
         
 
-        # Buscar préstamos: intentar primero por primeros 2 caracteres (prefijo) para reducir volumen
+        # Búsqueda más eficiente: usar OR en BD en lugar de traer todo el dataset
 
-        # Ej: "V-17709701" normalizdo a "V17709701" → prefijo "V1"
+        # Construir condiciones OR para cada cédula normalizada
 
-        prefijos = set()
+        or_conditions = []
 
         for ced_norm in cedulas_norm_map.keys():
 
-            if len(ced_norm) >= 2:
+            # Buscar: Cliente.cedula normalizada = ced_norm O Prestamo.cedula normalizada = ced_norm
 
-                prefijos.add(ced_norm[:2])  # Primeros 2 caracteres del código normalizado
+            or_conditions.append(
+
+                func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")) == ced_norm
+
+            )
+
+            or_conditions.append(
+
+                func.upper(func.replace(func.replace(Prestamo.cedula, "-", ""), " ", "")) == ced_norm
+
+            )
 
         
 
-        # Búsqueda: TODOS los préstamos (limit 100k para evitar memory issues)
+        # Ejecutar búsqueda con todas las condiciones
 
-        q_todos = (
+        q_faltantes = (
 
             select(Prestamo.id, Prestamo.cliente_id, Prestamo.estado, Prestamo.cedula, Cliente.cedula)
 
@@ -1239,15 +1249,15 @@ def listar_prestamos_por_cedulas_batch(
 
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
 
-            .order_by(Prestamo.id.desc())
+            .where(or_(*or_conditions) if or_conditions else False)
 
-            .limit(100000)  # Safety limit: máximo 100k préstamos
+            .order_by(Prestamo.id.desc())
 
         )
 
         
 
-        for p_id, cli_id, p_estado, p_cedula, cli_cedula in db.execute(q_todos):
+        for p_id, cli_id, p_estado, p_cedula, cli_cedula in db.execute(q_faltantes):
 
             cedula_cli = (cli_cedula or p_cedula or "").strip()
 
