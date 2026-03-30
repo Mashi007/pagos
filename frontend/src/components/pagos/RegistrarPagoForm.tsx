@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -49,6 +49,8 @@ import {
   isAxiosError,
   getErrorDetail,
 } from '../../types/errors'
+
+import type { Prestamo } from '../../types'
 
 const DUPLICADO_DOCUMENTO_UI =
   'Este comprobante ya fue registrado. Verifique el numero_documento.'
@@ -135,6 +137,20 @@ export function RegistrarPagoForm({
 
   const { data: prestamoSeleccionado } = usePrestamo(formData.prestamo_id || 0)
 
+  /** Incluye el préstamo cargado por ID si la lista por cédula aún no lo trae (evita placeholder "Seleccione el crédito" con valor 478). */
+  const prestamosParaSelect = useMemo((): Prestamo[] => {
+    const list = Array.isArray(prestamos) ? [...prestamos] : []
+    const pid = formData.prestamo_id
+    if (!pid || list.some(p => p.id === pid)) {
+      return list
+    }
+    const psel = prestamoSeleccionado as Prestamo | undefined
+    if (psel && psel.id === pid) {
+      return [psel, ...list]
+    }
+    return list
+  }, [prestamos, formData.prestamo_id, prestamoSeleccionado])
+
   useEffect(() => {
     let cancelled = false
 
@@ -204,11 +220,16 @@ export function RegistrarPagoForm({
     if (prestamos && prestamos.length === 1 && !formData.prestamo_id) {
       setFormData(prev => ({ ...prev, prestamo_id: prestamos[0].id }))
     } else if (prestamos && prestamos.length === 0) {
-      // Limpiar ID si no hay préstamos
-
+      // No borrar crédito al editar o si venía préstamo en pagoInicial (lista puede cargar tarde o Radix sin ítem).
+      const preservarCredito =
+        isEditing ||
+        (pagoInicial?.prestamo_id != null && Number(pagoInicial.prestamo_id) > 0)
+      if (preservarCredito) {
+        return
+      }
       setFormData(prev => ({ ...prev, prestamo_id: null }))
     }
-  }, [prestamos])
+  }, [prestamos, isEditing, pagoInicial?.prestamo_id, formData.prestamo_id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -225,18 +246,17 @@ export function RegistrarPagoForm({
 
     // Crédito: solo se acepta uno de la lista obtenida por cédula (tabla prestamos). Si hay más de uno, debe escogerse.
 
-    if (prestamos && prestamos.length > 0 && !formData.prestamo_id) {
+    if (prestamosParaSelect.length > 0 && !formData.prestamo_id) {
       newErrors.prestamo_id =
-        prestamos.length > 1
+        prestamosParaSelect.length > 1
           ? 'Debe escoger un crédito de la lista'
           : 'Debe seleccionar el crédito'
     }
 
     if (
       formData.prestamo_id &&
-      prestamos &&
-      prestamos.length > 0 &&
-      !prestamos.some(p => p.id === formData.prestamo_id)
+      prestamosParaSelect.length > 0 &&
+      !prestamosParaSelect.some(p => p.id === formData.prestamo_id)
     ) {
       newErrors.prestamo_id =
         'El crédito debe ser uno de la lista para esta cédula'
@@ -516,8 +536,7 @@ export function RegistrarPagoForm({
                 <label className="text-sm font-medium text-gray-700">
                   Crédito al que aplica el pago{' '}
                   {formData.cedula_cliente &&
-                    prestamos &&
-                    prestamos.length > 0 && (
+                    prestamosParaSelect.length > 0 && (
                       <span className="text-red-500">*</span>
                     )}
                 </label>
@@ -529,7 +548,7 @@ export function RegistrarPagoForm({
                   </p>
                 )}
 
-                {prestamos && prestamos.length > 0 ? (
+                {prestamosParaSelect.length > 0 ? (
                   <Select
                     value={formData.prestamo_id?.toString() || undefined}
                     onValueChange={value =>
@@ -541,7 +560,7 @@ export function RegistrarPagoForm({
                     >
                       <SelectValue
                         placeholder={
-                          prestamos.length > 1
+                          prestamosParaSelect.length > 1
                             ? 'Seleccione el crédito'
                             : 'Seleccione un crédito'
                         }
@@ -549,7 +568,7 @@ export function RegistrarPagoForm({
                     </SelectTrigger>
 
                     <SelectContent>
-                      {prestamos.map(prestamo => {
+                      {prestamosParaSelect.map(prestamo => {
                         const modelo =
                           (prestamo as any).modelo_vehiculo ||
                           (prestamo as any).modelo ||
@@ -579,7 +598,8 @@ export function RegistrarPagoForm({
                   </Select>
                 ) : formData.cedula_cliente &&
                   prestamos &&
-                  prestamos.length === 0 ? (
+                  prestamos.length === 0 &&
+                  prestamosParaSelect.length === 0 ? (
                   <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                     No hay préstamo asociado
                   </div>
@@ -587,14 +607,13 @@ export function RegistrarPagoForm({
 
                 {(errors.prestamo_id ||
                   (formData.cedula_cliente &&
-                    prestamos &&
-                    prestamos.length > 0 &&
+                    prestamosParaSelect.length > 0 &&
                     !formData.prestamo_id)) && (
                   <p className="flex items-center gap-1 text-sm text-red-600">
                     <AlertCircle className="h-4 w-4" />
 
                     {errors.prestamo_id ||
-                      (prestamos && prestamos.length > 1
+                      (prestamosParaSelect.length > 1
                         ? 'Debe escoger un crédito de la lista'
                         : 'Debe seleccionar un crédito')}
                   </p>
