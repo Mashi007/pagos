@@ -3975,15 +3975,17 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
     if row.fecha_aprobacion and row.fecha_requerimiento:
 
+        # Normalizar ambas fechas a date para comparación correcta
         ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
+        req_date = row.fecha_requerimiento.date() if hasattr(row.fecha_requerimiento, "date") else row.fecha_requerimiento
 
-        if row.fecha_requerimiento > ap_date:
+        if req_date > ap_date:
 
             raise HTTPException(
 
                 status_code=400,
 
-                detail=f"La fecha de requerimiento ({row.fecha_requerimiento}) no puede ser posterior a la fecha de aprobación ({ap_date}).",
+                detail=f"La fecha de requerimiento ({req_date}) no puede ser posterior a la fecha de aprobación ({ap_date}).",
 
             )
 

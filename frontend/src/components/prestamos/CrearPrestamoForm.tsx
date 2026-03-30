@@ -640,6 +640,10 @@ export function CrearPrestamoForm({
         ? String(formData.fecha_aprobacion).trim()
         : ''
 
+      const fechaReq = formData.fecha_requerimiento
+        ? String(formData.fecha_requerimiento).trim()
+        : ''
+
       const prestamoData: Record<string, unknown> = {
         ...formData,
 
@@ -684,6 +688,13 @@ export function CrearPrestamoForm({
 
       if (!prestamo) {
         delete prestamoData.estado
+      }
+
+      // Formatear fechas como ISO datetime completo
+      if (fechaReq !== '') {
+        prestamoData.fecha_requerimiento = `${fechaReq}T00:00:00`
+      } else {
+        delete prestamoData.fecha_requerimiento
       }
 
       // No enviar fecha_aprobacion vacía: FastAPI rechaza "" como datetime (422).
