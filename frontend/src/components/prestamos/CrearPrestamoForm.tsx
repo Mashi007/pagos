@@ -644,6 +644,12 @@ export function CrearPrestamoForm({
         ? String(formData.fecha_requerimiento).trim()
         : ''
 
+      // Fallback importante: si estamos editando y fecha_requerimiento está vacía en formData,
+      // usar el valor del prestamo anterior para evitar que el backend use una valor inconsistente
+      const fechaReqFinal = !fechaReq && prestamo?.fecha_requerimiento
+        ? fechaInputYmd(prestamo.fecha_requerimiento)
+        : fechaReq
+
       const prestamoData: Record<string, unknown> = {
         ...formData,
 
@@ -692,11 +698,16 @@ export function CrearPrestamoForm({
 
       // Formatear fechas como ISO completo (datetime)
       // fecha_requerimiento: solo date (YYYY-MM-DD) porque en BD es Date
-      if (fechaReq !== '') {
-        prestamoData.fecha_requerimiento = fechaReq  // Sin hora, solo YYYY-MM-DD
-      } else {
+      // IMPORTANTE: Para ediciones, SIEMPRE enviar fecha_requerimiento para evitar
+      // que el backend use un valor antiguo incompatible con la nueva fecha_aprobacion
+      if (fechaReqFinal !== '') {
+        prestamoData.fecha_requerimiento = fechaReqFinal  // Sin hora, solo YYYY-MM-DD
+      } else if (!prestamo) {
+        // Solo para nuevos préstamos, permitir omitir si está vacía
         delete prestamoData.fecha_requerimiento
       }
+      // Si es edición (prestamo existe) y fechaReqFinal sigue vacío, NO incluir
+      // (pero esto no debería pasar con el fallback anterior)
 
       // fecha_aprobacion: datetime completo porque en BD es DateTime
       if (fechaApr !== '') {
@@ -712,6 +723,7 @@ export function CrearPrestamoForm({
         })
         console.log('[CrearPrestamoForm] Fechas procesadas:', {
           fechaReq,
+          fechaReqFinal,
           fechaApr,
           fecha_requerimiento: prestamoData.fecha_requerimiento,
           fecha_aprobacion: prestamoData.fecha_aprobacion,
@@ -721,6 +733,12 @@ export function CrearPrestamoForm({
           'prestamo?.fecha_requerimiento': prestamo?.fecha_requerimiento,
           'prestamo?.fecha_aprobacion': prestamo?.fecha_aprobacion,
         })
+      }
+
+      // Validación importante: si editamos y no incluimos fecha_requerimiento, el backend usará el valor antiguo
+      // que podría ser incompatible con la nueva fecha_aprobacion
+      if (prestamo && prestamoData.fecha_aprobacion && !prestamoData.fecha_requerimiento && prestamo.fecha_requerimiento) {
+        console.warn('[CrearPrestamoForm] ADVERTENCIA: Se cambia fecha_aprobacion sin enviar fecha_requerimiento. El backend validará contra el valor antiguo:', prestamo.fecha_requerimiento)
       }
 
       if (prestamo) {
