@@ -281,21 +281,44 @@ function CreditoCell({
     return <span className="text-xs italic text-gray-500">Sin crédito</span>
   }
 
-  // 1 crédito: se carga automáticamente (ya asignado por useEffect), solo mostrar
+  // 1 crédito: vacío en Excel = sin inventar ID; válido = verde; inválido = ámbar (corrección solo si no está vacío).
 
   if (prestamos.length === 1) {
-    const displayId = !prestamoIdVacio(row.prestamo_id)
-      ? row.prestamo_id
-      : prestamos[0].id
+    const correctId = prestamos[0].id
+    const vacio = prestamoIdVacio(row.prestamo_id)
+    const ok = Number(row.prestamo_id) === correctId
+
+    if (vacio) {
+      return (
+        <input
+          type="text"
+          value=""
+          readOnly
+          className="w-full rounded border border-dashed border-gray-300 bg-white p-1 text-sm text-gray-500"
+          title="Indique el ID de préstamo en el archivo; vacío genera error de validación"
+        />
+      )
+    }
+
+    if (ok) {
+      return (
+        <input
+          type="text"
+          value={String(correctId)}
+          readOnly
+          className="w-full rounded border border-gray-200 bg-green-50 p-1 text-sm font-medium text-green-800"
+          title="ID de préstamo coincide con el único crédito activo"
+        />
+      )
+    }
 
     return (
       <input
         type="text"
-        value={displayId ?? ''}
+        value={String(row.prestamo_id ?? '')}
         readOnly
-        className="w-full rounded border border-gray-200 bg-green-50 p-1 text-sm font-medium text-green-800"
-        placeholder="-"
-        title="Cargado automáticamente (un solo crédito por cédula)"
+        className="w-full rounded border border-amber-300 bg-amber-50 p-1 text-sm text-amber-900"
+        title="ID no coincide con el crédito; se ajustará al guardar si corresponde"
       />
     )
   }
@@ -351,8 +374,6 @@ export function TablaEditablePagos({
 
   isSendingRevisar = false,
 }: FilaEditableProps) {
-  const autoFilledRef = useRef<Set<number>>(new Set())
-
   const cedulaBsCacheRef = useRef<Map<string, boolean>>(new Map())
 
   const [localSaving, setLocalSaving] = useState<Set<number>>(new Set())
@@ -496,15 +517,13 @@ export function TablaEditablePagos({
   const isSaving = (rowIndex: number) =>
     !!savingProgress[rowIndex] || localSaving.has(rowIndex)
 
-  // Auto-rellenar prestamo_id cuando la cédula tiene exactamente un préstamo (persiste en estado del padre)
+  // Solo corregir prestamo_id cuando hay valor incorrecto (p. ej. nº de documento en columna crédito); nunca rellenar vacío.
 
   useEffect(() => {
     if (!rows?.length || Object.keys(prestamosPorCedula).length === 0) return
 
     rows.forEach(row => {
-      if (autoFilledRef.current.has(row._rowIndex)) return
-
-      if (!prestamoIdVacio(row.prestamo_id)) return
+      if (prestamoIdVacio(row.prestamo_id)) return
 
       const lookup = cedulaLookupParaFila(
         row.cedula || '',
@@ -521,9 +540,9 @@ export function TablaEditablePagos({
         []
 
       if (prestamos.length === 1) {
-        autoFilledRef.current.add(row._rowIndex)
-
-        onUpdateCell(row, 'prestamo_id', prestamos[0].id)
+        const correctId = prestamos[0].id
+        if (Number(row.prestamo_id) === correctId) return
+        onUpdateCell(row, 'prestamo_id', correctId)
       }
     })
   }, [rows, prestamosPorCedula, onUpdateCell])
@@ -581,10 +600,10 @@ export function TablaEditablePagos({
         </p>
 
         <p className="mt-1 text-xs text-blue-700">
-          <strong>Crédito:</strong> si hay un solo crédito activo por cédula se
-          carga automáticamente; si hay varios debe elegir en la lista.
-          &quot;Sin crédito&quot; aplica cuando el cliente está registrado pero
-          no tiene créditos activos (si no hay cliente, la cédula marca error).
+          <strong>Crédito:</strong> el ID de préstamo debe venir en el archivo (o
+          elegir en la lista si hay varios). Un solo crédito activo no rellena
+          la celda sola: vacío = error de validación. &quot;Sin crédito&quot;
+          cuando el cliente no tiene préstamos activos.
         </p>
 
         <p className="mt-1 text-xs text-blue-700">
@@ -813,7 +832,8 @@ export function TablaEditablePagos({
                         []
 
                       const sinCreditoElegido =
-                        prestamos.length > 1 && prestamoIdVacio(row.prestamo_id)
+                        prestamos.length > 0 &&
+                        prestamoIdVacio(row.prestamo_id)
 
                       const sinCreditosActivos = prestamos.length === 0
 
@@ -847,7 +867,7 @@ export function TablaEditablePagos({
                         : sinCreditosActivos
                           ? 'Sin créditos activos para esta cédula; use Revisar Pagos'
                           : sinCreditoElegido
-                            ? 'Elija un crédito en la lista (varios por cédula)'
+                            ? 'Indique el ID de préstamo en el archivo (obligatorio)'
                             : 'Guardar esta fila'
 
                       return (
