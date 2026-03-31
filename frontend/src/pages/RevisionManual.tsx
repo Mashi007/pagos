@@ -30,6 +30,8 @@ import { toast } from 'sonner'
 
 import { revisionManualService } from '../services/revisionManualService'
 
+import { EstadoRevisionIcon } from '../components/revision_manual/EstadoRevisionIcon'
+
 interface PrestamoRevision {
   prestamo_id: number
 
@@ -568,6 +570,10 @@ export function RevisionManual() {
                     </th>
 
                     <th className="px-4 py-2 text-center font-semibold">
+                      Acción
+                    </th>
+
+                    <th className="px-4 py-2 text-center font-semibold">
                       Decisión
                     </th>
                   </tr>
@@ -644,6 +650,25 @@ export function RevisionManual() {
                             Pendiente
                           </span>
                         )}
+
+                        {prestamo.estado_revision === 'en_espera' && (
+                          <span className="rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">
+                            ⚠️ En Espera
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        <EstadoRevisionIcon
+                          prestamoId={prestamo.prestamo_id}
+                          estadoActual={prestamo.estado_revision}
+                          nombreCliente={prestamo.nombres}
+                          onStateChange={() => {
+                            queryClient.invalidateQueries({
+                              queryKey: ['revision-manual-prestamos'],
+                            })
+                          }}
+                        />
                       </td>
 
                       <td className="px-4 py-3 text-center">

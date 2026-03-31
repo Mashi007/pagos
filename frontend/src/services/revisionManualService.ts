@@ -335,6 +335,23 @@ class RevisionManualService {
       `${this.baseUrl}/prestamos/${prestamoId}/cuotas/${cuotaId}`
     )
   }
+
+  /**
+   * Cambia el estado de revisión de un préstamo
+   * Estados: "revisando", "en_espera", "revisado"
+   */
+  async cambiarEstadoRevision(
+    prestamoId: number,
+    datos: { nuevo_estado: string; observaciones?: string }
+  ): Promise<any> {
+    return await apiClient.patch(
+      `${this.baseUrl}/prestamos/${prestamoId}/estado-revision`,
+      datos,
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+  }
 }
 
 export const revisionManualService = new RevisionManualService()

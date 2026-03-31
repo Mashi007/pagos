@@ -104,6 +104,56 @@ def _forbid_si_prestamo_revision_cerrada(db: Session, prestamo_id: int) -> None:
         )
 
 
+def _validar_permiso_edicion(
+    db: Session,
+    prestamo_id: int,
+    current_user: Any,
+    actor: str,
+) -> None:
+    """
+    Valida permisos de edición según el estado y rol del usuario.
+    
+    Reglas:
+    - ✓ REVISADO: Nadie puede editar (solo admin desde BD)
+    - ❓ REVISANDO: Solo admin
+    - ⚠️ PENDIENTE, ❌ EN ESPERA: Todos
+    """
+    rev = db.execute(
+        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
+    ).scalars().first()
+    
+    if not rev:
+        # Si no existe registro de revisión, permitir
+        return
+    
+    estado = (rev.estado_revision or "").strip().lower()
+    es_admin = getattr(current_user, "is_admin", False) or getattr(current_user, "is_superuser", False)
+    
+    # ✓ REVISADO: Nadie puede editar
+    if estado == "revisado":
+        logger.warning(
+            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisado_cerrado actor=%s",
+            prestamo_id,
+            actor,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Este préstamo ya fue revisado y cerrado; no admite más ediciones.",
+        )
+    
+    # ❓ REVISANDO: Solo admin
+    if estado == "revisando" and not es_admin:
+        logger.warning(
+            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisando_solo_admin actor=%s",
+            prestamo_id,
+            actor,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Este préstamo está en revisión. Solo administradores pueden editar en este estado. Contacta con tu administrador.",
+        )
+
+
 # ===== SCHEMAS VALIDACION =====
 
 class ClienteUpdateData(BaseModel):
@@ -455,7 +505,7 @@ def editar_cliente_revision(
                 status_code=400,
                 detail="prestamo_id no corresponde a este cliente",
             )
-        _forbid_si_prestamo_revision_cerrada(db, prestamo_id)
+        _validar_permiso_edicion(db, prestamo_id, current_user, actor)
     
     # Registrar cambios antiguos para auditoría
     cambios_dict = {}
@@ -559,7 +609,7 @@ def editar_prestamo_revision(
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-    _forbid_si_prestamo_revision_cerrada(db, prestamo_id)
+    _validar_permiso_edicion(db, prestamo_id, current_user, actor)
     
     cambios_dict = {}
     
@@ -808,7 +858,7 @@ def editar_cuota_revision(
     if not cuota:
         raise HTTPException(status_code=404, detail="Cuota no encontrada")
 
-    _forbid_si_prestamo_revision_cerrada(db, cuota.prestamo_id)
+    _validar_permiso_edicion(db, cuota.prestamo_id, current_user, actor)
     
     cambios_dict = {}
     
@@ -912,7 +962,7 @@ def eliminar_cuota_revision(
     if not cuota or cuota.prestamo_id != prestamo_id:
         raise HTTPException(status_code=404, detail="Cuota no encontrada")
 
-    _forbid_si_prestamo_revision_cerrada(db, prestamo_id)
+    _validar_permiso_edicion(db, prestamo_id, current_user, actor)
 
     db.delete(cuota)
 
@@ -954,18 +1004,121 @@ def get_resumen_rapido_revision(db: Session = Depends(get_db)):
     q_revisado = select(func.count()).select_from(RevisionManualPrestamo).where(
         RevisionManualPrestamo.estado_revision == "revisado"
     )
+    q_en_espera = select(func.count()).select_from(RevisionManualPrestamo).where(
+        RevisionManualPrestamo.estado_revision == "en_espera"
+    )
     
     pendientes = db.scalar(q_pendiente) or 0
     revisando = db.scalar(q_revisando) or 0
     revisados = db.scalar(q_revisado) or 0
-    total = pendientes + revisando + revisados
+    en_espera = db.scalar(q_en_espera) or 0
+    total = pendientes + revisando + revisados + en_espera
     
     return {
         "total_pendientes": pendientes,
         "total_revisando": revisando,
+        "total_en_espera": en_espera,
         "total_revisados": revisados,
         "total": total,
         "porcentaje_completado": (revisados / total * 100) if total > 0 else 0.0
+    }
+
+
+class CambiarEstadoRevisionSchema(BaseModel):
+    nuevo_estado: str  # "revisando", "en_espera", "revisado"
+    observaciones: Optional[str] = None
+
+
+@router.patch("/prestamos/{prestamo_id}/estado-revision")
+def cambiar_estado_revision(
+    prestamo_id: int,
+    payload: CambiarEstadoRevisionSchema,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    Cambia el estado de revisión de un préstamo.
+    Estados permitidos:
+    - "revisando": marca como en revisión (iniciando análisis)
+    - "en_espera": marca como en espera (errores/necesita revisión adicional, no guarda cambios)
+    - "revisado": marca como revisado (finaliza la revisión, solo admin)
+    
+    Reglas de permisos:
+    - Solo admin puede marcar como "revisado"
+    - Solo admin puede cambiar de "revisado" a "revisando" (para permitir que usuario edite de nuevo)
+    """
+    actor = _actor_revision_manual(current_user)
+    es_admin = getattr(current_user, "is_admin", False) or getattr(current_user, "is_superuser", False)
+    
+    # Validar estado permitido
+    estado_permitidos = ["revisando", "en_espera", "revisado"]
+    if payload.nuevo_estado not in estado_permitidos:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Estado inválido. Permitidos: {', '.join(estado_permitidos)}"
+        )
+    
+    # Obtener estado actual
+    rev_manual = db.execute(
+        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
+    ).scalars().first()
+    
+    estado_actual = (rev_manual.estado_revision or "").strip().lower() if rev_manual else "pendiente"
+    
+    # Solo admin puede:
+    # 1. Marcar como "revisado"
+    # 2. Cambiar de "revisado" a "revisando" (para permitir que usuario edite de nuevo)
+    if payload.nuevo_estado == "revisado" and not es_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden marcar como revisado"
+        )
+    
+    if estado_actual == "revisado" and payload.nuevo_estado == "revisando" and not es_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden cambiar un préstamo revisado de vuelta a revisión"
+        )
+    
+    # Si no existe registro, crear uno
+    if not rev_manual:
+        rev_manual = RevisionManualPrestamo(
+            prestamo_id=prestamo_id,
+            estado_revision=payload.nuevo_estado,
+            usuario_revision_id=getattr(current_user, "id", None),
+            usuario_revision_email=getattr(current_user, "email", None),
+            observaciones=payload.observaciones,
+        )
+        db.add(rev_manual)
+    else:
+        rev_manual.estado_revision = payload.nuevo_estado
+        rev_manual.usuario_revision_id = getattr(current_user, "id", None)
+        rev_manual.usuario_revision_email = getattr(current_user, "email", None)
+        if payload.observaciones:
+            rev_manual.observaciones = payload.observaciones
+        
+        # Si se marca como "revisado", registrar fecha
+        if payload.nuevo_estado == "revisado":
+            rev_manual.fecha_revision = datetime.now()
+        # Si se regresa de revisado a revisando, limpiar fecha
+        elif estado_actual == "revisado" and payload.nuevo_estado == "revisando":
+            rev_manual.fecha_revision = None
+    
+    rev_manual.actualizado_en = datetime.now()
+    
+    _commit_revision_seguro(
+        db,
+        operacion="cambiar_estado_revision",
+        actor=actor,
+        tabla_principal="revision_manual_prestamos",
+        id_principal=prestamo_id,
+        resumen_campos=[f"estado_revision={estado_actual}→{payload.nuevo_estado}"],
+    )
+    
+    return {
+        "prestamo_id": prestamo_id,
+        "nuevo_estado": payload.nuevo_estado,
+        "mensaje": f"Estado actualizado de {estado_actual} a {payload.nuevo_estado}"
     }
 
 
