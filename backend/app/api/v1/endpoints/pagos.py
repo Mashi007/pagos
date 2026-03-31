@@ -754,7 +754,7 @@ def listar_pagos(
 
         # Orden: más reciente primero (fecha_pago desc, luego id desc)
 
-        q = q.order_by(Pago.fecha_registro.desc().nullslast(), Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
+        q = q.order_by(Pago.fecha_pago.desc().nullslast(), Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
 
         rows = db.execute(q).scalars().all()
 
