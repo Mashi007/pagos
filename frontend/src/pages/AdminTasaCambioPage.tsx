@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 
-import { TrendingUp, Calendar } from 'lucide-react'
+import { TrendingUp, Calendar, Check, AlertCircle, Plus } from 'lucide-react'
 
 import { TasaCambioModal } from '../components/TasaCambioModal'
 
@@ -31,6 +31,10 @@ export const AdminTasaCambioPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
 
   const [error, setError] = useState<string | null>(null)
+
+  const [tasaGuardadaExito, setTasaGuardadaExito] = useState(false)
+
+  const [mostrarFormAgregar, setMostrarFormAgregar] = useState(false)
 
   useEffect(() => {
     cargarDatos()
@@ -89,8 +93,12 @@ export const AdminTasaCambioPage: React.FC = () => {
       await guardarTasaPorFecha(fechaTasaPago.trim(), tasaNum)
       toast.success(`Tasa guardada para ${fechaTasaPago}`)
       setTasaParaFecha('')
+      setFechaTasaPago('')
+      setTasaGuardadaExito(true)
+      setTimeout(() => setTasaGuardadaExito(false), 3000)
       const hist = await getHistorialTasas(60)
       setHistorial(hist)
+      setMostrarFormAgregar(false)
     } catch (err: any) {
       toast.error(err?.message || 'No se pudo guardar la tasa')
     } finally {
@@ -168,49 +176,114 @@ export const AdminTasaCambioPage: React.FC = () => {
 
         {/* Tasa por fecha de pago (bolívares / backfill) */}
 
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/80 p-6 shadow-sm">
-          <h2 className="mb-1 text-lg font-bold text-gray-900">
-            Tasa para una fecha de pago (pagos en Bs.)
-          </h2>
-          <p className="mb-4 text-sm text-gray-700">
-            Use la <strong>fecha de pago</strong> del reporte o del comprobante.
-            Es la misma tasa oficial Bs./USD que usa el sistema para convertir
-            bolívares a cartera en dólares. No reemplaza el ingreso de
-            &quot;tasa de hoy&quot; arriba; sirve para días pasados o faltantes.
-          </p>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="mb-6 rounded-lg border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-50/50 p-6 shadow-sm">
+          <div className="mb-6 flex items-start justify-between">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Fecha de pago
-              </label>
-              <input
-                type="date"
-                value={fechaTasaPago}
-                onChange={e => setFechaTasaPago(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm"
-              />
+              <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900">
+                <Plus className="h-5 w-5 text-amber-700" />
+                Agregar Tasa para Fecha de Pago
+              </h2>
+              <p className="text-sm text-gray-700">
+                Use la <strong>fecha de pago</strong> del reporte o comprobante. Es la tasa
+                oficial Bs./USD para convertir bolívares a dólares. Ideal para días
+                pasados o faltantes que no cuentan con tasa registrada.
+              </p>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Tasa oficial (Bs. por 1 USD)
-              </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="ej. 3105.75"
-                value={tasaParaFecha}
-                onChange={e => setTasaParaFecha(e.target.value)}
-                className="w-44 rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm"
-              />
+            {tasaGuardadaExito && (
+              <div className="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-2 text-sm text-green-700">
+                <Check className="h-4 w-4" />
+                Guardado
+              </div>
+            )}
+          </div>
+
+          {mostrarFormAgregar ? (
+            <div className="space-y-4 rounded-lg bg-white p-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {/* Fecha */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Fecha de Pago
+                  </label>
+                  <input
+                    type="date"
+                    value={fechaTasaPago}
+                    onChange={e => setFechaTasaPago(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Seleccione la fecha del pago</p>
+                </div>
+
+                {/* Tasa */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Tasa Oficial (Bs. por 1 USD)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="ej. 3105.75"
+                    value={tasaParaFecha}
+                    onChange={e => setTasaParaFecha(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Debe ser mayor a 0</p>
+                </div>
+
+                {/* Validación */}
+                <div className="flex items-end gap-2">
+                  {fechaTasaPago && tasaParaFecha && (
+                    <div className="flex items-center gap-1 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
+                      <Check className="h-3.5 w-3.5" />
+                      Listo
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex gap-2 border-t border-gray-200 pt-4">
+                <button
+                  type="button"
+                  disabled={guardandoFecha || !fechaTasaPago || !tasaParaFecha}
+                  onClick={() => void handleGuardarTasaPorFechaPago()}
+                  className="flex-1 rounded-lg bg-amber-700 px-4 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:text-gray-500"
+                >
+                  {guardandoFecha ? 'Guardando…' : 'Guardar Tasa'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMostrarFormAgregar(false)
+                    setFechaTasaPago('')
+                    setTasaParaFecha('')
+                  }}
+                  disabled={guardandoFecha}
+                  className="rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
+          ) : (
             <button
               type="button"
-              disabled={guardandoFecha}
-              onClick={() => void handleGuardarTasaPorFechaPago()}
-              className="rounded-lg bg-amber-700 px-4 py-2 font-semibold text-white transition hover:bg-amber-800 disabled:opacity-50"
+              onClick={() => setMostrarFormAgregar(true)}
+              className="w-full rounded-lg border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-700 transition hover:border-amber-400 hover:bg-amber-100"
             >
-              {guardandoFecha ? 'Guardando…' : 'Guardar para esa fecha'}
+              + Agregar nueva tasa por fecha
             </button>
+          )}
+
+          {/* Información de validación */}
+          <div className="mt-4 flex gap-3 rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 text-blue-600 mt-0.5" />
+            <div>
+              <strong>Nota:</strong> Esta tasa se usará automáticamente para pagos registrados
+              en Bs. con la misma fecha. Si el reporte tiene múltiples fechas, agrégalas
+              todas.
+            </div>
           </div>
         </div>
 
