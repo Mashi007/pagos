@@ -1573,19 +1573,19 @@ export function PrestamosList() {
                                 </Button>
                               )}
 
-                              {/* Botón Editar - Solo si tiene permisos Y está APROBADO con fecha_aprobacion */}
+                              {/* Botón Editar - Permanente cuando tiene permisos Y está APROBADO con fecha_aprobacion */}
 
                               {canEditPrestamo(prestamo.estado) &&
                                 prestamo.estado === 'APROBADO' &&
                                 prestamo.fecha_aprobacion && (
                                   <Button
-                                    variant="ghost"
+                                    variant="default"
                                     size="sm"
                                     onClick={() => handleEdit(prestamo)}
                                     title="Editar préstamo"
-                                    className="hover:bg-blue-50"
+                                    className="bg-blue-600 text-white hover:bg-blue-700"
                                   >
-                                    <Edit className="h-4 w-4 text-blue-600" />
+                                    <Edit className="h-4 w-4" />
                                   </Button>
                                 )}
 
