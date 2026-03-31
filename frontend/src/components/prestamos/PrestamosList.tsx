@@ -1573,10 +1573,11 @@ export function PrestamosList() {
                                 </Button>
                               )}
 
-                              {/* Botón Editar - Permanente cuando tiene permisos Y está APROBADO con fecha_aprobacion */}
+                              {/* Botón Editar - Permanente cuando tiene permisos Y está APROBADO o LIQUIDADO con fecha_aprobacion */}
 
                               {canEditPrestamo(prestamo.estado) &&
-                                prestamo.estado === 'APROBADO' &&
+                                (prestamo.estado === 'APROBADO' ||
+                                  prestamo.estado === 'LIQUIDADO') &&
                                 prestamo.fecha_aprobacion && (
                                   <Button
                                     variant="default"
