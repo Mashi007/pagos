@@ -22,6 +22,7 @@ import {
   Mail,
   Upload,
   DollarSign,
+  Check,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -751,44 +752,65 @@ export function PagosList() {
           </div>
         </CardContent>
       </Card>
-      <Card className="border-emerald-200 bg-emerald-50/90 shadow-sm">
-        <CardContent className="flex flex-wrap items-center gap-3 py-4">
+      <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-amber-50/50 shadow-sm">
+        <CardContent className="space-y-4 py-6">
+          {/* Header */}
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <Plus className="h-5 w-5 text-amber-700" />
+                <h3 className="text-lg font-bold text-gray-900">
+                  Agregar Tasa para Fecha de Pago
+                </h3>
+              </div>
+              <p className="text-sm text-gray-700">
+                Use la <strong>fecha de pago</strong> del reporte o comprobante. Es
+                la tasa oficial Bs./USD para convertir bolívares a dólares. Ideal
+                para días pasados o faltantes que no cuentan con tasa registrada.
+              </p>
+            </div>
+          </div>
+
+          {/* Tasa Vigente Banner */}
           {tasaHoyBannerLoading ? (
-            <div className="flex items-center gap-2 text-sm text-emerald-800">
-              <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
-              Consultando tasa del dia (Caracas)...
+            <div className="flex items-center gap-2 rounded-lg bg-white/60 p-3 text-sm text-amber-800">
+              <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+              Consultando tasa del día...
             </div>
           ) : tasaHoyBanner ? (
-            <>
-              <DollarSign className="h-6 w-6 shrink-0 text-emerald-700" />
+            <div className="flex items-center gap-3 rounded-lg bg-white/60 p-3">
+              <DollarSign className="h-5 w-5 text-amber-700" />
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-emerald-900">
-                  Tasa de cambio vigente del dia
-                </p>
-                <p className="mt-0.5 text-sm text-emerald-800">
-                  Fecha{' '}
-                  <strong>{(tasaHoyBanner.fecha || '').slice(0, 10)}</strong>:{' '}
-                  <strong>
-                    {new Intl.NumberFormat('es-VE', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    }).format(tasaHoyBanner.tasa_oficial)}
-                  </strong>{' '}
-                  Bs. por 1 USD. Es la tasa oficial ingresada diariamente; se
-                  usa para reportes en bolivares segun la fecha de pago.
+                <p className="text-xs font-medium text-gray-600">Tasa Vigente</p>
+                <p className="text-sm font-semibold text-amber-900">
+                  {(tasaHoyBanner.fecha || '').slice(0, 10)}: Bs.{' '}
+                  {new Intl.NumberFormat('es-VE', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  }).format(tasaHoyBanner.tasa_oficial)}{' '}
+                  por 1 USD
                 </p>
               </div>
-            </>
+            </div>
           ) : (
-            <div className="flex items-start gap-2 text-sm text-amber-900">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div className="flex items-start gap-2 rounded-lg bg-amber-100/50 p-3 text-sm text-amber-900">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <span>
-                No hay tasa cargada para hoy (Caracas) o no tiene permisos para
-                verla. Ingrese la tasa en Administracion (tasa de cambio) para
-                poder operar pagos en bolivares.
+                No hay tasa cargada para hoy. Ingrese la tasa en Administracion
+                para operar pagos en bolivares.
               </span>
             </div>
           )}
+
+          {/* Info Box */}
+          <div className="flex gap-3 rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 text-blue-600" />
+            <div>
+              <strong>Nota:</strong> Esta tasa se usará automáticamente para pagos
+              registrados en Bs. con la misma fecha. Si el reporte tiene múltiples
+              fechas, agrégalas todas en Administración.
+            </div>
+          </div>
         </CardContent>
       </Card>
       <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
