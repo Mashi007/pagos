@@ -870,7 +870,7 @@ export function EditarRevisionManual() {
 
     queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
 
-    navigate('/revision-manual')
+    navigate('/prestamos')
   }
 
   if (isLoading) {
