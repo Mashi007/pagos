@@ -208,6 +208,11 @@ export function EditarRevisionManual() {
     },
 
     enabled: !!prestamoId,
+    // Siempre traer datos frescos de la BD
+    staleTime: 0, // Los datos están obsoletos inmediatamente
+    gcTime: 0, // No cachear en el tiempo
+    refetchOnMount: true, // Retraer cuando el componente se monta
+    refetchOnWindowFocus: true, // Retraer cuando la ventana obtiene foco
   })
 
   const estadoRevision = (detalleData?.revision?.estado_revision ?? 'pendiente')
