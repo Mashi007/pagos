@@ -278,7 +278,7 @@ export const AdminTasaCambioPage: React.FC = () => {
 
           {/* Información de validación */}
           <div className="mt-4 flex gap-3 rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
-            <AlertCircle className="h-4 w-4 flex-shrink-0 text-blue-600 mt-0.5" />
+            <AlertCircle className="h-4 w-4 flex-shrink-0 text-blue-600" style={{ marginTop: '2px' }} />
             <div>
               <strong>Nota:</strong> Esta tasa se usará automáticamente para pagos registrados
               en Bs. con la misma fecha. Si el reporte tiene múltiples fechas, agrégalas
