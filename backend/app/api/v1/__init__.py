@@ -6,7 +6,7 @@ API v1
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico, finiquito
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico, finiquito, registro_cambios
 
 from app.api.v1.endpoints.dashboard import kpis
 
@@ -297,6 +297,16 @@ api_router.include_router(
     auditoria.router,
 
     prefix="/auditoria",
+
+    tags=["auditoria"],
+
+)
+
+# Registro de Cambios (historial de cambios con usuario, fecha, descripción)
+
+api_router.include_router(
+
+    registro_cambios.router,
 
     tags=["auditoria"],
 

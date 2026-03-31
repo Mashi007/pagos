@@ -11,6 +11,7 @@ from app.models.configuracion import Configuracion
 from app.models.auditoria import Auditoria
 from app.models.auditoria_cartera_revision import AuditoriaCarteraRevision
 from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
+from app.models.registro_cambios import RegistroCambios
 from app.models.user import User
 from app.models.definicion_campo import DefinicionCampo
 from app.models.conversacion_ai import ConversacionAI
@@ -65,6 +66,7 @@ __all__ = [
     "Auditoria",
     "AuditoriaCarteraRevision",
     "AuditoriaConciliacionManual",
+    "RegistroCambios",
     "User",
     "DefinicionCampo",
     "ConversacionAI",

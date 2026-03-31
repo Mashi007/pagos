@@ -690,7 +690,7 @@ export function RevisionManual() {
                         )}
 
                         {prestamo.estado_revision === 'revisando' && (
-                          <div className="flex justify-center gap-2">
+                          <div className="flex flex-wrap justify-center gap-2">
                             <Button
                               size="sm"
                               variant="outline"
@@ -703,6 +703,17 @@ export function RevisionManual() {
                             >
                               <Edit className="mr-1 h-3 w-3" />
                               Continuar
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              className="h-8 bg-blue-600 px-2 text-xs text-white hover:bg-blue-700"
+                              onClick={() =>
+                                handleEditarNo(prestamo.prestamo_id)
+                              }
+                              title="Reiniciar edición"
+                            >
+                              ✎ No
                             </Button>
 
                             <Button
