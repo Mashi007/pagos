@@ -145,7 +145,7 @@ def generar_pdf_estado_cuenta(
     # ----- Cabecera -----
     titulo = Paragraph(
         f'<font name="Helvetica-Bold" size="20" color="{COLOR_HEADER}">Estado de cuenta</font>',
-        ParagraphStyle(name="EC_Tit", alignment=1, spaceAfter=2),
+        ParagraphStyle(name="EC_Tit", alignment=1, spaceAfter=12, leading=24),
     )
     subt = Paragraph(
         f'<font size="9" color="{COLOR_TEXT_MUTED}">Corte al {fecha_corte.strftime("%d/%m/%Y")} &mdash; documento informativo</font>',
@@ -153,13 +153,13 @@ def generar_pdf_estado_cuenta(
     )
     if _LOGO_PATH.exists():
         logo = Image(str(_LOGO_PATH), width=1.45 * inch, height=1.45 * inch)
-        head_tbl = Table([[logo, [titulo, subt]]], colWidths=[1.85 * inch, 5.5 * inch], rowHeights=[1.5 * inch])
+        head_tbl = Table([[logo, [titulo, subt]]], colWidths=[1.85 * inch, 5.5 * inch], rowHeights=[1.8 * inch])
         head_tbl.setStyle(
             TableStyle(
                 [
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("ALIGN", (1, 0), (1, 0), "CENTER"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 12),
                     ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
                     ("LEFTPADDING", (0, 0), (-1, -1), 0),
                     ("RIGHTPADDING", (1, 0), (1, 0), 12),
