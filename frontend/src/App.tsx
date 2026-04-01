@@ -252,7 +252,7 @@ let _authInitDone = false
 function App() {
   const location = useLocation()
 
-  const { isAuthenticated, isLoading, initializeAuth } = useSimpleAuth()
+  const { isAuthenticated, isLoading, initializeAuth, user } = useSimpleAuth()
 
   useEffect(() => {
     if (_authInitDone) return
