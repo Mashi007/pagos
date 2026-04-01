@@ -46,10 +46,10 @@ def listar_usuarios(
 
 @router.get("/verificar-admin", response_model=dict)
 def verificar_admin(db: Session = Depends(get_db)):
-    """Indica si existe al menos un usuario administrador activo (para mostrar avisos en frontend)."""
+    """Indica si existe al menos un usuario admin activo (para mostrar avisos en frontend)."""
     tiene = (
         db.query(User)
-        .filter(User.rol == "administrador", User.is_active == True)
+        .filter(User.rol == "admin", User.is_active == True)
         .limit(1)
         .first()
         is not None

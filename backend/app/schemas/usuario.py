@@ -1,13 +1,13 @@
 """
 Schemas para API de usuarios (crear, actualizar, respuesta).
 UserResponse se reutiliza desde app.schemas.auth.
-Rol: administrador | operativo.
+Rol: admin | manager | operator | viewer (RBAC estándar).
 """
 from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
-RolType = Literal["administrador", "operativo"]
+RolType = Literal["admin", "manager", "operator", "viewer"]
 
 
 class UserCreate(BaseModel):
@@ -15,7 +15,7 @@ class UserCreate(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=100)
     apellido: str = Field("", max_length=100)
     cargo: Optional[str] = Field(None, max_length=100)
-    rol: RolType = "operativo"
+    rol: RolType = "viewer"
     is_active: bool = True
     password: str = Field(..., min_length=6, max_length=100)
 
