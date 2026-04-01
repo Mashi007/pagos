@@ -228,13 +228,13 @@ export function Usuarios() {
   }
 
   const handleEdit = (usuario: User) => {
-    console.log('[Usuarios] Editando usuario:', { 
-      id: usuario.id, 
-      email: usuario.email, 
-      rol: usuario.rol, 
-      rolType: typeof usuario.rol 
+    console.log('[Usuarios] Editando usuario:', {
+      id: usuario.id,
+      email: usuario.email,
+      rol: usuario.rol,
+      rolType: typeof usuario.rol,
     })
-    
+
     setEditingUsuario(usuario)
 
     setFormData({
@@ -310,11 +310,11 @@ export function Usuarios() {
           rol: formData.rol,
           is_active: formData.is_active,
         }
-        
+
         console.log('[Usuarios] Enviando actualización con datos:', {
           userId: editingUsuario.id,
           rol: updateData.rol,
-          rolType: typeof updateData.rol
+          rolType: typeof updateData.rol,
         })
 
         // âœ… CRÍTICO: Validar que editingUsuario.id existe y es válido
@@ -502,10 +502,14 @@ export function Usuarios() {
 
   const getRoleBadgeColor = (rol: string) => {
     switch (rol) {
-      case 'admin':    return 'bg-red-600'
-      case 'manager':  return 'bg-purple-600'
-      case 'operator': return 'bg-blue-600'
-      default:         return 'bg-gray-500'
+      case 'admin':
+        return 'bg-red-600'
+      case 'manager':
+        return 'bg-purple-600'
+      case 'operator':
+        return 'bg-blue-600'
+      default:
+        return 'bg-gray-500'
     }
   }
 
@@ -545,7 +549,8 @@ export function Usuarios() {
         const total = usuarios.length
         const activos = usuarios.filter(u => u.is_active).length
         const inactivos = total - activos
-        const pctActivos = total > 0 ? ((activos / total) * 100).toFixed(1) : '0.0'
+        const pctActivos =
+          total > 0 ? ((activos / total) * 100).toFixed(1) : '0.0'
         const porRol = {
           admin: usuarios.filter(u => u.rol === 'admin').length,
           manager: usuarios.filter(u => u.rol === 'manager').length,
@@ -559,7 +564,11 @@ export function Usuarios() {
         ).length
         const ultimoLogin = usuarios
           .filter(u => u.last_login)
-          .sort((a, b) => new Date(b.last_login!).getTime() - new Date(a.last_login!).getTime())[0]
+          .sort(
+            (a, b) =>
+              new Date(b.last_login!).getTime() -
+              new Date(a.last_login!).getTime()
+          )[0]
 
         return (
           <>
@@ -585,9 +594,13 @@ export function Usuarios() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">Activos</p>
-                      <p className="text-2xl font-bold text-green-600">{activos}</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {activos}
+                      </p>
                       <p className="mt-1 text-xs text-gray-400">
-                        {inactivos > 0 ? `${inactivos} inactivo${inactivos > 1 ? 's' : ''}` : 'Todos activos'}
+                        {inactivos > 0
+                          ? `${inactivos} inactivo${inactivos > 1 ? 's' : ''}`
+                          : 'Todos activos'}
                       </p>
                     </div>
                     <UserCheck className="h-8 w-8 text-green-600" />
@@ -600,9 +613,13 @@ export function Usuarios() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">Administradores</p>
-                      <p className="text-2xl font-bold text-red-600">{porRol.admin}</p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {porRol.admin}
+                      </p>
                       <p className="mt-1 text-xs text-gray-400">
-                        {porRol.manager > 0 ? `${porRol.manager} gerente${porRol.manager > 1 ? 's' : ''}` : 'Acceso total al sistema'}
+                        {porRol.manager > 0
+                          ? `${porRol.manager} gerente${porRol.manager > 1 ? 's' : ''}`
+                          : 'Acceso total al sistema'}
                       </p>
                     </div>
                     <Shield className="h-8 w-8 text-red-600" />
@@ -615,7 +632,9 @@ export function Usuarios() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">Nuevo este mes</p>
-                      <p className="text-2xl font-bold text-blue-600">{nuevosUltimoMes}</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {nuevosUltimoMes}
+                      </p>
                       <p className="mt-1 text-xs text-gray-400">
                         {ultimoLogin
                           ? `Ultimo acceso: ${ultimoLogin.nombre}`
@@ -631,11 +650,15 @@ export function Usuarios() {
             {/* Fila 2: distribucion por rol */}
             <div className="grid gap-4 md:grid-cols-4">
               <Card className="border-red-100 bg-red-50/40">
-                <CardContent className="pt-4 pb-4">
+                <CardContent className="pb-4 pt-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-red-500">Admin</p>
-                      <p className="text-xl font-bold text-red-700">{porRol.admin}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-red-500">
+                        Admin
+                      </p>
+                      <p className="text-xl font-bold text-red-700">
+                        {porRol.admin}
+                      </p>
                       <p className="text-xs text-red-400">Acceso total</p>
                     </div>
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
@@ -645,19 +668,28 @@ export function Usuarios() {
                   <div className="mt-2 h-1.5 w-full rounded-full bg-red-100">
                     <div
                       className="h-1.5 rounded-full bg-red-500"
-                      style={{ width: total > 0 ? `${(porRol.admin / total) * 100}%` : '0%' }}
+                      style={{
+                        width:
+                          total > 0 ? `${(porRol.admin / total) * 100}%` : '0%',
+                      }}
                     />
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="border-purple-100 bg-purple-50/40">
-                <CardContent className="pt-4 pb-4">
+                <CardContent className="pb-4 pt-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-purple-500">Manager</p>
-                      <p className="text-xl font-bold text-purple-700">{porRol.manager}</p>
-                      <p className="text-xs text-purple-400">Gestion operativa</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-purple-500">
+                        Manager
+                      </p>
+                      <p className="text-xl font-bold text-purple-700">
+                        {porRol.manager}
+                      </p>
+                      <p className="text-xs text-purple-400">
+                        Gestion operativa
+                      </p>
                     </div>
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100">
                       <UserCheck className="h-5 w-5 text-purple-600" />
@@ -666,19 +698,30 @@ export function Usuarios() {
                   <div className="mt-2 h-1.5 w-full rounded-full bg-purple-100">
                     <div
                       className="h-1.5 rounded-full bg-purple-500"
-                      style={{ width: total > 0 ? `${(porRol.manager / total) * 100}%` : '0%' }}
+                      style={{
+                        width:
+                          total > 0
+                            ? `${(porRol.manager / total) * 100}%`
+                            : '0%',
+                      }}
                     />
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="border-blue-100 bg-blue-50/40">
-                <CardContent className="pt-4 pb-4">
+                <CardContent className="pb-4 pt-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-500">Operator</p>
-                      <p className="text-xl font-bold text-blue-700">{porRol.operator}</p>
-                      <p className="text-xs text-blue-400">Operaciones basicas</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-500">
+                        Operator
+                      </p>
+                      <p className="text-xl font-bold text-blue-700">
+                        {porRol.operator}
+                      </p>
+                      <p className="text-xs text-blue-400">
+                        Operaciones basicas
+                      </p>
                     </div>
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
                       <Users className="h-5 w-5 text-blue-600" />
@@ -687,18 +730,27 @@ export function Usuarios() {
                   <div className="mt-2 h-1.5 w-full rounded-full bg-blue-100">
                     <div
                       className="h-1.5 rounded-full bg-blue-500"
-                      style={{ width: total > 0 ? `${(porRol.operator / total) * 100}%` : '0%' }}
+                      style={{
+                        width:
+                          total > 0
+                            ? `${(porRol.operator / total) * 100}%`
+                            : '0%',
+                      }}
                     />
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="border-gray-100 bg-gray-50/40">
-                <CardContent className="pt-4 pb-4">
+                <CardContent className="pb-4 pt-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Viewer</p>
-                      <p className="text-xl font-bold text-gray-700">{porRol.viewer}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Viewer
+                      </p>
+                      <p className="text-xl font-bold text-gray-700">
+                        {porRol.viewer}
+                      </p>
                       <p className="text-xs text-gray-400">Solo lectura</p>
                     </div>
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
@@ -708,7 +760,12 @@ export function Usuarios() {
                   <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200">
                     <div
                       className="h-1.5 rounded-full bg-gray-500"
-                      style={{ width: total > 0 ? `${(porRol.viewer / total) * 100}%` : '0%' }}
+                      style={{
+                        width:
+                          total > 0
+                            ? `${(porRol.viewer / total) * 100}%`
+                            : '0%',
+                      }}
                     />
                   </div>
                 </CardContent>
@@ -814,7 +871,9 @@ export function Usuarios() {
                     </TableCell>
 
                     <TableCell>
-                      <Badge className={getRoleBadgeColor(usuario.rol || 'viewer')}>
+                      <Badge
+                        className={getRoleBadgeColor(usuario.rol || 'viewer')}
+                      >
                         {usuario.rol || 'viewer'}
                       </Badge>
                     </TableCell>
@@ -996,9 +1055,9 @@ export function Usuarios() {
 
                   <Select
                     value={formData.rol || 'viewer'}
-                    onValueChange={(value: 'admin' | 'manager' | 'operator' | 'viewer') =>
-                      setFormData({ ...formData, rol: value })
-                    }
+                    onValueChange={(
+                      value: 'admin' | 'manager' | 'operator' | 'viewer'
+                    ) => setFormData({ ...formData, rol: value })}
                   >
                     <SelectTrigger className="mt-1">
                       <SelectValue />

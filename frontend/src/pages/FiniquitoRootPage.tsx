@@ -43,11 +43,7 @@ export function FiniquitoRootPage() {
     )
   }
 
-  if (
-    isAuthenticated &&
-    user &&
-    (user.rol || 'viewer') === 'admin'
-  ) {
+  if (isAuthenticated && user && (user.rol || 'viewer') === 'admin') {
     return <Navigate to="/finiquitos/gestion" replace />
   }
 

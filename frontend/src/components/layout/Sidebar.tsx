@@ -38,6 +38,8 @@ import {
 
 import { cn } from '../../utils'
 
+import { isOperatorRole } from '../../utils/rol'
+
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 
 import { Button } from '../../components/ui/button'
@@ -47,7 +49,6 @@ import { Badge } from '../../components/ui/badge'
 import { useSidebarCounts } from '../../hooks/useSidebarCounts'
 
 import { Logo } from '../../components/ui/Logo'
-
 
 interface SidebarProps {
   isOpen: boolean
@@ -135,9 +136,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
   const userRoleDisplay =
-    (user?.rol || 'viewer') === 'admin'
-      ? 'Administrador'
-      : 'Operativo'
+    (user?.rol || 'viewer') === 'admin' ? 'Administrador' : 'Operativo'
 
   const handleLogout = async () => {
     await logout()
@@ -408,7 +407,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     .filter(item => {
       const rol = (user?.rol || 'viewer').toLowerCase()
       const isAdmin = rol === 'admin'
-      const isOperator = rol === 'operator'
+      const isOperator = isOperatorRole(user?.rol)
 
       // operator: solo ve CRM (clientes), Préstamos y Reportes (contiene Finiquito gestión)
       // Dashboard queda oculto porque /dashboard/menu no está en sus rutas permitidas
@@ -426,8 +425,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       return true
     })
     .map(item => {
-      const rol = (user?.rol || 'viewer').toLowerCase()
-      const isOperator = rol === 'operator'
+      const isOperator = isOperatorRole(user?.rol)
 
       if (isOperator) {
         // CRM: mostrar solo Clientes e Infopagos
@@ -852,13 +850,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                           ? 'justify-center px-2 py-2'
                                           : 'space-x-3 px-3 py-2'
                                       )}
-                                      title={isCompact ? child.title : undefined}
+                                      title={
+                                        isCompact ? child.title : undefined
+                                      }
                                     >
                                       <child.icon className="h-4 w-4" />
 
-                                      {!isCompact && (
-                                        <span>{child.title}</span>
-                                      )}
+                                      {!isCompact && <span>{child.title}</span>}
                                     </a>
                                   ) : (
                                     <NavLink
@@ -884,7 +882,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                             : 'space-x-3 px-3 py-2'
                                         )
                                       }
-                                      title={isCompact ? child.title : undefined}
+                                      title={
+                                        isCompact ? child.title : undefined
+                                      }
                                     >
                                       <child.icon className="h-4 w-4" />
 

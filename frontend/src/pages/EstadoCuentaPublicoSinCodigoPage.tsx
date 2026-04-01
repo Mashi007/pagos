@@ -344,7 +344,7 @@ export function EstadoCuentaPublicoSinCodigoPage() {
                       </div>
                     </object>
 
-                    {/* Banner fijo al pie del visor — siempre visible */}
+                    {/* Banner fijo al pie del visor - siempre visible */}
                     <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2">
                       <p className="text-xs text-slate-600">
                         Puedes guardar una copia de tu estado de cuenta en PDF.

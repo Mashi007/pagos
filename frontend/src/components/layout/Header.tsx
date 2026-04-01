@@ -46,9 +46,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
   const userRole =
-    (user?.rol || 'viewer') === 'admin'
-      ? 'Administrador'
-      : 'Operativo'
+    (user?.rol || 'viewer') === 'admin' ? 'Administrador' : 'Operativo'
 
   // Mock de notificaciones - en producción vendrían del backend
 

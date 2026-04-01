@@ -83,7 +83,7 @@ export function Login() {
               navigate('/login', { replace: true })
             }}
           >
-            Soy personal del sistema — iniciar sesión
+            Soy personal del sistema - iniciar sesión
           </button>
         </div>
       </div>

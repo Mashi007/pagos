@@ -57,6 +57,8 @@ import {
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 
+import { canonicalRol } from '../../utils/rol'
+
 import { toast } from 'sonner'
 
 import { Link } from 'react-router-dom'
@@ -77,11 +79,6 @@ const PAGE_SIZE_DEFAULT = 25
 const NOTA_EXCEPCION_MIN_LEN = 15
 
 const NOTA_REVOCACION_MIN_LEN = 10
-
-const ROLES_SIN_AUDITORIA_CARTERA = new Set([
-  'viewer',
-  'operator',
-])
 
 function csvEscapeCell(val: string): string {
   if (/[",\n\r]/.test(val)) {
@@ -205,8 +202,8 @@ export function AuditoriaCarteraTab() {
   const esAdmin = (user?.rol || 'viewer') === 'admin'
 
   const puedeAuditoriaCartera = useMemo(() => {
-    const r = (user?.rol || 'viewer').trim().toLowerCase()
-    return !ROLES_SIN_AUDITORIA_CARTERA.has(r)
+    const r = canonicalRol(user?.rol)
+    return r !== 'operator' && r !== 'viewer'
   }, [user?.rol])
 
   const boot = useMemo(() => loadCarteraSessionCache(), [])

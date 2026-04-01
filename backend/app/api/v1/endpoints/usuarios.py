@@ -27,6 +27,14 @@ from app.services.usuario_bulk_import import procesar_importacion_usuarios
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+# Valores legados en BD que equivalen a rol RBAC operator
+_OPERATOR_ROL_DB_VARIANTS = (
+    "operator",
+    "operador",
+    "operario",
+    "operadora",
+)
+
 
 @router.get("", response_model=dict)
 def listar_usuarios(
@@ -279,10 +287,11 @@ def obtener_kpis_usuarios(
         User.is_active == True
     ).scalar() or 0
     
-    # Operators activos
+    # Operators activos (incluye variantes en español hasta migrar BD)
+    _rol_norm = func.lower(func.trim(User.rol))
     operators_activos = db.query(func.count(User.id)).filter(
-        User.rol == "operator",
-        User.is_active == True
+        _rol_norm.in_(_OPERATOR_ROL_DB_VARIANTS),
+        User.is_active == True,
     ).scalar() or 0
     
     # Viewers activos

@@ -2049,9 +2049,7 @@ export function Comunicaciones({
 
                         <SelectContent>
                           {usuarios
-                            .filter(
-                              u => (u.rol || 'viewer') === 'admin'
-                            )
+                            .filter(u => (u.rol || 'viewer') === 'admin')
                             .map(u => (
                               <SelectItem key={u.id} value={u.id.toString()}>
                                 {u.nombre} {u.apellido}

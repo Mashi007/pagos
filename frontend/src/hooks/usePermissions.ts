@@ -2,6 +2,8 @@ import { useSimpleAuth } from '../store/simpleAuthStore'
 
 import { User } from '../types'
 
+import { canonicalRol } from '../utils/rol'
+
 /**
 
 
@@ -69,7 +71,7 @@ export function usePermissions() {
    */
 
   const canAccessPath = (pathname: string): boolean => {
-    const rol = (user?.rol || 'viewer').toLowerCase()
+    const rol = canonicalRol(user?.rol)
 
     // admin: acceso total
     if (rol === 'admin') {
@@ -81,9 +83,14 @@ export function usePermissions() {
       return true
     }
 
-    // operator (RBAC): solo clientes, prestamos, infopagos y finiquitos/gestion
+    // operator (RBAC y alias operador/operario): solo rutas permitidas
     if (rol === 'operator') {
-      const OPERATOR_ALLOWED = ['/clientes', '/prestamos', '/infopagos', '/finiquitos/gestion']
+      const OPERATOR_ALLOWED = [
+        '/clientes',
+        '/prestamos',
+        '/infopagos',
+        '/finiquitos/gestion',
+      ]
       return OPERATOR_ALLOWED.some(
         p => pathname === p || pathname.startsWith(p + '/')
       )

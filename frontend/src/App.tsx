@@ -22,6 +22,8 @@ import { BASE_PATH } from './config/env'
 
 import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
+import { isOperatorRole } from './utils/rol'
+
 /** Rutas que no requieren login: reporte de pago (un solo flujo, varias URLs), login e informes publicos. */
 
 const PUBLIC_PATHS = [
@@ -66,8 +68,13 @@ function RootLayoutWrapper() {
   }
 
   // GUARD OPERATOR: rol operator solo puede acceder a /clientes, /prestamos, /infopagos y /finiquitos/gestion
-  const OPERATOR_ALLOWED_PATHS = ['/clientes', '/prestamos', '/infopagos', '/finiquitos/gestion']
-  const isOperator = user && (user.rol || '').toLowerCase() === 'operator'
+  const OPERATOR_ALLOWED_PATHS = [
+    '/clientes',
+    '/prestamos',
+    '/infopagos',
+    '/finiquitos/gestion',
+  ]
+  const isOperator = user && isOperatorRole(user.rol)
   const isAdmin = user && (user.rol || '').toLowerCase() === 'admin'
   if (isOperator && !isAdmin) {
     const allowed = OPERATOR_ALLOWED_PATHS.some(
@@ -82,11 +89,9 @@ function RootLayoutWrapper() {
 
   const tokenPortalFiniquito = getFiniquitoAccessToken()?.trim()
 
-  const esAdminPanel =
-    isAuthenticated && (user?.rol || 'viewer') === 'admin'
+  const esAdminPanel = isAuthenticated && (user?.rol || 'viewer') === 'admin'
 
-  const esOperatorPanel =
-    isAuthenticated && (user?.rol || '').toLowerCase() === 'operator'
+  const esOperatorPanel = isAuthenticated && isOperatorRole(user?.rol)
 
   if (esGestionFiniquito && !esAdminPanel && !esOperatorPanel) {
     if (tokenPortalFiniquito) {
@@ -293,7 +298,7 @@ function App() {
               index
               element={
                 isAuthenticated ? (
-                  (user?.rol || '').toLowerCase() === 'operator' ? (
+                  isOperatorRole(user?.rol) ? (
                     <Navigate to="/clientes" replace />
                   ) : (
                     <Navigate to="/dashboard/menu" replace />
@@ -327,10 +332,6 @@ function App() {
               element={<EstadoCuentaPublicoSinCodigoPage />}
             />
 
-            {/* Infopagos: formulario de ingreso de pagos para colaboradores (sin login) */}
-
-            <Route path="infopagos" element={<InfopagosPage />} />
-
             {/* Acceso limitado: se muestra cuando alguien intenta acceder a /pagos desde /infopagos */}
 
             <Route path="acceso-limitado" element={<AccesoLimitadoPage />} />
@@ -345,7 +346,7 @@ function App() {
               path="login"
               element={
                 isAuthenticated ? (
-                  (user?.rol || '').toLowerCase() === 'operator' ? (
+                  isOperatorRole(user?.rol) ? (
                     <Navigate to="/clientes" replace />
                   ) : (
                     <Navigate to="/dashboard/menu" replace />
@@ -408,6 +409,10 @@ function App() {
 
               <Route path=":id" element={<PagosPage />} />
             </Route>
+
+            {/* Infopagos: dentro del layout con sidebar (requiere login) */}
+
+            <Route path="infopagos" element={<InfopagosPage />} />
 
             {/* Amortizacin */}
 

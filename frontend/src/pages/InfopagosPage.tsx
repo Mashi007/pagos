@@ -1,10 +1,10 @@
 /**
- * Pagina publica Infopagos: registro de pago a nombre del deudor (colaborador).
- * Mismo flujo y reglas de moneda (Bs./USD) que /rapicredit-cobros (ReportePagoPage).
- * El recibo se envia al correo del deudor; el colaborador puede descargarlo en pantalla.
+ * Infopagos: registro de pago a nombre del deudor (colaborador).
+ * Se despliega dentro del layout principal (con sidebar), con embedded=true
+ * para que ReportePagoPage no use el fondo oscuro full-screen.
  */
 import ReportePagoPage from './ReportePagoPage'
 
 export default function InfopagosPage() {
-  return <ReportePagoPage variant="infopagos" />
+  return <ReportePagoPage variant="infopagos" embedded={true} />
 }

@@ -764,7 +764,9 @@ export default function UsuariosConfig() {
                         }
                         className="mr-2"
                       />
-                      <span className="text-sm text-gray-700">Administrador</span>
+                      <span className="text-sm text-gray-700">
+                        Administrador
+                      </span>
                     </label>
 
                     <label className="flex items-center">
@@ -803,12 +805,15 @@ export default function UsuariosConfig() {
                         }
                         className="mr-2"
                       />
-                      <span className="text-sm text-gray-700">Visualizador</span>
+                      <span className="text-sm text-gray-700">
+                        Visualizador
+                      </span>
                     </label>
                   </div>
 
                   <p className="mt-1 text-xs text-gray-500">
-                    Admin: acceso total | Gerente: gestión operativa | Operario: operaciones básicas | Visualizador: solo lectura
+                    Admin: acceso total | Gerente: gestión operativa | Operario:
+                    operaciones básicas | Visualizador: solo lectura
                   </p>
                 </div>
 

@@ -455,7 +455,10 @@ export function RegistrarPagoForm({
                   Para elegir moneda (Bs./USD), adjuntar comprobante y recibo
                   PDF con la tasa del dia de la fecha de pago, use{' '}
                   <a
-                    href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(/\/+/g, '/')}
+                    href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(
+                      /\/+/g,
+                      '/'
+                    )}
                     target="_blank"
                     rel="noreferrer"
                     className="font-semibold text-amber-900 underline"

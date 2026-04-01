@@ -12,6 +12,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.rol_normalization import canonical_rol
 from app.core.security import decode_token
 from app.core.user_utils import user_to_response
 from app.models.finiquito import FiniquitoUsuarioAcceso
@@ -97,7 +98,7 @@ def require_admin(
     current: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
     """Solo rol admin (acceso total)."""
-    if (current.rol or "").lower() != "admin":
+    if canonical_rol(current.rol) != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden acceder a este recurso.",
@@ -109,7 +110,7 @@ def require_manager_or_admin(
     current: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
     """Solo rol manager o admin (gestión operativa)."""
-    rol = (current.rol or "").lower()
+    rol = canonical_rol(current.rol)
     if rol not in ("admin", "manager"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -122,7 +123,7 @@ def require_operator_or_higher(
     current: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
     """Rol operator, manager o admin (operaciones)."""
-    rol = (current.rol or "").lower()
+    rol = canonical_rol(current.rol)
     if rol not in ("admin", "manager", "operator"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -137,7 +138,7 @@ def require_auditoria_cartera_access(
     current_user: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
     """Auditoria de cartera: denegado a rol operator / viewer."""
-    r = (current_user.rol or "").strip().lower()
+    r = canonical_rol(current_user.rol)
     if r in ROLES_BLOQUEADOS_AUDITORIA_CARTERA:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

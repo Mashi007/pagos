@@ -332,8 +332,10 @@ export type ReportePagoVariant = 'cobros' | 'infopagos'
 
 export default function ReportePagoPage({
   variant = 'cobros',
+  embedded = false,
 }: {
   variant?: ReportePagoVariant
+  embedded?: boolean
 }) {
   const isInfopagos = variant === 'infopagos'
 
@@ -803,7 +805,13 @@ export default function ReportePagoPage({
         ]
 
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
+      <div
+        className={
+          embedded
+            ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+            : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+        }
+      >
         <div
           role="status"
           aria-live="polite"
@@ -813,11 +821,21 @@ export default function ReportePagoPage({
           {messageForScreenReader || stepAnnouncement}
         </div>
 
-        <div className="w-full max-w-4xl">
+        <div className={embedded ? 'w-full max-w-lg' : 'w-full max-w-4xl'}>
           {/* Main container con layout responsive */}
-          <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
-            {/* Sección izquierda: Branding */}
-            <div className="flex flex-col justify-center space-y-6 px-2 sm:px-0">
+          <div
+            className={
+              embedded ? 'flex flex-col' : 'grid gap-6 lg:grid-cols-2 lg:gap-8'
+            }
+          >
+            {/* Sección izquierda: Branding (oculta en modo embedded) */}
+            <div
+              className={
+                embedded
+                  ? 'hidden'
+                  : 'flex flex-col justify-center space-y-6 px-2 sm:px-0'
+              }
+            >
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <img
@@ -889,7 +907,13 @@ export default function ReportePagoPage({
             </div>
 
             {/* Sección derecha: Card con pasos */}
-            <Card className="mx-1 border-0 bg-white shadow-2xl sm:mx-0">
+            <Card
+              className={
+                embedded
+                  ? 'border border-slate-200 bg-white shadow-sm'
+                  : 'mx-1 border-0 bg-white shadow-2xl sm:mx-0'
+              }
+            >
               <CardContent className="space-y-4 p-5 sm:space-y-5 sm:p-6">
                 <div className="border-b border-slate-100 pb-4">
                   <h2 className="text-xl font-semibold text-slate-900">
@@ -974,7 +998,13 @@ export default function ReportePagoPage({
 
   if (step === 1) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
+      <div
+        className={
+          embedded
+            ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+            : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+        }
+      >
         <div
           role="status"
           aria-live="polite"
@@ -1007,7 +1037,13 @@ export default function ReportePagoPage({
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+          <Card
+            className={
+              embedded
+                ? 'w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm'
+                : 'w-full min-w-0 max-w-md border-0 bg-white shadow-xl'
+            }
+          >
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
@@ -1053,7 +1089,13 @@ export default function ReportePagoPage({
 
   if (step === 2) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
+      <div
+        className={
+          embedded
+            ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+            : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+        }
+      >
         <div
           role="status"
           aria-live="polite"
@@ -1069,7 +1111,13 @@ export default function ReportePagoPage({
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+          <Card
+            className={
+              embedded
+                ? 'w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm'
+                : 'w-full min-w-0 max-w-md border-0 bg-white shadow-xl'
+            }
+          >
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
@@ -1165,7 +1213,13 @@ export default function ReportePagoPage({
 
   if (step === 3) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
+      <div
+        className={
+          embedded
+            ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+            : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+        }
+      >
         <div
           role="status"
           aria-live="polite"
@@ -1181,7 +1235,13 @@ export default function ReportePagoPage({
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+          <Card
+            className={
+              embedded
+                ? 'w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm'
+                : 'w-full min-w-0 max-w-md border-0 bg-white shadow-xl'
+            }
+          >
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
@@ -1264,7 +1324,13 @@ export default function ReportePagoPage({
 
   if (step === 4) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
+      <div
+        className={
+          embedded
+            ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+            : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+        }
+      >
         <div
           role="status"
           aria-live="polite"
@@ -1280,7 +1346,13 @@ export default function ReportePagoPage({
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+          <Card
+            className={
+              embedded
+                ? 'w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm'
+                : 'w-full min-w-0 max-w-md border-0 bg-white shadow-xl'
+            }
+          >
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
@@ -1414,7 +1486,13 @@ export default function ReportePagoPage({
 
   if (step === 5) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
+      <div
+        className={
+          embedded
+            ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+            : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+        }
+      >
         <div
           role="status"
           aria-live="polite"
@@ -1430,7 +1508,13 @@ export default function ReportePagoPage({
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+          <Card
+            className={
+              embedded
+                ? 'w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm'
+                : 'w-full min-w-0 max-w-md border-0 bg-white shadow-xl'
+            }
+          >
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
@@ -1498,7 +1582,13 @@ export default function ReportePagoPage({
 
   if (step === 6) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
+      <div
+        className={
+          embedded
+            ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+            : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+        }
+      >
         <div
           role="status"
           aria-live="polite"
@@ -1514,7 +1604,13 @@ export default function ReportePagoPage({
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+          <Card
+            className={
+              embedded
+                ? 'w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm'
+                : 'w-full min-w-0 max-w-md border-0 bg-white shadow-xl'
+            }
+          >
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
@@ -1610,7 +1706,13 @@ export default function ReportePagoPage({
 
   if (step === 7) {
     return (
-      <div className="flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
+      <div
+        className={
+          embedded
+            ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+            : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+        }
+      >
         <div
           role="status"
           aria-live="polite"
@@ -1626,7 +1728,13 @@ export default function ReportePagoPage({
             onDismiss={dismissNotification}
           />
 
-          <Card className="w-full min-w-0 max-w-md border-0 bg-white shadow-xl">
+          <Card
+            className={
+              embedded
+                ? 'w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm'
+                : 'w-full min-w-0 max-w-md border-0 bg-white shadow-xl'
+            }
+          >
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
@@ -1731,7 +1839,13 @@ export default function ReportePagoPage({
 
   // step === 8: pantalla final de confirmación
   return (
-    <div className="flex min-h-[100dvh] min-h-screen items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4">
+    <div
+      className={
+        embedded
+          ? 'flex items-center justify-center overflow-x-hidden p-3 sm:p-4'
+          : 'flex min-h-[100dvh] min-h-screen items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+      }
+    >
       <div
         role="status"
         aria-live="polite"
@@ -1741,7 +1855,13 @@ export default function ReportePagoPage({
         {messageForScreenReader || stepAnnouncement}
       </div>
 
-      <Card className="mx-1 w-full min-w-0 max-w-md border-0 bg-white shadow-2xl sm:mx-0">
+      <Card
+        className={
+          embedded
+            ? 'mx-1 w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm sm:mx-0'
+            : 'mx-1 w-full min-w-0 max-w-md border-0 bg-white shadow-2xl sm:mx-0'
+        }
+      >
         <CardContent className="space-y-5 px-5 pt-6 sm:px-6 sm:pt-8">
           {/* Success icon */}
           <div className="flex justify-center">

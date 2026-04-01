@@ -191,11 +191,15 @@ export function EditarRevisionManual() {
 
   const [guardandoRechazo, setGuardandoRechazo] = useState(false)
 
-  /** Fecha de aprobación original cargada desde BD — para detectar si cambió */
-  const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<string | null>(null)
+  /** Fecha de aprobación original cargada desde BD - para detectar si cambió */
+  const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<
+    string | null
+  >(null)
 
   /** Confirmación pendiente de recálculo: 'parcial' | 'final' | null */
-  const [pendingGuardarTipo, setPendingGuardarTipo] = useState<'parcial' | 'final' | null>(null)
+  const [pendingGuardarTipo, setPendingGuardarTipo] = useState<
+    'parcial' | 'final' | null
+  >(null)
 
   const [cambios, setCambios] = useState({
     cliente: false,
@@ -210,14 +214,26 @@ export function EditarRevisionManual() {
 
     // --- Cliente ---
     // nombres: solo validar si el usuario lo borró explícitamente (hay cambios en cliente y quedó vacío)
-    if (cambios.cliente && clienteData.nombres !== undefined && !clienteData.nombres?.trim()) {
+    if (
+      cambios.cliente &&
+      clienteData.nombres !== undefined &&
+      !clienteData.nombres?.trim()
+    ) {
       e['nombres'] = 'El nombre no puede quedar vacío'
     }
-    const telSinPrefijo = (clienteData.telefono || '').replace(/^\+?58/, '').replace(/\D/g, '')
-    if (clienteData.telefono && (telSinPrefijo.length < 7 || telSinPrefijo.length > 11)) {
+    const telSinPrefijo = (clienteData.telefono || '')
+      .replace(/^\+?58/, '')
+      .replace(/\D/g, '')
+    if (
+      clienteData.telefono &&
+      (telSinPrefijo.length < 7 || telSinPrefijo.length > 11)
+    ) {
       e['telefono'] = 'Teléfono inválido (7-11 dígitos después del +58)'
     }
-    if (clienteData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clienteData.email)) {
+    if (
+      clienteData.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clienteData.email)
+    ) {
       e['email'] = 'Email inválido'
     }
     if (clienteData.fecha_nacimiento) {
@@ -232,13 +248,23 @@ export function EditarRevisionManual() {
     }
 
     // --- Préstamo ---
-    if (prestamoData.total_financiamiento !== undefined && prestamoData.total_financiamiento <= 0) {
+    if (
+      prestamoData.total_financiamiento !== undefined &&
+      prestamoData.total_financiamiento <= 0
+    ) {
       e['total_financiamiento'] = 'Debe ser mayor a 0'
     }
-    if (prestamoData.cuota_periodo !== undefined && prestamoData.cuota_periodo < 0) {
+    if (
+      prestamoData.cuota_periodo !== undefined &&
+      prestamoData.cuota_periodo < 0
+    ) {
       e['cuota_periodo'] = 'No puede ser negativo'
     }
-    if (prestamoData.numero_cuotas !== undefined && (prestamoData.numero_cuotas < 1 || !Number.isInteger(prestamoData.numero_cuotas))) {
+    if (
+      prestamoData.numero_cuotas !== undefined &&
+      (prestamoData.numero_cuotas < 1 ||
+        !Number.isInteger(prestamoData.numero_cuotas))
+    ) {
       e['numero_cuotas'] = 'Debe ser un entero mayor a 0'
     }
     if (prestamoData.fecha_aprobacion) {
@@ -272,15 +298,16 @@ export function EditarRevisionManual() {
           prestamo: data.prestamo,
           cliente: data.cliente,
           revision: data.revision,
-          cuotas: data.cuotas?.map((c: any) => ({
-            numero_cuota: c.numero_cuota,
-            monto: c.monto,
-            fecha_vencimiento: c.fecha_vencimiento,
-            fecha_pago: c.fecha_pago,
-            total_pagado: c.total_pagado,
-            estado: c.estado,
-            observaciones: c.observaciones,
-          })) || [],
+          cuotas:
+            data.cuotas?.map((c: any) => ({
+              numero_cuota: c.numero_cuota,
+              monto: c.monto,
+              fecha_vencimiento: c.fecha_vencimiento,
+              fecha_pago: c.fecha_pago,
+              total_pagado: c.total_pagado,
+              estado: c.estado,
+              observaciones: c.observaciones,
+            })) || [],
         })
       }
 
@@ -416,11 +443,11 @@ export function EditarRevisionManual() {
     ) {
       const ok = window.confirm(
         `⚠️ CAMBIO DE FECHA DE APROBACIÓN\n\n` +
-        `Fecha anterior: ${fechaAprobacionOriginal}\n` +
-        `Fecha nueva:    ${nuevaFechaCheck}\n\n` +
-        `Se recalcularán ÚNICAMENTE las fechas de vencimiento de las ${cuotasData.length} cuota(s) de la tabla de amortización.\n` +
-        `Los montos, pagos y saldos NO cambiarán.\n\n` +
-        `¿Deseas continuar?`
+          `Fecha anterior: ${fechaAprobacionOriginal}\n` +
+          `Fecha nueva:    ${nuevaFechaCheck}\n\n` +
+          `Se recalcularán ÚNICAMENTE las fechas de vencimiento de las ${cuotasData.length} cuota(s) de la tabla de amortización.\n` +
+          `Los montos, pagos y saldos NO cambiarán.\n\n` +
+          `¿Deseas continuar?`
       )
       if (!ok) return
     }
@@ -583,17 +610,24 @@ export function EditarRevisionManual() {
               cuotasData.length > 0
             ) {
               try {
-                const res = await prestamoService.recalcularFechasAmortizacion(pid2)
-                const actualizadas = res?.data?.actualizadas ?? res?.actualizadas ?? '?'
-                toast.success(`📅 Fechas de vencimiento actualizadas: ${actualizadas} cuota(s) recalculadas`)
+                const res =
+                  await prestamoService.recalcularFechasAmortizacion(pid2)
+                const actualizadas =
+                  res?.data?.actualizadas ?? res?.actualizadas ?? '?'
+                toast.success(
+                  `📅 Fechas de vencimiento actualizadas: ${actualizadas} cuota(s) recalculadas`
+                )
                 setFechaAprobacionOriginal(nuevaFecha)
                 // Recargar datos frescos de BD para mostrar nuevas fechas en tabla
-                const datosActualizados = await revisionManualService.getDetallePrestamoRevision(pid2)
+                const datosActualizados =
+                  await revisionManualService.getDetallePrestamoRevision(pid2)
                 if (datosActualizados?.cuotas) {
                   setCuotasData(datosActualizados.cuotas)
                 }
               } catch (errRecalc: any) {
-                toast.warning('⚠️ Préstamo guardado, pero no se pudieron recalcular las fechas de vencimiento')
+                toast.warning(
+                  '⚠️ Préstamo guardado, pero no se pudieron recalcular las fechas de vencimiento'
+                )
                 console.error('Error recalculando fechas:', errRecalc)
               }
             }
@@ -753,7 +787,9 @@ export function EditarRevisionManual() {
     }
 
     // Confirmar si cambió la fecha de aprobación y hay cuotas
-    const nuevaFechaFinalCheck = formatDateForInput(prestamoData.fecha_aprobacion)
+    const nuevaFechaFinalCheck = formatDateForInput(
+      prestamoData.fecha_aprobacion
+    )
     if (
       cambios.prestamo &&
       nuevaFechaFinalCheck &&
@@ -763,11 +799,11 @@ export function EditarRevisionManual() {
     ) {
       const okFecha = window.confirm(
         `⚠️ CAMBIO DE FECHA DE APROBACIÓN\n\n` +
-        `Fecha anterior: ${fechaAprobacionOriginal}\n` +
-        `Fecha nueva:    ${nuevaFechaFinalCheck}\n\n` +
-        `Se recalcularán ÚNICAMENTE las fechas de vencimiento de las ${cuotasData.length} cuota(s) de la tabla de amortización.\n` +
-        `Los montos, pagos y saldos NO cambiarán.\n\n` +
-        `¿Deseas continuar?`
+          `Fecha anterior: ${fechaAprobacionOriginal}\n` +
+          `Fecha nueva:    ${nuevaFechaFinalCheck}\n\n` +
+          `Se recalcularán ÚNICAMENTE las fechas de vencimiento de las ${cuotasData.length} cuota(s) de la tabla de amortización.\n` +
+          `Los montos, pagos y saldos NO cambiarán.\n\n` +
+          `¿Deseas continuar?`
       )
       if (!okFecha) return
     }
@@ -919,7 +955,9 @@ export function EditarRevisionManual() {
             )
 
             // Si cambió la fecha de aprobación y hay cuotas → recalcular SOLO fechas de vencimiento
-            const nuevaFechaFinal = formatDateForInput(prestamoData.fecha_aprobacion)
+            const nuevaFechaFinal = formatDateForInput(
+              prestamoData.fecha_aprobacion
+            )
             const pidFechas = parseInt(prestamoId, 10)
             if (
               prestamoUpdate.fecha_aprobacion &&
@@ -932,7 +970,10 @@ export function EditarRevisionManual() {
                 await prestamoService.recalcularFechasAmortizacion(pidFechas)
                 setFechaAprobacionOriginal(nuevaFechaFinal)
               } catch (errRecalc: any) {
-                console.error('Error recalculando fechas (guardar y cerrar):', errRecalc)
+                console.error(
+                  'Error recalculando fechas (guardar y cerrar):',
+                  errRecalc
+                )
               }
             }
           } catch (err: any) {
@@ -1389,15 +1430,21 @@ export function EditarRevisionManual() {
                       type="text"
                       value={clienteData.nombres || ''}
                       onChange={e => {
-                        setClienteData({ ...clienteData, nombres: e.target.value })
+                        setClienteData({
+                          ...clienteData,
+                          nombres: e.target.value,
+                        })
                         setCambios({ ...cambios, cliente: true })
-                        if (errores['nombres']) setErrores({ ...errores, nombres: '' })
+                        if (errores['nombres'])
+                          setErrores({ ...errores, nombres: '' })
                       }}
                       placeholder="Juan Carlos Pérez González"
                       className={`pl-10 ${errores['nombres'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                     />
                   </div>
-                  {errores['nombres'] && <p className="text-xs text-red-600">{errores['nombres']}</p>}
+                  {errores['nombres'] && (
+                    <p className="text-xs text-red-600">{errores['nombres']}</p>
+                  )}
                 </div>
 
                 {/* Teléfono */}
@@ -1416,15 +1463,27 @@ export function EditarRevisionManual() {
                       value={(clienteData.telefono || '').replace(/^\+?58/, '')}
                       onChange={e => {
                         const digits = e.target.value.replace(/\D/g, '')
-                        setClienteData({ ...clienteData, telefono: digits ? `+58${digits}` : '' })
+                        setClienteData({
+                          ...clienteData,
+                          telefono: digits ? `+58${digits}` : '',
+                        })
                         setCambios({ ...cambios, cliente: true })
-                        if (errores['telefono']) setErrores({ ...errores, telefono: '' })
+                        if (errores['telefono'])
+                          setErrores({ ...errores, telefono: '' })
                       }}
                       placeholder="4141234567"
-                      className={errores['telefono'] ? 'border-red-500 focus-visible:ring-red-400' : ''}
+                      className={
+                        errores['telefono']
+                          ? 'border-red-500 focus-visible:ring-red-400'
+                          : ''
+                      }
                     />
                   </div>
-                  {errores['telefono'] && <p className="text-xs text-red-600">{errores['telefono']}</p>}
+                  {errores['telefono'] && (
+                    <p className="text-xs text-red-600">
+                      {errores['telefono']}
+                    </p>
+                  )}
                 </div>
 
                 {/* Email */}
@@ -1438,15 +1497,21 @@ export function EditarRevisionManual() {
                       type="email"
                       value={clienteData.email || ''}
                       onChange={e => {
-                        setClienteData({ ...clienteData, email: e.target.value })
+                        setClienteData({
+                          ...clienteData,
+                          email: e.target.value,
+                        })
                         setCambios({ ...cambios, cliente: true })
-                        if (errores['email']) setErrores({ ...errores, email: '' })
+                        if (errores['email'])
+                          setErrores({ ...errores, email: '' })
                       }}
                       placeholder="juan@email.com"
                       className={`pl-10 ${errores['email'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                     />
                   </div>
-                  {errores['email'] && <p className="text-xs text-red-600">{errores['email']}</p>}
+                  {errores['email'] && (
+                    <p className="text-xs text-red-600">{errores['email']}</p>
+                  )}
                 </div>
 
                 {/* Fecha Nacimiento */}
@@ -1459,16 +1524,28 @@ export function EditarRevisionManual() {
                     <Input
                       type="date"
                       value={clienteData.fecha_nacimiento || ''}
-                      max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)}
+                      max={new Date(
+                        new Date().setFullYear(new Date().getFullYear() - 18)
+                      )
+                        .toISOString()
+                        .slice(0, 10)}
                       onChange={e => {
-                        setClienteData({ ...clienteData, fecha_nacimiento: e.target.value || null })
+                        setClienteData({
+                          ...clienteData,
+                          fecha_nacimiento: e.target.value || null,
+                        })
                         setCambios({ ...cambios, cliente: true })
-                        if (errores['fecha_nacimiento']) setErrores({ ...errores, fecha_nacimiento: '' })
+                        if (errores['fecha_nacimiento'])
+                          setErrores({ ...errores, fecha_nacimiento: '' })
                       }}
                       className={`pl-10 ${errores['fecha_nacimiento'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                     />
                   </div>
-                  {errores['fecha_nacimiento'] && <p className="text-xs text-red-600">{errores['fecha_nacimiento']}</p>}
+                  {errores['fecha_nacimiento'] && (
+                    <p className="text-xs text-red-600">
+                      {errores['fecha_nacimiento']}
+                    </p>
+                  )}
                 </div>
 
                 {/* Ocupación */}
@@ -1482,7 +1559,10 @@ export function EditarRevisionManual() {
                       type="text"
                       value={clienteData.ocupacion || ''}
                       onChange={e => {
-                        setClienteData({ ...clienteData, ocupacion: e.target.value })
+                        setClienteData({
+                          ...clienteData,
+                          ocupacion: e.target.value,
+                        })
                         setCambios({ ...cambios, cliente: true })
                       }}
                       placeholder="Ingeniero, Gerente..."
@@ -1522,11 +1602,12 @@ export function EditarRevisionManual() {
                     <MapPin className="h-5 w-5 text-blue-600" />
                     Dirección Completa
                   </h3>
-                  
+
                   {(() => {
                     const getDireccionObj = () => {
                       try {
-                        return typeof clienteData.direccion === 'string' && clienteData.direccion.startsWith('{')
+                        return typeof clienteData.direccion === 'string' &&
+                          clienteData.direccion.startsWith('{')
                           ? JSON.parse(clienteData.direccion)
                           : {}
                       } catch {
@@ -1534,14 +1615,23 @@ export function EditarRevisionManual() {
                       }
                     }
 
-                    const updateDireccionField = (field: string, value: string) => {
+                    const updateDireccionField = (
+                      field: string,
+                      value: string
+                    ) => {
                       try {
                         const obj = getDireccionObj()
                         const updated = { ...obj, [field]: value }
-                        setClienteData({ ...clienteData, direccion: JSON.stringify(updated) })
+                        setClienteData({
+                          ...clienteData,
+                          direccion: JSON.stringify(updated),
+                        })
                         setCambios({ ...cambios, cliente: true })
                       } catch {
-                        setClienteData({ ...clienteData, direccion: JSON.stringify({ [field]: value }) })
+                        setClienteData({
+                          ...clienteData,
+                          direccion: JSON.stringify({ [field]: value }),
+                        })
                         setCambios({ ...cambios, cliente: true })
                       }
                     }
@@ -1552,11 +1642,18 @@ export function EditarRevisionManual() {
                       <div className="grid grid-cols-2 gap-3">
                         {/* Calle Principal */}
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-gray-600">Calle Principal</label>
+                          <label className="text-xs font-medium text-gray-600">
+                            Calle Principal
+                          </label>
                           <Input
                             type="text"
                             value={dirObj.callePrincipal || ''}
-                            onChange={e => updateDireccionField('callePrincipal', e.target.value)}
+                            onChange={e =>
+                              updateDireccionField(
+                                'callePrincipal',
+                                e.target.value
+                              )
+                            }
                             placeholder="Av. Principal, Calle 5..."
                             className="text-xs"
                           />
@@ -1564,11 +1661,18 @@ export function EditarRevisionManual() {
 
                         {/* Calle Transversal */}
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-gray-600">Calle Transversal</label>
+                          <label className="text-xs font-medium text-gray-600">
+                            Calle Transversal
+                          </label>
                           <Input
                             type="text"
                             value={dirObj.calleTransversal || ''}
-                            onChange={e => updateDireccionField('calleTransversal', e.target.value)}
+                            onChange={e =>
+                              updateDireccionField(
+                                'calleTransversal',
+                                e.target.value
+                              )
+                            }
                             placeholder="Calle 10, Entre..."
                             className="text-xs"
                           />
@@ -1576,11 +1680,15 @@ export function EditarRevisionManual() {
 
                         {/* Parroquia */}
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-gray-600">Parroquia</label>
+                          <label className="text-xs font-medium text-gray-600">
+                            Parroquia
+                          </label>
                           <Input
                             type="text"
                             value={dirObj.parroquia || ''}
-                            onChange={e => updateDireccionField('parroquia', e.target.value)}
+                            onChange={e =>
+                              updateDireccionField('parroquia', e.target.value)
+                            }
                             placeholder="Los Robles..."
                             className="text-xs"
                           />
@@ -1588,11 +1696,15 @@ export function EditarRevisionManual() {
 
                         {/* Municipio */}
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-gray-600">Municipio</label>
+                          <label className="text-xs font-medium text-gray-600">
+                            Municipio
+                          </label>
                           <Input
                             type="text"
                             value={dirObj.municipio || ''}
-                            onChange={e => updateDireccionField('municipio', e.target.value)}
+                            onChange={e =>
+                              updateDireccionField('municipio', e.target.value)
+                            }
                             placeholder="Chacao, Baruta..."
                             className="text-xs"
                           />
@@ -1600,11 +1712,15 @@ export function EditarRevisionManual() {
 
                         {/* Ciudad */}
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-gray-600">Ciudad</label>
+                          <label className="text-xs font-medium text-gray-600">
+                            Ciudad
+                          </label>
                           <Input
                             type="text"
                             value={dirObj.ciudad || ''}
-                            onChange={e => updateDireccionField('ciudad', e.target.value)}
+                            onChange={e =>
+                              updateDireccionField('ciudad', e.target.value)
+                            }
                             placeholder="Caracas..."
                             className="text-xs"
                           />
@@ -1612,11 +1728,15 @@ export function EditarRevisionManual() {
 
                         {/* Estado (Región) */}
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-gray-600">Estado (Región)</label>
+                          <label className="text-xs font-medium text-gray-600">
+                            Estado (Región)
+                          </label>
                           <Input
                             type="text"
                             value={dirObj.estado || ''}
-                            onChange={e => updateDireccionField('estado', e.target.value)}
+                            onChange={e =>
+                              updateDireccionField('estado', e.target.value)
+                            }
                             placeholder="Miranda, Caracas..."
                             className="text-xs"
                           />
@@ -1624,10 +1744,17 @@ export function EditarRevisionManual() {
 
                         {/* Descripción (ancho completo) */}
                         <div className="col-span-2 space-y-1">
-                          <label className="text-xs font-medium text-gray-600">Descripción Adicional</label>
+                          <label className="text-xs font-medium text-gray-600">
+                            Descripción Adicional
+                          </label>
                           <Textarea
                             value={dirObj.descripcion || ''}
-                            onChange={e => updateDireccionField('descripcion', e.target.value)}
+                            onChange={e =>
+                              updateDireccionField(
+                                'descripcion',
+                                e.target.value
+                              )
+                            }
                             placeholder="Casa de color blanco, entre Av. A y B, próximo a esquina..."
                             rows={2}
                             className="text-xs"
@@ -1689,7 +1816,9 @@ export function EditarRevisionManual() {
                       <SelectItem value="EVALUADO">Evaluado</SelectItem>
                       <SelectItem value="APROBADO">Aprobado</SelectItem>
                       <SelectItem value="LIQUIDADO">Liquidado</SelectItem>
-                      <SelectItem value="DESISTIMIENTO">Desistimiento</SelectItem>
+                      <SelectItem value="DESISTIMIENTO">
+                        Desistimiento
+                      </SelectItem>
                       <SelectItem value="RECHAZADO">Rechazado</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1699,7 +1828,8 @@ export function EditarRevisionManual() {
                   {/* Total Financiamiento */}
                   <div>
                     <label className="mb-1 block text-sm font-medium">
-                      Total Financiamiento (USD) <span className="text-red-500">*</span>
+                      Total Financiamiento (USD){' '}
+                      <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -1709,15 +1839,24 @@ export function EditarRevisionManual() {
                         min="0.01"
                         value={prestamoData.total_financiamiento || ''}
                         onChange={e => {
-                          setPrestamoData({ ...prestamoData, total_financiamiento: parseFloat(e.target.value) || 0 })
+                          setPrestamoData({
+                            ...prestamoData,
+                            total_financiamiento:
+                              parseFloat(e.target.value) || 0,
+                          })
                           setCambios({ ...cambios, prestamo: true })
-                          if (errores['total_financiamiento']) setErrores({ ...errores, total_financiamiento: '' })
+                          if (errores['total_financiamiento'])
+                            setErrores({ ...errores, total_financiamiento: '' })
                         }}
                         className={`pl-10 ${errores['total_financiamiento'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                         placeholder="0.00"
                       />
                     </div>
-                    {errores['total_financiamiento'] && <p className="text-xs text-red-600">{errores['total_financiamiento']}</p>}
+                    {errores['total_financiamiento'] && (
+                      <p className="text-xs text-red-600">
+                        {errores['total_financiamiento']}
+                      </p>
+                    )}
                   </div>
 
                   {/* Cuota Período */}
@@ -1733,15 +1872,23 @@ export function EditarRevisionManual() {
                         min="0"
                         value={prestamoData.cuota_periodo ?? ''}
                         onChange={e => {
-                          setPrestamoData({ ...prestamoData, cuota_periodo: parseFloat(e.target.value) || 0 })
+                          setPrestamoData({
+                            ...prestamoData,
+                            cuota_periodo: parseFloat(e.target.value) || 0,
+                          })
                           setCambios({ ...cambios, prestamo: true })
-                          if (errores['cuota_periodo']) setErrores({ ...errores, cuota_periodo: '' })
+                          if (errores['cuota_periodo'])
+                            setErrores({ ...errores, cuota_periodo: '' })
                         }}
                         className={`pl-10 ${errores['cuota_periodo'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                         placeholder="0.00"
                       />
                     </div>
-                    {errores['cuota_periodo'] && <p className="text-xs text-red-600">{errores['cuota_periodo']}</p>}
+                    {errores['cuota_periodo'] && (
+                      <p className="text-xs text-red-600">
+                        {errores['cuota_periodo']}
+                      </p>
+                    )}
                   </div>
 
                   {/* Número de Cuotas */}
@@ -1755,16 +1902,28 @@ export function EditarRevisionManual() {
                       step="1"
                       value={prestamoData.numero_cuotas || ''}
                       onChange={e => {
-                        setPrestamoData({ ...prestamoData, numero_cuotas: parseInt(e.target.value) || 0 })
+                        setPrestamoData({
+                          ...prestamoData,
+                          numero_cuotas: parseInt(e.target.value) || 0,
+                        })
                         setCambios({ ...cambios, prestamo: true })
-                        if (errores['numero_cuotas']) setErrores({ ...errores, numero_cuotas: '' })
+                        if (errores['numero_cuotas'])
+                          setErrores({ ...errores, numero_cuotas: '' })
                       }}
                       disabled={prestamoData.estado === 'LIQUIDADO'}
-                      title={prestamoData.estado === 'LIQUIDADO' ? 'No se puede modificar en préstamos liquidados' : undefined}
+                      title={
+                        prestamoData.estado === 'LIQUIDADO'
+                          ? 'No se puede modificar en préstamos liquidados'
+                          : undefined
+                      }
                       className={`disabled:cursor-not-allowed disabled:bg-gray-100 ${errores['numero_cuotas'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                       placeholder="0"
                     />
-                    {errores['numero_cuotas'] && <p className="text-xs text-red-600">{errores['numero_cuotas']}</p>}
+                    {errores['numero_cuotas'] && (
+                      <p className="text-xs text-red-600">
+                        {errores['numero_cuotas']}
+                      </p>
+                    )}
                   </div>
 
                   {/* Tasa de Interés - OCULTO (0% por defecto) */}
@@ -1777,7 +1936,10 @@ export function EditarRevisionManual() {
                     <Select
                       value={prestamoData.modalidad_pago || '-'}
                       onValueChange={v => {
-                        setPrestamoData({ ...prestamoData, modalidad_pago: v === '-' ? '' : v })
+                        setPrestamoData({
+                          ...prestamoData,
+                          modalidad_pago: v === '-' ? '' : v,
+                        })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                     >
@@ -1807,16 +1969,26 @@ export function EditarRevisionManual() {
                       <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                       <Input
                         type="date"
-                        value={formatDateForInput(prestamoData.fecha_aprobacion)}
+                        value={formatDateForInput(
+                          prestamoData.fecha_aprobacion
+                        )}
                         onChange={e => {
-                          setPrestamoData({ ...prestamoData, fecha_aprobacion: e.target.value || null })
+                          setPrestamoData({
+                            ...prestamoData,
+                            fecha_aprobacion: e.target.value || null,
+                          })
                           setCambios({ ...cambios, prestamo: true })
-                          if (errores['fecha_aprobacion']) setErrores({ ...errores, fecha_aprobacion: '' })
+                          if (errores['fecha_aprobacion'])
+                            setErrores({ ...errores, fecha_aprobacion: '' })
                         }}
                         className={`pl-10 ${errores['fecha_aprobacion'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                       />
                     </div>
-                    {errores['fecha_aprobacion'] && <p className="text-xs text-red-600">{errores['fecha_aprobacion']}</p>}
+                    {errores['fecha_aprobacion'] && (
+                      <p className="text-xs text-red-600">
+                        {errores['fecha_aprobacion']}
+                      </p>
+                    )}
                   </div>
 
                   {/* Fecha Base Cálculo - OCULTO */}
@@ -1833,7 +2005,10 @@ export function EditarRevisionManual() {
                     <Select
                       value={prestamoData.concesionario || '-'}
                       onValueChange={v => {
-                        setPrestamoData({ ...prestamoData, concesionario: v === '-' ? '' : v })
+                        setPrestamoData({
+                          ...prestamoData,
+                          concesionario: v === '-' ? '' : v,
+                        })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                     >
@@ -1842,11 +2017,18 @@ export function EditarRevisionManual() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="-">-</SelectItem>
-                        {prestamoData.concesionario && !concesionarios.some((c: any) => c.nombre === prestamoData.concesionario) && (
-                          <SelectItem value={prestamoData.concesionario}>{prestamoData.concesionario}</SelectItem>
-                        )}
+                        {prestamoData.concesionario &&
+                          !concesionarios.some(
+                            (c: any) => c.nombre === prestamoData.concesionario
+                          ) && (
+                            <SelectItem value={prestamoData.concesionario}>
+                              {prestamoData.concesionario}
+                            </SelectItem>
+                          )}
                         {concesionarios.map((c: any) => (
-                          <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>
+                          <SelectItem key={c.id} value={c.nombre}>
+                            {c.nombre}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -1860,7 +2042,10 @@ export function EditarRevisionManual() {
                     <Select
                       value={prestamoData.analista || '-'}
                       onValueChange={v => {
-                        setPrestamoData({ ...prestamoData, analista: v === '-' ? '' : v })
+                        setPrestamoData({
+                          ...prestamoData,
+                          analista: v === '-' ? '' : v,
+                        })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                     >
@@ -1869,11 +2054,18 @@ export function EditarRevisionManual() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="-">-</SelectItem>
-                        {prestamoData.analista && !analistas.some((a: any) => a.nombre === prestamoData.analista) && (
-                          <SelectItem value={prestamoData.analista}>{prestamoData.analista}</SelectItem>
-                        )}
+                        {prestamoData.analista &&
+                          !analistas.some(
+                            (a: any) => a.nombre === prestamoData.analista
+                          ) && (
+                            <SelectItem value={prestamoData.analista}>
+                              {prestamoData.analista}
+                            </SelectItem>
+                          )}
                         {analistas.map((a: any) => (
-                          <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>
+                          <SelectItem key={a.id} value={a.nombre}>
+                            {a.nombre}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -1887,7 +2079,10 @@ export function EditarRevisionManual() {
                     <Select
                       value={prestamoData.modelo_vehiculo || '-'}
                       onValueChange={v => {
-                        setPrestamoData({ ...prestamoData, modelo_vehiculo: v === '-' ? '' : v })
+                        setPrestamoData({
+                          ...prestamoData,
+                          modelo_vehiculo: v === '-' ? '' : v,
+                        })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                     >
@@ -1896,11 +2091,19 @@ export function EditarRevisionManual() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="-">-</SelectItem>
-                        {prestamoData.modelo_vehiculo && !modelosVehiculos.some((m: any) => m.modelo === prestamoData.modelo_vehiculo) && (
-                          <SelectItem value={prestamoData.modelo_vehiculo}>{prestamoData.modelo_vehiculo}</SelectItem>
-                        )}
+                        {prestamoData.modelo_vehiculo &&
+                          !modelosVehiculos.some(
+                            (m: any) =>
+                              m.modelo === prestamoData.modelo_vehiculo
+                          ) && (
+                            <SelectItem value={prestamoData.modelo_vehiculo}>
+                              {prestamoData.modelo_vehiculo}
+                            </SelectItem>
+                          )}
                         {modelosVehiculos.map((m: any) => (
-                          <SelectItem key={m.id} value={m.modelo}>{m.modelo}</SelectItem>
+                          <SelectItem key={m.id} value={m.modelo}>
+                            {m.modelo}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -1917,7 +2120,10 @@ export function EditarRevisionManual() {
                         type="text"
                         value={prestamoData.cedula || ''}
                         onChange={e => {
-                          setPrestamoData({ ...prestamoData, cedula: e.target.value })
+                          setPrestamoData({
+                            ...prestamoData,
+                            cedula: e.target.value,
+                          })
                           setCambios({ ...cambios, prestamo: true })
                         }}
                         className="pl-10"
@@ -1937,7 +2143,10 @@ export function EditarRevisionManual() {
                         type="text"
                         value={prestamoData.nombres || ''}
                         onChange={e => {
-                          setPrestamoData({ ...prestamoData, nombres: e.target.value })
+                          setPrestamoData({
+                            ...prestamoData,
+                            nombres: e.target.value,
+                          })
                           setCambios({ ...cambios, prestamo: true })
                         }}
                         className="pl-10"
@@ -1955,7 +2164,10 @@ export function EditarRevisionManual() {
                       type="text"
                       value={prestamoData.usuario_proponente || ''}
                       onChange={e => {
-                        setPrestamoData({ ...prestamoData, usuario_proponente: e.target.value })
+                        setPrestamoData({
+                          ...prestamoData,
+                          usuario_proponente: e.target.value,
+                        })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                       placeholder="Usuario proponente"
@@ -1973,7 +2185,10 @@ export function EditarRevisionManual() {
                   <Textarea
                     value={prestamoData.observaciones || ''}
                     onChange={e => {
-                      setPrestamoData({ ...prestamoData, observaciones: e.target.value })
+                      setPrestamoData({
+                        ...prestamoData,
+                        observaciones: e.target.value,
+                      })
                       setCambios({ ...cambios, prestamo: true })
                     }}
                     placeholder="Ingresa observaciones del préstamo..."

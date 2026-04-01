@@ -10,6 +10,8 @@ import { LoadingSpinner } from '../../components/ui/loading-spinner'
 
 import { BASE_PATH } from '../../config/env'
 
+import { isOperatorRole } from '../../utils/rol'
+
 interface SimpleProtectedRouteProps {
   children: React.ReactNode
 
@@ -29,8 +31,7 @@ export function SimpleProtectedRoute({
 }: SimpleProtectedRouteProps) {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()
 
-  const homeForRole =
-    (user?.rol || '').toLowerCase() === 'operator' ? '/clientes' : '/dashboard'
+  const homeForRole = isOperatorRole(user?.rol) ? '/clientes' : '/dashboard'
 
   const location = useLocation()
 
@@ -167,7 +168,9 @@ export function SimpleProtectedRoute({
               onClick={() => (window.location.href = BASE_PATH + homeForRole)}
               className="w-full rounded-lg bg-gray-600 px-6 py-3 font-medium text-white transition-colors hover:bg-gray-700"
             >
-              {homeForRole === '/clientes' ? 'Ir a Clientes' : 'Ir al Dashboard'}
+              {homeForRole === '/clientes'
+                ? 'Ir a Clientes'
+                : 'Ir al Dashboard'}
             </button>
           </div>
 

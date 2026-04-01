@@ -5,6 +5,7 @@ Usado por auth, deps y endpoints de usuarios.
 from datetime import datetime, timezone
 from typing import Optional
 
+from app.core.rol_normalization import canonical_rol
 from app.models.user import User
 from app.schemas.auth import UserResponse
 
@@ -18,7 +19,10 @@ def user_to_response(u: User) -> UserResponse:
             return dt.isoformat().replace("+00:00", "Z")
         return dt.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
 
-    rol = getattr(u, "rol", None) or ("admin" if getattr(u, "is_admin", False) else "viewer")
+    raw_rol = getattr(u, "rol", None) or (
+        "admin" if getattr(u, "is_admin", False) else "viewer"
+    )
+    rol = canonical_rol(raw_rol)
     apellido = getattr(u, "apellido", "") or ""
     return UserResponse(
         id=u.id,
@@ -36,5 +40,5 @@ def user_to_response(u: User) -> UserResponse:
 
 def user_is_administrator(user: UserResponse) -> bool:
     """True si el usuario tiene rol admin."""
-    return (user.rol or "").strip().lower() == "admin"
+    return canonical_rol(user.rol) == "admin"
 
