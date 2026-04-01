@@ -20,19 +20,18 @@ import { getFiniquitoAccessToken } from './services/finiquitoService'
 
 import { BASE_PATH, PUBLIC_FLOW_SESSION_KEY } from './config/env'
 
-import {
-  RUTAS_REPORTE_PAGO_PUBLICO,
-  SEGMENTO_REPORTE_COBROS,
-} from './constants/rutasIngresoPago'
+import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
 import { isOperatorRole } from './utils/rol'
 
 /**
- * Rutas alcanzables sin sesion de personal. Cualquier otra ruta exige login y Layout;
- * un usuario en rapicredit-cobros no puede abrir dashboard, clientes, etc. sin autenticarse.
- * La raiz '/' no es publica por defecto: desde rapicredit-estadocuenta al volver a /pagos/
- * se pide login. Si el flujo publico activo es rapicredit-cobros, la raiz redirige al
- * formulario de reporte (sigue teniendo "acceso" coherente al volver atras).
+ * Acceso publico SIN login de personal: estas URLs siguen abiertas (formulario cobros, etc.).
+ * No se impide entrar a /rapicredit-cobros ni a rapicredit-estadocuenta por URL directa.
+ *
+ * La raiz pathname '/' NO esta aqui: si alguien va a /pagos/ sin sesion, debe pasar por /login
+ * (RedirectRootToLogin). Eso no quita el acceso publico al formulario; solo corta el atajo por la raiz.
+ *
+ * Un usuario en rapicredit-cobros no puede abrir dashboard, clientes, etc. sin autenticarse.
  */
 const PUBLIC_PATHS = [
   '/login',
@@ -41,7 +40,10 @@ const PUBLIC_PATHS = [
   '/rapicredit-estadocuenta',
 ]
 
-/** Redirige a login y quita marca de flujo publico (evita pantalla intermedia en la raiz). */
+/**
+ * Solo para pathname '/': envia a /login. Limpia marca de flujo publico en sessionStorage para
+ * que en login no queden restos de "estaba en formulario publico" al haber pasado por la raiz.
+ */
 function RedirectRootToLogin() {
   if (typeof sessionStorage !== 'undefined') {
     sessionStorage.removeItem(PUBLIC_FLOW_SESSION_KEY)
@@ -76,18 +78,6 @@ function RootLayoutWrapper() {
 
   if (!isLoading && !isAuthenticated) {
     if (pathname === '/') {
-      let flowPath = ''
-      if (typeof sessionStorage !== 'undefined') {
-        if (sessionStorage.getItem(PUBLIC_FLOW_SESSION_KEY) === '1') {
-          flowPath =
-            sessionStorage.getItem(`${PUBLIC_FLOW_SESSION_KEY}_path`) || ''
-        }
-      }
-      if (flowPath === SEGMENTO_REPORTE_COBROS) {
-        return (
-          <Navigate to={`/${SEGMENTO_REPORTE_COBROS}`} replace />
-        )
-      }
       return <RedirectRootToLogin />
     }
     return <Navigate to="/login" replace />
