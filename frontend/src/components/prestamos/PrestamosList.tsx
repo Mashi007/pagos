@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -1541,7 +1541,7 @@ export function PrestamosList() {
 
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {/* ICONO ESTADO EDICIÓN: ⚠️ en edición | 👁️ completado/visto */}
+                              {/* ICONO ESTADO EDICIÓN: ⚠️ en edición | 👁️ ver detalles */}
 
                               {(prestamo.estado === 'APROBADO' ||
                                 prestamo.estado === 'LIQUIDADO' ||
@@ -1574,6 +1574,56 @@ export function PrestamosList() {
                                   )}
                                 </Button>
                               )}
+
+                              {/* ICONO REVISIÓN MANUAL - siempre visible */}
+                              {(() => {
+                                const rev = (
+                                  prestamo.revision_manual_estado || 'pendiente'
+                                )
+                                  .toLowerCase()
+                                  .trim()
+                                const icons: Record<
+                                  string,
+                                  { icon: React.ReactNode; title: string; cls: string }
+                                > = {
+                                  pendiente: {
+                                    icon: <AlertTriangle className="h-4 w-4" />,
+                                    title: 'Revisión manual: Pendiente',
+                                    cls: 'text-amber-500 hover:bg-amber-50',
+                                  },
+                                  revisando: {
+                                    icon: <Edit className="h-4 w-4" />,
+                                    title: 'Revisión manual: En revisión',
+                                    cls: 'text-blue-500 hover:bg-blue-50',
+                                  },
+                                  en_espera: {
+                                    icon: <X className="h-4 w-4" />,
+                                    title: 'Revisión manual: En espera',
+                                    cls: 'text-red-500 hover:bg-red-50',
+                                  },
+                                  revisado: {
+                                    icon: <CheckCircle2 className="h-4 w-4" />,
+                                    title: 'Revisión manual: Revisado',
+                                    cls: 'text-green-500 hover:bg-green-50',
+                                  },
+                                }
+                                const cfg = icons[rev] ?? icons['pendiente']
+                                return (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    title={cfg.title}
+                                    className={cfg.cls}
+                                    onClick={() =>
+                                      navigate(
+                                        `/revision-manual?prestamo_id=${prestamo.id}`
+                                      )
+                                    }
+                                  >
+                                    {cfg.icon}
+                                  </Button>
+                                )
+                              })()}
 
                               {/* Botón Descargar Estado de Cuenta */}
 
