@@ -751,36 +751,34 @@ export function PagosList() {
         </CardContent>
       </Card>
       <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-amber-50/50 shadow-sm">
-        <CardContent className="space-y-4 py-6">
+        <CardContent className="space-y-6 py-6">
           {/* Header */}
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <Plus className="h-5 w-5 text-amber-700" />
-                <h3 className="text-lg font-bold text-gray-900">
-                  Agregar Tasa para Fecha de Pago
-                </h3>
-              </div>
-              <p className="text-sm text-gray-700">
-                Use la <strong>fecha de pago</strong> del reporte o comprobante. Es
-                la tasa oficial Bs./USD para convertir bolívares a dólares. Ideal
-                para días pasados o faltantes que no cuentan con tasa registrada.
-              </p>
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <Plus className="h-5 w-5 text-amber-700" />
+              <h3 className="text-lg font-bold text-gray-900">
+                Agregar Tasa para Fecha de Pago
+              </h3>
             </div>
+            <p className="text-sm text-gray-700">
+              Use la <strong>fecha de pago</strong> del reporte o comprobante. Es
+              la tasa oficial Bs./USD para convertir bolívares a dólares. Ideal
+              para días pasados o faltantes que no cuentan con tasa registrada.
+            </p>
           </div>
 
           {/* Tasa Vigente Banner */}
           {tasaHoyBannerLoading ? (
-            <div className="flex items-center gap-2 rounded-lg bg-white/60 p-3 text-sm text-amber-800">
+            <div className="flex items-center gap-2 rounded-lg bg-white/80 p-4 text-sm text-amber-800">
               <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
               Consultando tasa del día...
             </div>
           ) : tasaHoyBanner ? (
-            <div className="flex items-center gap-3 rounded-lg bg-white/60 p-3">
-              <DollarSign className="h-5 w-5 text-amber-700" />
+            <div className="flex items-center gap-3 rounded-lg bg-white/80 p-4">
+              <DollarSign className="h-6 w-6 text-amber-700" />
               <div className="min-w-0">
-                <p className="text-xs font-medium text-gray-600">Tasa Vigente</p>
-                <p className="text-sm font-semibold text-amber-900">
+                <p className="text-xs font-medium text-gray-600">Tasa Vigente Hoy</p>
+                <p className="text-base font-semibold text-amber-900">
                   {(tasaHoyBanner.fecha || '').slice(0, 10)}: Bs.{' '}
                   {new Intl.NumberFormat('es-VE', {
                     minimumFractionDigits: 2,
@@ -791,7 +789,7 @@ export function PagosList() {
               </div>
             </div>
           ) : (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-100/50 p-3 text-sm text-amber-900">
+            <div className="flex items-start gap-2 rounded-lg bg-amber-100/60 p-4 text-sm text-amber-900">
               <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <span>
                 No hay tasa cargada para hoy. Ingrese la tasa en Administracion
@@ -800,13 +798,64 @@ export function PagosList() {
             </div>
           )}
 
+          {/* Formulario: Fecha + Tasa */}
+          <div className="rounded-lg bg-white p-5 shadow-sm">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Fecha */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Fecha de Pago
+                </label>
+                <input
+                  type="date"
+                  max={new Date().toISOString().split('T')[0]}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  placeholder="Seleccione una fecha"
+                />
+                <p className="text-xs text-gray-500">
+                  Máximo: hoy
+                </p>
+              </div>
+
+              {/* Tasa */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Tasa Oficial (Bs. por 1 USD)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="999999.99"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  placeholder="ej. 3105.75"
+                />
+                <p className="text-xs text-gray-500">
+                  2 decimales máximo
+                </p>
+              </div>
+
+              {/* Botón */}
+              <div className="flex flex-col justify-end gap-2">
+                <button
+                  className="rounded-lg bg-amber-700 px-6 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 focus:ring-2 focus:ring-amber-400"
+                >
+                  Guardar Tasa
+                </button>
+                <p className="text-xs text-gray-500 text-center">
+                  Se agregará al historial
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Info Box */}
-          <div className="flex gap-3 rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
-            <AlertCircle className="h-4 w-4 flex-shrink-0 text-blue-600" />
+          <div className="flex gap-3 rounded-lg bg-blue-50 p-4 text-xs text-blue-700">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 text-blue-600 mt-0.5" />
             <div>
-              <strong>Nota:</strong> Esta tasa se usará automáticamente para pagos
-              registrados en Bs. con la misma fecha. Si el reporte tiene múltiples
-              fechas, agrégalas todas en Administración.
+              <strong>Cómo funciona:</strong> La tasa se aplicará automáticamente
+              a pagos registrados en Bs. con la misma fecha de pago. Si el
+              reporte tiene múltiples fechas, agrégalas una por una.
             </div>
           </div>
         </CardContent>
