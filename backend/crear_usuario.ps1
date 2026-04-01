@@ -9,27 +9,27 @@ Write-Host "====================================================================
 
 $usuarios = @()
 
-function Validar-Email {
+function Test-Email {
     param([string]$email)
     return $email -match '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 }
 
-function Validar-Cedula {
+function Test-Cedula {
     param([string]$cedula)
     return $cedula.Length -gt 0 -and $cedula.Length -le 50
 }
 
-function Validar-Nombre {
+function Test-Nombre {
     param([string]$nombre)
     return $nombre.Length -gt 0 -and $nombre.Length -le 255
 }
 
-function Validar-Password {
+function Test-Password {
     param([string]$password)
     return $password.Length -ge 6
 }
 
-function Validar-Rol {
+function Test-Rol {
     param([string]$rol)
     return $rol -in @('admin', 'manager', 'operator', 'viewer')
 }
@@ -87,14 +87,14 @@ while ($true) {
     Write-Host "`n--- USUARIO #$numeroUsuario ---" -ForegroundColor Cyan
     
     # Email
-    $email = Hacer-Pregunta "📧 Email (ej: usuario@empresa.com)" { param($e) Validar-Email $e } 'email'
+    $email = Hacer-Pregunta "📧 Email (ej: usuario@empresa.com)" { param($e) Test-Email $e } 'email'
     $email = $email.ToLower()
     
     # Cédula
-    $cedula = Hacer-Pregunta "🆔 Cédula (ej: 12345678-9)" { param($c) Validar-Cedula $c } 'cedula'
+    $cedula = Hacer-Pregunta "🆔 Cédula (ej: 12345678-9)" { param($c) Test-Cedula $c } 'cedula'
     
     # Nombre
-    $nombre = Hacer-Pregunta "👤 Nombre Completo (Nombre y Apellido, ej: Juan Pérez García)" { param($n) Validar-Nombre $n } 'nombre'
+    $nombre = Hacer-Pregunta "👤 Nombre Completo (Nombre y Apellido, ej: Juan Pérez García)" { param($n) Test-Nombre $n } 'nombre'
     
     # Cargo (opcional)
     Write-Host "`n💼 Cargo (opcional, Enter para omitir): " -NoNewline
@@ -108,10 +108,10 @@ while ($true) {
     Write-Host "   - operator  : Operaciones básicas"
     Write-Host "   - viewer    : Solo lectura (default)"
     
-    $rol = (Hacer-Pregunta "Selecciona rol (admin/manager/operator/viewer)" { param($r) Validar-Rol $r } 'rol').ToLower()
+    $rol = (Hacer-Pregunta "Selecciona rol (admin/manager/operator/viewer)" { param($r) Test-Rol $r } 'rol').ToLower()
     
     # Password
-    $password = Hacer-Pregunta "🔑 Password (mínimo 6 caracteres)" { param($p) Validar-Password $p } 'password'
+    $password = Hacer-Pregunta "🔑 Password (mínimo 6 caracteres)" { param($p) Test-Password $p } 'password'
     
     # Generar hash
     Write-Host "`n🔐 Generando hash de password..." -ForegroundColor Yellow
