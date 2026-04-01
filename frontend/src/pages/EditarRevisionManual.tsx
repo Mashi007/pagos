@@ -267,6 +267,15 @@ export function EditarRevisionManual() {
 
   const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
 
+  // Función helper para convertir ISO datetime a YYYY-MM-DD para input type="date"
+  const formatDateForInput = (isoDate: string | null | undefined): string => {
+    if (!isoDate) return ''
+    if (typeof isoDate === 'string' && isoDate.length >= 10) {
+      return isoDate.slice(0, 10)
+    }
+    return ''
+  }
+
   const opcionesBase = (
     opcionesBD.length > 0
       ? opcionesBD
@@ -1646,7 +1655,7 @@ export function EditarRevisionManual() {
                       <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                       <Input
                         type="date"
-                        value={prestamoData.fecha_requerimiento || ''}
+                        value={formatDateForInput(prestamoData.fecha_requerimiento)}
                         onChange={e => {
                           setPrestamoData({ ...prestamoData, fecha_requerimiento: e.target.value || null })
                           setCambios({ ...cambios, prestamo: true })
@@ -1665,8 +1674,8 @@ export function EditarRevisionManual() {
                       <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                       <Input
                         type="date"
-                        value={prestamoData.fecha_aprobacion || ''}
-                        min={prestamoData.fecha_requerimiento || undefined}
+                        value={formatDateForInput(prestamoData.fecha_aprobacion)}
+                        min={formatDateForInput(prestamoData.fecha_requerimiento) || undefined}
                         onChange={e => {
                           setPrestamoData({ ...prestamoData, fecha_aprobacion: e.target.value || null })
                           setCambios({ ...cambios, prestamo: true })
