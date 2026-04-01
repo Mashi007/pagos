@@ -68,7 +68,7 @@ def generar_pdf_estado_cuenta(
     accent = hc(COLOR_ACCENT)
     text_dark = hc("#1e293b")
 
-    def tbl_style(nrows: int, *, nhead: int = 1, hf: int = 9, bf: int = 9, extras=None):
+    def tbl_style(nrows: int, *, nhead: int = 1, hf: int = 9, bf: int = 9, extras=None, no_rowbg: bool = False):
         extras = extras or []
         h_end = nhead - 1
         st = [
@@ -84,7 +84,7 @@ def generar_pdf_estado_cuenta(
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("BOX", (0, 0), (-1, -1), 0.55, border_m),
         ]
-        if nrows > nhead:
+        if nrows > nhead and not no_rowbg:
             st.append(("ROWBACKGROUNDS", (0, nhead), (-1, -1), [colors.white, alt_bg]))
         st.extend(
             [
@@ -364,29 +364,33 @@ def generar_pdf_estado_cuenta(
 
             # --- Barra de progreso ---
             BAR_W = 7.35 * inch
-            # Minimo 20% para que el texto quepa; 0 si todas pagadas muestra completo
-            filled_pct = max(0.20, pct) if pct < 1.0 else 1.0
+            filled_pct = max(0.05, pct)  # minimo 5% para visibilidad
             filled = filled_pct * BAR_W
-            empty = BAR_W - filled
-            bar_label = f"{n_pagadas}/{n_total} cuotas pagadas ({pct*100:.0f}%)"
-            bar_cells = [[
-                Paragraph(
-                    f'<font color="white" size="8"><b>{bar_label}</b></font>',
-                    ParagraphStyle(name=f"EC_BT_{_pfx}_{prestamo_id}", alignment=1, leading=10),
-                ),
-                ""
-            ]]
-            bar_w_list = [filled, empty if empty > 0 else 0.01]
-            bar_tbl = Table(bar_cells, colWidths=bar_w_list, rowHeights=[16])
+            empty = max(0.01, BAR_W - filled)
+            bar_label = f"{n_pagadas}/{n_total} cuotas pagadas  ({pct*100:.0f}%)"
+            _bt_style = ParagraphStyle(name=f"EC_BT_{_pfx}_{prestamo_id}", alignment=1, leading=10)
+            # Fila 0: etiqueta centrada sobre toda la barra (SPAN)
+            # Fila 1: segmento azul (pagado) + segmento gris (pendiente)
+            bar_cells = [
+                [Paragraph(f'<font color="{COLOR_HEADER}" size="8"><b>{bar_label}</b></font>', _bt_style), ""],
+                ["", ""],
+            ]
+            bar_tbl = Table(bar_cells, colWidths=[filled, empty], rowHeights=[13, 8])
             bar_tbl.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (0, 0), hc(COLOR_HEADER)),
-                ("BACKGROUND", (1, 0), (1, 0), hc(COLOR_BORDER)),
-                ("LEFTPADDING", (0, 0), (-1, -1), 2),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-                ("TOPPADDING", (0, 0), (-1, -1), 2),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("SPAN", (0, 0), (0, 0)),
+                # Fila 0: fondo blanco, texto centrado que ocupa las 2 columnas
+                ("SPAN",       (0, 0), (1, 0)),
+                ("BACKGROUND", (0, 0), (1, 0), colors.white),
+                ("ALIGN",      (0, 0), (1, 0), "CENTER"),
+                ("VALIGN",     (0, 0), (1, 0), "MIDDLE"),
+                # Fila 1: barra bicolor
+                ("BACKGROUND", (0, 1), (0, 1), hc(COLOR_HEADER)),
+                ("BACKGROUND", (1, 1), (1, 1), hc(COLOR_BORDER)),
+                # Padding
+                ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
+                ("TOPPADDING",    (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("VALIGN",        (0, 1), (1, 1), "MIDDLE"),
                 ("BOX", (0, 0), (-1, -1), 0.5, hc(COLOR_BORDER)),
             ]))
             story.append(bar_tbl)
@@ -483,7 +487,7 @@ def generar_pdf_estado_cuenta(
                     1.20 * inch,
                 ],
             )
-            t_amort.setStyle(tbl_style(len(rows), hf=8, bf=8, extras=tbl_extras))
+            t_amort.setStyle(tbl_style(len(rows), hf=8, bf=8, extras=tbl_extras, no_rowbg=True))
             story.append(t_amort)
             story.append(Spacer(1, 8))
 
