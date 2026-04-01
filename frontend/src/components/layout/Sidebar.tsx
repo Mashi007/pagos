@@ -138,7 +138,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
   const userRoleDisplay =
-    (user?.rol || 'operativo') === 'administrador'
+    (user?.rol || 'viewer') === 'admin'
       ? 'Administrador'
       : 'Operativo'
 
@@ -163,7 +163,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const submenuContainsActiveRoute = (item: MenuItem): boolean => {
     if (!item.isSubmenu || !item.children) return false
 
-    const isAdmin = (user?.rol || 'operativo') === 'administrador'
+    const isAdmin = (user?.rol || 'viewer') === 'admin'
 
     const visibleChildren = item.children.filter(
       child => !child.adminOnly || isAdmin
@@ -344,7 +344,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Car,
         },
 
-        { title: 'Usuarios', href: '/usuarios', icon: Shield },
+        { title: 'Usuarios', href: '/usuarios', icon: Shield, adminOnly: true },
       ],
     },
   ]
@@ -354,7 +354,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   useEffect(() => {
     const pathname = location.pathname
 
-    const isAdmin = (user?.rol || 'operativo') === 'administrador'
+    const isAdmin = (user?.rol || 'viewer') === 'admin'
 
     menuItems.forEach(item => {
       if (item.isSubmenu && item.children) {
@@ -408,9 +408,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   }, [isOpen, onClose])
 
   // Operativo: no ve Configuración (ni auditoría); solo Administrador puede acceder a esos módulos
-
   const filteredMenuItems = menuItems.filter(item => {
-    const isAdmin = (user?.rol || 'operativo') === 'administrador'
+    const isAdmin = (user?.rol || 'operativo') === 'admin'
 
     if (item.title === 'Configuración') return isAdmin
 
