@@ -74,6 +74,17 @@ export function Login() {
           >
             Continuar
           </Button>
+
+          <button
+            className="mt-4 text-sm text-slate-500 underline hover:text-slate-300"
+            onClick={() => {
+              sessionStorage.removeItem(PUBLIC_FLOW_SESSION_KEY)
+              sessionStorage.removeItem(PUBLIC_FLOW_SESSION_KEY + '_path')
+              navigate('/login', { replace: true })
+            }}
+          >
+            Soy personal del sistema — iniciar sesión
+          </button>
         </div>
       </div>
     )
