@@ -45,6 +45,8 @@ import { toast } from 'sonner'
 
 import { revisionManualService } from '../services/revisionManualService'
 
+import { prestamoService } from '../services/prestamoService'
+
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 
 import { useConcesionariosActivos } from '../hooks/useConcesionarios'
@@ -189,6 +191,12 @@ export function EditarRevisionManual() {
 
   const [guardandoRechazo, setGuardandoRechazo] = useState(false)
 
+  /** Fecha de aprobación original cargada desde BD — para detectar si cambió */
+  const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<string | null>(null)
+
+  /** Confirmación pendiente de recálculo: 'parcial' | 'final' | null */
+  const [pendingGuardarTipo, setPendingGuardarTipo] = useState<'parcial' | 'final' | null>(null)
+
   const [cambios, setCambios] = useState({
     cliente: false,
     prestamo: false,
@@ -245,6 +253,14 @@ export function EditarRevisionManual() {
       })
 
       setPrestamoData(data.prestamo)
+
+      // Guardar fecha original para detectar cambios
+      const faOrig = data.prestamo?.fecha_aprobacion
+      setFechaAprobacionOriginal(
+        typeof faOrig === 'string' && faOrig.length >= 10
+          ? faOrig.slice(0, 10)
+          : null
+      )
 
       setCuotasData(data.cuotas)
 
@@ -332,6 +348,26 @@ export function EditarRevisionManual() {
       toast.info('ℹ️ No hay cambios para guardar')
 
       return
+    }
+
+    // Confirmar si cambió la fecha de aprobación y hay cuotas
+    const nuevaFechaCheck = formatDateForInput(prestamoData.fecha_aprobacion)
+    if (
+      cambios.prestamo &&
+      nuevaFechaCheck &&
+      fechaAprobacionOriginal &&
+      nuevaFechaCheck !== fechaAprobacionOriginal &&
+      cuotasData.length > 0
+    ) {
+      const ok = window.confirm(
+        `⚠️ CAMBIO DE FECHA DE APROBACIÓN\n\n` +
+        `Fecha anterior: ${fechaAprobacionOriginal}\n` +
+        `Fecha nueva:    ${nuevaFechaCheck}\n\n` +
+        `Se recalcularán ÚNICAMENTE las fechas de vencimiento de las ${cuotasData.length} cuota(s) de la tabla de amortización.\n` +
+        `Los montos, pagos y saldos NO cambiarán.\n\n` +
+        `¿Deseas continuar?`
+      )
+      if (!ok) return
     }
 
     setGuardandoParcial(true)
@@ -480,6 +516,27 @@ export function EditarRevisionManual() {
             )
 
             savedSomething = true
+
+            // Si cambió la fecha de aprobación y hay cuotas → recalcular SOLO fechas de vencimiento
+            const nuevaFecha = formatDateForInput(prestamoData.fecha_aprobacion)
+            const pid2 = parseInt(prestamoId, 10)
+            if (
+              prestamoUpdate.fecha_aprobacion &&
+              nuevaFecha &&
+              fechaAprobacionOriginal &&
+              nuevaFecha !== fechaAprobacionOriginal &&
+              cuotasData.length > 0
+            ) {
+              try {
+                const res = await prestamoService.recalcularFechasAmortizacion(pid2)
+                const actualizadas = res?.data?.actualizadas ?? res?.actualizadas ?? '?'
+                toast.success(`📅 Fechas de vencimiento actualizadas: ${actualizadas} cuota(s) recalculadas`)
+                setFechaAprobacionOriginal(nuevaFecha)
+              } catch (errRecalc: any) {
+                toast.warning('⚠️ Préstamo guardado, pero no se pudieron recalcular las fechas de vencimiento')
+                console.error('Error recalculando fechas:', errRecalc)
+              }
+            }
           } catch (err: any) {
             errorOccurred = true
 
@@ -630,6 +687,26 @@ export function EditarRevisionManual() {
       return
     }
 
+    // Confirmar si cambió la fecha de aprobación y hay cuotas
+    const nuevaFechaFinalCheck = formatDateForInput(prestamoData.fecha_aprobacion)
+    if (
+      cambios.prestamo &&
+      nuevaFechaFinalCheck &&
+      fechaAprobacionOriginal &&
+      nuevaFechaFinalCheck !== fechaAprobacionOriginal &&
+      cuotasData.length > 0
+    ) {
+      const okFecha = window.confirm(
+        `⚠️ CAMBIO DE FECHA DE APROBACIÓN\n\n` +
+        `Fecha anterior: ${fechaAprobacionOriginal}\n` +
+        `Fecha nueva:    ${nuevaFechaFinalCheck}\n\n` +
+        `Se recalcularán ÚNICAMENTE las fechas de vencimiento de las ${cuotasData.length} cuota(s) de la tabla de amortización.\n` +
+        `Los montos, pagos y saldos NO cambiarán.\n\n` +
+        `¿Deseas continuar?`
+      )
+      if (!okFecha) return
+    }
+
     const confirmar = window.confirm(
       '⚠️ CONFIRMAR FINALIZACIÓN DE REVISIÓN\n\n' +
         '✓ Se guardarán todos los cambios pendientes\n' +
@@ -775,6 +852,24 @@ export function EditarRevisionManual() {
               prestamoData.prestamo_id,
               prestamoUpdate
             )
+
+            // Si cambió la fecha de aprobación y hay cuotas → recalcular SOLO fechas de vencimiento
+            const nuevaFechaFinal = formatDateForInput(prestamoData.fecha_aprobacion)
+            const pidFechas = parseInt(prestamoId, 10)
+            if (
+              prestamoUpdate.fecha_aprobacion &&
+              nuevaFechaFinal &&
+              fechaAprobacionOriginal &&
+              nuevaFechaFinal !== fechaAprobacionOriginal &&
+              cuotasData.length > 0
+            ) {
+              try {
+                await prestamoService.recalcularFechasAmortizacion(pidFechas)
+                setFechaAprobacionOriginal(nuevaFechaFinal)
+              } catch (errRecalc: any) {
+                console.error('Error recalculando fechas (guardar y cerrar):', errRecalc)
+              }
+            }
           } catch (err: any) {
             throw new Error(
               `Error en préstamo: ${err?.response?.data?.detail || 'Error desconocido'}`
