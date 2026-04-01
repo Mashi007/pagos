@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
 
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
@@ -131,6 +131,28 @@ export function RevisionManual() {
   const navigate = useNavigate()
 
   const location = useLocation()
+
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // ID del préstamo a resaltar (viene de ?prestamo_id=X al navegar desde Lista de Préstamos)
+  const highlightPrestamoId = (() => {
+    const raw = searchParams.get('prestamo_id')
+    if (!raw) return null
+    const n = parseInt(raw, 10)
+    return isNaN(n) ? null : n
+  })()
+
+  const highlightRowRef = useRef<HTMLTableRowElement | null>(null)
+
+  // Scroll automático a la fila resaltada cuando carga la lista
+  useEffect(() => {
+    if (highlightRowRef.current) {
+      highlightRowRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }
+  })
 
   // Al volver tras finalizar (Guardar y Cerrar), mostrar "Todos" para que el préstamo finalizado sea visible
 
@@ -581,12 +603,16 @@ export function RevisionManual() {
                 </thead>
 
                 <tbody className="divide-y">
-                  {datosVisibles.map(prestamo => (
+                  {datosVisibles.map(prestamo => {
+                    const isHighlighted =
+                      highlightPrestamoId === prestamo.prestamo_id
+                    return (
                     <motion.tr
                       key={prestamo.prestamo_id}
+                      ref={isHighlighted ? highlightRowRef : undefined}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="transition hover:bg-gray-50"
+                      className={`transition ${isHighlighted ? 'bg-blue-50 ring-2 ring-inset ring-blue-400' : 'hover:bg-gray-50'}`}
                     >
                       <td className="px-4 py-3 font-medium">
                         {prestamo.nombres}
@@ -780,7 +806,8 @@ export function RevisionManual() {
                         )}
                       </td>
                     </motion.tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

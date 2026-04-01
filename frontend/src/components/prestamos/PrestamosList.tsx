@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   Download,
   Loader2,
+  MoreHorizontal,
 } from 'lucide-react'
 
 import {
@@ -235,6 +236,8 @@ export function PrestamosList() {
   const [cambiosManualPrestamo, setCambiosManualPrestamo] = useState<Prestamo | null>(null)
 
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
+
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null)
 
   const [pageRevisar, setPageRevisar] = useState(1)
 
@@ -1537,8 +1540,8 @@ export function PrestamosList() {
                           </TableCell>
 
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              {/* ICONO ESTADO EDICIÓN: ⚠️ en edición | ✅ completado/visto */}
+                            <div className="flex items-center justify-end gap-1">
+                              {/* ICONO ESTADO EDICIÓN: ⚠️ en edición | 👁️ completado/visto */}
 
                               {(prestamo.estado === 'APROBADO' ||
                                 prestamo.estado === 'LIQUIDADO' ||
@@ -1556,7 +1559,7 @@ export function PrestamosList() {
                                   title={
                                     prestamo.estado_edicion === 'EN_EDICION'
                                       ? 'En edición - Click para continuar editando'
-                                      : 'Guardado - Click para ver detalles'
+                                      : 'Ver detalles'
                                   }
                                   className={
                                     prestamo.estado_edicion === 'EN_EDICION'
@@ -1601,7 +1604,7 @@ export function PrestamosList() {
                                 </Button>
                               )}
 
-                              {/* Aprobar préstamo (riesgo manual) - Reemplaza Evaluar riesgo + Aprobar crédito + Asignar fecha */}
+                              {/* Aprobar préstamo (riesgo manual) */}
 
                               {canViewEvaluacionRiesgo() &&
                                 (prestamo.estado === 'DRAFT' ||
@@ -1631,6 +1634,51 @@ export function PrestamosList() {
                                   <Trash2 className="h-4 w-4 text-red-600" />
                                 </Button>
                               ) : null}
+
+                              {/* Botón Más opciones (...) - dropdown */}
+
+                              <div className="relative">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="Más opciones"
+                                  className="text-gray-500 hover:bg-gray-100"
+                                  onClick={() =>
+                                    setOpenMenuId(
+                                      openMenuId === prestamo.id
+                                        ? null
+                                        : prestamo.id
+                                    )
+                                  }
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+
+                                {openMenuId === prestamo.id && (
+                                  <>
+                                    {/* Capa invisible para cerrar al hacer click fuera */}
+                                    <div
+                                      className="fixed inset-0 z-40"
+                                      onClick={() => setOpenMenuId(null)}
+                                    />
+
+                                    <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border border-gray-200 bg-white py-1 shadow-xl">
+                                      <button
+                                        className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+                                        onClick={() => {
+                                          setOpenMenuId(null)
+                                          navigate(
+                                            `/revision-manual?prestamo_id=${prestamo.id}`
+                                          )
+                                        }}
+                                      >
+                                        <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                                        Ir a Revisión Manual
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                         </TableRow>
