@@ -1582,7 +1582,7 @@ export function PrestamosList() {
                                   size="sm"
                                   onClick={async () => {
                                     try {
-                                      await prestamoService.descargarEstadoCuentaPdf(
+                                      await prestamoService.descargarEstadoCuentaPDF(
                                         prestamo.id
                                       )
                                       toast.success(

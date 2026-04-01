@@ -50,7 +50,7 @@ export function ModalCambiosManualPrestamo({
     setIsRecalculando(true)
     try {
       // Primero actualizar la fecha de aprobación
-      await prestamoService.actualizarPrestamo(prestamo.id, {
+      await prestamoService.updatePrestamo(prestamo.id, {
         fecha_aprobacion: `${fechaAprobacion}T00:00:00`,
       })
 
@@ -80,7 +80,7 @@ export function ModalCambiosManualPrestamo({
     setIsSaving(true)
     try {
       // Solo guardar cambios (fecha ya fue guardada en recalcular)
-      await prestamoService.actualizarPrestamo(prestamo.id, {
+      await prestamoService.updatePrestamo(prestamo.id, {
         estado_edicion: 'COMPLETADO',
       })
 
