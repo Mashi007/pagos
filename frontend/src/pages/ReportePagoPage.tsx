@@ -1089,78 +1089,66 @@ export default function ReportePagoPage({
             </CardHeader>
 
             <CardContent className="space-y-4 px-5 sm:px-6">
-              {puedeReportarBs ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button
-                    onClick={() => setMoneda('BS')}
-                    className={`relative rounded-lg border-2 p-4 text-left transition-all ${
-                      moneda === 'BS'
-                        ? 'border-emerald-500 bg-emerald-50'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="font-semibold text-slate-900">Bolivares</p>
-                    <p className="mt-1 text-xs text-slate-600">Bs.</p>
-                    <p className="mt-2 text-xs leading-snug text-slate-500">
-                      Monto: 1 a 10M Bs. Tasa oficial del día.
-                    </p>
-                    {moneda === 'BS' && (
-                      <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
-                        <svg
-                          className="h-3 w-3 text-white"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setMoneda('USD')}
-                    className={`relative rounded-lg border-2 p-4 text-left transition-all ${
-                      moneda === 'USD'
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="font-semibold text-slate-900">Dólares</p>
-                    <p className="mt-1 text-xs text-slate-600">USD / $</p>
-                    <p className="mt-2 text-xs leading-snug text-slate-500">
-                      Monto: cualquier cantidad válida en USD.
-                    </p>
-                    {moneda === 'USD' && (
-                      <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
-                        <svg
-                          className="h-3 w-3 text-white"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
-                  <p className="font-semibold text-amber-900">
-                    Solo dólares (USD)
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  onClick={() => setMoneda('BS')}
+                  className={`relative rounded-lg border-2 p-4 text-left transition-all ${
+                    moneda === 'BS'
+                      ? 'border-emerald-500 bg-emerald-50'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <p className="font-semibold text-slate-900">Bolivares</p>
+                  <p className="mt-1 text-xs text-slate-600">Bs.</p>
+                  <p className="mt-2 text-xs leading-snug text-slate-500">
+                    Monto: 1 a 10M Bs. Tasa oficial del día.
                   </p>
-                  <p className="mt-2 text-sm leading-snug text-amber-900/80">
-                    Esta cédula no está autorizada para reportar en bolivares.
-                    Por favor, reporta el monto en USD.
+                  {moneda === 'BS' && (
+                    <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
+                      <svg
+                        className="h-3 w-3 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+                <button
+                  onClick={() => setMoneda('USD')}
+                  className={`relative rounded-lg border-2 p-4 text-left transition-all ${
+                    moneda === 'USD'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <p className="font-semibold text-slate-900">Dólares</p>
+                  <p className="mt-1 text-xs text-slate-600">USD / $</p>
+                  <p className="mt-2 text-xs leading-snug text-slate-500">
+                    Monto: cualquier cantidad válida en USD.
                   </p>
-                </div>
-              )}
+                  {moneda === 'USD' && (
+                    <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
+                      <svg
+                        className="h-3 w-3 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              </div>
 
               <Button
                 className="min-h-[48px] w-full touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
