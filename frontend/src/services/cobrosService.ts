@@ -176,62 +176,67 @@ export async function enviarReportePublico(
 ): Promise<EnviarReporteResponse> {
   const url = `${BASE_PUBLIC}/enviar-reporte`
 
-  const res = await fetch(url, {
-    method: 'POST',
-
-    body: formData,
-
-    credentials: 'same-origin',
-
-    // No Content-Type: el navegador fija multipart boundary
-  })
-
-  if (res.status === 429) {
-    return {
-      ok: false,
-      error:
-        'Ha alcanzado el l├â┬¡mite de env├â┬¡os por hora. Intente m├â┬ís tarde.',
-    }
-  }
-
-  if (res.status === 503) {
-    return {
-      ok: false,
-
-      error:
-        'Servicio temporalmente no disponible. Intente m├â┬ís tarde o contacte por WhatsApp 424-4579934.',
-    }
-  }
-
-  // Leer el body una sola vez (evita "body stream already read" si el servidor devuelve 500/HTML)
-
-  const text = await res.text()
-
-  let data: EnviarReporteResponse
-
   try {
-    data = text ? JSON.parse(text) : {}
-  } catch {
-    return {
-      ok: false,
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
 
-      error: (
-        text ||
-        `Error ${res.status}. Intente m├â┬ís tarde o contacte por WhatsApp 424-4579934.`
-      ).slice(0, 200),
+      body: formData,
+
+      credentials: 'same-origin',
+
+      // No Content-Type: el navegador fija multipart boundary
+    })
+
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.',
+      }
     }
-  }
 
-  if (!res.ok && data && typeof data === 'object') {
-    return {
-      ok: false,
-      error:
-        (data as EnviarReporteResponse).error ||
-        `Error ${res.status}. Intente m├â┬ís tarde o contacte por WhatsApp 424-4579934.`,
+    if (res.status === 503) {
+      return {
+        ok: false,
+
+        error:
+          'Servicio temporalmente no disponible. Intente más tarde o contacte por WhatsApp 424-4579934.',
+      }
     }
-  }
 
-  return data
+    // Leer el body una sola vez (evita "body stream already read" si el servidor devuelve 500/HTML)
+
+    const text = await res.text()
+
+    let data: EnviarReporteResponse
+
+    try {
+      data = text ? JSON.parse(text) : {}
+    } catch {
+      return {
+        ok: false,
+
+        error: (
+          text ||
+          `Error ${res.status}. Intente más tarde o contacte por WhatsApp 424-4579934.`
+        ).slice(0, 200),
+      }
+    }
+
+    if (!res.ok && data && typeof data === 'object') {
+      return {
+        ok: false,
+        error:
+          (data as EnviarReporteResponse).error ||
+          `Error ${res.status}. Intente más tarde o contacte por WhatsApp 424-4579934.`,
+      }
+    }
+
+    return data
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : 'Error de conexión con el servidor.'
+    return { ok: false, error: msg }
+  }
 }
 
 /** Infopagos: enviar reporte a nombre del deudor (uso interno). Devuelve token para descargar recibo. */
@@ -241,49 +246,54 @@ export async function enviarReporteInfopagos(
 ): Promise<EnviarReporteInfopagosResponse> {
   const url = `${BASE_PUBLIC}/infopagos/enviar-reporte`
 
-  const res = await fetch(url, {
-    method: 'POST',
-
-    body: formData,
-
-    credentials: 'same-origin',
-  })
-
-  if (res.status === 429) {
-    return {
-      ok: false,
-      error:
-        'Ha alcanzado el l├â┬¡mite de env├â┬¡os por hora. Intente m├â┬ís tarde.',
-    }
-  }
-
-  const text = await res.text()
-
-  let data: EnviarReporteInfopagosResponse
-
   try {
-    data = text ? JSON.parse(text) : {}
-  } catch {
-    return {
-      ok: false,
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
 
-      error: (text || `Error ${res.status}. Intente m├â┬ís tarde.`).slice(
-        0,
-        200
-      ),
+      body: formData,
+
+      credentials: 'same-origin',
+    })
+
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.',
+      }
     }
-  }
 
-  if (!res.ok && data && typeof data === 'object') {
-    return {
-      ok: false,
-      error:
-        (data as EnviarReporteInfopagosResponse).error ||
-        `Error ${res.status}.`,
+    const text = await res.text()
+
+    let data: EnviarReporteInfopagosResponse
+
+    try {
+      data = text ? JSON.parse(text) : {}
+    } catch {
+      return {
+        ok: false,
+
+        error: (text || `Error ${res.status}. Intente más tarde.`).slice(
+          0,
+          200
+        ),
+      }
     }
-  }
 
-  return data
+    if (!res.ok && data && typeof data === 'object') {
+      return {
+        ok: false,
+        error:
+          (data as EnviarReporteInfopagosResponse).error ||
+          `Error ${res.status}.`,
+      }
+    }
+
+    return data
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : 'Error de conexión con el servidor.'
+    return { ok: false, error: msg }
+  }
 }
 
 /** Infopagos: descargar recibo PDF con el token devuelto tras registrar el pago. */
