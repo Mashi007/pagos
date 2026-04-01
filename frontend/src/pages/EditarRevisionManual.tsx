@@ -2196,20 +2196,31 @@ export function EditarRevisionManual() {
         <div className="sticky bottom-6 -mx-6 flex justify-end gap-3 rounded-t-lg bg-white p-4 shadow-lg">
           <Button
             variant="outline"
-            onClick={handleCerrar}
+            onClick={handleGuardarParciales}
+            disabled={soloLectura || guardandoParcial || guardandoFinal}
             className="gap-2"
-            disabled={guardandoParcial || guardandoFinal}
-            title="Cierra sin guardar cambios"
+            title="Guarda los cambios y continúa revisando - estado cambia a ?"
+          >
+            <Save className="h-4 w-4" />
+            Guardar Cambios
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => setShowRechazarModal(true)}
+            disabled={guardandoParcial || guardandoFinal || guardandoRechazo}
+            className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+            title="Marcar como rechazado - no guarda cambios, solo marca el préstamo"
           >
             <X className="h-4 w-4" />
-            Cerrar sin guardar
+            Rechazar
           </Button>
 
           <Button
             className="gap-2 bg-green-600 text-white hover:bg-green-700"
             onClick={handleGuardarYCerrar}
             disabled={soloLectura || guardandoParcial || guardandoFinal}
-            title="Guarda todos los cambios y finaliza la revisión"
+            title="Guarda todos los cambios y finaliza la revisión - aparece ✓ en Acciones"
           >
             {guardandoFinal ? (
               <Loader2 className="h-4 w-4 animate-spin" />
