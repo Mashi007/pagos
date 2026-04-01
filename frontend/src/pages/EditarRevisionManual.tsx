@@ -214,7 +214,15 @@ export function EditarRevisionManual() {
           prestamo: data.prestamo,
           cliente: data.cliente,
           revision: data.revision,
-          cuotasCount: data.cuotas?.length || 0,
+          cuotas: data.cuotas?.map((c: any) => ({
+            numero_cuota: c.numero_cuota,
+            monto: c.monto,
+            fecha_vencimiento: c.fecha_vencimiento,
+            fecha_pago: c.fecha_pago,
+            total_pagado: c.total_pagado,
+            estado: c.estado,
+            observaciones: c.observaciones,
+          })) || [],
         })
       }
 
@@ -1921,7 +1929,7 @@ export function EditarRevisionManual() {
                               type="date"
                               value={
                                 cuota.fecha_vencimiento
-                                  ? cuota.fecha_vencimiento.split('T')[0]
+                                  ? formatDateForInput(cuota.fecha_vencimiento)
                                   : ''
                               }
                               onChange={e => {
@@ -1947,7 +1955,7 @@ export function EditarRevisionManual() {
                               type="date"
                               value={
                                 cuota.fecha_pago
-                                  ? cuota.fecha_pago.split('T')[0]
+                                  ? formatDateForInput(cuota.fecha_pago)
                                   : ''
                               }
                               onChange={e => {
