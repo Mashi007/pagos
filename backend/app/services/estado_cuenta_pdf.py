@@ -319,6 +319,21 @@ def generar_pdf_estado_cuenta(
         story.append(tp)
         story.append(Spacer(1, 10))
 
+    # Indice: numero_cuota -> lista de pagos que la cubrieron (para cruzar con Plan de pago)
+    _cuota_pagos_idx: dict = {}  # {numero_cuota: [{"fecha": str, "ref": str, "monto": float}]}
+    for _pr in (pagos_realizados or []):
+        _fecha_pr = (str(_pr.get("fecha_pago_display") or ""))[:10]
+        _ref_pr   = (str(_pr.get("referencia_tabla") or _pr.get("numero_documento") or "") or f"Pago #{_pr.get('pago_id','')}").strip()[:20]
+        for _apl in (_pr.get("aplicacion_cuotas") or []):
+            _nc  = int(_apl.get("numero_cuota") or 0)
+            _apl_m = float(_apl.get("monto_aplicado") or 0)
+            if _nc and _apl_m > 0:
+                _cuota_pagos_idx.setdefault(_nc, []).append({
+                    "fecha": _fecha_pr,
+                    "ref":   _ref_pr,
+                    "monto": _apl_m,
+                })
+
     # ----- Plan de pago (didactico con barra de progreso) -----
     if amortizaciones_por_prestamo:
         story.append(Spacer(1, 8))
@@ -410,12 +425,20 @@ def generar_pdf_estado_cuenta(
                 es_pagada = estado_codigo in ("PAGADO", "PAGADA", "PAGO_ADELANTADO")
                 es_parcial = (not es_pagada) and total_aplicado > 0
 
+                _nc_key = int(c.get('numero_cuota') or 0)
+                _orig_pagos = _cuota_pagos_idx.get(_nc_key, [])
+                # Lineas de origen: fecha + referencia del pago que cubrió esta cuota
+                _orig_lines = ''
+                for _op in _orig_pagos:
+                    _op_txt = f"{_op['fecha']}  {_op['ref']}  ({_op['monto']:,.2f})"
+                    _orig_lines += f'<br/><font size="6" color="{COLOR_TEXT_MUTED}">{_op_txt}</font>'
+
                 cell_link = ParagraphStyle(name=f"EC_CL_{_pfx}_{prestamo_id}_{c.get('numero_cuota','x')}", fontSize=8, leading=10)
                 if es_pagada:
-                    pagado_txt = f'<font color="{COLOR_HEADER}"><b>{total_aplicado:,.2f}</b></font>'
+                    pagado_txt = f'<font color="{COLOR_HEADER}"><b>{total_aplicado:,.2f}</b></font>{_orig_lines}'
                     estado_txt = f'<font color="{COLOR_HEADER}"><b>{estado_etiqueta[:18]}</b></font>'
                 elif es_parcial:
-                    pagado_txt = f'<font color="{COLOR_ACCENT}"><b>{total_aplicado:,.2f}</b></font> <font size="7" color="{COLOR_ACCENT}">(parcial)</font>'
+                    pagado_txt = f'<font color="{COLOR_ACCENT}"><b>{total_aplicado:,.2f}</b></font> <font size="7" color="{COLOR_ACCENT}">(parcial)</font>{_orig_lines}'
                     estado_txt = f'<font color="{COLOR_ACCENT}">{estado_etiqueta[:18]}</font>'
                 else:
                     pagado_txt = f'<font color="{COLOR_TEXT_MUTED}">-</font>'
