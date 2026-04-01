@@ -128,7 +128,8 @@ def _validar_permiso_edicion(
         return
     
     estado = (rev.estado_revision or "").strip().lower()
-    es_admin = getattr(current_user, "is_admin", False) or getattr(current_user, "is_superuser", False)
+    rol_user = (getattr(current_user, "rol", "") or "").strip().lower()
+    es_admin = rol_user == "administrador"
     
     # ✓ REVISADO: Nadie puede editar
     if estado == "revisado":
@@ -1107,7 +1108,8 @@ def cambiar_estado_revision(
     - rechazado (✕)  → revisando (?) : reabrir para corregir
     """
     actor = _actor_revision_manual(current_user)
-    es_admin = getattr(current_user, "is_admin", False) or getattr(current_user, "is_superuser", False)
+    rol_user = (getattr(current_user, "rol", "") or "").strip().lower()
+    es_admin = rol_user == "administrador"
 
     ESTADOS_VALIDOS = {"revisando", "en_espera", "rechazado", "revisado"}
     if payload.nuevo_estado not in ESTADOS_VALIDOS:
