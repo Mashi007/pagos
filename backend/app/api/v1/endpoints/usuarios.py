@@ -115,9 +115,16 @@ def actualizar_usuario(
     db: Session = Depends(get_db)
 ):
     """Actualiza un usuario. Solo administradores. Email debe ser único."""
+    from app.core.config import settings
+    
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    # Log de depuración
+    if settings.DEBUG:
+        print(f"[DEBUG] Actualizando usuario {user_id}: {body.dict()}")
+        print(f"[DEBUG] Rol recibido: '{body.rol}' (type: {type(body.rol)})")
 
     if body.email is not None:
         email = body.email.lower().strip()
@@ -136,6 +143,7 @@ def actualizar_usuario(
     if body.cargo is not None:
         u.cargo = body.cargo.strip() if body.cargo else None
     if body.rol is not None:
+        print(f"[DEBUG] Asignando rol: '{body.rol}' a usuario {user_id}")
         u.rol = body.rol
     if body.is_active is not None:
         u.is_active = body.is_active
@@ -143,7 +151,16 @@ def actualizar_usuario(
         u.password_hash = get_password_hash(body.password)
 
     u.updated_at = datetime.utcnow()
-    db.commit()
+    
+    try:
+        db.commit()
+        if settings.DEBUG:
+            print(f"[DEBUG] Usuario actualizado correctamente. Rol en BD: '{u.rol}'")
+    except Exception as e:
+        db.rollback()
+        print(f"[DEBUG] Error al actualizar usuario: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    
     db.refresh(u)
     return user_to_response(u)
 

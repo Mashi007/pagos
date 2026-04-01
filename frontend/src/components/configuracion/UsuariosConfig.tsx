@@ -753,21 +753,7 @@ export default function UsuariosConfig() {
                     Nivel de usuario
                   </label>
 
-                  <div className="flex items-center space-x-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="rol"
-                        checked={formData.rol === 'viewer'}
-                        onChange={() =>
-                          setFormData({ ...formData, rol: 'viewer' })
-                        }
-                        className="mr-2"
-                      />
-
-                      <span className="text-sm text-gray-700">Operativo</span>
-                    </label>
-
+                  <div className="flex flex-wrap items-center gap-4">
                     <label className="flex items-center">
                       <input
                         type="radio"
@@ -778,16 +764,51 @@ export default function UsuariosConfig() {
                         }
                         className="mr-2"
                       />
+                      <span className="text-sm text-gray-700">Administrador</span>
+                    </label>
 
-                      <span className="text-sm text-gray-700">
-                        Administrador
-                      </span>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="rol"
+                        checked={formData.rol === 'manager'}
+                        onChange={() =>
+                          setFormData({ ...formData, rol: 'manager' })
+                        }
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Gerente</span>
+                    </label>
+
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="rol"
+                        checked={formData.rol === 'operator'}
+                        onChange={() =>
+                          setFormData({ ...formData, rol: 'operator' })
+                        }
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Operario</span>
+                    </label>
+
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="rol"
+                        checked={formData.rol === 'viewer'}
+                        onChange={() =>
+                          setFormData({ ...formData, rol: 'viewer' })
+                        }
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Visualizador</span>
                     </label>
                   </div>
 
                   <p className="mt-1 text-xs text-gray-500">
-                    Administrador: acceso total. Operativo: no puede realizar
-                    cambios en módulos de configuración ni auditoría.
+                    Admin: acceso total | Gerente: gestión operativa | Operario: operaciones básicas | Visualizador: solo lectura
                   </p>
                 </div>
 

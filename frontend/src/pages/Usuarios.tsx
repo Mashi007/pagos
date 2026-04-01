@@ -227,23 +227,26 @@ export function Usuarios() {
   }
 
   const handleEdit = (usuario: User) => {
+    console.log('[Usuarios] Editando usuario:', { 
+      id: usuario.id, 
+      email: usuario.email, 
+      rol: usuario.rol, 
+      rolType: typeof usuario.rol 
+    })
+    
     setEditingUsuario(usuario)
 
     setFormData({
       email: usuario.email,
-
       nombre: usuario.nombre,
-
       apellido: usuario.apellido,
-
-      rol: usuario.rol || 'viewer', // Cambio clave: rol â†' is_admin
-
+      rol: (usuario.rol || 'viewer') as UserRol,
       password: '',
-
-      cargo: usuario.cargo || '', // Si es null, usar string vacío (no 'Usuario')
-
+      cargo: usuario.cargo || '',
       is_active: usuario.is_active,
     })
+
+    console.log('[Usuarios] FormData establecido con rol:', usuario.rol)
 
     setShowCreateForm(true)
   }
@@ -301,15 +304,17 @@ export function Usuarios() {
 
         const updateData: any = {
           email: formData.email,
-
           nombre: formData.nombre,
-
           apellido: formData.apellido,
-
           rol: formData.rol,
-
           is_active: formData.is_active,
         }
+        
+        console.log('[Usuarios] Enviando actualización con datos:', {
+          userId: editingUsuario.id,
+          rol: updateData.rol,
+          rolType: typeof updateData.rol
+        })
 
         // âœ… CRÍTICO: Validar que editingUsuario.id existe y es válido
 
