@@ -1684,23 +1684,7 @@ export function EditarRevisionManual() {
                     />
                   </div>
 
-                  {/* Tasa de Interés */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
-                      Tasa de Interés (%)
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={prestamoData.tasa_interes || ''}
-                      onChange={e => {
-                        setPrestamoData({ ...prestamoData, tasa_interes: parseFloat(e.target.value) || 0 })
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      placeholder="0.00"
-                    />
-                  </div>
+                  {/* Tasa de Interés - OCULTO (0% por defecto) */}
 
                   {/* Modalidad Pago */}
                   <div>
