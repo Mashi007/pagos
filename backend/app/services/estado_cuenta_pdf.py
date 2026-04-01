@@ -349,22 +349,25 @@ def generar_pdf_estado_cuenta(
 
             # --- Barra de progreso ---
             BAR_W = 7.35 * inch
-            filled = max(0.01, pct) * BAR_W
+            # Minimo 20% para que el texto quepa; 0 si todas pagadas muestra completo
+            filled_pct = max(0.20, pct) if pct < 1.0 else 1.0
+            filled = filled_pct * BAR_W
             empty = BAR_W - filled
+            bar_label = f"{n_pagadas}/{n_total} cuotas pagadas ({pct*100:.0f}%)"
             bar_cells = [[
                 Paragraph(
-                    f'<font color="white" size="8"><b>{n_pagadas}/{n_total} cuotas pagadas ({pct*100:.0f}%)</b></font>',
+                    f'<font color="white" size="8"><b>{bar_label}</b></font>',
                     ParagraphStyle(name=f"EC_BT_{_pfx}_{prestamo_id}", alignment=1, leading=10),
                 ),
                 ""
             ]]
             bar_w_list = [filled, empty if empty > 0 else 0.01]
-            bar_tbl = Table(bar_cells, colWidths=bar_w_list, rowHeights=[14])
+            bar_tbl = Table(bar_cells, colWidths=bar_w_list, rowHeights=[16])
             bar_tbl.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (0, 0), hc(COLOR_HEADER)),
                 ("BACKGROUND", (1, 0), (1, 0), hc(COLOR_BORDER)),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 2),
                 ("TOPPADDING", (0, 0), (-1, -1), 2),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
