@@ -848,16 +848,6 @@ export function PagosList() {
               </div>
             </div>
           </div>
-
-          {/* Info Box */}
-          <div className="flex gap-3 rounded-lg bg-blue-50 p-4 text-xs text-blue-700">
-            <AlertCircle className="h-4 w-4 flex-shrink-0 text-blue-600 mt-0.5" />
-            <div>
-              <strong>Cómo funciona:</strong> La tasa se aplicará automáticamente
-              a pagos registrados en Bs. con la misma fecha de pago. Si el
-              reporte tiene múltiples fechas, agrégalas una por una.
-            </div>
-          </div>
         </CardContent>
       </Card>
       <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
