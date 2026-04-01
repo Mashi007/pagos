@@ -693,6 +693,10 @@ def editar_prestamo_revision(
             fecha_ap = datetime.strptime(update_data.fecha_aprobacion, "%Y-%m-%d")
             cambios_dict['fecha_aprobacion'] = (str(prestamo.fecha_aprobacion), str(fecha_ap))
             prestamo.fecha_aprobacion = fecha_ap
+            # fecha_base_calculo siempre igual a fecha_aprobacion
+            fecha_base_nueva = fecha_ap.date()
+            cambios_dict['fecha_base_calculo'] = (str(prestamo.fecha_base_calculo), str(fecha_base_nueva))
+            prestamo.fecha_base_calculo = fecha_base_nueva
         except ValueError:
             pass
 

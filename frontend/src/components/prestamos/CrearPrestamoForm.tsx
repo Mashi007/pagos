@@ -785,8 +785,10 @@ export function CrearPrestamoForm({
       // (pero esto no debería pasar con el fallback anterior)
 
       // fecha_aprobacion: datetime completo porque en BD es DateTime
+      // fecha_base_calculo siempre igual a fecha_aprobacion
       if (fechaApr !== '') {
         prestamoData.fecha_aprobacion = `${fechaApr}T00:00:00`
+        prestamoData.fecha_base_calculo = fechaApr
       } else {
         delete prestamoData.fecha_aprobacion
       }
@@ -874,8 +876,10 @@ export function CrearPrestamoForm({
     setIsRecalculatingAmortizacion(true)
     try {
       // 1. Primero actualizar la fecha de aprobación del préstamo
+      // fecha_base_calculo siempre igual a fecha_aprobacion
       const prestamoDataUpdate = {
         fecha_aprobacion: `${nuevaFechaAprobacion}T00:00:00`,
+        fecha_base_calculo: nuevaFechaAprobacion,
       }
 
       await updatePrestamo.mutateAsync({

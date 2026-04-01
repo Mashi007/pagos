@@ -411,13 +411,16 @@ export function EditarRevisionManual() {
         )
           prestamoUpdate.cuota_periodo = prestamoData.cuota_periodo
 
-        if (prestamoData.fecha_base_calculo !== undefined)
-          prestamoUpdate.fecha_base_calculo =
-            prestamoData.fecha_base_calculo || null
-
-        if (prestamoData.fecha_aprobacion !== undefined)
+        if (prestamoData.fecha_aprobacion !== undefined) {
           prestamoUpdate.fecha_aprobacion =
             prestamoData.fecha_aprobacion || null
+          // fecha_base_calculo siempre igual a fecha_aprobacion
+          prestamoUpdate.fecha_base_calculo =
+            prestamoData.fecha_aprobacion || null
+        } else if (prestamoData.fecha_base_calculo !== undefined) {
+          prestamoUpdate.fecha_base_calculo =
+            prestamoData.fecha_base_calculo || null
+        }
 
         if (prestamoData.estado !== undefined)
           prestamoUpdate.estado = prestamoData.estado
@@ -705,13 +708,16 @@ export function EditarRevisionManual() {
         )
           prestamoUpdate.cuota_periodo = prestamoData.cuota_periodo
 
-        if (prestamoData.fecha_base_calculo !== undefined)
-          prestamoUpdate.fecha_base_calculo =
-            prestamoData.fecha_base_calculo || null
-
-        if (prestamoData.fecha_aprobacion !== undefined)
+        if (prestamoData.fecha_aprobacion !== undefined) {
           prestamoUpdate.fecha_aprobacion =
             prestamoData.fecha_aprobacion || null
+          // fecha_base_calculo siempre igual a fecha_aprobacion
+          prestamoUpdate.fecha_base_calculo =
+            prestamoData.fecha_aprobacion || null
+        } else if (prestamoData.fecha_base_calculo !== undefined) {
+          prestamoUpdate.fecha_base_calculo =
+            prestamoData.fecha_base_calculo || null
+        }
 
         if (prestamoData.estado !== undefined)
           prestamoUpdate.estado = prestamoData.estado

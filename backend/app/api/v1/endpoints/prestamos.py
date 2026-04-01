@@ -2904,6 +2904,9 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
 
     p.fecha_aprobacion = datetime.combine(payload.fecha_aprobacion, datetime.min.time()) if isinstance(payload.fecha_aprobacion, date) else payload.fecha_aprobacion
 
+    # fecha_base_calculo siempre igual a fecha_aprobacion
+    p.fecha_base_calculo = fecha_ap_date
+
     p.estado = "APROBADO"
 
     validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
@@ -4003,6 +4006,11 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
     if payload.fecha_aprobacion is not None:
 
         row.fecha_aprobacion = payload.fecha_aprobacion
+
+        # fecha_base_calculo siempre igual a fecha_aprobacion
+        fa_date = payload.fecha_aprobacion.date() if hasattr(payload.fecha_aprobacion, "date") and callable(getattr(payload.fecha_aprobacion, "date", None)) else payload.fecha_aprobacion
+        if payload.fecha_base_calculo is None:
+            row.fecha_base_calculo = fa_date
 
     if payload.cuota_periodo is not None:
 
