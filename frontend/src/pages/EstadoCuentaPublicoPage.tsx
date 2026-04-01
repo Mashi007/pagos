@@ -31,6 +31,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 import { useLocation } from 'react-router-dom'
 
@@ -179,6 +180,8 @@ export default function EstadoCuentaPublicoPage() {
   const [codigo, setCodigo] = useState('')
 
   const [loading, setLoading] = useState(false)
+
+  const isMobile = useIsMobile()
 
   const [loadingPdf, setLoadingPdf] = useState(false)
 
@@ -921,11 +924,13 @@ export default function EstadoCuentaPublicoPage() {
 
             {pdfDataUrl && !loadingPdf && (
               <>
-                <p className="py-6 text-center text-xl font-bold text-slate-800 sm:text-2xl">
-                  Descarga tu estado de cuenta
+                <p className="py-4 text-center text-xl font-bold text-slate-800 sm:text-2xl">
+                  {isMobile
+                    ? 'Descarga tu estado de cuenta'
+                    : 'Vista previa de tu estado de cuenta'}
                 </p>
 
-                <p className="-mt-4 pb-2 text-center text-sm text-slate-500">
+                <p className="-mt-2 pb-2 text-center text-sm text-slate-500">
                   Los datos reflejan el estado al momento de esta consulta. Cada
                   nueva consulta muestra los pagos más recientes.
                 </p>
@@ -936,6 +941,26 @@ export default function EstadoCuentaPublicoPage() {
                   </span>
                   : se aplican en orden por número de cuota.
                 </p>
+
+                {/* Visor PDF solo en desktop/tablet */}
+                {!isMobile && (pdfBlobUrl || pdfDataUrl) && (
+                  <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 shadow-md">
+                    <iframe
+                      src={pdfBlobUrl || pdfDataUrl || ''}
+                      title="Vista previa estado de cuenta"
+                      className="h-[70vh] w-full"
+                      style={{ minHeight: '480px' }}
+                    />
+                  </div>
+                )}
+
+                {/* En movil: mensaje informativo */}
+                {isMobile && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-800">
+                    <span className="font-semibold">Listo.</span> Pulsa el botón
+                    para guardar el PDF en tu dispositivo.
+                  </div>
+                )}
               </>
             )}
 
@@ -961,7 +986,7 @@ export default function EstadoCuentaPublicoPage() {
                   download={`estado_cuenta_${cedula.replace(/\s/g, '_')}.pdf`}
                   className="inline-flex min-h-[48px] min-w-0 flex-1 touch-manipulation items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 transition-all duration-200 hover:bg-emerald-700 hover:shadow-xl"
                 >
-                  Descargar estado de cuenta
+                  {isMobile ? 'Descargar estado de cuenta' : 'Guardar PDF'}
                 </a>
               )}
             </div>

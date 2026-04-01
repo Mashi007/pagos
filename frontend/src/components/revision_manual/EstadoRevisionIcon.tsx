@@ -1,4 +1,10 @@
-import { AlertTriangle, MessageSquare, X, CheckCircle, Loader2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  MessageSquare,
+  X,
+  CheckCircle,
+  Loader2,
+} from 'lucide-react'
 import { Button } from '../ui/button'
 import { toast } from 'sonner'
 import { revisionManualService } from '../../services/revisionManualService'
@@ -40,7 +46,9 @@ export function EstadoRevisionIcon({
       revisado: `✅ FINALIZAR REVISIÓN de ${nombreCliente}?\n\n⚠️ Esta acción NO se puede deshacer. Solo admin.\n\nTodos los cambios se guardarán en las tablas originales.`,
     }
 
-    const confirmar = window.confirm(confirmMsgs[nuevoEstado] || 'Confirmar cambio?')
+    const confirmar = window.confirm(
+      confirmMsgs[nuevoEstado] || 'Confirmar cambio?'
+    )
     if (!confirmar) return
 
     setIsLoading(true)
@@ -105,7 +113,9 @@ export function EstadoRevisionIcon({
             title="Click para iniciar revisión"
           >
             <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <span className="text-xs font-semibold text-amber-700">Pendiente</span>
+            <span className="text-xs font-semibold text-amber-700">
+              Pendiente
+            </span>
           </div>
         )
 
@@ -121,7 +131,9 @@ export function EstadoRevisionIcon({
             ) : (
               <MessageSquare className="h-4 w-4 text-blue-600" />
             )}
-            <span className="text-xs font-semibold text-blue-700">Revisando</span>
+            <span className="text-xs font-semibold text-blue-700">
+              Revisando
+            </span>
           </div>
         )
 
@@ -133,7 +145,9 @@ export function EstadoRevisionIcon({
             title="Click para cambiar estado"
           >
             <X className="h-4 w-4 text-orange-600" />
-            <span className="text-xs font-semibold text-orange-700">En Espera</span>
+            <span className="text-xs font-semibold text-orange-700">
+              En Espera
+            </span>
           </div>
         )
 
@@ -145,7 +159,9 @@ export function EstadoRevisionIcon({
             title="Rechazado — click para reabrir"
           >
             <X className="h-4 w-4 text-red-600" />
-            <span className="text-xs font-semibold text-red-700">Rechazado</span>
+            <span className="text-xs font-semibold text-red-700">
+              Rechazado
+            </span>
           </div>
         )
 
@@ -153,14 +169,14 @@ export function EstadoRevisionIcon({
         return (
           <div className="flex items-center justify-center gap-1 rounded-lg bg-green-100 px-2 py-1">
             <CheckCircle className="h-4 w-4 text-green-600" />
-            <span className="text-xs font-semibold text-green-700">Revisado</span>
+            <span className="text-xs font-semibold text-green-700">
+              Revisado
+            </span>
           </div>
         )
 
       default:
-        return (
-          <span className="text-xs text-gray-500">Estado desconocido</span>
-        )
+        return <span className="text-xs text-gray-500">Estado desconocido</span>
     }
   }
 

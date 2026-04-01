@@ -90,9 +90,7 @@ export function ModalCambiosManualPrestamo({
       onSuccess?.()
       onClose()
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || 'Error al guardar cambios'
-      )
+      toast.error(error?.response?.data?.detail || 'Error al guardar cambios')
     } finally {
       setIsSaving(false)
     }
@@ -123,10 +121,14 @@ export function ModalCambiosManualPrestamo({
                 <div>
                   <p className="text-gray-600">Monto</p>
                   <p className="font-semibold">
-                    ${Number(prestamo.total_financiamiento).toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    $
+                    {Number(prestamo.total_financiamiento).toLocaleString(
+                      'en-US',
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }
+                    )}
                   </p>
                 </div>
                 <div>
@@ -142,28 +144,31 @@ export function ModalCambiosManualPrestamo({
             <CardContent className="pt-4">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Calendar className="inline mr-2 h-4 w-4" />
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    <Calendar className="mr-2 inline h-4 w-4" />
                     Fecha de Aprobación
                   </label>
                   <Input
                     type="date"
                     value={fechaAprobacion}
-                    onChange={(e) => setFechaAprobacion(e.target.value)}
+                    onChange={e => setFechaAprobacion(e.target.value)}
                     className="w-full"
                   />
-                  {fechaAprobacion !== 
-                    new Date(prestamo.fecha_aprobacion || '').toISOString().split('T')[0] && (
-                    <p className="text-xs text-orange-600 mt-1">
+                  {fechaAprobacion !==
+                    new Date(prestamo.fecha_aprobacion || '')
+                      .toISOString()
+                      .split('T')[0] && (
+                    <p className="mt-1 text-xs text-orange-600">
                       ⚠️ La fecha ha sido modificada
                     </p>
                   )}
                 </div>
 
-                <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                <div className="rounded border border-blue-200 bg-blue-50 p-3">
                   <p className="text-xs text-blue-800">
-                    💡 <strong>Nota:</strong> Cuando cambies la fecha de aprobación, 
-                    la tabla de amortización se recalculará automáticamente.
+                    💡 <strong>Nota:</strong> Cuando cambies la fecha de
+                    aprobación, la tabla de amortización se recalculará
+                    automáticamente.
                   </p>
                 </div>
 
@@ -174,7 +179,9 @@ export function ModalCambiosManualPrestamo({
                   className="w-full"
                 >
                   <RefreshCw className="mr-2 h-4 w-4" />
-                  {isRecalculando ? 'Recalculando...' : 'Recalcular Amortización'}
+                  {isRecalculando
+                    ? 'Recalculando...'
+                    : 'Recalcular Amortización'}
                 </Button>
               </div>
             </CardContent>

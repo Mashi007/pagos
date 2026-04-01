@@ -405,8 +405,7 @@ export function useExcelUploadPagos({
           )
 
           cedulasUnicas.forEach(cedula => {
-            const raw =
-              batch[cedula] || batch[cedula.replace(/-/g, '')] || []
+            const raw = batch[cedula] || batch[cedula.replace(/-/g, '')] || []
 
             const prestamos = raw.filter((p: any) =>
               ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
@@ -419,7 +418,11 @@ export function useExcelUploadPagos({
 
             console.log(
               `[ExcelUpload v2.1] ${cedula}: raw=${raw.length} activos=${arr.length}`,
-              arr.map((a: { id: number; estado: string }) => `${a.id}(${a.estado})`).join(',')
+              arr
+                .map(
+                  (a: { id: number; estado: string }) => `${a.id}(${a.estado})`
+                )
+                .join(',')
             )
 
             map[cedula] = arr
@@ -617,7 +620,10 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
-      const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
+      const prestamosActivos = buscarEnMapaPrestamos(
+        cedulaLookup,
+        prestamosPorCedula
+      )
 
       return prestamosActivos.length !== 1
     })
@@ -644,7 +650,10 @@ export function useExcelUploadPagos({
           row.numero_documento || ''
         )
 
-        const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
+        const prestamosActivos = buscarEnMapaPrestamos(
+          cedulaLookup,
+          prestamosPorCedula
+        )
 
         let prestamoId: number | null = currentRow.prestamo_id
 
@@ -732,7 +741,10 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
-      const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
+      const prestamosActivos = buscarEnMapaPrestamos(
+        cedulaLookup,
+        prestamosPorCedula
+      )
 
       if (prestamosActivos.length > 1 && !currentRow.prestamo_id) {
         addToast(
@@ -1199,8 +1211,7 @@ export function useExcelUploadPagos({
 
       const psDup = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
       const autoIdDup =
-        row.prestamo_id ||
-        (psDup.length === 1 ? psDup[0].id : null)
+        row.prestamo_id || (psDup.length === 1 ? psDup[0].id : null)
 
       if (row._hasErrors) {
         const camposConProblema = Object.entries(row._validation || {})
@@ -1327,8 +1338,7 @@ export function useExcelUploadPagos({
 
       const psRow = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
       const autoId =
-        row.prestamo_id ||
-        (psRow.length === 1 ? psRow[0].id : null)
+        row.prestamo_id || (psRow.length === 1 ? psRow[0].id : null)
 
       if (row._hasErrors) {
         const camposConProblema = Object.entries(row._validation || {})
@@ -1450,7 +1460,10 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
-      const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
+      const prestamosActivos = buscarEnMapaPrestamos(
+        cedulaLookup,
+        prestamosPorCedula
+      )
 
       if (prestamosActivos.length > 1 && !row.prestamo_id) return false
 
@@ -1495,7 +1508,10 @@ export function useExcelUploadPagos({
         row.numero_documento || ''
       )
 
-      const prestamosActivos = buscarEnMapaPrestamos(cedulaLookup, prestamosPorCedula)
+      const prestamosActivos = buscarEnMapaPrestamos(
+        cedulaLookup,
+        prestamosPorCedula
+      )
 
       let prestamoId: number | null = row.prestamo_id ?? null
 

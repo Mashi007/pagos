@@ -607,205 +607,205 @@ export function RevisionManual() {
                     const isHighlighted =
                       highlightPrestamoId === prestamo.prestamo_id
                     return (
-                    <motion.tr
-                      key={prestamo.prestamo_id}
-                      ref={isHighlighted ? highlightRowRef : undefined}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className={`transition ${isHighlighted ? 'bg-blue-50 ring-2 ring-inset ring-blue-400' : 'hover:bg-gray-50'}`}
-                    >
-                      <td className="px-4 py-3 font-medium">
-                        {prestamo.nombres}
-                      </td>
+                      <motion.tr
+                        key={prestamo.prestamo_id}
+                        ref={isHighlighted ? highlightRowRef : undefined}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className={`transition ${isHighlighted ? 'bg-blue-50 ring-2 ring-inset ring-blue-400' : 'hover:bg-gray-50'}`}
+                      >
+                        <td className="px-4 py-3 font-medium">
+                          {prestamo.nombres}
+                        </td>
 
-                      <td className="px-4 py-3 text-gray-600">
-                        {prestamo.cedula}
-                      </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {prestamo.cedula}
+                        </td>
 
-                      <td className="px-4 py-3 text-right font-semibold">
-                        $
-                        {prestamo.total_prestamo.toLocaleString('es-ES', {
-                          maximumFractionDigits: 2,
-                        })}
-                      </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          $
+                          {prestamo.total_prestamo.toLocaleString('es-ES', {
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
 
-                      <td className="px-4 py-3 text-right font-semibold text-green-600">
-                        $
-                        {prestamo.total_abonos.toLocaleString('es-ES', {
-                          maximumFractionDigits: 2,
-                        })}
-                      </td>
+                        <td className="px-4 py-3 text-right font-semibold text-green-600">
+                          $
+                          {prestamo.total_abonos.toLocaleString('es-ES', {
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
 
-                      <td className="px-4 py-3 text-right font-semibold text-orange-600">
-                        $
-                        {prestamo.saldo.toLocaleString('es-ES', {
-                          maximumFractionDigits: 2,
-                        })}
-                      </td>
+                        <td className="px-4 py-3 text-right font-semibold text-orange-600">
+                          $
+                          {prestamo.saldo.toLocaleString('es-ES', {
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
 
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`rounded px-2 py-1 text-xs font-semibold ${prestamo.cuotas_vencidas > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100'}`}
-                        >
-                          {prestamo.cuotas_vencidas}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`rounded px-2 py-1 text-xs font-semibold ${prestamo.cuotas_morosas > 0 ? 'bg-red-100 text-red-800' : 'bg-gray-100'}`}
-                        >
-                          {prestamo.cuotas_morosas}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        {prestamo.estado_revision === 'revisado' && (
-                          <span className="rounded bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">
-                            ✓ Revisado
-                          </span>
-                        )}
-
-                        {prestamo.estado_revision === 'revisando' && (
-                          <span className="rounded bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800">
-                            🔄 Revisando
-                          </span>
-                        )}
-
-                        {prestamo.estado_revision === 'pendiente' && (
-                          <span className="rounded bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800">
-                            Pendiente
-                          </span>
-                        )}
-
-                        {prestamo.estado_revision === 'en_espera' && (
-                          <span className="rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">
-                            ⚠️ En Espera
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <EstadoRevisionIcon
-                            prestamoId={prestamo.prestamo_id}
-                            estadoActual={prestamo.estado_revision}
-                            nombreCliente={prestamo.nombres}
-                            onStateChange={() => {
-                              queryClient.invalidateQueries({
-                                queryKey: ['revision-manual-prestamos'],
-                              })
-                            }}
-                          />
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0"
-                            onClick={() => {
-                              const opciones = `Opciones para ${prestamo.nombres}:\n\n1. Ver historial de cambios\n2. Enviar notificación\n3. Duplicar revisión\n4. Ver detalles completos\n5. Cancelar`
-                              window.alert(opciones)
-                            }}
-                            title="Más opciones"
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`rounded px-2 py-1 text-xs font-semibold ${prestamo.cuotas_vencidas > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100'}`}
                           >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        {prestamo.estado_revision === 'pendiente' && (
-                          <div className="flex flex-wrap justify-center gap-2">
-                            <Button
-                              size="sm"
-                              className="h-8 bg-green-600 px-2 text-xs text-white hover:bg-green-700"
-                              onClick={() =>
-                                handleConfirmarSi(
-                                  prestamo.prestamo_id,
-                                  prestamo.nombres
-                                )
-                              }
-                            >
-                              ✓ Sí
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              className="h-8 bg-blue-600 px-2 text-xs text-white hover:bg-blue-700"
-                              onClick={() =>
-                                handleEditarNo(prestamo.prestamo_id)
-                              }
-                            >
-                              ✎ No
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 border-red-200 px-2 text-xs text-red-600 hover:border-red-300 hover:bg-red-50"
-                              onClick={() =>
-                                handleEliminar(
-                                  prestamo.prestamo_id,
-                                  prestamo.nombres
-                                )
-                              }
-                            >
-                              <Trash2 className="mr-1 h-3 w-3" />
-                              Eliminar
-                            </Button>
-                          </div>
-                        )}
-
-                        {prestamo.estado_revision === 'revisando' && (
-                          <div className="flex flex-wrap justify-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-xs text-blue-600"
-                              onClick={() =>
-                                navigate(
-                                  `/revision-manual/editar/${prestamo.prestamo_id}`
-                                )
-                              }
-                            >
-                              <Edit className="mr-1 h-3 w-3" />
-                              Continuar
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              className="h-8 bg-blue-600 px-2 text-xs text-white hover:bg-blue-700"
-                              onClick={() =>
-                                handleEditarNo(prestamo.prestamo_id)
-                              }
-                              title="Reiniciar edición"
-                            >
-                              ✎ No
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 border-red-200 text-xs text-red-600 hover:bg-red-50"
-                              onClick={() =>
-                                handleEliminar(
-                                  prestamo.prestamo_id,
-                                  prestamo.nombres
-                                )
-                              }
-                            >
-                              <Trash2 className="mr-1 h-3 w-3" />
-                              Eliminar
-                            </Button>
-                          </div>
-                        )}
-
-                        {prestamo.estado_revision === 'revisado' && (
-                          <span className="text-xs text-gray-500">
-                            Finalizado
+                            {prestamo.cuotas_vencidas}
                           </span>
-                        )}
-                      </td>
-                    </motion.tr>
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`rounded px-2 py-1 text-xs font-semibold ${prestamo.cuotas_morosas > 0 ? 'bg-red-100 text-red-800' : 'bg-gray-100'}`}
+                          >
+                            {prestamo.cuotas_morosas}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          {prestamo.estado_revision === 'revisado' && (
+                            <span className="rounded bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">
+                              ✓ Revisado
+                            </span>
+                          )}
+
+                          {prestamo.estado_revision === 'revisando' && (
+                            <span className="rounded bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800">
+                              🔄 Revisando
+                            </span>
+                          )}
+
+                          {prestamo.estado_revision === 'pendiente' && (
+                            <span className="rounded bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800">
+                              Pendiente
+                            </span>
+                          )}
+
+                          {prestamo.estado_revision === 'en_espera' && (
+                            <span className="rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">
+                              ⚠️ En Espera
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <EstadoRevisionIcon
+                              prestamoId={prestamo.prestamo_id}
+                              estadoActual={prestamo.estado_revision}
+                              nombreCliente={prestamo.nombres}
+                              onStateChange={() => {
+                                queryClient.invalidateQueries({
+                                  queryKey: ['revision-manual-prestamos'],
+                                })
+                              }}
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                              onClick={() => {
+                                const opciones = `Opciones para ${prestamo.nombres}:\n\n1. Ver historial de cambios\n2. Enviar notificación\n3. Duplicar revisión\n4. Ver detalles completos\n5. Cancelar`
+                                window.alert(opciones)
+                              }}
+                              title="Más opciones"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          {prestamo.estado_revision === 'pendiente' && (
+                            <div className="flex flex-wrap justify-center gap-2">
+                              <Button
+                                size="sm"
+                                className="h-8 bg-green-600 px-2 text-xs text-white hover:bg-green-700"
+                                onClick={() =>
+                                  handleConfirmarSi(
+                                    prestamo.prestamo_id,
+                                    prestamo.nombres
+                                  )
+                                }
+                              >
+                                ✓ Sí
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                className="h-8 bg-blue-600 px-2 text-xs text-white hover:bg-blue-700"
+                                onClick={() =>
+                                  handleEditarNo(prestamo.prestamo_id)
+                                }
+                              >
+                                ✎ No
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 border-red-200 px-2 text-xs text-red-600 hover:border-red-300 hover:bg-red-50"
+                                onClick={() =>
+                                  handleEliminar(
+                                    prestamo.prestamo_id,
+                                    prestamo.nombres
+                                  )
+                                }
+                              >
+                                <Trash2 className="mr-1 h-3 w-3" />
+                                Eliminar
+                              </Button>
+                            </div>
+                          )}
+
+                          {prestamo.estado_revision === 'revisando' && (
+                            <div className="flex flex-wrap justify-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs text-blue-600"
+                                onClick={() =>
+                                  navigate(
+                                    `/revision-manual/editar/${prestamo.prestamo_id}`
+                                  )
+                                }
+                              >
+                                <Edit className="mr-1 h-3 w-3" />
+                                Continuar
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                className="h-8 bg-blue-600 px-2 text-xs text-white hover:bg-blue-700"
+                                onClick={() =>
+                                  handleEditarNo(prestamo.prestamo_id)
+                                }
+                                title="Reiniciar edición"
+                              >
+                                ✎ No
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 border-red-200 text-xs text-red-600 hover:bg-red-50"
+                                onClick={() =>
+                                  handleEliminar(
+                                    prestamo.prestamo_id,
+                                    prestamo.nombres
+                                  )
+                                }
+                              >
+                                <Trash2 className="mr-1 h-3 w-3" />
+                                Eliminar
+                              </Button>
+                            </div>
+                          )}
+
+                          {prestamo.estado_revision === 'revisado' && (
+                            <span className="text-xs text-gray-500">
+                              Finalizado
+                            </span>
+                          )}
+                        </td>
+                      </motion.tr>
                     )
                   })}
                 </tbody>

@@ -10,7 +10,8 @@
  * Seguridad: validación de cédula, rate limiting por IP
  */
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { useLocation } from 'react-router-dom'
 import {
   validarCedulaEstadoCuenta,
@@ -108,6 +109,15 @@ export function EstadoCuentaPublicoSinCodigoPage() {
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<NotificationState>(null)
   const [descargando, setDescargando] = useState(false)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
+  const isMobile = useIsMobile()
+
+  // Liberar blob URL al desmontar
+  useEffect(() => {
+    return () => {
+      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
+    }
+  }, [pdfBlobUrl])
 
   const cedulaInputRef = useRef<HTMLInputElement>(null)
 
@@ -166,7 +176,7 @@ export function EstadoCuentaPublicoSinCodigoPage() {
         return
       }
 
-      // Si tiene PDF en base64, descargar
+      // Si tiene PDF en base64, mostrar preview (desktop) o descargar (movil)
       if (res.pdf_base64) {
         const bin = atob(res.pdf_base64)
         const bytes = new Uint8Array(bin.length)
@@ -174,18 +184,29 @@ export function EstadoCuentaPublicoSinCodigoPage() {
         const blob = new Blob([bytes], { type: 'application/pdf' })
         const url = URL.createObjectURL(blob)
 
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `estado_cuenta_${cedulaValidada}.pdf`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-
-        setNotification({
-          type: 'success',
-          message: 'Estado de cuenta descargado. También se envió a tu email.',
-        })
+        if (isMobile) {
+          // Movil: descarga directa (iframes PDF no funcionan bien en iOS/Android)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `estado_cuenta_${cedulaValidada}.pdf`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          URL.revokeObjectURL(url)
+          setNotification({
+            type: 'success',
+            message:
+              'Estado de cuenta descargado. También se envió a tu email.',
+          })
+        } else {
+          // Desktop: guardar blob URL y mostrar visor inline
+          if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
+          setPdfBlobUrl(url)
+          setNotification({
+            type: 'success',
+            message: 'Estado de cuenta listo. También se envió a tu email.',
+          })
+        }
       } else {
         setNotification({
           type: 'success',
@@ -298,6 +319,26 @@ export function EstadoCuentaPublicoSinCodigoPage() {
               </div>
 
               <div className="space-y-2">
+                {/* Visor PDF en desktop */}
+                {pdfBlobUrl && !isMobile && (
+                  <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 shadow-md">
+                    <iframe
+                      src={pdfBlobUrl}
+                      title="Vista previa estado de cuenta"
+                      className="h-[70vh] w-full"
+                      style={{ minHeight: '480px' }}
+                    />
+                  </div>
+                )}
+
+                {/* En movil: mensaje informativo */}
+                {isMobile && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-800">
+                    <span className="font-semibold">Listo.</span> El PDF fue
+                    guardado en tu dispositivo.
+                  </div>
+                )}
+
                 <Button
                   onClick={handleDescargarPDF}
                   disabled={descargando}
@@ -311,7 +352,9 @@ export function EstadoCuentaPublicoSinCodigoPage() {
                   ) : (
                     <>
                       <Download className="mr-2 h-4 w-4" />
-                      Descargar Estado de Cuenta
+                      {pdfBlobUrl && !isMobile
+                        ? 'Guardar PDF'
+                        : 'Descargar Estado de Cuenta'}
                     </>
                   )}
                 </Button>

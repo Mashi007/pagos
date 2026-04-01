@@ -536,11 +536,14 @@ class PagoService {
     total: number
     mensaje: string
   }> {
-    return await apiClient.delete(`${this.baseUrl}/cedulas-reportar-bs/eliminar`, {
-      data: {
-        cedula,
-      },
-    })
+    return await apiClient.delete(
+      `${this.baseUrl}/cedulas-reportar-bs/eliminar`,
+      {
+        data: {
+          cedula,
+        },
+      }
+    )
   }
 
   /** Carga Excel con columna 'cedula' para definir quiénes pueden reportar en Bs. */
@@ -713,7 +716,7 @@ class PagoService {
       saldo_vencido: number
 
       total_prestamos: number
-    }>,
+    }>
     total: number
 
     page: number

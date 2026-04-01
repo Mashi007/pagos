@@ -300,8 +300,7 @@ export default function CobrosDetallePage() {
                 USD
                 {detalle.tasa_cambio_bs_usd != null && (
                   <span className="ml-1 text-xs text-muted-foreground">
-                    (tasa:{' '}
-                    {detalle.tasa_cambio_bs_usd.toLocaleString('es-VE')}{' '}
+                    (tasa: {detalle.tasa_cambio_bs_usd.toLocaleString('es-VE')}{' '}
                     Bs/USD)
                   </span>
                 )}
@@ -312,7 +311,8 @@ export default function CobrosDetallePage() {
                 className="ml-2 text-xs font-semibold text-amber-600"
                 title="No hay tasa registrada para la fecha de pago. Debe registrarla en Pagos antes de aprobar."
               >
-                (sin tasa registrada para esta fecha — no se puede aprobar hasta registrar la tasa)
+                (sin tasa registrada para esta fecha — no se puede aprobar hasta
+                registrar la tasa)
               </span>
             )}
           </p>

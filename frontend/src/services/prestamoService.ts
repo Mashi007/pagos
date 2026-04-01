@@ -879,7 +879,14 @@ class PrestamoService {
    * GET /api/v1/prestamos/{id}/estado-cuenta/pdf
    */
   async descargarEstadoCuentaPDF(prestamoId: number): Promise<void> {
-    const previewWindow = window.open('', '_blank', 'noopener,noreferrer')
+    // En movil los navegadores bloquean window.open fuera de evento de usuario;
+    // se detecta movil por ancho de pantalla o touch points y se fuerza descarga.
+    const isMobileDevice =
+      window.innerWidth < 768 || navigator.maxTouchPoints > 0
+
+    const previewWindow = isMobileDevice
+      ? null
+      : window.open('', '_blank', 'noopener,noreferrer')
 
     try {
       const axiosInstance = apiClient.getAxiosInstance()

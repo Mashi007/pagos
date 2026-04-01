@@ -211,10 +211,7 @@ export function buscarEnMapaPrestamos<T>(
   const conV = /^\d{6,11}$/.test(sinGuion) ? 'V' + sinGuion : null
   if (conV) {
     const r3 =
-      mapa[conV] ||
-      mapa[conV.toUpperCase()] ||
-      mapa[conV.toLowerCase()] ||
-      []
+      mapa[conV] || mapa[conV.toUpperCase()] || mapa[conV.toLowerCase()] || []
     if (r3.length > 0) return r3
   }
   return []

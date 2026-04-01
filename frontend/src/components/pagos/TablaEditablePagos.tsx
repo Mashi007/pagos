@@ -219,7 +219,6 @@ function prestamoIdVacio(v: unknown): boolean {
   )
 }
 
-
 /**
 
 
@@ -571,7 +570,9 @@ export function TablaEditablePagos({
       <div className="rounded-lg border border-blue-400 bg-blue-50 p-4">
         <h2 className="mb-2 text-lg font-bold text-blue-800">
           Indicadores (se actualizan al editar)
-          <span className="ml-2 text-[10px] font-normal text-gray-400">v2.1</span>
+          <span className="ml-2 text-[10px] font-normal text-gray-400">
+            v2.1
+          </span>
         </h2>
 
         <div className="flex flex-wrap gap-6 text-sm">
@@ -826,7 +827,10 @@ export function TablaEditablePagos({
                         row.numero_documento || ''
                       )
 
-                      const prestamos = buscarEnMapaPrestamos(lookup, prestamosPorCedula)
+                      const prestamos = buscarEnMapaPrestamos(
+                        lookup,
+                        prestamosPorCedula
+                      )
 
                       const sinCreditoElegido =
                         prestamos.length > 1 && prestamoIdVacio(row.prestamo_id)
@@ -874,7 +878,7 @@ export function TablaEditablePagos({
                       return (
                         <div className="flex flex-col gap-1">
                           {noPuedeGuardar && motivoBloqueo && (
-                            <p className="text-[10px] leading-tight text-red-600 font-medium">
+                            <p className="text-[10px] font-medium leading-tight text-red-600">
                               {motivoBloqueo}
                             </p>
                           )}

@@ -184,9 +184,10 @@ export const AdminTasaCambioPage: React.FC = () => {
                 Agregar Tasa para Fecha de Pago
               </h2>
               <p className="text-sm text-gray-700">
-                Use la <strong>fecha de pago</strong> del reporte o comprobante. Es la tasa
-                oficial Bs./USD para convertir bolívares a dólares. Ideal para días
-                pasados o faltantes que no cuentan con tasa registrada.
+                Use la <strong>fecha de pago</strong> del reporte o comprobante.
+                Es la tasa oficial Bs./USD para convertir bolívares a dólares.
+                Ideal para días pasados o faltantes que no cuentan con tasa
+                registrada.
               </p>
             </div>
             {tasaGuardadaExito && (
@@ -212,7 +213,9 @@ export const AdminTasaCambioPage: React.FC = () => {
                     max={new Date().toISOString().split('T')[0]}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   />
-                  <p className="mt-1 text-xs text-gray-500">Seleccione la fecha del pago</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Seleccione la fecha del pago
+                  </p>
                 </div>
 
                 {/* Tasa */}
@@ -228,7 +231,9 @@ export const AdminTasaCambioPage: React.FC = () => {
                     onChange={e => setTasaParaFecha(e.target.value)}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   />
-                  <p className="mt-1 text-xs text-gray-500">Debe ser mayor a 0</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Debe ser mayor a 0
+                  </p>
                 </div>
 
                 {/* Validación */}
@@ -248,7 +253,7 @@ export const AdminTasaCambioPage: React.FC = () => {
                   type="button"
                   disabled={guardandoFecha || !fechaTasaPago || !tasaParaFecha}
                   onClick={() => void handleGuardarTasaPorFechaPago()}
-                  className="flex-1 rounded-lg bg-amber-700 px-4 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:text-gray-500"
+                  className="flex-1 rounded-lg bg-amber-700 px-4 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
                 >
                   {guardandoFecha ? 'Guardando…' : 'Guardar Tasa'}
                 </button>
@@ -278,11 +283,14 @@ export const AdminTasaCambioPage: React.FC = () => {
 
           {/* Información de validación */}
           <div className="mt-4 flex gap-3 rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
-            <AlertCircle className="h-4 w-4 flex-shrink-0 text-blue-600" style={{ marginTop: '2px' }} />
+            <AlertCircle
+              className="h-4 w-4 flex-shrink-0 text-blue-600"
+              style={{ marginTop: '2px' }}
+            />
             <div>
-              <strong>Nota:</strong> Esta tasa se usará automáticamente para pagos registrados
-              en Bs. con la misma fecha. Si el reporte tiene múltiples fechas, agrégalas
-              todas.
+              <strong>Nota:</strong> Esta tasa se usará automáticamente para
+              pagos registrados en Bs. con la misma fecha. Si el reporte tiene
+              múltiples fechas, agrégalas todas.
             </div>
           </div>
         </div>
