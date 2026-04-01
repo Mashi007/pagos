@@ -1725,13 +1725,11 @@ export function EditarRevisionManual() {
                       <Input
                         type="date"
                         value={formatDateForInput(prestamoData.fecha_aprobacion)}
-                        min={formatDateForInput(prestamoData.fecha_requerimiento) || undefined}
                         onChange={e => {
                           setPrestamoData({ ...prestamoData, fecha_aprobacion: e.target.value || null })
                           setCambios({ ...cambios, prestamo: true })
                         }}
                         className="pl-10"
-                        title={prestamoData.fecha_requerimiento ? 'Debe ser igual o posterior a la fecha de requerimiento' : undefined}
                       />
                     </div>
                   </div>
