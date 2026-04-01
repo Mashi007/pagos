@@ -501,9 +501,12 @@ export function Usuarios() {
   )
 
   const getRoleBadgeColor = (rol: string) => {
-    // Cambio clave: rol â†' is_admin
-
-    return rol === 'admin' ? 'bg-red-600' : 'bg-blue-600' // Cambio clave: rol â†' is_admin
+    switch (rol) {
+      case 'admin':    return 'bg-red-600'
+      case 'manager':  return 'bg-purple-600'
+      case 'operator': return 'bg-blue-600'
+      default:         return 'bg-gray-500'
+    }
   }
 
   return (
@@ -811,17 +814,8 @@ export function Usuarios() {
                     </TableCell>
 
                     <TableCell>
-                      <Badge
-                        className={getRoleBadgeColor(
-                          usuario.rol || 'viewer'
-                        )}
-                      >
-                        {' '}
-                        {/* Cambio clave: rol â†' is_admin */}
-                        {(usuario.rol || 'viewer') === 'admin'
-                          ? 'admin'
-                          : 'viewer'}{' '}
-                        {/* Cambio clave: rol â†' is_admin */}
+                      <Badge className={getRoleBadgeColor(usuario.rol || 'viewer')}>
+                        {usuario.rol || 'viewer'}
                       </Badge>
                     </TableCell>
 
