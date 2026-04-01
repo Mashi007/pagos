@@ -18,7 +18,7 @@
 
  */
 
-export type UserRol = 'administrador' | 'operativo'
+export type UserRol = 'admin' | 'manager' | 'operator' | 'viewer'
 
 export interface User {
   id: number
