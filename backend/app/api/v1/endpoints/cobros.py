@@ -111,6 +111,14 @@ class PagoReportadoDetalle(BaseModel):
     numero_operacion: str
     monto: float
     moneda: str
+    tasa_cambio_bs_usd: Optional[float] = Field(
+        None,
+        description="Tasa oficial Bs por 1 USD (día fecha_pago); null si USD o sin tasa en BD.",
+    )
+    equivalente_usd: Optional[float] = Field(
+        None,
+        description="Monto en USD (Bs÷tasa si BS; si USD el monto; null si BS sin tasa).",
+    )
     ruta_comprobante: Optional[str] = None
     tiene_comprobante: bool
     tiene_recibo_pdf: bool
@@ -941,6 +949,9 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         }
         for h in hist
     ]
+    tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
+        db, pr.fecha_pago, float(pr.monto), pr.moneda or "BS"
+    )
     return PagoReportadoDetalle(
         id=pr.id,
         referencia_interna=pr.referencia_interna,
@@ -953,6 +964,8 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         numero_operacion=pr.numero_operacion,
         monto=float(pr.monto),
         moneda=pr.moneda or "BS",
+        tasa_cambio_bs_usd=tasa_x,
+        equivalente_usd=eq_usd,
         ruta_comprobante=pr.ruta_comprobante,
         tiene_comprobante=bool(pr.comprobante),
         tiene_recibo_pdf=bool(pr.recibo_pdf),

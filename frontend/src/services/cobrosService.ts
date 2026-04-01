@@ -559,6 +559,12 @@ export interface PagoReportadoDetalleResponse {
 
   moneda: string
 
+  /** Tasa oficial Bs por 1 USD (día fecha_pago); null si USD o sin tasa en BD. */
+  tasa_cambio_bs_usd?: number | null
+
+  /** Monto equivalente en USD (Bs÷tasa si BS; si USD es el mismo monto; null si BS sin tasa). */
+  equivalente_usd?: number | null
+
   ruta_comprobante?: string | null
 
   tiene_comprobante: boolean

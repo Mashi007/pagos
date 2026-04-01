@@ -25,6 +25,10 @@ import React, { useState, useEffect } from 'react'
 
 import { useNavigate } from 'react-router-dom'
 
+import { useQueryClient } from '@tanstack/react-query'
+
+import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
+
 import {
   listPagosReportadosConKpis,
   cambiarEstadoPago,
@@ -216,6 +220,8 @@ const normalizeEstadoValue = (value: string) =>
 export default function CobrosPagosReportadosPage() {
   const navigate = useNavigate()
 
+  const queryClient = useQueryClient()
+
   const [data, setData] = useState<ListPagosReportadosResponse | null>(null)
 
   const [loading, setLoading] = useState(true)
@@ -358,6 +364,15 @@ export default function CobrosPagosReportadosPage() {
         toast.success(data.mensaje || 'Estado actualizado.')
       }
 
+      // Al aprobar: el backend crea el pago en pagos, lo concilia y aplica a cuotas en cascada.
+      // Invalidar queries para que prestamos, cuotas y notificaciones de mora se actualicen.
+      if (nuevoEstado === 'aprobado') {
+        queryClient.invalidateQueries({ queryKey: ['pagos'] })
+        queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
+        queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+        void invalidateListasNotificacionesMora(queryClient)
+      }
+
       // Quitar la fila al instante si la vista actual no lista aprobados (coincide con el API por defecto).
       if (nuevoEstado === 'aprobado' && estado !== 'aprobado') {
         setData(prev => {
@@ -379,7 +394,12 @@ export default function CobrosPagosReportadosPage() {
         setMotivoRechazo('')
       }
     } catch (e: any) {
-      toast.error(e?.message || 'Error al actualizar.')
+      const detail =
+        e?.response?.data?.detail ||
+        e?.response?.data?.message ||
+        e?.message ||
+        'Error al actualizar.'
+      toast.error(detail)
     } finally {
       setChangingEstadoId(null)
     }
@@ -992,7 +1012,34 @@ export default function CobrosPagosReportadosPage() {
                       </td>
 
                       <td className="whitespace-nowrap px-3 py-3 text-right align-top">
-                        {row.monto} {row.moneda}
+                        <span>
+                          {row.monto} {row.moneda}
+                        </span>
+                        {row.moneda === 'BS' && row.equivalente_usd != null && (
+                          <span
+                            className="mt-0.5 block text-xs text-emerald-700"
+                            title={
+                              row.tasa_cambio_bs_usd != null
+                                ? `Tasa: ${row.tasa_cambio_bs_usd.toLocaleString('es-VE')} Bs/USD`
+                                : 'Equivalente en USD'
+                            }
+                          >
+                            {'≈ '}
+                            {row.equivalente_usd.toLocaleString('es-VE', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}{' '}
+                            USD
+                          </span>
+                        )}
+                        {row.moneda === 'BS' && row.equivalente_usd == null && (
+                          <span
+                            className="mt-0.5 block text-xs text-amber-600"
+                            title="No hay tasa registrada para esta fecha. Registre la tasa en Pagos antes de aprobar."
+                          >
+                            Sin tasa
+                          </span>
+                        )}
                       </td>
 
                       <td className="whitespace-nowrap px-3 py-3 align-top">

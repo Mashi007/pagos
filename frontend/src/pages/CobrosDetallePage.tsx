@@ -159,23 +159,27 @@ export default function CobrosDetallePage() {
     setAccion('aprobar')
 
     try {
-      await aprobarPagoReportado(Number(id))
+      const res = await aprobarPagoReportado(Number(id))
 
-      toast.success('Pago aprobado y recibo enviado por correo.')
+      toast.success(res.mensaje || 'Pago aprobado.')
 
       setAccion('idle')
 
       load()
 
-      // Actualizar tabla de amortización y listado de préstamos para que reflejen el pago aplicado
-
+      // El backend crea el pago en pagos, lo concilia y aplica a cuotas en cascada.
+      // Invalidar para que prestamos, cuotas y notificaciones de mora se actualicen.
+      queryClient.invalidateQueries({ queryKey: ['pagos'] })
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
-
       queryClient.invalidateQueries({ queryKey: ['prestamos'] })
-
       void invalidateListasNotificacionesMora(queryClient)
     } catch (e: any) {
-      toast.error(e?.message || 'Error al aprobar.')
+      const detail =
+        e?.response?.data?.detail ||
+        e?.response?.data?.message ||
+        e?.message ||
+        'Error al aprobar.'
+      toast.error(detail)
 
       setAccion('idle')
     }
@@ -286,6 +290,31 @@ export default function CobrosDetallePage() {
 
           <p>
             <strong>Monto:</strong> {detalle.monto} {detalle.moneda}
+            {detalle.moneda === 'BS' && detalle.equivalente_usd != null && (
+              <span className="ml-2 text-emerald-700">
+                {'≈ '}
+                {detalle.equivalente_usd.toLocaleString('es-VE', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{' '}
+                USD
+                {detalle.tasa_cambio_bs_usd != null && (
+                  <span className="ml-1 text-xs text-muted-foreground">
+                    (tasa:{' '}
+                    {detalle.tasa_cambio_bs_usd.toLocaleString('es-VE')}{' '}
+                    Bs/USD)
+                  </span>
+                )}
+              </span>
+            )}
+            {detalle.moneda === 'BS' && detalle.equivalente_usd == null && (
+              <span
+                className="ml-2 text-xs font-semibold text-amber-600"
+                title="No hay tasa registrada para la fecha de pago. Debe registrarla en Pagos antes de aprobar."
+              >
+                (sin tasa registrada para esta fecha — no se puede aprobar hasta registrar la tasa)
+              </span>
+            )}
           </p>
 
           {detalle.observacion && (
