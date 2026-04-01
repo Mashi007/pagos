@@ -33,6 +33,7 @@ import {
   BarChart3,
   Award,
   Wallet,
+  Building2,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -46,6 +47,10 @@ import { Badge } from '../../components/ui/badge'
 import { useSidebarCounts } from '../../hooks/useSidebarCounts'
 
 import { Logo } from '../../components/ui/Logo'
+
+import { BASE_PATH } from '../../config/env'
+
+import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 
 interface SidebarProps {
   isOpen: boolean
@@ -70,6 +75,9 @@ interface MenuItem {
 
   /** Solo visible si el usuario es administrador (p. ej. Finiquito gestión). */
   adminOnly?: boolean
+
+  /** Si true, el href es una URL externa que abre en nueva pestaña. */
+  external?: boolean
 }
 
 export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
@@ -217,9 +225,20 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     {
       title: 'Pagos',
 
-      href: '/pagos',
-
       icon: Wallet,
+
+      isSubmenu: true,
+
+      children: [
+        { title: 'Pagos', href: '/pagos', icon: Wallet },
+
+        {
+          title: 'Infopagos',
+          href: `${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(/\/+/g, '/'),
+          icon: Building2,
+          external: true,
+        },
+      ],
     },
 
     {
@@ -777,50 +796,74 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                     (user?.rol || 'operativo') ===
                                       'administrador'
                                 )
-                                .map(child => (
-                                  <NavLink
-                                    key={child.href}
-                                    to={child.href!}
-                                    onClick={() => {
-                                      if (window.innerWidth < 1024) {
-                                        onClose()
-                                      }
-                                    }}
-                                    className={() =>
-                                      cn(
-                                        'flex items-center rounded-lg border-l-4 text-sm font-medium transition-all duration-200',
-
+                                .map(child =>
+                                  child.external ? (
+                                    <a
+                                      key={child.href}
+                                      href={child.href!}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className={cn(
+                                        'flex items-center rounded-lg border-l-4 border-l-transparent text-sm font-medium transition-all duration-200',
+                                        'text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
                                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2',
-
-                                        isActiveRoute(child.href!)
-                                          ? 'border-l-white bg-blue-600 text-white shadow-md shadow-blue-500/30'
-                                          : 'border-l-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
-
                                         isCompact
                                           ? 'justify-center px-2 py-2'
                                           : 'space-x-3 px-3 py-2'
-                                      )
-                                    }
-                                    title={isCompact ? child.title : undefined}
-                                  >
-                                    <child.icon className="h-4 w-4" />
+                                      )}
+                                      title={isCompact ? child.title : undefined}
+                                    >
+                                      <child.icon className="h-4 w-4" />
 
-                                    {!isCompact && (
-                                      <>
+                                      {!isCompact && (
                                         <span>{child.title}</span>
+                                      )}
+                                    </a>
+                                  ) : (
+                                    <NavLink
+                                      key={child.href}
+                                      to={child.href!}
+                                      onClick={() => {
+                                        if (window.innerWidth < 1024) {
+                                          onClose()
+                                        }
+                                      }}
+                                      className={() =>
+                                        cn(
+                                          'flex items-center rounded-lg border-l-4 text-sm font-medium transition-all duration-200',
 
-                                        {child.badge && (
-                                          <Badge
-                                            variant="destructive"
-                                            className="ml-auto flex h-5 min-w-[20px] items-center justify-center px-1.5 text-xs"
-                                          >
-                                            {child.badge}
-                                          </Badge>
-                                        )}
-                                      </>
-                                    )}
-                                  </NavLink>
-                                ))}
+                                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2',
+
+                                          isActiveRoute(child.href!)
+                                            ? 'border-l-white bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                                            : 'border-l-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
+
+                                          isCompact
+                                            ? 'justify-center px-2 py-2'
+                                            : 'space-x-3 px-3 py-2'
+                                        )
+                                      }
+                                      title={isCompact ? child.title : undefined}
+                                    >
+                                      <child.icon className="h-4 w-4" />
+
+                                      {!isCompact && (
+                                        <>
+                                          <span>{child.title}</span>
+
+                                          {child.badge && (
+                                            <Badge
+                                              variant="destructive"
+                                              className="ml-auto flex h-5 min-w-[20px] items-center justify-center px-1.5 text-xs"
+                                            >
+                                              {child.badge}
+                                            </Badge>
+                                          )}
+                                        </>
+                                      )}
+                                    </NavLink>
+                                  )
+                                )}
                             </div>
                           </motion.div>
                         )}
