@@ -18,7 +18,7 @@ import { useSimpleAuth } from './store/simpleAuthStore'
 
 import { getFiniquitoAccessToken } from './services/finiquitoService'
 
-import { BASE_PATH } from './config/env'
+import { BASE_PATH, PUBLIC_FLOW_SESSION_KEY } from './config/env'
 
 import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
@@ -27,14 +27,24 @@ import { isOperatorRole } from './utils/rol'
 /**
  * Rutas alcanzables sin sesion de personal. Cualquier otra ruta exige login y Layout;
  * un usuario en rapicredit-cobros no puede abrir dashboard, clientes, etc. sin autenticarse.
+ * La raiz '/' no es publica: quien retrocede desde rapicredit-estadocuenta (u otra publica)
+ * a /pagos/ debe ir a login, no quedar en modo flujo publico.
  */
 const PUBLIC_PATHS = [
-  '/',
   '/login',
   '/acceso-limitado',
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
 ]
+
+/** Redirige a login y quita marca de flujo publico (evita pantalla intermedia en la raiz). */
+function RedirectRootToLogin() {
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem(PUBLIC_FLOW_SESSION_KEY)
+    sessionStorage.removeItem(`${PUBLIC_FLOW_SESSION_KEY}_path`)
+  }
+  return <Navigate to="/login" replace />
+}
 
 /**
  * En rutas publicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
@@ -61,6 +71,9 @@ function RootLayoutWrapper() {
   // Esto previene que intenten acceder al dashboard quitando /infopagos de la URL
 
   if (!isLoading && !isAuthenticated) {
+    if (pathname === '/') {
+      return <RedirectRootToLogin />
+    }
     return <Navigate to="/login" replace />
   }
 
@@ -108,12 +121,6 @@ function RootLayoutWrapper() {
     }
 
     return <Navigate to="/finiquitos/acceso" replace />
-  }
-
-  // Sin token activo en ruta no pblica ? pedir usuario y clave (login)
-
-  if (!isLoading && !isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location }} />
   }
 
   return (
@@ -305,14 +312,9 @@ function App() {
               }
             />
 
-            {/* Formulario pblico de reporte de pago (sin login). Link cannico: /rapicredit-cobros */}
+            {/* Formulario publico de reporte de pago (sin login). Link canonico: /rapicredit-cobros */}
 
             <Route path="rapicredit-cobros" element={<ReportePagoPage />} />
-
-            <Route
-              path="rapicredit"
-              element={<Navigate to="/rapicredit-cobros" replace />}
-            />
 
             {/* Consulta publica de estado de cuenta (sin login). Solo esta consulta, sin acceso a otros servicios. */}
 

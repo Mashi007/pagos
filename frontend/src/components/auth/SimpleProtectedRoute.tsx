@@ -17,7 +17,7 @@ interface SimpleProtectedRouteProps {
 
   requireAdmin?: boolean // Cambio clave: requiredRoles -> requireAdmin
 
-  /** Si no autenticado, redirige aquí. Por defecto /rapicredit (formulario público). Empleados usan /login. */
+  /** Si no autenticado, redirige aquí. Por defecto /login. */
 
   fallbackPath?: string
 }
