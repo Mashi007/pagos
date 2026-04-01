@@ -20,11 +20,11 @@ def user_to_response(u: User) -> UserResponse:
 
     rol = getattr(u, "rol", None) or ("admin" if getattr(u, "is_admin", False) else "viewer")
     apellido = getattr(u, "apellido", "") or ""
-    nombre_completo = f"{u.nombre or ''} {apellido}".strip()
     return UserResponse(
         id=u.id,
         email=u.email,
-        nombre=nombre_completo,
+        nombre=u.nombre or "",
+        apellido=apellido,
         cargo=u.cargo,
         rol=rol,
         is_active=bool(u.is_active),

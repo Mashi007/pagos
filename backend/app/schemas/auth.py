@@ -21,8 +21,8 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: str
-    cedula: Optional[str] = None
     nombre: str
+    apellido: str = ""
     cargo: Optional[str] = None
     rol: str  # 'admin' | 'manager' | 'operator' | 'viewer'
     is_active: bool

@@ -39,7 +39,8 @@ def _fake_user_response(email: str) -> UserResponse:
     return UserResponse(
         id=1,
         email=email.lower(),
-        nombre="Admin Sistema",
+        nombre="Admin",
+        apellido="Sistema",
         cargo="Administrador",
         rol="admin",
         is_active=True,

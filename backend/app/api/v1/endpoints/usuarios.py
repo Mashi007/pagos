@@ -79,9 +79,8 @@ def crear_usuario(
     admin: UserResponse = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """Crea un nuevo usuario. Solo administradores. Email y cédula deben ser únicos."""
+    """Crea un nuevo usuario. Solo administradores. Email debe ser único."""
     email = body.email.lower().strip()
-    cedula = body.cedula.strip()
     
     # Validar email único
     if db.query(User).filter(User.email == email).first():
@@ -90,19 +89,12 @@ def crear_usuario(
             detail="Ya existe un usuario con ese email",
         )
     
-    # Validar cédula única
-    if db.query(User).filter(User.cedula == cedula).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya existe un usuario con esa cédula",
-        )
-    
     now = datetime.utcnow()
     u = User(
         email=email,
-        cedula=cedula,
         password_hash=get_password_hash(body.password),
         nombre=body.nombre.strip(),
+        apellido=(body.apellido or "").strip(),
         cargo=body.cargo.strip() if body.cargo else None,
         rol=body.rol,
         is_active=body.is_active,
@@ -122,7 +114,7 @@ def actualizar_usuario(
     admin: UserResponse = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """Actualiza un usuario. Solo administradores. Email y cédula deben ser únicos."""
+    """Actualiza un usuario. Solo administradores. Email debe ser único."""
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -137,18 +129,10 @@ def actualizar_usuario(
             )
         u.email = email
     
-    if body.cedula is not None:
-        cedula = body.cedula.strip()
-        other = db.query(User).filter(User.cedula == cedula, User.id != user_id).first()
-        if other:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ya existe otro usuario con esa cédula",
-            )
-        u.cedula = cedula
-    
     if body.nombre is not None:
         u.nombre = body.nombre.strip()
+    if body.apellido is not None:
+        u.apellido = body.apellido.strip()
     if body.cargo is not None:
         u.cargo = body.cargo.strip() if body.cargo else None
     if body.rol is not None:
