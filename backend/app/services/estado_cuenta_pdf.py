@@ -389,7 +389,6 @@ def generar_pdf_estado_cuenta(
                     "Cuota",
                     "F. venc.",
                     "Capital",
-                    "Interés",
                     "Total",
                     "Saldo",
                     "Pago",
@@ -418,7 +417,6 @@ def generar_pdf_estado_cuenta(
                         str(c.get("numero_cuota", "")),
                         (c.get("fecha_vencimiento") or ""),
                         f"{float(c.get('monto_capital') or 0):,.2f}",
-                        f"{float(c.get('monto_interes') or 0):,.2f}",
                         f"{float(c.get('monto_cuota') or 0):,.2f}",
                         f"{float(c.get('saldo_capital_final') or 0):,.2f}",
                         c.get("pago_conciliado_display", "-"),
@@ -430,7 +428,6 @@ def generar_pdf_estado_cuenta(
                 colWidths=[
                     0.40 * inch,
                     0.66 * inch,
-                    0.94 * inch,
                     0.94 * inch,
                     1.00 * inch,
                     0.82 * inch,
@@ -445,12 +442,12 @@ def generar_pdf_estado_cuenta(
                     bf=7,
                     extras=[
                         # Encabezado: Capital, Interes, Total centrados (referencia visual).
-                        ("ALIGN", (2, 0), (4, 0), "CENTER"),
+                        ("ALIGN", (2, 0), (3, 0), "CENTER"),
                         ("ALIGN", (0, 0), (1, 0), "CENTER"),
-                        ("ALIGN", (5, 0), (7, 0), "CENTER"),
+                        ("ALIGN", (4, 0), (6, 0), "CENTER"),
                         ("ALIGN", (0, 1), (0, -1), "CENTER"),
-                        ("ALIGN", (2, 1), (6, -1), "RIGHT"),
-                        ("ALIGN", (7, 1), (7, -1), "CENTER"),
+                        ("ALIGN", (2, 1), (5, -1), "RIGHT"),
+                        ("ALIGN", (6, 1), (6, -1), "CENTER"),
                     ],
                 )
             )
