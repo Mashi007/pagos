@@ -262,8 +262,6 @@ Equipo RapiCredit"""
                 cedula=datos.get("cedula_display") or "",
                 nombre=datos.get("nombre") or "",
                 prestamos=datos.get("prestamos_list") or [],
-                cuotas_pendientes=datos.get("cuotas_pendientes") or [],
-                total_pendiente=float(datos.get("total_pendiente") or 0),
                 fecha_corte=datos.get("fecha_corte") or date.today(),
                 amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
                 pagos_realizados=datos.get("pagos_realizados") or [],

@@ -1021,10 +1021,6 @@ def verificar_codigo_estado_cuenta(
 
             prestamos=datos.get("prestamos_list") or [],
 
-            cuotas_pendientes=datos.get("cuotas_pendientes") or [],
-
-            total_pendiente=float(datos.get("total_pendiente") or 0),
-
             fecha_corte=datos.get("fecha_corte") or date.today(),
 
             amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
@@ -1197,10 +1193,6 @@ def solicitar_estado_cuenta(
 
     prestamos_list = datos.get("prestamos_list") or []
 
-    cuotas_pendientes = datos.get("cuotas_pendientes") or []
-
-    total_pendiente = float(datos.get("total_pendiente") or 0)
-
     fecha_corte = datos.get("fecha_corte") or date.today()
 
     amortizaciones_por_prestamo = datos.get("amortizaciones_por_prestamo") or []
@@ -1218,11 +1210,6 @@ def solicitar_estado_cuenta(
         nombre=nombre,
 
         prestamos=prestamos_list,
-
-        cuotas_pendientes=cuotas_pendientes,
-
-        total_pendiente=total_pendiente,
-
         fecha_corte=fecha_corte,
 
         amortizaciones_por_prestamo=amortizaciones_por_prestamo,

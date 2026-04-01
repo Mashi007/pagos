@@ -64,34 +64,31 @@ export function EstadoRevisionIcon({
 
   const handleShowDialog = () => {
     if (estadoNorm === 'pendiente') {
-      // Iniciar revisión
       handleChangeState('revisando')
     } else if (estadoNorm === 'revisando' || estadoNorm === 'en_espera') {
-      // Mostrar opciones
-      const opciones = `Selecciona la acción:
-
-      1. ❌ EN ESPERA - Necesita más revisión (no guarda cambios)
-      2. ✅ REVISADO - Finalizar y guardar (solo admin)
-      3. Cancelar`
-
-      const seleccion = window.prompt(opciones, '')
-
+      const seleccion = window.prompt(
+        `Selecciona la acción:\n\n1. ❓ REVISANDO - Continuar revisando\n2. ✅ REVISADO - Finalizar (solo admin)\n3. Cancelar`,
+        ''
+      )
       if (seleccion === '1') {
-        handleChangeState('en_espera')
+        handleChangeState('revisando')
       } else if (seleccion === '2') {
         handleChangeState('revisado')
       }
+    } else if (estadoNorm === 'rechazado') {
+      // Desde rechazado se puede reabrir para corrección
+      const confirmar = window.confirm(
+        `Este préstamo está RECHAZADO.\n\n¿Deseas reabrirlo para continuar la revisión?`
+      )
+      if (confirmar) {
+        handleChangeState('revisando')
+      }
     } else if (estadoNorm === 'revisado') {
-      // Mostrar opción de reabrir (solo si es admin)
-      const opciones = `Este préstamo está REVISADO.
-
-      Opciones (solo admin):
-      1. ❓ REVISANDO - Abrir para que usuario edite de nuevo
-      2. Cancelar`
-
-      const seleccion = window.prompt(opciones, '')
-
-      if (seleccion === '1') {
+      // Desde revisado (visto) se puede reabrir → vuelve a revisando (? es el nuevo inicio)
+      const confirmar = window.confirm(
+        `Este préstamo está REVISADO ✓.\n\n¿Deseas reabrirlo para continuar revisando?`
+      )
+      if (confirmar) {
         handleChangeState('revisando')
       }
     }
@@ -131,12 +128,24 @@ export function EstadoRevisionIcon({
       case 'en_espera':
         return (
           <div
-            className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-red-100 px-2 py-1 transition-all hover:bg-red-200"
+            className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-orange-100 px-2 py-1 transition-all hover:bg-orange-200"
             onClick={handleShowDialog}
             title="Click para cambiar estado"
           >
+            <X className="h-4 w-4 text-orange-600" />
+            <span className="text-xs font-semibold text-orange-700">En Espera</span>
+          </div>
+        )
+
+      case 'rechazado':
+        return (
+          <div
+            className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-red-100 px-2 py-1 transition-all hover:bg-red-200"
+            onClick={handleShowDialog}
+            title="Rechazado — click para reabrir"
+          >
             <X className="h-4 w-4 text-red-600" />
-            <span className="text-xs font-semibold text-red-700">En Espera</span>
+            <span className="text-xs font-semibold text-red-700">Rechazado</span>
           </div>
         )
 

@@ -18,7 +18,15 @@ import {
   SelectValue,
 } from '../components/ui/select'
 
-import { Loader2, Save, X, ChevronLeft, Check, Trash2 } from 'lucide-react'
+import {
+  Loader2,
+  Save,
+  X,
+  ChevronLeft,
+  Check,
+  Trash2,
+  AlertTriangle,
+} from 'lucide-react'
 
 import { toast } from 'sonner'
 
@@ -161,6 +169,12 @@ export function EditarRevisionManual() {
   const [guardandoParcial, setGuardandoParcial] = useState(false)
 
   const [guardandoFinal, setGuardandoFinal] = useState(false)
+
+  const [showRechazarModal, setShowRechazarModal] = useState(false)
+
+  const [motivoRechazo, setMotivoRechazo] = useState('')
+
+  const [guardandoRechazo, setGuardandoRechazo] = useState(false)
 
   const [cambios, setCambios] = useState({
     cliente: false,
@@ -860,6 +874,33 @@ export function EditarRevisionManual() {
     setCambios(c => ({ ...c, cuotas: true }))
   }
 
+  const handleConfirmarRechazo = async () => {
+    if (!prestamoId || !motivoRechazo.trim()) {
+      toast.error('Debes ingresar un motivo de rechazo')
+      return
+    }
+    setGuardandoRechazo(true)
+    try {
+      await revisionManualService.cambiarEstadoRevision(Number(prestamoId), {
+        nuevo_estado: 'rechazado',
+        motivo_rechazo: motivoRechazo.trim(),
+      })
+      toast.success('Préstamo marcado como rechazado')
+      setShowRechazarModal(false)
+      setMotivoRechazo('')
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+      queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+      const scrollY = window.scrollY
+      sessionStorage.setItem('revision_manual_scroll', String(scrollY))
+      navigate('/prestamos')
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Error al rechazar'
+      toast.error(msg)
+    } finally {
+      setGuardandoRechazo(false)
+    }
+  }
+
   const handleCerrar = () => {
     // Si hay cambios sin guardar, advertir
 
@@ -937,6 +978,66 @@ export function EditarRevisionManual() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6 p-6"
     >
+      {/* Modal de rechazo */}
+      {showRechazarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Rechazar préstamo
+                </h2>
+                <p className="text-sm text-gray-500">
+                  No se guardarán cambios. Solo se marcará como rechazado.
+                </p>
+              </div>
+            </div>
+
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Motivo del rechazo <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              className="w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400"
+              rows={4}
+              placeholder="Describe el motivo del rechazo..."
+              value={motivoRechazo}
+              onChange={e => setMotivoRechazo(e.target.value)}
+              autoFocus
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowRechazarModal(false)
+                  setMotivoRechazo('')
+                }}
+                disabled={guardandoRechazo}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="gap-2 bg-red-600 text-white hover:bg-red-700"
+                onClick={handleConfirmarRechazo}
+                disabled={guardandoRechazo || !motivoRechazo.trim()}
+              >
+                {guardandoRechazo ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+                Confirmar rechazo
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contenido principal */}
+      <div>
       {/* Header */}
 
       <div className="sticky top-0 z-10 -mx-6 mb-4 flex items-center justify-between bg-white p-4 shadow-sm">
@@ -970,17 +1071,28 @@ export function EditarRevisionManual() {
             onClick={handleGuardarParciales}
             disabled={soloLectura || guardandoParcial || guardandoFinal}
             className="gap-2"
-            title="Guarda los cambios sin finalizar la revisión"
+            title="Guarda los cambios y continúa revisando — estado cambia a ?"
           >
             <Save className="h-4 w-4" />
-            Guardar Parciales
+            Guardar Cambios
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => setShowRechazarModal(true)}
+            disabled={guardandoParcial || guardandoFinal || guardandoRechazo}
+            className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+            title="Marcar como rechazado — no guarda cambios, solo marca el préstamo"
+          >
+            <X className="h-4 w-4" />
+            Rechazar
           </Button>
 
           <Button
             className="gap-2 bg-green-600 text-white hover:bg-green-700"
             onClick={handleGuardarYCerrar}
             disabled={soloLectura || guardandoParcial || guardandoFinal}
-            title="Guarda todos los cambios y finaliza la revisión"
+            title="Guarda todos los cambios y finaliza la revisión — aparece ✓ en Acciones"
           >
             {guardandoFinal ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1935,6 +2047,7 @@ export function EditarRevisionManual() {
           )}
           Guardar y Cerrar
         </Button>
+      </div>
       </div>
     </motion.div>
   )

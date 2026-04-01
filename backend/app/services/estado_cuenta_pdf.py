@@ -44,8 +44,6 @@ def generar_pdf_estado_cuenta(
     cedula: str,
     nombre: str,
     prestamos: List[dict],
-    cuotas_pendientes: List[dict],
-    total_pendiente: float,
     fecha_corte: date,
     amortizaciones_por_prestamo: Optional[List[dict]] = None,
     pagos_realizados: Optional[List[dict]] = None,

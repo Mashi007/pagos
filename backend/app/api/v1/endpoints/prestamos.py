@@ -5156,9 +5156,6 @@ def get_estado_cuenta_prestamo_pdf(
 
         prestamos_list = datos.get("prestamos_list") or []
 
-        cuotas_pendientes = datos.get("cuotas_pendientes") or []
-
-        total_pendiente = float(datos.get("total_pendiente") or 0)
 
         fecha_corte = datos.get("fecha_corte") or date.today()
 
@@ -5197,10 +5194,6 @@ def get_estado_cuenta_prestamo_pdf(
             nombre=nombre,
 
             prestamos=prestamos_list,
-
-            cuotas_pendientes=cuotas_pendientes,
-
-            total_pendiente=total_pendiente,
 
             fecha_corte=fecha_corte,
 

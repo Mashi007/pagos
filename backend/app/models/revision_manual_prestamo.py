@@ -14,12 +14,13 @@ class RevisionManualPrestamo(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False, index=True, unique=True)
-    # Estados: pendiente (⚠️), revisando (❓), en_espera (❌), revisado (✓)
+    # Estados: pendiente (⚠️), revisando (❓), en_espera (❌), rechazado (✕), revisado (✓)
     estado_revision = Column(String(20), nullable=False, index=True, server_default="'pendiente'")
     usuario_revision_id = Column(Integer, nullable=True)  # Usuario que realizó la revisión
     usuario_revision_email = Column(String(255), nullable=True)
     fecha_revision = Column(DateTime(timezone=False), nullable=True)  # Fecha cuando se marcó como revisado
     observaciones = Column(Text, nullable=True)  # Observaciones del revisor
+    motivo_rechazo = Column(Text, nullable=True)  # Motivo cuando se marca como rechazado
     cambios_realizados = Column(Text, nullable=True)  # JSON con historial de cambios
     cliente_editado = Column(Boolean, nullable=False, server_default=text("false"))
     prestamo_editado = Column(Boolean, nullable=False, server_default=text("false"))

@@ -20,7 +20,6 @@ import {
   FileSpreadsheet,
   Download,
   Loader2,
-  MoreHorizontal,
 } from 'lucide-react'
 
 import {
@@ -236,8 +235,6 @@ export function PrestamosList() {
   const [cambiosManualPrestamo, setCambiosManualPrestamo] = useState<Prestamo | null>(null)
 
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
-
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null)
 
   const [pageRevisar, setPageRevisar] = useState(1)
 
@@ -1560,39 +1557,44 @@ export function PrestamosList() {
                                 </Button>
                               )}
 
-                              {/* ICONO REVISIÓN MANUAL - siempre visible */}
+                              {/* ICONO REVISIÓN MANUAL — siempre visible, navega directo al formulario */}
                               {(() => {
                                 const rev = (
                                   prestamo.revision_manual_estado || 'pendiente'
                                 )
                                   .toLowerCase()
                                   .trim()
-                                const icons: Record<
+                                const ICONO_REV: Record<
                                   string,
                                   { icon: React.ReactNode; title: string; cls: string }
                                 > = {
                                   pendiente: {
                                     icon: <AlertTriangle className="h-4 w-4" />,
-                                    title: 'Revisión manual: Pendiente',
+                                    title: 'Revisión manual: No iniciada — click para revisar',
                                     cls: 'text-amber-500 hover:bg-amber-50',
                                   },
                                   revisando: {
-                                    icon: <Edit className="h-4 w-4" />,
-                                    title: 'Revisión manual: En revisión',
+                                    icon: <Info className="h-4 w-4" />,
+                                    title: 'Revisión manual: En revisión (?) — click para continuar',
                                     cls: 'text-blue-500 hover:bg-blue-50',
                                   },
                                   en_espera: {
                                     icon: <X className="h-4 w-4" />,
-                                    title: 'Revisión manual: En espera',
-                                    cls: 'text-red-500 hover:bg-red-50',
+                                    title: 'Revisión manual: En espera — click para revisar',
+                                    cls: 'text-orange-500 hover:bg-orange-50',
+                                  },
+                                  rechazado: {
+                                    icon: <X className="h-4 w-4" />,
+                                    title: 'Revisión manual: Rechazado — click para ver motivo',
+                                    cls: 'text-red-600 hover:bg-red-50',
                                   },
                                   revisado: {
                                     icon: <CheckCircle2 className="h-4 w-4" />,
-                                    title: 'Revisión manual: Revisado',
-                                    cls: 'text-green-500 hover:bg-green-50',
+                                    title: 'Revisión manual: Revisado ✓ — click para reabrir',
+                                    cls: 'text-green-600 hover:bg-green-50',
                                   },
                                 }
-                                const cfg = icons[rev] ?? icons['pendiente']
+                                const cfg = ICONO_REV[rev] ?? ICONO_REV['pendiente']
                                 return (
                                   <Button
                                     variant="ghost"
@@ -1601,7 +1603,7 @@ export function PrestamosList() {
                                     className={cfg.cls}
                                     onClick={() =>
                                       navigate(
-                                        `/revision-manual?prestamo_id=${prestamo.id}`
+                                        `/revision-manual/editar/${prestamo.id}`
                                       )
                                     }
                                   >
@@ -1670,50 +1672,6 @@ export function PrestamosList() {
                                 </Button>
                               ) : null}
 
-                              {/* Botón Más opciones (...) - dropdown */}
-
-                              <div className="relative">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  title="Más opciones"
-                                  className="text-gray-500 hover:bg-gray-100"
-                                  onClick={() =>
-                                    setOpenMenuId(
-                                      openMenuId === prestamo.id
-                                        ? null
-                                        : prestamo.id
-                                    )
-                                  }
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-
-                                {openMenuId === prestamo.id && (
-                                  <>
-                                    {/* Capa invisible para cerrar al hacer click fuera */}
-                                    <div
-                                      className="fixed inset-0 z-40"
-                                      onClick={() => setOpenMenuId(null)}
-                                    />
-
-                                    <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border border-gray-200 bg-white py-1 shadow-xl">
-                                      <button
-                                        className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
-                                        onClick={() => {
-                                          setOpenMenuId(null)
-                                          navigate(
-                                            `/revision-manual?prestamo_id=${prestamo.id}`
-                                          )
-                                        }}
-                                      >
-                                        <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                                        Ir a Revisión Manual
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
                             </div>
                           </TableCell>
                         </TableRow>

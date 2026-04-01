@@ -26,6 +26,7 @@ from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
     PrestamoCedulaClienteError,
     asegurar_prestamo_alineado_con_cliente,
 )
+from app.services.registro_cambios_service import registrar_cambio
 
 logger = logging.getLogger(__name__)
 
@@ -589,6 +590,25 @@ def editar_cliente_revision(
         id_principal=cliente_id,
         resumen_campos=list(cambios_dict.keys()),
     )
+
+    usuario_id = getattr(current_user, "id", None)
+    if usuario_id:
+        try:
+            registrar_cambio(
+                db=db,
+                usuario_id=usuario_id,
+                modulo="Revisión Manual",
+                tipo_cambio="ACTUALIZAR",
+                descripcion=f"Edición de cliente #{cliente_id} en revisión manual (préstamo #{prestamo_id})",
+                registro_id=cliente_id,
+                tabla_afectada="clientes",
+                campos_anteriores={k: v[0] for k, v in cambios_dict.items()},
+                campos_nuevos={k: v[1] for k, v in cambios_dict.items()},
+            )
+            db.commit()
+        except Exception:
+            logger.warning("revision_manual: no se pudo registrar auditoría edición cliente id=%s", cliente_id)
+
     return {
         "mensaje": "Cliente actualizado exitosamente",
         "cliente_id": cliente_id,
@@ -749,6 +769,25 @@ def editar_prestamo_revision(
         id_principal=prestamo_id,
         resumen_campos=list(cambios_dict.keys()),
     )
+
+    usuario_id = getattr(current_user, "id", None)
+    if usuario_id:
+        try:
+            registrar_cambio(
+                db=db,
+                usuario_id=usuario_id,
+                modulo="Revisión Manual",
+                tipo_cambio="ACTUALIZAR",
+                descripcion=f"Edición de préstamo #{prestamo_id} en revisión manual",
+                registro_id=prestamo_id,
+                tabla_afectada="prestamos",
+                campos_anteriores={k: v[0] for k, v in cambios_dict.items()},
+                campos_nuevos={k: v[1] for k, v in cambios_dict.items()},
+            )
+            db.commit()
+        except Exception:
+            logger.warning("revision_manual: no se pudo registrar auditoría edición préstamo id=%s", prestamo_id)
+
     return {
         "mensaje": "Préstamo actualizado exitosamente",
         "prestamo_id": prestamo_id,
@@ -942,6 +981,25 @@ def editar_cuota_revision(
         id_principal=cuota_id,
         resumen_campos=list(cambios_dict.keys()),
     )
+
+    usuario_id = getattr(current_user, "id", None)
+    if usuario_id:
+        try:
+            registrar_cambio(
+                db=db,
+                usuario_id=usuario_id,
+                modulo="Revisión Manual",
+                tipo_cambio="ACTUALIZAR",
+                descripcion=f"Edición de cuota #{cuota_id} (préstamo #{cuota.prestamo_id}) en revisión manual",
+                registro_id=cuota_id,
+                tabla_afectada="cuotas",
+                campos_anteriores={k: v[0] for k, v in cambios_dict.items()},
+                campos_nuevos={k: v[1] for k, v in cambios_dict.items()},
+            )
+            db.commit()
+        except Exception:
+            logger.warning("revision_manual: no se pudo registrar auditoría edición cuota id=%s", cuota_id)
+
     return {
         "mensaje": "Cuota actualizada exitosamente (cambio parcial guardado)",
         "cuota_id": cuota_id,
@@ -1025,8 +1083,10 @@ def get_resumen_rapido_revision(db: Session = Depends(get_db)):
 
 
 class CambiarEstadoRevisionSchema(BaseModel):
-    nuevo_estado: str  # "revisando", "en_espera", "revisado"
+    # Estados: revisando | en_espera | rechazado | revisado
+    nuevo_estado: str
     observaciones: Optional[str] = None
+    motivo_rechazo: Optional[str] = None
 
 
 @router.patch("/prestamos/{prestamo_id}/estado-revision")
@@ -1038,74 +1098,67 @@ def cambiar_estado_revision(
 ):
     """
     Cambia el estado de revisión de un préstamo.
-    Estados permitidos:
-    - "revisando": marca como en revisión (iniciando análisis)
-    - "en_espera": marca como en espera (errores/necesita revisión adicional, no guarda cambios)
-    - "revisado": marca como revisado (finaliza la revisión, solo admin)
-    
-    Reglas de permisos:
-    - Solo admin puede marcar como "revisado"
-    - Solo admin puede cambiar de "revisado" a "revisando" (para permitir que usuario edite de nuevo)
+    Flujo:
+    - pendiente (⚠️) → revisando (?) : cualquier usuario al abrir formulario
+    - revisando (?)  → revisando    : guardar cambios (guarda en BD, sigue revisando)
+    - revisando (?)  → rechazado (✕): solo marca, pide motivo, no guarda cambios de formulario
+    - revisando (?)  → revisado (✓) : guardar y cerrar (guarda todo, finaliza)
+    - revisado (✓)   → revisando (?) : cualquier usuario reabre (visto es nuevo punto de inicio)
+    - rechazado (✕)  → revisando (?) : reabrir para corregir
     """
     actor = _actor_revision_manual(current_user)
     es_admin = getattr(current_user, "is_admin", False) or getattr(current_user, "is_superuser", False)
-    
-    # Validar estado permitido
-    estado_permitidos = ["revisando", "en_espera", "revisado"]
-    if payload.nuevo_estado not in estado_permitidos:
+
+    ESTADOS_VALIDOS = {"revisando", "en_espera", "rechazado", "revisado"}
+    if payload.nuevo_estado not in ESTADOS_VALIDOS:
         raise HTTPException(
             status_code=400,
-            detail=f"Estado inválido. Permitidos: {', '.join(estado_permitidos)}"
+            detail=f"Estado inválido. Permitidos: {', '.join(sorted(ESTADOS_VALIDOS))}"
         )
-    
-    # Obtener estado actual
+
+    if payload.nuevo_estado == "rechazado" and not (payload.motivo_rechazo or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Debe proporcionar un motivo_rechazo para rechazar un préstamo."
+        )
+
     rev_manual = db.execute(
         select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
     ).scalars().first()
-    
-    estado_actual = (rev_manual.estado_revision or "").strip().lower() if rev_manual else "pendiente"
-    
-    # Solo admin puede:
-    # 1. Marcar como "revisado"
-    # 2. Cambiar de "revisado" a "revisando" (para permitir que usuario edite de nuevo)
-    if payload.nuevo_estado == "revisado" and not es_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo administradores pueden marcar como revisado"
-        )
-    
-    if estado_actual == "revisado" and payload.nuevo_estado == "revisando" and not es_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo administradores pueden cambiar un préstamo revisado de vuelta a revisión"
-        )
-    
-    # Si no existe registro, crear uno
+
+    estado_actual = (rev_manual.estado_revision or "pendiente").strip().lower() if rev_manual else "pendiente"
+    usuario_id = getattr(current_user, "id", None)
+    usuario_email = getattr(current_user, "email", None)
+
     if not rev_manual:
         rev_manual = RevisionManualPrestamo(
             prestamo_id=prestamo_id,
             estado_revision=payload.nuevo_estado,
-            usuario_revision_id=getattr(current_user, "id", None),
-            usuario_revision_email=getattr(current_user, "email", None),
+            usuario_revision_id=usuario_id,
+            usuario_revision_email=usuario_email,
             observaciones=payload.observaciones,
+            motivo_rechazo=payload.motivo_rechazo if payload.nuevo_estado == "rechazado" else None,
         )
         db.add(rev_manual)
     else:
         rev_manual.estado_revision = payload.nuevo_estado
-        rev_manual.usuario_revision_id = getattr(current_user, "id", None)
-        rev_manual.usuario_revision_email = getattr(current_user, "email", None)
+        rev_manual.usuario_revision_id = usuario_id
+        rev_manual.usuario_revision_email = usuario_email
         if payload.observaciones:
             rev_manual.observaciones = payload.observaciones
-        
-        # Si se marca como "revisado", registrar fecha
-        if payload.nuevo_estado == "revisado":
+
+        if payload.nuevo_estado == "rechazado":
+            rev_manual.motivo_rechazo = payload.motivo_rechazo
+        elif payload.nuevo_estado == "revisado":
             rev_manual.fecha_revision = datetime.now()
-        # Si se regresa de revisado a revisando, limpiar fecha
-        elif estado_actual == "revisado" and payload.nuevo_estado == "revisando":
+            rev_manual.motivo_rechazo = None
+        elif payload.nuevo_estado == "revisando":
+            # Reapertura desde revisado o rechazado → limpiar cierre anterior
             rev_manual.fecha_revision = None
-    
+            rev_manual.motivo_rechazo = None
+
     rev_manual.actualizado_en = datetime.now()
-    
+
     _commit_revision_seguro(
         db,
         operacion="cambiar_estado_revision",
@@ -1114,11 +1167,33 @@ def cambiar_estado_revision(
         id_principal=prestamo_id,
         resumen_campos=[f"estado_revision={estado_actual}→{payload.nuevo_estado}"],
     )
-    
+
+    # Auditoría en registro_cambios
+    if usuario_id:
+        try:
+            registrar_cambio(
+                db=db,
+                usuario_id=usuario_id,
+                modulo="Revisión Manual",
+                tipo_cambio="ACTUALIZAR",
+                descripcion=f"Estado revisión manual: {estado_actual} → {payload.nuevo_estado}",
+                registro_id=prestamo_id,
+                tabla_afectada="revision_manual_prestamos",
+                campos_anteriores={"estado_revision": estado_actual},
+                campos_nuevos={
+                    "estado_revision": payload.nuevo_estado,
+                    "motivo_rechazo": payload.motivo_rechazo,
+                },
+            )
+            db.commit()
+        except Exception:
+            logger.warning("revision_manual: no se pudo registrar auditoría de cambio de estado prestamo_id=%s", prestamo_id)
+
     return {
         "prestamo_id": prestamo_id,
+        "estado_anterior": estado_actual,
         "nuevo_estado": payload.nuevo_estado,
-        "mensaje": f"Estado actualizado de {estado_actual} a {payload.nuevo_estado}"
+        "mensaje": f"Estado actualizado de '{estado_actual}' a '{payload.nuevo_estado}'",
     }
 
 

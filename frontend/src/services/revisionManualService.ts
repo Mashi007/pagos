@@ -342,7 +342,11 @@ class RevisionManualService {
    */
   async cambiarEstadoRevision(
     prestamoId: number,
-    datos: { nuevo_estado: string; observaciones?: string }
+    datos: {
+      nuevo_estado: string
+      observaciones?: string
+      motivo_rechazo?: string
+    }
   ): Promise<any> {
     return await apiClient.patch(
       `${this.baseUrl}/prestamos/${prestamoId}/estado-revision`,
