@@ -260,9 +260,8 @@ def generar_pdf_estado_cuenta(
         rows_p = [
             [
                 "Fecha de pago",
-                "Fecha ingreso sistema",
+                "F. ingreso",
                 "Monto",
-                "Tasa",
                 "Subtotal (USD)",
                 "Recibo",
             ]
@@ -285,7 +284,6 @@ def generar_pdf_estado_cuenta(
                     str(pr.get("fecha_pago_display") or "-")[:16],
                     str(pr.get("fecha_registro_display") or "-")[:16],
                     str(pr.get("monto_display") or "-")[:22],
-                    str(pr.get("tasa_display") or "-")[:12],
                     f"{float(pr.get('subtotal_usd') or 0):,.2f}",
                     rec_cell,
                 ]
@@ -293,7 +291,6 @@ def generar_pdf_estado_cuenta(
         rows_p.append(
             [
                 Paragraph("<b>Total pagado (USD)</b>", styles["Normal"]),
-                "",
                 "",
                 "",
                 Paragraph(f"<b>{total_usd:,.2f}</b>", styles["Normal"]),
@@ -304,19 +301,18 @@ def generar_pdf_estado_cuenta(
         tp = Table(
             rows_p,
             colWidths=[
-                1.1 * inch,
-                1.1 * inch,
-                1.2 * inch,
-                0.7 * inch,
-                1.1 * inch,
-                0.9 * inch,
+                1.20 * inch,
+                1.10 * inch,
+                1.25 * inch,
+                1.20 * inch,
+                0.80 * inch,
             ],
         )
         extras_p = [
-            ("ALIGN", (4, 0), (4, nrp - 2), "RIGHT"),
-            ("ALIGN", (4, nrp - 1), (4, nrp - 1), "RIGHT"),
-            ("SPAN", (0, nrp - 1), (3, nrp - 1)),
-            ("ALIGN", (0, nrp - 1), (3, nrp - 1), "RIGHT"),
+            ("ALIGN", (3, 0), (3, nrp - 2), "RIGHT"),
+            ("ALIGN", (3, nrp - 1), (3, nrp - 1), "RIGHT"),
+            ("SPAN", (0, nrp - 1), (2, nrp - 1)),
+            ("ALIGN", (0, nrp - 1), (2, nrp - 1), "RIGHT"),
             ("FONTNAME", (0, nrp - 1), (-1, nrp - 1), "Helvetica-Bold"),
             ("BACKGROUND", (0, nrp - 1), (-1, nrp - 1), surf),
         ]
@@ -324,51 +320,151 @@ def generar_pdf_estado_cuenta(
         story.append(tp)
         story.append(Spacer(1, 10))
 
-    # ----- Cuotas pendientes -----
-    story.append(Paragraph("Cuotas pendientes", styles["EC_Section"]))
-    story.append(
-        Paragraph(
-            f'Total pendiente: <b><font color="{COLOR_HEADER}">{float(total_pendiente or 0):,.2f} USD</font></b>',
-            ParagraphStyle(name="EC_TotPen", fontSize=10, spaceAfter=8),
-        )
-    )
-    if not cuotas_pendientes:
-        story.append(Paragraph("No hay cuotas pendientes.", styles["EC_Muted"]))
-    else:
-        rows = [["Préstamo", "Nº cuota", "Vencimiento", "Monto", "Estado"]]
-        for c in cuotas_pendientes:
-            fv = c.get("fecha_vencimiento", "")
-            if len(fv) >= 10 and fv[4] == "-":
-                try:
-                    from datetime import datetime as _dt
-
-                    fv = _dt.strptime(fv[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
-                except Exception:
-                    pass
-            rows.append(
-                [
-                    str(c.get("prestamo_id", "")),
-                    str(c.get("numero_cuota", "")),
-                    fv,
-                    f"{float(c.get('monto') or 0):,.2f}",
-                    (c.get("estado_etiqueta") or etiqueta_estado_cuota(str(c.get("estado") or "")))[:34],
-                ]
-            )
-        t = Table(rows, colWidths=[58, 52, 78, 72, 86])
-        t.setStyle(
-            tbl_style(
-                len(rows),
-                extras=[
-                    ("ALIGN", (0, 1), (1, -1), "CENTER"),
-                    ("ALIGN", (3, 1), (3, -1), "RIGHT"),
-                ],
-            )
-        )
-        story.append(t)
-
     # ----- Amortización -----
     if amortizaciones_por_prestamo:
         story.append(Spacer(1, 8))
+        story.append(Paragraph("Plan de pago", styles["EC_Section"]))
+        for item in amortizaciones_por_prestamo:
+            prestamo_id = item.get("prestamo_id", "")
+            producto = (item.get("producto") or "Préstamo")[:52]
+            cuotas = item.get("cuotas") or []
+            if not cuotas:
+                continue
+
+            # --- Calcular totales para barra de progreso ---
+            n_total = len(cuotas)
+            n_pagadas = sum(
+                1 for c in cuotas
+                if (c.get("estado") or "").strip().upper() in ("PAGADO", "PAGADA", "PAGO_ADELANTADO")
+            )
+            n_pendientes = n_total - n_pagadas
+            pct = n_pagadas / n_total if n_total else 0
+
+            story.append(Spacer(1, 4))
+            story.append(
+                Paragraph(
+                    f'<font color="{COLOR_HEADER}"><b>Préstamo #{prestamo_id}</b></font>'
+                    f' &nbsp; <font color="{COLOR_TEXT_MUTED}" size="9">{producto}</font>',
+                    ParagraphStyle(name="EC_SubPrest", fontSize=10, spaceAfter=4, fontName="Helvetica"),
+                )
+            )
+
+            # --- Barra de progreso ---
+            BAR_W = 7.35 * inch
+            filled = max(0.01, pct) * BAR_W
+            empty = BAR_W - filled
+            bar_cells = [[
+                Paragraph(
+                    f'<font color="white" size="8"><b>{n_pagadas}/{n_total} cuotas pagadas ({pct*100:.0f}%)</b></font>',
+                    ParagraphStyle(name="EC_BarTxt", alignment=1, leading=10),
+                ),
+                ""
+            ]]
+            bar_w_list = [filled, empty if empty > 0 else 0.01]
+            bar_tbl = Table(bar_cells, colWidths=bar_w_list, rowHeights=[14])
+            bar_tbl.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (0, 0), hc(COLOR_HEADER)),
+                ("BACKGROUND", (1, 0), (1, 0), hc(COLOR_BORDER)),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("SPAN", (0, 0), (0, 0)),
+                ("BOX", (0, 0), (-1, -1), 0.5, hc(COLOR_BORDER)),
+            ]))
+            story.append(bar_tbl)
+            story.append(Spacer(1, 2))
+
+            # --- Leyenda colores ---
+            leyenda_style = ParagraphStyle(name="EC_Ley", fontSize=7, leading=9, textColor=hc(COLOR_TEXT_MUTED))
+            leyenda = Paragraph(
+                f'<font color="{COLOR_HEADER}">&#9632;</font> Pagada &nbsp;&nbsp;'
+                f'<font color="{COLOR_ACCENT}">&#9632;</font> Parcial &nbsp;&nbsp;'
+                f'<font color="{COLOR_BORDER}">&#9632;</font> Pendiente',
+                leyenda_style,
+            )
+            story.append(leyenda)
+            story.append(Spacer(1, 4))
+
+            # --- Tabla ---
+            rows = [["#", "Vence", "Cuota (USD)", "Pagado (USD)", "Saldo (USD)", "Estado"]]
+            for c in cuotas:
+                estado_codigo = (c.get("estado") or "").strip().upper()
+                estado_etiqueta = (c.get("estado_etiqueta") or "").strip() or etiqueta_estado_cuota(estado_codigo)
+                monto_cuota = float(c.get("monto_cuota") or 0)
+                raw_tp = c.get("total_pagado_cuota")
+                try:
+                    total_aplicado = float(raw_tp) if raw_tp is not None else 0.0
+                except (TypeError, ValueError):
+                    total_aplicado = 0.0
+                if total_aplicado <= 0:
+                    disp = c.get("pago_conciliado_display")
+                    if disp not in (None, "", "-"):
+                        try:
+                            total_aplicado = float(str(disp).replace(",", ""))
+                        except ValueError:
+                            total_aplicado = 0.0
+
+                # Determinar color de fondo segun estado
+                es_pagada = estado_codigo in ("PAGADO", "PAGADA", "PAGO_ADELANTADO")
+                es_parcial = (not es_pagada) and total_aplicado > 0
+
+                # Celda "Pagado": muestra monto y si cubre total o parcial
+                if es_pagada:
+                    pagado_txt = f'<font color="{COLOR_HEADER}"><b>{total_aplicado:,.2f}</b></font>'
+                    estado_txt = f'<font color="{COLOR_HEADER}"><b>{estado_etiqueta[:18]}</b></font>'
+                elif es_parcial:
+                    pagado_txt = f'<font color="{COLOR_ACCENT}"><b>{total_aplicado:,.2f}</b></font> <font size="7" color="{COLOR_ACCENT}">(parcial)</font>'
+                    estado_txt = f'<font color="{COLOR_ACCENT}">{estado_etiqueta[:18]}</font>'
+                else:
+                    pagado_txt = f'<font color="{COLOR_TEXT_MUTED}">-</font>'
+                    estado_txt = f'<font color="{COLOR_TEXT_MUTED}">{estado_etiqueta[:18]}</font>'
+
+                cell_link = ParagraphStyle(name="EC_CL", fontSize=8, leading=10)
+                rows.append([
+                    str(c.get("numero_cuota", "")),
+                    (c.get("fecha_vencimiento") or ""),
+                    f"{monto_cuota:,.2f}",
+                    Paragraph(pagado_txt, cell_link),
+                    f"{float(c.get('saldo_capital_final') or 0):,.2f}",
+                    Paragraph(estado_txt, cell_link),
+                ])
+
+            # Colores por fila segun estado
+            tbl_extras = [
+                ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                ("ALIGN", (1, 0), (1, -1), "CENTER"),
+                ("ALIGN", (2, 1), (4, -1), "RIGHT"),
+                ("ALIGN", (5, 0), (5, -1), "CENTER"),
+            ]
+            # Pintar filas pagadas con tono azul suave, parciales con tono dorado
+            for idx, c in enumerate(cuotas, 1):
+                ec = (c.get("estado") or "").strip().upper()
+                raw_tp2 = c.get("total_pagado_cuota")
+                try:
+                    tap2 = float(raw_tp2) if raw_tp2 is not None else 0.0
+                except (TypeError, ValueError):
+                    tap2 = 0.0
+                if ec in ("PAGADO", "PAGADA", "PAGO_ADELANTADO"):
+                    tbl_extras.append(("BACKGROUND", (0, idx), (-1, idx), hc("#e8f0fe")))
+                elif tap2 > 0:
+                    tbl_extras.append(("BACKGROUND", (0, idx), (-1, idx), hc("#fef9ec")))
+
+            t_amort = Table(
+                rows,
+                colWidths=[
+                    0.38 * inch,
+                    0.80 * inch,
+                    1.00 * inch,
+                    1.20 * inch,
+                    1.00 * inch,
+                    1.20 * inch,
+                ],
+            )
+            t_amort.setStyle(tbl_style(len(rows), hf=8, bf=8, extras=tbl_extras))
+            story.append(t_amort)
+            story.append(Spacer(1, 8))
         story.append(Paragraph("Tablas de amortización", styles["EC_Section"]))
         for item in amortizaciones_por_prestamo:
             prestamo_id = item.get("prestamo_id", "")
