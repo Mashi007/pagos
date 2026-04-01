@@ -803,7 +803,7 @@ def finiquito_admin_patch_estado(
     caso_id: int,
     body: FiniquitoPatchEstadoRequest,
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_administrador),
+    admin: UserResponse = Depends(require_admin),
 ):
     """Administrador: bandejas y area de trabajo (EN_PROCESO / TERMINADO con Sí/No)."""
     nuevo = (body.estado or "").upper().strip()
