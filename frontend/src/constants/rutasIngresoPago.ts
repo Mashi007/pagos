@@ -5,7 +5,7 @@
  *
  * Fuentes de ingreso (producto):
  * - /pagos/rapicredit-cobros: deudor, sin login.
- * - /pagos/infopagos: colaborador, sin login; mismo flujo que cobros con variant.
+ * - /pagos/infopagos: colaborador con login; mismo flujo que cobros con variant.
  * - /pagos/pagos: Excel, Gmail y revision; la importacion y conciliacion en
  *   backend usan la misma logica de moneda/tasa cuando el origen trae Bs.
  *
@@ -17,8 +17,6 @@
 /** Segmentos bajo el basename de la app (p. ej. /pagos). */
 export const SEGMENTO_REPORTE_COBROS = 'rapicredit-cobros'
 
-export const SEGMENTO_REPORTE_LEGACY = 'reporte-pago'
-
 export const SEGMENTO_INFOPAGOS = 'infopagos'
 
 export const SEGMENTO_GESTION_PAGOS = 'pagos'
@@ -28,6 +26,5 @@ export const SEGMENTO_GESTION_PAGOS = 'pagos'
  * Deben coincidir con las rutas declaradas en App.tsx.
  */
 export const RUTAS_REPORTE_PAGO_PUBLICO: readonly string[] = [
-  `/${SEGMENTO_REPORTE_LEGACY}`,
   `/${SEGMENTO_REPORTE_COBROS}`,
 ]

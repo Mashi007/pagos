@@ -34,17 +34,12 @@ const PUBLIC_PATHS = [
   '/acceso-limitado',
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
-  '/rapicredit-estadocuenta-publico',
-  '/informes',
 ]
 
-/** En rutas pblicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
-
-
-
-
-
- * para pedir usuario y clave. Con basename="/pagos", pathname puede ser "/pagos/rapicredit-cobros"; normalizamos. */
+/**
+ * En rutas publicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
+ * para pedir usuario y clave. Con basename="/pagos", pathname puede ser "/pagos/rapicredit-cobros"; normalizamos.
+ */
 
 function RootLayoutWrapper() {
   const location = useLocation()
@@ -193,7 +188,6 @@ import ReportePagoPage from './pages/ReportePagoPage'
 import InfopagosPage from './pages/InfopagosPage'
 
 import EstadoCuentaPublicoPage from './pages/EstadoCuentaPublicoPage'
-import { EstadoCuentaPublicoSinCodigoPage } from './pages/EstadoCuentaPublicoSinCodigoPage'
 
 import { FiniquitoRootPage } from './pages/FiniquitoRootPage'
 
@@ -313,8 +307,6 @@ function App() {
 
             {/* Formulario pblico de reporte de pago (sin login). Link cannico: /rapicredit-cobros */}
 
-            <Route path="reporte-pago" element={<ReportePagoPage />} />
-
             <Route path="rapicredit-cobros" element={<ReportePagoPage />} />
 
             <Route
@@ -322,16 +314,11 @@ function App() {
               element={<Navigate to="/rapicredit-cobros" replace />}
             />
 
-            {/* Consulta pblica de estado de cuenta (sin login). Solo esta consulta, sin acceso a otros servicios. */}
+            {/* Consulta publica de estado de cuenta (sin login). Solo esta consulta, sin acceso a otros servicios. */}
 
             <Route
               path="rapicredit-estadocuenta"
               element={<EstadoCuentaPublicoPage />}
-            />
-
-            <Route
-              path="rapicredit-estadocuenta-publico"
-              element={<EstadoCuentaPublicoSinCodigoPage />}
             />
 
             {/* Acceso limitado: se muestra cuando alguien intenta acceder a /pagos desde /infopagos */}
@@ -443,10 +430,6 @@ function App() {
               path="cobros/historico-cliente"
               element={<CobrosHistoricoPage />}
             />
-
-            {/* Informes: generador de estado de cuenta (requiere login) */}
-
-            <Route path="informes" element={<EstadoCuentaPublicoPage />} />
 
             {/* Reportes */}
 

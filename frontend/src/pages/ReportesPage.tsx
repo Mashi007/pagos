@@ -73,7 +73,9 @@ export function ReportesPage() {
 
             <Button
               className="w-full bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => (window.location.href = '/pagos/informes')}
+              onClick={() =>
+                (window.location.href = '/pagos/rapicredit-estadocuenta')
+              }
             >
               Acceder a Informes
             </Button>

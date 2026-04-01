@@ -33,13 +33,10 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useIsMobile } from '../hooks/useIsMobile'
 
-import { useLocation } from 'react-router-dom'
-
 import {
   validarCedulaEstadoCuenta,
   solicitarCodigo,
   verificarCodigo,
-  solicitarEstadoCuenta,
   type ReciboCuotaItem,
 } from '../services/estadoCuentaService'
 
@@ -360,12 +357,6 @@ function EstadoCuentaPublicoPage() {
 
   const stepAnnouncement = stepAnnouncements[step] ?? `Paso ${step}`
 
-  const location = useLocation()
-
-  const publicPath = (location.pathname || '').replace(/^\//, '')
-
-  const isInformesRoute = publicPath === 'informes'
-
   // Marcar flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver aquí
 
   useEffect(() => {
@@ -373,7 +364,7 @@ function EstadoCuentaPublicoPage() {
 
     sessionStorage.setItem(
       PUBLIC_FLOW_SESSION_KEY + '_path',
-      (location.pathname || '').replace(/^\//, '') || 'rapicredit-estadocuenta'
+      'rapicredit-estadocuenta'
     )
   }, [])
 
@@ -391,46 +382,10 @@ function EstadoCuentaPublicoPage() {
     setLoading(true)
 
     try {
-      const validacion = await validarCedulaEstadoCuenta(
-        cedulaEnviar,
-
-        isInformesRoute ? { origen: 'informes' } : undefined
-      )
+      const validacion = await validarCedulaEstadoCuenta(cedulaEnviar)
 
       if (!validacion.ok) {
         showNotification('error', validacion.error || 'Cédula no válida.')
-
-        return
-      }
-
-      if (isInformesRoute) {
-        const resPdf = await solicitarEstadoCuenta(cedulaEnviar, {
-          origen: 'informes',
-        })
-
-        if (!resPdf.ok) {
-          showNotification(
-            'error',
-            resPdf.error || 'No se pudo generar el estado de cuenta.'
-          )
-
-          return
-        }
-
-        setCedula(cedulaEnviar)
-
-        if (resPdf.pdf_base64) {
-          setPdfDataUrl(`data:application/pdf;base64,${resPdf.pdf_base64}`)
-
-          try {
-            setPdfBlobUrl(base64ToBlobUrl(resPdf.pdf_base64))
-          } catch (blobErr) {
-            console.error('PDF blob URL creation failed:', blobErr)
-            setPdfBlobUrl(null)
-          }
-
-          setStep(3)
-        }
 
         return
       }
@@ -532,19 +487,18 @@ function EstadoCuentaPublicoPage() {
                     RapiCredit
                   </p>
                   <p className="text-xs text-slate-400 sm:text-sm">
-                    Consulta de Informes
+                    Estado de cuenta
                   </p>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <h1 className="text-3xl font-bold text-white sm:text-4xl">
-                  {isInformesRoute ? 'Estado de cuenta' : 'Tus informes'}
+                  Consulta tu estado de cuenta
                 </h1>
                 <p className="text-base leading-relaxed text-slate-300 sm:text-lg">
-                  {isInformesRoute
-                    ? 'Generación rápida de estado de cuenta. Ingrese la cédula del cliente y obtenga el PDF al instante.'
-                    : 'Accede a tu estado de cuenta y documentos financieros de forma segura y rápida.'}
+                  Accede a tu estado de cuenta y documentos financieros de forma
+                  segura y rápida.
                 </p>
               </div>
 
@@ -594,12 +548,10 @@ function EstadoCuentaPublicoPage() {
               <CardContent className="space-y-4 p-5 sm:space-y-5 sm:p-6">
                 <div className="border-b border-slate-100 pb-4">
                   <h2 className="text-xl font-semibold text-slate-900">
-                    {isInformesRoute ? 'Uso interno' : 'Acceso rápido'}
+                    Acceso rápido
                   </h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    {isInformesRoute
-                      ? 'Generador de estado de cuenta para colaboradores'
-                      : 'Consulta tu información financiera'}
+                    Consulta tu información financiera
                   </p>
                 </div>
 
@@ -614,9 +566,7 @@ function EstadoCuentaPublicoPage() {
                         Ingresa cédula
                       </p>
                       <p className="mt-0.5 text-xs text-slate-500">
-                        {isInformesRoute
-                          ? 'Del cliente (V, E, G o J + dígitos)'
-                          : 'Tu cédula (V, E, G o J + dígitos)'}
+                        Tu cédula (V, E, G o J + dígitos)
                       </p>
                     </div>
                   </div>
@@ -644,9 +594,7 @@ function EstadoCuentaPublicoPage() {
                         Descarga o envío
                       </p>
                       <p className="mt-0.5 text-xs text-slate-500">
-                        {isInformesRoute
-                          ? 'Descarga directa'
-                          : 'Se envía a tu correo'}
+                        Se envía a tu correo
                       </p>
                     </div>
                   </div>
@@ -716,9 +664,8 @@ function EstadoCuentaPublicoPage() {
               </CardTitle>
 
               <p className="text-sm text-gray-600">
-                {isInformesRoute
-                  ? 'Uso interno. Ingrese la cédula del cliente para generar el PDF. No se envía correo.'
-                  : 'Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni signos. Si solo ingresa números se procesará con V.'}
+                Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni
+                signos. Si solo ingresa números se procesará con V.
               </p>
             </CardHeader>
 
@@ -746,13 +693,7 @@ function EstadoCuentaPublicoPage() {
                   onClick={handleSolicitarCodigo}
                   disabled={loading}
                 >
-                  {loading
-                    ? isInformesRoute
-                      ? 'Generando PDF...'
-                      : 'Enviando código...'
-                    : isInformesRoute
-                      ? 'Generar PDF'
-                      : 'Enviar código al correo'}
+                  {loading ? 'Enviando código...' : 'Enviar código al correo'}
                 </Button>
               </div>
             </CardContent>
