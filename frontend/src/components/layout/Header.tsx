@@ -46,9 +46,9 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
   const userRole =
-    (user?.rol || 'operativo') === 'administrador'
+    (user?.rol || 'viewer') === 'admin'
       ? 'Administrador'
-      : 'Operativo' // Cambio clave: rol â†' is_admin
+      : 'Operativo'
 
   // Mock de notificaciones - en producción vendrían del backend
 
@@ -256,7 +256,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
                         <Badge
                           className={getRoleColor(
-                            (user?.rol || 'operativo') === 'administrador'
+                            (user?.rol || 'viewer') === 'admin'
                           )}
                         >
                           {userRole}
@@ -278,7 +278,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                       <span>Configuración</span>
                     </button>
 
-                    {(user?.rol || 'operativo') !== 'administrador' && (
+                    {(user?.rol || 'viewer') !== 'admin' && (
                       <button
                         onClick={async () => {
                           try {

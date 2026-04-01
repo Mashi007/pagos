@@ -792,8 +792,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                 .filter(
                                   child =>
                                     !child.adminOnly ||
-                                    (user?.rol || 'operativo') ===
-                                      'administrador'
+                                    (user?.rol || 'viewer') === 'admin'
                                 )
                                 .map(child =>
                                   child.external ? (
@@ -1006,7 +1005,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           <span>Mi Perfil</span>
                         </button>
 
-                        {(user?.rol || 'operativo') === 'administrador' && (
+                        {(user?.rol || 'viewer') === 'admin' && (
                           <NavLink
                             to="/configuracion"
                             className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
@@ -1017,7 +1016,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           </NavLink>
                         )}
 
-                        {(user?.rol || 'operativo') !== 'administrador' && (
+                        {(user?.rol || 'viewer') !== 'admin' && (
                           <button
                             type="button"
                             onClick={async () => {

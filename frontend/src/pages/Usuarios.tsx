@@ -85,7 +85,7 @@ export function Usuarios() {
 
     apellido: '',
 
-    rol: 'operativo', // Cambio clave: rol â†' is_admin
+    rol: 'viewer', // Cambio clave: rol â†' is_admin
 
     password: '',
 
@@ -236,7 +236,7 @@ export function Usuarios() {
 
       apellido: usuario.apellido,
 
-      rol: usuario.rol || 'operativo', // Cambio clave: rol â†' is_admin
+      rol: usuario.rol || 'viewer', // Cambio clave: rol â†' is_admin
 
       password: '',
 
@@ -464,7 +464,7 @@ export function Usuarios() {
 
       apellido: '',
 
-      rol: 'operativo', // Cambio clave: rol â†' is_admin
+      rol: 'viewer', // Cambio clave: rol â†' is_admin
 
       password: '',
 
@@ -497,7 +497,7 @@ export function Usuarios() {
   const getRoleBadgeColor = (rol: string) => {
     // Cambio clave: rol â†' is_admin
 
-    return rol === 'administrador' ? 'bg-red-600' : 'bg-blue-600' // Cambio clave: rol â†' is_admin
+    return rol === 'admin' ? 'bg-red-600' : 'bg-blue-600' // Cambio clave: rol â†' is_admin
   }
 
   return (
@@ -582,7 +582,7 @@ export function Usuarios() {
                 <p className="text-2xl font-bold text-red-600">
                   {
                     usuarios.filter(
-                      u => (u.rol || 'operativo') === 'administrador'
+                      u => (u.rol || 'viewer') === 'admin'
                     ).length
                   }{' '}
                   {/* Cambio clave: rol â†' is_admin */}
@@ -727,14 +727,14 @@ export function Usuarios() {
                     <TableCell>
                       <Badge
                         className={getRoleBadgeColor(
-                          usuario.rol || 'operativo'
+                          usuario.rol || 'viewer'
                         )}
                       >
                         {' '}
                         {/* Cambio clave: rol â†' is_admin */}
-                        {(usuario.rol || 'operativo') === 'administrador'
-                          ? 'Administrador'
-                          : 'Operativo'}{' '}
+                        {(usuario.rol || 'viewer') === 'admin'
+                          ? 'admin'
+                          : 'viewer'}{' '}
                         {/* Cambio clave: rol â†' is_admin */}
                       </Badge>
                     </TableCell>
@@ -915,8 +915,8 @@ export function Usuarios() {
                   </label>
 
                   <Select
-                    value={formData.rol || 'operativo'}
-                    onValueChange={(value: 'administrador' | 'operativo') =>
+                    value={formData.rol || 'viewer'}
+                    onValueChange={(value: 'admin' | 'manager' | 'operator' | 'viewer') =>
                       setFormData({ ...formData, rol: value })
                     }
                   >
@@ -925,11 +925,10 @@ export function Usuarios() {
                     </SelectTrigger>
 
                     <SelectContent>
-                      <SelectItem value="operativo">Operativo</SelectItem>
-
-                      <SelectItem value="administrador">
-                        Administrador
-                      </SelectItem>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                      <SelectItem value="manager">Gerente</SelectItem>
+                      <SelectItem value="operator">Operario</SelectItem>
+                      <SelectItem value="viewer">Visualizador</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

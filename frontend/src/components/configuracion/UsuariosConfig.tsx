@@ -127,7 +127,7 @@ export default function UsuariosConfig() {
 
     apellido: '',
 
-    rol: 'operativo', // Cambio clave: rol → is_admin
+    rol: 'viewer', // Cambio clave: rol → is_admin
 
     password: '',
 
@@ -293,7 +293,7 @@ export default function UsuariosConfig() {
 
       cargo: usuario.cargo || 'Usuario', // Preservar cargo existente
 
-      rol: usuario.rol || 'operativo', // Cambio clave: rol → is_admin
+      rol: usuario.rol || 'viewer', // Cambio clave: rol → is_admin
 
       password: '', // No pre-llenar password
 
@@ -339,7 +339,7 @@ export default function UsuariosConfig() {
 
       apellido: '',
 
-      rol: 'operativo', // Cambio clave: rol → is_admin
+      rol: 'viewer', // Cambio clave: rol → is_admin
 
       password: '',
 
@@ -545,14 +545,14 @@ export default function UsuariosConfig() {
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            (usuario.rol || 'operativo') === 'administrador'
+                            (usuario.rol || 'viewer') === 'admin'
                               ? 'bg-red-100 text-red-800'
                               : 'bg-blue-100 text-blue-800'
                           }`}
                         >
-                          {(usuario.rol || 'operativo') === 'administrador'
-                            ? 'Administrador'
-                            : 'Operativo'}
+                          {(usuario.rol || 'viewer') === 'admin'
+                            ? 'admin'
+                            : 'viewer'}
                         </span>
                       </td>
 
@@ -758,9 +758,9 @@ export default function UsuariosConfig() {
                       <input
                         type="radio"
                         name="rol"
-                        checked={formData.rol === 'operativo'}
+                        checked={formData.rol === 'viewer'}
                         onChange={() =>
-                          setFormData({ ...formData, rol: 'operativo' })
+                          setFormData({ ...formData, rol: 'viewer' })
                         }
                         className="mr-2"
                       />
@@ -772,9 +772,9 @@ export default function UsuariosConfig() {
                       <input
                         type="radio"
                         name="rol"
-                        checked={formData.rol === 'administrador'}
+                        checked={formData.rol === 'admin'}
                         onChange={() =>
-                          setFormData({ ...formData, rol: 'administrador' })
+                          setFormData({ ...formData, rol: 'admin' })
                         }
                         className="mr-2"
                       />
@@ -989,14 +989,14 @@ export default function UsuariosConfig() {
                   <p className="mt-1 text-sm text-gray-900">
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        (viewingUser.rol || 'operativo') === 'administrador'
+                        (viewingUser.rol || 'viewer') === 'admin'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}
                     >
-                      {(viewingUser.rol || 'operativo') === 'administrador'
-                        ? 'Administrador'
-                        : 'Operativo'}
+                      {(viewingUser.rol || 'viewer') === 'admin'
+                        ? 'admin'
+                        : 'viewer'}
                     </span>
                   </p>
                 </div>
@@ -1007,13 +1007,13 @@ export default function UsuariosConfig() {
 
                     <div>
                       <p className="text-sm font-medium text-green-900">
-                        {(viewingUser.rol || 'operativo') === 'administrador'
+                        {(viewingUser.rol || 'viewer') === 'admin'
                           ? 'Acceso total'
                           : 'Acceso operativo'}
                       </p>
 
                       <p className="mt-1 text-xs text-green-700">
-                        {(viewingUser.rol || 'operativo') === 'administrador'
+                        {(viewingUser.rol || 'viewer') === 'admin'
                           ? 'Acceso total: usuarios, configuración y todas las funcionalidades.'
                           : 'No puede realizar cambios en módulos de configuración ni auditoría.'}
                       </p>

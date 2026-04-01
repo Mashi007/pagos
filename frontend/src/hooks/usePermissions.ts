@@ -40,7 +40,7 @@ export function usePermissions() {
    */
 
   const isAdmin = (): boolean => {
-    return (user?.rol || 'operativo') === 'administrador'
+    return (user?.rol || 'viewer') === 'admin'
   }
 
   /**

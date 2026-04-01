@@ -77,7 +77,7 @@ function RootLayoutWrapper() {
   const tokenPortalFiniquito = getFiniquitoAccessToken()?.trim()
 
   const esAdminPanel =
-    isAuthenticated && (user?.rol || 'operativo') === 'administrador'
+    isAuthenticated && (user?.rol || 'viewer') === 'admin'
 
   if (esGestionFiniquito && !esAdminPanel) {
     if (tokenPortalFiniquito) {

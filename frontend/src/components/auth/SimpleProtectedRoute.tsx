@@ -109,7 +109,7 @@ export function SimpleProtectedRoute({
 
   // Si se requiere admin y el usuario no es admin
 
-  if (requireAdmin && (user.rol || 'operativo') !== 'administrador') {
+  if (requireAdmin && (user.rol || 'viewer') !== 'admin') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="w-full max-w-md rounded-lg bg-white p-8 text-center shadow-lg">
@@ -145,7 +145,7 @@ export function SimpleProtectedRoute({
 
               <p className="text-sm text-gray-700">
                 <strong>Su rol actual:</strong>{' '}
-                {(user.rol || 'operativo') === 'administrador'
+                {(user.rol || 'viewer') === 'admin'
                   ? 'Administrador'
                   : 'Operativo'}
               </p>

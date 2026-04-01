@@ -31,16 +31,16 @@ export function FiniquitoGestionGatePage() {
 
   const finiToken = getFiniquitoAccessToken()?.trim()
 
-  const rol = user?.rol || 'operativo'
+  const rol = user?.rol || 'viewer'
 
-  const esAdmin = isAuthenticated && rol === 'administrador'
+  const esAdmin = isAuthenticated && rol === 'admin'
 
   if (finiToken) {
     if (isLoading && isAuthenticated) {
       return <GateSpinner />
     }
 
-    if (!isAuthenticated || rol !== 'administrador') {
+    if (!isAuthenticated || rol !== 'admin') {
       return <FiniquitoPanelPage />
     }
   }

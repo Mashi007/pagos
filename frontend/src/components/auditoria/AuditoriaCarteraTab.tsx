@@ -203,7 +203,7 @@ function saveCarteraSessionCache(payload: {
 export function AuditoriaCarteraTab() {
   const { user } = useSimpleAuth()
 
-  const esAdmin = (user?.rol || 'operativo') === 'administrador'
+  const esAdmin = (user?.rol || 'viewer') === 'admin'
 
   const puedeAuditoriaCartera = useMemo(() => {
     const r = (user?.rol || 'operativo').trim().toLowerCase()
