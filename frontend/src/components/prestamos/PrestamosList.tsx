@@ -1471,8 +1471,6 @@ export function PrestamosList() {
 
                         <TableHead>Estado</TableHead>
 
-                        <TableHead title="Fecha de aprobación">Fecha</TableHead>
-
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1524,19 +1522,6 @@ export function PrestamosList() {
                             <Badge className={getEstadoBadge(prestamo.estado)}>
                               {getEstadoLabel(prestamo.estado)}
                             </Badge>
-                          </TableCell>
-
-                          <TableCell>
-                            <div
-                              className="flex items-center gap-1 text-sm text-gray-600"
-                              title="Fecha de aprobación"
-                            >
-                              <Calendar className="h-4 w-4" />
-
-                              {prestamo.fecha_aprobacion
-                                ? formatDate(prestamo.fecha_aprobacion)
-                                : '-'}
-                            </div>
                           </TableCell>
 
                           <TableCell className="text-right">
