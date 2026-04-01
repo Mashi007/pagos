@@ -98,6 +98,7 @@ def generar_pdf_estado_cuenta(
         return TableStyle(st)
 
     buf = io.BytesIO()
+    _pfx = str(id(buf))  # unique per call; avoids ReportLab style registry collisions
     doc = SimpleDocTemplate(
         buf,
         pagesize=letter,
@@ -342,7 +343,7 @@ def generar_pdf_estado_cuenta(
                 Paragraph(
                     f'<font color="{COLOR_HEADER}"><b>Pr\ufffd stamo #{prestamo_id}</b></font>'
                     f' &nbsp; <font color="{COLOR_TEXT_MUTED}" size="9">{producto}</font>',
-                    ParagraphStyle(name="EC_SubPrest", fontSize=10, spaceAfter=4, fontName="Helvetica"),
+                    ParagraphStyle(name=f"EC_SP_{_pfx}_{prestamo_id}", fontSize=10, spaceAfter=4, fontName="Helvetica"),
                 )
             )
 
@@ -353,7 +354,7 @@ def generar_pdf_estado_cuenta(
             bar_cells = [[
                 Paragraph(
                     f'<font color="white" size="8"><b>{n_pagadas}/{n_total} cuotas pagadas ({pct*100:.0f}%)</b></font>',
-                    ParagraphStyle(name="EC_BarTxt", alignment=1, leading=10),
+                    ParagraphStyle(name=f"EC_BT_{_pfx}_{prestamo_id}", alignment=1, leading=10),
                 ),
                 ""
             ]]
@@ -374,7 +375,7 @@ def generar_pdf_estado_cuenta(
             story.append(Spacer(1, 2))
 
             # --- Leyenda colores ---
-            leyenda_style = ParagraphStyle(name="EC_Ley", fontSize=7, leading=9, textColor=hc(COLOR_TEXT_MUTED))
+            leyenda_style = ParagraphStyle(name=f"EC_LY_{_pfx}_{prestamo_id}", fontSize=7, leading=9, textColor=hc(COLOR_TEXT_MUTED))
             leyenda = Paragraph(
                 f'<font color="{COLOR_HEADER}">&#9632;</font> Pagada &nbsp;&nbsp;'
                 f'<font color="{COLOR_ACCENT}">&#9632;</font> Parcial &nbsp;&nbsp;'
@@ -406,7 +407,7 @@ def generar_pdf_estado_cuenta(
                 es_pagada = estado_codigo in ("PAGADO", "PAGADA", "PAGO_ADELANTADO")
                 es_parcial = (not es_pagada) and total_aplicado > 0
 
-                cell_link = ParagraphStyle(name="EC_CL", fontSize=8, leading=10)
+                cell_link = ParagraphStyle(name=f"EC_CL_{_pfx}_{prestamo_id}_{c.get('numero_cuota','x')}", fontSize=8, leading=10)
                 if es_pagada:
                     pagado_txt = f'<font color="{COLOR_HEADER}"><b>{total_aplicado:,.2f}</b></font>'
                     estado_txt = f'<font color="{COLOR_HEADER}"><b>{estado_etiqueta[:18]}</b></font>'
