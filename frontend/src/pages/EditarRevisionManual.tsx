@@ -212,9 +212,9 @@ export function EditarRevisionManual() {
     if (!clienteData.nombres?.trim()) {
       e['nombres'] = 'El nombre es obligatorio'
     }
-    const tel = (clienteData.telefono || '').replace(/\D/g, '')
-    if (clienteData.telefono && (tel.length < 7 || tel.length > 15)) {
-      e['telefono'] = 'Teléfono inválido (7-15 dígitos)'
+    const telSinPrefijo = (clienteData.telefono || '').replace(/^\+?58/, '').replace(/\D/g, '')
+    if (clienteData.telefono && (telSinPrefijo.length < 7 || telSinPrefijo.length > 11)) {
+      e['telefono'] = 'Teléfono inválido (7-11 dígitos después del +58)'
     }
     if (clienteData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clienteData.email)) {
       e['email'] = 'Email inválido'
@@ -1406,9 +1406,10 @@ export function EditarRevisionManual() {
                     <Input
                       type="text"
                       inputMode="numeric"
-                      value={clienteData.telefono || ''}
+                      value={(clienteData.telefono || '').replace(/^\+?58/, '')}
                       onChange={e => {
-                        setClienteData({ ...clienteData, telefono: e.target.value })
+                        const digits = e.target.value.replace(/\D/g, '')
+                        setClienteData({ ...clienteData, telefono: digits ? `+58${digits}` : '' })
                         setCambios({ ...cambios, cliente: true })
                         if (errores['telefono']) setErrores({ ...errores, telefono: '' })
                       }}
