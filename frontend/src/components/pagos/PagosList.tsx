@@ -157,6 +157,11 @@ export function PagosList() {
   const [fechaTasaForm, setFechaTasaForm] = useState('')
   const [tasaForm, setTasaForm] = useState('')
   const [isGuardandoTasa, setIsGuardandoTasa] = useState(false)
+  const [tasaExistenteDialogo, setTasaExistenteDialogo] = useState<{
+    fecha: string
+    tasaActual: number
+    tasaNueva: number
+  } | null>(null)
   const fileInputCedulasBsRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
@@ -252,11 +257,28 @@ export function PagosList() {
 
     setIsGuardandoTasa(true)
     try {
-      // Importar el servicio de tasa de cambio
-      const { guardarTasaPorFecha } = await import('../../services/tasaCambioService')
+      // Importar servicios
+      const { getTasaPorFecha, guardarTasaPorFecha } = await import('../../services/tasaCambioService')
+      
+      // Verificar si ya existe tasa para esa fecha
+      const tasaExistente = await getTasaPorFecha(fechaTasaForm)
+      
+      if (tasaExistente && tasaExistente.tasa_oficial !== tasaNum) {
+        // Mostrar diálogo de confirmación
+        setTasaExistenteDialogo({
+          fecha: fechaTasaForm,
+          tasaActual: tasaExistente.tasa_oficial,
+          tasaNueva: tasaNum,
+        })
+        setIsGuardandoTasa(false)
+        return
+      }
+      
+      // Guardar la tasa
       await guardarTasaPorFecha(fechaTasaForm, tasaNum)
       
-      toast.success(`✓ Tasa guardada para ${fechaTasaForm}`)
+      const accion = tasaExistente ? 'Tasa actualizada' : 'Tasa guardada'
+      toast.success(`✓ ${accion} para ${fechaTasaForm}`)
       setFechaTasaForm('')
       setTasaForm('')
       
@@ -264,6 +286,31 @@ export function PagosList() {
       await queryClient.invalidateQueries({ queryKey: ['tasa-hoy-banner-pagos'] })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo guardar la tasa')
+    } finally {
+      setIsGuardandoTasa(false)
+    }
+  }
+
+  const handleConfirmarEditarTasa = async () => {
+    if (!tasaExistenteDialogo) return
+
+    setIsGuardandoTasa(true)
+    try {
+      const { guardarTasaPorFecha } = await import('../../services/tasaCambioService')
+      await guardarTasaPorFecha(
+        tasaExistenteDialogo.fecha,
+        tasaExistenteDialogo.tasaNueva
+      )
+      
+      toast.success(`✓ Tasa actualizada de ${tasaExistenteDialogo.tasaActual.toFixed(2)} a ${tasaExistenteDialogo.tasaNueva.toFixed(2)}`)
+      setFechaTasaForm('')
+      setTasaForm('')
+      setTasaExistenteDialogo(null)
+      
+      // Refrescar query de tasa
+      await queryClient.invalidateQueries({ queryKey: ['tasa-hoy-banner-pagos'] })
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo actualizar la tasa')
     } finally {
       setIsGuardandoTasa(false)
     }
@@ -889,6 +936,53 @@ export function PagosList() {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Diálogo de confirmación para editar tasa existente */}
+      {tasaExistenteDialogo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl">
+            <h3 className="mb-2 text-lg font-bold text-gray-900">
+              Tasa ya existe para esta fecha
+            </h3>
+            <p className="mb-6 text-sm text-gray-600">
+              Ya hay una tasa registrada para {tasaExistenteDialogo.fecha}. ¿Deseas actualizarla?
+            </p>
+            
+            <div className="mb-6 space-y-3 rounded-lg bg-amber-50 p-4">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-700">Tasa actual:</span>
+                <span className="font-semibold text-amber-700">
+                  {tasaExistenteDialogo.tasaActual.toFixed(2)} Bs/USD
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-amber-200 pt-3">
+                <span className="text-sm text-gray-700">Tasa nueva:</span>
+                <span className="font-semibold text-green-700">
+                  {tasaExistenteDialogo.tasaNueva.toFixed(2)} Bs/USD
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setTasaExistenteDialogo(null)}
+                disabled={isGuardandoTasa}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarEditarTasa}
+                disabled={isGuardandoTasa}
+                className="flex-1 rounded-lg bg-green-600 px-4 py-2.5 font-semibold text-white transition hover:bg-green-700 disabled:bg-gray-400"
+              >
+                {isGuardandoTasa ? 'Actualizando...' : 'Actualizar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
         <Button
           variant="outline"

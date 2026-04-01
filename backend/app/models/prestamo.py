@@ -58,6 +58,7 @@ class Prestamo(Base):
     ml_impago_calculado_en = Column(DateTime(timezone=False), nullable=True)
     ml_impago_modelo_id = Column(Integer, nullable=True)
     requiere_revision = Column(Boolean, nullable=False, server_default=text("false"))
+    estado_edicion = Column(String(50), nullable=False, server_default=text("'COMPLETADO'"), index=True)
 
     @property
     def modelo(self):

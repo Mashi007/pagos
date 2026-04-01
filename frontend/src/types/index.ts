@@ -203,6 +203,8 @@ export interface Prestamo {
   fecha_desistimiento?: string
 
   fecha_actualizacion: string
+
+  estado_edicion?: 'EN_EDICION' | 'COMPLETADO'
 }
 
 export interface PrestamoForm {

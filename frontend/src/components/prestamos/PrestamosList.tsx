@@ -79,6 +79,8 @@ import { PrestamoDetalleModal } from './PrestamoDetalleModal'
 
 import { AprobarPrestamoManualModal } from './AprobarPrestamoManualModal'
 
+import { ModalCambiosManualPrestamo } from './ModalCambiosManualPrestamo'
+
 import {
   Dialog,
   DialogContent,
@@ -218,6 +220,8 @@ export function PrestamosList() {
 
   const [showAprobarManual, setShowAprobarManual] = useState(false)
 
+  const [showCambiosManual, setShowCambiosManual] = useState(false)
+
   const [aprobacionManualPrestamo, setAprobacionManualPrestamo] =
     useState<any>(null)
 
@@ -227,6 +231,8 @@ export function PrestamosList() {
     useState(false)
 
   const [viewingPrestamo, setViewingPrestamo] = useState<any>(null)
+
+  const [cambiosManualPrestamo, setCambiosManualPrestamo] = useState<Prestamo | null>(null)
 
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
 
@@ -526,9 +532,9 @@ export function PrestamosList() {
     try {
       const full = await prestamoService.getPrestamo(prestamo.id)
 
-      setEditingPrestamo(full)
+      setCambiosManualPrestamo(full)
 
-      setShowCrearPrestamo(true)
+      setShowCambiosManual(true)
     } catch {
       toast.error('No se pudo cargar el préstamo para editar')
     } finally {
@@ -730,6 +736,21 @@ export function PrestamosList() {
 
               type: 'active',
             })
+          }}
+        />
+      )}
+
+      {showCambiosManual && cambiosManualPrestamo && (
+        <ModalCambiosManualPrestamo
+          open={showCambiosManual}
+          prestamo={cambiosManualPrestamo}
+          onClose={() => {
+            setShowCambiosManual(false)
+            setCambiosManualPrestamo(null)
+          }}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+            queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
           }}
         />
       )}
@@ -1517,48 +1538,7 @@ export function PrestamosList() {
 
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              {/* ICONO REVISIÓN MANUAL: ⚠ no revisado | ? en revisión | ausencia = ya revisado */}
-
-                              {(prestamo.estado === 'APROBADO' ||
-                                prestamo.estado === 'LIQUIDADO' ||
-                                prestamo.fecha_aprobacion) &&
-                                prestamo.revision_manual_estado !==
-                                  'revisado' &&
-                                (prestamo.revision_manual_estado ===
-                                'revisando' ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      navigate(
-                                        `/revision-manual/editar/${prestamo.id}`
-                                      )
-                                    }
-                                    title="Está siendo revisado - Click para continuar"
-                                    className="text-yellow-600 hover:bg-yellow-50"
-                                  >
-                                    <Info className="h-4 w-4" />
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      navigate(
-                                        prestamo.revision_manual_estado ===
-                                          'pendiente'
-                                          ? '/revision-manual'
-                                          : `/revision-manual/editar/${prestamo.id}`
-                                      )
-                                    }
-                                    title="No ha sido revisado - Click para revisar"
-                                    className="text-orange-600 hover:bg-orange-50"
-                                  >
-                                    <AlertTriangle className="h-4 w-4" />
-                                  </Button>
-                                ))}
-
-                              {/* Botón Ver Detalles - Visible cuando APROBADO o tiene fecha_aprobacion */}
+                              {/* ICONO ESTADO EDICIÓN: ⚠️ en edición | ✅ completado/visto */}
 
                               {(prestamo.estado === 'APROBADO' ||
                                 prestamo.estado === 'LIQUIDADO' ||
@@ -1566,29 +1546,60 @@ export function PrestamosList() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => handleView(prestamo)}
-                                  title="Ver detalles"
+                                  onClick={() => {
+                                    if (prestamo.estado_edicion === 'EN_EDICION') {
+                                      handleEdit(prestamo)
+                                    } else {
+                                      handleView(prestamo)
+                                    }
+                                  }}
+                                  title={
+                                    prestamo.estado_edicion === 'EN_EDICION'
+                                      ? 'En edición - Click para continuar editando'
+                                      : 'Guardado - Click para ver detalles'
+                                  }
+                                  className={
+                                    prestamo.estado_edicion === 'EN_EDICION'
+                                      ? 'text-orange-600 hover:bg-orange-50'
+                                      : 'text-blue-600 hover:bg-blue-50'
+                                  }
                                 >
-                                  <Eye className="h-4 w-4" />
+                                  {prestamo.estado_edicion === 'EN_EDICION' ? (
+                                    <AlertTriangle className="h-4 w-4" />
+                                  ) : (
+                                    <Eye className="h-4 w-4" />
+                                  )}
                                 </Button>
                               )}
 
-                              {/* Botón Editar - Permanente cuando tiene permisos Y está APROBADO o LIQUIDADO con fecha_aprobacion */}
+                              {/* Botón Descargar Estado de Cuenta */}
 
-                              {canEditPrestamo(prestamo.estado) &&
-                                (prestamo.estado === 'APROBADO' ||
-                                  prestamo.estado === 'LIQUIDADO') &&
-                                prestamo.fecha_aprobacion && (
-                                  <Button
-                                    variant="default"
-                                    size="sm"
-                                    onClick={() => handleEdit(prestamo)}
-                                    title="Editar préstamo"
-                                    className="bg-blue-600 text-white hover:bg-blue-700"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                )}
+                              {(prestamo.estado === 'APROBADO' ||
+                                prestamo.estado === 'LIQUIDADO' ||
+                                prestamo.fecha_aprobacion) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await prestamoService.descargarEstadoCuentaPdf(
+                                        prestamo.id
+                                      )
+                                      toast.success(
+                                        'Estado de cuenta descargado'
+                                      )
+                                    } catch (error) {
+                                      toast.error(
+                                        'Error al descargar estado de cuenta'
+                                      )
+                                    }
+                                  }}
+                                  title="Descargar estado de cuenta"
+                                  className="text-green-600 hover:bg-green-50"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              )}
 
                               {/* Aprobar préstamo (riesgo manual) - Reemplaza Evaluar riesgo + Aprobar crédito + Asignar fecha */}
 
