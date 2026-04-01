@@ -172,7 +172,7 @@ function NotificationBanner({
   )
 }
 
-export default /** Convierte base64 PDF en blob URL para el visor inline. */
+/** Convierte base64 PDF en blob URL para el visor inline. */
 function base64ToBlobUrl(b64: string): string {
   const bin = atob(b64)
   const bytes = new Uint8Array(bin.length)
@@ -1028,3 +1028,5 @@ function EstadoCuentaPublicoPage() {
     </div>
   )
 }
+
+export default EstadoCuentaPublicoPage
