@@ -1646,24 +1646,8 @@ export function EditarRevisionManual() {
                     </div>
                   </div>
 
-                  {/* Fecha Requerimiento */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
-                      Fecha de Requerimiento
-                    </label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                      <Input
-                        type="date"
-                        value={formatDateForInput(prestamoData.fecha_requerimiento)}
-                        onChange={e => {
-                          setPrestamoData({ ...prestamoData, fecha_requerimiento: e.target.value || null })
-                          setCambios({ ...cambios, prestamo: true })
-                        }}
-                        className="pl-10"
-                      />
-                    </div>
-                  </div>
+                  {/* Fecha Requerimiento - OCULTO */}
+                  {/* Este campo se usa en gestión de préstamos, no en revisión manual */}
 
                   {/* Fecha Aprobación */}
                   <div>
