@@ -340,3 +340,42 @@ def me(
     if u and u.is_active:
         return user_to_response(u)
     return _fake_user(email)
+
+
+@router.post("/clear-rate-limits")
+def clear_rate_limits(
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    """
+    Endpoint solo para admin: limpia todos los rate limits de login.
+    Requiere header X-Admin-Secret que coincida con ADMIN_SECRET_CLEAR_LIMITS.
+    Uso: POST /api/v1/auth/clear-rate-limits
+         Header: X-Admin-Secret: tu_secreto
+    """
+    secret = getattr(settings, "ADMIN_SECRET_CLEAR_LIMITS", None)
+    if not secret or not secret.strip():
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="ADMIN_SECRET_CLEAR_LIMITS no configurado en servidor",
+        )
+    
+    if not x_admin_secret or x_admin_secret.strip() != secret.strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Secreto inválido",
+        )
+    
+    # Limpiar ambos rate limits
+    num_ips_login = len(_LOGIN_ATTEMPTS)
+    num_ips_forgot = len(_FORGOT_ATTEMPTS)
+    
+    _LOGIN_ATTEMPTS.clear()
+    _FORGOT_ATTEMPTS.clear()
+    
+    logger.info(f"Rate limits limpiados: {num_ips_login} IPs de login, {num_ips_forgot} IPs de forgot")
+    
+    return {
+        "message": "Rate limits limpiados exitosamente",
+        "ips_login_cleared": num_ips_login,
+        "ips_forgot_cleared": num_ips_forgot,
+    }
