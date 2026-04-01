@@ -23,11 +23,14 @@ interface SimpleProtectedRouteProps {
 export function SimpleProtectedRoute({
   children,
 
-  requireAdmin = false, // Cambio clave: requiredRoles -> requireAdmin
+  requireAdmin = false,
 
   fallbackPath = '/login',
 }: SimpleProtectedRouteProps) {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()
+
+  const homeForRole =
+    (user?.rol || '').toLowerCase() === 'operator' ? '/clientes' : '/dashboard'
 
   const location = useLocation()
 
@@ -161,10 +164,10 @@ export function SimpleProtectedRoute({
             </button>
 
             <button
-              onClick={() => (window.location.href = BASE_PATH + '/dashboard')}
+              onClick={() => (window.location.href = BASE_PATH + homeForRole)}
               className="w-full rounded-lg bg-gray-600 px-6 py-3 font-medium text-white transition-colors hover:bg-gray-700"
             >
-              Ir al Dashboard
+              {homeForRole === '/clientes' ? 'Ir a Clientes' : 'Ir al Dashboard'}
             </button>
           </div>
 

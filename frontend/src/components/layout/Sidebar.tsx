@@ -411,8 +411,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       const isOperator = rol === 'operator'
 
       // operator: solo ve CRM (clientes), Préstamos y Reportes (contiene Finiquito gestión)
+      // Dashboard queda oculto porque /dashboard/menu no está en sus rutas permitidas
       if (isOperator) {
-        return item.title === 'CRM' || item.title === 'Préstamos' || item.title === 'Reportes'
+        return (
+          item.title === 'CRM' ||
+          item.title === 'Préstamos' ||
+          item.title === 'Reportes'
+        )
       }
 
       // No-admin: ocultar Configuración
