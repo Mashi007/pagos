@@ -1877,21 +1877,7 @@ export function EditarRevisionManual() {
                     />
                   </div>
 
-                  {/* Usuario Aprobador */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
-                      Usuario Aprobador
-                    </label>
-                    <Input
-                      type="text"
-                      value={prestamoData.usuario_aprobador || ''}
-                      onChange={e => {
-                        setPrestamoData({ ...prestamoData, usuario_aprobador: e.target.value })
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      placeholder="Usuario aprobador"
-                    />
-                  </div>
+                  {/* Usuario Aprobador - OCULTO */}
                 </div>
 
                 {/* Observaciones - ancho completo */}
