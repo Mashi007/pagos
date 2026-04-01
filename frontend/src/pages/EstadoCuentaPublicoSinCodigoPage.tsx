@@ -321,7 +321,7 @@ export function EstadoCuentaPublicoSinCodigoPage() {
               <div className="space-y-2">
                 {/* Visor PDF en desktop con fallback */}
                 {pdfBlobUrl && !isMobile && (
-                  <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 shadow-md">
+                  <div className="overflow-hidden rounded-xl border border-slate-200 shadow-md">
                     <object
                       data={pdfBlobUrl}
                       type="application/pdf"
@@ -335,7 +335,7 @@ export function EstadoCuentaPublicoSinCodigoPage() {
                         </p>
                         <a
                           href={pdfBlobUrl}
-                          download={`estado_cuenta.pdf`}
+                          download={`estado_cuenta_${cedulaValidada}.pdf`}
                           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                         >
                           <Download className="h-4 w-4" />
@@ -343,6 +343,21 @@ export function EstadoCuentaPublicoSinCodigoPage() {
                         </a>
                       </div>
                     </object>
+
+                    {/* Banner fijo al pie del visor — siempre visible */}
+                    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2">
+                      <p className="text-xs text-slate-600">
+                        Puedes guardar una copia de tu estado de cuenta en PDF.
+                      </p>
+                      <a
+                        href={pdfBlobUrl}
+                        download={`estado_cuenta_${cedulaValidada}.pdf`}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Descargar PDF
+                      </a>
+                    </div>
                   </div>
                 )}
 
