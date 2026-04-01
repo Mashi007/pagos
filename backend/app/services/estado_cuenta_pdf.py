@@ -340,7 +340,7 @@ def generar_pdf_estado_cuenta(
         story.append(Paragraph("Plan de pago", styles["EC_Section"]))
         for item in amortizaciones_por_prestamo:
             prestamo_id = item.get("prestamo_id", "")
-            producto = (item.get("producto") or "Pr\ufffd stamo")[:52]
+            producto = (item.get("producto") or "Préstamo")[:52]
             cuotas = item.get("cuotas") or []
             if not cuotas:
                 continue
@@ -353,58 +353,114 @@ def generar_pdf_estado_cuenta(
             )
             pct = n_pagadas / n_total if n_total else 0
 
-            story.append(Spacer(1, 4))
-            story.append(
-                Paragraph(
-                    f'<font color="{COLOR_HEADER}"><b>Pr\ufffd stamo #{prestamo_id}</b></font>'
-                    f' &nbsp; <font color="{COLOR_TEXT_MUTED}" size="9">{producto}</font>',
-                    ParagraphStyle(name=f"EC_SP_{_pfx}_{prestamo_id}", fontSize=10, spaceAfter=4, fontName="Helvetica"),
-                )
+            story.append(Spacer(1, 6))
+
+            # ── Tarjeta de encabezado del prestamo ──────────────────────────────────────────
+            if pct == 0:
+                _card_color  = COLOR_HEADER
+                _estado_icon = "○"
+            elif pct >= 1.0:
+                _card_color  = "#1a6b3c"
+                _estado_icon = "✓"
+            else:
+                _card_color  = COLOR_ACCENT
+                _estado_icon = "◔"
+
+            n_pendientes    = n_total - n_pagadas
+            monto_pendiente = sum(
+                float(c.get("monto_cuota") or 0)
+                for c in cuotas
+                if (c.get("estado") or "").strip().upper() not in ("PAGADO", "PAGADA", "PAGO_ADELANTADO")
             )
 
-            # --- Barra de progreso ---
-            BAR_W = 7.35 * inch
-            filled_pct = max(0.05, pct)  # minimo 5% para visibilidad
-            filled = filled_pct * BAR_W
-            empty = max(0.01, BAR_W - filled)
-            bar_label = f"{n_pagadas}/{n_total} cuotas pagadas  ({pct*100:.0f}%)"
-            _bt_style = ParagraphStyle(name=f"EC_BT_{_pfx}_{prestamo_id}", alignment=1, leading=10)
-            # Fila 0: etiqueta centrada sobre toda la barra (SPAN)
-            # Fila 1: segmento azul (pagado) + segmento gris (pendiente)
-            bar_cells = [
-                [Paragraph(f'<font color="{COLOR_HEADER}" size="8"><b>{bar_label}</b></font>', _bt_style), ""],
-                ["", ""],
-            ]
-            bar_tbl = Table(bar_cells, colWidths=[filled, empty], rowHeights=[13, 8])
-            bar_tbl.setStyle(TableStyle([
-                # Fila 0: fondo blanco, texto centrado que ocupa las 2 columnas
-                ("SPAN",       (0, 0), (1, 0)),
-                ("BACKGROUND", (0, 0), (1, 0), colors.white),
-                ("ALIGN",      (0, 0), (1, 0), "CENTER"),
-                ("VALIGN",     (0, 0), (1, 0), "MIDDLE"),
-                # Fila 1: barra bicolor
-                ("BACKGROUND", (0, 1), (0, 1), hc(COLOR_HEADER)),
-                ("BACKGROUND", (1, 1), (1, 1), hc(COLOR_BORDER)),
-                # Padding
-                ("LEFTPADDING",   (0, 0), (-1, -1), 2),
-                ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
+            # Barra de progreso interna (solo colores, sin texto)
+            _bw_total = 1.55 * inch
+            _bw_fill  = round(max(0.04, pct) * _bw_total, 2)
+            _bw_empty = round(max(0.02, _bw_total - _bw_fill), 2)
+            _bar_inner = Table([["", ""]], colWidths=[_bw_fill, _bw_empty], rowHeights=[7])
+            _bar_inner.setStyle(TableStyle([
+                ("BACKGROUND",    (0, 0), (0, 0), hc(_card_color)),
+                ("BACKGROUND",    (1, 0), (1, 0), hc("#dde3ea")),
                 ("TOPPADDING",    (0, 0), (-1, -1), 0),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                ("VALIGN",        (0, 1), (1, 1), "MIDDLE"),
-                ("BOX", (0, 0), (-1, -1), 0.5, hc(COLOR_BORDER)),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
             ]))
-            story.append(bar_tbl)
-            story.append(Spacer(1, 2))
 
-            # --- Leyenda colores ---
-            leyenda_style = ParagraphStyle(name=f"EC_LY_{_pfx}_{prestamo_id}", fontSize=7, leading=9, textColor=hc(COLOR_TEXT_MUTED))
-            leyenda = Paragraph(
-                f'<font color="{COLOR_HEADER}">&#9632;</font> Pagada &nbsp;&nbsp;'
-                f'<font color="{COLOR_ACCENT}">&#9632;</font> Parcial &nbsp;&nbsp;'
-                f'<font color="{COLOR_BORDER}">&#9632;</font> Pendiente',
-                leyenda_style,
+            # Estilos de la tarjeta
+            _s_title = ParagraphStyle(name=f"EC_CT_{_pfx}_{prestamo_id}", fontSize=10,
+                fontName="Helvetica-Bold", leading=13, textColor=hc(COLOR_HEADER))
+            _s_sub   = ParagraphStyle(name=f"EC_CS_{_pfx}_{prestamo_id}", fontSize=8,
+                fontName="Helvetica", leading=11, textColor=hc(COLOR_TEXT_MUTED))
+            _s_num   = ParagraphStyle(name=f"EC_SV_{_pfx}_{prestamo_id}", fontSize=14,
+                fontName="Helvetica-Bold", leading=16, alignment=1)
+            _s_lbl   = ParagraphStyle(name=f"EC_SL_{_pfx}_{prestamo_id}", fontSize=7,
+                fontName="Helvetica", leading=9, alignment=1, textColor=hc(COLOR_TEXT_MUTED))
+            _s_barlbl = ParagraphStyle(name=f"EC_BL_{_pfx}_{prestamo_id}", fontSize=9,
+                fontName="Helvetica-Bold", leading=11, alignment=1)
+            _s_legend = ParagraphStyle(name=f"EC_BG_{_pfx}_{prestamo_id}", fontSize=6,
+                leading=8, alignment=1, textColor=hc(COLOR_TEXT_MUTED))
+
+            _pct_str = f"{pct*100:.0f}%"
+            _pend_str = f"${monto_pendiente:,.2f}"
+
+            card_cells = [[
+                # Col 0: identificacion
+                [
+                    Paragraph(
+                        f'{_estado_icon} Préstamo <b>#{prestamo_id}</b>',
+                        _s_title,
+                    ),
+                    Paragraph(producto, _s_sub),
+                ],
+                # Col 1: cuotas pagadas
+                [
+                    Paragraph(f'<font color="{_card_color}"><b>{n_pagadas}</b></font>', _s_num),
+                    Paragraph("Cuotas<br/>pagadas", _s_lbl),
+                ],
+                # Col 2: cuotas pendientes
+                [
+                    Paragraph(f'<font color="{COLOR_TEXT_MUTED}"><b>{n_pendientes}</b></font>', _s_num),
+                    Paragraph("Cuotas<br/>pendientes", _s_lbl),
+                ],
+                # Col 3: barra + porcentaje + leyenda
+                [
+                    Paragraph(
+                        f'<font color="{_card_color}"><b>{_pct_str}</b></font>'
+                        f' <font size="7" color="{COLOR_TEXT_MUTED}">completado</font>',
+                        _s_barlbl,
+                    ),
+                    _bar_inner,
+                    Paragraph(
+                        f'<font color="{COLOR_HEADER}">■</font><font size="6"> Pagada</font>'
+                        f'  <font color="{COLOR_ACCENT}">■</font><font size="6"> Parcial</font>'
+                        f'  <font color="#dde3ea">■</font><font size="6"> Pend.</font>',
+                        _s_legend,
+                    ),
+                ],
+            ]]
+
+            card_tbl = Table(
+                card_cells,
+                colWidths=[3.30 * inch, 1.10 * inch, 1.10 * inch, 1.85 * inch],
+                rowHeights=[None],
             )
-            story.append(leyenda)
+            card_tbl.setStyle(TableStyle([
+                ("BACKGROUND",    (0, 0), (-1, -1), hc("#f0f4f8")),
+                ("BACKGROUND",    (0, 0), (0, 0),   colors.white),
+                ("BOX",           (0, 0), (-1, -1), 0.8, hc(COLOR_HEADER)),
+                ("LINEAFTER",     (0, 0), (2, 0),   0.4, hc(COLOR_BORDER)),
+                ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN",         (1, 0), (3, 0),   "CENTER"),
+                ("TOPPADDING",    (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING",   (0, 0), (0, 0),   10),
+                ("LEFTPADDING",   (1, 0), (-1, -1), 4),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+            ]))
+            story.append(card_tbl)
+            story.append(Spacer(1, 6))
+
             story.append(Spacer(1, 4))
 
             # --- Tabla ---
