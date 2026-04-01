@@ -722,6 +722,9 @@ export function TablaAmortizacionPrestamo({
                 <p className="text-2xl font-bold text-gray-700">
                   {
                     cuotas.filter((c: Cuota) => {
+                      const ec = (c.estado || '').trim().toUpperCase()
+                      if (['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(ec)) return true
+
                       const totalPagado = c.total_pagado ?? 0
 
                       const montoConciliado = c.pago_monto_conciliado ?? 0
