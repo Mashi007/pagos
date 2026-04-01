@@ -4,13 +4,15 @@ Solo administradores (rol=admin) pueden crear, actualizar, eliminar usuarios.
 GET /api/v1/usuarios/ (listado), POST (crear), GET /{id}, PUT /{id}, DELETE /{id},
 POST /{id}/activate, POST /{id}/deactivate, GET /verificar-admin.
 POST /bulk (carga masiva de usuarios).
+GET /kpis (estadísticas y KPIs de usuarios).
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
@@ -20,6 +22,7 @@ from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.schemas.usuario import UserCreate, UserUpdate
 from app.schemas.usuario_bulk import UserBulkImportRequest, UserBulkImportResponse
+from app.schemas.usuario_kpis import KpiUsuariosResponse
 from app.services.usuario_bulk_import import procesar_importacion_usuarios
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -245,4 +248,88 @@ def importar_usuarios_masivo(
         total_exitosos=total_exitosos,
         total_errores=total_errores,
         resultados=resultados,
+    )
+
+
+@router.get("/kpis", response_model=KpiUsuariosResponse)
+def obtener_kpis_usuarios(
+    db: Session = Depends(get_db),
+):
+    """Obtiene KPIs y estadísticas de usuarios del sistema."""
+    
+    # Total de usuarios
+    total_usuarios = db.query(func.count(User.id)).scalar() or 0
+    
+    # Usuarios activos
+    usuarios_activos = db.query(func.count(User.id)).filter(User.is_active == True).scalar() or 0
+    
+    # Usuarios inactivos
+    usuarios_inactivos = db.query(func.count(User.id)).filter(User.is_active == False).scalar() or 0
+    
+    # Administradores activos
+    admins_activos = db.query(func.count(User.id)).filter(
+        User.rol == "admin",
+        User.is_active == True
+    ).scalar() or 0
+    
+    # Managers activos
+    managers_activos = db.query(func.count(User.id)).filter(
+        User.rol == "manager",
+        User.is_active == True
+    ).scalar() or 0
+    
+    # Operators activos
+    operators_activos = db.query(func.count(User.id)).filter(
+        User.rol == "operator",
+        User.is_active == True
+    ).scalar() or 0
+    
+    # Viewers activos
+    viewers_activos = db.query(func.count(User.id)).filter(
+        User.rol == "viewer",
+        User.is_active == True
+    ).scalar() or 0
+    
+    # Usuarios agregados en el último mes
+    hace_un_mes = datetime.utcnow() - timedelta(days=30)
+    usuarios_ultimo_mes = db.query(func.count(User.id)).filter(
+        User.created_at >= hace_un_mes
+    ).scalar() or 0
+    
+    # Usuarios agregados en últimos 7 días
+    hace_una_semana = datetime.utcnow() - timedelta(days=7)
+    usuarios_ultima_semana = db.query(func.count(User.id)).filter(
+        User.created_at >= hace_una_semana
+    ).scalar() or 0
+    
+    # Porcentaje de activos
+    porcentaje_activos = round((usuarios_activos / total_usuarios * 100) if total_usuarios > 0 else 0, 1)
+    
+    # Último usuario creado
+    ultimo_usuario = db.query(User).order_by(User.created_at.desc()).first()
+    
+    # Último login
+    ultimo_login = db.query(User).filter(User.last_login != None).order_by(User.last_login.desc()).first()
+    
+    return KpiUsuariosResponse(
+        total_usuarios=total_usuarios,
+        usuarios_activos=usuarios_activos,
+        usuarios_inactivos=usuarios_inactivos,
+        porcentaje_activos=porcentaje_activos,
+        por_rol={
+            "admin": admins_activos,
+            "manager": managers_activos,
+            "operator": operators_activos,
+            "viewer": viewers_activos,
+        },
+        usuarios_ultimo_mes=usuarios_ultimo_mes,
+        usuarios_ultima_semana=usuarios_ultima_semana,
+        ultimo_usuario_creado={
+            "email": ultimo_usuario.email if ultimo_usuario else None,
+            "fecha": ultimo_usuario.created_at.isoformat() if ultimo_usuario else None,
+        },
+        ultimo_login={
+            "email": ultimo_login.email if ultimo_login else None,
+            "fecha": ultimo_login.last_login.isoformat() if ultimo_login else None,
+        },
     )
