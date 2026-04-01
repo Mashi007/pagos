@@ -75,7 +75,6 @@ import {
   DialogFooter,
 } from '../../components/ui/dialog'
 import { PagosListResumen } from './PagosListResumen'
-import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
 import { getErrorMessage, isAxiosError } from '../../types/errors'
 import { useSearchParams, Link } from 'react-router-dom'
@@ -522,7 +521,6 @@ export function PagosList() {
   }
   return (
     <div className="space-y-6">
-      <PagosKPIsNuevo />
       {/* Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos) - visible arriba */}
       <Card className="border-blue-200 bg-blue-50/80 shadow-sm">
         <CardHeader className="pb-2">
