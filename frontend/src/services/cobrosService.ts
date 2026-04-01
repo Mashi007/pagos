@@ -94,9 +94,35 @@ export interface ValidarCedulaResponse {
 
   error?: string
 
-  /** True si esta c├â┬⌐dula puede reportar pagos en Bol├â┬¡vares (Bs) en cobros/infopagos. */
+  /** True si esta cedula puede reportar pagos en Bolivares (Bs) en cobros/infopagos. */
 
   puede_reportar_bs?: boolean
+}
+
+export interface SolicitarCodigoReporteResponse {
+  ok: boolean
+
+  mensaje?: string
+
+  error?: string
+
+  expira_en?: string
+}
+
+export interface VerificarCodigoReporteResponse {
+  ok: boolean
+
+  error?: string
+
+  access_token?: string
+
+  expires_in?: number
+
+  nombre?: string
+
+  puede_reportar_bs?: boolean
+
+  email_enmascarado?: string
 }
 
 export interface EnviarReporteResponse {
@@ -133,12 +159,12 @@ export interface EnviarReporteInfopagosResponse {
   estado_reportado?: string | null
 }
 
-/** P├â┬║blico: validar c├â┬⌐dula (formato + tiene pr├â┬⌐stamo). Sin auth. Sin env├â┬¡o de token. */
+/** Publico: validar cedula. Con accessToken (JWT cobros_public) tras verificar codigo por correo. */
 
 export async function validarCedulaPublico(
   cedula: string,
 
-  opts?: { origen?: string }
+  opts?: { origen?: string; accessToken?: string }
 ): Promise<ValidarCedulaResponse> {
   const o = (opts?.origen || '').trim()
 
@@ -148,8 +174,18 @@ export async function validarCedulaPublico(
 
   const url = `${BASE_PUBLIC}/validar-cedula?${q.toString()}`
 
+  const headers: Record<string, string> = {}
+
+  const tok = (opts?.accessToken || '').trim()
+
+  if (tok) headers.Authorization = `Bearer ${tok}`
+
   try {
-    const res = await fetchWithTimeout(url, { credentials: 'same-origin' })
+    const res = await fetchWithTimeout(url, {
+      credentials: 'same-origin',
+
+      headers,
+    })
 
     if (res.status === 429) {
       return {
@@ -169,12 +205,101 @@ export async function validarCedulaPublico(
   }
 }
 
-/** P├â┬║blico: enviar reporte de pago (multipart). Sin auth. Sin env├â┬¡o de token. */
+export async function solicitarCodigoReportePublico(body: {
+  cedula: string
+
+  email: string
+}): Promise<SolicitarCodigoReporteResponse> {
+  const url = `${BASE_PUBLIC}/solicitar-codigo-reporte`
+
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+
+      credentials: 'same-origin',
+
+      headers: { 'Content-Type': 'application/json' },
+
+      body: JSON.stringify(body),
+    })
+
+    if (res.status === 429) {
+      return {
+        ok: false,
+
+        error:
+          'Demasiadas solicitudes de codigo. Intente de nuevo en una hora.',
+      }
+    }
+
+    return res.json().catch(() => ({
+      ok: false,
+
+      error: 'Error al procesar respuesta del servidor.',
+    }))
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : 'Error de conexion con el servidor.'
+
+    return { ok: false, error: msg }
+  }
+}
+
+export async function verificarCodigoReportePublico(body: {
+  cedula: string
+
+  email: string
+
+  codigo: string
+}): Promise<VerificarCodigoReporteResponse> {
+  const url = `${BASE_PUBLIC}/verificar-codigo-reporte`
+
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+
+      credentials: 'same-origin',
+
+      headers: { 'Content-Type': 'application/json' },
+
+      body: JSON.stringify(body),
+    })
+
+    if (res.status === 429) {
+      return {
+        ok: false,
+
+        error: 'Demasiados intentos. Espere unos minutos e intente de nuevo.',
+      }
+    }
+
+    return res.json().catch(() => ({
+      ok: false,
+
+      error: 'Error al procesar respuesta del servidor.',
+    }))
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : 'Error de conexion con el servidor.'
+
+    return { ok: false, error: msg }
+  }
+}
+
+/** Publico: enviar reporte de pago (multipart). Requiere accessToken salvo modo legacy en backend. */
 
 export async function enviarReportePublico(
-  formData: FormData
+  formData: FormData,
+
+  opts?: { accessToken?: string }
 ): Promise<EnviarReporteResponse> {
   const url = `${BASE_PUBLIC}/enviar-reporte`
+
+  const headers: Record<string, string> = {}
+
+  const tok = (opts?.accessToken || '').trim()
+
+  if (tok) headers.Authorization = `Bearer ${tok}`
 
   try {
     const res = await fetchWithTimeout(url, {
@@ -183,6 +308,8 @@ export async function enviarReportePublico(
       body: formData,
 
       credentials: 'same-origin',
+
+      headers,
 
       // No Content-Type: el navegador fija multipart boundary
     })

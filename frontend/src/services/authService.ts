@@ -2,7 +2,7 @@ import { apiClient, ApiResponse } from './api'
 
 import { User, AuthTokens } from '../types'
 
-import { BASE_PATH } from '../config/env'
+import { BASE_PATH, STAFF_LOGIN_SEARCH } from '../config/env'
 
 import {
   safeSetItem,
@@ -252,7 +252,8 @@ export class AuthService {
       // Redirigir al login (BASE_PATH para coherencia con basename /pagos)
 
       setTimeout(() => {
-        window.location.href = `${BASE_PATH}/login`.replace(/\/+/g, '/')
+        window.location.href =
+          `${BASE_PATH}/login${STAFF_LOGIN_SEARCH}`.replace(/\/+/g, '/')
       }, 500) // Aumentado a 500ms para dar tiempo a mostrar el mensaje
     }
 

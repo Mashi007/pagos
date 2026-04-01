@@ -8,9 +8,11 @@ import { Button } from '../components/ui/button'
 
 import { FiniquitoWorkspaceShell } from '../components/finiquito/FiniquitoWorkspaceShell'
 
-import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
-
-import { BASE_PATH } from '../config/env'
+import {
+  BASE_PATH,
+  PUBLIC_FLOW_SESSION_KEY,
+  STAFF_LOGIN_SEARCH,
+} from '../config/env'
 
 import { useSimpleAuth } from '../store/simpleAuthStore'
 
@@ -47,7 +49,11 @@ export function FiniquitoRootPage() {
     return <Navigate to="/finiquitos/gestion" replace />
   }
 
-  const loginHref = `${(BASE_PATH || '').replace(/\/$/, '') || ''}/login`
+  const loginHref =
+    `${(BASE_PATH || '').replace(/\/$/, '') || ''}/login${STAFF_LOGIN_SEARCH}`.replace(
+      /\/+/g,
+      '/'
+    )
 
   return (
     <FiniquitoWorkspaceShell

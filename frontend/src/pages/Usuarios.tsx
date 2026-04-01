@@ -60,7 +60,7 @@ import { UserRol } from '../types'
 
 import { logger } from '../utils/logger'
 
-import { BASE_PATH } from '../config/env'
+import { BASE_PATH, STAFF_LOGIN_SEARCH } from '../config/env'
 
 export function Usuarios() {
   const { user: currentUser } = useSimpleAuth()
@@ -386,7 +386,8 @@ export function Usuarios() {
           clearAuthStorage()
 
           setTimeout(() => {
-            window.location.href = BASE_PATH + '/login'
+            window.location.href =
+              `${BASE_PATH}/login${STAFF_LOGIN_SEARCH}`.replace(/\/+/g, '/')
           }, 1000)
         } else {
           toast.success('Usuario actualizado exitosamente')

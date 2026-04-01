@@ -77,6 +77,11 @@ class Settings(BaseSettings):
         default="itmaster@rapicreditca.com",
         description="Destino del correo de solicitud de restablecimiento de contraseña",
     )
+    # False = exige JWT cobros_public (OTP por correo) en validar-cedula y enviar-reporte publicos.
+    COBROS_PUBLICO_OTP_DISABLED: bool = Field(
+        default=True,
+        description="Por defecto True: rapicredit-cobros sin codigo al correo. Poner False para exigir OTP.",
+    )
     
     @validator('SECRET_KEY')
     def validate_secret_key(cls, v):

@@ -426,9 +426,10 @@ export default function ReportePagoPage({
     setMontoAltoConfirmado(false)
   }, [monto, moneda])
 
-  // Marcar flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver
-
+  // Marcar flujo publico: si entran a /login ven "Acceso limitado" y pueden volver al formulario (no al panel).
   useEffect(() => {
+    if (typeof sessionStorage === 'undefined') return
+
     sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
 
     sessionStorage.setItem(
@@ -779,8 +780,8 @@ export default function ReportePagoPage({
       : [
           {
             icon: 'id' as const,
-            text: 'Tu cédula',
-            desc: '(V, E, G o J + dígitos)',
+            text: 'Tu cedula',
+            desc: '(V, E, G o J + digitos)',
           },
           {
             icon: 'path' as const,

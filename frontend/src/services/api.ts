@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 
 import { getErrorMessage, getErrorCode, isAxiosError } from '../types/errors'
 
-import { env, BASE_PATH } from '../config/env'
+import { env, BASE_PATH, STAFF_LOGIN_SEARCH } from '../config/env'
 
 import {
   safeGetItem,
@@ -73,6 +73,8 @@ export const API_BASE_URL = getEffectiveApiBaseUrl()
 // Ruta de login con base path (ej. /pagos/login cuando BASE_PATH es /pagos)
 
 const LOGIN_PATH = `${BASE_PATH}/login`.replace(/\/+/g, '/')
+
+const LOGIN_REDIRECT_URL = `${LOGIN_PATH}${STAFF_LOGIN_SEARCH}`
 
 class ApiClient {
   private client: AxiosInstance
@@ -183,7 +185,7 @@ class ApiClient {
               ) {
                 this.isRedirectingToLogin = true
 
-                window.location.replace(LOGIN_PATH)
+                window.location.replace(LOGIN_REDIRECT_URL)
               }
 
               const error = new Error(
@@ -214,7 +216,7 @@ class ApiClient {
               ) {
                 this.isRedirectingToLogin = true
 
-                window.location.replace(LOGIN_PATH)
+                window.location.replace(LOGIN_REDIRECT_URL)
               }
 
               const error = new Error(
@@ -477,7 +479,7 @@ class ApiClient {
 
               // ? Redirigir inmediatamente sin delay para evitar más requests (respeta BASE_PATH)
 
-              window.location.replace(LOGIN_PATH)
+              window.location.replace(LOGIN_REDIRECT_URL)
             }
 
             return Promise.reject(refreshError)

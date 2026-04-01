@@ -24,8 +24,10 @@ import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
 import { isOperatorRole } from './utils/rol'
 
-/** Rutas que no requieren login: reporte de pago (un solo flujo, varias URLs), login e informes publicos. */
-
+/**
+ * Rutas alcanzables sin sesion de personal. Cualquier otra ruta exige login y Layout;
+ * un usuario en rapicredit-cobros no puede abrir dashboard, clientes, etc. sin autenticarse.
+ */
 const PUBLIC_PATHS = [
   '/',
   '/login',

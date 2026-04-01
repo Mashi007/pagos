@@ -109,6 +109,14 @@ export const PUBLIC_REPORTE_PAGO_PATH = 'rapicredit-cobros'
 
 export const PUBLIC_FLOW_SESSION_KEY = 'public_flow_active'
 
+/** Sufijo de URL para mostrar siempre el formulario de personal (evita la pantalla Acceso limitado). */
+export const STAFF_LOGIN_SEARCH = '?personal=1'
+
+/** Sesion del formulario publico rapicredit-cobros tras verificar codigo por correo. */
+export const COBROS_PUBLIC_TOKEN_KEY = 'cobros_public_jwt'
+
+export const COBROS_PUBLIC_CEDULA_KEY = 'cobros_public_cedula'
+
 interface EnvConfig {
   API_URL: string
 

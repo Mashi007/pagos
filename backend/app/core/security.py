@@ -60,6 +60,17 @@ def create_recibo_token(cedula: str, expire_hours: int = 2) -> str:
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+def create_cobros_public_token(cedula_normalized: str, expire_minutes: int = 120) -> str:
+    """JWT de sesion para reporte de pago publico tras verificar OTP al correo registrado."""
+    expire = datetime.utcnow() + timedelta(minutes=expire_minutes)
+    to_encode: dict[str, Any] = {
+        "sub": cedula_normalized.replace("-", ""),
+        "exp": expire,
+        "type": "cobros_public",
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
 def create_recibo_infopagos_token(pago_id: int, expire_hours: int = 2) -> str:
     """Token de un solo uso para que el colaborador descargue el recibo tras registrar pago por Infopagos."""
     expire = datetime.utcnow() + timedelta(hours=expire_hours)

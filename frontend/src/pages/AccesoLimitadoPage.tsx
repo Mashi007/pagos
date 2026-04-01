@@ -1,34 +1,40 @@
 import { AlertCircle, Lock, Key } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
+import { BASE_PATH, STAFF_LOGIN_SEARCH } from '../config/env'
+
+/** Ruta absoluta de pathname (incluye base) para history.* del navegador. */
+function absoluteAppPath(segment: string): string {
+  const base = (BASE_PATH || '').replace(/\/$/, '') || ''
+  const seg = segment.replace(/^\//, '')
+  if (!base || base === '/') return `/${seg}`.replace(/\/{2,}/g, '/')
+  return `${base}/${seg}`.replace(/\/{2,}/g, '/')
+}
 
 export default function AccesoLimitadoPage() {
   const navigate = useNavigate()
 
+  const accesoHistorial = useMemo(() => absoluteAppPath('acceso-limitado'), [])
+
   useEffect(() => {
-    // Bloquea el botón atrás del navegador
     const handlePopState = (e: PopStateEvent) => {
       e.preventDefault()
-      window.history.pushState(null, '', '/pagos/acceso-limitado')
+      window.history.pushState(null, '', accesoHistorial)
     }
 
     window.addEventListener('popstate', handlePopState)
-
-    // Limpia el historial anterior para evitar retrocesos
-    window.history.replaceState(null, '', '/pagos/acceso-limitado')
+    window.history.replaceState(null, '', accesoHistorial)
 
     return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
+  }, [accesoHistorial])
 
   const handleLogin = () => {
-    window.location.href = '/pagos/login'
+    navigate(`/login${STAFF_LOGIN_SEARCH}`)
   }
 
   const handleVolverAInfopagos = () => {
-    // Limpia el historial y redirige
-    window.history.replaceState(null, '', '/pagos/infopagos')
-    window.location.href = '/pagos/infopagos'
+    navigate('/infopagos', { replace: true })
   }
 
   return (

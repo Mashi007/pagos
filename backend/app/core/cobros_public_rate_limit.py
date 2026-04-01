@@ -42,7 +42,17 @@ _estado_cuenta_validar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_solicitar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_verificar_attempts: dict[str, list[float]] = defaultdict(list)
 _finiquito_solicitar_codigo_attempts: dict[str, list[float]] = defaultdict(list)
+_cobros_public_solicitar_attempts: dict[str, list[float]] = defaultdict(list)
+_cobros_public_verificar_attempts: dict[str, list[float]] = defaultdict(list)
 _lock = Lock()
+
+# Reporte de pago publico: solicitar codigo OTP al correo
+COBROS_PUBLIC_SOLICITAR_WINDOW_SEC = 3600
+COBROS_PUBLIC_SOLICITAR_MAX = 12
+
+# Verificar codigo (misma ventana que estado de cuenta)
+COBROS_PUBLIC_VERIFICAR_WINDOW_SEC = 900
+COBROS_PUBLIC_VERIFICAR_MAX = 15
 
 
 
@@ -159,6 +169,66 @@ def check_rate_limit_estado_cuenta_solicitar(ip: str) -> None:
             raise HTTPException(
                 status_code=429,
                 detail="Ha alcanzado el límite de consultas por hora. Intente más tarde.",
+            )
+        attempts.append(now)
+
+
+def check_rate_limit_cobros_public_solicitar(ip: str) -> None:
+    """Limite solicitudes de codigo OTP reporte publico por IP."""
+    if check_rate_limit_redis is not None:
+        try:
+            check_rate_limit_redis(
+                "cobros_pub_solicitar",
+                ip,
+                COBROS_PUBLIC_SOLICITAR_WINDOW_SEC,
+                COBROS_PUBLIC_SOLICITAR_MAX,
+                "Demasiadas solicitudes de codigo. Intente de nuevo en una hora.",
+            )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    with _lock:
+        now = time.time()
+        attempts = _cobros_public_solicitar_attempts[ip]
+        attempts[:] = [
+            t for t in attempts if now - t < COBROS_PUBLIC_SOLICITAR_WINDOW_SEC
+        ]
+        if len(attempts) >= COBROS_PUBLIC_SOLICITAR_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Demasiadas solicitudes de codigo. Intente de nuevo en una hora.",
+            )
+        attempts.append(now)
+
+
+def check_rate_limit_cobros_public_verificar(ip: str) -> None:
+    """Limite intentos de verificacion OTP reporte publico por IP."""
+    if check_rate_limit_redis is not None:
+        try:
+            check_rate_limit_redis(
+                "cobros_pub_verificar",
+                ip,
+                COBROS_PUBLIC_VERIFICAR_WINDOW_SEC,
+                COBROS_PUBLIC_VERIFICAR_MAX,
+                "Demasiados intentos. Espere 15 minutos e intente de nuevo.",
+            )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    with _lock:
+        now = time.time()
+        attempts = _cobros_public_verificar_attempts[ip]
+        attempts[:] = [
+            t for t in attempts if now - t < COBROS_PUBLIC_VERIFICAR_WINDOW_SEC
+        ]
+        if len(attempts) >= COBROS_PUBLIC_VERIFICAR_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Demasiados intentos. Espere 15 minutos e intente de nuevo.",
             )
         attempts.append(now)
 

@@ -2,23 +2,25 @@
 
 Endpoints PÚBLICOS del módulo Cobros (formulario de reporte de pago).
 
-SEGURIDAD: Sin autenticación (router sin get_current_user). No permitir acceso a datos
+SEGURIDAD: Sin login de panel. Por defecto (COBROS_PUBLICO_OTP_DISABLED=True) rapicredit-cobros
 
-de otros clientes ni a rutas internas. Incluye: rate limiting por IP, honeypot anti-bot,
+solo exige cedula valida + rate limit + honeypot; opcionalmente COBROS_PUBLICO_OTP_DISABLED=False
 
-validación de archivo por magic bytes. Solo expone: validar-cedula (nombre/email del cliente
-
-consultado) y enviar-reporte (crear PagoReportado para esa cédula).
+activa OTP por correo y JWT cobros_public en validar-cedula y enviar-reporte (origen=infopagos sin OTP).
 
 """
 
 import os
 
+import random
+
 import re
+
+import string
 
 import logging
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 from typing import Optional
 
@@ -32,7 +34,7 @@ from pydantic import BaseModel
 
 from sqlalchemy.orm import Session
 
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, text, and_
 
 from sqlalchemy.exc import IntegrityError
 
@@ -48,6 +50,10 @@ from app.core.cobros_public_rate_limit import (
 
     check_rate_limit_enviar_reporte,
 
+    check_rate_limit_cobros_public_solicitar,
+
+    check_rate_limit_cobros_public_verificar,
+
 )
 
 from app.models.cliente import Cliente
@@ -55,6 +61,8 @@ from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 
 from app.models.pago_reportado import PagoReportado
+
+from app.models.cobros_publico_codigo import CobrosPublicoCodigo
 
 from app.api.v1.endpoints.validadores import validate_cedula
 
@@ -81,7 +89,15 @@ from app.services.notificaciones_exclusion_desistimiento import (
     cliente_bloqueado_por_desistimiento,
 )
 
-from app.core.security import decode_token, create_recibo_infopagos_token
+from app.core.security import (
+    decode_token,
+    create_recibo_infopagos_token,
+    create_cobros_public_token,
+)
+
+from app.core.config import settings
+
+from app.core.email_config_holder import get_email_activo_servicio
 
 
 
@@ -641,8 +657,523 @@ MIN_MONTO_BS_REPORTAR = 1.0
 MAX_MONTO_BS_REPORTAR = 10_000_000.0
 
 
+COBROS_CODIGO_EXPIRA_MINUTES = 120
+
+MAX_CODIGOS_COBROS_PUBLICO_POR_CEDULA = 3
 
 
+class SolicitarCodigoReporteRequest(BaseModel):
+
+    cedula: str
+
+    email: str
+
+
+class SolicitarCodigoReporteResponse(BaseModel):
+
+    ok: bool
+
+    mensaje: Optional[str] = None
+
+    error: Optional[str] = None
+
+    expira_en: Optional[str] = None
+
+
+class VerificarCodigoReporteRequest(BaseModel):
+
+    cedula: str
+
+    email: str
+
+    codigo: str
+
+
+class VerificarCodigoReporteResponse(BaseModel):
+
+    ok: bool
+
+    error: Optional[str] = None
+
+    access_token: Optional[str] = None
+
+    expires_in: Optional[int] = None
+
+    nombre: Optional[str] = None
+
+    puede_reportar_bs: Optional[bool] = None
+
+    email_enmascarado: Optional[str] = None
+
+
+def _cobros_public_otp_required(origen: Optional[str]) -> bool:
+
+    if settings.COBROS_PUBLICO_OTP_DISABLED:
+
+        return False
+
+    if (origen or "").strip().lower() == "infopagos":
+
+        return False
+
+    return True
+
+
+def _validar_bearer_cobros_public(request: Request, cedula_lookup: str) -> Optional[str]:
+
+    auth = (request.headers.get("Authorization") or "").strip()
+
+    if not auth.lower().startswith("bearer "):
+
+        return (
+
+            "Debe verificar su correo con el codigo enviado antes de continuar. "
+
+            "Use el paso anterior del formulario."
+
+        )
+
+    token = auth[7:].strip()
+
+    payload = decode_token(token)
+
+    if not payload or payload.get("type") != "cobros_public":
+
+        return "La sesion de verificacion expiro o no es valida. Solicite un nuevo codigo."
+
+    sub = (payload.get("sub") or "").strip().replace("-", "")
+
+    if not sub or sub != cedula_lookup:
+
+        return "La cedula no coincide con la verificacion por correo."
+
+    return None
+
+
+def _norm_email_reporte_pub(e: str) -> str:
+
+    return (e or "").strip().lower()
+
+
+def _generar_codigo_6_reporte_pub() -> str:
+
+    return "".join(random.choices(string.digits, k=6))
+
+
+@router.post("/solicitar-codigo-reporte", response_model=SolicitarCodigoReporteResponse)
+
+def cobros_public_solicitar_codigo_reporte(
+
+    request: Request,
+
+    body: SolicitarCodigoReporteRequest,
+
+    db: Session = Depends(get_db),
+
+):
+
+    """
+
+    Envia un codigo de 6 digitos al correo registrado del cliente si cedula y correo coinciden
+
+    con la base de datos y el cliente puede reportar pago en web. Respuesta generica si no aplica.
+
+    """
+
+    ip = get_client_ip(request)
+
+    try:
+
+        check_rate_limit_cobros_public_solicitar(ip)
+
+    except HTTPException:
+
+        raise
+
+    cedula_raw = (body.cedula or "").strip()
+
+    email_in = _norm_email_reporte_pub(body.email or "")
+
+    if not cedula_raw or not email_in:
+
+        return SolicitarCodigoReporteResponse(
+
+            ok=False, error="Ingrese cedula y correo electronico."
+
+        )
+
+    if len(cedula_raw) > MAX_CEDULA_LENGTH:
+
+        return SolicitarCodigoReporteResponse(ok=False, error="Datos invalidos.")
+
+    result = validate_cedula(cedula_raw)
+
+    if not result.get("valido"):
+
+        return SolicitarCodigoReporteResponse(
+
+            ok=False, error=result.get("error", "Cedula invalida.")
+
+        )
+
+    valor = result.get("valor_formateado", "")
+
+    cedula_lookup = valor.replace("-", "") if valor else ""
+
+    if not cedula_lookup:
+
+        return SolicitarCodigoReporteResponse(ok=False, error="Formato de cedula no reconocido.")
+
+    cliente = db.execute(
+
+        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+
+    ).scalars().first()
+
+    if not cliente:
+
+        logger.info(
+
+            "cobros_public solicitar-codigo: cedula no registrada ip=%s",
+
+            ip,
+
+        )
+
+        return SolicitarCodigoReporteResponse(
+
+            ok=True,
+
+            mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
+
+        )
+
+    email_reg = _norm_email_reporte_pub(cliente.email or "")
+
+    if not email_reg:
+
+        logger.info(
+
+            "cobros_public solicitar-codigo: cliente sin email cedula_suffix=***%s",
+
+            cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
+
+        )
+
+        return SolicitarCodigoReporteResponse(
+
+            ok=True,
+
+            mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
+
+        )
+
+    if email_in != email_reg:
+
+        logger.info("cobros_public solicitar-codigo: email no coincide con BD")
+
+        return SolicitarCodigoReporteResponse(
+
+            ok=True,
+
+            mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
+
+        )
+
+    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
+
+    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
+
+    if err_pres:
+
+        logger.info("cobros_public solicitar-codigo: no puede reportar web")
+
+        return SolicitarCodigoReporteResponse(
+
+            ok=True,
+
+            mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
+
+        )
+
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    activos = (
+
+        db.execute(
+
+            select(CobrosPublicoCodigo)
+
+            .where(
+
+                and_(
+
+                    CobrosPublicoCodigo.cedula_normalizada == cedula_lookup,
+
+                    CobrosPublicoCodigo.usado == False,
+
+                    CobrosPublicoCodigo.expira_en > now_utc,
+
+                )
+
+            )
+
+            .order_by(CobrosPublicoCodigo.creado_en.desc())
+
+        )
+
+        .scalars()
+
+        .all()
+
+    )
+
+    if len(activos) >= MAX_CODIGOS_COBROS_PUBLICO_POR_CEDULA:
+
+        for item in activos[MAX_CODIGOS_COBROS_PUBLICO_POR_CEDULA - 1 :]:
+
+            db.delete(item)
+
+        db.flush()
+
+    codigo = _generar_codigo_6_reporte_pub()
+
+    expira_en = now_utc + timedelta(minutes=COBROS_CODIGO_EXPIRA_MINUTES)
+
+    row = CobrosPublicoCodigo(
+
+        cedula_normalizada=cedula_lookup,
+
+        email=email_reg,
+
+        codigo=codigo,
+
+        expira_en=expira_en,
+
+        usado=False,
+
+        creado_en=now_utc,
+
+    )
+
+    db.add(row)
+
+    db.commit()
+
+    nombre_c = (cliente.nombres or "").strip() or "Cliente"
+
+    asunto = "[RapiCredit] Codigo para reportar su pago"
+
+    cuerpo = (
+
+        f"Estimado(a) {nombre_c},\n\n"
+
+        f"Su codigo para continuar en el formulario de reporte de pago es: {codigo}\n\n"
+
+        f"Valido por {COBROS_CODIGO_EXPIRA_MINUTES} minutos. No lo comparta.\n\n"
+
+        "Si usted no solicito este codigo, ignore este mensaje.\n\n"
+
+        "RapiCredit"
+
+    )
+
+    if not get_email_activo_servicio("estado_cuenta"):
+
+        logger.warning(
+
+            "cobros_public solicitar-codigo: servicio email estado_cuenta desactivado, codigo no enviado"
+
+        )
+
+        return SolicitarCodigoReporteResponse(
+
+            ok=True,
+
+            mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
+
+            expira_en=expira_en.isoformat() + "Z",
+
+        )
+
+    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_lookup, email=email_reg):
+
+        logger.info("cobros_public solicitar-codigo: bloqueo desistimiento")
+
+        return SolicitarCodigoReporteResponse(
+
+            ok=True,
+
+            mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
+
+            expira_en=expira_en.isoformat() + "Z",
+
+        )
+
+    ok_send, err_send = send_email(
+
+        [cliente.email.strip()],
+
+        asunto,
+
+        cuerpo,
+
+        servicio="estado_cuenta",
+
+        respetar_destinos_manuales=True,
+
+    )
+
+    if not ok_send:
+
+        logger.warning("cobros_public solicitar-codigo: SMTP fallo %s", err_send)
+
+    return SolicitarCodigoReporteResponse(
+
+        ok=True,
+
+        mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
+
+        expira_en=expira_en.isoformat() + "Z",
+
+    )
+
+
+@router.post("/verificar-codigo-reporte", response_model=VerificarCodigoReporteResponse)
+
+def cobros_public_verificar_codigo_reporte(
+
+    request: Request,
+
+    body: VerificarCodigoReporteRequest,
+
+    db: Session = Depends(get_db),
+
+):
+
+    """Verifica el codigo y devuelve JWT de sesion para validar-cedula y enviar-reporte."""
+
+    ip = get_client_ip(request)
+
+    try:
+
+        check_rate_limit_cobros_public_verificar(ip)
+
+    except HTTPException:
+
+        raise
+
+    cedula_raw = (body.cedula or "").strip()
+
+    email_in = _norm_email_reporte_pub(body.email or "")
+
+    codigo = (body.codigo or "").strip()
+
+    if not cedula_raw or not email_in or not codigo:
+
+        return VerificarCodigoReporteResponse(
+
+            ok=False, error="Ingrese cedula, correo y codigo."
+
+        )
+
+    result = validate_cedula(cedula_raw)
+
+    if not result.get("valido"):
+
+        return VerificarCodigoReporteResponse(
+
+            ok=False, error=result.get("error", "Cedula invalida.")
+
+        )
+
+    cedula_lookup = (result.get("valor_formateado", "") or "").replace("-", "")
+
+    if not cedula_lookup:
+
+        return VerificarCodigoReporteResponse(ok=False, error="Formato de cedula no reconocido.")
+
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    fila = db.execute(
+
+        select(CobrosPublicoCodigo).where(
+
+            and_(
+
+                CobrosPublicoCodigo.cedula_normalizada == cedula_lookup,
+
+                CobrosPublicoCodigo.email == email_in,
+
+                CobrosPublicoCodigo.codigo == codigo.strip(),
+
+                CobrosPublicoCodigo.expira_en > now_utc,
+
+                CobrosPublicoCodigo.usado == False,
+
+            )
+
+        )
+
+    ).scalars().first()
+
+    if not fila:
+
+        return VerificarCodigoReporteResponse(
+
+            ok=False, error="Codigo invalido o expirado. Solicite uno nuevo.",
+
+        )
+
+    fila.usado = True
+
+    db.commit()
+
+    cliente = db.execute(
+
+        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+
+    ).scalars().first()
+
+    if not cliente:
+
+        return VerificarCodigoReporteResponse(ok=False, error="Cliente no encontrado.")
+
+    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
+
+    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
+
+    if err_pres:
+
+        return VerificarCodigoReporteResponse(ok=False, error=err_pres)
+
+    nombre = (cliente.nombres or "").strip()
+
+    email_raw = (cliente.email or "").strip()
+
+    puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
+
+    token = create_cobros_public_token(
+
+        cedula_lookup, expire_minutes=COBROS_CODIGO_EXPIRA_MINUTES
+
+    )
+
+    return VerificarCodigoReporteResponse(
+
+        ok=True,
+
+        access_token=token,
+
+        expires_in=COBROS_CODIGO_EXPIRA_MINUTES * 60,
+
+        nombre=nombre,
+
+        puede_reportar_bs=puede_bs,
+
+        email_enmascarado=_mask_email(email_raw) if email_raw else None,
+
+    )
 
 
 @router.get("/validar-cedula", response_model=ValidarCedulaResponse)
@@ -700,6 +1231,14 @@ def validar_cedula_publico(
     if not cedula_lookup:
 
         return ValidarCedulaResponse(ok=False, error="Formato de cédula no reconocido.")
+
+    if _cobros_public_otp_required(origen):
+
+        token_err = _validar_bearer_cobros_public(request, cedula_lookup)
+
+        if token_err:
+
+            return ValidarCedulaResponse(ok=False, error=token_err)
 
     # Búsqueda que acepta cédula con o sin guión en BD (normalizar para comparar)
 
@@ -816,6 +1355,14 @@ async def enviar_reporte_publico(
         return EnviarReporteResponse(ok=False, error=val.get("error", "Cédula inválida."))
 
     cedula_lookup = val.get("valor_formateado", "").replace("-", "")
+
+    if _cobros_public_otp_required(None):
+
+        token_err = _validar_bearer_cobros_public(request, cedula_lookup)
+
+        if token_err:
+
+            return EnviarReporteResponse(ok=False, error=token_err)
 
     # Búsqueda que acepta cédula con o sin guión en BD
 
