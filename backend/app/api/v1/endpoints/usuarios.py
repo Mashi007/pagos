@@ -68,8 +68,12 @@ def obtener_usuario(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=UserResponse)
-def crear_usuario(body: UserCreate, db: Session = Depends(get_db)):
-    """Crea un nuevo usuario. Email y cédula deben ser únicos."""
+def crear_usuario(
+    body: UserCreate,
+    admin: UserResponse = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Crea un nuevo usuario. Solo administradores. Email y cédula deben ser únicos."""
     email = body.email.lower().strip()
     cedula = body.cedula.strip()
     
@@ -106,8 +110,13 @@ def crear_usuario(body: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{user_id}", response_model=UserResponse)
-def actualizar_usuario(user_id: int, body: UserUpdate, db: Session = Depends(get_db)):
-    """Actualiza un usuario. Email y cédula deben ser únicos. Si se envía password, se hashea y guarda."""
+def actualizar_usuario(
+    user_id: int,
+    body: UserUpdate,
+    admin: UserResponse = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Actualiza un usuario. Solo administradores. Email y cédula deben ser únicos."""
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -150,8 +159,12 @@ def actualizar_usuario(user_id: int, body: UserUpdate, db: Session = Depends(get
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_usuario(user_id: int, db: Session = Depends(get_db)):
-    """Desactiva el usuario (soft delete). No borra el registro."""
+def eliminar_usuario(
+    user_id: int,
+    admin: UserResponse = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Desactiva el usuario (soft delete). Solo administradores. No borra el registro."""
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -162,8 +175,12 @@ def eliminar_usuario(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{user_id}/activate", response_model=UserResponse)
-def activar_usuario(user_id: int, db: Session = Depends(get_db)):
-    """Activa un usuario (is_active=True)."""
+def activar_usuario(
+    user_id: int,
+    admin: UserResponse = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Activa un usuario (is_active=True). Solo administradores."""
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -175,8 +192,12 @@ def activar_usuario(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{user_id}/deactivate", response_model=UserResponse)
-def desactivar_usuario(user_id: int, db: Session = Depends(get_db)):
-    """Desactiva un usuario (is_active=False)."""
+def desactivar_usuario(
+    user_id: int,
+    admin: UserResponse = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Desactiva un usuario (is_active=False). Solo administradores."""
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
