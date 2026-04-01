@@ -1313,21 +1313,126 @@ export function EditarRevisionManual() {
                   </Select>
                 </div>
 
-                {/* Dirección */}
-                <div className="space-y-2 md:col-span-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                    <MapPin className="h-4 w-4 text-gray-500" />
-                    Dirección
-                  </label>
-                  <Textarea
-                    value={clienteData.direccion || ''}
-                    onChange={e => {
-                      setClienteData({ ...clienteData, direccion: e.target.value })
-                      setCambios({ ...cambios, cliente: true })
-                    }}
-                    placeholder="Av. Principal, Casa #5, Sector Los Robles..."
-                    rows={2}
-                  />
+                {/* Dirección - Desglosada en campos */}
+                <div className="space-y-4 md:col-span-2">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                    <MapPin className="h-5 w-5 text-blue-600" />
+                    Dirección Completa
+                  </h3>
+                  
+                  {(() => {
+                    const getDireccionObj = () => {
+                      try {
+                        return typeof clienteData.direccion === 'string' && clienteData.direccion.startsWith('{')
+                          ? JSON.parse(clienteData.direccion)
+                          : {}
+                      } catch {
+                        return {}
+                      }
+                    }
+
+                    const updateDireccionField = (field: string, value: string) => {
+                      try {
+                        const obj = getDireccionObj()
+                        const updated = { ...obj, [field]: value }
+                        setClienteData({ ...clienteData, direccion: JSON.stringify(updated) })
+                        setCambios({ ...cambios, cliente: true })
+                      } catch {
+                        setClienteData({ ...clienteData, direccion: JSON.stringify({ [field]: value }) })
+                        setCambios({ ...cambios, cliente: true })
+                      }
+                    }
+
+                    const dirObj = getDireccionObj()
+
+                    return (
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Calle Principal */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-gray-600">Calle Principal</label>
+                          <Input
+                            type="text"
+                            value={dirObj.callePrincipal || ''}
+                            onChange={e => updateDireccionField('callePrincipal', e.target.value)}
+                            placeholder="Av. Principal, Calle 5..."
+                            className="text-xs"
+                          />
+                        </div>
+
+                        {/* Calle Transversal */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-gray-600">Calle Transversal</label>
+                          <Input
+                            type="text"
+                            value={dirObj.calleTransversal || ''}
+                            onChange={e => updateDireccionField('calleTransversal', e.target.value)}
+                            placeholder="Calle 10, Entre..."
+                            className="text-xs"
+                          />
+                        </div>
+
+                        {/* Parroquia */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-gray-600">Parroquia</label>
+                          <Input
+                            type="text"
+                            value={dirObj.parroquia || ''}
+                            onChange={e => updateDireccionField('parroquia', e.target.value)}
+                            placeholder="Los Robles..."
+                            className="text-xs"
+                          />
+                        </div>
+
+                        {/* Municipio */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-gray-600">Municipio</label>
+                          <Input
+                            type="text"
+                            value={dirObj.municipio || ''}
+                            onChange={e => updateDireccionField('municipio', e.target.value)}
+                            placeholder="Chacao, Baruta..."
+                            className="text-xs"
+                          />
+                        </div>
+
+                        {/* Ciudad */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-gray-600">Ciudad</label>
+                          <Input
+                            type="text"
+                            value={dirObj.ciudad || ''}
+                            onChange={e => updateDireccionField('ciudad', e.target.value)}
+                            placeholder="Caracas..."
+                            className="text-xs"
+                          />
+                        </div>
+
+                        {/* Estado (Región) */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-gray-600">Estado (Región)</label>
+                          <Input
+                            type="text"
+                            value={dirObj.estado || ''}
+                            onChange={e => updateDireccionField('estado', e.target.value)}
+                            placeholder="Miranda, Caracas..."
+                            className="text-xs"
+                          />
+                        </div>
+
+                        {/* Descripción (ancho completo) */}
+                        <div className="col-span-2 space-y-1">
+                          <label className="text-xs font-medium text-gray-600">Descripción Adicional</label>
+                          <Textarea
+                            value={dirObj.descripcion || ''}
+                            onChange={e => updateDireccionField('descripcion', e.target.value)}
+                            placeholder="Casa de color blanco, entre Av. A y B, próximo a esquina..."
+                            rows={2}
+                            className="text-xs"
+                          />
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Notas */}
