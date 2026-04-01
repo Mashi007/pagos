@@ -172,7 +172,15 @@ function NotificationBanner({
   )
 }
 
-export default function EstadoCuentaPublicoPage() {
+export default /** Convierte base64 PDF en blob URL para el visor inline. */
+function base64ToBlobUrl(b64: string): string {
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+}
+
+function EstadoCuentaPublicoPage() {
   const [step, setStep] = useState(0)
 
   const [cedula, setCedula] = useState('')
@@ -415,16 +423,9 @@ export default function EstadoCuentaPublicoPage() {
           setPdfDataUrl(`data:application/pdf;base64,${resPdf.pdf_base64}`)
 
           try {
-            const bin = atob(resPdf.pdf_base64)
-
-            const bytes = new Uint8Array(bin.length)
-
-            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-
-            const blob = new Blob([bytes], { type: 'application/pdf' })
-
-            setPdfBlobUrl(URL.createObjectURL(blob))
-          } catch (_) {
+            setPdfBlobUrl(base64ToBlobUrl(resPdf.pdf_base64))
+          } catch (blobErr) {
+            console.error('PDF blob URL creation failed:', blobErr)
             setPdfBlobUrl(null)
           }
 
@@ -488,16 +489,9 @@ export default function EstadoCuentaPublicoPage() {
         setRecibosCuotas(res.recibos_cuotas ?? null)
 
         try {
-          const bin = atob(res.pdf_base64)
-
-          const bytes = new Uint8Array(bin.length)
-
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-
-          const blob = new Blob([bytes], { type: 'application/pdf' })
-
-          setPdfBlobUrl(URL.createObjectURL(blob))
-        } catch (_) {
+          setPdfBlobUrl(base64ToBlobUrl(res.pdf_base64))
+        } catch (blobErr) {
+          console.error('PDF blob URL creation failed:', blobErr)
           setPdfBlobUrl(null)
         }
 
@@ -942,15 +936,29 @@ export default function EstadoCuentaPublicoPage() {
                   : se aplican en orden por número de cuota.
                 </p>
 
-                {/* Visor PDF solo en desktop/tablet */}
-                {!isMobile && (pdfBlobUrl || pdfDataUrl) && (
-                  <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 shadow-md">
-                    <iframe
-                      src={pdfBlobUrl || pdfDataUrl || ''}
-                      title="Vista previa estado de cuenta"
+                {/* Visor PDF solo en desktop/tablet - usa <object> para mayor compatibilidad con blob URLs */}
+                {!isMobile && pdfBlobUrl && (
+                  <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 shadow-md bg-slate-50">
+                    <object
+                      data={pdfBlobUrl}
+                      type="application/pdf"
                       className="h-[70vh] w-full"
                       style={{ minHeight: '480px' }}
-                    />
+                    >
+                      <embed
+                        src={pdfBlobUrl}
+                        type="application/pdf"
+                        className="h-[70vh] w-full"
+                        style={{ minHeight: '480px' }}
+                      />
+                    </object>
+                  </div>
+                )}
+
+                {/* Mientras se genera el blob URL muestra spinner */}
+                {!isMobile && pdfDataUrl && !pdfBlobUrl && (
+                  <div className="flex h-40 w-full items-center justify-center rounded-xl border border-slate-200">
+                    <p className="text-sm text-slate-500">Preparando vista previa...</p>
                   </div>
                 )}
 
