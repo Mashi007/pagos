@@ -34,6 +34,7 @@ import {
   Calendar,
   Briefcase,
   FileText,
+  DollarSign,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -1353,492 +1354,423 @@ export function EditarRevisionManual() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  📋 Datos del Préstamo
+                  <DollarSign className="h-5 w-5 text-green-600" />
+                  Datos del Préstamo
                 </CardTitle>
               </CardHeader>
 
               <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+                {/* Estado préstamo */}
+                <div className="rounded-lg border-2 border-indigo-200 bg-indigo-50/80 p-4">
+                  <p className="mb-2 text-sm font-semibold text-indigo-900">
+                    Estado del préstamo
+                  </p>
+                  <Select
+                    value={prestamoData.estado || ''}
+                    onValueChange={v => {
+                      setPrestamoData({ ...prestamoData, estado: v })
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                  >
+                    <SelectTrigger className="border-indigo-200 bg-white">
+                      <SelectValue placeholder="Seleccionar estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DRAFT">Borrador</SelectItem>
+                      <SelectItem value="EN_REVISION">En revisión</SelectItem>
+                      <SelectItem value="EVALUADO">Evaluado</SelectItem>
+                      <SelectItem value="APROBADO">Aprobado</SelectItem>
+                      <SelectItem value="LIQUIDADO">Liquidado</SelectItem>
+                      <SelectItem value="DESISTIMIENTO">Desistimiento</SelectItem>
+                      <SelectItem value="RECHAZADO">Rechazado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Total Financiamiento */}
                   <div>
-                    <label className="text-sm font-medium">
-                      Total Financiamiento
+                    <label className="mb-1 block text-sm font-medium">
+                      Total Financiamiento (USD)
                     </label>
-
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={prestamoData.total_financiamiento || ''}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          total_financiamiento: parseFloat(e.target.value) || 0,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="0.00"
-                    />
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={prestamoData.total_financiamiento || ''}
+                        onChange={e => {
+                          setPrestamoData({ ...prestamoData, total_financiamiento: parseFloat(e.target.value) || 0 })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                        placeholder="0.00"
+                      />
+                    </div>
                   </div>
 
+                  {/* Cuota Período */}
                   <div>
-                    <label className="text-sm font-medium">
+                    <label className="mb-1 block text-sm font-medium">
+                      Cuota por Período (USD)
+                    </label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={prestamoData.cuota_periodo ?? ''}
+                        onChange={e => {
+                          setPrestamoData({ ...prestamoData, cuota_periodo: parseFloat(e.target.value) || 0 })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Número de Cuotas */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
                       Número de Cuotas
                     </label>
-
-                    <input
+                    <Input
                       type="number"
+                      min="1"
                       value={prestamoData.numero_cuotas || ''}
                       onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          numero_cuotas: parseInt(e.target.value) || 0,
-                        })
-
+                        setPrestamoData({ ...prestamoData, numero_cuotas: parseInt(e.target.value) || 0 })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                       disabled={prestamoData.estado === 'LIQUIDADO'}
-                      title={
-                        prestamoData.estado === 'LIQUIDADO'
-                          ? 'No se puede modificar el plazo en préstamos liquidados'
-                          : undefined
-                      }
-                      className="mt-1 w-full rounded border px-3 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+                      title={prestamoData.estado === 'LIQUIDADO' ? 'No se puede modificar en préstamos liquidados' : undefined}
+                      className="disabled:cursor-not-allowed disabled:bg-gray-100"
                       placeholder="0"
                     />
                   </div>
 
+                  {/* Tasa de Interés */}
                   <div>
-                    <label className="text-sm font-medium">
+                    <label className="mb-1 block text-sm font-medium">
                       Tasa de Interés (%)
                     </label>
-
-                    <input
+                    <Input
                       type="number"
                       step="0.01"
+                      min="0"
                       value={prestamoData.tasa_interes || ''}
                       onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          tasa_interes: parseFloat(e.target.value) || 0,
-                        })
-
+                        setPrestamoData({ ...prestamoData, tasa_interes: parseFloat(e.target.value) || 0 })
                         setCambios({ ...cambios, prestamo: true })
                       }}
-                      className="mt-1 w-full rounded border px-3 py-2"
                       placeholder="0.00"
                     />
                   </div>
 
+                  {/* Modalidad Pago */}
                   <div>
-                    <label className="text-sm font-medium">Producto</label>
+                    <label className="mb-1 block text-sm font-medium">
+                      Modalidad de Pago
+                    </label>
+                    <Select
+                      value={prestamoData.modalidad_pago || '-'}
+                      onValueChange={v => {
+                        setPrestamoData({ ...prestamoData, modalidad_pago: v === '-' ? '' : v })
+                        setCambios({ ...cambios, prestamo: true })
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="-">-</SelectItem>
+                        <SelectItem value="MENSUAL">Mensual</SelectItem>
+                        <SelectItem value="QUINCENAL">Quincenal</SelectItem>
+                        <SelectItem value="SEMANAL">Semanal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
+                  {/* Valor Activo */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Valor Activo (USD)
+                    </label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={prestamoData.valor_activo ?? ''}
+                        onChange={e => {
+                          const v = e.target.value
+                          setPrestamoData({ ...prestamoData, valor_activo: v === '' ? null : parseFloat(v) || 0 })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fecha Requerimiento */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Fecha de Requerimiento
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="date"
+                        value={prestamoData.fecha_requerimiento || ''}
+                        onChange={e => {
+                          setPrestamoData({ ...prestamoData, fecha_requerimiento: e.target.value || null })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fecha Aprobación */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Fecha de Aprobación
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="date"
+                        value={prestamoData.fecha_aprobacion || ''}
+                        min={prestamoData.fecha_requerimiento || undefined}
+                        onChange={e => {
+                          setPrestamoData({ ...prestamoData, fecha_aprobacion: e.target.value || null })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                        title={prestamoData.fecha_requerimiento ? 'Debe ser igual o posterior a la fecha de requerimiento' : undefined}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fecha Base Cálculo */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Fecha Base Cálculo
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="date"
+                        value={prestamoData.fecha_base_calculo || ''}
+                        onChange={e => {
+                          setPrestamoData({ ...prestamoData, fecha_base_calculo: e.target.value || null })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Producto */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Producto / Modelo Vehículo
+                    </label>
                     <Select
                       value={prestamoData.producto || '-'}
                       onValueChange={v => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          producto: v === '-' ? '' : v,
-                        })
-
+                        setPrestamoData({ ...prestamoData, producto: v === '-' ? '' : v })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                     >
-                      <SelectTrigger className="mt-1 w-full">
+                      <SelectTrigger>
                         <SelectValue placeholder="-" />
                       </SelectTrigger>
-
                       <SelectContent>
                         <SelectItem value="-">-</SelectItem>
-
-                        {prestamoData.producto &&
-                          !modelosVehiculos.some(
-                            (m: any) => m.modelo === prestamoData.producto
-                          ) && (
-                            <SelectItem value={prestamoData.producto}>
-                              {prestamoData.producto}
-                            </SelectItem>
-                          )}
-
+                        {prestamoData.producto && !modelosVehiculos.some((m: any) => m.modelo === prestamoData.producto) && (
+                          <SelectItem value={prestamoData.producto}>{prestamoData.producto}</SelectItem>
+                        )}
                         {modelosVehiculos.map((m: any) => (
-                          <SelectItem key={m.id} value={m.modelo}>
-                            {m.modelo}
-                          </SelectItem>
+                          <SelectItem key={m.id} value={m.modelo}>{m.modelo}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
+                  {/* Concesionario */}
                   <div>
-                    <label className="text-sm font-medium">
-                      Cédula (préstamo)
+                    <label className="mb-1 block text-sm font-medium">
+                      Concesionario
                     </label>
-
-                    <input
-                      type="text"
-                      value={prestamoData.cedula || ''}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          cedula: e.target.value,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="Cédula"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">
-                      Nombres (préstamo)
-                    </label>
-
-                    <input
-                      type="text"
-                      value={prestamoData.nombres || ''}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          nombres: e.target.value,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="Nombres"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">
-                      Fecha Requerimiento
-                    </label>
-
-                    <input
-                      type="date"
-                      value={prestamoData.fecha_requerimiento || ''}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          fecha_requerimiento: e.target.value || null,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">
-                      Modalidad Pago
-                    </label>
-
-                    <input
-                      type="text"
-                      value={prestamoData.modalidad_pago || ''}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          modalidad_pago: e.target.value,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="MENSUAL, QUINCENAL, etc."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Cuota Período</label>
-
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={prestamoData.cuota_periodo ?? ''}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          cuota_periodo: parseFloat(e.target.value) || 0,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">
-                      Fecha Base Cálculo
-                    </label>
-
-                    <input
-                      type="date"
-                      value={prestamoData.fecha_base_calculo || ''}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          fecha_base_calculo: e.target.value || null,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">
-                      Fecha Aprobación
-                    </label>
-
-                    <input
-                      type="date"
-                      value={prestamoData.fecha_aprobacion || ''}
-                      min={prestamoData.fecha_requerimiento || undefined}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          fecha_aprobacion: e.target.value || null,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      title={
-                        prestamoData.fecha_requerimiento
-                          ? 'Debe ser igual o posterior a la fecha de requerimiento'
-                          : undefined
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">
-                      Estado Préstamo
-                    </label>
-
-                    <input
-                      type="text"
-                      value={prestamoData.estado || ''}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          estado: e.target.value,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="DRAFT, APROBADO, RECHAZADO, etc."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Concesionario</label>
-
                     <Select
                       value={prestamoData.concesionario || '-'}
                       onValueChange={v => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          concesionario: v === '-' ? '' : v,
-                        })
-
+                        setPrestamoData({ ...prestamoData, concesionario: v === '-' ? '' : v })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                     >
-                      <SelectTrigger className="mt-1 w-full">
+                      <SelectTrigger>
                         <SelectValue placeholder="-" />
                       </SelectTrigger>
-
                       <SelectContent>
                         <SelectItem value="-">-</SelectItem>
-
-                        {prestamoData.concesionario &&
-                          !concesionarios.some(
-                            (c: any) => c.nombre === prestamoData.concesionario
-                          ) && (
-                            <SelectItem value={prestamoData.concesionario}>
-                              {prestamoData.concesionario}
-                            </SelectItem>
-                          )}
-
+                        {prestamoData.concesionario && !concesionarios.some((c: any) => c.nombre === prestamoData.concesionario) && (
+                          <SelectItem value={prestamoData.concesionario}>{prestamoData.concesionario}</SelectItem>
+                        )}
                         {concesionarios.map((c: any) => (
-                          <SelectItem key={c.id} value={c.nombre}>
-                            {c.nombre}
-                          </SelectItem>
+                          <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
+                  {/* Analista */}
                   <div>
-                    <label className="text-sm font-medium">Analista</label>
-
+                    <label className="mb-1 block text-sm font-medium">
+                      Analista
+                    </label>
                     <Select
                       value={prestamoData.analista || '-'}
                       onValueChange={v => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          analista: v === '-' ? '' : v,
-                        })
-
+                        setPrestamoData({ ...prestamoData, analista: v === '-' ? '' : v })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                     >
-                      <SelectTrigger className="mt-1 w-full">
+                      <SelectTrigger>
                         <SelectValue placeholder="-" />
                       </SelectTrigger>
-
                       <SelectContent>
                         <SelectItem value="-">-</SelectItem>
-
-                        {prestamoData.analista &&
-                          !analistas.some(
-                            (a: any) => a.nombre === prestamoData.analista
-                          ) && (
-                            <SelectItem value={prestamoData.analista}>
-                              {prestamoData.analista}
-                            </SelectItem>
-                          )}
-
+                        {prestamoData.analista && !analistas.some((a: any) => a.nombre === prestamoData.analista) && (
+                          <SelectItem value={prestamoData.analista}>{prestamoData.analista}</SelectItem>
+                        )}
                         {analistas.map((a: any) => (
-                          <SelectItem key={a.id} value={a.nombre}>
-                            {a.nombre}
-                          </SelectItem>
+                          <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
+                  {/* Modelo Vehículo */}
                   <div>
-                    <label className="text-sm font-medium">
-                      Modelo Vehículo
+                    <label className="mb-1 block text-sm font-medium">
+                      Modelo de Vehículo
                     </label>
-
                     <Select
                       value={prestamoData.modelo_vehiculo || '-'}
                       onValueChange={v => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          modelo_vehiculo: v === '-' ? '' : v,
-                        })
-
+                        setPrestamoData({ ...prestamoData, modelo_vehiculo: v === '-' ? '' : v })
                         setCambios({ ...cambios, prestamo: true })
                       }}
                     >
-                      <SelectTrigger className="mt-1 w-full">
+                      <SelectTrigger>
                         <SelectValue placeholder="-" />
                       </SelectTrigger>
-
                       <SelectContent>
                         <SelectItem value="-">-</SelectItem>
-
-                        {prestamoData.modelo_vehiculo &&
-                          !modelosVehiculos.some(
-                            (m: any) =>
-                              m.modelo === prestamoData.modelo_vehiculo
-                          ) && (
-                            <SelectItem value={prestamoData.modelo_vehiculo}>
-                              {prestamoData.modelo_vehiculo}
-                            </SelectItem>
-                          )}
-
+                        {prestamoData.modelo_vehiculo && !modelosVehiculos.some((m: any) => m.modelo === prestamoData.modelo_vehiculo) && (
+                          <SelectItem value={prestamoData.modelo_vehiculo}>{prestamoData.modelo_vehiculo}</SelectItem>
+                        )}
                         {modelosVehiculos.map((m: any) => (
-                          <SelectItem key={m.id} value={m.modelo}>
-                            {m.modelo}
-                          </SelectItem>
+                          <SelectItem key={m.id} value={m.modelo}>{m.modelo}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
+                  {/* Cédula préstamo */}
                   <div>
-                    <label className="text-sm font-medium">Valor Activo</label>
-
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={prestamoData.valor_activo ?? ''}
-                      onChange={e => {
-                        const v = e.target.value
-
-                        setPrestamoData({
-                          ...prestamoData,
-                          valor_activo: v === '' ? null : parseFloat(v) || 0,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="0.00"
-                    />
+                    <label className="mb-1 block text-sm font-medium">
+                      Cédula (registro préstamo)
+                    </label>
+                    <div className="relative">
+                      <CreditCard className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="text"
+                        value={prestamoData.cedula || ''}
+                        onChange={e => {
+                          setPrestamoData({ ...prestamoData, cedula: e.target.value })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                        placeholder="Cédula"
+                      />
+                    </div>
                   </div>
 
+                  {/* Nombres préstamo */}
                   <div>
-                    <label className="text-sm font-medium">
+                    <label className="mb-1 block text-sm font-medium">
+                      Nombres (registro préstamo)
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="text"
+                        value={prestamoData.nombres || ''}
+                        onChange={e => {
+                          setPrestamoData({ ...prestamoData, nombres: e.target.value })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                        placeholder="Nombres"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Usuario Proponente */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
                       Usuario Proponente
                     </label>
-
-                    <input
+                    <Input
                       type="text"
                       value={prestamoData.usuario_proponente || ''}
                       onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          usuario_proponente: e.target.value,
-                        })
-
+                        setPrestamoData({ ...prestamoData, usuario_proponente: e.target.value })
                         setCambios({ ...cambios, prestamo: true })
                       }}
-                      className="mt-1 w-full rounded border px-3 py-2"
+                      placeholder="Usuario proponente"
                     />
                   </div>
 
+                  {/* Usuario Aprobador */}
                   <div>
-                    <label className="text-sm font-medium">
+                    <label className="mb-1 block text-sm font-medium">
                       Usuario Aprobador
                     </label>
-
-                    <input
+                    <Input
                       type="text"
                       value={prestamoData.usuario_aprobador || ''}
                       onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          usuario_aprobador: e.target.value,
-                        })
-
+                        setPrestamoData({ ...prestamoData, usuario_aprobador: e.target.value })
                         setCambios({ ...cambios, prestamo: true })
                       }}
-                      className="mt-1 w-full rounded border px-3 py-2"
+                      placeholder="Usuario aprobador"
                     />
                   </div>
+                </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="text-sm font-medium">Observaciones</label>
-
-                    <textarea
-                      value={prestamoData.observaciones || ''}
-                      onChange={e => {
-                        setPrestamoData({
-                          ...prestamoData,
-                          observaciones: e.target.value,
-                        })
-
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="Ingresa observaciones"
-                      rows={2}
-                    />
-                  </div>
+                {/* Observaciones - ancho completo */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    Observaciones
+                  </label>
+                  <Textarea
+                    value={prestamoData.observaciones || ''}
+                    onChange={e => {
+                      setPrestamoData({ ...prestamoData, observaciones: e.target.value })
+                      setCambios({ ...cambios, prestamo: true })
+                    }}
+                    placeholder="Ingresa observaciones del préstamo..."
+                    rows={3}
+                  />
                 </div>
               </CardContent>
             </Card>
