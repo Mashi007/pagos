@@ -3,6 +3,7 @@ Endpoints de usuarios. CRUD contra tabla usuarios.
 Solo administradores (rol=admin) pueden crear, actualizar, eliminar usuarios.
 GET /api/v1/usuarios/ (listado), POST (crear), GET /{id}, PUT /{id}, DELETE /{id},
 POST /{id}/activate, POST /{id}/deactivate, GET /verificar-admin.
+POST /bulk (carga masiva de usuarios).
 """
 from datetime import datetime
 from typing import Optional
@@ -18,6 +19,8 @@ from app.core.user_utils import user_to_response
 from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.schemas.usuario import UserCreate, UserUpdate
+from app.schemas.usuario_bulk import UserBulkImportRequest, UserBulkImportResponse
+from app.services.usuario_bulk_import import procesar_importacion_usuarios
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -206,3 +209,40 @@ def desactivar_usuario(
     db.commit()
     db.refresh(u)
     return user_to_response(u)
+
+
+@router.post("/bulk", response_model=UserBulkImportResponse)
+def importar_usuarios_masivo(
+    request: UserBulkImportRequest,
+    admin: UserResponse = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Importación masiva de usuarios. Solo administradores.
+    
+    Máximo 1000 usuarios por solicitud.
+    
+    Validaciones:
+    - Email debe ser único
+    - Cédula debe ser única
+    - Roles válidos: admin, manager, operator, viewer
+    - Password mínimo 6 caracteres
+    
+    Respuesta:
+    - Devuelve resultado de cada usuario (éxito o error)
+    - Los usuarios exitosos se crean en la BD
+    - Los usuarios con error no se crean
+    """
+    total_solicitados = len(request.usuarios)
+    total_exitosos, total_errores, resultados = procesar_importacion_usuarios(
+        db=db,
+        usuarios=request.usuarios,
+        admin_email=admin.email
+    )
+    
+    return UserBulkImportResponse(
+        total_solicitados=total_solicitados,
+        total_exitosos=total_exitosos,
+        total_errores=total_errores,
+        resultados=resultados,
+    )
