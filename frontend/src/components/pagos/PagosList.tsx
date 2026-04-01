@@ -154,6 +154,9 @@ export function PagosList() {
     total_en_lista: number
   } | null>(null)
   const [isConsultandoCedulaBs, setIsConsultandoCedulaBs] = useState(false)
+  const [fechaTasaForm, setFechaTasaForm] = useState('')
+  const [tasaForm, setTasaForm] = useState('')
+  const [isGuardandoTasa, setIsGuardandoTasa] = useState(false)
   const fileInputCedulasBsRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
@@ -233,6 +236,36 @@ export function PagosList() {
       toast.error(getErrorMessage(e))
     } finally {
       setIsVaciarTablaGmail(false)
+    }
+  }
+
+  const handleGuardarTasa = async () => {
+    if (!fechaTasaForm.trim()) {
+      toast.error('Seleccione una fecha')
+      return
+    }
+    const tasaNum = parseFloat(tasaForm)
+    if (isNaN(tasaNum) || tasaNum <= 0) {
+      toast.error('Ingrese una tasa válida mayor a 0')
+      return
+    }
+
+    setIsGuardandoTasa(true)
+    try {
+      // Importar el servicio de tasa de cambio
+      const { guardarTasaPorFecha } = await import('../../services/tasaCambioService')
+      await guardarTasaPorFecha(fechaTasaForm, tasaNum)
+      
+      toast.success(`✓ Tasa guardada para ${fechaTasaForm}`)
+      setFechaTasaForm('')
+      setTasaForm('')
+      
+      // Refrescar query de tasa
+      await queryClient.invalidateQueries({ queryKey: ['tasa-hoy-banner-pagos'] })
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo guardar la tasa')
+    } finally {
+      setIsGuardandoTasa(false)
     }
   }
 
@@ -808,6 +841,8 @@ export function PagosList() {
                 </label>
                 <input
                   type="date"
+                  value={fechaTasaForm}
+                  onChange={(e) => setFechaTasaForm(e.target.value)}
                   max={new Date().toISOString().split('T')[0]}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   placeholder="Seleccione una fecha"
@@ -827,6 +862,8 @@ export function PagosList() {
                   step="0.01"
                   min="0"
                   max="999999.99"
+                  value={tasaForm}
+                  onChange={(e) => setTasaForm(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   placeholder="ej. 3105.75"
                 />
@@ -838,9 +875,11 @@ export function PagosList() {
               {/* Botón */}
               <div className="flex flex-col justify-end gap-2">
                 <button
-                  className="rounded-lg bg-amber-700 px-6 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 focus:ring-2 focus:ring-amber-400"
+                  onClick={handleGuardarTasa}
+                  disabled={isGuardandoTasa}
+                  className="rounded-lg bg-amber-700 px-6 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 focus:ring-2 focus:ring-amber-400 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  Guardar Tasa
+                  {isGuardandoTasa ? 'Guardando...' : 'Guardar Tasa'}
                 </button>
                 <p className="text-xs text-gray-500 text-center">
                   Se agregará al historial
