@@ -1726,28 +1726,7 @@ export function EditarRevisionManual() {
                     </Select>
                   </div>
 
-                  {/* Valor Activo */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
-                      Valor Activo (USD)
-                    </label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={prestamoData.valor_activo ?? ''}
-                        onChange={e => {
-                          const v = e.target.value
-                          setPrestamoData({ ...prestamoData, valor_activo: v === '' ? null : parseFloat(v) || 0 })
-                          setCambios({ ...cambios, prestamo: true })
-                        }}
-                        className="pl-10"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
+                  {/* Valor Activo - OCULTO */}
 
                   {/* Fecha Requerimiento - OCULTO */}
                   {/* Este campo se usa en gestión de préstamos, no en revisión manual */}
