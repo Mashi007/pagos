@@ -124,7 +124,8 @@ def forgot_password(body: ForgotPasswordRequest, request: Request, db: Session =
 
     # Comprobar si el usuario existe (solo para el contenido del correo; no cambiamos la respuesta al cliente)
     user = db.query(User).filter(User.email == email).first()
-    nombre_solicitante = f"{user.nombre} {user.apellido}".strip() if user else "Usuario no encontrado en BD"
+    apellido_u = getattr(user, "apellido", "") or ""
+    nombre_solicitante = f"{user.nombre} {apellido_u}".strip() if user else "Usuario no encontrado en BD"
     existe = user is not None
 
     asunto = "[RapiCredit] Solicitud de restablecimiento de contraseña"
@@ -147,10 +148,9 @@ def _fake_user(email: str) -> UserResponse:
     return UserResponse(
         id=1,
         email=email.lower(),
-        nombre="Admin",
-        apellido="Sistema",
+        nombre="Admin Sistema",
         cargo="Administrador",
-        rol="administrador",
+        rol="admin",
         is_active=True,
         created_at=now,
         updated_at=now,
