@@ -203,6 +203,54 @@ export function EditarRevisionManual() {
     cuotas: false,
   })
 
+  const [errores, setErrores] = useState<Record<string, string>>({})
+
+  const validarFormulario = (): boolean => {
+    const e: Record<string, string> = {}
+
+    // --- Cliente ---
+    if (!clienteData.nombres?.trim()) {
+      e['nombres'] = 'El nombre es obligatorio'
+    }
+    const tel = (clienteData.telefono || '').replace(/\D/g, '')
+    if (clienteData.telefono && (tel.length < 7 || tel.length > 15)) {
+      e['telefono'] = 'Teléfono inválido (7-15 dígitos)'
+    }
+    if (clienteData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clienteData.email)) {
+      e['email'] = 'Email inválido'
+    }
+    if (clienteData.fecha_nacimiento) {
+      const fn = new Date(clienteData.fecha_nacimiento)
+      const hoy = new Date()
+      const edad = hoy.getFullYear() - fn.getFullYear()
+      if (isNaN(fn.getTime())) {
+        e['fecha_nacimiento'] = 'Fecha inválida'
+      } else if (edad < 18 || edad > 100) {
+        e['fecha_nacimiento'] = 'La edad debe estar entre 18 y 100 años'
+      }
+    }
+
+    // --- Préstamo ---
+    if (prestamoData.total_financiamiento !== undefined && prestamoData.total_financiamiento <= 0) {
+      e['total_financiamiento'] = 'Debe ser mayor a 0'
+    }
+    if (prestamoData.cuota_periodo !== undefined && prestamoData.cuota_periodo < 0) {
+      e['cuota_periodo'] = 'No puede ser negativo'
+    }
+    if (prestamoData.numero_cuotas !== undefined && (prestamoData.numero_cuotas < 1 || !Number.isInteger(prestamoData.numero_cuotas))) {
+      e['numero_cuotas'] = 'Debe ser un entero mayor a 0'
+    }
+    if (prestamoData.fecha_aprobacion) {
+      const fa = new Date(prestamoData.fecha_aprobacion)
+      if (isNaN(fa.getTime())) {
+        e['fecha_aprobacion'] = 'Fecha inválida'
+      }
+    }
+
+    setErrores(e)
+    return Object.keys(e).length === 0
+  }
+
   const {
     data: detalleData,
     isLoading,
@@ -334,6 +382,11 @@ export function EditarRevisionManual() {
         'Este préstamo está en solo lectura (revisión ya cerrada en el sistema).'
       )
 
+      return
+    }
+
+    if (!validarFormulario()) {
+      toast.error('Corrige los errores marcados en rojo antes de guardar')
       return
     }
 
@@ -684,6 +737,11 @@ export function EditarRevisionManual() {
         'Este préstamo está en solo lectura (revisión ya cerrada en el sistema).'
       )
 
+      return
+    }
+
+    if (!validarFormulario()) {
+      toast.error('Corrige los errores marcados en rojo antes de guardar')
       return
     }
 
@@ -1316,7 +1374,7 @@ export function EditarRevisionManual() {
                 {/* Nombres */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">
-                    Nombres y Apellidos
+                    Nombres y Apellidos <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -1326,11 +1384,13 @@ export function EditarRevisionManual() {
                       onChange={e => {
                         setClienteData({ ...clienteData, nombres: e.target.value })
                         setCambios({ ...cambios, cliente: true })
+                        if (errores['nombres']) setErrores({ ...errores, nombres: '' })
                       }}
                       placeholder="Juan Carlos Pérez González"
-                      className="pl-10"
+                      className={`pl-10 ${errores['nombres'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                     />
                   </div>
+                  {errores['nombres'] && <p className="text-xs text-red-600">{errores['nombres']}</p>}
                 </div>
 
                 {/* Teléfono */}
@@ -1350,10 +1410,13 @@ export function EditarRevisionManual() {
                       onChange={e => {
                         setClienteData({ ...clienteData, telefono: e.target.value })
                         setCambios({ ...cambios, cliente: true })
+                        if (errores['telefono']) setErrores({ ...errores, telefono: '' })
                       }}
                       placeholder="4141234567"
+                      className={errores['telefono'] ? 'border-red-500 focus-visible:ring-red-400' : ''}
                     />
                   </div>
+                  {errores['telefono'] && <p className="text-xs text-red-600">{errores['telefono']}</p>}
                 </div>
 
                 {/* Email */}
@@ -1369,11 +1432,13 @@ export function EditarRevisionManual() {
                       onChange={e => {
                         setClienteData({ ...clienteData, email: e.target.value })
                         setCambios({ ...cambios, cliente: true })
+                        if (errores['email']) setErrores({ ...errores, email: '' })
                       }}
                       placeholder="juan@email.com"
-                      className="pl-10"
+                      className={`pl-10 ${errores['email'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                     />
                   </div>
+                  {errores['email'] && <p className="text-xs text-red-600">{errores['email']}</p>}
                 </div>
 
                 {/* Fecha Nacimiento */}
@@ -1386,13 +1451,16 @@ export function EditarRevisionManual() {
                     <Input
                       type="date"
                       value={clienteData.fecha_nacimiento || ''}
+                      max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)}
                       onChange={e => {
                         setClienteData({ ...clienteData, fecha_nacimiento: e.target.value || null })
                         setCambios({ ...cambios, cliente: true })
+                        if (errores['fecha_nacimiento']) setErrores({ ...errores, fecha_nacimiento: '' })
                       }}
-                      className="pl-10"
+                      className={`pl-10 ${errores['fecha_nacimiento'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                     />
                   </div>
+                  {errores['fecha_nacimiento'] && <p className="text-xs text-red-600">{errores['fecha_nacimiento']}</p>}
                 </div>
 
                 {/* Ocupación */}
@@ -1623,23 +1691,25 @@ export function EditarRevisionManual() {
                   {/* Total Financiamiento */}
                   <div>
                     <label className="mb-1 block text-sm font-medium">
-                      Total Financiamiento (USD)
+                      Total Financiamiento (USD) <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                       <Input
                         type="number"
                         step="0.01"
-                        min="0"
+                        min="0.01"
                         value={prestamoData.total_financiamiento || ''}
                         onChange={e => {
                           setPrestamoData({ ...prestamoData, total_financiamiento: parseFloat(e.target.value) || 0 })
                           setCambios({ ...cambios, prestamo: true })
+                          if (errores['total_financiamiento']) setErrores({ ...errores, total_financiamiento: '' })
                         }}
-                        className="pl-10"
+                        className={`pl-10 ${errores['total_financiamiento'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                         placeholder="0.00"
                       />
                     </div>
+                    {errores['total_financiamiento'] && <p className="text-xs text-red-600">{errores['total_financiamiento']}</p>}
                   </div>
 
                   {/* Cuota Período */}
@@ -1657,31 +1727,36 @@ export function EditarRevisionManual() {
                         onChange={e => {
                           setPrestamoData({ ...prestamoData, cuota_periodo: parseFloat(e.target.value) || 0 })
                           setCambios({ ...cambios, prestamo: true })
+                          if (errores['cuota_periodo']) setErrores({ ...errores, cuota_periodo: '' })
                         }}
-                        className="pl-10"
+                        className={`pl-10 ${errores['cuota_periodo'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                         placeholder="0.00"
                       />
                     </div>
+                    {errores['cuota_periodo'] && <p className="text-xs text-red-600">{errores['cuota_periodo']}</p>}
                   </div>
 
                   {/* Número de Cuotas */}
                   <div>
                     <label className="mb-1 block text-sm font-medium">
-                      Número de Cuotas
+                      Número de Cuotas <span className="text-red-500">*</span>
                     </label>
                     <Input
                       type="number"
                       min="1"
+                      step="1"
                       value={prestamoData.numero_cuotas || ''}
                       onChange={e => {
                         setPrestamoData({ ...prestamoData, numero_cuotas: parseInt(e.target.value) || 0 })
                         setCambios({ ...cambios, prestamo: true })
+                        if (errores['numero_cuotas']) setErrores({ ...errores, numero_cuotas: '' })
                       }}
                       disabled={prestamoData.estado === 'LIQUIDADO'}
                       title={prestamoData.estado === 'LIQUIDADO' ? 'No se puede modificar en préstamos liquidados' : undefined}
-                      className="disabled:cursor-not-allowed disabled:bg-gray-100"
+                      className={`disabled:cursor-not-allowed disabled:bg-gray-100 ${errores['numero_cuotas'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                       placeholder="0"
                     />
+                    {errores['numero_cuotas'] && <p className="text-xs text-red-600">{errores['numero_cuotas']}</p>}
                   </div>
 
                   {/* Tasa de Interés - OCULTO (0% por defecto) */}
@@ -1728,10 +1803,12 @@ export function EditarRevisionManual() {
                         onChange={e => {
                           setPrestamoData({ ...prestamoData, fecha_aprobacion: e.target.value || null })
                           setCambios({ ...cambios, prestamo: true })
+                          if (errores['fecha_aprobacion']) setErrores({ ...errores, fecha_aprobacion: '' })
                         }}
-                        className="pl-10"
+                        className={`pl-10 ${errores['fecha_aprobacion'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                       />
                     </div>
+                    {errores['fecha_aprobacion'] && <p className="text-xs text-red-600">{errores['fecha_aprobacion']}</p>}
                   </div>
 
                   {/* Fecha Base Cálculo - OCULTO */}
