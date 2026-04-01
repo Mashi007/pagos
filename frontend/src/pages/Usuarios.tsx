@@ -56,6 +56,7 @@ import { clearAuthStorage } from '../utils/storage'
 import { toast } from 'sonner'
 
 import { getErrorMessage, getErrorDetail } from '../types/errors'
+import { UserRol } from '../types'
 
 import { logger } from '../utils/logger'
 
