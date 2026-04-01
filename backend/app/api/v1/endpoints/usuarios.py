@@ -1,5 +1,6 @@
 """
 Endpoints de usuarios. CRUD contra tabla usuarios.
+Solo administradores (rol=admin) pueden crear, actualizar, eliminar usuarios.
 GET /api/v1/usuarios/ (listado), POST (crear), GET /{id}, PUT /{id}, DELETE /{id},
 POST /{id}/activate, POST /{id}/deactivate, GET /verificar-admin.
 """
@@ -11,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_admin
 from app.core.security import get_password_hash
 from app.core.user_utils import user_to_response
 from app.models.user import User
