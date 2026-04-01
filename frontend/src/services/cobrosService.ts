@@ -304,16 +304,24 @@ export async function getReciboInfopagos(
 ): Promise<Blob> {
   const url = `${BASE_PUBLIC}/infopagos/recibo?token=${encodeURIComponent(token)}&pago_id=${pagoId}`
 
-  const res = await fetch(url, { credentials: 'same-origin' })
+  try {
+    const res = await fetchWithTimeout(url, { credentials: 'same-origin' })
 
-  if (!res.ok)
-    throw new Error(
-      res.status === 401
-        ? 'Enlace de descarga expirado.'
-        : 'No se pudo descargar el recibo.'
-    )
+    if (!res.ok)
+      throw new Error(
+        res.status === 401
+          ? 'Enlace de descarga expirado.'
+          : 'No se pudo descargar el recibo.'
+      )
 
-  return res.blob()
+    return res.blob()
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error
+        ? e.message
+        : 'Error de conexión al descargar el recibo.'
+    throw new Error(msg)
+  }
 }
 
 export interface PagoReportadoItem {
