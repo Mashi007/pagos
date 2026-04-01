@@ -1677,51 +1677,11 @@ export function EditarRevisionManual() {
                     </div>
                   </div>
 
-                  {/* Fecha Base Cálculo */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
-                      Fecha Base Cálculo
-                    </label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                      <Input
-                        type="date"
-                        value={prestamoData.fecha_base_calculo || ''}
-                        onChange={e => {
-                          setPrestamoData({ ...prestamoData, fecha_base_calculo: e.target.value || null })
-                          setCambios({ ...cambios, prestamo: true })
-                        }}
-                        className="pl-10"
-                      />
-                    </div>
-                  </div>
+                  {/* Fecha Base Cálculo - OCULTO */}
+                  {/* Este campo se sincroniza automáticamente con fecha_aprobacion, no necesita edición manual */}
 
-                  {/* Producto */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
-                      Producto / Modelo Vehículo
-                    </label>
-                    <Select
-                      value={prestamoData.producto || '-'}
-                      onValueChange={v => {
-                        setPrestamoData({ ...prestamoData, producto: v === '-' ? '' : v })
-                        setCambios({ ...cambios, prestamo: true })
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="-" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="-">-</SelectItem>
-                        {prestamoData.producto && !modelosVehiculos.some((m: any) => m.modelo === prestamoData.producto) && (
-                          <SelectItem value={prestamoData.producto}>{prestamoData.producto}</SelectItem>
-                        )}
-                        {modelosVehiculos.map((m: any) => (
-                          <SelectItem key={m.id} value={m.modelo}>{m.modelo}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {/* Producto - OCULTO */}
+                  {/* Este campo se maneja en el módulo de gestión de préstamos, no en revisión manual */}
 
                   {/* Concesionario */}
                   <div>
