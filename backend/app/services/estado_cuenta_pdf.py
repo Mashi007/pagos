@@ -203,7 +203,7 @@ def generar_pdf_estado_cuenta(
     story.append(Spacer(1, 12))
     story.append(
         Paragraph(
-"Los pagos de la secci� n <b>Pagos realizados</b> (Subtotal en USD) se aplican a las cuotas en orden por n� mero de cuota.",
+"Los pagos de la sección <b>Pagos realizados</b> (Subtotal en USD) se aplican a las cuotas en orden por número de cuota.",
             styles["EC_Muted"],
         )
     )
