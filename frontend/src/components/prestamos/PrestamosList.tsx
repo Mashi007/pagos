@@ -1560,7 +1560,7 @@ export function PrestamosList() {
                                 </Button>
                               )}
 
-                              {/* ICONO REVISIÓN MANUAL — siempre visible, navega directo al formulario */}
+                              {/* ICONO REVISIÓN MANUAL - siempre visible, navega directo al formulario */}
                               {(() => {
                                 const rev = (
                                   prestamo.revision_manual_estado || 'pendiente'
@@ -1578,31 +1578,31 @@ export function PrestamosList() {
                                   pendiente: {
                                     icon: <AlertTriangle className="h-4 w-4" />,
                                     title:
-                                      'Revisión manual: No iniciada — click para revisar',
+                                      'Revisión manual: No iniciada - click para revisar',
                                     cls: 'text-amber-500 hover:bg-amber-50',
                                   },
                                   revisando: {
                                     icon: <Info className="h-4 w-4" />,
                                     title:
-                                      'Revisión manual: En revisión (?) — click para continuar',
+                                      'Revisión manual: En revisión (?) - click para continuar',
                                     cls: 'text-blue-500 hover:bg-blue-50',
                                   },
                                   en_espera: {
                                     icon: <X className="h-4 w-4" />,
                                     title:
-                                      'Revisión manual: En espera — click para revisar',
+                                      'Revisión manual: En espera - click para revisar',
                                     cls: 'text-orange-500 hover:bg-orange-50',
                                   },
                                   rechazado: {
                                     icon: <X className="h-4 w-4" />,
                                     title:
-                                      'Revisión manual: Rechazado — click para ver motivo',
+                                      'Revisión manual: Rechazado - click para ver motivo',
                                     cls: 'text-red-600 hover:bg-red-50',
                                   },
                                   revisado: {
                                     icon: <CheckCircle2 className="h-4 w-4" />,
                                     title:
-                                      'Revisión manual: Revisado ✓ — click para reabrir',
+                                      'Revisión manual: Revisado ✓ - click para reabrir',
                                     cls: 'text-green-600 hover:bg-green-50',
                                   },
                                 }

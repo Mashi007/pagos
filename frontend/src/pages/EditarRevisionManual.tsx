@@ -1076,7 +1076,7 @@ export function EditarRevisionManual() {
               onClick={handleGuardarParciales}
               disabled={soloLectura || guardandoParcial || guardandoFinal}
               className="gap-2"
-              title="Guarda los cambios y continúa revisando — estado cambia a ?"
+              title="Guarda los cambios y continúa revisando - estado cambia a ?"
             >
               <Save className="h-4 w-4" />
               Guardar Cambios
@@ -1087,7 +1087,7 @@ export function EditarRevisionManual() {
               onClick={() => setShowRechazarModal(true)}
               disabled={guardandoParcial || guardandoFinal || guardandoRechazo}
               className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
-              title="Marcar como rechazado — no guarda cambios, solo marca el préstamo"
+              title="Marcar como rechazado - no guarda cambios, solo marca el préstamo"
             >
               <X className="h-4 w-4" />
               Rechazar
@@ -1097,7 +1097,7 @@ export function EditarRevisionManual() {
               className="gap-2 bg-green-600 text-white hover:bg-green-700"
               onClick={handleGuardarYCerrar}
               disabled={soloLectura || guardandoParcial || guardandoFinal}
-              title="Guarda todos los cambios y finaliza la revisión — aparece ✓ en Acciones"
+              title="Guarda todos los cambios y finaliza la revisión - aparece ✓ en Acciones"
             >
               {guardandoFinal ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

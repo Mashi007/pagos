@@ -156,7 +156,7 @@ export function EstadoRevisionIcon({
           <div
             className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-red-100 px-2 py-1 transition-all hover:bg-red-200"
             onClick={handleShowDialog}
-            title="Rechazado — click para reabrir"
+            title="Rechazado - click para reabrir"
           >
             <X className="h-4 w-4 text-red-600" />
             <span className="text-xs font-semibold text-red-700">

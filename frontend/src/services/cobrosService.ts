@@ -52,6 +52,35 @@ const BASE_PUBLIC = `${API}/api/v1/cobros/public`
 
 const BASE_COBROS = `${API}/api/v1/cobros`
 
+/** Timeout (ms) para peticiones públicas. Sin timeout pueden quedar colgadas. */
+const FETCH_TIMEOUT_MS = 30000
+
+/** Helper: fetch con timeout y mejor manejo de errores */
+async function fetchWithTimeout(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    return res
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(
+        `Timeout después de ${FETCH_TIMEOUT_MS / 1000}s. El servidor no responde.`
+      )
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export interface ValidarCedulaResponse {
   ok: boolean
 
@@ -119,16 +148,25 @@ export async function validarCedulaPublico(
 
   const url = `${BASE_PUBLIC}/validar-cedula?${q.toString()}`
 
-  const res = await fetch(url, { credentials: 'same-origin' })
+  try {
+    const res = await fetchWithTimeout(url, { credentials: 'same-origin' })
 
-  if (res.status === 429) {
-    return {
-      ok: false,
-      error: 'Demasiadas consultas. Espere un minuto e intente de nuevo.',
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error: 'Demasiadas consultas. Espere un minuto e intente de nuevo.',
+      }
     }
-  }
 
-  return res.json()
+    return res.json().catch(() => ({
+      ok: false,
+      error: 'Error al procesar respuesta del servidor.',
+    }))
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : 'Error de conexión con el servidor.'
+    return { ok: false, error: msg }
+  }
 }
 
 /** P├â┬║blico: enviar reporte de pago (multipart). Sin auth. Sin env├â┬¡o de token. */

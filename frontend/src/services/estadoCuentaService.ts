@@ -24,6 +24,9 @@ const API = env.API_URL || ''
 
 const BASE = `${API}/api/v1/estado-cuenta/public`
 
+/** Timeout (ms) para peticiones públicas. Sin timeout pueden quedar colgadas. */
+const FETCH_TIMEOUT_MS = 30000
+
 export interface ValidarCedulaEstadoCuentaResponse {
   ok: boolean
 
@@ -82,6 +85,32 @@ export interface VerificarCodigoResponse {
   recibos_cuotas?: ReciboCuotaItem[]
 }
 
+/** Helper: fetch con timeout y mejor manejo de errores */
+async function fetchWithTimeout(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    return res
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(
+        `Timeout después de ${FETCH_TIMEOUT_MS / 1000}s. El servidor no responde.`
+      )
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 /** Público: validar cédula (formato + existe en clientes). Sin auth. */
 
 export async function validarCedulaEstadoCuenta(
@@ -97,16 +126,25 @@ export async function validarCedulaEstadoCuenta(
 
   const url = `${BASE}/validar-cedula?${q.toString()}`
 
-  const res = await fetch(url, { credentials: 'same-origin' })
+  try {
+    const res = await fetchWithTimeout(url, { credentials: 'same-origin' })
 
-  if (res.status === 429) {
-    return {
-      ok: false,
-      error: 'Demasiadas consultas. Espere un minuto e intente de nuevo.',
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error: 'Demasiadas consultas. Espere un minuto e intente de nuevo.',
+      }
     }
-  }
 
-  return res.json()
+    return res.json().catch(() => ({
+      ok: false,
+      error: 'Error al procesar respuesta del servidor.',
+    }))
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : 'Error de conexión con el servidor.'
+    return { ok: false, error: msg }
+  }
 }
 
 /** Público: solicitar código por email. Sin auth. Rate limit 5/hora por IP. */
@@ -116,32 +154,40 @@ export async function solicitarCodigo(
 ): Promise<SolicitarCodigoResponse> {
   const url = `${BASE}/solicitar-codigo`
 
-  const res = await fetch(url, {
-    method: 'POST',
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
 
-    headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
 
-    body: JSON.stringify({ cedula: cedula.slice(0, 20).trim() }),
+      body: JSON.stringify({ cedula: cedula.slice(0, 20).trim() }),
 
-    credentials: 'same-origin',
-  })
+      credentials: 'same-origin',
+    })
 
-  if (res.status === 429) {
-    return {
-      ok: false,
-      error: 'Ha alcanzado el límite de consultas por hora. Intente más tarde.',
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error:
+          'Ha alcanzado el límite de consultas por hora. Intente más tarde.',
+      }
     }
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok)
+      return {
+        ok: false,
+        error:
+          (data as SolicitarCodigoResponse).error || `Error ${res.status}.`,
+      }
+
+    return data
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : 'Error de conexión con el servidor.'
+    return { ok: false, error: msg }
   }
-
-  const data = await res.json().catch(() => ({}))
-
-  if (!res.ok)
-    return {
-      ok: false,
-      error: (data as SolicitarCodigoResponse).error || `Error ${res.status}.`,
-    }
-
-  return data
 }
 
 /** Público: verificar código y obtener PDF. Sin auth. Rate limit 15 intentos/15 min por IP. */
@@ -152,35 +198,42 @@ export async function verificarCodigo(
 ): Promise<VerificarCodigoResponse> {
   const url = `${BASE}/verificar-codigo`
 
-  const res = await fetch(url, {
-    method: 'POST',
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
 
-    headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
 
-    body: JSON.stringify({
-      cedula: cedula.slice(0, 20).trim(),
-      codigo: (codigo || '').trim(),
-    }),
+      body: JSON.stringify({
+        cedula: cedula.slice(0, 20).trim(),
+        codigo: (codigo || '').trim(),
+      }),
 
-    credentials: 'same-origin',
-  })
+      credentials: 'same-origin',
+    })
 
-  if (res.status === 429) {
-    return {
-      ok: false,
-      error: 'Demasiados intentos. Espere 15 minutos e intente de nuevo.',
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error: 'Demasiados intentos. Espere 15 minutos e intente de nuevo.',
+      }
     }
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok)
+      return {
+        ok: false,
+        error:
+          (data as VerificarCodigoResponse).error || `Error ${res.status}.`,
+      }
+
+    return data
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : 'Error de conexión con el servidor.'
+    return { ok: false, error: msg }
   }
-
-  const data = await res.json().catch(() => ({}))
-
-  if (!res.ok)
-    return {
-      ok: false,
-      error: (data as VerificarCodigoResponse).error || `Error ${res.status}.`,
-    }
-
-  return data
 }
 
 /** Público: solicitar estado de cuenta (genera PDF, envía al email, devuelve PDF en base64). Sin auth. */
@@ -191,47 +244,58 @@ export async function solicitarEstadoCuenta(
 ): Promise<SolicitarEstadoCuentaResponse> {
   const url = `${BASE}/solicitar-estado-cuenta`
 
-  const res = await fetch(url, {
-    method: 'POST',
-
-    headers: { 'Content-Type': 'application/json' },
-
-    body: JSON.stringify(
-      opts?.origen
-        ? { cedula: cedula.slice(0, 20).trim(), origen: opts.origen }
-        : { cedula: cedula.slice(0, 20).trim() }
-    ),
-
-    credentials: 'same-origin',
-  })
-
-  if (res.status === 429) {
-    return {
-      ok: false,
-      error: 'Ha alcanzado el límite de consultas por hora. Intente más tarde.',
-    }
-  }
-
-  const text = await res.text()
-
-  let data: SolicitarEstadoCuentaResponse
-
   try {
-    data = text ? JSON.parse(text) : {}
-  } catch {
-    return {
-      ok: false,
-      error: (text || `Error ${res.status}. Intente más tarde.`).slice(0, 200),
-    }
-  }
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
 
-  if (!res.ok && data && typeof data === 'object') {
-    return {
-      ok: false,
-      error:
-        (data as SolicitarEstadoCuentaResponse).error || `Error ${res.status}.`,
-    }
-  }
+      headers: { 'Content-Type': 'application/json' },
 
-  return data
+      body: JSON.stringify(
+        opts?.origen
+          ? { cedula: cedula.slice(0, 20).trim(), origen: opts.origen }
+          : { cedula: cedula.slice(0, 20).trim() }
+      ),
+
+      credentials: 'same-origin',
+    })
+
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error:
+          'Ha alcanzado el límite de consultas por hora. Intente más tarde.',
+      }
+    }
+
+    const text = await res.text()
+
+    let data: SolicitarEstadoCuentaResponse
+
+    try {
+      data = text ? JSON.parse(text) : {}
+    } catch {
+      return {
+        ok: false,
+        error: (text || `Error ${res.status}. Intente más tarde.`).slice(
+          0,
+          200
+        ),
+      }
+    }
+
+    if (!res.ok && data && typeof data === 'object') {
+      return {
+        ok: false,
+        error:
+          (data as SolicitarEstadoCuentaResponse).error ||
+          `Error ${res.status}.`,
+      }
+    }
+
+    return data
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : 'Error de conexión con el servidor.'
+    return { ok: false, error: msg }
+  }
 }

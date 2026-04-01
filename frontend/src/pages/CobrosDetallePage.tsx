@@ -311,7 +311,7 @@ export default function CobrosDetallePage() {
                 className="ml-2 text-xs font-semibold text-amber-600"
                 title="No hay tasa registrada para la fecha de pago. Debe registrarla en Pagos antes de aprobar."
               >
-                (sin tasa registrada para esta fecha — no se puede aprobar hasta
+                (sin tasa registrada para esta fecha - no se puede aprobar hasta
                 registrar la tasa)
               </span>
             )}

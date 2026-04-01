@@ -938,7 +938,7 @@ function EstadoCuentaPublicoPage() {
 
                 {/* Visor PDF solo en desktop/tablet - usa <object> para mayor compatibilidad con blob URLs */}
                 {!isMobile && pdfBlobUrl && (
-                  <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 shadow-md bg-slate-50">
+                  <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-md">
                     <object
                       data={pdfBlobUrl}
                       type="application/pdf"
@@ -958,7 +958,9 @@ function EstadoCuentaPublicoPage() {
                 {/* Mientras se genera el blob URL muestra spinner */}
                 {!isMobile && pdfDataUrl && !pdfBlobUrl && (
                   <div className="flex h-40 w-full items-center justify-center rounded-xl border border-slate-200">
-                    <p className="text-sm text-slate-500">Preparando vista previa...</p>
+                    <p className="text-sm text-slate-500">
+                      Preparando vista previa...
+                    </p>
                   </div>
                 )}
 
