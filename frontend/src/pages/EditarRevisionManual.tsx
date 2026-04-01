@@ -808,10 +808,23 @@ export function EditarRevisionManual() {
           exact: false,
         })
 
+        // Guardar posición de scroll antes de navegar
+        const scrollPosition = window.scrollY
+        sessionStorage.setItem('prestamoScrollPosition', scrollPosition.toString())
+
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
 
         setTimeout(() => {
           navigate('/prestamos')
+
+          // Restaurar posición después de que se renderice
+          setTimeout(() => {
+            const savedPosition = sessionStorage.getItem('prestamoScrollPosition')
+            if (savedPosition) {
+              window.scrollTo(0, parseInt(savedPosition, 10))
+              sessionStorage.removeItem('prestamoScrollPosition')
+            }
+          }, 100)
         }, 1500)
       } catch (err: any) {
         throw new Error(
@@ -875,7 +888,21 @@ export function EditarRevisionManual() {
 
     queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
 
+    // Guardar posición de scroll antes de navegar
+    const scrollPosition = window.scrollY
+    sessionStorage.setItem('prestamoScrollPosition', scrollPosition.toString())
+
+    // Navegar a prestamos
     navigate('/prestamos')
+
+    // Restaurar posición después de que se renderice
+    setTimeout(() => {
+      const savedPosition = sessionStorage.getItem('prestamoScrollPosition')
+      if (savedPosition) {
+        window.scrollTo(0, parseInt(savedPosition, 10))
+        sessionStorage.removeItem('prestamoScrollPosition')
+      }
+    }, 100)
   }
 
   if (isLoading) {
