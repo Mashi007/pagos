@@ -21,10 +21,11 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: str
+    cedula: str
     nombre: str
     apellido: str
     cargo: Optional[str] = None
-    rol: str  # 'administrador' | 'operativo'
+    rol: str  # 'admin' | 'manager' | 'operator' | 'viewer'
     is_active: bool
     created_at: str
     updated_at: Optional[str] = None

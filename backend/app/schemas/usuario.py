@@ -12,6 +12,7 @@ RolType = Literal["admin", "manager", "operator", "viewer"]
 
 class UserCreate(BaseModel):
     email: EmailStr
+    cedula: str = Field(..., min_length=1, max_length=50, description="Cédula única")
     nombre: str = Field(..., min_length=1, max_length=100)
     apellido: str = Field("", max_length=100)
     cargo: Optional[str] = Field(None, max_length=100)
@@ -22,6 +23,7 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
+    cedula: Optional[str] = Field(None, min_length=1, max_length=50, description="Cédula única")
     nombre: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido: Optional[str] = Field(None, max_length=100)
     cargo: Optional[str] = Field(None, max_length=100)

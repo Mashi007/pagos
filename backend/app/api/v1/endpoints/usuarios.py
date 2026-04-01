@@ -68,16 +68,28 @@ def obtener_usuario(user_id: int, db: Session = Depends(get_db)):
 
 @router.post("", response_model=UserResponse)
 def crear_usuario(body: UserCreate, db: Session = Depends(get_db)):
-    """Crea un nuevo usuario. Email debe ser único."""
+    """Crea un nuevo usuario. Email y cédula deben ser únicos."""
     email = body.email.lower().strip()
+    cedula = body.cedula.strip()
+    
+    # Validar email único
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ya existe un usuario con ese email",
         )
+    
+    # Validar cédula única
+    if db.query(User).filter(User.cedula == cedula).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe un usuario con esa cédula",
+        )
+    
     now = datetime.utcnow()
     u = User(
         email=email,
+        cedula=cedula,
         password_hash=get_password_hash(body.password),
         nombre=body.nombre.strip(),
         apellido=(body.apellido or "").strip(),
@@ -95,7 +107,7 @@ def crear_usuario(body: UserCreate, db: Session = Depends(get_db)):
 
 @router.put("/{user_id}", response_model=UserResponse)
 def actualizar_usuario(user_id: int, body: UserUpdate, db: Session = Depends(get_db)):
-    """Actualiza un usuario. Si se envía password, se hashea y guarda."""
+    """Actualiza un usuario. Email y cédula deben ser únicos. Si se envía password, se hashea y guarda."""
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -109,6 +121,17 @@ def actualizar_usuario(user_id: int, body: UserUpdate, db: Session = Depends(get
                 detail="Ya existe otro usuario con ese email",
             )
         u.email = email
+    
+    if body.cedula is not None:
+        cedula = body.cedula.strip()
+        other = db.query(User).filter(User.cedula == cedula, User.id != user_id).first()
+        if other:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ya existe otro usuario con esa cédula",
+            )
+        u.cedula = cedula
+    
     if body.nombre is not None:
         u.nombre = body.nombre.strip()
     if body.apellido is not None:
