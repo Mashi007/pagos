@@ -23,6 +23,7 @@ import {
   Upload,
   DollarSign,
   Check,
+  Eye,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -258,11 +259,12 @@ export function PagosList() {
     setIsGuardandoTasa(true)
     try {
       // Importar servicios
-      const { getTasaPorFecha, guardarTasaPorFecha } = await import('../../services/tasaCambioService')
-      
+      const { getTasaPorFecha, guardarTasaPorFecha } =
+        await import('../../services/tasaCambioService')
+
       // Verificar si ya existe tasa para esa fecha
       const tasaExistente = await getTasaPorFecha(fechaTasaForm)
-      
+
       if (tasaExistente && tasaExistente.tasa_oficial !== tasaNum) {
         // Mostrar diálogo de confirmación
         setTasaExistenteDialogo({
@@ -273,17 +275,19 @@ export function PagosList() {
         setIsGuardandoTasa(false)
         return
       }
-      
+
       // Guardar la tasa
       await guardarTasaPorFecha(fechaTasaForm, tasaNum)
-      
+
       const accion = tasaExistente ? 'Tasa actualizada' : 'Tasa guardada'
       toast.success(`✓ ${accion} para ${fechaTasaForm}`)
       setFechaTasaForm('')
       setTasaForm('')
-      
+
       // Refrescar query de tasa
-      await queryClient.invalidateQueries({ queryKey: ['tasa-hoy-banner-pagos'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['tasa-hoy-banner-pagos'],
+      })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo guardar la tasa')
     } finally {
@@ -296,19 +300,24 @@ export function PagosList() {
 
     setIsGuardandoTasa(true)
     try {
-      const { guardarTasaPorFecha } = await import('../../services/tasaCambioService')
+      const { guardarTasaPorFecha } =
+        await import('../../services/tasaCambioService')
       await guardarTasaPorFecha(
         tasaExistenteDialogo.fecha,
         tasaExistenteDialogo.tasaNueva
       )
-      
-      toast.success(`✓ Tasa actualizada de ${tasaExistenteDialogo.tasaActual.toFixed(2)} a ${tasaExistenteDialogo.tasaNueva.toFixed(2)}`)
+
+      toast.success(
+        `✓ Tasa actualizada de ${tasaExistenteDialogo.tasaActual.toFixed(2)} a ${tasaExistenteDialogo.tasaNueva.toFixed(2)}`
+      )
       setFechaTasaForm('')
       setTasaForm('')
       setTasaExistenteDialogo(null)
-      
+
       // Refrescar query de tasa
-      await queryClient.invalidateQueries({ queryKey: ['tasa-hoy-banner-pagos'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['tasa-hoy-banner-pagos'],
+      })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo actualizar la tasa')
     } finally {
@@ -841,9 +850,10 @@ export function PagosList() {
               </h3>
             </div>
             <p className="text-sm text-gray-700">
-              Use la <strong>fecha de pago</strong> del reporte o comprobante. Es
-              la tasa oficial Bs./USD para convertir bolívares a dólares. Ideal
-              para días pasados o faltantes que no cuentan con tasa registrada.
+              Use la <strong>fecha de pago</strong> del reporte o comprobante.
+              Es la tasa oficial Bs./USD para convertir bolívares a dólares.
+              Ideal para días pasados o faltantes que no cuentan con tasa
+              registrada.
             </p>
           </div>
 
@@ -857,7 +867,9 @@ export function PagosList() {
             <div className="flex items-center gap-3 rounded-lg bg-white/80 p-4">
               <DollarSign className="h-6 w-6 text-amber-700" />
               <div className="min-w-0">
-                <p className="text-xs font-medium text-gray-600">Tasa Vigente Hoy</p>
+                <p className="text-xs font-medium text-gray-600">
+                  Tasa Vigente Hoy
+                </p>
                 <p className="text-base font-semibold text-amber-900">
                   {(tasaHoyBanner.fecha || '').slice(0, 10)}: Bs.{' '}
                   {new Intl.NumberFormat('es-VE', {
@@ -889,14 +901,12 @@ export function PagosList() {
                 <input
                   type="date"
                   value={fechaTasaForm}
-                  onChange={(e) => setFechaTasaForm(e.target.value)}
+                  onChange={e => setFechaTasaForm(e.target.value)}
                   max={new Date().toISOString().split('T')[0]}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   placeholder="Seleccione una fecha"
                 />
-                <p className="text-xs text-gray-500">
-                  Máximo: hoy
-                </p>
+                <p className="text-xs text-gray-500">Máximo: hoy</p>
               </div>
 
               {/* Tasa */}
@@ -910,13 +920,11 @@ export function PagosList() {
                   min="0"
                   max="999999.99"
                   value={tasaForm}
-                  onChange={(e) => setTasaForm(e.target.value)}
+                  onChange={e => setTasaForm(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   placeholder="ej. 3105.75"
                 />
-                <p className="text-xs text-gray-500">
-                  2 decimales máximo
-                </p>
+                <p className="text-xs text-gray-500">2 decimales máximo</p>
               </div>
 
               {/* Botón */}
@@ -924,11 +932,11 @@ export function PagosList() {
                 <button
                   onClick={handleGuardarTasa}
                   disabled={isGuardandoTasa}
-                  className="rounded-lg bg-amber-700 px-6 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 focus:ring-2 focus:ring-amber-400 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="rounded-lg bg-amber-700 px-6 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 focus:ring-2 focus:ring-amber-400 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
                   {isGuardandoTasa ? 'Guardando...' : 'Guardar Tasa'}
                 </button>
-                <p className="text-xs text-gray-500 text-center">
+                <p className="text-center text-xs text-gray-500">
                   Se agregará al historial
                 </p>
               </div>
@@ -936,7 +944,7 @@ export function PagosList() {
           </div>
         </CardContent>
       </Card>
-      
+
       {/* Diálogo de confirmación para editar tasa existente */}
       {tasaExistenteDialogo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -945,9 +953,10 @@ export function PagosList() {
               Tasa ya existe para esta fecha
             </h3>
             <p className="mb-6 text-sm text-gray-600">
-              Ya hay una tasa registrada para {tasaExistenteDialogo.fecha}. ¿Deseas actualizarla?
+              Ya hay una tasa registrada para {tasaExistenteDialogo.fecha}.
+              ¿Deseas actualizarla?
             </p>
-            
+
             <div className="mb-6 space-y-3 rounded-lg bg-amber-50 p-4">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-700">Tasa actual:</span>
@@ -962,7 +971,7 @@ export function PagosList() {
                 </span>
               </div>
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => setTasaExistenteDialogo(null)}
@@ -982,7 +991,7 @@ export function PagosList() {
           </div>
         </div>
       )}
-      
+
       <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
         <Button
           variant="outline"
@@ -1623,6 +1632,7 @@ export function PagosList() {
                           <TableHead>Fecha Pago</TableHead>
                           <TableHead>Nº Documento</TableHead>
                           <TableHead>Conciliado</TableHead>
+                          <TableHead>Fotografía</TableHead>
                           <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1670,6 +1680,24 @@ export function PagosList() {
                                 <Badge className="bg-gray-500 text-white">
                                   NO
                                 </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {pago.documento_ruta ? (
+                                <a
+                                  href={pago.documento_ruta}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 font-medium text-blue-600 hover:text-blue-800"
+                                  title="Visualizar fotografía"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  Ver foto
+                                </a>
+                              ) : (
+                                <span className="text-sm text-gray-500">
+                                  NA
+                                </span>
                               )}
                             </TableCell>
                             <TableCell className="text-right">
