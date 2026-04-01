@@ -26,7 +26,7 @@ import logging
 
 from app.core.config import settings
 from app.core.database import get_db, engine, SessionLocal
-from app.core.deps import get_current_user, require_administrador
+from app.core.deps import get_current_user, require_admin
 from app.core.openrouter_client import call_openrouter as _openrouter_call
 from app.core.openrouter_client import call_openrouter_stream
 from app.core.chat_context_cache import get_cached_context, set_cached_context, invalidate_cache
@@ -491,7 +491,7 @@ class AIConfigUpdate(BaseModel):
 def put_ai_configuracion(
     payload: AIConfigUpdate = Body(...),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """
     Actualiza modelo, temperatura, max_tokens, activo y opcionalmente el token OpenRouter.
@@ -617,7 +617,7 @@ class PromptPutBody(BaseModel):
 @router.get("/prompt")
 def get_ai_prompt(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """
     Devuelve el prompt personalizado y si se está usando el por defecto.
@@ -649,7 +649,7 @@ def get_ai_prompt(
 def put_ai_prompt(
     payload: PromptPutBody = Body(...),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Guarda el prompt personalizado. Si prompt está vacío, se restaura el por defecto."""
     texto = (payload.prompt or "").strip()
@@ -676,7 +676,7 @@ class PromptVariableUpdate(BaseModel):
 @router.get("/prompt/variables")
 def get_ai_prompt_variables(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Lista las variables personalizadas del prompt."""
     variables = _get_prompt_variables_list(db)
@@ -698,7 +698,7 @@ def get_ai_prompt_variables(
 def post_ai_prompt_variable(
     payload: PromptVariableCreate = Body(...),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Crea una variable para el prompt."""
     variables = _get_prompt_variables_list(db)
@@ -733,7 +733,7 @@ def put_ai_prompt_variable(
     variable_id: int,
     payload: PromptVariableUpdate = Body(...),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Actualiza una variable del prompt."""
     variables = _get_prompt_variables_list(db)
@@ -761,7 +761,7 @@ def put_ai_prompt_variable(
 def delete_ai_prompt_variable(
     variable_id: int,
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Elimina una variable del prompt."""
     variables = _get_prompt_variables_list(db)
@@ -883,7 +883,7 @@ class ProbarRequest(BaseModel):
 @router.post("/probar")
 def post_ai_probar(
     payload: ProbarRequest = Body(...),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Prueba la conexión con OpenRouter. Carga config desde BD en sesión corta (no retiene conexión durante la llamada)."""
     session = SessionLocal()
@@ -916,7 +916,7 @@ def post_ai_probar(
 @router.get("/documentos")
 def get_ai_documentos(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """
     Listado de documentos para RAG/IA. El frontend AIConfig lo usa.
@@ -1001,7 +1001,7 @@ def get_chat_calificaciones(
     calificacion: Optional[str] = None,
     procesado: Optional[str] = None,
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """
     Lista calificaciones del Chat AI desde BD. Filtros: calificacion (arriba|abajo), procesado (true|false).
@@ -1025,7 +1025,7 @@ def put_chat_calificacion_procesar(
     calificacion_id: int,
     payload: ProcesarCalificacionRequest = Body(...),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """
     Marca una calificación como procesada y opcionalmente guarda notas.
@@ -1085,7 +1085,7 @@ def _inspector_tablas_campos() -> dict[str, list[dict]]:
 @router.get("/tablas-campos")
 def get_tablas_campos(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """
     Lista tablas y campos del esquema de la BD (para Catálogo de Campos y Fine-tuning).
@@ -1143,7 +1143,7 @@ def _definicion_to_dict(row: DefinicionCampo) -> dict:
 @router.get("/definiciones-campos")
 def get_definiciones_campos(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """
     Lista definiciones de campos desde la tabla definiciones_campos (BD).
@@ -1157,7 +1157,7 @@ def get_definiciones_campos(
 @router.get("/definiciones-campos/tablas")
 def get_definiciones_campos_tablas(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """
     Lista nombres de tablas con al menos una definición (desde definiciones_campos).
@@ -1204,7 +1204,7 @@ class DefinicionCampoUpdate(BaseModel):
 @router.post("/definiciones-campos/sincronizar")
 def post_definiciones_campos_sincronizar(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """
     Sincroniza definiciones con el esquema actual de la BD.
@@ -1267,7 +1267,7 @@ def post_definiciones_campos_sincronizar(
 def post_definiciones_campos(
     payload: DefinicionCampoCreate = Body(...),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Crea una definición de campo."""
     if not (payload.tabla or "").strip() or not (payload.campo or "").strip() or not (payload.definicion or "").strip():
@@ -1304,7 +1304,7 @@ def put_definiciones_campos(
     definicion_id: int,
     payload: DefinicionCampoUpdate = Body(...),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Actualiza una definición de campo (parcial)."""
     row = db.get(DefinicionCampo, definicion_id)
@@ -1325,7 +1325,7 @@ def put_definiciones_campos(
 def delete_definiciones_campos(
     definicion_id: int,
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Elimina una definición de campo."""
     row = db.get(DefinicionCampo, definicion_id)
@@ -1368,7 +1368,7 @@ def _diccionario_to_dict(row: DiccionarioSemantico) -> dict:
 @router.get("/diccionario-semantico")
 def get_diccionario_semantico(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Lista entradas del diccionario semántico."""
     rows = db.query(DiccionarioSemantico).order_by(DiccionarioSemantico.orden, DiccionarioSemantico.palabra).all()
@@ -1379,7 +1379,7 @@ def get_diccionario_semantico(
 @router.get("/diccionario-semantico/categorias")
 def get_diccionario_semantico_categorias(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Lista categorías distintas del diccionario."""
     from sqlalchemy import distinct
@@ -1416,7 +1416,7 @@ class DiccionarioSemanticoUpdate(BaseModel):
 def post_diccionario_semantico(
     payload: DiccionarioSemanticoCreate = Body(...),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Crea entrada en el diccionario semántico."""
     if not (payload.palabra or "").strip() or not (payload.definicion or "").strip():
@@ -1445,7 +1445,7 @@ def put_diccionario_semantico(
     entrada_id: int,
     payload: DiccionarioSemanticoUpdate = Body(...),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Actualiza entrada del diccionario semántico."""
     row = db.get(DiccionarioSemantico, entrada_id)
@@ -1466,7 +1466,7 @@ def put_diccionario_semantico(
 def delete_diccionario_semantico(
     entrada_id: int,
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Elimina entrada del diccionario semántico."""
     row = db.get(DiccionarioSemantico, entrada_id)
@@ -1480,7 +1480,7 @@ def delete_diccionario_semantico(
 @router.post("/diccionario-semantico/procesar")
 def post_diccionario_semantico_procesar(
     payload: dict = Body(...),
-    _admin: UserResponse = Depends(require_administrador),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Procesa entrada con IA para mejorar definición (stub)."""
     return {"mensaje": "Procesamiento con IA no implementado aún", "definicion_mejorada": payload.get("definicion", "")}

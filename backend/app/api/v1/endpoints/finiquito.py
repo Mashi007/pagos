@@ -24,8 +24,7 @@ from app.core.cobros_public_rate_limit import (
 from app.core.database import get_db
 from app.core.deps import (
     get_finiquito_usuario_acceso,
-    require_administrador,
-    require_finiquitador,
+    require_admin,
 )
 from app.core.email import mask_email_for_log, send_email
 from app.core.email_cuentas import SERVICIO_FINIQUITO
@@ -560,7 +559,7 @@ def finiquito_public_solicitar_codigo(
 
 @router.get("/admin/otp-email-metricas")
 def finiquito_admin_otp_email_metricas(
-    _: UserResponse = Depends(require_administrador),
+    _: UserResponse = Depends(require_admin),
 ):
     """
     Contadores en memoria desde el arranque del proceso (solicitudes OTP Finiquito).
@@ -760,7 +759,7 @@ def finiquito_admin_listar(
         description="Subcadena de cedula (coincidencia parcial, sin distinguir mayusculas)",
     ),
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_finiquitador),
+    _: UserResponse = Depends(require_admin),
 ):
     q = db.query(FiniquitoCaso)
     if estado_in and estado_in.strip():
@@ -787,7 +786,7 @@ def finiquito_admin_listar(
 def finiquito_admin_revision_datos(
     caso_id: int,
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_finiquitador),
+    _: UserResponse = Depends(require_admin),
 ):
     """Misma carga que GET public/revision-datos (préstamo caso, cuotas, préstamos/pagos por cédula)."""
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
@@ -804,7 +803,7 @@ def finiquito_admin_patch_estado(
     caso_id: int,
     body: FiniquitoPatchEstadoRequest,
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_finiquitador),
+    admin: UserResponse = Depends(require_administrador),
 ):
     """Administrador: bandejas y area de trabajo (EN_PROCESO / TERMINADO con Sí/No)."""
     nuevo = (body.estado or "").upper().strip()
@@ -888,7 +887,7 @@ def finiquito_admin_patch_estado(
 @router.post("/admin/refresh-materializado")
 def finiquito_admin_refresh_manual(
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_administrador),
+    _: UserResponse = Depends(require_admin),
 ):
     """Uso operativo: ejecutar el mismo refresco que el job 02:00 (sin esperar al cron)."""
     from app.services.finiquito_refresh import ejecutar_refresh_finiquito_casos

@@ -18,7 +18,7 @@ def user_to_response(u: User) -> UserResponse:
             return dt.isoformat().replace("+00:00", "Z")
         return dt.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
 
-    rol = getattr(u, "rol", None) or ("administrador" if getattr(u, "is_admin", False) else "operativo")
+    rol = getattr(u, "rol", None) or ("admin" if getattr(u, "is_admin", False) else "viewer")
     return UserResponse(
         id=u.id,
         email=u.email,
@@ -34,6 +34,6 @@ def user_to_response(u: User) -> UserResponse:
 
 
 def user_is_administrator(user: UserResponse) -> bool:
-    """True si el usuario tiene rol administrador (respuesta de get_current_user)."""
-    return (user.rol or "").strip().lower() == "administrador"
+    """True si el usuario tiene rol admin."""
+    return (user.rol or "").strip().lower() == "admin"
 

@@ -24,8 +24,13 @@ security_optional_bearer = HTTPBearer(auto_error=False)
 
 logger = logging.getLogger(__name__)
 
-# Roles sin acceso a auditoria de cartera (API bajo /auditoria/prestamos/cartera/*).
-ROLES_BLOQUEADOS_AUDITORIA_CARTERA = frozenset({"operativo", "usuario", "usuarios"})
+# Roles estándar (RBAC - Role-Based Access Control)
+# admin: Full access
+# manager: Gestión operativa
+# operator: Operaciones básicas
+# viewer: Solo lectura
+
+ROLES_BLOQUEADOS_AUDITORIA_CARTERA = frozenset({"operator", "viewer"})
 
 
 def _fake_user_response(email: str) -> UserResponse:
@@ -37,7 +42,7 @@ def _fake_user_response(email: str) -> UserResponse:
         nombre="Admin",
         apellido="Sistema",
         cargo="Administrador",
-        rol="administrador",
+        rol="admin",
         is_active=True,
         created_at=now,
         updated_at=now,
@@ -88,11 +93,11 @@ def get_current_user(
     return _fake_user_response(email)
 
 
-def require_administrador(
+def require_admin(
     current: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
-    """Solo rol administrador (portal interno)."""
-    if (current.rol or "").lower() != "administrador":
+    """Solo rol admin (acceso total)."""
+    if (current.rol or "").lower() != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden acceder a este recurso.",
@@ -100,23 +105,38 @@ def require_administrador(
     return current
 
 
-def require_finiquitador(
+def require_manager_or_admin(
     current: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
-    """Solo rol finiquitador o administrador (acceso exclusivo a finiquito gestion)."""
+    """Solo rol manager o admin (gestión operativa)."""
     rol = (current.rol or "").lower()
-    if rol not in ("administrador", "finiquitador"):
+    if rol not in ("admin", "manager"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo finiquitadores y administradores pueden acceder a este recurso.",
+            detail="Se requiere rol de gerente o administrador.",
         )
     return current
+
+
+def require_operator_or_higher(
+    current: UserResponse = Depends(get_current_user),
+) -> UserResponse:
+    """Rol operator, manager o admin (operaciones)."""
+    rol = (current.rol or "").lower()
+    if rol not in ("admin", "manager", "operator"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere acceso de operario o superior.",
+        )
+    return current
+
+
 
 
 def require_auditoria_cartera_access(
     current_user: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
-    """Auditoria de cartera: denegado a rol operativo / usuario(s) basico."""
+    """Auditoria de cartera: denegado a rol operator / viewer."""
     r = (current_user.rol or "").strip().lower()
     if r in ROLES_BLOQUEADOS_AUDITORIA_CARTERA:
         raise HTTPException(

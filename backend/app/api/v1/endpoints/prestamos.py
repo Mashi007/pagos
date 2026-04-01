@@ -346,7 +346,7 @@ def _audit_user_id(db: Session, current_user: UserResponse) -> int:
 
     r = db.execute(
 
-        text("SELECT id FROM public.usuarios WHERE rol = 'administrador' AND is_active = true LIMIT 1"),
+        text("SELECT id FROM public.usuarios WHERE rol = 'admin' AND is_active = true LIMIT 1"),
 
     ).first()
 
@@ -2969,7 +2969,7 @@ def aprobar_manual(
 
     """
 
-    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+    if (getattr(current_user, "rol", None) or "").lower() != "admin":
 
         raise HTTPException(
 
@@ -3195,7 +3195,7 @@ def rechazar_prestamo(
 
     """
 
-    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+    if (getattr(current_user, "rol", None) or "").lower() != "admin":
 
         raise HTTPException(
 
@@ -3381,7 +3381,7 @@ def generar_cuotas_aprobados_sin_cuotas(
 
     """
 
-    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+    if (getattr(current_user, "rol", None) or "").lower() != "admin":
 
         raise HTTPException(
 
@@ -3509,7 +3509,7 @@ def get_integridad_cuotas_prestamo(
     Diagnostico: total_pagado vs SUM(cuota_pagos) por cuota (y diff global).
     Solo administrador. No modifica datos.
     """
-    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+    if (getattr(current_user, "rol", None) or "").lower() != "admin":
         raise HTTPException(
             status_code=403,
             detail="Solo administracion puede consultar integridad de cuotas.",
@@ -3539,7 +3539,7 @@ def reaplicar_cascada_aplicacion_prestamo(
 
     Solo administrador.
     """
-    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+    if (getattr(current_user, "rol", None) or "").lower() != "admin":
         raise HTTPException(
             status_code=403,
             detail="Solo administracion puede reaplicar la cascada sobre cuotas.",
@@ -3584,7 +3584,7 @@ def reaplicar_cascada_aplicacion_masiva(
     Compatibilidad: POST `.../reaplicar-fifo-aplicacion-masiva` (mismo comportamiento).
     Solo administrador. Maximo 500 IDs por solicitud.
     """
-    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+    if (getattr(current_user, "rol", None) or "").lower() != "admin":
         raise HTTPException(
             status_code=403,
             detail="Solo administracion puede reaplicar cascada masivo.",

@@ -1,10 +1,12 @@
 """
 Modelo SQLAlchemy para Usuario (auth y gestión de usuarios).
 Tabla: usuarios. Campos: email, password_hash, nombre, apellido, cargo, rol, is_active, timestamps.
-Rol: 'administrador' | 'operativo' | 'finiquitador'.
-  - administrador: acceso total
-  - operativo: acceso limitado a reportes y préstamos
-  - finiquitador: acceso exclusivo a finiquito gestion (/pagos/finiquitos/gestion)
+
+Roles estandarizados según RBAC (Role-Based Access Control - ISO/IEC 12207):
+  - admin: Acceso total (Administrador del Sistema)
+  - manager: Gestión de operaciones (Gerente/Supervisor)
+  - operator: Operaciones básicas (Operario)
+  - viewer: Solo lectura (Visualizador)
 """
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
 
@@ -20,7 +22,7 @@ class User(Base):
     nombre = Column(String(100), nullable=False)
     apellido = Column(String(100), nullable=False, server_default=text("''"))
     cargo = Column(String(100), nullable=True)
-    rol = Column(String(20), nullable=False, server_default=text("'operativo'"))
+    rol = Column(String(20), nullable=False, server_default=text("'viewer'"))
     is_active = Column(Boolean, nullable=False, server_default=text("true"))
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
