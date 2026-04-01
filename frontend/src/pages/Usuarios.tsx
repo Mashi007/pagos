@@ -537,102 +537,182 @@ export function Usuarios() {
 
       {/* Stats Dashboard */}
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total Usuarios</p>
+      {(() => {
+        const total = usuarios.length
+        const activos = usuarios.filter(u => u.is_active).length
+        const inactivos = total - activos
+        const pctActivos = total > 0 ? ((activos / total) * 100).toFixed(1) : '0.0'
+        const porRol = {
+          admin: usuarios.filter(u => u.rol === 'admin').length,
+          manager: usuarios.filter(u => u.rol === 'manager').length,
+          operator: usuarios.filter(u => u.rol === 'operator').length,
+          viewer: usuarios.filter(u => u.rol === 'viewer').length,
+        }
+        const haceUnMes = new Date()
+        haceUnMes.setMonth(haceUnMes.getMonth() - 1)
+        const nuevosUltimoMes = usuarios.filter(
+          u => new Date(u.created_at) >= haceUnMes
+        ).length
+        const ultimoLogin = usuarios
+          .filter(u => u.last_login)
+          .sort((a, b) => new Date(b.last_login!).getTime() - new Date(a.last_login!).getTime())[0]
 
-                <p className="text-2xl font-bold">{usuarios.length}</p>
+        return (
+          <>
+            {/* Fila 1: totales */}
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500">Total Usuarios</p>
+                      <p className="text-2xl font-bold">{total}</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {total > 0 ? `${pctActivos}% activos` : 'Sin usuarios'}
+                      </p>
+                    </div>
+                    <Users className="h-8 w-8 text-blue-600" />
+                  </div>
+                </CardContent>
+              </Card>
 
-                <p className="mt-1 text-xs text-gray-400">
-                  {usuarios.length > 0
-                    ? `${((usuarios.filter(u => u.is_active).length / usuarios.length) * 100).toFixed(1)}% activos`
-                    : 'Conectando con BD...'}
-                </p>
-              </div>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500">Activos</p>
+                      <p className="text-2xl font-bold text-green-600">{activos}</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {inactivos > 0 ? `${inactivos} inactivo${inactivos > 1 ? 's' : ''}` : 'Todos activos'}
+                      </p>
+                    </div>
+                    <UserCheck className="h-8 w-8 text-green-600" />
+                  </div>
+                </CardContent>
+              </Card>
 
-              <Users className="h-8 w-8 text-blue-600" />
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500">Administradores</p>
+                      <p className="text-2xl font-bold text-red-600">{porRol.admin}</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {porRol.manager > 0 ? `${porRol.manager} gerente${porRol.manager > 1 ? 's' : ''}` : 'Acceso total al sistema'}
+                      </p>
+                    </div>
+                    <Shield className="h-8 w-8 text-red-600" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500">Nuevo este mes</p>
+                      <p className="text-2xl font-bold text-blue-600">{nuevosUltimoMes}</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {ultimoLogin
+                          ? `Ultimo acceso: ${ultimoLogin.nombre}`
+                          : 'Sin accesos recientes'}
+                      </p>
+                    </div>
+                    <Plus className="h-8 w-8 text-blue-600" />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Activos</p>
+            {/* Fila 2: distribucion por rol */}
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card className="border-red-100 bg-red-50/40">
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-red-500">Admin</p>
+                      <p className="text-xl font-bold text-red-700">{porRol.admin}</p>
+                      <p className="text-xs text-red-400">Acceso total</p>
+                    </div>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                      <Shield className="h-5 w-5 text-red-600" />
+                    </div>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-red-100">
+                    <div
+                      className="h-1.5 rounded-full bg-red-500"
+                      style={{ width: total > 0 ? `${(porRol.admin / total) * 100}%` : '0%' }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-                <p className="text-2xl font-bold text-green-600">
-                  {usuarios.filter(u => u.is_active).length}
-                </p>
+              <Card className="border-purple-100 bg-purple-50/40">
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-purple-500">Manager</p>
+                      <p className="text-xl font-bold text-purple-700">{porRol.manager}</p>
+                      <p className="text-xs text-purple-400">Gestion operativa</p>
+                    </div>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100">
+                      <UserCheck className="h-5 w-5 text-purple-600" />
+                    </div>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-purple-100">
+                    <div
+                      className="h-1.5 rounded-full bg-purple-500"
+                      style={{ width: total > 0 ? `${(porRol.manager / total) * 100}%` : '0%' }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-                <p className="mt-1 text-xs text-gray-400">
-                  {loading ? 'Cargando...' : 'Pueden acceder al sistema'}
-                </p>
-              </div>
+              <Card className="border-blue-100 bg-blue-50/40">
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-500">Operator</p>
+                      <p className="text-xl font-bold text-blue-700">{porRol.operator}</p>
+                      <p className="text-xs text-blue-400">Operaciones basicas</p>
+                    </div>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+                      <Users className="h-5 w-5 text-blue-600" />
+                    </div>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-blue-100">
+                    <div
+                      className="h-1.5 rounded-full bg-blue-500"
+                      style={{ width: total > 0 ? `${(porRol.operator / total) * 100}%` : '0%' }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-              <UserCheck className="h-8 w-8 text-green-600" />
+              <Card className="border-gray-100 bg-gray-50/40">
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Viewer</p>
+                      <p className="text-xl font-bold text-gray-700">{porRol.viewer}</p>
+                      <p className="text-xs text-gray-400">Solo lectura</p>
+                    </div>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
+                      <UserX className="h-5 w-5 text-gray-600" />
+                    </div>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200">
+                    <div
+                      className="h-1.5 rounded-full bg-gray-500"
+                      style={{ width: total > 0 ? `${(porRol.viewer / total) * 100}%` : '0%' }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Administradores</p>
-
-                <p className="text-2xl font-bold text-red-600">
-                  {
-                    usuarios.filter(
-                      u => (u.rol || 'viewer') === 'admin'
-                    ).length
-                  }{' '}
-                  {/* Cambio clave: rol â†' is_admin */}
-                </p>
-
-                <p className="mt-1 text-xs text-gray-400">
-                  {loading ? 'Cargando...' : 'Pueden crear usuarios'}
-                </p>
-              </div>
-
-              <Shield className="h-8 w-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Último Mes</p>
-
-                <p className="text-2xl font-bold text-blue-600">
-                  {
-                    usuarios.filter(u => {
-                      const fechaCreacion = new Date(u.created_at)
-
-                      const haceUnMes = new Date()
-
-                      haceUnMes.setMonth(haceUnMes.getMonth() - 1)
-
-                      return fechaCreacion >= haceUnMes
-                    }).length
-                  }
-                </p>
-
-                <p className="mt-1 text-xs text-gray-400">
-                  {loading ? 'Cargando...' : 'Usuarios agregados'}
-                </p>
-              </div>
-
-              <Plus className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </>
+        )
+      })()}
 
       {/* Búsqueda */}
 
