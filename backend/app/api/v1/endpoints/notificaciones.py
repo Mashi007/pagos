@@ -1750,8 +1750,8 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
 
 def ejecutar_actualizacion_notificaciones(db: Session) -> dict:
     """
-    LÃƒÂ³gica de actualizaciÃƒÂ³n de notificaciones (mora desde cuotas no pagadas).
-    Usado por el endpoint POST /actualizar y por el scheduler a las 2:00.
+    Logica de actualizacion de notificaciones (mora desde cuotas no pagadas).
+    Solo se invoca desde POST /notificaciones/actualizar (disparo manual).
     """
     hoy = hoy_negocio()
     q = select(Cuota).where(
@@ -1766,7 +1766,7 @@ def ejecutar_actualizacion_notificaciones(db: Session) -> dict:
 
 @router.post("/actualizar")
 def actualizar_notificaciones(db: Session = Depends(get_db)):
-    """Recalcular mora desde cuotas no pagadas. TambiÃƒÂ©n se ejecuta por scheduler a las 2:00."""
+    """Recalcular mora desde cuotas no pagadas. Disparo manual (no hay job programado)."""
     return ejecutar_actualizacion_notificaciones(db)
 
 

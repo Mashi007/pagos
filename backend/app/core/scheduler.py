@@ -3,19 +3,20 @@ Scheduler para tareas programadas (zona America/Caracas).
 
 ActualizaciÃ³n periÃ³dica de informes y reportes:
 - 01:00  Reportes cobranzas (resumen + diagnÃ³stico).
-- 00:50  Notificaciones (actualizar mora / datos; antes de envios por hora configurada).
 - 06:00  Informe de pagos por email (link Google Sheet).
 - 13:00  Reportes cobranzas.
 - 13:00  Informe de pagos por email.
 - 16:00  CachÃ© dashboard (hilo aparte en main: 1:00, 13:00).
 - 16:30  Informe de pagos por email.
-- * cada 15 min (:00,:15,:30,:45)  Envio automatico por hora configurada (programador en notificaciones_envios; America/Caracas).
 - 01:10  Emails credito liquidado: PDF estado de cuenta (dias 1 y 2 despues de fecha_liquidado; America/Caracas).
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 02:00  Finiquito: refrescar tabla finiquito_casos (total_financiamiento = sum cuotas.total_pagado exacto).
 
 Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
 se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.
+
+Notificaciones por mora/masivos: no hay jobs en este modulo; disparo manual via API.
+El envio por hora (programador) queda desactivado salvo NOTIFICACIONES_ENVIO_PROGRAMADO=true en .env.
 """
 import logging
 import threading
@@ -27,9 +28,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.api.v1.endpoints import cobranzas, notificaciones
-from app.services.notificaciones_envios_store import coerce_modo_pruebas_notificaciones
-from app.services.notificaciones_envio_batch_resumen import persist_ultimo_envio_batch
+from app.api.v1.endpoints import cobranzas
 from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running, _last_run_too_recent, _run_pipeline_background
 from app.models.pagos_gmail_sync import PagosGmailSync
 
@@ -39,21 +38,6 @@ logger = logging.getLogger(__name__)
 SCHEDULER_TZ = "America/Caracas"
 
 _scheduler: Optional[BackgroundScheduler] = None
-
-
-def _job_actualizar_notificaciones() -> None:
-    """Job 00:50. Actualizacion de notificaciones (mora desde cuotas), antes del envio 01:00."""
-    db = SessionLocal()
-    try:
-        result = notificaciones.ejecutar_actualizacion_notificaciones(db)
-        logger.info(
-            "Notificaciones actualizadas: %s",
-            result.get("clientes_actualizados", 0),
-        )
-    except Exception as e:
-        logger.exception("Error en job actualizar_notificaciones: %s", e)
-    finally:
-        db.close()
 
 
 def _job_emails_liquidado_diferidos() -> None:
@@ -72,56 +56,6 @@ def _job_emails_liquidado_diferidos() -> None:
         )
     except Exception as e:
         logger.exception("Error en job emails_liquidado_diferidos: %s", e)
-    finally:
-        db.close()
-
-
-def _job_envio_notificaciones_programador() -> None:
-    """
-    Cada 15 minutos en Caracas (:00, :15, :30, :45): envia los criterios cuya hora
-    en configuracion coincide con la hora actual (programador por tipo). Una vez por dia por criterio.
-    La hora del programador debe usar minuto 0, 15, 30 o 45 para coincidir con una corrida.
-    """
-    db = SessionLocal()
-    try:
-        config = notificaciones.get_notificaciones_envios_config(db)
-        if coerce_modo_pruebas_notificaciones(config.get("modo_pruebas")):
-            logger.debug("Envio notificaciones programador: omitido (modo pruebas; envio manual).")
-            return
-        from app.services.notificaciones_programador import ejecutar_envios_por_programador
-
-        result = ejecutar_envios_por_programador(db)
-        if result.get("skipped"):
-            logger.debug(
-                "Envio notificaciones programador: sin coincidencia de hora (%s).",
-                result.get("motivo") or result.get("hm_caracas"),
-            )
-            return
-        if not result.get("detalles"):
-            return
-        persist_ultimo_envio_batch(db, resultado=result, origen="scheduler_programador")
-        db.commit()
-        logger.info(
-            "Envio notificaciones programador %s: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s omitidos_paquete=%s whatsapp_ok=%s whatsapp_fail=%s",
-            result.get("hm_caracas"),
-            result.get("enviados", 0),
-            result.get("fallidos", 0),
-            result.get("sin_email", 0),
-            result.get("omitidos_config", 0),
-            result.get("omitidos_paquete_incompleto", 0),
-            result.get("enviados_whatsapp", 0),
-            result.get("fallidos_whatsapp", 0),
-        )
-    except Exception as e:
-        logger.exception("Error en job envio_notificaciones_programador: %s", e)
-        try:
-            db.rollback()
-            persist_ultimo_envio_batch(
-                db, resultado={}, origen="scheduler_programador", error=str(e)[:5000]
-            )
-            db.commit()
-        except Exception:
-            db.rollback()
     finally:
         db.close()
 
@@ -271,26 +205,12 @@ def _job_pagos_gmail_pipeline() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: notificaciones 00:50 + envio programador cada 15 min; liquidado+PDF 01:10; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
+    """Inicia el scheduler: liquidado+PDF 01:10; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; etc."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
         return
     _scheduler = BackgroundScheduler(timezone=SCHEDULER_TZ)
-    # 00:50 - Actualizar datos de notificaciones (mora desde cuotas), antes de envios por hora
-    _scheduler.add_job(
-        _job_actualizar_notificaciones,
-        CronTrigger(hour=0, minute=50, timezone=SCHEDULER_TZ),
-        id="notificaciones_0050",
-        name="Actualizar notificaciones 00:50",
-    )
-    # Cada 15 min (Caracas): envio por hora configurada en notificaciones_envios
-    _scheduler.add_job(
-        _job_envio_notificaciones_programador,
-        CronTrigger(minute="0,15,30,45", timezone=SCHEDULER_TZ),
-        id="envio_notificaciones_programador",
-        name="Envio notificaciones por programador (cada 15 min)",
-    )
     _scheduler.add_job(
         _job_emails_liquidado_diferidos,
         CronTrigger(hour=1, minute=10, timezone=SCHEDULER_TZ),
@@ -368,7 +288,7 @@ def start_scheduler() -> None:
 
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: notificaciones 00:50 + programador cada 15 min; liquidado PDF 01:10; finiquito 02:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
+        "Scheduler iniciado: liquidado PDF 01:10; finiquito 02:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
         SCHEDULER_TZ,
     )
 

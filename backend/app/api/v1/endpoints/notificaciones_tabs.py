@@ -1089,7 +1089,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
 def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     """
     Ejecuta el env�o de todas las notificaciones (previas, d�a pago, retrasadas, prejudicial).
-    Pensado para ser llamado por el scheduler (p. ej. diario a la 01:00 America/Caracas).
+    Solo desde POST /notificaciones/enviar-todas (BackgroundTasks); no hay scheduler de mora.
     Respeta configuraci�n de env�os (habilitado/CCO por tipo) desde BD.
     """
     config_envios = get_notificaciones_envios_config(db)

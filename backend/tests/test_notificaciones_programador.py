@@ -1,5 +1,7 @@
 """Tests para hora programador (parseo y clave de deduplicacion)."""
 
+from unittest.mock import MagicMock
+
 from app.services.notificaciones_programador import (
     _slot_key,
     parse_programador_hm,
@@ -53,3 +55,16 @@ def test_normalizar_payload_envios_programadores():
 
 def test_formato_hm_programador():
     assert formato_hm_programador((4, 0)) == "04:00"
+
+
+def test_ejecutar_envios_por_programador_omitido_sin_flag(monkeypatch):
+    """Sin NOTIFICACIONES_ENVIO_PROGRAMADO no se envia por cron (solo manual API)."""
+    import app.services.notificaciones_programador as np
+
+    mock_s = MagicMock()
+    mock_s.NOTIFICACIONES_ENVIO_PROGRAMADO = False
+    monkeypatch.setattr(np, "settings", mock_s)
+    out = np.ejecutar_envios_por_programador(MagicMock())
+    assert out.get("skipped") is True
+    assert out.get("motivo") == "solo_disparo_manual"
+    assert "hm_caracas" in out

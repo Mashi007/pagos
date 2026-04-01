@@ -53,7 +53,7 @@ export const NOTIFICACIONES_QUERY_KEYS = {
 
   plantillaPdfCobranza: ['notificaciones-plantilla-pdf-cobranza'] as const,
 
-  /** GET /notificaciones/envio-batch/ultimo (resumen ultimo masivo o scheduler). */
+  /** GET /notificaciones/envio-batch/ultimo (resumen ultimo masivo). */
 
   envioBatchUltimo: ['notificaciones-envio-batch-ultimo'] as const,
 } as const

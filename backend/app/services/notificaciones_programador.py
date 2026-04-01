@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Envio automatico de notificaciones por hora configurada (campo programador en notificaciones_envios).
+Hora programador en notificaciones_envios: parseo, normalizacion (API) y helpers.
 
-- Zona: America/Caracas (igual que el scheduler).
-- El scheduler corre en :00, :15, :30 y :45 de cada hora; la hora del programador debe
-  usar minuto 0, 15, 30 o 45 para coincidir con una ejecucion.
-- Por cada criterio (PAGO_* , PREJUDICIAL) la hora HH:MM del cuadro dispara una vez por dia
-  ese lote filtrado (deduplicacion en configuracion).
-- Si programador falta o es invalido, se usa 01:00 (compatibilidad con el antiguo job unico).
+El envio por hora queda desactivado por defecto (NOTIFICACIONES_ENVIO_PROGRAMADO=false):
+ejecutar_envios_por_programador no envia salvo que se active explicitamente en .env.
+Los envios de mora/masivos van por POST desde la UI/API. Zona de referencia: America/Caracas.
 """
 from __future__ import annotations
 
@@ -19,6 +16,7 @@ from typing import Any, Callable, Dict, List, Tuple
 from sqlalchemy.orm import Session
 from zoneinfo import ZoneInfo
 
+from app.core.config import settings
 from app.models.configuracion import Configuracion
 
 logger = logging.getLogger(__name__)
@@ -171,9 +169,21 @@ def _item_entra(
 
 def ejecutar_envios_por_programador(db: Session) -> Dict[str, Any]:
     """
-    Ejecuta envios para items cuya hora programador coincide con la hora actual en Caracas,
-    una vez por dia por tipo (dedup).
+    Envio por hora configurada (programador). Solo corre si NOTIFICACIONES_ENVIO_PROGRAMADO=true;
+    con el valor por defecto False los disparadores efectivos son manuales (API).
     """
+    if not settings.NOTIFICACIONES_ENVIO_PROGRAMADO:
+        now = datetime.now(TZ)
+        hm = (now.hour, now.minute)
+        logger.info(
+            "ejecutar_envios_por_programador omitido: NOTIFICACIONES_ENVIO_PROGRAMADO=false (solo manual)."
+        )
+        return {
+            "skipped": True,
+            "motivo": "solo_disparo_manual",
+            "hm_caracas": f"{hm[0]:02d}:{hm[1]:02d}",
+        }
+
     from app.api.v1.endpoints.notificaciones import get_notificaciones_tabs_data
     from app.services.notificaciones_envios_store import get_notificaciones_envios_dict
     from app.api.v1.endpoints.notificaciones_tabs import (
