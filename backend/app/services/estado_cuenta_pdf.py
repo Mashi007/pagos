@@ -355,75 +355,101 @@ def generar_pdf_estado_cuenta(
 
             story.append(Spacer(1, 6))
 
-            # ── Tarjeta de encabezado del prestamo ──────────────────────────────────────────
-            if pct == 0:
-                _card_color  = COLOR_HEADER
-                _estado_icon = "○"
-            elif pct >= 1.0:
-                _card_color  = "#1a6b3c"
-                _estado_icon = "✓"
+            # ── Tarjeta de encabezado del prestamo ────────────────────────────────────────
+            # Colores: azul=pagado, tomate=parcial, rojo=pendiente
+            C_PAG  = "#1565c0"
+            C_PARC = "#e64a19"
+            C_PEND = "#c62828"
+
+            if pct >= 1.0:
+                _card_color  = C_PAG
+                _estado_icon = "\u2713"
+            elif pct > 0:
+                _card_color  = C_PAG
+                _estado_icon = "\u25d4"
             else:
-                _card_color  = COLOR_ACCENT
-                _estado_icon = "◔"
+                _card_color  = C_PEND
+                _estado_icon = "\u25cb"
 
             n_pendientes    = n_total - n_pagadas
-            monto_pendiente = sum(
-                float(c.get("monto_cuota") or 0)
-                for c in cuotas
-                if (c.get("estado") or "").strip().upper() not in ("PAGADO", "PAGADA", "PAGO_ADELANTADO")
+            # Contar cuotas parciales
+            n_parciales = sum(
+                1 for c in cuotas
+                if (c.get("estado") or "").strip().upper() not in ("PAGADO","PAGADA","PAGO_ADELANTADO")
+                and float(c.get("total_pagado_cuota") or 0) > 0
             )
+            n_pend_puro = n_pendientes - n_parciales
 
-            # Barra de progreso interna (solo colores, sin texto)
-            _bw_total = 1.55 * inch
-            _bw_fill  = round(max(0.04, pct) * _bw_total, 2)
-            _bw_empty = round(max(0.02, _bw_total - _bw_fill), 2)
-            _bar_inner = Table([["", ""]], colWidths=[_bw_fill, _bw_empty], rowHeights=[7])
-            _bar_inner.setStyle(TableStyle([
-                ("BACKGROUND",    (0, 0), (0, 0), hc(_card_color)),
-                ("BACKGROUND",    (1, 0), (1, 0), hc("#dde3ea")),
-                ("TOPPADDING",    (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-            ]))
+            # Barra tricolor: azul=pagado | tomate=parcial | rojo=pendiente
+            _bw_total = 4.80 * inch  # barra ancha
+            _pct_pag  = n_pagadas  / n_total if n_total else 0
+            _pct_parc = n_parciales / n_total if n_total else 0
+            _pct_pend = max(0.0, 1.0 - _pct_pag - _pct_parc)
 
-            # Estilos de la tarjeta
-            _s_title = ParagraphStyle(name=f"EC_CT_{_pfx}_{prestamo_id}", fontSize=10,
+            # Segmentos con minimo visible
+            _seg_pag  = round(max(0.01 if _pct_pag  > 0 else 0, _pct_pag  * _bw_total), 2)
+            _seg_parc = round(max(0.01 if _pct_parc > 0 else 0, _pct_parc * _bw_total), 2)
+            _seg_pend = round(max(0.01, _bw_total - _seg_pag - _seg_parc), 2)
+
+            # Construir barra con 2 o 3 segmentos segun haya parciales
+            if n_parciales > 0:
+                _bar_cells = [["", "", ""]]
+                _bar_cols  = [_seg_pag, _seg_parc, _seg_pend]
+                _bar_style = [
+                    ("BACKGROUND", (0,0),(0,0), hc(C_PAG)),
+                    ("BACKGROUND", (1,0),(1,0), hc(C_PARC)),
+                    ("BACKGROUND", (2,0),(2,0), hc(C_PEND)),
+                ]
+            else:
+                _bar_cells = [["", ""]]
+                _bar_cols  = [max(_seg_pag, 0.01), _seg_pend]
+                _bar_style = [
+                    ("BACKGROUND", (0,0),(0,0), hc(C_PAG  if _pct_pag > 0 else "#e0e0e0")),
+                    ("BACKGROUND", (1,0),(1,0), hc(C_PEND if _pct_pend > 0 else "#e0e0e0")),
+                ]
+
+            _bar_style += [
+                ("TOPPADDING",    (0,0),(-1,-1), 0),
+                ("BOTTOMPADDING", (0,0),(-1,-1), 0),
+                ("LEFTPADDING",   (0,0),(-1,-1), 0),
+                ("RIGHTPADDING",  (0,0),(-1,-1), 0),
+            ]
+            _bar_inner = Table(_bar_cells, colWidths=_bar_cols, rowHeights=[9])
+            _bar_inner.setStyle(TableStyle(_bar_style))
+
+            # Estilos
+            _s_title  = ParagraphStyle(name=f"EC_CT_{_pfx}_{prestamo_id}", fontSize=10,
                 fontName="Helvetica-Bold", leading=13, textColor=hc(COLOR_HEADER))
-            _s_sub   = ParagraphStyle(name=f"EC_CS_{_pfx}_{prestamo_id}", fontSize=8,
+            _s_sub    = ParagraphStyle(name=f"EC_CS_{_pfx}_{prestamo_id}", fontSize=8,
                 fontName="Helvetica", leading=11, textColor=hc(COLOR_TEXT_MUTED))
-            _s_num   = ParagraphStyle(name=f"EC_SV_{_pfx}_{prestamo_id}", fontSize=14,
+            _s_num    = ParagraphStyle(name=f"EC_SV_{_pfx}_{prestamo_id}", fontSize=14,
                 fontName="Helvetica-Bold", leading=16, alignment=1)
-            _s_lbl   = ParagraphStyle(name=f"EC_SL_{_pfx}_{prestamo_id}", fontSize=7,
+            _s_lbl    = ParagraphStyle(name=f"EC_SL_{_pfx}_{prestamo_id}", fontSize=7,
                 fontName="Helvetica", leading=9, alignment=1, textColor=hc(COLOR_TEXT_MUTED))
-            _s_barlbl = ParagraphStyle(name=f"EC_BL_{_pfx}_{prestamo_id}", fontSize=9,
-                fontName="Helvetica-Bold", leading=11, alignment=1)
+            _s_barlbl = ParagraphStyle(name=f"EC_BL_{_pfx}_{prestamo_id}", fontSize=10,
+                fontName="Helvetica-Bold", leading=12, alignment=1)
             _s_legend = ParagraphStyle(name=f"EC_BG_{_pfx}_{prestamo_id}", fontSize=6,
                 leading=8, alignment=1, textColor=hc(COLOR_TEXT_MUTED))
 
             _pct_str = f"{pct*100:.0f}%"
-            _pend_str = f"${monto_pendiente:,.2f}"
 
             card_cells = [[
-                # Col 0: identificacion
+                # Col 0: identificacion (estrecha)
                 [
-                    Paragraph(
-                        f'{_estado_icon} Préstamo <b>#{prestamo_id}</b>',
-                        _s_title,
-                    ),
+                    Paragraph(f'{_estado_icon} Préstamo <b>#{prestamo_id}</b>', _s_title),
                     Paragraph(producto, _s_sub),
                 ],
                 # Col 1: cuotas pagadas
                 [
-                    Paragraph(f'<font color="{_card_color}"><b>{n_pagadas}</b></font>', _s_num),
+                    Paragraph(f'<font color="{C_PAG}"><b>{n_pagadas}</b></font>', _s_num),
                     Paragraph("Cuotas<br/>pagadas", _s_lbl),
                 ],
                 # Col 2: cuotas pendientes
                 [
-                    Paragraph(f'<font color="{COLOR_TEXT_MUTED}"><b>{n_pendientes}</b></font>', _s_num),
+                    Paragraph(f'<font color="{C_PEND}"><b>{n_pendientes}</b></font>', _s_num),
                     Paragraph("Cuotas<br/>pendientes", _s_lbl),
                 ],
-                # Col 3: barra + porcentaje + leyenda
+                # Col 3: barra ancha + porcentaje + leyenda
                 [
                     Paragraph(
                         f'<font color="{_card_color}"><b>{_pct_str}</b></font>'
@@ -432,9 +458,9 @@ def generar_pdf_estado_cuenta(
                     ),
                     _bar_inner,
                     Paragraph(
-                        f'<font color="{COLOR_HEADER}">■</font><font size="6"> Pagada</font>'
-                        f'  <font color="{COLOR_ACCENT}">■</font><font size="6"> Parcial</font>'
-                        f'  <font color="#dde3ea">■</font><font size="6"> Pend.</font>',
+                        f'<font color="{C_PAG}">■</font><font size="6"> Pagado</font>'
+                        + (f'  <font color="{C_PARC}">■</font><font size="6"> Parcial</font>' if n_parciales > 0 else '')
+                        + f'  <font color="{C_PEND}">■</font><font size="6"> Pendiente</font>',
                         _s_legend,
                     ),
                 ],
@@ -442,7 +468,7 @@ def generar_pdf_estado_cuenta(
 
             card_tbl = Table(
                 card_cells,
-                colWidths=[3.30 * inch, 1.10 * inch, 1.10 * inch, 1.85 * inch],
+                colWidths=[2.20 * inch, 0.90 * inch, 0.90 * inch, 3.35 * inch],
                 rowHeights=[None],
             )
             card_tbl.setStyle(TableStyle([
@@ -455,7 +481,7 @@ def generar_pdf_estado_cuenta(
                 ("TOPPADDING",    (0, 0), (-1, -1), 8),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
                 ("LEFTPADDING",   (0, 0), (0, 0),   10),
-                ("LEFTPADDING",   (1, 0), (-1, -1), 4),
+                ("LEFTPADDING",   (1, 0), (-1, -1), 6),
                 ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
             ]))
             story.append(card_tbl)
@@ -495,11 +521,11 @@ def generar_pdf_estado_cuenta(
 
                 cell_link = ParagraphStyle(name=f"EC_CL_{_pfx}_{prestamo_id}_{c.get('numero_cuota','x')}", fontSize=8, leading=10)
                 if es_pagada:
-                    pagado_txt = f'<font color="{COLOR_HEADER}"><b>{total_aplicado:,.2f}</b></font>{_orig_lines}'
-                    estado_txt = f'<font color="{COLOR_HEADER}"><b>{estado_etiqueta[:18]}</b></font>'
+                    pagado_txt = f'<font color="#1565c0"><b>{total_aplicado:,.2f}</b></font>{_orig_lines}'
+                    estado_txt = f'<font color="#1565c0"><b>{estado_etiqueta[:18]}</b></font>'
                 elif es_parcial:
-                    pagado_txt = f'<font color="{COLOR_ACCENT}"><b>{total_aplicado:,.2f}</b></font> <font size="7" color="{COLOR_ACCENT}">(parcial)</font>{_orig_lines}'
-                    estado_txt = f'<font color="{COLOR_ACCENT}">{estado_etiqueta[:18]}</font>'
+                    pagado_txt = f'<font color="#e64a19"><b>{total_aplicado:,.2f}</b></font> <font size="7" color="#e64a19">(parcial)</font>{_orig_lines}'
+                    estado_txt = f'<font color="#e64a19">{estado_etiqueta[:18]}</font>'
                 else:
                     pagado_txt = f'<font color="{COLOR_TEXT_MUTED}">-</font>'
                     estado_txt = f'<font color="{COLOR_TEXT_MUTED}">{estado_etiqueta[:18]}</font>'
@@ -528,9 +554,9 @@ def generar_pdf_estado_cuenta(
                 except (TypeError, ValueError):
                     tap2 = 0.0
                 if ec in ("PAGADO", "PAGADA", "PAGO_ADELANTADO"):
-                    tbl_extras.append(("BACKGROUND", (0, idx), (-1, idx), hc("#e8f0fe")))
+                    tbl_extras.append(("BACKGROUND", (0, idx), (-1, idx), hc("#e3edf9")))
                 elif tap2 > 0:
-                    tbl_extras.append(("BACKGROUND", (0, idx), (-1, idx), hc("#fef9ec")))
+                    tbl_extras.append(("BACKGROUND", (0, idx), (-1, idx), hc("#fdecea")))
 
             t_amort = Table(
                 rows,
