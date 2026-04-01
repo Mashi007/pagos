@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Trash2,
   FileText,
+  MoreHorizontal,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -659,16 +660,31 @@ export function RevisionManual() {
                       </td>
 
                       <td className="px-4 py-3 text-center">
-                        <EstadoRevisionIcon
-                          prestamoId={prestamo.prestamo_id}
-                          estadoActual={prestamo.estado_revision}
-                          nombreCliente={prestamo.nombres}
-                          onStateChange={() => {
-                            queryClient.invalidateQueries({
-                              queryKey: ['revision-manual-prestamos'],
-                            })
-                          }}
-                        />
+                        <div className="flex items-center justify-center gap-1">
+                          <EstadoRevisionIcon
+                            prestamoId={prestamo.prestamo_id}
+                            estadoActual={prestamo.estado_revision}
+                            nombreCliente={prestamo.nombres}
+                            onStateChange={() => {
+                              queryClient.invalidateQueries({
+                                queryKey: ['revision-manual-prestamos'],
+                              })
+                            }}
+                          />
+                          
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={() => {
+                              const opciones = `Opciones para ${prestamo.nombres}:\n\n1. Ver historial de cambios\n2. Enviar notificación\n3. Duplicar revisión\n4. Ver detalles completos\n5. Cancelar`
+                              window.alert(opciones)
+                            }}
+                            title="Más opciones"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
 
                       <td className="px-4 py-3 text-center">
