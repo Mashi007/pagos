@@ -209,8 +209,9 @@ export function EditarRevisionManual() {
     const e: Record<string, string> = {}
 
     // --- Cliente ---
-    if (!clienteData.nombres?.trim()) {
-      e['nombres'] = 'El nombre es obligatorio'
+    // nombres: solo validar si el usuario lo borró explícitamente (hay cambios en cliente y quedó vacío)
+    if (cambios.cliente && clienteData.nombres !== undefined && !clienteData.nombres?.trim()) {
+      e['nombres'] = 'El nombre no puede quedar vacío'
     }
     const telSinPrefijo = (clienteData.telefono || '').replace(/^\+?58/, '').replace(/\D/g, '')
     if (clienteData.telefono && (telSinPrefijo.length < 7 || telSinPrefijo.length > 11)) {
@@ -255,6 +256,7 @@ export function EditarRevisionManual() {
     data: detalleData,
     isLoading,
     error,
+    refetch: refetchDetalle,
   } = useQuery({
     queryKey: ['revision-editar', prestamoId],
 
@@ -585,6 +587,11 @@ export function EditarRevisionManual() {
                 const actualizadas = res?.data?.actualizadas ?? res?.actualizadas ?? '?'
                 toast.success(`📅 Fechas de vencimiento actualizadas: ${actualizadas} cuota(s) recalculadas`)
                 setFechaAprobacionOriginal(nuevaFecha)
+                // Recargar datos frescos de BD para mostrar nuevas fechas en tabla
+                const datosActualizados = await revisionManualService.getDetallePrestamoRevision(pid2)
+                if (datosActualizados?.cuotas) {
+                  setCuotasData(datosActualizados.cuotas)
+                }
               } catch (errRecalc: any) {
                 toast.warning('⚠️ Préstamo guardado, pero no se pudieron recalcular las fechas de vencimiento')
                 console.error('Error recalculando fechas:', errRecalc)
