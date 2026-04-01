@@ -18,10 +18,9 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     email = Column(String(255), nullable=False, unique=True, index=True)
-    cedula = Column(String(50), nullable=True, unique=True, index=True)  # Opcional para compatibilidad
     password_hash = Column(String(255), nullable=False)
-    nombre = Column(String(255), nullable=False)
-    apellido = Column(String(100), nullable=True)
+    nombre = Column(String(100), nullable=False)
+    apellido = Column(String(100), nullable=False, server_default=text("''"))
     cargo = Column(String(100), nullable=True)
     rol = Column(String(20), nullable=False, server_default=text("'viewer'"))
     is_active = Column(Boolean, nullable=False, server_default=text("true"))

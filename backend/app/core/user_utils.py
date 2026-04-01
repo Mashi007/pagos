@@ -19,13 +19,12 @@ def user_to_response(u: User) -> UserResponse:
         return dt.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
 
     rol = getattr(u, "rol", None) or ("admin" if getattr(u, "is_admin", False) else "viewer")
-    # cedula puede no existir en tabla antigua, usar getattr con default
-    cedula = getattr(u, "cedula", None)
+    apellido = getattr(u, "apellido", "") or ""
+    nombre_completo = f"{u.nombre or ''} {apellido}".strip()
     return UserResponse(
         id=u.id,
         email=u.email,
-        cedula=cedula or "",
-        nombre=u.nombre or "",
+        nombre=nombre_completo,
         cargo=u.cargo,
         rol=rol,
         is_active=bool(u.is_active),
