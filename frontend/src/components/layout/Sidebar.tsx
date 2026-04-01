@@ -48,9 +48,6 @@ import { useSidebarCounts } from '../../hooks/useSidebarCounts'
 
 import { Logo } from '../../components/ui/Logo'
 
-import { BASE_PATH } from '../../config/env'
-
-import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 
 interface SidebarProps {
   isOpen: boolean
@@ -234,9 +231,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
         {
           title: 'Infopagos',
-          href: `${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(/\/+/g, '/'),
+          href: '/infopagos',
           icon: Building2,
-          external: true,
         },
       ],
     },
@@ -407,14 +403,56 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [isOpen, onClose])
 
-  // Operativo: no ve Configuración (ni auditoría); solo Administrador puede acceder a esos módulos
-  const filteredMenuItems = menuItems.filter(item => {
-    const isAdmin = (user?.rol || 'operativo') === 'admin'
+  // Filtro de menú según rol RBAC
+  const filteredMenuItems = menuItems
+    .filter(item => {
+      const rol = (user?.rol || 'viewer').toLowerCase()
+      const isAdmin = rol === 'admin'
+      const isOperator = rol === 'operator'
 
-    if (item.title === 'Configuración') return isAdmin
+      // operator: solo ve CRM (clientes), Préstamos y Reportes (contiene Finiquito gestión)
+      if (isOperator) {
+        return item.title === 'CRM' || item.title === 'Préstamos' || item.title === 'Reportes'
+      }
 
-    return true
-  })
+      // No-admin: ocultar Configuración
+      if (item.title === 'Configuración') return isAdmin
+
+      return true
+    })
+    .map(item => {
+      const rol = (user?.rol || 'viewer').toLowerCase()
+      const isOperator = rol === 'operator'
+
+      if (isOperator) {
+        // CRM: mostrar solo Clientes e Infopagos
+        if (item.title === 'CRM' && item.children) {
+          return {
+            ...item,
+            children: [
+              ...item.children.filter(c => c.title === 'Clientes'),
+              {
+                title: 'Infopagos',
+                href: '/infopagos',
+                icon: Building2,
+              } as MenuItem,
+            ],
+          }
+        }
+
+        // Reportes: mostrar solo Finiquito (gestión), sin restricción adminOnly
+        if (item.title === 'Reportes' && item.children) {
+          return {
+            ...item,
+            children: item.children
+              .filter(c => c.title === 'Finiquito (gestión)')
+              .map(c => ({ ...c, adminOnly: false })),
+          }
+        }
+      }
+
+      return item
+    })
 
   const isActiveRoute = (href: string) => {
     if (href === '/dashboard') {

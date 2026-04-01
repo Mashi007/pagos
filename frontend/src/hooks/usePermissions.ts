@@ -49,18 +49,16 @@ export function usePermissions() {
    */
 
   const isFiniquitador = (): boolean => {
-    const rol = (user?.rol || 'operativo').toLowerCase()
-    return rol === 'finiquitador' || rol === 'administrador'
+    const rol = (user?.rol || 'viewer').toLowerCase()
+    return rol === 'admin' || rol === 'manager'
   }
 
   /**
-   * Verifica si el usuario SOLO tiene acceso a finiquito (rol finiquitador puro)
-   * - Sin acceso a ninguna otra funcionalidad
+   * Verifica si el usuario SOLO tiene acceso a finiquito (sin acceso general)
    */
 
   const isPuroFiniquitador = (): boolean => {
-    const rol = (user?.rol || 'operativo').toLowerCase()
-    return rol === 'finiquitador'
+    return false // Rol finiquitador eliminado; solo admin/manager acceden a gestion
   }
 
   /**
@@ -71,24 +69,28 @@ export function usePermissions() {
    */
 
   const canAccessPath = (pathname: string): boolean => {
-    const rol = (user?.rol || 'operativo').toLowerCase()
+    const rol = (user?.rol || 'viewer').toLowerCase()
 
-    // Finiquitador: solo acceso a /finiquitos/gestion
-    if (rol === 'finiquitador') {
-      return pathname === '/finiquitos/gestion'
-    }
-
-    // Administrador: acceso total
-    if (rol === 'administrador') {
+    // admin: acceso total
+    if (rol === 'admin') {
       return true
     }
 
-    // Operativo: acceso a todo excepto finiquito gestion
-    if (rol === 'operativo') {
-      return pathname !== '/finiquitos/gestion'
+    // manager: acceso total excepto configuracion de usuarios
+    if (rol === 'manager') {
+      return true
     }
 
-    return true
+    // operator (RBAC): solo clientes, prestamos, infopagos y finiquitos/gestion
+    if (rol === 'operator') {
+      const OPERATOR_ALLOWED = ['/clientes', '/prestamos', '/infopagos', '/finiquitos/gestion']
+      return OPERATOR_ALLOWED.some(
+        p => pathname === p || pathname.startsWith(p + '/')
+      )
+    }
+
+    // manager / viewer / operativo (legacy): acceso a todo excepto finiquito gestion
+    return pathname !== '/finiquitos/gestion'
   }
 
   /**

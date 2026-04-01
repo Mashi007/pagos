@@ -79,9 +79,8 @@ const NOTA_EXCEPCION_MIN_LEN = 15
 const NOTA_REVOCACION_MIN_LEN = 10
 
 const ROLES_SIN_AUDITORIA_CARTERA = new Set([
-  'operativo',
-  'usuario',
-  'usuarios',
+  'viewer',
+  'operator',
 ])
 
 function csvEscapeCell(val: string): string {
@@ -206,7 +205,7 @@ export function AuditoriaCarteraTab() {
   const esAdmin = (user?.rol || 'viewer') === 'admin'
 
   const puedeAuditoriaCartera = useMemo(() => {
-    const r = (user?.rol || 'operativo').trim().toLowerCase()
+    const r = (user?.rol || 'viewer').trim().toLowerCase()
     return !ROLES_SIN_AUDITORIA_CARTERA.has(r)
   }, [user?.rol])
 

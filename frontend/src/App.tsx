@@ -62,14 +62,20 @@ function RootLayoutWrapper() {
   // Esto previene que intenten acceder al dashboard quitando /infopagos de la URL
 
   if (!isLoading && !isAuthenticated) {
-    return <Navigate to="/acceso-limitado" replace />
+    return <Navigate to="/login" replace />
   }
 
-  // GUARD FINIQUITADOR: Si usuario es finiquitador puro, SOLO puede acceder a /finiquitos/gestion
-  const isPuroFiniquitador =
-    user && (user.rol || 'operativo').toLowerCase() === 'finiquitador'
-  if (isPuroFiniquitador && pathname !== '/finiquitos/gestion') {
-    return <Navigate to="/finiquitos/gestion" replace />
+  // GUARD OPERATOR: rol operator solo puede acceder a /clientes, /prestamos, /infopagos y /finiquitos/gestion
+  const OPERATOR_ALLOWED_PATHS = ['/clientes', '/prestamos', '/infopagos', '/finiquitos/gestion']
+  const isOperator = user && (user.rol || '').toLowerCase() === 'operator'
+  const isAdmin = user && (user.rol || '').toLowerCase() === 'admin'
+  if (isOperator && !isAdmin) {
+    const allowed = OPERATOR_ALLOWED_PATHS.some(
+      p => pathname === p || pathname.startsWith(p + '/')
+    )
+    if (!allowed) {
+      return <Navigate to="/clientes" replace />
+    }
   }
 
   const esGestionFiniquito = pathname === '/finiquitos/gestion'
@@ -79,7 +85,10 @@ function RootLayoutWrapper() {
   const esAdminPanel =
     isAuthenticated && (user?.rol || 'viewer') === 'admin'
 
-  if (esGestionFiniquito && !esAdminPanel) {
+  const esOperatorPanel =
+    isAuthenticated && (user?.rol || '').toLowerCase() === 'operator'
+
+  if (esGestionFiniquito && !esAdminPanel && !esOperatorPanel) {
     if (tokenPortalFiniquito) {
       return <Outlet />
     }
@@ -284,9 +293,13 @@ function App() {
               index
               element={
                 isAuthenticated ? (
-                  <Navigate to="/dashboard/menu" replace />
+                  (user?.rol || '').toLowerCase() === 'operator' ? (
+                    <Navigate to="/clientes" replace />
+                  ) : (
+                    <Navigate to="/dashboard/menu" replace />
+                  )
                 ) : (
-                  <Navigate to="/acceso-limitado" replace />
+                  <Navigate to="/login" replace />
                 )
               }
             />
@@ -332,7 +345,11 @@ function App() {
               path="login"
               element={
                 isAuthenticated ? (
-                  <Navigate to="/dashboard/menu" replace />
+                  (user?.rol || '').toLowerCase() === 'operator' ? (
+                    <Navigate to="/clientes" replace />
+                  ) : (
+                    <Navigate to="/dashboard/menu" replace />
+                  )
                 ) : (
                   <motion.div
                     key="login"
