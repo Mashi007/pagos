@@ -26,7 +26,19 @@ import {
   Check,
   Trash2,
   AlertTriangle,
+  User,
+  CreditCard,
+  Phone,
+  Mail,
+  MapPin,
+  Calendar,
+  Briefcase,
+  FileText,
 } from 'lucide-react'
+
+import { Input } from '../components/ui/input'
+
+import { Textarea } from '../components/ui/textarea'
 
 import { toast } from 'sonner'
 
@@ -1152,181 +1164,186 @@ export function EditarRevisionManual() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  👤 Datos del Cliente
+                  <User className="h-5 w-5 text-blue-600" />
+                  Datos del Cliente
                 </CardTitle>
               </CardHeader>
 
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="text-sm font-medium">Nombre</label>
+              <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {/* Cédula - solo lectura */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Cédula
+                  </label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
+                      value={clienteData.cedula || ''}
+                      disabled
+                      className="cursor-not-allowed bg-gray-100 pl-10"
+                    />
+                  </div>
+                </div>
 
-                    <input
+                {/* Nombres */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Nombres y Apellidos
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
                       type="text"
                       value={clienteData.nombres || ''}
                       onChange={e => {
-                        setClienteData({
-                          ...clienteData,
-                          nombres: e.target.value,
-                        })
-
+                        setClienteData({ ...clienteData, nombres: e.target.value })
                         setCambios({ ...cambios, cliente: true })
                       }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="Ingresa nombre"
+                      placeholder="Juan Carlos Pérez González"
+                      className="pl-10"
                     />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-sm font-medium">Cédula</label>
-
-                    <input
+                {/* Teléfono */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Teléfono
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700">
+                      <Phone className="mr-1 h-4 w-4 text-gray-500" />
+                      +58
+                    </div>
+                    <Input
                       type="text"
-                      value={clienteData.cedula || ''}
-                      className="mt-1 w-full cursor-not-allowed rounded border bg-gray-100 px-3 py-2"
-                      disabled
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Teléfono</label>
-
-                    <input
-                      type="text"
+                      inputMode="numeric"
                       value={clienteData.telefono || ''}
                       onChange={e => {
-                        setClienteData({
-                          ...clienteData,
-                          telefono: e.target.value,
-                        })
-
+                        setClienteData({ ...clienteData, telefono: e.target.value })
                         setCambios({ ...cambios, cliente: true })
                       }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="Ingresa teléfono"
+                      placeholder="4141234567"
                     />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-sm font-medium">Email</label>
-
-                    <input
+                {/* Email */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
                       type="email"
                       value={clienteData.email || ''}
                       onChange={e => {
-                        setClienteData({
-                          ...clienteData,
-                          email: e.target.value,
-                        })
-
+                        setClienteData({ ...clienteData, email: e.target.value })
                         setCambios({ ...cambios, cliente: true })
                       }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="Ingresa email"
+                      placeholder="juan@email.com"
+                      className="pl-10"
                     />
                   </div>
+                </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="text-sm font-medium">Dirección</label>
-
-                    <textarea
-                      value={clienteData.direccion || ''}
-                      onChange={e => {
-                        setClienteData({
-                          ...clienteData,
-                          direccion: e.target.value,
-                        })
-
-                        setCambios({ ...cambios, cliente: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="Ingresa dirección"
-                      rows={2}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Ocupación</label>
-
-                    <input
-                      type="text"
-                      value={clienteData.ocupacion || ''}
-                      onChange={e => {
-                        setClienteData({
-                          ...clienteData,
-                          ocupacion: e.target.value,
-                        })
-
-                        setCambios({ ...cambios, cliente: true })
-                      }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="Ingresa ocupación"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Estado</label>
-
-                    <select
-                      value={clienteData.estado || ''}
-                      onChange={e => {
-                        setClienteData({
-                          ...clienteData,
-                          estado: e.target.value,
-                        })
-
-                        setCambios({ ...cambios, cliente: true })
-                      }}
-                      className="mt-1 w-full rounded border bg-white px-3 py-2"
-                    >
-                      <option value="">Seleccionar estado</option>
-
-                      {opcionesEstado.map(est => (
-                        <option key={est.value} value={est.value}>
-                          {est.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">
-                      Fecha Nacimiento
-                    </label>
-
-                    <input
+                {/* Fecha Nacimiento */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Fecha de Nacimiento
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
                       type="date"
                       value={clienteData.fecha_nacimiento || ''}
                       onChange={e => {
-                        setClienteData({
-                          ...clienteData,
-                          fecha_nacimiento: e.target.value || null,
-                        })
-
+                        setClienteData({ ...clienteData, fecha_nacimiento: e.target.value || null })
                         setCambios({ ...cambios, cliente: true })
                       }}
-                      className="mt-1 w-full rounded border px-3 py-2"
+                      className="pl-10"
                     />
                   </div>
+                </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="text-sm font-medium">Notas</label>
-
-                    <textarea
-                      value={clienteData.notas || ''}
+                {/* Ocupación */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Ocupación
+                  </label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
+                      type="text"
+                      value={clienteData.ocupacion || ''}
                       onChange={e => {
-                        setClienteData({
-                          ...clienteData,
-                          notas: e.target.value,
-                        })
-
+                        setClienteData({ ...clienteData, ocupacion: e.target.value })
                         setCambios({ ...cambios, cliente: true })
                       }}
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      placeholder="Notas del cliente"
-                      rows={2}
+                      placeholder="Ingeniero, Gerente..."
+                      className="pl-10"
                     />
                   </div>
+                </div>
+
+                {/* Estado */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Estado del cliente
+                  </label>
+                  <Select
+                    value={clienteData.estado || ''}
+                    onValueChange={val => {
+                      setClienteData({ ...clienteData, estado: val })
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {opcionesEstado.map(est => (
+                        <SelectItem key={est.value} value={est.value}>
+                          {est.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Dirección */}
+                <div className="space-y-2 md:col-span-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <MapPin className="h-4 w-4 text-gray-500" />
+                    Dirección
+                  </label>
+                  <Textarea
+                    value={clienteData.direccion || ''}
+                    onChange={e => {
+                      setClienteData({ ...clienteData, direccion: e.target.value })
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    placeholder="Av. Principal, Casa #5, Sector Los Robles..."
+                    rows={2}
+                  />
+                </div>
+
+                {/* Notas */}
+                <div className="space-y-2 md:col-span-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <FileText className="h-4 w-4 text-gray-500" />
+                    Notas
+                  </label>
+                  <Textarea
+                    value={clienteData.notas || ''}
+                    onChange={e => {
+                      setClienteData({ ...clienteData, notas: e.target.value })
+                      setCambios({ ...cambios, cliente: true })
+                    }}
+                    placeholder="Observaciones adicionales del cliente..."
+                    rows={2}
+                  />
                 </div>
               </CardContent>
             </Card>
