@@ -22,8 +22,8 @@ def user_to_response(u: User) -> UserResponse:
     return UserResponse(
         id=u.id,
         email=u.email,
+        cedula=u.cedula,
         nombre=u.nombre or "",
-        apellido=u.apellido or "",
         cargo=u.cargo,
         rol=rol,
         is_active=bool(u.is_active),

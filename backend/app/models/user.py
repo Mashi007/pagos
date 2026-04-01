@@ -1,10 +1,11 @@
 """
 Modelo SQLAlchemy para Usuario (auth y gestión de usuarios).
-Tabla: usuarios. Campos: email, cedula, password_hash, nombre, apellido, cargo, rol, is_active, timestamps.
+Tabla: usuarios. Campos: email, cedula, password_hash, nombre, cargo, rol, is_active, timestamps.
 
-Columnas obligatorias y únicas:
+Columnas obligatorias:
   - email: Email del usuario (único)
-  - cedula: Cédula de identidad (única, obligatoria)
+  - cedula: Cédula de identidad (única)
+  - nombre: Nombre completo (Nombre y Apellido)
 
 Roles estandarizados según RBAC (Role-Based Access Control - ISO/IEC 12207):
   - admin: Acceso total (Administrador del Sistema)
@@ -24,8 +25,7 @@ class User(Base):
     email = Column(String(255), nullable=False, unique=True, index=True)
     cedula = Column(String(50), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
-    nombre = Column(String(100), nullable=False)
-    apellido = Column(String(100), nullable=False, server_default=text("''"))
+    nombre = Column(String(255), nullable=False)
     cargo = Column(String(100), nullable=True)
     rol = Column(String(20), nullable=False, server_default=text("'viewer'"))
     is_active = Column(Boolean, nullable=False, server_default=text("true"))

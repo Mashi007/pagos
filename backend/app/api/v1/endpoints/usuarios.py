@@ -92,7 +92,6 @@ def crear_usuario(body: UserCreate, db: Session = Depends(get_db)):
         cedula=cedula,
         password_hash=get_password_hash(body.password),
         nombre=body.nombre.strip(),
-        apellido=(body.apellido or "").strip(),
         cargo=body.cargo.strip() if body.cargo else None,
         rol=body.rol,
         is_active=body.is_active,
@@ -134,8 +133,6 @@ def actualizar_usuario(user_id: int, body: UserUpdate, db: Session = Depends(get
     
     if body.nombre is not None:
         u.nombre = body.nombre.strip()
-    if body.apellido is not None:
-        u.apellido = body.apellido.strip()
     if body.cargo is not None:
         u.cargo = body.cargo.strip() if body.cargo else None
     if body.rol is not None:

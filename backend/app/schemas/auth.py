@@ -23,7 +23,6 @@ class UserResponse(BaseModel):
     email: str
     cedula: str
     nombre: str
-    apellido: str
     cargo: Optional[str] = None
     rol: str  # 'admin' | 'manager' | 'operator' | 'viewer'
     is_active: bool

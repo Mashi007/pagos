@@ -319,15 +319,30 @@ export function EstadoCuentaPublicoSinCodigoPage() {
               </div>
 
               <div className="space-y-2">
-                {/* Visor PDF en desktop */}
+                {/* Visor PDF en desktop con fallback */}
                 {pdfBlobUrl && !isMobile && (
                   <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 shadow-md">
-                    <iframe
-                      src={pdfBlobUrl}
-                      title="Vista previa estado de cuenta"
+                    <object
+                      data={pdfBlobUrl}
+                      type="application/pdf"
                       className="h-[70vh] w-full"
                       style={{ minHeight: '480px' }}
-                    />
+                    >
+                      {/* Fallback si el navegador no soporta visor PDF inline */}
+                      <div className="flex h-48 flex-col items-center justify-center gap-3 bg-slate-50 text-slate-600">
+                        <p className="text-sm">
+                          Tu navegador no puede mostrar el PDF aqui.
+                        </p>
+                        <a
+                          href={pdfBlobUrl}
+                          download={`estado_cuenta.pdf`}
+                          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                          <Download className="h-4 w-4" />
+                          Descargar PDF
+                        </a>
+                      </div>
+                    </object>
                   </div>
                 )}
 
