@@ -209,6 +209,15 @@ export function EditarRevisionManual() {
 
       let data = await revisionManualService.getDetallePrestamoRevision(pid)
 
+      if (import.meta.env.DEV) {
+        console.log('[EditarRevisionManual] Datos cargados del backend:', {
+          prestamo: data.prestamo,
+          cliente: data.cliente,
+          revision: data.revision,
+          cuotasCount: data.cuotas?.length || 0,
+        })
+      }
+
       const estRev = (data.revision?.estado_revision ?? 'pendiente')
         .toString()
         .toLowerCase()
