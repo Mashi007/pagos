@@ -78,8 +78,9 @@ import {
 import { PagosListResumen } from './PagosListResumen'
 import { toast } from 'sonner'
 import { getErrorMessage, isAxiosError } from '../../types/errors'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
+import { BASE_PATH } from '../../config/env'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
 
 import { invalidateListasNotificacionesMora } from '../../constants/queryKeys'
@@ -1067,8 +1068,10 @@ export function PagosList() {
               </p>
             )}
             <div className="space-y-2">
-              <Link
-                to={`/${SEGMENTO_INFOPAGOS}`}
+              <a
+                href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(/\/+/g, '/')}
+                target="_blank"
+                rel="noreferrer"
                 className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-blue-50"
                 onClick={() => setAgregarPagoOpen(false)}
               >
@@ -1077,7 +1080,7 @@ export function PagosList() {
                 <span className="ml-auto text-xs text-gray-500">
                   Infopagos (un solo flujo)
                 </span>
-              </Link>
+              </a>
               <button
                 type="button"
                 className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-blue-50"

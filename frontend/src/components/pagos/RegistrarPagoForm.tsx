@@ -38,9 +38,9 @@ import { usePrestamosByCedula, usePrestamo } from '../../hooks/usePrestamos'
 
 import { useDebounce } from '../../hooks/useDebounce'
 
-import { Link } from 'react-router-dom'
-
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
+
+import { BASE_PATH } from '../../config/env'
 
 import { getTasaPorFecha } from '../../services/tasaCambioService'
 
@@ -454,12 +454,14 @@ export function RegistrarPagoForm({
                 <p>
                   Para elegir moneda (Bs./USD), adjuntar comprobante y recibo
                   PDF con la tasa del dia de la fecha de pago, use{' '}
-                  <Link
-                    to={`/${SEGMENTO_INFOPAGOS}`}
+                  <a
+                    href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(/\/+/g, '/')}
+                    target="_blank"
+                    rel="noreferrer"
                     className="font-semibold text-amber-900 underline"
                   >
                     Infopagos
-                  </Link>
+                  </a>
                   . Este formulario es para registro o edición directa en la
                   tabla interna de pagos (conciliación).
                 </p>

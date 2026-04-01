@@ -19,9 +19,7 @@ import {
   CheckCircle2,
   Mail,
   Search,
-  Building2,
   Copy,
-  Briefcase,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -74,14 +72,6 @@ import { BASE_PATH, PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 /** Path público de estado de cuenta (consultar por cédula, PDF por correo). */
 
 const PUBLIC_ESTADO_CUENTA_PATH = 'rapicredit-estadocuenta'
-
-/** Path para personal: registro de pago a nombre del deudor (sin token; recibo al email y descarga). */
-
-const INFOPAGOS_PATH = 'infopagos'
-
-/** Portal público Finiquito (colaboradores: código por correo). */
-
-const PUBLIC_FINIQUITO_PATH = 'finiquitos'
 
 /** Ruta relativa de esta pagina (compartir URL del Centro de Reportes). */
 
@@ -740,74 +730,6 @@ export function Reportes() {
                   >
                     <FileText className="h-4 w-4 shrink-0" />
                     Estado de cuenta
-                  </Button>
-                </div>
-              </div>
-
-              {/* Personal y colaboradores */}
-              <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 shadow-sm ring-1 ring-violet-100/80">
-                <div className="mb-3 flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white shadow-sm">
-                    <Briefcase className="h-5 w-5" aria-hidden />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold tracking-tight text-violet-950">
-                      Personal y colaboradores
-                    </h3>
-                    <p className="mt-0.5 text-xs leading-snug text-violet-900/80">
-                      Tasas (administración), finiquito con código por correo e
-                      Infopagos (pago a nombre del deudor).
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-10 w-full justify-start gap-2 border-violet-300/90 bg-white/90 text-violet-950 hover:bg-white sm:w-auto"
-                    onClick={() =>
-                      copiarEnlaceServicio(
-                        'admin/tasas-cambio',
-                        'Tasa de cambio'
-                      )
-                    }
-                    title="Copiar enlace: Tasa de cambio"
-                    aria-label="Copiar enlace de Tasa de cambio"
-                  >
-                    <Copy className="h-4 w-4 shrink-0" aria-hidden />
-                    Tasa de cambio
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-10 w-full justify-start gap-2 border-violet-300/90 bg-white/90 text-violet-950 hover:bg-white sm:w-auto"
-                    onClick={() =>
-                      copiarEnlaceServicio(PUBLIC_FINIQUITO_PATH, 'Finiquito')
-                    }
-                    title="Copiar enlace: Finiquito (acceso colaboradores con código por correo)"
-                    aria-label="Copiar enlace de Finiquito"
-                  >
-                    <Copy className="h-4 w-4 shrink-0" aria-hidden />
-                    Finiquito
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-10 w-full justify-start gap-2 border-violet-300/90 bg-white/90 text-violet-950 hover:bg-white sm:w-auto"
-                    onClick={() =>
-                      copiarEnlaceServicio(INFOPAGOS_PATH, 'Infopagos')
-                    }
-                    title="Copiar enlace: Infopagos (pago a nombre del deudor)"
-                    aria-label="Copiar enlace Infopagos"
-                  >
-                    <Building2 className="h-4 w-4 shrink-0" />
-                    Infopagos
                   </Button>
                 </div>
               </div>
