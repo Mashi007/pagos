@@ -17,7 +17,8 @@ from fastapi import APIRouter, Depends, HTTPException, Body, Query, File, Upload
 from fastapi.responses import Response, JSONResponse, RedirectResponse
 from starlette.requests import Request
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_admin
+from app.schemas.auth import UserResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -1214,7 +1215,10 @@ def enviar_caso_manual(payload: dict = Body(...), db: Session = Depends(get_db))
 
 
 @router.get("/estadisticas/resumen")
-def get_notificaciones_resumen(db: Session = Depends(get_db)):
+def get_notificaciones_resumen(
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin),
+):
     """
     Resumen para sidebar: total de envios registrados y fallidos en ventana reciente.
     no_leidas = envios con exito=False (atencion / rebotados) en los ultimos 30 dias.

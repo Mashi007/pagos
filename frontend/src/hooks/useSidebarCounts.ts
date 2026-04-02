@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { apiClient } from '../services/api'
+import { useSimpleAuth } from '../store/simpleAuthStore'
+import { isAdminRole } from '../utils/rol'
 
 interface SidebarCounts {
   pagosPendientes: number
@@ -31,6 +33,9 @@ interface SidebarCounts {
  */
 
 export function useSidebarCounts() {
+  const { user } = useSimpleAuth()
+  const adminNotifications = isAdminRole(user?.rol)
+
   // âœ… OPTIMIZACIÓN: Usar React Query para compartir datos con otros componentes
 
   // Estos queries tienen las mismas queryKeys que otros componentes, así que React Query
@@ -83,11 +88,13 @@ export function useSidebarCounts() {
         }
       },
 
+      enabled: adminNotifications,
+
       staleTime: 5 * 60 * 1000, // 5 minutos
 
       refetchOnWindowFocus: false, // âœ… No recargar automáticamente al enfocar ventana
 
-      refetchInterval: 5 * 60 * 1000, // âœ… Actualizar cada 5 minutos automáticamente
+      refetchInterval: adminNotifications ? 5 * 60 * 1000 : false,
 
       refetchIntervalInBackground: false, // Solo actualizar si la página está visible
 
@@ -101,10 +108,12 @@ export function useSidebarCounts() {
 
     cuotasEnMora: kpisData?.clientes_en_mora || 0,
 
-    notificacionesNoLeidas: notificacionesData?.no_leidas || 0,
+    notificacionesNoLeidas: adminNotifications
+      ? notificacionesData?.no_leidas || 0
+      : 0,
   }
 
-  const loading = loadingKPIs || loadingNotificaciones
+  const loading = loadingKPIs || (adminNotifications && loadingNotificaciones)
 
   return { counts, loading }
 }

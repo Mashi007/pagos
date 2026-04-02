@@ -48,45 +48,35 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
   const userRole = isAdminRole(user?.rol) ? 'Administrador' : 'Operativo'
 
-  // Mock de notificaciones - en producción vendrían del backend
+  const showAdminNotifications = isAdminRole(user?.rol)
 
-  const notifications = [
-    {
-      id: 1,
+  // Solo administradores: campana (módulo de notificaciones lo gestiona admin)
 
-      title: 'Pago recibido',
-
-      message: 'Cliente Juan Pérez realizó pago de $500',
-
-      time: '5 min',
-
-      read: false,
-    },
-
-    {
-      id: 2,
-
-      title: 'Cuota vencida',
-
-      message: '3 clientes tienen cuotas vencidas hoy',
-
-      time: '1 hora',
-
-      read: false,
-    },
-
-    {
-      id: 3,
-
-      title: 'Reporte generado',
-
-      message: 'Reporte de cartera mensual disponible',
-
-      time: '2 horas',
-
-      read: true,
-    },
-  ]
+  const notifications = showAdminNotifications
+    ? [
+        {
+          id: 1,
+          title: 'Pago recibido',
+          message: 'Cliente Juan Pérez realizó pago de $500',
+          time: '5 min',
+          read: false,
+        },
+        {
+          id: 2,
+          title: 'Cuota vencida',
+          message: '3 clientes tienen cuotas vencidas hoy',
+          time: '1 hora',
+          read: false,
+        },
+        {
+          id: 3,
+          title: 'Reporte generado',
+          message: 'Reporte de cartera mensual disponible',
+          time: '2 horas',
+          read: true,
+        },
+      ]
+    : []
 
   const unreadCount = notifications.filter(n => !n.read).length
 
@@ -134,81 +124,81 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
         {/* Right side */}
 
         <div className="flex items-center space-x-3">
-          {/* Notifications */}
+          {showAdminNotifications && (
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative"
+              >
+                <Bell className="h-5 w-5" />
 
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="relative"
-            >
-              <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center p-0 text-xs"
+                  >
+                    {unreadCount}
+                  </Badge>
+                )}
+              </Button>
 
-              {unreadCount > 0 && (
-                <Badge
-                  variant="destructive"
-                  className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center p-0 text-xs"
-                >
-                  {unreadCount}
-                </Badge>
-              )}
-            </Button>
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute right-0 z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg"
+                  >
+                    <div className="border-b border-gray-200 p-4">
+                      <h3 className="font-semibold text-gray-900">
+                        Notificaciones
+                      </h3>
+                    </div>
 
-            <AnimatePresence>
-              {showNotifications && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg"
-                >
-                  <div className="border-b border-gray-200 p-4">
-                    <h3 className="font-semibold text-gray-900">
-                      Notificaciones
-                    </h3>
-                  </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {notifications.map(notification => (
+                        <div
+                          key={notification.id}
+                          className={`cursor-pointer border-b border-gray-100 p-4 hover:bg-gray-50 ${
+                            !notification.read ? 'bg-blue-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h4 className="text-sm font-medium text-gray-900">
+                                {notification.title}
+                              </h4>
 
-                  <div className="max-h-96 overflow-y-auto">
-                    {notifications.map(notification => (
-                      <div
-                        key={notification.id}
-                        className={`cursor-pointer border-b border-gray-100 p-4 hover:bg-gray-50 ${
-                          !notification.read ? 'bg-blue-50' : ''
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="text-sm font-medium text-gray-900">
-                              {notification.title}
-                            </h4>
+                              <p className="mt-1 text-sm text-gray-600">
+                                {notification.message}
+                              </p>
+                            </div>
 
-                            <p className="mt-1 text-sm text-gray-600">
-                              {notification.message}
-                            </p>
+                            <span className="ml-2 text-xs text-gray-500">
+                              {notification.time}
+                            </span>
                           </div>
 
-                          <span className="ml-2 text-xs text-gray-500">
-                            {notification.time}
-                          </span>
+                          {!notification.read && (
+                            <div className="mt-2 h-2 w-2 rounded-full bg-blue-500"></div>
+                          )}
                         </div>
+                      ))}
+                    </div>
 
-                        {!notification.read && (
-                          <div className="mt-2 h-2 w-2 rounded-full bg-blue-500"></div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="border-t border-gray-200 p-3">
-                    <Button variant="ghost" className="w-full text-sm">
-                      Ver todas las notificaciones
-                    </Button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                    <div className="border-t border-gray-200 p-3">
+                      <Button variant="ghost" className="w-full text-sm">
+                        Ver todas las notificaciones
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
           {/* User menu */}
 

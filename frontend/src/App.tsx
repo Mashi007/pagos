@@ -453,7 +453,14 @@ function App() {
 
             {/* Notificaciones (dentro de CRM en sidebar) */}
 
-            <Route path="notificaciones" element={<Notificaciones />} />
+            <Route
+              path="notificaciones"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <Notificaciones />
+                </SimpleProtectedRoute>
+              }
+            />
 
             {/* Redirecciones: plantillas viven en Configuracin */}
 
