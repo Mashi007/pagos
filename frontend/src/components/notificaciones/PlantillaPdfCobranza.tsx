@@ -217,7 +217,9 @@ export function PlantillaPdfCobranza() {
 
       window.open(url, '_blank', 'noopener,noreferrer')
 
-      setTimeout(() => URL.revokeObjectURL(url), 60000)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => URL.revokeObjectURL(url))
+      })
 
       toast.success('Vista previa abierta en nueva pestaña')
     } catch (e: any) {

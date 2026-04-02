@@ -907,10 +907,6 @@ export function EmailConfig() {
         setRequiereAppPassword(false)
 
         setMensajeVinculacion(null)
-
-        setTimeout(() => {
-          setEmailEnviadoExitoso(false)
-        }, 3000)
       } else {
         toast.error('Error enviando email de prueba')
 
@@ -997,10 +993,6 @@ export function EmailConfig() {
         setResultadoPrueba({ ...resultado, error: mensaje })
       } else if (resultado.mensaje?.includes('enviado')) {
         toast.success('Correo de prueba enviado exitosamente a ' + emailPruebas)
-
-        setTimeout(() => {
-          setEmailEnviadoExitoso(false)
-        }, 3000)
       } else {
         toast.error('Error enviando correo de prueba')
       }
@@ -1098,7 +1090,7 @@ export function EmailConfig() {
 
                 {
                   key: 'email_activo_informe_pagos' as const,
-                  label: 'Informe de pagos (cron)',
+                  label: 'Informe de pagos (manual / servidor)',
                 },
 
                 {
@@ -1170,7 +1162,7 @@ export function EmailConfig() {
 
                 {
                   key: 'modo_pruebas_informe_pagos' as const,
-                  label: 'Informe de pagos (cron)',
+                  label: 'Informe de pagos (manual / servidor)',
                 },
 
                 {

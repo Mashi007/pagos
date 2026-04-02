@@ -1097,7 +1097,7 @@ export function PlantillasNotificaciones({
 
       setter(next)
 
-      setTimeout(() => {
+      queueMicrotask(() => {
         try {
           ;(el as any).focus()
           ;(el as any).setSelectionRange(
@@ -1105,7 +1105,7 @@ export function PlantillasNotificaciones({
             start + token.length
           )
         } catch {}
-      }, 0)
+      })
     }
 
     if (focus === 'asunto')
@@ -1222,11 +1222,11 @@ export function PlantillasNotificaciones({
 
       setter(next)
 
-      setTimeout(() => {
+      queueMicrotask(() => {
         try {
           el.focus()
         } catch {}
-      }, 0)
+      })
     }
 
     if (focus === 'encabezado')
@@ -1811,7 +1811,9 @@ export function PlantillasNotificaciones({
 
     window.open(url, '_blank', 'noopener,noreferrer')
 
-    setTimeout(() => URL.revokeObjectURL(url), 60000)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => URL.revokeObjectURL(url))
+    })
 
     toast.success('Vista previa abierta en nueva pesta?a')
   }

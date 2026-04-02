@@ -32,7 +32,6 @@ import {
   ConfigModelosTab,
   ConfigUsuariosTab,
   ConfigNotificacionesTab,
-  ConfigProgramadorTab,
   ConfigAuditoriaTab,
   ConfigBaseDatosTab,
   ConfigFacturacionTab,
@@ -63,8 +62,6 @@ function tabToSeccion(tab: string | null): string {
     usuarios: 'usuarios',
 
     notificaciones: 'notificaciones',
-
-    programador: 'programador',
 
     auditoria: 'auditoria',
 
@@ -108,12 +105,13 @@ const Configuracion = () => {
   useEffect(() => {
     const tab = searchParams.get('tab')
 
-    setSeccionActiva(tabToSeccion(tab))
-  }, [searchParams])
+    if (tab === 'programador') {
+      navigate('/configuracion?tab=general', { replace: true })
+      return
+    }
 
-  useEffect(() => {
-    if (seccionActiva === 'scheduler') navigate('/scheduler')
-  }, [seccionActiva, navigate])
+    setSeccionActiva(tabToSeccion(tab))
+  }, [searchParams, navigate])
 
   const findSeccionById = (id: string) =>
     findSeccionByIdHelper(SECCIONES_CONFIGURACION, id)
@@ -121,8 +119,6 @@ const Configuracion = () => {
   const nombresSeccionEspecial = NOMBRES_SECCION_ESPECIAL
 
   const renderContenidoSeccion = () => {
-    if (seccionActiva === 'scheduler') return null
-
     switch (seccionActiva) {
       case 'general':
         return <ConfigGeneralTab />
@@ -146,9 +142,6 @@ const Configuracion = () => {
 
       case 'informePagosConfig':
         return <ConfigInformePagosTab />
-
-      case 'programador':
-        return <ConfigProgramadorTab />
 
       case 'auditoria':
         return <ConfigAuditoriaTab />

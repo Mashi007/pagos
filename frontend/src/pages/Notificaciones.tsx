@@ -464,7 +464,7 @@ export function Notificaciones() {
         }),
       ])
       toast.success(
-        'Listas y KPI actualizados manualmente. El servidor tambien ejecuta un job a las 00:50 (America/Caracas).'
+        'Listas y KPI actualizados. El envio de correos y campanas sigue siendo manual desde esta pantalla o configuracion.'
       )
     } catch (e) {
       console.error(e)

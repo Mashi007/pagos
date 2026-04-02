@@ -1,6 +1,12 @@
 import { useState } from 'react'
 
+import { RefreshCw } from 'lucide-react'
+
 import { Input } from '../../ui/input'
+
+import { Button } from '../../ui/button'
+
+import { ConfigTabManualStrip } from '../ConfigTabManualStrip'
 
 const DEFAULT_FACTURACION = {
   tasaInteres: 12.5,
@@ -29,6 +35,18 @@ export function ConfigFacturacionTab() {
 
   return (
     <div className="space-y-6">
+      <ConfigTabManualStrip note="Borrador local en el navegador; use Guardar en módulos que persistan tasas si aplica.">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setConfig(DEFAULT_FACTURACION)}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Restablecer valores de ejemplo
+        </Button>
+      </ConfigTabManualStrip>
+
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <label className="text-sm font-medium">

@@ -189,15 +189,6 @@ class Settings(BaseSettings):
             'Los envios masivos reales siguen sujetos a NOTIFICACIONES_PAQUETE_ESTRICTO.'
         ),
     )
-    # Si True, ejecutar_envios_por_programador puede enviar por hora (solo si existe un job/cron que lo invoque).
-    # Por defecto False: envios de mora/masivos por pestaña solo por POST explicito (UI o API).
-    NOTIFICACIONES_ENVIO_PROGRAMADO: bool = Field(
-        default=False,
-        description=(
-            'Habilita el envio automatico por hora del programador en notificaciones_envios. '
-            'False (defecto): disparadores manuales unicamente (enviar-todas, enviar-caso-manual, masivos/enviar).'
-        ),
-    )
     # Dias calendario (Caracas) despues de prestamos.fecha_liquidado para enviar correo con PDF estado de cuenta.
     # Ej. "1,2" = primer correo al dia siguiente de la fecha_liquidado, segundo al segundo dia. Un correo por cliente por oleada.
     NOTIFICACIONES_LIQUIDADO_DIAS_ENVIO: str = Field(

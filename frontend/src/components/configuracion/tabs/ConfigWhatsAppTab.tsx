@@ -1,5 +1,30 @@
+import { useState } from 'react'
+
+import { RefreshCw } from 'lucide-react'
+
+import { Button } from '../../ui/button'
+
 import { WhatsAppConfig } from '../WhatsAppConfig'
 
+import { ConfigTabManualStrip } from '../ConfigTabManualStrip'
+
 export function ConfigWhatsAppTab() {
-  return <WhatsAppConfig />
+  const [reloadKey, setReloadKey] = useState(0)
+
+  return (
+    <>
+      <ConfigTabManualStrip>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setReloadKey(k => k + 1)}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Recargar esta pestaña
+        </Button>
+      </ConfigTabManualStrip>
+      <WhatsAppConfig key={reloadKey} />
+    </>
+  )
 }

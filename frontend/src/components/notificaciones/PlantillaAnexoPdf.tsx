@@ -172,13 +172,13 @@ export function PlantillaAnexoPdf() {
 
       setter(next)
 
-      setTimeout(() => {
+      queueMicrotask(() => {
         try {
           el.focus()
 
           el.setSelectionRange(start + token.length, start + token.length)
         } catch {}
-      }, 0)
+      })
     }
 
     if (focus === 'encabezado')
@@ -242,11 +242,11 @@ export function PlantillaAnexoPdf() {
 
       setter(next)
 
-      setTimeout(() => {
+      queueMicrotask(() => {
         try {
           el.focus()
         } catch {}
-      }, 0)
+      })
     }
 
     if (focus === 'encabezado')
@@ -299,7 +299,9 @@ export function PlantillaAnexoPdf() {
 
       window.open(url, '_blank', 'noopener,noreferrer')
 
-      setTimeout(() => URL.revokeObjectURL(url), 60000)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => URL.revokeObjectURL(url))
+      })
 
       toast.success('Vista previa abierta en nueva pestaña')
     } catch (e: any) {

@@ -531,7 +531,7 @@ class NotificacionService {
     )) as Blob
   }
 
-  /** Ejecutar actualización de notificaciones (dias_mora en clientes). Llamar desde cron a las 2am. */
+  /** Recalcular dias_mora en clientes (POST manual desde la UI «Actualizar» o API). */
 
   async actualizarNotificaciones(): Promise<{
     mensaje: string
@@ -631,12 +631,6 @@ class NotificacionService {
     )
 
     return response as Blob
-  }
-
-  // Notificaciones automáticas
-
-  async procesarAutomaticas(): Promise<{ mensaje: string; estadisticas: any }> {
-    return await apiClient.post(`${this.baseUrl}/automaticas/procesar`)
   }
 
   // Notificaciones previas
@@ -1032,7 +1026,7 @@ class EmailConfigService {
     return await apiClient.post(`${this.baseUrl}/email/probar`, params)
   }
 
-  /** Config por tipo (habilitado, cco, plantilla_id, programador) + global: modo_pruebas, email_pruebas. Un solo objeto, sin duplicar. */
+  /** Config por tipo (habilitado, cco, plantilla_id, campos legacy programador/dias_semana) + global: modo_pruebas, email_pruebas. */
 
   async obtenerConfiguracionEnvios(): Promise<Record<string, unknown>> {
     return await apiClient.get<Record<string, unknown>>(

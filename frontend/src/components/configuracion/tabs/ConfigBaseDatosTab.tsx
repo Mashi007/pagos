@@ -1,31 +1,21 @@
 import { useState } from 'react'
 
+import { RefreshCw } from 'lucide-react'
+
 import { Input } from '../../ui/input'
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../ui/select'
+import { Button } from '../../ui/button'
 
 import { formatDate } from '../../../utils'
+
+import { ConfigTabManualStrip } from '../ConfigTabManualStrip'
 
 const DEFAULT_BASE_DATOS = {
   tipo: 'PostgreSQL',
 
   version: '15',
 
-  frecuenciaBackup: 'DIARIO',
-
-  horaBackup: '02:00',
-
   retencionBackup: 30,
-
-  backupAutomatico: true,
-
-  compresionBackup: true,
 
   ultimoBackup: new Date().toISOString(),
 }
@@ -33,12 +23,25 @@ const DEFAULT_BASE_DATOS = {
 export function ConfigBaseDatosTab() {
   const [config, setConfig] = useState(DEFAULT_BASE_DATOS)
 
-  const handleChange = (campo: string, valor: string | number | boolean) => {
-    setConfig(prev => ({ ...prev, [campo]: valor }))
-  }
-
   return (
     <div className="space-y-6">
+      <ConfigTabManualStrip note="Vista de referencia: backups programados no se configuran aquí (solo manual en infraestructura).">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setConfig(DEFAULT_BASE_DATOS)}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Restablecer vista de ejemplo
+        </Button>
+      </ConfigTabManualStrip>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+        No hay programación de backups ni temporizadores en esta pantalla. Los
+        valores son ilustrativos en el navegador.
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <label className="text-sm font-medium">Tipo de Base de Datos</label>
@@ -53,76 +56,24 @@ export function ConfigBaseDatosTab() {
         </div>
 
         <div>
-          <label className="text-sm font-medium">Frecuencia de Backup</label>
-
-          <Select
-            value={config.frecuenciaBackup}
-            onValueChange={v => handleChange('frecuenciaBackup', v)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-
-            <SelectContent>
-              <SelectItem value="DIARIO">Diario</SelectItem>
-
-              <SelectItem value="SEMANAL">Semanal</SelectItem>
-
-              <SelectItem value="MENSUAL">Mensual</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Hora de Backup</label>
-
-          <Input
-            type="time"
-            value={config.horaBackup}
-            onChange={e => handleChange('horaBackup', e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Retención (días)</label>
+          <label className="text-sm font-medium">Retención referencial (días)</label>
 
           <Input
             type="number"
             value={config.retencionBackup}
             onChange={e =>
-              handleChange('retencionBackup', parseInt(e.target.value) || 0)
+              setConfig(prev => ({
+                ...prev,
+                retencionBackup: parseInt(e.target.value) || 0,
+              }))
             }
             placeholder="30"
           />
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            checked={config.backupAutomatico}
-            onChange={e => handleChange('backupAutomatico', e.target.checked)}
-            className="rounded"
-          />
-
-          <label className="text-sm font-medium">Backup Automático</label>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            checked={config.compresionBackup}
-            onChange={e => handleChange('compresionBackup', e.target.checked)}
-            className="rounded"
-          />
-
-          <label className="text-sm font-medium">Comprimir Backups</label>
-        </div>
-      </div>
-
       <div>
-        <label className="text-sm font-medium">Último Backup</label>
+        <label className="text-sm font-medium">Último backup (ejemplo)</label>
 
         <Input
           value={formatDate(config.ultimoBackup)}

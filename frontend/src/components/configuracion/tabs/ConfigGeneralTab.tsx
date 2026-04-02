@@ -47,6 +47,8 @@ import { toast } from 'sonner'
 
 import { getErrorMessage, getErrorDetail } from '../../../types/errors'
 
+import { ConfigTabManualStrip } from '../ConfigTabManualStrip'
+
 interface GeneralFormState {
   nombreEmpresa: string
 
@@ -481,6 +483,19 @@ export function ConfigGeneralTab() {
 
   return (
     <div className="space-y-6">
+      <ConfigTabManualStrip>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={loading}
+          onClick={() => void cargarConfiguracionGeneral(true)}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Recargar desde servidor
+        </Button>
+      </ConfigTabManualStrip>
+
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <label className="text-sm font-medium">Nombre de la Empresa</label>

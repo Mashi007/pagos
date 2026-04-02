@@ -154,64 +154,10 @@ export function MLImpagoCuotasTab() {
 
       progreso: 0,
 
-      mensaje: 'Iniciando entrenamiento...',
+      mensaje: 'Entrenando (espere respuesta del servidor)...',
     })
 
     setMostrarFormEntrenamiento(false)
-
-    // Simular progreso mientras se entrena (el backend no devuelve progreso real)
-
-    const intervalProgreso = setInterval(() => {
-      setEstadoEntrenamiento(prev => {
-        if (!prev) return null
-
-        let nuevoProgreso = prev.progreso
-
-        let nuevoEstado = prev.estado
-
-        let nuevoMensaje = prev.mensaje
-
-        // Simular progreso basado en el estado
-
-        if (prev.estado === 'iniciando' && prev.progreso < 10) {
-          nuevoProgreso = Math.min(prev.progreso + 2, 10)
-
-          nuevoMensaje = 'Preparando datos de entrenamiento...'
-        } else if (prev.estado === 'iniciando' && prev.progreso >= 10) {
-          nuevoEstado = 'procesando'
-
-          nuevoMensaje = 'Procesando préstamos y extrayendo features...'
-        } else if (prev.estado === 'procesando' && prev.progreso < 60) {
-          nuevoProgreso = Math.min(prev.progreso + 1.5, 60)
-
-          nuevoMensaje = `Procesando datos... ${Math.round(prev.progreso)}%`
-        } else if (prev.estado === 'procesando' && prev.progreso >= 60) {
-          nuevoEstado = 'entrenando'
-
-          nuevoMensaje = 'Entrenando modelo con algoritmo seleccionado...'
-        } else if (prev.estado === 'entrenando' && prev.progreso < 90) {
-          nuevoProgreso = Math.min(prev.progreso + 0.8, 90)
-
-          nuevoMensaje = `Entrenando modelo... ${Math.round(prev.progreso)}%`
-        } else if (prev.estado === 'entrenando' && prev.progreso >= 90) {
-          nuevoEstado = 'finalizando'
-
-          nuevoMensaje = 'Finalizando y guardando modelo...'
-
-          nuevoProgreso = 95
-        }
-
-        return {
-          ...prev,
-
-          estado: nuevoEstado,
-
-          progreso: nuevoProgreso,
-
-          mensaje: nuevoMensaje,
-        }
-      })
-    }, 500) // Actualizar cada 500ms
 
     try {
       const resultado = await aiTrainingService.entrenarModeloImpago({
@@ -219,10 +165,6 @@ export function MLImpagoCuotasTab() {
 
         test_size: testSize,
       })
-
-      // Limpiar intervalo y mostrar éxito
-
-      clearInterval(intervalProgreso)
 
       setEstadoEntrenamiento({
         estado: 'completado',
@@ -233,8 +175,6 @@ export function MLImpagoCuotasTab() {
 
         modelo: resultado.modelo,
       })
-
-      // Notificación mejorada con métricas
 
       const metricas = resultado.metricas
 
@@ -257,20 +197,10 @@ export function MLImpagoCuotasTab() {
         }
       )
 
-      // Recargar modelos después de 2 segundos
+      await cargarModelos()
 
-      setTimeout(async () => {
-        await cargarModelos()
-
-        setEstadoEntrenamiento(null)
-      }, 2000)
-
-      console.log('âœ… Modelo entrenado exitosamente:', resultado)
+      setEstadoEntrenamiento(null)
     } catch (error: any) {
-      // Limpiar intervalo en caso de error
-
-      clearInterval(intervalProgreso)
-
       setEstadoEntrenamiento({
         estado: 'error',
 

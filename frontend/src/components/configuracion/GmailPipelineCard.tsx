@@ -42,7 +42,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
-import { Mail, Download, Loader2 } from 'lucide-react'
+import { Mail, Download, Loader2, RefreshCw } from 'lucide-react'
 
 import {
   Card,
@@ -76,8 +76,6 @@ interface GmailStatus {
   latest_data_date: string | null
 }
 
-const POLL_INTERVAL_MS = 8000
-
 export function GmailPipelineCard() {
   const [status, setStatus] = useState<GmailStatus | null>(null)
 
@@ -86,6 +84,8 @@ export function GmailPipelineCard() {
   const [downloadingExcel, setDownloadingExcel] = useState(false)
 
   const [starting, setStarting] = useState(false)
+
+  const [refreshing, setRefreshing] = useState(false)
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -104,12 +104,17 @@ export function GmailPipelineCard() {
   }, [])
 
   useEffect(() => {
-    fetchStatus()
-
-    const id = setInterval(fetchStatus, POLL_INTERVAL_MS)
-
-    return () => clearInterval(id)
+    void fetchStatus()
   }, [fetchStatus])
+
+  const handleRefrescarEstado = async () => {
+    try {
+      setRefreshing(true)
+      await fetchStatus()
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const handleRunNow = async () => {
     try {
@@ -202,8 +207,9 @@ export function GmailPipelineCard() {
         </CardTitle>
 
         <CardDescription>
-          Iniciar descarga de correos no leídos; luego descargar Excel desde la
-          tabla temporal (al descargar se vacía la tabla).
+          Iniciar descarga de correos no leídos; actualice el estado con el
+          botón (sin sondeo automático). Luego descargue Excel desde la tabla
+          temporal (al descargar se vacía la tabla).
         </CardDescription>
       </CardHeader>
 
@@ -240,6 +246,21 @@ export function GmailPipelineCard() {
             )}
 
             <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleRefrescarEstado()}
+                disabled={refreshing}
+              >
+                {refreshing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Actualizar estado
+              </Button>
+
               <Button
                 type="button"
                 variant="default"

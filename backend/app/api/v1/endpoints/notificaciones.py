@@ -1139,7 +1139,7 @@ def _tarea_envio_todas_notificaciones():
 
 @router.get("/envio-batch/ultimo")
 def get_ultimo_envio_batch_notificaciones(db: Session = Depends(get_db)):
-    """Ultimo resultado de ejecutar envio masivo (API o scheduler). Null si nunca hubo ejecucion."""
+    """Ultimo resultado de ejecutar envio masivo (POST manual / BackgroundTasks). Null si nunca hubo ejecucion."""
     from app.services.notificaciones_envio_batch_resumen import get_ultimo_envio_batch_dict
 
     return {"ultimo": get_ultimo_envio_batch_dict(db)}

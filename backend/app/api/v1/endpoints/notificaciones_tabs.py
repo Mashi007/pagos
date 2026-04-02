@@ -808,10 +808,6 @@ def get_campanas_masivos_config(config_envios: dict) -> List[dict]:
     return [_normalizar_campana_masiva(c, i + 1) for i, c in enumerate(raw)]
 
 
-def _slot_campana_masiva(campana_id: str) -> str:
-    return f"MASIVOS::{campana_id}"
-
-
 def _norm_cco_list(raw) -> List[str]:
     if not isinstance(raw, list):
         return []
@@ -859,10 +855,6 @@ def ejecutar_envio_masivos_por_campanas(
     db: Session,
     config_envios: dict,
     *,
-    filtrar_hora: Optional[Tuple[int, int]] = None,
-    filtrar_weekday: Optional[int] = None,
-    dedup: Optional[dict] = None,
-    fecha_str: Optional[str] = None,
     forzar_habilitado: bool = False,
 ) -> dict:
     campanas = get_campanas_masivos_config(config_envios)
@@ -907,23 +899,6 @@ def ejecutar_envio_masivos_por_campanas(
     for camp in campanas:
         if not camp.get("habilitado", True) and not forzar_habilitado:
             continue
-        if filtrar_weekday is not None:
-            dias = camp.get("dias_semana") or []
-            if dias and filtrar_weekday not in dias:
-                continue
-        hm = camp.get("programador")
-        if filtrar_hora is not None:
-            from app.services.notificaciones_programador import (
-                parse_programador_hm,
-                snap_hm_to_cron_slot,
-            )
-
-            if snap_hm_to_cron_slot(parse_programador_hm(hm)) != filtrar_hora:
-                continue
-        if dedup is not None and fecha_str and filtrar_hora is not None:
-            key = _slot_campana_masiva(str(camp.get("id") or ""))
-            if dedup.get(key) == f"{fecha_str}|{filtrar_hora[0]:02d}:{filtrar_hora[1]:02d}":
-                continue
 
         tipo_cfg = _tipo_cfg_masivos_por_campana(camp, config_envios)
         cfg_tmp = dict(config_envios)
@@ -941,10 +916,6 @@ def ejecutar_envio_masivos_por_campanas(
         total_omitidos_paquete += int(r.get("omitidos_paquete_incompleto", 0) or 0)
         total_wok += int(r.get("enviados_whatsapp", 0) or 0)
         total_wf += int(r.get("fallidos_whatsapp", 0) or 0)
-
-        if dedup is not None and fecha_str and filtrar_hora is not None:
-            key = _slot_campana_masiva(str(camp.get("id") or ""))
-            dedup[key] = f"{fecha_str}|{filtrar_hora[0]:02d}:{filtrar_hora[1]:02d}"
 
     return {
         "enviados": total_enviados,
@@ -1110,7 +1081,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
 def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     """
     Ejecuta el env�o de todas las notificaciones (previas, d�a pago, retrasadas, prejudicial).
-    Solo desde POST /notificaciones/enviar-todas (BackgroundTasks); no hay scheduler de mora.
+    Solo desde POST /notificaciones/enviar-todas (BackgroundTasks); sin envio automatico por hora.
     Respeta configuraci�n de env�os (habilitado/CCO por tipo) desde BD.
     """
     config_envios = get_notificaciones_envios_config(db)

@@ -73,7 +73,7 @@ function parsearCorreosCco(texto: string): string[] {
     .slice(0, CCO_MAX)
 }
 
-/** Tipo de configuración por criterio (habilitado, cco, plantilla opcional, programador) */
+/** Tipo de configuración por criterio (habilitado, cco, plantilla; programador solo persistido por compatibilidad) */
 
 export type ConfigEnvioItem = {
   habilitado: boolean
@@ -120,8 +120,8 @@ type CriterioEnvioRow = {
 }
 
 /**
- * Tabla de envíos / programador: una fila por caso (hora y CCO independientes).
- * Alineado con los tipos que usa el backend (notificaciones_tabs + programador).
+ * Tabla de envíos: una fila por caso (CCO por fila). Envíos solo manuales.
+ * Alineado con los tipos que usa el backend (notificaciones_tabs).
  */
 export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
   {
@@ -311,16 +311,6 @@ const COLORES = {
 
 const HORA_DEFAULT = '04:00'
 const HORA_DEFAULT_MASIVOS = '03:00'
-
-const DIAS_SEMANA = [
-  { id: 0, label: 'Lun' },
-  { id: 1, label: 'Mar' },
-  { id: 2, label: 'Mie' },
-  { id: 3, label: 'Jue' },
-  { id: 4, label: 'Vie' },
-  { id: 5, label: 'Sab' },
-  { id: 6, label: 'Dom' },
-] as const
 
 /** Toast fijo mientras corre POST /notificaciones/enviar-caso-manual (lote largo). */
 const TOAST_ID_ENVIO_CASO_MANUAL = 'envio-caso-manual'
@@ -677,20 +667,6 @@ export function ConfiguracionNotificaciones() {
     setCampanasMasivos(prev => prev.filter(c => c.id !== id))
   }
 
-  const toggleDiaCampana = (id: string, dia: number) => {
-    markEnviosLocalDirty()
-    setCampanasMasivos(prev =>
-      prev.map(c => {
-        if (c.id !== id) return c
-        const has = c.dias_semana.includes(dia)
-        const dias = has
-          ? c.dias_semana.filter(d => d !== dia)
-          : [...c.dias_semana, dia]
-        return { ...c, dias_semana: dias.sort((a, b) => a - b) }
-      })
-    )
-  }
-
   const guardarConfiguracionEnvios = async () => {
     if (guardandoRef.current) return
 
@@ -996,11 +972,6 @@ export function ConfiguracionNotificaciones() {
         await queryClient.invalidateQueries({
           queryKey: NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo,
         })
-        setTimeout(() => {
-          void queryClient.invalidateQueries({
-            queryKey: NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo,
-          })
-        }, 8000)
         toast.success(
           `${res.mensaje} En unos segundos use Actualizar en Ultimo envio masivo para ver enviados y omitidos por paquete. Si enviados=0, revise PDFs en pestana 3 y disco persistente en Render.`,
           { duration: 14000 }
@@ -1097,9 +1068,6 @@ export function ConfiguracionNotificaciones() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-            Tip: define minutos 00, 15, 30 o 45 para coincidir con el scheduler.
-          </div>
           {modoPruebas && smtpConfigurado === false && (
             <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
               <TestTube className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
@@ -1447,21 +1415,17 @@ export function ConfiguracionNotificaciones() {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Mail className="h-4 w-4 text-slate-600" />
-              Campanas masivas semanales
+              Campanas masivas
             </CardTitle>
             <CardDescription>
-              Solo para la pestana Masivos: varias campanas con plantilla,
-              horario, CCO y dias semanales. Si una campana deja la plantilla en
-              «Texto por defecto», se usa la plantilla de la fila
-              «Comunicaciones masivas» de la tabla de arriba (guardada en el
-              servidor).
+              Solo para la pestana Masivos: varias campanas con plantilla y CCO.
+              El envio es manual (boton Enviar o pestana Masivos). Si una
+              campana deja la plantilla en «Texto por defecto», se usa la
+              plantilla de la fila «Comunicaciones masivas» de la tabla de
+              arriba (guardada en el servidor).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-              Tip: define minutos 00, 15, 30 o 45 para coincidir con el
-              scheduler.
-            </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
@@ -1533,7 +1497,7 @@ export function ConfiguracionNotificaciones() {
                         </div>
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-3">
+                      <div className="grid gap-4 md:grid-cols-2">
                         <div>
                           <label className="mb-1 block text-xs font-medium text-gray-600">
                             Plantilla
@@ -1570,23 +1534,6 @@ export function ConfiguracionNotificaciones() {
 
                         <div>
                           <label className="mb-1 block text-xs font-medium text-gray-600">
-                            Hora (Caracas)
-                          </label>
-                          <Input
-                            type="time"
-                            step={900}
-                            value={camp.programador || HORA_DEFAULT_MASIVOS}
-                            onChange={e =>
-                              actualizarCampanaMasiva(camp.id, {
-                                programador: e.target.value,
-                              })
-                            }
-                            className="h-9 max-w-[11rem] bg-white"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600">
                             CCO (coma, ; o salto)
                           </label>
                           <Textarea
@@ -1599,31 +1546,6 @@ export function ConfiguracionNotificaciones() {
                             rows={3}
                             className="bg-white"
                           />
-                        </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <p className="mb-1 text-xs font-medium text-gray-600">
-                          Dias de repeticion semanal
-                        </p>
-                        <p className="mb-2 text-[11px] text-gray-500">
-                          Si no marcas dias, se enviara todos los dias segun la
-                          hora.
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {DIAS_SEMANA.map(d => (
-                            <label
-                              key={`${camp.id}-dia-${d.id}`}
-                              className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors ${camp.dias_semana.includes(d.id) ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={camp.dias_semana.includes(d.id)}
-                                onChange={() => toggleDiaCampana(camp.id, d.id)}
-                              />
-                              {d.label}
-                            </label>
-                          ))}
                         </div>
                       </div>
                     </div>
@@ -1840,39 +1762,10 @@ export function ConfiguracionNotificaciones() {
 
                     <details className="group">
                       <summary className="cursor-pointer list-none text-xs font-medium text-blue-600 hover:text-blue-800">
-                        Hora y CCO (hasta {CCO_MAX})
+                        CCO (hasta {CCO_MAX})
                       </summary>
 
                       <div className="mt-2 min-w-[260px] space-y-3 pl-0">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600">
-                            Hora envío
-                          </label>
-
-                          <Input
-                            type="time"
-                            step={900}
-                            value={config.programador || HORA_DEFAULT}
-                            onChange={e =>
-                              setConfig(tipo, { programador: e.target.value })
-                            }
-                            disabled={!config.habilitado}
-                            className="h-9 w-full max-w-[9.5rem] bg-white text-sm"
-                          />
-
-                          <p className="mt-1.5 text-xs text-gray-600">
-                            Cada <strong>fila</strong> (caso) tiene su propia
-                            hora y CCO. Zona <strong>America/Caracas</strong>:
-                            el servidor revisa cada <strong>15 minutos</strong>{' '}
-                            (:00, :15, :30, :45) y envía ese caso cuando
-                            coincide la hora (una vez al día por caso). Elija
-                            minutos <strong>00, 15, 30 o 45</strong> en el
-                            selector para que coincida con una corrida. Si el
-                            campo viene vacío en datos antiguos, el backend usa{' '}
-                            <strong>01:00</strong> por compatibilidad.
-                          </p>
-                        </div>
-
                         <div className="rounded-lg border border-gray-200 bg-slate-50/80 p-3">
                           <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-700">
                             <Mail className="h-3.5 w-3.5 text-blue-600" />

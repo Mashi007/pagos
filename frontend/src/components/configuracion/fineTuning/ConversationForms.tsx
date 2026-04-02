@@ -124,13 +124,13 @@ export function ConversationForms({
 
     setValue(nuevoValor)
 
-    setTimeout(() => {
+    queueMicrotask(() => {
       const nuevaPosicion = start + texto.length
 
       textarea?.setSelectionRange(nuevaPosicion, nuevaPosicion)
 
       textarea?.focus()
-    }, 0)
+    })
   }
 
   const handleInsertarTabla = () => {

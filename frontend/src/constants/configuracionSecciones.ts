@@ -7,7 +7,6 @@ import {
   Mail,
   MessageSquare,
   FileText,
-  Calendar,
   Database,
   DollarSign,
   Brain,
@@ -77,15 +76,6 @@ export const SECCIONES_CONFIGURACION: SeccionConfig[] = [
       { id: 'plantillas', nombre: 'Plantillas', icono: FileText },
 
       // sin href: se muestra como sección dentro de Configuración (tab=plantillas)
-
-      {
-        id: 'scheduler',
-        nombre: 'Programador',
-        icono: Calendar,
-        href: '/scheduler',
-      },
-
-      { id: 'programador', nombre: 'Programador (Config)', icono: Calendar },
 
       { id: 'auditoria', nombre: 'Auditoría', icono: FileText },
     ],

@@ -92,6 +92,8 @@ export function MLRiesgoTab() {
 
   const [prediciendo, setPrediciendo] = useState(false)
 
+  const [consultandoJob, setConsultandoJob] = useState(false)
+
   const cargarModelos = async () => {
     setCargando(true)
 
@@ -133,64 +135,40 @@ export function MLRiesgoTab() {
     cargarModelos()
   }, [])
 
-  // Polling para estado de entrenamiento
-
-  useEffect(() => {
+  const handleConsultarEstadoJob = async () => {
     if (!jobId) return
 
-    const interval = setInterval(async () => {
-      try {
-        const estado = await aiTrainingService.getEstadoEntrenamientoML(jobId)
+    setConsultandoJob(true)
 
-        setEstadoJob(estado)
+    try {
+      const estado = await aiTrainingService.getEstadoEntrenamientoML(jobId)
 
-        if (estado.status === 'succeeded' || estado.status === 'failed') {
-          clearInterval(interval)
+      setEstadoJob(estado)
 
-          cargarModelos()
+      if (estado.status === 'succeeded' || estado.status === 'failed') {
+        await cargarModelos()
 
-          if (estado.status === 'succeeded') {
-            toast.success('Modelo entrenado exitosamente')
-          } else {
-            toast.error('Error en el entrenamiento del modelo')
-          }
+        if (estado.status === 'succeeded') {
+          toast.success('Modelo entrenado exitosamente')
+        } else {
+          toast.error('Error en el entrenamiento del modelo')
         }
-      } catch (error) {
-        console.error('Error verificando estado:', error)
       }
-    }, 5000) // Cada 5 segundos
+    } catch (error) {
+      console.error('Error verificando estado:', error)
 
-    return () => clearInterval(interval)
-  }, [jobId])
+      toast.error('No se pudo consultar el estado del entrenamiento')
+    } finally {
+      setConsultandoJob(false)
+    }
+  }
 
   const handleEntrenar = async () => {
     setEntrenando(true)
 
-    setEstadoJob({ status: 'pending', progreso: 0 })
+    setEstadoJob({ status: 'pending', progreso: undefined })
 
     setMostrarFormEntrenamiento(false)
-
-    // Simular progreso mientras se entrena
-
-    const intervalProgreso = setInterval(() => {
-      setEstadoJob(prev => {
-        if (!prev) return { status: 'pending', progreso: 0 }
-
-        let nuevoProgreso = prev.progreso || 0
-
-        if (nuevoProgreso < 90) {
-          nuevoProgreso = Math.min(nuevoProgreso + 1.5, 90)
-        } else if (nuevoProgreso < 95) {
-          nuevoProgreso = Math.min(nuevoProgreso + 0.5, 95)
-        }
-
-        return {
-          ...prev,
-
-          progreso: nuevoProgreso,
-        }
-      })
-    }, 500)
 
     try {
       const result = await aiTrainingService.entrenarModeloRiesgo({
@@ -199,30 +177,18 @@ export function MLRiesgoTab() {
         test_size: testSize,
       })
 
-      clearInterval(intervalProgreso)
-
       setJobId(result.job_id)
 
       setEstadoJob({
         status: 'pending',
 
-        progreso: 0,
+        progreso: undefined,
       })
 
-      // El modelo se obtendrá cuando se consulte el estado del job
-
       toast.success(
-        'Entrenamiento iniciado. El modelo se creará cuando el proceso termine.'
+        'Entrenamiento iniciado. Pulse «Consultar estado del entrenamiento» para ver el progreso (solo manual).'
       )
-
-      // Recargar modelos después de 2 segundos
-
-      setTimeout(async () => {
-        await cargarModelos()
-      }, 2000)
     } catch (error: any) {
-      clearInterval(intervalProgreso)
-
       const errorMsg =
         error?.response?.data?.detail || error?.message || 'Error desconocido'
 
@@ -527,7 +493,7 @@ export function MLRiesgoTab() {
               ) : estadoJob.status === 'failed' ? (
                 <AlertCircle className="h-5 w-5 text-red-600" />
               ) : (
-                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                <RefreshCw className="h-5 w-5 text-blue-600" />
               )}
 
               <h4 className="font-semibold">
@@ -535,7 +501,7 @@ export function MLRiesgoTab() {
                   ? 'Entrenamiento Completado'
                   : estadoJob.status === 'failed'
                     ? 'Error en Entrenamiento'
-                    : 'Entrenamiento en Progreso'}
+                    : 'Entrenamiento en curso (consulta manual)'}
               </h4>
             </div>
 
@@ -546,7 +512,7 @@ export function MLRiesgoTab() {
                     ? '¡Modelo entrenado exitosamente!'
                     : estadoJob.status === 'failed'
                       ? 'Error durante el entrenamiento'
-                      : 'Procesando y entrenando modelo...'}
+                      : 'Pulse el botón inferior para consultar el estado en el servidor (sin sondeo automático).'}
                 </span>
 
                 {estadoJob.progreso !== undefined && (
@@ -559,6 +525,24 @@ export function MLRiesgoTab() {
               {estadoJob.progreso !== undefined && (
                 <Progress value={estadoJob.progreso} className="h-2.5" />
               )}
+
+              {jobId &&
+                estadoJob.status !== 'succeeded' &&
+                estadoJob.status !== 'failed' && (
+                  <Button
+                    type="button"
+                    onClick={() => void handleConsultarEstadoJob()}
+                    disabled={consultandoJob}
+                    className="mt-2"
+                  >
+                    {consultandoJob ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Consultar estado del entrenamiento
+                  </Button>
+                )}
 
               {estadoJob.status === 'succeeded' && estadoJob.modelo && (
                 <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3">

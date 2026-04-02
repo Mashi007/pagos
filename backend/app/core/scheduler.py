@@ -15,8 +15,7 @@ ActualizaciÃ³n periÃ³dica de informes y reportes:
 Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
 se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.
 
-Notificaciones por mora/masivos: no hay jobs en este modulo; disparo manual via API.
-El envio por hora (programador) queda desactivado salvo NOTIFICACIONES_ENVIO_PROGRAMADO=true en .env.
+Notificaciones por mora/masivos: no hay jobs en este modulo; disparo manual via API (sin programador por hora).
 """
 import logging
 import threading

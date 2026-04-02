@@ -24,8 +24,6 @@ export { ConfigUsuariosTab } from './ConfigUsuariosTab'
 
 export { ConfigNotificacionesTab } from './ConfigNotificacionesTab'
 
-export { ConfigProgramadorTab } from './ConfigProgramadorTab'
-
 export { ConfigAuditoriaTab } from './ConfigAuditoriaTab'
 
 export { ConfigBaseDatosTab } from './ConfigBaseDatosTab'
