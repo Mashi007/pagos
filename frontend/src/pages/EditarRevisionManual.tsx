@@ -239,6 +239,22 @@ function firmaSoloCuotas(cuotas: Partial<CuotaData>[]): string {
 
 type FirmaCargaRevision = { cliente: string; prestamo: string; cuotas: string }
 
+/** Lotes de PUT de cuotas en revisión manual (evita ~12 s en serie contra el mismo host). */
+const CUOTAS_REVISION_PUT_CONCURRENCY = 6
+
+async function ejecutarEnLotes<T>(
+  items: T[],
+  tamanoLote: number,
+  fn: (item: T) => Promise<void>
+): Promise<void> {
+  if (items.length === 0) return
+  const n = Math.max(1, tamanoLote)
+  for (let i = 0; i < items.length; i += n) {
+    const lote = items.slice(i, i + n)
+    await Promise.all(lote.map(item => fn(item)))
+  }
+}
+
 /** Lista de préstamos (en producción: /pagos/prestamos vía basename). */
 const RUTA_LISTA_PRESTAMOS = '/prestamos'
 
@@ -548,13 +564,14 @@ export function EditarRevisionManual() {
         { prestamoId: pid }
       )
     }
-    for (const cuota of cuotasData) {
-      if (cuota.cuota_id) {
-        await revisionManualService.editarCuota(cuota.cuota_id, {
-          observaciones: String(cuota.observaciones ?? ''),
-        })
-      }
-    }
+    const cuotasObs = cuotasData.filter(
+      (c): c is typeof c & { cuota_id: number } => !!c.cuota_id
+    )
+    await ejecutarEnLotes(cuotasObs, CUOTAS_REVISION_PUT_CONCURRENCY, c =>
+      revisionManualService.editarCuota(c.cuota_id, {
+        observaciones: String(c.observaciones ?? ''),
+      })
+    )
   }
 
   // Estados de cliente desde BD (tabla estados_cliente)
@@ -973,53 +990,70 @@ export function EditarRevisionManual() {
       // Guardar cuotas si difieren de la carga inicial
 
       if (needGuardarCuotas) {
+        type JobCuota = {
+          cuota_id: number
+          cuotaUpdate: Record<string, any>
+          numero_cuota: number | undefined
+        }
+        const jobsCuotas: JobCuota[] = []
         for (const cuota of cuotasData) {
-          if (cuota.cuota_id) {
-            const cuotaUpdate: Record<string, any> = {
-              observaciones: String(cuota.observaciones ?? ''),
-            }
+          if (!cuota.cuota_id) continue
+          const cuotaUpdate: Record<string, any> = {
+            observaciones: String(cuota.observaciones ?? ''),
+          }
 
-            if (cuota.fecha_pago)
-              cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
+          if (cuota.fecha_pago)
+            cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
 
-            if (cuota.fecha_vencimiento)
-              cuotaUpdate.fecha_vencimiento =
-                cuota.fecha_vencimiento.split('T')[0]
+          if (cuota.fecha_vencimiento)
+            cuotaUpdate.fecha_vencimiento =
+              cuota.fecha_vencimiento.split('T')[0]
 
-            if (cuota.monto !== undefined && cuota.monto >= 0)
-              cuotaUpdate.monto = cuota.monto
+          if (cuota.monto !== undefined && cuota.monto >= 0)
+            cuotaUpdate.monto = cuota.monto
 
-            if (cuota.total_pagado !== undefined && cuota.total_pagado >= 0)
-              cuotaUpdate.total_pagado = cuota.total_pagado
+          if (cuota.total_pagado !== undefined && cuota.total_pagado >= 0)
+            cuotaUpdate.total_pagado = cuota.total_pagado
 
-            if (cuota.estado) cuotaUpdate.estado = cuota.estado
+          if (cuota.estado) cuotaUpdate.estado = cuota.estado
 
-            if (Object.keys(cuotaUpdate).length > 0) {
-              try {
-                await revisionManualService.editarCuota(
-                  cuota.cuota_id,
-                  cuotaUpdate
-                )
-
-                savedSomething = true
-              } catch (err: any) {
-                errorOccurred = true
-
-                const errorMsg =
-                  err?.response?.data?.detail || 'Error al guardar cuota'
-
-                toast.error(
-                  `❌ Error en cuota #${cuota.numero_cuota}: ${errorMsg}`
-                )
-
-                console.error(
-                  `Error guardando cuota ${cuota.numero_cuota}:`,
-                  err
-                )
-              }
-            }
+          if (Object.keys(cuotaUpdate).length > 0) {
+            jobsCuotas.push({
+              cuota_id: cuota.cuota_id,
+              cuotaUpdate,
+              numero_cuota: cuota.numero_cuota,
+            })
           }
         }
+
+        await ejecutarEnLotes(
+          jobsCuotas,
+          CUOTAS_REVISION_PUT_CONCURRENCY,
+          async job => {
+            try {
+              await revisionManualService.editarCuota(
+                job.cuota_id,
+                job.cuotaUpdate
+              )
+
+              savedSomething = true
+            } catch (err: any) {
+              errorOccurred = true
+
+              const errorMsg =
+                err?.response?.data?.detail || 'Error al guardar cuota'
+
+              toast.error(
+                `❌ Error en cuota #${job.numero_cuota}: ${errorMsg}`
+              )
+
+              console.error(
+                `Error guardando cuota ${job.numero_cuota}:`,
+                err
+              )
+            }
+          }
+        )
       }
 
       if (!errorOccurred && savedSomething) {
@@ -1306,41 +1340,58 @@ export function EditarRevisionManual() {
       setCuotasIdsAEliminar([])
 
       if (needCuotasCierre) {
+        type JobCuotaCierre = {
+          cuota_id: number
+          cuotaUpdate: Record<string, any>
+          numero_cuota: number | undefined
+        }
+        const jobsCierre: JobCuotaCierre[] = []
         for (const cuota of cuotasData) {
-          if (cuota.cuota_id) {
-            const cuotaUpdate: Record<string, any> = {
-              observaciones: String(cuota.observaciones ?? ''),
-            }
+          if (!cuota.cuota_id) continue
+          const cuotaUpdate: Record<string, any> = {
+            observaciones: String(cuota.observaciones ?? ''),
+          }
 
-            if (cuota.fecha_pago)
-              cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
+          if (cuota.fecha_pago)
+            cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
 
-            if (cuota.fecha_vencimiento)
-              cuotaUpdate.fecha_vencimiento =
-                cuota.fecha_vencimiento.split('T')[0]
+          if (cuota.fecha_vencimiento)
+            cuotaUpdate.fecha_vencimiento =
+              cuota.fecha_vencimiento.split('T')[0]
 
-            if (cuota.monto !== undefined && cuota.monto >= 0)
-              cuotaUpdate.monto = cuota.monto
+          if (cuota.monto !== undefined && cuota.monto >= 0)
+            cuotaUpdate.monto = cuota.monto
 
-            if (cuota.total_pagado !== undefined && cuota.total_pagado >= 0)
-              cuotaUpdate.total_pagado = cuota.total_pagado
+          if (cuota.total_pagado !== undefined && cuota.total_pagado >= 0)
+            cuotaUpdate.total_pagado = cuota.total_pagado
 
-            if (cuota.estado) cuotaUpdate.estado = cuota.estado
+          if (cuota.estado) cuotaUpdate.estado = cuota.estado
 
-            if (Object.keys(cuotaUpdate).length > 0) {
-              try {
-                await revisionManualService.editarCuota(
-                  cuota.cuota_id,
-                  cuotaUpdate
-                )
-              } catch (err: any) {
-                throw new Error(
-                  `Error en cuota #${cuota.numero_cuota}: ${err?.response?.data?.detail || 'Error desconocido'}`
-                )
-              }
-            }
+          if (Object.keys(cuotaUpdate).length > 0) {
+            jobsCierre.push({
+              cuota_id: cuota.cuota_id,
+              cuotaUpdate,
+              numero_cuota: cuota.numero_cuota,
+            })
           }
         }
+
+        await ejecutarEnLotes(
+          jobsCierre,
+          CUOTAS_REVISION_PUT_CONCURRENCY,
+          async job => {
+            try {
+              await revisionManualService.editarCuota(
+                job.cuota_id,
+                job.cuotaUpdate
+              )
+            } catch (err: any) {
+              throw new Error(
+                `Error en cuota #${job.numero_cuota}: ${err?.response?.data?.detail || 'Error desconocido'}`
+              )
+            }
+          }
+        )
       }
 
       await persistObservacionesYNotasRevision()
