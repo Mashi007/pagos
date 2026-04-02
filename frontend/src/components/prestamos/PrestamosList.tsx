@@ -97,6 +97,16 @@ import { toast } from 'sonner'
 
 import type { Prestamo } from '../../types'
 
+/** Valores de `revision_manual_estado` admitidos por GET /prestamos */
+const REVISION_MANUAL_FILTRO_URL = new Set([
+  'sin_registro',
+  'pendiente',
+  'revisando',
+  'en_espera',
+  'revisado',
+  'rechazado',
+])
+
 export function PrestamosList() {
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -145,6 +155,14 @@ export function PrestamosList() {
 
   const searchFromUrl = (searchParams.get('search') ?? '').trim()
 
+  const revisionManualFromUrl = searchParams.get('revision_manual_estado')
+
+  const revisionManualValidInit =
+    revisionManualFromUrl &&
+    REVISION_MANUAL_FILTRO_URL.has(revisionManualFromUrl)
+      ? revisionManualFromUrl
+      : undefined
+
   const [filters, setFilters] = useState<PrestamoFilters>({
     search: searchFromUrl,
 
@@ -165,6 +183,8 @@ export function PrestamosList() {
     fecha_fin: undefined,
 
     requiere_revision: requiereRevision,
+
+    revision_manual_estado: revisionManualValidInit,
   })
 
   // Efecto para actualizar filtros cuando cambien los parámetros de URL
@@ -197,6 +217,13 @@ export function PrestamosList() {
 
     const searchParam = (searchParams.get('search') ?? '').trim()
 
+    const revManualParam = searchParams.get('revision_manual_estado')
+
+    const revisionManualValid =
+      revManualParam && REVISION_MANUAL_FILTRO_URL.has(revManualParam)
+        ? revManualParam
+        : undefined
+
     setFilters(prev => ({
       ...prev,
 
@@ -207,6 +234,8 @@ export function PrestamosList() {
       estado: estadoValid,
 
       search: searchParam,
+
+      revision_manual_estado: revisionManualValid,
     }))
   }, [searchParams])
 
@@ -432,6 +461,8 @@ export function PrestamosList() {
       fecha_fin: undefined,
 
       requiere_revision: undefined,
+
+      revision_manual_estado: undefined,
     })
 
     // Limpiar también el parámetro de URL
@@ -461,6 +492,8 @@ export function PrestamosList() {
     filters.fecha_inicio,
 
     filters.fecha_fin,
+
+    filters.revision_manual_estado,
   ].filter(Boolean).length
 
   // Efecto para resetear página cuando cambien los filtros
@@ -485,6 +518,8 @@ export function PrestamosList() {
     filters.fecha_inicio,
 
     filters.fecha_fin,
+
+    filters.revision_manual_estado,
   ])
 
   const getEstadoBadge = (estado: string) => {
@@ -1126,13 +1161,17 @@ export function PrestamosList() {
           <div className="space-y-4">
             {/* Fila 1: Búsqueda general */}
 
-            <div className="flex gap-4">
-              <div className="flex-1">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end">
+              <div className="min-w-0 flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Buscar
+                </label>
+
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 transform text-gray-400" />
 
                   <Input
-                    placeholder="Buscar por cédula..."
+                    placeholder="Buscar por cédula, nombre o ID de préstamo..."
                     value={filters.search || ''}
                     onChange={e =>
                       setFilters({ ...filters, search: e.target.value })
@@ -1140,6 +1179,58 @@ export function PrestamosList() {
                     className="pl-10"
                   />
                 </div>
+              </div>
+
+              <div className="w-full shrink-0 md:w-64">
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Revisión manual
+                </label>
+
+                <Select
+                  value={filters.revision_manual_estado ?? 'ALL'}
+                  onValueChange={val => {
+                    const next =
+                      val === 'ALL' ? undefined : val
+
+                    setFilters(prev => ({
+                      ...prev,
+
+                      revision_manual_estado: next,
+                    }))
+
+                    const params = new URLSearchParams(searchParams)
+
+                    if (next) {
+                      params.set('revision_manual_estado', next)
+                    } else {
+                      params.delete('revision_manual_estado')
+                    }
+
+                    setSearchParams(params, { replace: true })
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Estado de revisión manual" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="ALL">Todos</SelectItem>
+
+                    <SelectItem value="sin_registro">
+                      Sin registro (sin fila en BD)
+                    </SelectItem>
+
+                    <SelectItem value="pendiente">Pendiente</SelectItem>
+
+                    <SelectItem value="revisando">En revisión</SelectItem>
+
+                    <SelectItem value="en_espera">En espera</SelectItem>
+
+                    <SelectItem value="revisado">Revisado</SelectItem>
+
+                    <SelectItem value="rechazado">Rechazado</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

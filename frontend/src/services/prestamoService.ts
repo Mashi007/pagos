@@ -107,6 +107,8 @@ class PrestamoService {
       fecha_fin?: string
 
       requiere_revision?: boolean
+
+      revision_manual_estado?: string
     },
 
     page: number = 1,

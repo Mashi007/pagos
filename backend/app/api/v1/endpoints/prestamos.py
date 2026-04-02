@@ -541,6 +541,14 @@ def listar_prestamos(
 
     search: Optional[str] = Query(None),
 
+    revision_manual_estado: Optional[str] = Query(
+        None,
+        description=(
+            "Filtra por estado en revision_manual_prestamos: pendiente, revisando, "
+            "en_espera, revisado, rechazado, o sin_registro (sin fila en esa tabla)."
+        ),
+    ),
+
     db: Session = Depends(get_db),
 
 ):
@@ -642,6 +650,39 @@ def listar_prestamos(
         q = q.where(Prestamo.requiere_revision == requiere_revision)
 
         count_q = count_q.where(Prestamo.requiere_revision == requiere_revision)
+
+    if revision_manual_estado and revision_manual_estado.strip():
+
+        rm = revision_manual_estado.strip().lower()
+
+        _rm_validos_tabla = frozenset(
+            {"pendiente", "revisando", "en_espera", "revisado", "rechazado"}
+        )
+
+        if rm == "sin_registro":
+
+            _existe_rev = exists(
+                select(RevisionManualPrestamo.id).where(
+                    RevisionManualPrestamo.prestamo_id == Prestamo.id
+                )
+            )
+
+            q = q.where(~_existe_rev)
+
+            count_q = count_q.where(~_existe_rev)
+
+        elif rm in _rm_validos_tabla:
+
+            _existe_rev_estado = exists(
+                select(RevisionManualPrestamo.id).where(
+                    RevisionManualPrestamo.prestamo_id == Prestamo.id,
+                    func.lower(RevisionManualPrestamo.estado_revision) == rm,
+                )
+            )
+
+            q = q.where(_existe_rev_estado)
+
+            count_q = count_q.where(_existe_rev_estado)
 
     if fecha_inicio:
 

@@ -61,6 +61,9 @@ export interface PrestamoFilters {
   fecha_fin?: string
 
   requiere_revision?: boolean
+
+  /** Backend: pendiente | revisando | en_espera | revisado | rechazado | sin_registro */
+  revision_manual_estado?: string
 }
 
 // Hook para obtener lista de préstamos
