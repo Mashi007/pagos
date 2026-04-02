@@ -24,7 +24,7 @@
 
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { Save, Loader2, Search } from 'lucide-react'
 
@@ -219,6 +219,41 @@ function prestamoIdVacio(v: unknown): boolean {
   )
 }
 
+/** Segunda línea en columna Crédito: préstamo del pago ya existente en BD (mismo documento). */
+
+export function PrestamoDuplicadoEnBdBloque({ row }: { row: PagoExcelRow }) {
+  if (row._prestamoIdExistenteDuplicadoBD === undefined) return null
+
+  const pid = row._prestamoIdExistenteDuplicadoBD
+
+  return (
+    <div className="mt-1.5 border-t border-red-200 pt-1.5">
+      <p className="text-[10px] font-medium text-red-600/90">
+        Ya registrado (mismo documento)
+      </p>
+
+      <p
+        className="text-sm font-semibold tabular-nums text-red-700"
+        title="prestamo_id del pago que ya existe en la base de datos con este documento"
+      >
+        {typeof pid === 'number' && pid > 0 ? pid : '—'}
+      </p>
+    </div>
+  )
+}
+
+function CreditoDestinoEnvoltorio({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <p className="text-[10px] font-medium leading-tight text-gray-600">
+        Préstamo destino (esta fila)
+      </p>
+
+      {children}
+    </div>
+  )
+}
+
 /**
 
 
@@ -262,30 +297,6 @@ function CreditoCell({
     value: string | number
   ) => void
 }) {
-  if (row._prestamoIdExistenteDuplicadoBD !== undefined) {
-    const pid = row._prestamoIdExistenteDuplicadoBD
-
-    if (typeof pid === 'number' && pid > 0) {
-      return (
-        <span
-          className="text-sm font-semibold tabular-nums text-red-600"
-          title="Crédito del pago ya registrado en BD con este documento"
-        >
-          {pid}
-        </span>
-      )
-    }
-
-    return (
-      <span
-        className="text-xs text-gray-500"
-        title="Documento ya existe en BD; el registro existente no tiene crédito asociado"
-      >
-        —
-      </span>
-    )
-  }
-
   const lookup = cedulaLookupParaFila(
     row.cedula || '',
     row.numero_documento || ''
@@ -296,16 +307,23 @@ function CreditoCell({
   if (prestamos.length === 0) {
     const mapKeys = Object.keys(prestamosPorCedula).length
     return (
-      <div>
-        <span
-          className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-700"
-          title={`lookup=${lookup} mapKeys=${mapKeys}`}
-        >
-          Sin credito
-        </span>
-        <p className="mt-0.5 text-[10px] leading-tight text-red-500">
-          No hay prestamos activos (APROBADO) para esta cedula
-        </p>
+      <div className="flex flex-col gap-0.5">
+        <CreditoDestinoEnvoltorio>
+          <div>
+            <span
+              className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-700"
+              title={`lookup=${lookup} mapKeys=${mapKeys}`}
+            >
+              Sin credito
+            </span>
+
+            <p className="mt-0.5 text-[10px] leading-tight text-red-500">
+              No hay prestamos activos (APROBADO) para esta cedula
+            </p>
+          </div>
+        </CreditoDestinoEnvoltorio>
+
+        <PrestamoDuplicadoEnBdBloque row={row} />
       </div>
     )
   }
@@ -319,36 +337,54 @@ function CreditoCell({
 
     if (vacio) {
       return (
-        <input
-          type="text"
-          value={String(correctId)}
-          readOnly
-          className="w-full rounded border border-green-200 bg-green-50 p-1 text-sm font-medium text-green-800"
-          title="ID de préstamo auto-llenado (único crédito activo)"
-        />
+        <div className="flex flex-col gap-0.5">
+          <CreditoDestinoEnvoltorio>
+            <input
+              type="text"
+              value={String(correctId)}
+              readOnly
+              className="w-full rounded border border-green-200 bg-green-50 p-1 text-sm font-medium text-green-800"
+              title="ID de préstamo auto-llenado (único crédito activo)"
+            />
+          </CreditoDestinoEnvoltorio>
+
+          <PrestamoDuplicadoEnBdBloque row={row} />
+        </div>
       )
     }
 
     if (ok) {
       return (
-        <input
-          type="text"
-          value={String(correctId)}
-          readOnly
-          className="w-full rounded border border-gray-200 bg-green-50 p-1 text-sm font-medium text-green-800"
-          title="ID de préstamo coincide con el único crédito activo"
-        />
+        <div className="flex flex-col gap-0.5">
+          <CreditoDestinoEnvoltorio>
+            <input
+              type="text"
+              value={String(correctId)}
+              readOnly
+              className="w-full rounded border border-gray-200 bg-green-50 p-1 text-sm font-medium text-green-800"
+              title="ID de préstamo coincide con el único crédito activo"
+            />
+          </CreditoDestinoEnvoltorio>
+
+          <PrestamoDuplicadoEnBdBloque row={row} />
+        </div>
       )
     }
 
     return (
-      <input
-        type="text"
-        value={String(row.prestamo_id ?? '')}
-        readOnly
-        className="w-full rounded border border-amber-300 bg-amber-50 p-1 text-sm text-amber-900"
-        title="ID no coincide con el crédito; se ajustará al guardar si corresponde"
-      />
+      <div className="flex flex-col gap-0.5">
+        <CreditoDestinoEnvoltorio>
+          <input
+            type="text"
+            value={String(row.prestamo_id ?? '')}
+            readOnly
+            className="w-full rounded border border-amber-300 bg-amber-50 p-1 text-sm text-amber-900"
+            title="ID no coincide con el crédito; se ajustará al guardar si corresponde"
+          />
+        </CreditoDestinoEnvoltorio>
+
+        <PrestamoDuplicadoEnBdBloque row={row} />
+      </div>
     )
   }
 
@@ -361,28 +397,34 @@ function CreditoCell({
   const esValido = prestamos.some(p => p.id === row.prestamo_id)
 
   return (
-    <Select
-      value={valorActual}
-      onValueChange={v =>
-        onUpdateCell(row, 'prestamo_id', v === 'none' ? 0 : Number(v))
-      }
-    >
-      <SelectTrigger
-        className={`h-8 w-full text-xs ${!esValido && valorActual === 'none' ? 'border-amber-500 bg-amber-50' : ''}`}
-      >
-        <SelectValue placeholder="Elegir crédito" />
-      </SelectTrigger>
+    <div className="flex flex-col gap-0.5">
+      <CreditoDestinoEnvoltorio>
+        <Select
+          value={valorActual}
+          onValueChange={v =>
+            onUpdateCell(row, 'prestamo_id', v === 'none' ? 0 : Number(v))
+          }
+        >
+          <SelectTrigger
+            className={`h-8 w-full text-xs ${!esValido && valorActual === 'none' ? 'border-amber-500 bg-amber-50' : ''}`}
+          >
+            <SelectValue placeholder="Elegir crédito" />
+          </SelectTrigger>
 
-      <SelectContent>
-        <SelectItem value="none">- Elegir crédito -</SelectItem>
+          <SelectContent>
+            <SelectItem value="none">- Elegir crédito -</SelectItem>
 
-        {prestamos.map(p => (
-          <SelectItem key={p.id} value={String(p.id)}>
-            Crédito #{p.id}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+            {prestamos.map(p => (
+              <SelectItem key={p.id} value={String(p.id)}>
+                Crédito #{p.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </CreditoDestinoEnvoltorio>
+
+      <PrestamoDuplicadoEnBdBloque row={row} />
+    </div>
   )
 }
 
@@ -681,7 +723,7 @@ export function TablaEditablePagos({
                 Documento
               </th>
 
-              <th className="min-w-[80px] border-r p-2 text-left font-semibold">
+              <th className="min-w-[140px] border-r p-2 text-left font-semibold">
                 Crédito
               </th>
 

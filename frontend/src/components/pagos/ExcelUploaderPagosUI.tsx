@@ -97,7 +97,10 @@ import { useMemo } from 'react'
 
 import { PagosConErroresSection } from './PagosConErroresSection'
 
-import { TablaEditablePagos } from './TablaEditablePagos'
+import {
+  TablaEditablePagos,
+  PrestamoDuplicadoEnBdBloque,
+} from './TablaEditablePagos'
 
 import {
   cedulaLookupParaFila,
@@ -670,7 +673,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                 Documento
                               </th>
 
-                              <th className="w-32 border p-2 text-left text-xs font-medium">
+                              <th className="min-w-[140px] border p-2 text-left text-xs font-medium">
                                 Crédito
                               </th>
 
@@ -917,116 +920,106 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                     </td>
 
                                     <td className="border p-2">
-                                      {row._prestamoIdExistenteDuplicadoBD !==
-                                      undefined ? (
-                                        typeof row._prestamoIdExistenteDuplicadoBD ===
-                                          'number' &&
-                                        row._prestamoIdExistenteDuplicadoBD >
-                                          0 ? (
-                                          <span
-                                            className="text-sm font-semibold tabular-nums text-red-600"
-                                            title="Crédito del pago ya registrado en BD con este documento"
-                                          >
-                                            {
-                                              row._prestamoIdExistenteDuplicadoBD
-                                            }
-                                          </span>
-                                        ) : (
-                                          <span
-                                            className="text-xs text-gray-500"
-                                            title="Documento ya existe en BD; el registro existente no tiene crédito asociado"
-                                          >
-                                            —
-                                          </span>
-                                        )
-                                      ) : tieneCreditos ? (
-                                        <>
-                                          <Select
-                                            key={`credito-${row._rowIndex}-${prestamosActivos.length}-${row.prestamo_id ?? 'n'}`}
-                                            value={valorCredito}
-                                            onValueChange={v =>
-                                              updateCellValue(
-                                                row,
-                                                'prestamo_id',
-                                                v
-                                              )
-                                            }
-                                          >
-                                            <SelectTrigger className="h-8 text-xs">
-                                              <SelectValue placeholder="Seleccionar crédito" />
-                                            </SelectTrigger>
+                                      <div className="flex flex-col gap-1.5">
+                                        <div className="min-w-0">
+                                          <p className="mb-0.5 text-[10px] font-medium leading-tight text-gray-600">
+                                            Préstamo destino (esta fila)
+                                          </p>
 
-                                            <SelectContent>
-                                              <SelectItem value="none">
-                                                - Seleccionar -
-                                              </SelectItem>
-
-                                              {prestamosActivos.map(p => (
-                                                <SelectItem
-                                                  key={p.id}
-                                                  value={String(p.id)}
-                                                >
-                                                  Crédito #{p.id}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
-
-                                          {prestamosActivos.length > 1 &&
-                                            valorCredito === 'none' && (
-                                              <p className="mt-0.5 text-xs text-amber-700">
-                                                {OBSERVACIONES_POR_CAMPO.prestamo_id ??
-                                                  'Crédito inválido'}
-                                              </p>
-                                            )}
-                                        </>
-                                      ) : (
-                                        <div className="flex flex-col gap-0.5">
-                                          <div className="flex items-center gap-1">
-                                            {cedulaLookup &&
-                                            cedulasBuscando.has(
-                                              cedulaLookup
-                                            ) ? (
-                                              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                                            ) : cedulaLookup &&
-                                              cedulaLookup.length >= 5 ? (
-                                              <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-7 px-2 text-xs"
-                                                onClick={() =>
-                                                  fetchSingleCedula(
-                                                    cedulaLookup
+                                          {tieneCreditos ? (
+                                            <>
+                                              <Select
+                                                key={`credito-${row._rowIndex}-${prestamosActivos.length}-${row.prestamo_id ?? 'n'}`}
+                                                value={valorCredito}
+                                                onValueChange={v =>
+                                                  updateCellValue(
+                                                    row,
+                                                    'prestamo_id',
+                                                    v
                                                   )
                                                 }
-                                                disabled={
-                                                  serviceStatus === 'offline'
-                                                }
                                               >
-                                                <Search className="mr-1 h-3 w-3" />
-                                                Buscar
-                                              </Button>
-                                            ) : null}
+                                                <SelectTrigger className="h-8 text-xs">
+                                                  <SelectValue placeholder="Seleccionar crédito" />
+                                                </SelectTrigger>
 
-                                            {(!cedulaLookup ||
-                                              cedulaLookup.length < 5) && (
-                                              <span className="text-xs text-gray-400">
-                                                -
-                                              </span>
-                                            )}
-                                          </div>
+                                                <SelectContent>
+                                                  <SelectItem value="none">
+                                                    - Seleccionar -
+                                                  </SelectItem>
 
-                                          {cedulaLookup &&
-                                            cedulaLookup.length >= 5 &&
-                                            !tieneCreditos && (
-                                              <p className="mt-0.5 text-xs text-amber-700">
-                                                {OBSERVACIONES_POR_CAMPO.prestamo_id ??
-                                                  'Crédito inválido'}
-                                              </p>
-                                            )}
+                                                  {prestamosActivos.map(p => (
+                                                    <SelectItem
+                                                      key={p.id}
+                                                      value={String(p.id)}
+                                                    >
+                                                      Crédito #{p.id}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+
+                                              {prestamosActivos.length > 1 &&
+                                                valorCredito === 'none' && (
+                                                  <p className="mt-0.5 text-xs text-amber-700">
+                                                    {OBSERVACIONES_POR_CAMPO.prestamo_id ??
+                                                      'Crédito inválido'}
+                                                  </p>
+                                                )}
+                                            </>
+                                          ) : (
+                                            <div className="flex flex-col gap-0.5">
+                                              <div className="flex items-center gap-1">
+                                                {cedulaLookup &&
+                                                cedulasBuscando.has(
+                                                  cedulaLookup
+                                                ) ? (
+                                                  <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                                                ) : cedulaLookup &&
+                                                  cedulaLookup.length >= 5 ? (
+                                                  <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 px-2 text-xs"
+                                                    onClick={() =>
+                                                      fetchSingleCedula(
+                                                        cedulaLookup
+                                                      )
+                                                    }
+                                                    disabled={
+                                                      serviceStatus ===
+                                                      'offline'
+                                                    }
+                                                  >
+                                                    <Search className="mr-1 h-3 w-3" />
+                                                    Buscar
+                                                  </Button>
+                                                ) : null}
+
+                                                {(!cedulaLookup ||
+                                                  cedulaLookup.length <
+                                                    5) && (
+                                                  <span className="text-xs text-gray-400">
+                                                    -
+                                                  </span>
+                                                )}
+                                              </div>
+
+                                              {cedulaLookup &&
+                                                cedulaLookup.length >= 5 &&
+                                                !tieneCreditos && (
+                                                  <p className="mt-0.5 text-xs text-amber-700">
+                                                    {OBSERVACIONES_POR_CAMPO.prestamo_id ??
+                                                      'Crédito inválido'}
+                                                  </p>
+                                                )}
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
+
+                                        <PrestamoDuplicadoEnBdBloque row={row} />
+                                      </div>
                                     </td>
 
                                     <td className="border p-2">
