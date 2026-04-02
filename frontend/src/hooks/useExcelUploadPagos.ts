@@ -1748,6 +1748,8 @@ export function useExcelUploadPagos({
 
       let detalleDuplicadosBD = new Map<string, string>()
 
+      let prestamoPorDocDupBD = new Map<string, number | null>()
+
       if (todasCedulas.length > 0 || todosDocumentos.length > 0) {
         try {
           const resultado = await pagoService.validarFilasBatch({
@@ -1777,6 +1779,7 @@ export function useExcelUploadPagos({
               origen?: string
               pago_id?: number
               pago_con_error_id?: number
+              prestamo_id?: number | null
             }
 
             const key = normalizarNumeroDocumento(d.numero_documento)
@@ -1795,12 +1798,19 @@ export function useExcelUploadPagos({
             }
 
             detalleDuplicadosBD.set(key, suffix)
+
+            const pid = d.prestamo_id
+            prestamoPorDocDupBD.set(
+              key,
+              pid != null && Number.isFinite(Number(pid)) ? Number(pid) : null
+            )
           }
         } catch {
           // Igual que carga inicial: sin respuesta del API, validar sin listas de BD
           cedulasExistentesBD = new Set()
           documentosDuplicadosBD = new Set()
           detalleDuplicadosBD = new Map()
+          prestamoPorDocDupBD = new Map()
         }
       }
 
@@ -1810,6 +1820,8 @@ export function useExcelUploadPagos({
 
       return processed.map(r => {
         const docNorm = normalizarNumeroDocumento(r.numero_documento)
+
+        const { _prestamoIdExistenteDuplicadoBD: _omitDup, ...restRow } = r
 
         const vCedula = validatePagoField('cedula', r.cedula, {
           cedulasInvalidas: new Set(
@@ -1857,7 +1869,19 @@ export function useExcelUploadPagos({
           !newValidation['monto_pagado']?.isValid ||
           !newValidation['numero_documento']?.isValid
 
-        return { ...r, _validation: newValidation, _hasErrors: hasErrors }
+        const prestamoDupBd =
+          esDuplicadoEnBD && docNorm
+            ? (prestamoPorDocDupBD.get(docNorm) ?? null)
+            : undefined
+
+        return {
+          ...restRow,
+          _validation: newValidation,
+          _hasErrors: hasErrors,
+          ...(prestamoDupBd !== undefined
+            ? { _prestamoIdExistenteDuplicadoBD: prestamoDupBd }
+            : {}),
+        }
       })
     },
     [isMounted]

@@ -262,6 +262,30 @@ function CreditoCell({
     value: string | number
   ) => void
 }) {
+  if (row._prestamoIdExistenteDuplicadoBD !== undefined) {
+    const pid = row._prestamoIdExistenteDuplicadoBD
+
+    if (typeof pid === 'number' && pid > 0) {
+      return (
+        <span
+          className="text-sm font-semibold tabular-nums text-red-600"
+          title="Crédito del pago ya registrado en BD con este documento"
+        >
+          {pid}
+        </span>
+      )
+    }
+
+    return (
+      <span
+        className="text-xs text-gray-500"
+        title="Documento ya existe en BD; el registro existente no tiene crédito asociado"
+      >
+        —
+      </span>
+    )
+  }
+
   const lookup = cedulaLookupParaFila(
     row.cedula || '',
     row.numero_documento || ''
@@ -661,7 +685,7 @@ export function TablaEditablePagos({
                 Crédito
               </th>
 
-              <th className="min-w-[100px] p-2 text-center font-semibold">
+              <th className="w-14 min-w-[3.5rem] p-2 text-center font-semibold">
                 Acción
               </th>
             </tr>
@@ -907,7 +931,7 @@ export function TablaEditablePagos({
                               serviceStatus === 'offline'
                             }
                             title={motivoBloqueo || 'Guardar esta fila'}
-                            className={`inline-flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                            className={`inline-flex items-center justify-center rounded p-1.5 transition-colors ${
                               noPuedeGuardar
                                 ? 'cursor-not-allowed bg-gray-100 text-gray-400'
                                 : 'bg-green-600 text-white hover:bg-green-700 disabled:opacity-70'
@@ -915,13 +939,16 @@ export function TablaEditablePagos({
                           >
                             {isSaving(row._rowIndex) ? (
                               <>
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                Guardando...
+                                <Loader2
+                                  className="h-3.5 w-3.5 animate-spin"
+                                  aria-hidden
+                                />
+                                <span className="sr-only">Guardando</span>
                               </>
                             ) : (
                               <>
-                                <Save className="h-3.5 w-3.5" />
-                                Guardar
+                                <Save className="h-3.5 w-3.5" aria-hidden />
+                                <span className="sr-only">Guardar</span>
                               </>
                             )}
                           </button>
@@ -935,15 +962,23 @@ export function TablaEditablePagos({
                                 isSaving(row._rowIndex) ||
                                 serviceStatus === 'offline'
                               }
-                              className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-100 px-2 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-200 disabled:opacity-70"
+                              className="inline-flex items-center justify-center rounded border border-amber-300 bg-amber-100 p-1.5 text-amber-800 hover:bg-amber-200 disabled:opacity-70"
                               title="Enviar esta fila a Revisar Pagos (no cumple validadores)"
                             >
                               {isSendingRevisar || isSaving(row._rowIndex) ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <>
+                                  <Loader2
+                                    className="h-3.5 w-3.5 animate-spin"
+                                    aria-hidden
+                                  />
+                                  <span className="sr-only">
+                                    Enviando a Revisar Pagos
+                                  </span>
+                                </>
                               ) : (
                                 <>
-                                  <Search className="h-3.5 w-3.5" />
-                                  Revisar Pagos
+                                  <Search className="h-3.5 w-3.5" aria-hidden />
+                                  <span className="sr-only">Revisar Pagos</span>
                                 </>
                               )}
                             </button>

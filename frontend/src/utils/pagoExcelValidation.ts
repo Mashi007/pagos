@@ -63,6 +63,13 @@ export interface PagoExcelRow {
   moneda_registro?: 'USD' | 'BS'
 
   tasa_cambio_manual?: number
+
+  /**
+   * Si el documento ya existe en BD (validar-filas-batch): id del préstamo del registro existente.
+   * `null` si el pago en BD no tiene prestamo_id. No definido si no aplica.
+   */
+
+  _prestamoIdExistenteDuplicadoBD?: number | null
 }
 
 /** Valor para API: string recortado o null si vacío (máx. 255). */

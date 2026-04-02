@@ -3343,6 +3343,8 @@ def validar_filas_batch(
 
                 Pago.monto_pagado,
 
+                Pago.prestamo_id,
+
             )
 
             .where(doc_match_pagos)
@@ -3383,6 +3385,8 @@ def validar_filas_batch(
 
                     "monto_pagado": float(row[4]) if row[4] else 0,
 
+                    "prestamo_id": int(row[5]) if row[5] is not None else None,
+
                     "estado": "duplicado",
 
                     "origen": "pagos",
@@ -3412,6 +3416,8 @@ def validar_filas_batch(
                 PagoConError.fecha_pago,
 
                 PagoConError.monto_pagado,
+
+                PagoConError.prestamo_id,
 
             )
 
@@ -3450,6 +3456,8 @@ def validar_filas_batch(
                     "fecha_pago": row[3].isoformat() if row[3] else None,
 
                     "monto_pagado": float(row[4]) if row[4] else 0,
+
+                    "prestamo_id": int(row[5]) if row[5] is not None else None,
 
                     "estado": "duplicado",
 

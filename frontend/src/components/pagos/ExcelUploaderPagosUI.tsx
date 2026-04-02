@@ -678,7 +678,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                 Conciliación
                               </th>
 
-                              <th className="w-20 border p-2 text-left text-xs font-medium">
+                              <th className="w-14 border p-2 text-center text-xs font-medium">
                                 Acción
                               </th>
                             </tr>
@@ -917,7 +917,29 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                     </td>
 
                                     <td className="border p-2">
-                                      {tieneCreditos ? (
+                                      {row._prestamoIdExistenteDuplicadoBD !==
+                                      undefined ? (
+                                        typeof row._prestamoIdExistenteDuplicadoBD ===
+                                          'number' &&
+                                        row._prestamoIdExistenteDuplicadoBD >
+                                          0 ? (
+                                          <span
+                                            className="text-sm font-semibold tabular-nums text-red-600"
+                                            title="Crédito del pago ya registrado en BD con este documento"
+                                          >
+                                            {
+                                              row._prestamoIdExistenteDuplicadoBD
+                                            }
+                                          </span>
+                                        ) : (
+                                          <span
+                                            className="text-xs text-gray-500"
+                                            title="Documento ya existe en BD; el registro existente no tiene crédito asociado"
+                                          >
+                                            —
+                                          </span>
+                                        )
+                                      ) : tieneCreditos ? (
                                         <>
                                           <Select
                                             key={`credito-${row._rowIndex}-${prestamosActivos.length}-${row.prestamo_id ?? 'n'}`}
@@ -1061,15 +1083,28 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                               savingProgress[row._rowIndex] ||
                                               serviceStatus === 'offline'
                                             }
-                                            className="border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+                                            className="h-8 w-8 shrink-0 border-amber-300 p-0 text-amber-700 hover:bg-amber-50"
                                             title="Enviar a Revisar Pagos para confirmar uno a uno"
                                           >
                                             {savingProgress[row._rowIndex] ? (
-                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                              <>
+                                                <Loader2
+                                                  className="h-3.5 w-3.5 animate-spin"
+                                                  aria-hidden
+                                                />
+                                                <span className="sr-only">
+                                                  Enviando
+                                                </span>
+                                              </>
                                             ) : (
                                               <>
-                                                <Search className="mr-1 h-3 w-3" />
-                                                Revisar Pagos
+                                                <Search
+                                                  className="h-3.5 w-3.5"
+                                                  aria-hidden
+                                                />
+                                                <span className="sr-only">
+                                                  Revisar Pagos
+                                                </span>
                                               </>
                                             )}
                                           </Button>
@@ -1084,11 +1119,13 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                               savingProgress[row._rowIndex] ||
                                               serviceStatus === 'offline'
                                             }
-                                            className="text-xs text-gray-600"
+                                            className="h-8 w-8 shrink-0 p-0 text-gray-600"
                                             title="Cambie el documento o intente guardar de nuevo"
                                           >
-                                            <Save className="mr-1 h-3 w-3" />
-                                            Guardar de nuevo
+                                            <Save className="h-3.5 w-3.5" aria-hidden />
+                                            <span className="sr-only">
+                                              Guardar de nuevo
+                                            </span>
                                           </Button>
                                         </div>
                                       ) : !row._hasErrors ? (
@@ -1102,14 +1139,28 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                               savingProgress[row._rowIndex] ||
                                               serviceStatus === 'offline'
                                             }
-                                            className="bg-green-600 text-xs text-white hover:bg-green-700"
+                                            className="h-8 w-8 shrink-0 bg-green-600 p-0 text-white hover:bg-green-700"
+                                            title="Guardar esta fila"
                                           >
                                             {savingProgress[row._rowIndex] ? (
-                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                              <>
+                                                <Loader2
+                                                  className="h-3.5 w-3.5 animate-spin"
+                                                  aria-hidden
+                                                />
+                                                <span className="sr-only">
+                                                  Guardando
+                                                </span>
+                                              </>
                                             ) : (
                                               <>
-                                                <Save className="mr-1 h-3 w-3" />
-                                                Guardar
+                                                <Save
+                                                  className="h-3.5 w-3.5"
+                                                  aria-hidden
+                                                />
+                                                <span className="sr-only">
+                                                  Guardar
+                                                </span>
                                               </>
                                             )}
                                           </Button>
@@ -1128,7 +1179,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                                 savingProgress[row._rowIndex] ||
                                                 serviceStatus === 'offline'
                                               }
-                                              className="border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+                                              className="h-8 w-8 shrink-0 border-amber-300 p-0 text-amber-700 hover:bg-amber-50"
                                               title={
                                                 prestamosActivos.length > 1
                                                   ? 'Enviar a Revisar Pagos para asignar el crédito correcto'
@@ -1136,11 +1187,24 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                               }
                                             >
                                               {savingProgress[row._rowIndex] ? (
-                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                <>
+                                                  <Loader2
+                                                    className="h-3.5 w-3.5 animate-spin"
+                                                    aria-hidden
+                                                  />
+                                                  <span className="sr-only">
+                                                    Enviando
+                                                  </span>
+                                                </>
                                               ) : (
                                                 <>
-                                                  <Search className="mr-1 h-3 w-3" />
-                                                  Revisar Pagos
+                                                  <Search
+                                                    className="h-3.5 w-3.5"
+                                                    aria-hidden
+                                                  />
+                                                  <span className="sr-only">
+                                                    Revisar Pagos
+                                                  </span>
                                                 </>
                                               )}
                                             </Button>
@@ -1165,14 +1229,28 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                               savingProgress[row._rowIndex] ||
                                               serviceStatus === 'offline'
                                             }
-                                            className="border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+                                            className="h-8 w-8 shrink-0 border-amber-300 p-0 text-amber-700 hover:bg-amber-50"
+                                            title="Enviar a Revisar Pagos"
                                           >
                                             {savingProgress[row._rowIndex] ? (
-                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                              <>
+                                                <Loader2
+                                                  className="h-3.5 w-3.5 animate-spin"
+                                                  aria-hidden
+                                                />
+                                                <span className="sr-only">
+                                                  Enviando
+                                                </span>
+                                              </>
                                             ) : (
                                               <>
-                                                <Search className="mr-1 h-3 w-3" />
-                                                Revisar Pagos
+                                                <Search
+                                                  className="h-3.5 w-3.5"
+                                                  aria-hidden
+                                                />
+                                                <span className="sr-only">
+                                                  Revisar Pagos
+                                                </span>
                                               </>
                                             )}
                                           </Button>
