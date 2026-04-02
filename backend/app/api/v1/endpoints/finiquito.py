@@ -78,6 +78,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_ADMIN_CASOS_DEFAULT_LIMIT = 500
+_ADMIN_CASOS_MAX_LIMIT = 2000
+
 ESTADOS_VALIDOS = frozenset(
     {"REVISION", "ACEPTADO", "RECHAZADO", "EN_PROCESO", "TERMINADO"}
 )
@@ -655,7 +658,8 @@ def finiquito_public_listar_casos(
     items: List[FiniquitoCasoOut] = [
         _caso_to_out(c, mp.get(c.prestamo_id), db) for c in casos
     ]
-    return FiniquitoCasoListaResponse(items=items)
+    n = len(items)
+    return FiniquitoCasoListaResponse(items=items, total=n, limit=n, offset=0)
 
 
 @router.get("/public/casos/{caso_id}/detalle", response_model=FiniquitoDetalleResponse)
@@ -758,6 +762,13 @@ def finiquito_admin_listar(
         None,
         description="Subcadena de cedula (coincidencia parcial, sin distinguir mayusculas)",
     ),
+    limit: int = Query(
+        _ADMIN_CASOS_DEFAULT_LIMIT,
+        ge=1,
+        le=_ADMIN_CASOS_MAX_LIMIT,
+        description="Tamano de pagina (max 2000).",
+    ),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginacion."),
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_admin),
 ):
@@ -777,9 +788,14 @@ def finiquito_admin_listar(
         q = q.filter(FiniquitoCaso.estado == e)
     if cedula and cedula.strip():
         q = q.filter(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
-    casos = q.order_by(FiniquitoCaso.id.desc()).all()
+    total = int(q.count())
+    casos = (
+        q.order_by(FiniquitoCaso.id.desc()).offset(offset).limit(limit).all()
+    )
     items = _admin_casos_to_items(db, casos)
-    return FiniquitoCasoListaResponse(items=items)
+    return FiniquitoCasoListaResponse(
+        items=items, total=total, limit=limit, offset=offset
+    )
 
 
 @router.get("/admin/casos/{caso_id}/revision-datos")

@@ -256,23 +256,35 @@ export async function finiquitoAdminRevisionDatos(casoId: number) {
   )
 }
 
+export type FiniquitoAdminListaResult = {
+  items: FiniquitoCasoItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export async function finiquitoAdminListar(
   estado?: string,
   cedula?: string,
-  estadoIn?: string
-) {
+  estadoIn?: string,
+  pagination?: { limit?: number; offset?: number }
+): Promise<FiniquitoAdminListaResult> {
   const params = new URLSearchParams()
   if (estadoIn && estadoIn.trim()) {
     params.set('estado_in', estadoIn.trim())
   } else if (estado) {
     params.set('estado', estado)
   }
-  const c = (cedula ?? '').trim()
-  if (c) params.set('cedula', c)
+  const ced = (cedula ?? '').trim()
+  if (ced) params.set('cedula', ced)
+  if (pagination?.limit != null) {
+    params.set('limit', String(pagination.limit))
+  }
+  if (pagination?.offset != null) {
+    params.set('offset', String(pagination.offset))
+  }
   const q = params.toString() ? `?${params.toString()}` : ''
-  return apiClient.get<{ items: FiniquitoCasoItem[] }>(
-    `${BASE}/admin/casos${q}`
-  )
+  return apiClient.get<FiniquitoAdminListaResult>(`${BASE}/admin/casos${q}`)
 }
 
 export async function finiquitoAdminPatchEstado(

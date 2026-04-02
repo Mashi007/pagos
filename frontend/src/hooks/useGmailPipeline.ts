@@ -121,7 +121,7 @@ export function useGmailPipeline({
                 // Datos de una ejecución anterior disponibles para descargar
 
                 toast(
-                  `Sin correos nuevos (solo se procesan no leídos; al terminar se vuelve a revisar la bandeja). Hay datos del ${s.latest_data_date} listos para descargar.`,
+                  `Sin correos nuevos con adjuntos elegibles (no leídos). Hay datos del ${s.latest_data_date} listos para descargar.`,
 
                   { duration: 8000 }
                 )
@@ -129,9 +129,9 @@ export function useGmailPipeline({
                 onDoneRef.current?.(s)
               } else {
                 toast(
-                  'No se encontraron correos para procesar. Regla: solo mensajes NO LEÍDOS (con o sin adjuntos). Marque como no leído si quiere reprocesar.',
+                  'No hay correos no leídos con adjuntos, o todos quedaron destacados (formato no RAPI-CREDIT/BNC). Revise estrellas en Gmail.',
 
-                  { duration: 7000 }
+                  { duration: 8000 }
                 )
 
                 // Sin datos: no abrir el diálogo de descarga

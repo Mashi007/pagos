@@ -13,7 +13,7 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional, Tuple
 
 GEMINI_RATE_LIMIT_RETRY_DELAY = 45
 GEMINI_RATE_LIMIT_MAX_RETRIES = 2
@@ -26,6 +26,33 @@ from app.services.pagos_gmail.helpers import get_mime_type
 logger = logging.getLogger(__name__)
 
 PAGOS_NA = "NA"
+
+PagosGmailFormato = Literal["A", "B", "ninguno"]
+
+GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = (
+    "Analiza UNICAMENTE la imagen o PDF adjunto (comprobante escaneado o foto). "
+    "Ignora cualquier contexto externo: no uses asunto ni cuerpo de correo.\n\n"
+    "PASO 1 — Clasifica el documento en exactamente UNO de estos formatos:\n"
+    "- Formato A (rapicredit_terminal): comprobante de recaudacion/terminal con la empresa "
+    '"RAPI-CREDIT" o "RAPI-CREDIT, C.A." visible; suele incluir etiquetas como '
+    '"Cedula Dep." o "C.I. del Depositante", "Monto:" (a veces con asteriscos antes del importe), '
+    '"USD", "RECAUDACION", "Serial:" o lineas de referencia largas.\n'
+    "- Formato B (bnc): comprobante del Banco Nacional de Credito (BNC): texto o marca "
+    '"BNC", "Banco Nacional de Credito", agencia, terminal/cajero, cuenta con barras, '
+    '"Deposito Us$" o deposito en dolares, beneficiario "RAPI-CREDIT".\n'
+    "- Si NO encaja claramente en A ni en B (otro banco, captura de app, documento ilegible, "
+    "foto irrelevante): formato = ninguno.\n\n"
+    "PASO 2 — Si formato es A o B, extrae SOLO de la imagen estos campos (no inventes; usa NA si no se lee):\n"
+    "- fecha_pago: fecha de la operacion\n"
+    "- cedula: cedula o documento del depositante/pagador (normaliza: quita guiones; sin ceros a la izquierda "
+    "del numero despues de V/E/J; ej. DP:V-018031623 -> V18031623)\n"
+    "- monto: importe con moneda si aparece (ej. 236.00 USD)\n"
+    "- numero_referencia: serial, ref, operacion o numero largo identificador de la transaccion\n\n"
+    "Si formato es ninguno: los cuatro campos deben ser exactamente \"NA\".\n\n"
+    'Responde UNICAMENTE con JSON valido (sin markdown): '
+    '{"formato":"A"|"B"|"ninguno","fecha_pago":"...","cedula":"...","monto":"...","numero_referencia":"..."}'
+)
+
 
 GEMINI_PROMPT = (
     "[EN] You MUST review ALL available information: email SUBJECT, message BODY, and ATTACHMENTS (images/PDFs). Extract the 4 fields from any source or combination. Respond ONLY with valid JSON. [ES] DEBES revisar TODA la informacion: ASUNTO, CUERPO y ADJUNTOS. Extrae los 4 campos de cualquier fuente o combinacion. Responde UNICAMENTE con JSON. "
@@ -200,6 +227,112 @@ def extract_payment_data(
     except Exception as e:
         logger.exception("Gemini extract_payment_data: %s", e)
         return _empty_result(str(e))
+
+
+def _parse_formato_y_pagos_json(text: str) -> Tuple[PagosGmailFormato, Dict[str, str]]:
+    empty = _empty_result()
+    try:
+        json_str = _find_json_object(text)
+        if not json_str:
+            m = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+            json_str = m.group(0) if m else None
+        if not json_str:
+            return "ninguno", empty.copy()
+        data = json.loads(json_str)
+        fmt_raw = str(data.get("formato", "")).strip().upper()
+        if fmt_raw == "A":
+            fmt: PagosGmailFormato = "A"
+        elif fmt_raw == "B":
+            fmt = "B"
+        else:
+            fmt = "ninguno"
+        fields = {
+            "fecha_pago": _normalize_to_na(data.get("fecha_pago", PAGOS_NA)),
+            "cedula": _normalize_to_na(data.get("cedula", PAGOS_NA)),
+            "monto": _normalize_to_na(data.get("monto", PAGOS_NA)),
+            "numero_referencia": _normalize_to_na(data.get("numero_referencia", PAGOS_NA)),
+        }
+        if fmt == "ninguno":
+            return fmt, {
+                "fecha_pago": PAGOS_NA,
+                "cedula": PAGOS_NA,
+                "monto": PAGOS_NA,
+                "numero_referencia": PAGOS_NA,
+            }
+        return fmt, fields
+    except (json.JSONDecodeError, TypeError):
+        return "ninguno", empty.copy()
+
+
+def classify_and_extract_pagos_gmail_attachment(
+    file_content: bytes,
+    filename: str,
+    api_key: Optional[str] = None,
+) -> Tuple[PagosGmailFormato, Dict[str, str]]:
+    """
+    Clasifica el comprobante en formato A (RAPI-CREDIT terminal), B (BNC) o ninguno,
+    y extrae campos solo desde el archivo (sin asunto/cuerpo).
+    """
+    key = api_key or getattr(settings, "GEMINI_API_KEY", None)
+    if not key:
+        logger.warning("[PAGOS_GMAIL] GEMINI_API_KEY no configurado; formato=ninguno")
+        return "ninguno", _empty_result(PAGOS_NA)
+    mime = get_mime_type(filename)
+    image_part = _build_image_part(file_content, filename, mime)
+    model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+    contents = [GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION, image_part]
+    try:
+        from google.genai import types
+        client = _gemini_client(key)
+        last_error = None
+        for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(temperature=0.1),
+                )
+                text = ""
+                try:
+                    text = (response.text or "").strip()
+                except Exception as text_err:
+                    logger.warning(
+                        "[PAGOS_GMAIL] Gemini formato+extraccion bloqueada/vacia: %s",
+                        text_err,
+                    )
+                    return "ninguno", _empty_result(f"blocked: {text_err}")
+                fmt, fields = _parse_formato_y_pagos_json(text)
+                logger.warning(
+                    "[PAGOS_GMAIL] Gemini formato=%s fecha=%s cedula=%s monto=%s ref=%s",
+                    fmt,
+                    fields.get("fecha_pago"),
+                    fields.get("cedula"),
+                    fields.get("monto"),
+                    fields.get("numero_referencia"),
+                )
+                return fmt, fields
+            except Exception as e:
+                last_error = e
+                if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
+                    delay = _extract_retry_seconds(e)
+                    logger.warning(
+                        "[PAGOS_GMAIL] Gemini 429 formato+extraccion, reintento en %ds",
+                        delay,
+                    )
+                    time.sleep(delay)
+                elif _is_server_error_503(e) and attempt < GEMINI_SERVER_ERROR_MAX_RETRIES:
+                    delay = GEMINI_SERVER_ERROR_RETRY_DELAY + (attempt * 5)
+                    logger.warning(
+                        "[PAGOS_GMAIL] Gemini 503 formato+extraccion, reintento en %ds",
+                        delay,
+                    )
+                    time.sleep(delay)
+                else:
+                    raise
+        return "ninguno", _empty_result(str(last_error))
+    except Exception as e:
+        logger.exception("Gemini classify_and_extract_pagos_gmail_attachment: %s", e)
+        return "ninguno", _empty_result(str(e))
 
 
 # ── Cobranza ────────────────────────────────────────────────────────────────

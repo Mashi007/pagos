@@ -65,8 +65,7 @@ export function isDelegatedPathForRol(
     }
     return matchesDelegatedPath(pathname, MANAGER_PREFIXES)
   }
-  if (r === 'operator')
-    return matchesDelegatedPath(pathname, OPERATOR_PREFIXES)
+  if (r === 'operator') return matchesDelegatedPath(pathname, OPERATOR_PREFIXES)
   if (r === 'viewer') return matchesDelegatedPath(pathname, VIEWER_PREFIXES)
   return false
 }

@@ -22,7 +22,6 @@ from app.api.v1.endpoints.pagos_gmail import (
     _find_sheet_by_fecha,
     _get_latest_date_with_data,
     _is_pipeline_running,
-    _last_run_too_recent,
     _sheet_date_from_fecha,
     download_excel,
     status,
@@ -200,8 +199,3 @@ def test_download_excel_logs_etapa_when_has_data(db: Session, caplog_gmail):
     assert any("download-excel" in m for m in etapas), "Debería haber log [ETAPA] download-excel"
 
 
-# --- Test _last_run_too_recent ---
-def test_last_run_too_recent_false_when_no_last(db: Session):
-    """Sin ejecución previa, _last_run_too_recent es (False, None)."""
-    too_recent, wait = _last_run_too_recent(db)
-    assert wait is None or isinstance(wait, int)

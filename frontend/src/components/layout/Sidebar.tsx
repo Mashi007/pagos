@@ -138,8 +138,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
-  const userRoleDisplay =
-    isAdminRole(user?.rol) ? 'Administrador' : 'Operativo'
+  const userRoleDisplay = isAdminRole(user?.rol) ? 'Administrador' : 'Operativo'
 
   const handleLogout = async () => {
     await logout()
@@ -368,10 +367,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           const hasInfopagos = children.some(c =>
             (c.href || '').split('?')[0].startsWith('/infopagos')
           )
-          if (
-            !hasInfopagos &&
-            isHrefDelegatedForRol(user?.rol, '/infopagos')
-          ) {
+          if (!hasInfopagos && isHrefDelegatedForRol(user?.rol, '/infopagos')) {
             children = [
               ...children,
               {
@@ -823,75 +819,71 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                               )}
                             >
                               {item.children.map(child =>
-                                  child.external ? (
-                                    <a
-                                      key={child.href}
-                                      href={child.href!}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className={cn(
-                                        'flex items-center rounded-lg border-l-4 border-l-transparent text-sm font-medium transition-all duration-200',
-                                        'text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
+                                child.external ? (
+                                  <a
+                                    key={child.href}
+                                    href={child.href!}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className={cn(
+                                      'flex items-center rounded-lg border-l-4 border-l-transparent text-sm font-medium transition-all duration-200',
+                                      'text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
+                                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2',
+                                      isCompact
+                                        ? 'justify-center px-2 py-2'
+                                        : 'space-x-3 px-3 py-2'
+                                    )}
+                                    title={isCompact ? child.title : undefined}
+                                  >
+                                    <child.icon className="h-4 w-4" />
+
+                                    {!isCompact && <span>{child.title}</span>}
+                                  </a>
+                                ) : (
+                                  <NavLink
+                                    key={child.href}
+                                    to={child.href!}
+                                    onClick={() => {
+                                      if (window.innerWidth < 1024) {
+                                        onClose()
+                                      }
+                                    }}
+                                    className={() =>
+                                      cn(
+                                        'flex items-center rounded-lg border-l-4 text-sm font-medium transition-all duration-200',
+
                                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2',
+
+                                        isActiveRoute(child.href!)
+                                          ? 'border-l-white bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                                          : 'border-l-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
+
                                         isCompact
                                           ? 'justify-center px-2 py-2'
                                           : 'space-x-3 px-3 py-2'
-                                      )}
-                                      title={
-                                        isCompact ? child.title : undefined
-                                      }
-                                    >
-                                      <child.icon className="h-4 w-4" />
+                                      )
+                                    }
+                                    title={isCompact ? child.title : undefined}
+                                  >
+                                    <child.icon className="h-4 w-4" />
 
-                                      {!isCompact && <span>{child.title}</span>}
-                                    </a>
-                                  ) : (
-                                    <NavLink
-                                      key={child.href}
-                                      to={child.href!}
-                                      onClick={() => {
-                                        if (window.innerWidth < 1024) {
-                                          onClose()
-                                        }
-                                      }}
-                                      className={() =>
-                                        cn(
-                                          'flex items-center rounded-lg border-l-4 text-sm font-medium transition-all duration-200',
+                                    {!isCompact && (
+                                      <>
+                                        <span>{child.title}</span>
 
-                                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2',
-
-                                          isActiveRoute(child.href!)
-                                            ? 'border-l-white bg-blue-600 text-white shadow-md shadow-blue-500/30'
-                                            : 'border-l-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
-
-                                          isCompact
-                                            ? 'justify-center px-2 py-2'
-                                            : 'space-x-3 px-3 py-2'
-                                        )
-                                      }
-                                      title={
-                                        isCompact ? child.title : undefined
-                                      }
-                                    >
-                                      <child.icon className="h-4 w-4" />
-
-                                      {!isCompact && (
-                                        <>
-                                          <span>{child.title}</span>
-
-                                          {child.badge && (
-                                            <Badge
-                                              variant="destructive"
-                                              className="ml-auto flex h-5 min-w-[20px] items-center justify-center px-1.5 text-xs"
-                                            >
-                                              {child.badge}
-                                            </Badge>
-                                          )}
-                                        </>
-                                      )}
-                                    </NavLink>
-                                  )
-                                )}
+                                        {child.badge && (
+                                          <Badge
+                                            variant="destructive"
+                                            className="ml-auto flex h-5 min-w-[20px] items-center justify-center px-1.5 text-xs"
+                                          >
+                                            {child.badge}
+                                          </Badge>
+                                        )}
+                                      </>
+                                    )}
+                                  </NavLink>
+                                )
+                              )}
                             </div>
                           </motion.div>
                         )}

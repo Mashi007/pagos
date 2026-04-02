@@ -1208,8 +1208,7 @@ export function PrestamosList() {
                 <Select
                   value={filters.revision_manual_estado ?? 'ALL'}
                   onValueChange={val => {
-                    const next =
-                      val === 'ALL' ? undefined : val
+                    const next = val === 'ALL' ? undefined : val
 
                     setFilters(prev => ({
                       ...prev,

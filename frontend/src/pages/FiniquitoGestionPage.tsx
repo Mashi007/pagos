@@ -68,6 +68,34 @@ function textoUltimoPago(iso: string | null | undefined): string {
   }
 }
 
+function estadoEtiquetaVisible(estado: string): string {
+  const map: Record<string, string> = {
+    REVISION: 'Revisión',
+    ACEPTADO: 'Aceptado',
+    RECHAZADO: 'Rechazado',
+    EN_PROCESO: 'En proceso',
+    TERMINADO: 'Terminado',
+  }
+  return map[estado] ?? estado.replace(/_/g, ' ')
+}
+
+function estadoBadgeClassName(estado: string): string {
+  switch (estado) {
+    case 'REVISION':
+      return 'bg-sky-100 text-sky-950'
+    case 'ACEPTADO':
+      return 'bg-slate-100 text-slate-800'
+    case 'RECHAZADO':
+      return 'bg-rose-100 text-rose-950'
+    case 'EN_PROCESO':
+      return 'bg-amber-100 text-amber-950'
+    case 'TERMINADO':
+      return 'bg-emerald-100 text-emerald-950'
+    default:
+      return 'bg-slate-100 text-slate-800'
+  }
+}
+
 const thGestion =
   'h-9 whitespace-nowrap bg-slate-800 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-white'
 
@@ -96,19 +124,77 @@ function textoToastRefresco(r: FiniquitoRefreshStats): {
 
 const DEBOUNCE_MS = 420
 
-export function FiniquitoGestionPage() {
+const PAGE_SIZE = 100
+
+function FiniquitoPaginationBar(props: {
+  page: number
+  pageSize: number
+  total: number
+  onPageChange: (p: number) => void
+  loading: boolean
+  className?: string
+}) {
+  const { page, pageSize, total, onPageChange, loading, className } = props
+  if (total === 0) return null
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  if (totalPages <= 1) return null
+  const from = page * pageSize + 1
+  const to = Math.min((page + 1) * pageSize, total)
+  const canPrev = page > 0 && !loading
+  const canNext = page + 1 < totalPages && !loading
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/80 px-3 py-2.5',
+        className
+      )}
+    >
+      <p className="text-xs text-slate-600">
+        Filas {from}-{to} de {total} · Página {page + 1} de {totalPages}
+      </p>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={!canPrev}
+          onClick={() => onPageChange(page - 1)}
+        >
+          Anterior
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={!canNext}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function FiniquitoGestionPageInner() {
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaBusqueda, setCedulaBusqueda] = useState('')
   const [itemsAreaTrabajo, setItemsAreaTrabajo] = useState<FiniquitoCasoItem[]>(
     []
   )
+  const [totalAreaTrabajo, setTotalAreaTrabajo] = useState(0)
+  const [pageTrabajo, setPageTrabajo] = useState(0)
   const [dialogTerminadoCasoId, setDialogTerminadoCasoId] = useState<
     number | null
   >(null)
   const [itemsRechazados, setItemsRechazados] = useState<FiniquitoCasoItem[]>(
     []
   )
+  const [totalRechazados, setTotalRechazados] = useState(0)
+  const [pageRechazados, setPageRechazados] = useState(0)
   const [itemsBandeja, setItemsBandeja] = useState<FiniquitoCasoItem[]>([])
+  const [totalBandeja, setTotalBandeja] = useState(0)
+  const [pageBandeja, setPageBandeja] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [revisionOpen, setRevisionOpen] = useState(false)
@@ -117,8 +203,9 @@ export function FiniquitoGestionPage() {
     descargandoEstadoCuentaPrestamoId,
     setDescargandoEstadoCuentaPrestamoId,
   ] = useState<number | null>(null)
-
-  const { isFiniquitador } = usePermissions()
+  const [pendingRechazoCasoId, setPendingRechazoCasoId] = useState<
+    number | null
+  >(null)
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -128,27 +215,9 @@ export function FiniquitoGestionPage() {
     return () => window.clearTimeout(t)
   }, [cedulaInput])
 
-  // Verificar acceso: solo finiquitador o administrador
-  if (!isFiniquitador) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-8 py-12">
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <Lock className="h-5 w-5 text-red-600" />
-              <div>
-                <p className="font-semibold text-red-800">Acceso Restringido</p>
-                <p className="mt-1 text-sm text-red-700">
-                  No tienes permisos para acceder a la gestión de finiquitos.
-                  Contacta al administrador.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  useEffect(() => {
+    setPageBandeja(0)
+  }, [cedulaBusqueda])
 
   const cargarListas = useCallback(async () => {
     setLoading(true)
@@ -157,23 +226,38 @@ export function FiniquitoGestionPage() {
         finiquitoAdminListar(
           undefined,
           undefined,
-          'ACEPTADO,EN_PROCESO,TERMINADO'
+          'ACEPTADO,EN_PROCESO,TERMINADO',
+          { limit: PAGE_SIZE, offset: pageTrabajo * PAGE_SIZE }
         ),
-        finiquitoAdminListar('RECHAZADO'),
-        finiquitoAdminListar('REVISION', cedulaBusqueda || undefined),
+        finiquitoAdminListar('RECHAZADO', undefined, undefined, {
+          limit: PAGE_SIZE,
+          offset: pageRechazados * PAGE_SIZE,
+        }),
+        finiquitoAdminListar(
+          'REVISION',
+          cedulaBusqueda || undefined,
+          undefined,
+          {
+            limit: PAGE_SIZE,
+            offset: pageBandeja * PAGE_SIZE,
+          }
+        ),
       ])
       setItemsAreaTrabajo(rTrabajo.items || [])
+      setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
       setItemsRechazados(rRech.items || [])
+      setTotalRechazados(rRech.total ?? (rRech.items || []).length)
       setItemsBandeja(rBandeja.items || [])
+      setTotalBandeja(rBandeja.total ?? (rBandeja.items || []).length)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al cargar')
     } finally {
       setLoading(false)
     }
-  }, [cedulaBusqueda])
+  }, [pageTrabajo, pageRechazados, pageBandeja, cedulaBusqueda])
 
   useEffect(() => {
-    cargarListas()
+    void cargarListas()
   }, [cargarListas])
 
   const onRefreshJob = async () => {
@@ -212,10 +296,25 @@ export function FiniquitoGestionPage() {
         return
       }
       toast.success('Estado actualizado')
-      cargarListas()
+      await cargarListas()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
     }
+  }
+
+  const onSeleccionarEstadoBandeja = (casoId: number, v: string) => {
+    if (v === 'RECHAZADO') {
+      setPendingRechazoCasoId(casoId)
+      return
+    }
+    void cambiarEstado(casoId, v)
+  }
+
+  const confirmarRechazo = async () => {
+    if (pendingRechazoCasoId == null) return
+    const id = pendingRechazoCasoId
+    setPendingRechazoCasoId(null)
+    await cambiarEstado(id, 'RECHAZADO')
   }
 
   const confirmarTerminado = async (contactoParaSiguientes: boolean) => {
@@ -232,7 +331,7 @@ export function FiniquitoGestionPage() {
       }
       setDialogTerminadoCasoId(null)
       toast.success('Caso marcado como terminado')
-      cargarListas()
+      await cargarListas()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
     }
@@ -251,12 +350,14 @@ export function FiniquitoGestionPage() {
         variant="outline"
         className="h-8 w-8 border-slate-300"
         title="Ver préstamo, cuotas y pagos"
+        aria-label={`Ver préstamo, cuotas y pagos del caso ${row.id}`}
         onClick={() => {
           setRevisionCasoId(row.id)
           setRevisionOpen(true)
         }}
       >
         <Eye className="h-4 w-4" aria-hidden />
+        <span className="sr-only">Abrir revisión</span>
       </Button>
       <Button
         type="button"
@@ -264,6 +365,7 @@ export function FiniquitoGestionPage() {
         variant="outline"
         className="h-8 w-8 border-slate-300"
         title="Descargar estado de cuenta (PDF)"
+        aria-label={`Descargar estado de cuenta PDF del préstamo ${row.prestamo_id}`}
         disabled={descargandoEstadoCuentaPrestamoId === row.prestamo_id}
         onClick={() => descargarEstadoCuenta(row.prestamo_id)}
       >
@@ -274,8 +376,14 @@ export function FiniquitoGestionPage() {
         )}
         <span className="sr-only">Descargar estado de cuenta PDF</span>
       </Button>
-      <Select onValueChange={v => cambiarEstado(row.id, v)}>
-        <SelectTrigger className="h-8 w-[150px] text-xs">
+      <Select
+        key={`estado-sel-${row.id}-${row.estado}`}
+        onValueChange={v => onSeleccionarEstadoBandeja(row.id, v)}
+      >
+        <SelectTrigger
+          className="h-8 w-[150px] text-xs"
+          aria-label={`Cambiar estado del caso ${row.id}`}
+        >
           <SelectValue placeholder="Estado..." />
         </SelectTrigger>
         <SelectContent>
@@ -295,12 +403,14 @@ export function FiniquitoGestionPage() {
         variant="outline"
         className="h-8 w-8 border-slate-300"
         title="Ver préstamo, cuotas y pagos"
+        aria-label={`Ver préstamo, cuotas y pagos del caso ${row.id}`}
         onClick={() => {
           setRevisionCasoId(row.id)
           setRevisionOpen(true)
         }}
       >
         <Eye className="h-4 w-4" aria-hidden />
+        <span className="sr-only">Abrir revisión</span>
       </Button>
       <Button
         type="button"
@@ -308,6 +418,7 @@ export function FiniquitoGestionPage() {
         variant="outline"
         className="h-8 w-8 border-slate-300"
         title="Descargar estado de cuenta (PDF)"
+        aria-label={`Descargar estado de cuenta PDF del préstamo ${row.prestamo_id}`}
         disabled={descargandoEstadoCuentaPrestamoId === row.prestamo_id}
         onClick={() => descargarEstadoCuenta(row.prestamo_id)}
       >
@@ -359,14 +470,25 @@ export function FiniquitoGestionPage() {
         <Table>
           <TableHeader>
             <TableRow className="border-0 hover:bg-transparent">
-              <TableHead className={thGestion}>ID caso</TableHead>
-              <TableHead className={thGestion}>Cédula</TableHead>
-              <TableHead className={thGestion}>Préstamo</TableHead>
-              <TableHead className={cn(thGestion, 'whitespace-normal')}>
+              <TableHead className={thGestion} scope="col">
+                ID caso
+              </TableHead>
+              <TableHead className={thGestion} scope="col">
+                Cédula
+              </TableHead>
+              <TableHead className={thGestion} scope="col">
+                Préstamo
+              </TableHead>
+              <TableHead
+                className={cn(thGestion, 'whitespace-normal')}
+                scope="col"
+              >
                 Último pago
               </TableHead>
-              <TableHead className={thGestion}>Estado</TableHead>
-              <TableHead className={cn(thGestion, 'text-right')}>
+              <TableHead className={thGestion} scope="col">
+                Estado
+              </TableHead>
+              <TableHead className={cn(thGestion, 'text-right')} scope="col">
                 Acciones
               </TableHead>
             </TableRow>
@@ -394,8 +516,13 @@ export function FiniquitoGestionPage() {
                   {textoUltimoPago(row.ultima_fecha_pago)}
                 </TableCell>
                 <TableCell className={tdGestion}>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium uppercase text-slate-800">
-                    {row.estado}
+                  <span
+                    className={cn(
+                      'rounded px-1.5 py-0.5 text-xs font-medium',
+                      estadoBadgeClassName(row.estado)
+                    )}
+                  >
+                    {estadoEtiquetaVisible(row.estado)}
                   </span>
                 </TableCell>
                 <TableCell className={cn(tdGestion, 'text-right')}>
@@ -415,17 +542,28 @@ export function FiniquitoGestionPage() {
         <Table>
           <TableHeader>
             <TableRow className="border-0 hover:bg-transparent">
-              <TableHead className={thGestion}>ID caso</TableHead>
-              <TableHead className={thGestion}>Cédula</TableHead>
-              <TableHead className={thGestion}>Préstamo</TableHead>
-              <TableHead className={cn(thGestion, 'whitespace-normal')}>
+              <TableHead className={thGestion} scope="col">
+                ID caso
+              </TableHead>
+              <TableHead className={thGestion} scope="col">
+                Cédula
+              </TableHead>
+              <TableHead className={thGestion} scope="col">
+                Préstamo
+              </TableHead>
+              <TableHead
+                className={cn(thGestion, 'whitespace-normal')}
+                scope="col"
+              >
                 Último pago
               </TableHead>
-              <TableHead className={cn(thGestion, 'min-w-[140px]')}>
+              <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
                 Contacto
               </TableHead>
-              <TableHead className={thGestion}>Estado</TableHead>
-              <TableHead className={cn(thGestion, 'text-right')}>
+              <TableHead className={thGestion} scope="col">
+                Estado
+              </TableHead>
+              <TableHead className={cn(thGestion, 'text-right')} scope="col">
                 Acciones
               </TableHead>
             </TableRow>
@@ -478,7 +616,7 @@ export function FiniquitoGestionPage() {
                 <TableCell className={tdGestion}>
                   <span
                     className={cn(
-                      'rounded px-1.5 py-0.5 text-xs font-medium uppercase',
+                      'rounded px-1.5 py-0.5 text-xs font-medium',
                       row.estado === 'ACEPTADO' &&
                         'bg-slate-100 text-slate-800',
                       row.estado === 'EN_PROCESO' &&
@@ -487,7 +625,7 @@ export function FiniquitoGestionPage() {
                         'bg-emerald-100 text-emerald-950'
                     )}
                   >
-                    {row.estado.replace('_', ' ')}
+                    {estadoEtiquetaVisible(row.estado)}
                   </span>
                 </TableCell>
                 <TableCell className={cn(tdGestion, 'text-right')}>
@@ -500,6 +638,9 @@ export function FiniquitoGestionPage() {
       </div>
     </div>
   )
+
+  const subtituloTrabajo = totalAreaTrabajo === 1 ? 'registro' : 'registros'
+  const subtituloRech = totalRechazados === 1 ? 'registro' : 'registros'
 
   return (
     <FiniquitoWorkspaceShell
@@ -521,7 +662,6 @@ export function FiniquitoGestionPage() {
         </Button>
       }
     >
-      {/* Área de trabajo: aprobados */}
       <section
         className={cn(
           'overflow-hidden rounded-2xl border border-emerald-200/90 bg-white shadow-md',
@@ -542,29 +682,38 @@ export function FiniquitoGestionPage() {
                 Área de trabajo
               </h2>
               <p className="text-xs text-emerald-100">
-                Aceptados, en proceso y terminados · {itemsAreaTrabajo.length}{' '}
-                {itemsAreaTrabajo.length === 1 ? 'registro' : 'registros'}
+                Aceptados, en proceso y terminados · {totalAreaTrabajo}{' '}
+                {subtituloTrabajo}
               </p>
             </div>
           </div>
         </div>
-        <div className="bg-gradient-to-b from-emerald-50/50 to-white p-3 sm:p-4">
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-emerald-600/70" />
-            </div>
-          ) : itemsAreaTrabajo.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-emerald-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
-              No hay casos en esta bandeja. Los aceptados aparecen aquí; use «En
-              proceso» y luego «Terminado» para cerrar el flujo.
-            </p>
-          ) : (
-            renderTablaAreaTrabajo(itemsAreaTrabajo)
-          )}
+        <div className="bg-gradient-to-b from-emerald-50/50 to-white">
+          <div className="p-3 sm:p-4">
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-emerald-600/70" />
+              </div>
+            ) : itemsAreaTrabajo.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-emerald-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
+                No hay casos en esta bandeja. Los aceptados aparecen aquí; use
+                «En proceso» y luego «Terminado» para cerrar el flujo.
+              </p>
+            ) : (
+              renderTablaAreaTrabajo(itemsAreaTrabajo)
+            )}
+          </div>
+          <FiniquitoPaginationBar
+            page={pageTrabajo}
+            pageSize={PAGE_SIZE}
+            total={totalAreaTrabajo}
+            loading={loading}
+            onPageChange={setPageTrabajo}
+            className="border-emerald-200/60 bg-emerald-50/40"
+          />
         </div>
       </section>
 
-      {/* Bandeja principal + filtro cédula */}
       <section
         className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
         aria-labelledby="finiquito-bandeja-titulo"
@@ -625,7 +774,7 @@ export function FiniquitoGestionPage() {
                 size="sm"
                 className="h-10 shrink-0 border-slate-300"
                 disabled={loading}
-                onClick={() => cargarListas()}
+                onClick={() => void cargarListas()}
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -644,24 +793,32 @@ export function FiniquitoGestionPage() {
             </p>
           ) : null}
         </div>
-        <div className="p-3 sm:p-4">
-          {loading ? (
-            <div className="flex justify-center py-14">
-              <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-            </div>
-          ) : itemsBandeja.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
-              {cedulaBusqueda
-                ? 'Ningún caso en revisión coincide con esa cédula. Pruebe otra subcadena o limpie el filtro.'
-                : 'No hay casos en revisión. Use «Refrescar materializado» si acaba de cargar datos o revise préstamos saldados.'}
-            </p>
-          ) : (
-            renderTabla(itemsBandeja)
-          )}
+        <div>
+          <div className="p-3 sm:p-4">
+            {loading ? (
+              <div className="flex justify-center py-14">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+              </div>
+            ) : itemsBandeja.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
+                {cedulaBusqueda
+                  ? 'Ningún caso en revisión coincide con esa cédula. Pruebe otra subcadena o limpie el filtro.'
+                  : 'No hay casos en revisión. Use «Refrescar materializado» si acaba de cargar datos o revise préstamos saldados.'}
+              </p>
+            ) : (
+              renderTabla(itemsBandeja)
+            )}
+          </div>
+          <FiniquitoPaginationBar
+            page={pageBandeja}
+            pageSize={PAGE_SIZE}
+            total={totalBandeja}
+            loading={loading}
+            onPageChange={setPageBandeja}
+          />
         </div>
       </section>
 
-      {/* Área de revisión: rechazados */}
       <section
         className={cn(
           'overflow-hidden rounded-2xl border-2 border-dashed border-amber-400/85',
@@ -682,25 +839,34 @@ export function FiniquitoGestionPage() {
                 Área de revisión
               </h2>
               <p className="text-xs text-amber-900/85">
-                Rechazados · {itemsRechazados.length}{' '}
-                {itemsRechazados.length === 1 ? 'registro' : 'registros'}
+                Rechazados · {totalRechazados} {subtituloRech}
               </p>
             </div>
           </div>
         </div>
-        <div className="p-3 sm:p-4">
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-amber-600/70" />
-            </div>
-          ) : itemsRechazados.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-amber-200/90 bg-white/50 px-4 py-10 text-center text-sm text-amber-950/85">
-              No hay casos rechazados. Aparecerán aquí al pasar un caso a
-              «Rechazado».
-            </p>
-          ) : (
-            renderTabla(itemsRechazados)
-          )}
+        <div>
+          <div className="p-3 sm:p-4">
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-amber-600/70" />
+              </div>
+            ) : itemsRechazados.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-amber-200/90 bg-white/50 px-4 py-10 text-center text-sm text-amber-950/85">
+                No hay casos rechazados. Aparecerán aquí al pasar un caso a
+                «Rechazado».
+              </p>
+            ) : (
+              renderTabla(itemsRechazados)
+            )}
+          </div>
+          <FiniquitoPaginationBar
+            page={pageRechazados}
+            pageSize={PAGE_SIZE}
+            total={totalRechazados}
+            loading={loading}
+            onPageChange={setPageRechazados}
+            className="border-amber-200/80 bg-amber-50/50"
+          />
         </div>
       </section>
 
@@ -752,6 +918,66 @@ export function FiniquitoGestionPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={pendingRechazoCasoId != null}
+        onOpenChange={open => {
+          if (!open) setPendingRechazoCasoId(null)
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rechazar caso</DialogTitle>
+            <DialogDescription className="text-base text-slate-800">
+              ¿Confirma pasar este caso a <strong>Rechazado</strong>? Podrá
+              revertirlo desde el área de revisión cambiando el estado.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingRechazoCasoId(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void confirmarRechazo()}
+            >
+              Rechazar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </FiniquitoWorkspaceShell>
   )
+}
+
+export function FiniquitoGestionPage() {
+  const { isFiniquitador } = usePermissions()
+
+  if (!isFiniquitador) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-8 py-12">
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <Lock className="h-5 w-5 text-red-600" />
+              <div>
+                <p className="font-semibold text-red-800">Acceso Restringido</p>
+                <p className="mt-1 text-sm text-red-700">
+                  No tienes permisos para acceder a la gestión de finiquitos.
+                  Contacta al administrador.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return <FiniquitoGestionPageInner />
 }

@@ -236,7 +236,7 @@ export function PrestamoDuplicadoEnBdBloque({ row }: { row: PagoExcelRow }) {
         className="text-sm font-semibold tabular-nums text-red-700"
         title="prestamo_id del pago que ya existe en la base de datos con este documento"
       >
-        {typeof pid === 'number' && pid > 0 ? pid : '—'}
+        {typeof pid === 'number' && pid > 0 ? pid : '-'}
       </p>
     </div>
   )
@@ -653,38 +653,8 @@ export function TablaEditablePagos({
 
           <span className="font-medium text-red-700">
             Inválidas: <strong className="tabular-nums">{invalidas}</strong>
-            <span className="ml-1 text-blue-600">(van a Revisar Pagos)</span>
           </span>
         </div>
-
-        <p className="mt-2 text-xs text-blue-700">
-          <strong>Los que no cumplen validadores van a Revisar Pagos.</strong>{' '}
-          Puede enviarlos con el botón &quot;Revisar Pagos&quot; por fila o con
-          &quot;Revisar Pagos (N)&quot; para enviar todas las inválidas.
-        </p>
-
-        <p className="mt-1 text-xs text-blue-700">
-          Al guardar una fila (botón Guardar en cada fila), esta desaparece de
-          la tabla y el pago se registra aplicando las mismas reglas de negocio:
-          aplicación a cuotas (cascada), conciliación y actualización de
-          pagos/cuotas.
-        </p>
-
-        <p className="mt-1 text-xs text-blue-700">
-          <strong>Crédito:</strong> si hay un único crédito activo, se carga
-          automáticamente. Si hay varios, elige en la lista. Si no hay créditos
-          activos, aparece "Sin crédito". El ID se completa por cédula desde la
-          base de datos.
-        </p>
-
-        <p className="mt-1 text-xs text-blue-700">
-          <strong>Moneda / tasa:</strong> USD por defecto. Bolívares (Bs) solo
-          si la cédula está en la lista autorizada. La tasa se toma de la BD por
-          fecha de pago; si no existe, ingrese la tasa manual (Bs por 1 USD) en
-          la columna correspondiente. Esa tasa no se copia a la tabla de tasas
-          diarias (solo queda en el registro del pago); para dejarla en el
-          calendario de tasas use Administracion.
-        </p>
       </div>
 
       {/* Tabla */}
@@ -943,11 +913,6 @@ export function TablaEditablePagos({
 
                       return (
                         <div className="flex flex-col gap-1">
-                          {noPuedeGuardar && motivoBloqueo && (
-                            <p className="text-[10px] font-medium leading-tight text-red-600">
-                              {motivoBloqueo}
-                            </p>
-                          )}
                           <button
                             type="button"
                             onClick={async () => {
@@ -1005,7 +970,11 @@ export function TablaEditablePagos({
                                 serviceStatus === 'offline'
                               }
                               className="inline-flex items-center justify-center rounded border border-amber-300 bg-amber-100 p-1.5 text-amber-800 hover:bg-amber-200 disabled:opacity-70"
-                              title="Enviar esta fila a Revisar Pagos (no cumple validadores)"
+                              title={
+                                motivoBloqueo
+                                  ? `Enviar a Revisar Pagos - ${motivoBloqueo}`
+                                  : 'Enviar esta fila a Revisar Pagos (no cumple validadores)'
+                              }
                             >
                               {isSendingRevisar || isSaving(row._rowIndex) ? (
                                 <>

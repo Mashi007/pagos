@@ -28,7 +28,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.api.v1.endpoints import cobranzas
-from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running, _last_run_too_recent, _run_pipeline_background
+from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running, _run_pipeline_background
 from app.models.pagos_gmail_sync import PagosGmailSync
 
 logger = logging.getLogger(__name__)
@@ -178,15 +178,11 @@ def _job_campanas_programadas() -> None:
 
 
 def _job_pagos_gmail_pipeline() -> None:
-    """Job cada N min (PAGOS_GMAIL_CRON_MINUTES): procesa correos (Gmail -> Drive -> Gemini -> Sheets). No procesa si aÃºn no es tiempo desde la Ãºltima ejecuciÃ³n."""
+    """Job cada N min (PAGOS_GMAIL_CRON_MINUTES): Gmail -> Drive -> Gemini -> BD (solo si no hay otra sync en curso)."""
     db = SessionLocal()
     try:
         if _is_pipeline_running(db):
             logger.info("Pagos Gmail pipeline: omitido (ya hay una ejecucion en curso)")
-            return
-        too_recent, wait_min = _last_run_too_recent(db)
-        if too_recent and wait_min is not None:
-            logger.info("Pagos Gmail pipeline: omitido (aun no es tiempo, esperar %d min)", wait_min)
             return
         sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
         db.add(sync)

@@ -70,7 +70,6 @@ import {
   Save,
   Loader2,
   Eye,
-  AlertTriangle,
   Search,
 } from 'lucide-react'
 
@@ -998,8 +997,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                                 ) : null}
 
                                                 {(!cedulaLookup ||
-                                                  cedulaLookup.length <
-                                                    5) && (
+                                                  cedulaLookup.length < 5) && (
                                                   <span className="text-xs text-gray-400">
                                                     -
                                                   </span>
@@ -1018,7 +1016,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                           )}
                                         </div>
 
-                                        <PrestamoDuplicadoEnBdBloque row={row} />
+                                        <PrestamoDuplicadoEnBdBloque
+                                          row={row}
+                                        />
                                       </div>
                                     </td>
 
@@ -1059,11 +1059,6 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                           row._rowIndex
                                         ) ? (
                                         <div className="flex flex-col gap-1">
-                                          <span className="flex items-center text-xs text-amber-700">
-                                            <AlertTriangle className="mr-1 h-4 w-4" />
-                                            Documento duplicado
-                                          </span>
-
                                           <Button
                                             size="sm"
                                             variant="outline"
@@ -1077,7 +1072,11 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                               serviceStatus === 'offline'
                                             }
                                             className="h-8 w-8 shrink-0 border-amber-300 p-0 text-amber-700 hover:bg-amber-50"
-                                            title="Enviar a Revisar Pagos para confirmar uno a uno"
+                                            title={
+                                              row._validation.numero_documento
+                                                ?.message ||
+                                              'Documento duplicado - enviar a Revisar Pagos para confirmar uno a uno'
+                                            }
                                           >
                                             {savingProgress[row._rowIndex] ? (
                                               <>
@@ -1115,7 +1114,10 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                             className="h-8 w-8 shrink-0 p-0 text-gray-600"
                                             title="Cambie el documento o intente guardar de nuevo"
                                           >
-                                            <Save className="h-3.5 w-3.5" aria-hidden />
+                                            <Save
+                                              className="h-3.5 w-3.5"
+                                              aria-hidden
+                                            />
                                             <span className="sr-only">
                                               Guardar de nuevo
                                             </span>
@@ -1205,11 +1207,6 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                         </div>
                                       ) : (
                                         <div className="flex flex-col gap-1">
-                                          <span className="flex items-center text-xs text-red-600">
-                                            <AlertTriangle className="mr-1 h-4 w-4" />
-                                            Corregir
-                                          </span>
-
                                           <Button
                                             size="sm"
                                             variant="outline"
@@ -1223,7 +1220,11 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                               serviceStatus === 'offline'
                                             }
                                             className="h-8 w-8 shrink-0 border-amber-300 p-0 text-amber-700 hover:bg-amber-50"
-                                            title="Enviar a Revisar Pagos"
+                                            title={
+                                              row._validation.numero_documento
+                                                ?.message ||
+                                              'Enviar a Revisar Pagos'
+                                            }
                                           >
                                             {savingProgress[row._rowIndex] ? (
                                               <>

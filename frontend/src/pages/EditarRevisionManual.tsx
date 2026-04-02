@@ -267,10 +267,7 @@ export function EditarRevisionManual() {
 
   const irAListaPrestamos = () => {
     const scrollPosition = window.scrollY
-    sessionStorage.setItem(
-      'prestamoScrollPosition',
-      scrollPosition.toString()
-    )
+    sessionStorage.setItem('prestamoScrollPosition', scrollPosition.toString())
     navigate(RUTA_LISTA_PRESTAMOS, { state: { focusPrestamosSearch: true } })
     setTimeout(() => {
       const savedPosition = sessionStorage.getItem('prestamoScrollPosition')
@@ -1043,14 +1040,9 @@ export function EditarRevisionManual() {
               const errorMsg =
                 err?.response?.data?.detail || 'Error al guardar cuota'
 
-              toast.error(
-                `❌ Error en cuota #${job.numero_cuota}: ${errorMsg}`
-              )
+              toast.error(`❌ Error en cuota #${job.numero_cuota}: ${errorMsg}`)
 
-              console.error(
-                `Error guardando cuota ${job.numero_cuota}:`,
-                err
-              )
+              console.error(`Error guardando cuota ${job.numero_cuota}:`, err)
             }
           }
         )
@@ -1492,10 +1484,7 @@ export function EditarRevisionManual() {
   const handleCerrar = () => {
     // Si hay cambios sin guardar, advertir
 
-    if (
-      cuotasIdsAEliminar.length > 0 ||
-      hayDiferenciaVsCargaInicial()
-    ) {
+    if (cuotasIdsAEliminar.length > 0 || hayDiferenciaVsCargaInicial()) {
       const confirmar = window.confirm(
         '⚠️ Tienes cambios sin guardar.\n\n' +
           'Si cierras ahora, se perderán todos los cambios realizados.\n' +
@@ -2300,9 +2289,10 @@ export function EditarRevisionManual() {
                     <p className="mb-2 text-xs text-gray-600">
                       Obligatoria para préstamos aprobados/liquidados: debe
                       ingresarla usted (no se infiere de otras fechas). La base
-                      de cálculo es la misma fecha. El botón guarda en servidor y
-                      recalcula vencimientos. &quot;Guardar cambios&quot; y
-                      &quot;Guardar y cerrar&quot; persisten el resto en la base.
+                      de cálculo es la misma fecha. El botón guarda en servidor
+                      y recalcula vencimientos. &quot;Guardar cambios&quot; y
+                      &quot;Guardar y cerrar&quot; persisten el resto en la
+                      base.
                     </p>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                       <div className="relative min-w-0 flex-1">

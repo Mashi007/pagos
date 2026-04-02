@@ -242,11 +242,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                           {userName}
                         </div>
 
-                        <Badge
-                          className={getRoleColor(
-                            isAdminRole(user?.rol)
-                          )}
-                        >
+                        <Badge className={getRoleColor(isAdminRole(user?.rol))}>
                           {userRole}
                         </Badge>
                       </div>

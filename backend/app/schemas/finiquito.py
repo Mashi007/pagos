@@ -66,6 +66,15 @@ class FiniquitoCasoOut(BaseModel):
 
 class FiniquitoCasoListaResponse(BaseModel):
     items: List[FiniquitoCasoOut]
+    total: int = Field(
+        ...,
+        description="Total de filas que coinciden con el filtro (sin paginar).",
+    )
+    limit: int = Field(
+        ...,
+        description="Tamano de pagina efectivo (admin) o filas devueltas (publico sin paginar).",
+    )
+    offset: int = Field(..., description="Desplazamiento desde el mas reciente (orden id desc).")
 
 
 class FiniquitoPatchEstadoRequest(BaseModel):
