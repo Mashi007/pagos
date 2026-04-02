@@ -380,41 +380,73 @@ def generar_pdf_estado_cuenta(
             )
             n_pend_puro = n_pendientes - n_parciales
 
-            # Barra tricolor: azul=pagado | tomate=parcial | rojo=pendiente
-            _bw_total = 4.80 * inch  # barra ancha
-            _pct_pag  = n_pagadas  / n_total if n_total else 0
+            # Anchos tarjeta (suma = 7.35" alineado al resto del documento)
+            _w_col_id = 2.05 * inch
+            _w_col_stat = 1.00 * inch
+            _w_col_bar = 3.30 * inch
+            # Barra: ancho util = columna barra menos padding (antes 4.8" desbordaba y cubria cols 2-3)
+            _card_col_bar_w = _w_col_bar
+            _bar_h_pad_pt = 12  # LEFTPADDING+RIGHTPADDING (6+6 pt)
+            _bw_total = float(_card_col_bar_w - _bar_h_pad_pt)
+            if _bw_total < 100:
+                _bw_total = 100.0
+
+            _pct_pag  = n_pagadas / n_total if n_total else 0
             _pct_parc = n_parciales / n_total if n_total else 0
             _pct_pend = max(0.0, 1.0 - _pct_pag - _pct_parc)
 
-            # Segmentos con minimo visible
-            _seg_pag  = round(max(0.01 if _pct_pag  > 0 else 0, _pct_pag  * _bw_total), 2)
-            _seg_parc = round(max(0.01 if _pct_parc > 0 else 0, _pct_parc * _bw_total), 2)
-            _seg_pend = round(max(0.01, _bw_total - _seg_pag - _seg_parc), 2)
+            _min_vis = max(2.0, 0.02 * _bw_total)
 
-            # Construir barra con 2 o 3 segmentos segun haya parciales
+            # Segmentos: suma = _bw_total (nunca mas ancho que la columna 3)
             if n_parciales > 0:
+                _w_pag = _pct_pag * _bw_total
+                _w_parc = _pct_parc * _bw_total
+                _w_pend = max(0.0, _bw_total - _w_pag - _w_parc)
+                if _w_pag + _w_parc > _bw_total:
+                    _s = _w_pag + _w_parc
+                    _w_pag = _bw_total * (_w_pag / _s)
+                    _w_parc = _bw_total - _w_pag
+                    _w_pend = 0.0
                 _bar_cells = [["", "", ""]]
-                _bar_cols  = [_seg_pag, _seg_parc, _seg_pend]
+                _bar_cols = [_w_pag, _w_parc, _w_pend]
                 _bar_style = [
-                    ("BACKGROUND", (0,0),(0,0), hc(C_PAG)),
-                    ("BACKGROUND", (1,0),(1,0), hc(C_PARC)),
-                    ("BACKGROUND", (2,0),(2,0), hc(C_PEND)),
+                    ("BACKGROUND", (0, 0), (0, 0), hc(C_PAG)),
+                    ("BACKGROUND", (1, 0), (1, 0), hc(C_PARC)),
+                    ("BACKGROUND", (2, 0), (2, 0), hc(C_PEND)),
                 ]
             else:
+                _w_pag = _pct_pag * _bw_total
+                _w_pend = max(0.0, _bw_total - _w_pag)
+                if _pct_pag > 0 and _pct_pend > 0:
+                    if _w_pag < _min_vis:
+                        _w_pag = _min_vis
+                        _w_pend = _bw_total - _w_pag
+                    if _w_pend < _min_vis:
+                        _w_pend = _min_vis
+                        _w_pag = _bw_total - _w_pend
+                elif _pct_pag > 0 and _pct_pend == 0:
+                    _sliver = min(2.0, 0.02 * _bw_total)
+                    _w_pag = _bw_total - _sliver
+                    _w_pend = _sliver
+                elif _pct_pag == 0 and _pct_pend > 0:
+                    _g = min(2.0, max(0.01, 0.02 * _bw_total))
+                    _w_pag, _w_pend = _g, _bw_total - _g
+                else:
+                    _w_pag = _w_pend = _bw_total / 2.0
                 _bar_cells = [["", ""]]
-                _bar_cols  = [max(_seg_pag, 0.01), _seg_pend]
+                _bar_cols = [_w_pag, _w_pend]
                 _bar_style = [
-                    ("BACKGROUND", (0,0),(0,0), hc(C_PAG  if _pct_pag > 0 else "#e0e0e0")),
-                    ("BACKGROUND", (1,0),(1,0), hc(C_PEND if _pct_pend > 0 else "#e0e0e0")),
+                    ("BACKGROUND", (0, 0), (0, 0), hc(C_PAG if _pct_pag > 0 else "#e0e0e0")),
+                    ("BACKGROUND", (1, 0), (1, 0), hc(C_PEND if _pct_pend > 0 else "#e0e0e0")),
                 ]
 
             _bar_style += [
-                ("TOPPADDING",    (0,0),(-1,-1), 0),
-                ("BOTTOMPADDING", (0,0),(-1,-1), 0),
-                ("LEFTPADDING",   (0,0),(-1,-1), 0),
-                ("RIGHTPADDING",  (0,0),(-1,-1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ]
-            _bar_inner = Table(_bar_cells, colWidths=_bar_cols, rowHeights=[9])
+            _bar_inner = Table(_bar_cells, colWidths=_bar_cols, rowHeights=[10])
             _bar_inner.setStyle(TableStyle(_bar_style))
 
             # Estilos
@@ -433,8 +465,43 @@ def generar_pdf_estado_cuenta(
 
             _pct_str = f"{pct*100:.0f}%"
 
+            _p_pct = Paragraph(
+                f'<font color="{_card_color}"><b>{_pct_str}</b></font>'
+                f' <font size="7" color="{COLOR_TEXT_MUTED}">completado</font>',
+                _s_barlbl,
+            )
+            _p_leg = Paragraph(
+                f'<font color="{C_PAG}">■</font><font size="6"> Pagado</font>'
+                + (f'  <font color="{C_PARC}">■</font><font size="6"> Parcial</font>' if n_parciales > 0 else '')
+                + f'  <font color="{C_PEND}">■</font><font size="6"> Pendiente</font>',
+                _s_legend,
+            )
+            # Columna derecha: tabla anidada (porcentaje arriba, barra centrada, leyenda abajo; sin solapes)
+            _col3_inner = Table(
+                [
+                    [_p_pct],
+                    [Spacer(1, 6)],
+                    [_bar_inner],
+                    [Spacer(1, 5)],
+                    [_p_leg],
+                ],
+                colWidths=[_bw_total],
+            )
+            _col3_inner.setStyle(
+                TableStyle(
+                    [
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+
             card_cells = [[
-                # Col 0: identificacion (estrecha)
+                # Col 0: identificacion
                 [
                     Paragraph(f'{_estado_icon} Préstamo <b>#{prestamo_id}</b>', _s_title),
                     Paragraph(producto, _s_sub),
@@ -449,26 +516,12 @@ def generar_pdf_estado_cuenta(
                     Paragraph(f'<font color="{C_PEND}"><b>{n_pendientes}</b></font>', _s_num),
                     Paragraph("Cuotas<br/>pendientes", _s_lbl),
                 ],
-                # Col 3: barra ancha + porcentaje + leyenda
-                [
-                    Paragraph(
-                        f'<font color="{_card_color}"><b>{_pct_str}</b></font>'
-                        f' <font size="7" color="{COLOR_TEXT_MUTED}">completado</font>',
-                        _s_barlbl,
-                    ),
-                    _bar_inner,
-                    Paragraph(
-                        f'<font color="{C_PAG}">■</font><font size="6"> Pagado</font>'
-                        + (f'  <font color="{C_PARC}">■</font><font size="6"> Parcial</font>' if n_parciales > 0 else '')
-                        + f'  <font color="{C_PEND}">■</font><font size="6"> Pendiente</font>',
-                        _s_legend,
-                    ),
-                ],
+                _col3_inner,
             ]]
 
             card_tbl = Table(
                 card_cells,
-                colWidths=[2.20 * inch, 0.90 * inch, 0.90 * inch, 3.35 * inch],
+                colWidths=[_w_col_id, _w_col_stat, _w_col_stat, _w_col_bar],
                 rowHeights=[None],
             )
             card_tbl.setStyle(TableStyle([
@@ -476,10 +529,13 @@ def generar_pdf_estado_cuenta(
                 ("BACKGROUND",    (0, 0), (0, 0),   colors.white),
                 ("BOX",           (0, 0), (-1, -1), 0.8, hc(COLOR_HEADER)),
                 ("LINEAFTER",     (0, 0), (2, 0),   0.4, hc(COLOR_BORDER)),
-                ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN",         (1, 0), (3, 0),   "CENTER"),
-                ("TOPPADDING",    (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("VALIGN",        (0, 0), (0, 0),  "MIDDLE"),
+                ("VALIGN",        (1, 0), (2, 0),  "MIDDLE"),
+                ("VALIGN",        (3, 0), (3, 0),  "MIDDLE"),
+                ("ALIGN",         (1, 0), (2, 0),  "CENTER"),
+                ("ALIGN",         (3, 0), (3, 0),  "CENTER"),
+                ("TOPPADDING",    (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
                 ("LEFTPADDING",   (0, 0), (0, 0),   10),
                 ("LEFTPADDING",   (1, 0), (-1, -1), 6),
                 ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
