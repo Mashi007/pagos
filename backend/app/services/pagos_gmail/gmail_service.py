@@ -1,9 +1,10 @@
 """
-Gmail: listar correos (no leidos / leidos / todos) que tienen adjuntos (has:attachment),
-descargar solo adjuntos imagen/PDF con filename (sin cuerpo, inline ni HTML),
-marcar segun pipeline: por cada comprobante OK, etiqueta IMAGEN 1 o IMAGEN 2 + estrella; cierre leido si hubo al menos un OK.
+Gmail: listar correos (no leidos / leidos / todos) que tienen adjuntos (has:attachment).
+Pipeline Pagos: solo procesa imagen/PDF incrustados en el cuerpo (inline, multipart/related, data: en HTML);
+no adjuntos declarados como attachment. Etiquetas IMAGEN 1/2 + estrella solo si Gemini confirma plantilla y columnas.
 """
 import base64
+import hashlib
 import logging
 import re
 import time
@@ -329,9 +330,8 @@ def get_attachment_image_pdf_files_for_message(
     service: Any, message_id: str, payload: dict
 ) -> List[Tuple[str, bytes, str]]:
     """
-    Solo archivos adjuntos reales (filename + attachmentId), recorriendo multiparte.
-    Incluye solo tipos imagen/PDF permitidos (MIME_IMAGE_OR_PDF). No inline sin nombre,
-    no imagenes del cuerpo HTML, no message/rfc822 incrustado.
+    Adjuntos declarados (filename + attachmentId), imagen/PDF. No usa reglas de cuerpo incrustado.
+    El pipeline Pagos usa get_body_embedded_image_pdf_files_for_message en su lugar.
     """
     out: List[Tuple[str, bytes, str]] = []
 
@@ -381,6 +381,124 @@ def get_attachment_image_pdf_files_for_message(
             except Exception as e:
                 logger.warning("Error descargando adjunto raiz %s: %s", fn, e)
     return out
+
+
+def _header_value_from_part_headers(part: dict, header_name: str) -> str:
+    want = header_name.strip().lower()
+    for h in part.get("headers") or []:
+        if (h.get("name") or "").strip().lower() == want:
+            return (h.get("value") or "").strip()
+    return ""
+
+
+def _content_disposition_type(cd_value: str) -> str:
+    """Primer token de Content-Disposition: inline, attachment, form-data, o vacio."""
+    if not (cd_value or "").strip():
+        return ""
+    return (cd_value.split(";", 1)[0].strip().lower())
+
+
+def _download_gmail_leaf_part_bytes(service: Any, message_id: str, part: dict) -> Optional[bytes]:
+    body = part.get("body") or {}
+    data_b64 = body.get("data")
+    if data_b64:
+        try:
+            return base64.urlsafe_b64decode(data_b64)
+        except Exception as e:
+            logger.debug("Decode part data: %s", e)
+            return None
+    att_id = body.get("attachmentId")
+    if not att_id:
+        return None
+    try:
+        att = service.users().messages().attachments().get(
+            userId="me", messageId=message_id, id=att_id
+        ).execute()
+        if att.get("data"):
+            return base64.urlsafe_b64decode(att["data"])
+    except Exception as e:
+        logger.warning("Error descargando attachmentId %s: %s", att_id, e)
+    return None
+
+
+def _is_body_embedded_image_pdf_leaf(part: dict, parent_mime: str) -> bool:
+    """
+    True: inline, parte de multipart/related (cid), o sin Content-Disposition bajo related.
+    False: Content-Disposition: attachment (adjunto clasico fuera del cuerpo).
+    """
+    dt = _content_disposition_type(_header_value_from_part_headers(part, "Content-Disposition"))
+    if dt == "attachment":
+        return False
+    if dt == "inline":
+        return True
+    p = (parent_mime or "").strip().lower()
+    return p == "multipart/related"
+
+
+def _dedupe_image_pdf_by_content(items: List[Tuple[str, bytes, str]]) -> List[Tuple[str, bytes, str]]:
+    seen: set[str] = set()
+    out: List[Tuple[str, bytes, str]] = []
+    for fn, content, mime in items:
+        fp = hashlib.sha256(content).hexdigest()
+        if fp in seen:
+            continue
+        seen.add(fp)
+        out.append((fn, content, mime))
+    return out
+
+
+def get_body_embedded_image_pdf_files_for_message(
+    service: Any, message_id: str, payload: dict
+) -> List[Tuple[str, bytes, str]]:
+    """
+    Imagenes/PDF solo si van incrustadas en el cuerpo del mensaje:
+    - Content-Disposition: inline, o parte hija de multipart/related (p. ej. cid en HTML),
+    - imagenes en HTML como data:image/...;base64,...,
+    - mensaje de una sola parte MIME image/* o PDF sin ser adjunto declarado.
+    Excluye partes con Content-Disposition: attachment (adjunto separado del cuerpo).
+    """
+    out: List[Tuple[str, bytes, str]] = []
+    parts = payload.get("parts") or []
+
+    def _append_leaf(part: dict, mime: str) -> None:
+        if mime not in MIME_IMAGE_OR_PDF:
+            return
+        raw = _download_gmail_leaf_part_bytes(service, message_id, part)
+        if not raw:
+            return
+        fn = (part.get("filename") or "").strip()
+        if not fn or not is_allowed_attachment(fn):
+            fn = f"inline_body.{ext_for_mime(mime)}"
+        out.append((fn, raw, mime))
+
+    if not parts:
+        root_mime = (payload.get("mimeType") or "").strip().lower()
+        if root_mime in MIME_IMAGE_OR_PDF:
+            if _content_disposition_type(_header_value_from_part_headers(payload, "Content-Disposition")) != "attachment":
+                _append_leaf(payload, root_mime)
+    else:
+
+        def walk(plist: List[dict], parent_mime: str) -> None:
+            for part in plist:
+                mime = (part.get("mimeType") or "").strip().lower()
+                nested = part.get("parts") or []
+                if nested:
+                    walk(nested, mime)
+                    continue
+                if mime not in MIME_IMAGE_OR_PDF:
+                    continue
+                if not _is_body_embedded_image_pdf_leaf(part, parent_mime):
+                    continue
+                _append_leaf(part, mime)
+
+        walk(parts, (payload.get("mimeType") or "").strip().lower())
+
+    try:
+        out.extend(_get_images_from_html_body(service, message_id, payload))
+    except Exception as e:
+        logger.warning("[PAGOS_GMAIL] get_body_embedded: HTML body images: %s", e)
+
+    return _dedupe_image_pdf_by_content(out)
 
 
 def _get_inline_images_from_parts(

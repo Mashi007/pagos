@@ -1,6 +1,6 @@
 """
 Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
-Solo correos con adjuntos (has:attachment); solo imagenes/PDF adjuntos (no cuerpo ni inline).
+Solo correos con adjuntos (has:attachment); imagen/PDF solo si esta incrustada en el cuerpo (inline/related/data: HTML).
 Comprobantes plantilla 1 (A) o 2 (B) con cuatro columnas -> BD/Drive; por cada OK: etiqueta Gmail IMAGEN 1 o IMAGEN 2 + estrella.
 Si ningun adjunto OK: sin estrella + no leido (solo con filtro unread).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
@@ -104,7 +104,7 @@ def run_now(
 ):
     """
     Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
-    Solo correos con adjuntos; solo imagenes/PDF adjuntos (formatos RAPI-CREDIT terminal o BNC).
+    Solo correos con adjuntos; imagen/PDF solo si van en el cuerpo (inline/related/data: HTML).
     scan_filter: "unread" | "read" | "all". Etiqueta+estrella por adjunto OK; leido si hubo al menos un OK.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
@@ -456,7 +456,7 @@ def diagnostico(db: Session = Depends(get_db)):
         build_gmail_service,
         list_messages_by_filter,
         get_message_full_payload,
-        get_attachment_image_pdf_files_for_message,
+        get_body_embedded_image_pdf_files_for_message,
     )
     from app.services.pagos_gmail.drive_service import build_drive_service
     from app.services.pagos_gmail.gemini_service import (
@@ -531,11 +531,12 @@ def diagnostico(db: Session = Depends(get_db)):
 
     # PASO 4: Extracción de imágenes del primer correo
     try:
-        attachments = get_attachment_image_pdf_files_for_message(
+        attachments = get_body_embedded_image_pdf_files_for_message(
             gmail_svc, msg["id"], full_payload
         )
         result["paso_4_imagenes"] = {
             "ok": True,
+            "nota": "Solo incrustadas en cuerpo (inline, multipart/related, data: en HTML); no attachment",
             "total_imagenes": len(attachments),
             "detalle": [
                 {"nombre": f, "bytes": len(c), "mime": m}

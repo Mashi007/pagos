@@ -30,9 +30,11 @@ PAGOS_NA = "NA"
 PagosGmailFormato = Literal["A", "B", "ninguno"]
 
 GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = """
-Eres un clasificador estricto. Una sola imagen o PDF. Sin asunto/cuerpo de correo.
+Eres un clasificador estricto. Entrada: una sola imagen o PDF que ya forma parte del cuerpo del correo (incrustada);
+no uses asunto, cuerpo de texto ni metadatos del mensaje para clasificar ni rellenar campos.
 Si hay duda -> formato "ninguno" y los cuatro campos "NA". No inventes datos.
-REGLA SISTEMA: Devuelve "A" o "B" solo si puedes extraer del comprobante los CUATRO campos con valor real
+REGLA SISTEMA: Devuelve "A" o "B" solo si el comprobante coincide exactamente con la plantilla imagen 1 (A) o imagen 2 (B)
+del prompt y puedes extraer los CUATRO campos con valor real
 (fecha_pago, cedula, monto, numero_referencia). Si la plantilla parece A o B pero algun campo no es legible
 con certeza, devuelve formato "ninguno" y los cuatro "NA".
 

@@ -1,5 +1,5 @@
 """
-Orquestacion: Gmail -> Gemini (solo adjuntos imagen/PDF) -> si formato A o B y cuatro columnas completas
+Orquestacion: Gmail -> Gemini (solo imagen/PDF incrustados en cuerpo: inline, related, data: HTML) -> si formato A o B
   -> Drive + BD; si no cumple plantillas 1/2 o faltan columnas -> no fila ni archivo en Drive para ese adjunto.
 
 Por cada adjunto digitalizado OK: etiqueta Gmail IMAGEN 1 (formato A) o IMAGEN 2 (formato B) + estrella.
@@ -22,7 +22,7 @@ from app.services.pagos_gmail.drive_service import (
 from app.services.pagos_gmail.gmail_service import (
     add_message_star_and_user_labels,
     build_gmail_service,
-    get_attachment_image_pdf_files_for_message,
+    get_body_embedded_image_pdf_files_for_message,
     get_message_date,
     get_message_full_payload,
     get_message_raw_bytes,
@@ -134,7 +134,7 @@ def run_pipeline(
             nonlocal emails_ok, files_ok, drive_errors, correos_marcados_revision
             if batch:
                 logger.warning(
-                    "[PAGOS_GMAIL] Procesando lote %s: %d correos (adjuntos imagen/PDF, formatos A/B)",
+                    "[PAGOS_GMAIL] Procesando lote %s: %d correos (imagen/PDF en cuerpo, formatos A/B)",
                     label,
                     len(batch),
                 )
@@ -202,12 +202,12 @@ def run_pipeline(
                             msg_id,
                         )
 
-                attachments = get_attachment_image_pdf_files_for_message(
+                attachments = get_body_embedded_image_pdf_files_for_message(
                     gmail_svc, msg_id, full_payload or {}
                 )
 
                 logger.warning(
-                    "[PAGOS_GMAIL]   adjuntos imagen/PDF: %d — %s",
+                    "[PAGOS_GMAIL]   imagen/PDF en cuerpo: %d — %s",
                     len(attachments),
                     ", ".join(f"{f}({len(c)}B)" for f, c, _ in attachments)
                     if attachments
