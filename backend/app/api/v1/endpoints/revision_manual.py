@@ -408,7 +408,16 @@ def confirmar_prestamo_revisado(
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
+    if prestamo_estado_exige_fecha_aprobacion(prestamo.estado) and prestamo.fecha_aprobacion is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No se puede confirmar la revisión: el préstamo no tiene fecha de aprobación. "
+                "Debe ingresarla manualmente antes de cerrar."
+            ),
+        )
+
     rev_manual = db.execute(
         select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
     ).scalars().first()
@@ -690,27 +699,36 @@ def editar_prestamo_revision(
         cambios_dict['cuota_periodo'] = (float(prestamo.cuota_periodo or 0), update_data.cuota_periodo)
         prestamo.cuota_periodo = update_data.cuota_periodo
 
-    if update_data.fecha_base_calculo is not None:
-        try:
-            fecha_base = datetime.strptime(update_data.fecha_base_calculo, "%Y-%m-%d").date()
-            cambios_dict['fecha_base_calculo'] = (str(prestamo.fecha_base_calculo), str(fecha_base))
-            prestamo.fecha_base_calculo = fecha_base
-            # Alineacion con fecha de aprobacion (misma fecha calendario)
-            prestamo.fecha_aprobacion = datetime.combine(fecha_base, datetime.min.time())
-        except ValueError:
-            pass
+    # fecha_aprobacion solo explicita (manual). No se infiere desde fecha_base_calculo.
+    if update_data.fecha_base_calculo is not None and update_data.fecha_aprobacion is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Indique fecha_aprobacion (YYYY-MM-DD) de forma explícita. "
+                "No se actualiza la base de cálculo ni la amortización sin fecha de aprobación ingresada manualmente."
+            ),
+        )
 
     if update_data.fecha_aprobacion is not None:
+        s_fa = (update_data.fecha_aprobacion or "").strip()
+        if not s_fa:
+            raise HTTPException(
+                status_code=400,
+                detail="La fecha de aprobación no puede estar vacía; indique una fecha válida (YYYY-MM-DD).",
+            )
         try:
-            fecha_ap = datetime.strptime(update_data.fecha_aprobacion, "%Y-%m-%d")
+            fecha_ap = datetime.strptime(s_fa, "%Y-%m-%d")
             cambios_dict['fecha_aprobacion'] = (str(prestamo.fecha_aprobacion), str(fecha_ap))
             prestamo.fecha_aprobacion = fecha_ap
             # fecha_base_calculo siempre igual a fecha_aprobacion
             fecha_base_nueva = fecha_ap.date()
             cambios_dict['fecha_base_calculo'] = (str(prestamo.fecha_base_calculo), str(fecha_base_nueva))
             prestamo.fecha_base_calculo = fecha_base_nueva
-        except ValueError:
-            pass
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="fecha_aprobacion inválida; use formato YYYY-MM-DD.",
+            ) from exc
 
     if update_data.estado is not None and update_data.estado.strip():
         cambios_dict['estado'] = (prestamo.estado, update_data.estado.strip().upper())
@@ -1390,7 +1408,16 @@ def finalizar_revision_prestamo(
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
+    if prestamo_estado_exige_fecha_aprobacion(prestamo.estado) and prestamo.fecha_aprobacion is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No se puede finalizar la revisión: falta la fecha de aprobación en el préstamo. "
+                "Ingrese la fecha manualmente y guarde antes de cerrar."
+            ),
+        )
+
     rev_manual = db.execute(
         select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
     ).scalars().first()

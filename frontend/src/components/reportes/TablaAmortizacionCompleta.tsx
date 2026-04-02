@@ -564,15 +564,10 @@ export function TablaAmortizacionCompleta() {
   const handleAbrirDialogoFecha = (prestamo: any) => {
     setPrestamoParaGenerar(prestamo)
 
+    // Solo prellenar si ya hay fecha de aprobación persistida; no usar fecha_base_calculo como sustituto.
     let ymd = ''
     if (prestamo.fecha_aprobacion) {
       ymd = new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
-    } else if (prestamo.fecha_base_calculo) {
-      const raw = prestamo.fecha_base_calculo
-      ymd =
-        typeof raw === 'string'
-          ? raw.slice(0, 10)
-          : new Date(raw).toISOString().split('T')[0]
     }
     setFechaBaseCalculo(ymd)
 

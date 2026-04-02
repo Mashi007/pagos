@@ -286,9 +286,7 @@ export function RevisionManual() {
 
         // Navega a página de edición
 
-        navigate(`/revision-manual/editar/${prestamoId}`, {
-          state: { returnTo: '/revision-manual' },
-        })
+        navigate(`/revision-manual/editar/${prestamoId}`)
       })
       .catch((err: any) => {
         const errorMsg =
@@ -765,10 +763,7 @@ export function RevisionManual() {
                                 className="h-8 text-xs text-blue-600"
                                 onClick={() =>
                                   navigate(
-                                    `/revision-manual/editar/${prestamo.prestamo_id}`,
-                                    {
-                                      state: { returnTo: '/revision-manual' },
-                                    }
+                                    `/revision-manual/editar/${prestamo.prestamo_id}`
                                   )
                                 }
                               >

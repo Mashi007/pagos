@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useLayoutEffect, useRef } from 'react'
 
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -168,33 +168,31 @@ interface CuotaData {
   observaciones: string
 }
 
-const ALLOWED_REVISION_RETURN_PATHS = ['/revision-manual', '/prestamos'] as const
-
-function resolveRevisionEditorReturnPath(
-  state: unknown
-): (typeof ALLOWED_REVISION_RETURN_PATHS)[number] {
-  const raw = (state as { returnTo?: string } | null)?.returnTo
-  if (
-    typeof raw === 'string' &&
-    ALLOWED_REVISION_RETURN_PATHS.includes(
-      raw as (typeof ALLOWED_REVISION_RETURN_PATHS)[number]
-    )
-  ) {
-    return raw as (typeof ALLOWED_REVISION_RETURN_PATHS)[number]
-  }
-  return '/revision-manual'
-}
+/** Lista de préstamos (en producción: /pagos/prestamos vía basename). */
+const RUTA_LISTA_PRESTAMOS = '/prestamos'
 
 export function EditarRevisionManual() {
   const { prestamoId } = useParams()
 
   const navigate = useNavigate()
 
-  const location = useLocation()
-
   const queryClient = useQueryClient()
 
-  const returnTo = resolveRevisionEditorReturnPath(location.state)
+  const irAListaPrestamos = () => {
+    const scrollPosition = window.scrollY
+    sessionStorage.setItem(
+      'prestamoScrollPosition',
+      scrollPosition.toString()
+    )
+    navigate(RUTA_LISTA_PRESTAMOS)
+    setTimeout(() => {
+      const savedPosition = sessionStorage.getItem('prestamoScrollPosition')
+      if (savedPosition) {
+        window.scrollTo(0, parseInt(savedPosition, 10))
+        sessionStorage.removeItem('prestamoScrollPosition')
+      }
+    }, 100)
+  }
 
   const [clienteData, setClienteData] = useState<Partial<ClienteData>>({})
 
@@ -235,6 +233,26 @@ export function EditarRevisionManual() {
   })
 
   const [errores, setErrores] = useState<Record<string, string>>({})
+
+  /**
+   * Si el queryFn del detalle vuelve a correr (refetch al enfocar ventana, invalidación,
+   * etc.) y aquí sigue true, NO se sincroniza cliente/préstamo/cuotas desde el servidor
+   * para no pisar lo que el usuario está editando (típico: fecha de aprobación).
+   */
+  const formDirtyRef = useRef(false)
+
+  useLayoutEffect(() => {
+    formDirtyRef.current =
+      cambios.cliente ||
+      cambios.prestamo ||
+      cambios.cuotas ||
+      cuotasIdsAEliminar.length > 0
+  }, [
+    cambios.cliente,
+    cambios.prestamo,
+    cambios.cuotas,
+    cuotasIdsAEliminar.length,
+  ])
 
   const validarFormulario = (): boolean => {
     const e: Record<string, string> = {}
@@ -294,8 +312,29 @@ export function EditarRevisionManual() {
     ) {
       e['numero_cuotas'] = 'Debe ser un entero mayor a 0'
     }
-    if (prestamoData.fecha_aprobacion) {
-      const fa = new Date(prestamoData.fecha_aprobacion)
+
+    const estadoPr = (prestamoData.estado || '').toString().trim().toUpperCase()
+    const exigeFechaAprobacionManual =
+      estadoPr === 'APROBADO' ||
+      estadoPr === 'DESEMBOLSADO' ||
+      estadoPr === 'LIQUIDADO'
+
+    let faYmd = ''
+    const faRaw = prestamoData.fecha_aprobacion
+    if (faRaw != null && faRaw !== '') {
+      if (typeof faRaw === 'string' && faRaw.length >= 10) {
+        faYmd = faRaw.slice(0, 10)
+      } else {
+        const d = new Date(faRaw as string | number | Date)
+        if (!isNaN(d.getTime())) faYmd = d.toISOString().split('T')[0]
+      }
+    }
+    if (exigeFechaAprobacionManual && !faYmd.trim()) {
+      e['fecha_aprobacion'] =
+        'La fecha de aprobación es obligatoria (ingreso manual). Sin ella no se guardan cambios ni se puede cerrar la revisión.'
+    }
+    if (faYmd) {
+      const fa = new Date(faYmd)
       if (isNaN(fa.getTime())) {
         e['fecha_aprobacion'] = 'Fecha inválida'
       }
@@ -347,26 +386,27 @@ export function EditarRevisionManual() {
         data = await revisionManualService.getDetallePrestamoRevision(pid)
       }
 
-      const fn = data.cliente?.fecha_nacimiento
-      const fnNorm =
-        typeof fn === 'string' && fn.length >= 10 ? fn.slice(0, 10) : fn
+      if (!formDirtyRef.current) {
+        const fn = data.cliente?.fecha_nacimiento
+        const fnNorm =
+          typeof fn === 'string' && fn.length >= 10 ? fn.slice(0, 10) : fn
 
-      setClienteData({
-        ...data.cliente,
-        fecha_nacimiento: fnNorm ?? null,
-      })
+        setClienteData({
+          ...data.cliente,
+          fecha_nacimiento: fnNorm ?? null,
+        })
 
-      setPrestamoData(data.prestamo)
+        setPrestamoData(data.prestamo)
 
-      // Guardar fecha original para detectar cambios
-      const faOrig = data.prestamo?.fecha_aprobacion
-      setFechaAprobacionOriginal(
-        typeof faOrig === 'string' && faOrig.length >= 10
-          ? faOrig.slice(0, 10)
-          : null
-      )
+        const faOrig = data.prestamo?.fecha_aprobacion
+        setFechaAprobacionOriginal(
+          typeof faOrig === 'string' && faOrig.length >= 10
+            ? faOrig.slice(0, 10)
+            : null
+        )
 
-      setCuotasData(data.cuotas)
+        setCuotasData(data.cuotas)
+      }
 
       return data
     },
@@ -376,7 +416,8 @@ export function EditarRevisionManual() {
     staleTime: 0, // Los datos están obsoletos inmediatamente
     gcTime: 0, // No cachear en el tiempo
     refetchOnMount: true, // Retraer cuando el componente se monta
-    refetchOnWindowFocus: true, // Retraer cuando la ventana obtiene foco
+    // Evita refetch al volver el foco (calendario nativo, otra pestaña): antes pisaba el formulario.
+    refetchOnWindowFocus: false,
   })
 
   const estadoRevision = (detalleData?.revision?.estado_revision ?? 'pendiente')
@@ -857,6 +898,8 @@ export function EditarRevisionManual() {
           queryKey: ['dashboard-menu'],
           exact: false,
         })
+
+        setTimeout(() => irAListaPrestamos(), 400)
       } else if (errorOccurred) {
         toast.warning(
           '⚠️ Algunos cambios no se guardaron. Revisa los errores arriba'
@@ -1172,27 +1215,7 @@ export function EditarRevisionManual() {
         })
 
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
-        setTimeout(() => {
-          if (returnTo === '/revision-manual') {
-            navigate('/revision-manual', { state: { fromFinalize: true } })
-          } else {
-            const scrollPosition = window.scrollY
-            sessionStorage.setItem(
-              'prestamoScrollPosition',
-              scrollPosition.toString()
-            )
-            navigate('/prestamos')
-            setTimeout(() => {
-              const savedPosition = sessionStorage.getItem(
-                'prestamoScrollPosition'
-              )
-              if (savedPosition) {
-                window.scrollTo(0, parseInt(savedPosition, 10))
-                sessionStorage.removeItem('prestamoScrollPosition')
-              }
-            }, 100)
-          }
-        }, 1500)
+        setTimeout(() => irAListaPrestamos(), 1500)
       } catch (err: any) {
         throw new Error(
           `Error al finalizar: ${err?.response?.data?.detail || 'Error desconocido'}`
@@ -1243,7 +1266,7 @@ export function EditarRevisionManual() {
       setMotivoRechazo('')
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['prestamos'] })
-      navigate(returnTo)
+      irAListaPrestamos()
     } catch (err: any) {
       const msg = err?.response?.data?.detail || 'Error al rechazar'
       toast.error(msg)
@@ -1280,20 +1303,7 @@ export function EditarRevisionManual() {
 
     queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
 
-    if (returnTo === '/prestamos') {
-      const scrollPosition = window.scrollY
-      sessionStorage.setItem('prestamoScrollPosition', scrollPosition.toString())
-      navigate('/prestamos')
-      setTimeout(() => {
-        const savedPosition = sessionStorage.getItem('prestamoScrollPosition')
-        if (savedPosition) {
-          window.scrollTo(0, parseInt(savedPosition, 10))
-          sessionStorage.removeItem('prestamoScrollPosition')
-        }
-      }, 100)
-    } else {
-      navigate('/revision-manual')
-    }
+    navigate('/revision-manual')
   }
 
   if (isLoading) {
@@ -1314,8 +1324,8 @@ export function EditarRevisionManual() {
             No se pudieron cargar los datos del préstamo
           </p>
 
-          <Button onClick={() => navigate('/revision-manual')}>
-            Volver a Revisión Manual
+          <Button type="button" onClick={() => navigate(RUTA_LISTA_PRESTAMOS)}>
+            Volver a lista de préstamos
           </Button>
         </div>
       </div>
@@ -2069,11 +2079,11 @@ export function EditarRevisionManual() {
                       Fecha de Aprobación
                     </label>
                     <p className="mb-2 text-xs text-gray-600">
-                      La fecha base de cálculo es la misma que la de aprobación.
-                      El botón guarda esta fecha en el servidor y recalcula
-                      vencimientos de cuotas. &quot;Guardar cambios&quot; y
-                      &quot;Guardar y cerrar&quot; persisten también el resto de
-                      ediciones en la base (estado de cuenta, reportes, etc.).
+                      Obligatoria para préstamos aprobados/liquidados: debe
+                      ingresarla usted (no se infiere de otras fechas). La base
+                      de cálculo es la misma fecha. El botón guarda en servidor y
+                      recalcula vencimientos. &quot;Guardar cambios&quot; y
+                      &quot;Guardar y cerrar&quot; persisten el resto en la base.
                     </p>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                       <div className="relative min-w-0 flex-1">
@@ -2085,6 +2095,7 @@ export function EditarRevisionManual() {
                             prestamoData.fecha_aprobacion
                           )}
                           onChange={e => {
+                            formDirtyRef.current = true
                             setPrestamoData({
                               ...prestamoData,
                               fecha_aprobacion: e.target.value || null,

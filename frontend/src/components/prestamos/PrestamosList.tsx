@@ -1709,10 +1709,7 @@ export function PrestamosList() {
                                     className={cfg.cls}
                                     onClick={() =>
                                       navigate(
-                                        `/revision-manual/editar/${prestamo.id}`,
-                                        {
-                                          state: { returnTo: '/prestamos' },
-                                        }
+                                        `/revision-manual/editar/${prestamo.id}`
                                       )
                                     }
                                   >
