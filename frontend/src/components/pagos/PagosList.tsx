@@ -1086,9 +1086,7 @@ export function PagosList() {
                       <>
                         <br />
                         <span className="text-amber-700">
-                          {
-                            gmailStatus.last_correos_marcados_revision
-                          }{' '}
+                          {gmailStatus.last_correos_marcados_revision}{' '}
                           destacado(s) en Gmail (revisar formato).
                         </span>
                       </>

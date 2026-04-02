@@ -122,10 +122,8 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
                     <>
                       <br />
                       <span className="text-amber-700">
-                        {
-                          gmailStatus.last_correos_marcados_revision
-                        }{' '}
-                        con estrella (revisar en Gmail).
+                        {gmailStatus.last_correos_marcados_revision} con
+                        estrella (revisar en Gmail).
                       </span>
                     </>
                   ) : null}
