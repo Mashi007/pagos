@@ -22,7 +22,7 @@
 
 
 
- * Concesionario, Analista, Modelo vehículo, Número cuotas, Cuota período, Tasa interés, Observaciones.
+ * Concesionario, Analista, Modelo vehículo, Número cuotas, Cuota período, Tasa interés, Observaciones, Fecha aprobación / desembolso (columna M).
 
 
 
@@ -353,6 +353,10 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                           </th>
 
                           <th className="w-28 border p-2 text-left text-xs font-medium">
+                            Fecha aprob.
+                          </th>
+
+                          <th className="w-28 border p-2 text-left text-xs font-medium">
                             Producto
                           </th>
 
@@ -459,6 +463,25 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                                 className={inputClass(
                                   row._validation.fecha_requerimiento
                                     ?.isValid ?? true
+                                )}
+                              />
+                            </td>
+
+                            <td className="border p-2">
+                              <input
+                                type="text"
+                                value={row.fecha_aprobacion}
+                                onChange={e =>
+                                  updateCellValue(
+                                    row,
+                                    'fecha_aprobacion',
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="DD/MM/YYYY"
+                                className={inputClass(
+                                  row._validation.fecha_aprobacion?.isValid ??
+                                    true
                                 )}
                               />
                             </td>

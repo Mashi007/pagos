@@ -722,7 +722,8 @@ export function PrestamoDetalleModal({
                       </p>
 
                       <p className="text-xs text-gray-500">
-                        {formatDate(prestamoData.fecha_registro)}
+                        Registro en sistema (automática, no afecta
+                        amortización): {formatDate(prestamoData.fecha_registro)}
                       </p>
                     </div>
 

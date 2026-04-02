@@ -40,6 +40,8 @@ class Prestamo(Base):
     usuario_aprobador = Column(String(255), nullable=True)
     observaciones = Column(Text, nullable=True, server_default=text("'No observaciones'"))
     informacion_desplegable = Column(Boolean, nullable=False, server_default=text("false"))
+    # Alta del registro en BD (default server-side al insertar, equivalente a "hoy" del servidor). No se edita en formularios.
+    # No debe usarse para amortizacion ni compararse con fecha_aprobacion (puede ser anterior o posterior).
     fecha_registro = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     fecha_aprobacion = Column(DateTime(timezone=False), nullable=True)
     fecha_actualizacion = Column(DateTime(timezone=False), nullable=False, server_default=func.now(), onupdate=func.now())

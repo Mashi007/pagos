@@ -196,20 +196,14 @@ export function AsignarFechaAprobacionModal({
                       value={fechaAprobacion}
                       onChange={e => setFechaAprobacion(e.target.value)}
                       className="pl-10"
-                      min={
-                        fechaRequerimientoStr ||
-                        (prestamo.fecha_registro
-                          ? new Date(prestamo.fecha_registro)
-                              .toISOString()
-                              .split('T')[0]
-                          : undefined)
-                      }
+                      min={fechaRequerimientoStr || undefined}
                     />
                   </div>
 
                   <p className="text-xs text-gray-500">
                     Esta fecha será la base para calcular las fechas de
-                    vencimiento de todas las cuotas
+                    vencimiento de todas las cuotas. La fecha de registro en
+                    sistema no limita esta elección.
                   </p>
                 </div>
               </div>

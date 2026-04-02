@@ -15,6 +15,9 @@ from app.api.v1.endpoints.reportes.reportes_productos import router as router_pr
 from app.api.v1.endpoints.reportes.reportes_cedula import router as router_cedula
 from app.api.v1.endpoints.reportes.reportes_contable import router as router_contable
 from app.api.v1.endpoints.reportes.reportes_conciliacion import router as router_conciliacion
+from app.api.v1.endpoints.reportes.reportes_prestamos_fechas import (
+    router as router_prestamos_fechas,
+)
 
 router = APIRouter()
 
@@ -29,4 +32,5 @@ router.include_router(router_productos, tags=["reportes"])
 router.include_router(router_cedula, tags=["reportes"])
 router.include_router(router_contable, tags=["reportes"])
 router.include_router(router_conciliacion, tags=["reportes"])
+router.include_router(router_prestamos_fechas, tags=["reportes"])
 

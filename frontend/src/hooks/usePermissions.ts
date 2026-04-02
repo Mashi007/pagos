@@ -373,7 +373,13 @@ export function usePermissions() {
 
     // Operativos pueden ver: Pagos, Morosidad, Vencimiento, Por cédula. Contable solo admin.
 
-    const allowedForOperativos = ['PAGOS', 'MOROSIDAD', 'VENCIMIENTO', 'CEDULA']
+    const allowedForOperativos = [
+      'PAGOS',
+      'MOROSIDAD',
+      'VENCIMIENTO',
+      'CEDULA',
+      'FECHAS',
+    ]
 
     return allowedForOperativos.includes(reportType)
   }

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de reportes. Datos reales desde BD.
 Dashboard resumen, cartera, pagos, morosidad, financiero, asesores, productos.
 ExportaciÃ³n Excel y PDF para cada tipo segÃºn corresponda.
@@ -1974,7 +1974,7 @@ def get_productos_por_mes(
     """Productos por mes: una pestaÃ±a por mes. Columnas: Modelo vehÃ­culo, Total financiamiento, Valor activo (70%)."""
     resultado: dict = {"meses": []}
     periodos = _periodos_desde_filtros(aÃ±os, meses_list, meses)
-    fecha_ref = func.coalesce(func.date(Prestamo.fecha_aprobacion), func.date(Prestamo.fecha_registro))
+    fecha_ref = prestamo_fecha_referencia_negocio()
 
     for (aÃ±o, mes) in periodos:
         inicio = date(aÃ±o, mes, 1)

@@ -13,6 +13,10 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.constants.prestamo_estados import prestamo_estado_exige_fecha_aprobacion
+from app.services.prestamos.fechas_prestamo_coherencia import (
+    alinear_fecha_aprobacion_y_base_calculo,
+)
 from app.core.serializers import to_float, format_datetime_iso
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
@@ -732,6 +736,14 @@ def editar_prestamo_revision(
     
     if not cambios_dict:
         return {"mensaje": "No hay cambios que guardar", "prestamo_id": prestamo_id}
+
+    alinear_fecha_aprobacion_y_base_calculo(prestamo)
+
+    if prestamo_estado_exige_fecha_aprobacion(prestamo.estado) and prestamo.fecha_aprobacion is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Falta la fecha de aprobación. Los préstamos aprobados, desembolsados o liquidados deben tener fecha de aprobación.",
+        )
 
     # Coherencia: fecha de aprobación debe ser >= fecha de requerimiento
     _req = getattr(prestamo, "fecha_requerimiento", None)

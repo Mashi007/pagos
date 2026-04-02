@@ -16,4 +16,6 @@ export const REPORTES_TOAST = {
   pagoVencido: 'Reporte de Pago Vencido descargado exitosamente',
   cedula: 'Reporte por Cédula descargado exitosamente',
   contableOk: 'Reporte Contable descargado exitosamente',
+
+  fechas: 'Reporte Fechas (prestamos) descargado exitosamente',
 } as const

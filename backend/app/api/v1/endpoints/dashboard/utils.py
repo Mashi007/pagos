@@ -198,7 +198,7 @@ def _etiquetas_12_meses() -> list[dict]:
 
 
 def _rango_y_anterior(fecha_inicio: date, fecha_fin: date):
-    """Dado un rango (inicio, fin), devuelve (inicio_dt, fin_dt, inicio_ant_dt, fin_ant_dt) para filtrar por fecha_registro.
+    """Dado un rango (inicio, fin), devuelve (inicio_dt, fin_dt, inicio_ant_dt, fin_ant_dt) para KPIs por fecha_aprobacion.
     Período anterior = mismo número de días antes de fecha_inicio.
     """
     from datetime import time as dt_time
@@ -213,7 +213,7 @@ def _rango_y_anterior(fecha_inicio: date, fecha_fin: date):
 
 
 def _ultimo_dia_del_mes(d: datetime) -> datetime:
-    """Último día del mes a las 23:59 UTC para comparar con fecha_registro (timezone-aware)."""
+    """Último día del mes a las 23:59 UTC (timezone-aware)."""
     siguiente = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
     ultimo = siguiente - timedelta(seconds=1)
     if ultimo.tzinfo is None:

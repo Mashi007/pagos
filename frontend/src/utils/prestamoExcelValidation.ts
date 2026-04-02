@@ -16,7 +16,13 @@
 
 
 
- * Concesionario, Analista, Modelo vehículo, Número cuotas, Cuota período, Tasa interés, Observaciones.
+ * Concesionario, Analista, Modelo vehículo, Número cuotas, Cuota período, Tasa interés, Observaciones,
+
+
+
+
+
+ * Fecha aprobación / desembolso (obligatoria; columna M / índice 12).
 
 
 
@@ -60,6 +66,8 @@ export interface PrestamoExcelRow {
   tasa_interes: number
 
   observaciones: string
+
+  fecha_aprobacion: string
 }
 
 const MODALIDADES = ['MENSUAL', 'QUINCENAL', 'SEMANAL']
@@ -155,6 +163,7 @@ export function validatePrestamoField(
         : { isValid: false, message: `Uno de: ${MODALIDADES.join(', ')}` }
 
     case 'fecha_requerimiento':
+    case 'fecha_aprobacion':
       if (!strVal) return { isValid: false, message: 'Fecha requerida' }
 
       const fm = strVal.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)

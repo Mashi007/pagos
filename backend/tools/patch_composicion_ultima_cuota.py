@@ -46,8 +46,9 @@ new_fn = r'''def _compute_composicion_morosidad(
             try:
                 inicio = date.fromisoformat(fecha_inicio)
                 fin = date.fromisoformat(fecha_fin)
-                conds_prestamo.append(func.date(Prestamo.fecha_registro) >= inicio)
-                conds_prestamo.append(func.date(Prestamo.fecha_registro) <= fin)
+                fref = prestamo_fecha_referencia_negocio()
+                conds_prestamo.append(fref >= inicio)
+                conds_prestamo.append(fref <= fin)
             except ValueError:
                 pass
 

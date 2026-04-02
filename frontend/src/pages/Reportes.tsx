@@ -20,6 +20,7 @@ import {
   Mail,
   Search,
   Copy,
+  Calendar,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -96,6 +97,8 @@ const tiposReporte = [
 
   { value: 'PAGOS', label: 'Pagos', icon: Users },
 
+  { value: 'FECHAS', label: 'Fechas', icon: Calendar },
+
   { value: 'ASESORES', label: 'Pago vencido', icon: UserCheck },
 
   { value: 'CONTABLE', label: 'Contable', icon: Calculator },
@@ -110,6 +113,7 @@ const REPORTES_COBRANZA = [
   'MOROSIDAD',
   'VENCIMIENTO',
   'PAGOS',
+  'FECHAS',
   'ASESORES',
 ]
 
@@ -223,7 +227,7 @@ export function Reportes() {
       return
     }
 
-    if (tipo === 'CEDULA' || tipo === 'MOROSIDAD') {
+    if (tipo === 'CEDULA' || tipo === 'MOROSIDAD' || tipo === 'FECHAS') {
       generarReporte(tipo, {
         ['a\u00f1os']: [],
         meses: [],
@@ -486,7 +490,7 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      if (tipo !== 'CEDULA' && tipo !== 'MOROSIDAD') {
+      if (tipo !== 'CEDULA' && tipo !== 'MOROSIDAD' && tipo !== 'FECHAS') {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
           toast.error(errFiltros)
@@ -583,6 +587,16 @@ export function Reportes() {
         toast.dismiss(toastId)
 
         toast.success(REPORTES_TOAST.cedula)
+      } else if (tipo === 'FECHAS') {
+        const blob = await reporteService.exportarReporteFechasPrestamos()
+
+        descargarBlob(blob, `FECHAS_${fechaCorte}.${ext}`)
+
+        toast.dismiss(toastId)
+
+        toast.success(REPORTES_TOAST.fechas)
+
+        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else {
         toast.dismiss(toastId)
 
@@ -773,6 +787,7 @@ export function Reportes() {
                       'PAGOS',
                       'MOROSIDAD',
                       'VENCIMIENTO',
+                      'FECHAS',
                       'ASESORES',
                       'CONTABLE',
                       'CEDULA',

@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 PRESTAMO_ESTADOS_VALIDOS = frozenset(
     {"APROBADO", "DRAFT", "EN_REVISION", "EVALUADO", "RECHAZADO", "LIQUIDADO", "DESISTIMIENTO"}
@@ -50,9 +50,37 @@ class PrestamoBase(BaseModel):
 
 class PrestamoCreate(PrestamoBase):
     """Campos para crear préstamo. cedula/nombres se rellenan desde Cliente si no se envían."""
-    aprobado_por_carga_masiva: Optional[bool] = False  # Si True: estado=APROBADO, fecha_aprobacion=fecha_requerimiento
+    # Obligatoria: no se infiere de requerimiento, fecha_registro ni fecha del servidor.
+    fecha_aprobacion: date
+    aprobado_por_carga_masiva: Optional[bool] = False
     # Solo cargas controladas: saltar validacion de huella duplicada (misma cedula + mismos montos/plazos que otro APROBADO).
     omitir_validacion_huella_duplicada: bool = False
+
+    @field_validator("fecha_aprobacion", mode="before")
+    @classmethod
+    def fecha_aprobacion_create_resiliente(cls, v):
+        if v is None or v == "":
+            raise ValueError("fecha_aprobacion es obligatoria")
+        if isinstance(v, datetime):
+            return v.date()
+        if isinstance(v, date):
+            return v
+        if isinstance(v, str):
+            s = v.strip()
+            if "T" in s:
+                s = s.split("T", 1)[0]
+            elif " " in s:
+                s = s.split(" ", 1)[0]
+            return s
+        return v
+
+    @model_validator(mode="after")
+    def aprobacion_no_antes_requerimiento(self):
+        if self.fecha_aprobacion < self.fecha_requerimiento:
+            raise ValueError(
+                "La fecha de aprobacion debe ser igual o posterior a la fecha de requerimiento"
+            )
+        return self
 
 
 class PrestamoUpdate(BaseModel):

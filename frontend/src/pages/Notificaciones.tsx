@@ -863,6 +863,22 @@ export function Notificaciones() {
 
             {mostrarTablaCuotas ? (
               <div className="overflow-x-auto">
+                {(activeTab === 'dias_1_atraso' ||
+                  activeTab === 'dias_5_atraso' ||
+                  activeTab === 'dias_30_atraso') &&
+                  list.length > 0 && (
+                    <p className="mb-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+                      <span className="font-semibold">
+                        Por que la fecha de vencimiento se repite:{' '}
+                      </span>
+                      {activeTab === 'dias_1_atraso'
+                        ? 'Esta pestaña solo incluye cuotas cuya fecha de vencimiento fue ayer (primer dia despues del vencimiento). Por definicion, todas comparten esa misma fecha; al pasar el dia en el calendario de negocio, la fecha mostrada avanza un dia para todo el listado (ayer 31 mar, hoy 1 abr, etc.). Los numeros de cuota (9, 11, 12...) son distintos prestamos o cuotas distintas que casualmente vencieron ese mismo dia.'
+                        : activeTab === 'dias_5_atraso'
+                          ? 'Solo cuotas con vencimiento hace exactamente 5 dias calendario; la columna Fecha venc. es la misma para todas las filas de esta lista.'
+                          : 'Solo cuotas con vencimiento hace exactamente 30 dias calendario; la columna Fecha venc. es la misma para todas las filas de esta lista.'}
+                    </p>
+                  )}
+
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">

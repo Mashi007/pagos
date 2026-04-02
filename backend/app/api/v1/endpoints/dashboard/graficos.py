@@ -19,6 +19,9 @@ from app.models.pago import Pago
 from app.models.pago_reportado import PagoReportado
 from app.models.prestamo import Prestamo
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
+from app.services.prestamos.prestamo_fecha_referencia_query import (
+    prestamo_fecha_referencia_negocio,
+)
 from app.services.cuota_estado import SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO
 
 from .utils import (
@@ -123,8 +126,9 @@ def _compute_financiamiento_por_rangos(
             try:
                 inicio = date.fromisoformat(fecha_inicio)
                 fin = date.fromisoformat(fecha_fin)
-                conds_base.append(func.date(Prestamo.fecha_registro) >= inicio)
-                conds_base.append(func.date(Prestamo.fecha_registro) <= fin)
+                fref = prestamo_fecha_referencia_negocio()
+                conds_base.append(fref >= inicio)
+                conds_base.append(fref <= fin)
             except ValueError:
                 pass
 
@@ -230,8 +234,9 @@ def _compute_composicion_morosidad(
             try:
                 inicio = date.fromisoformat(fecha_inicio)
                 fin = date.fromisoformat(fecha_fin)
-                conds_prestamo.append(func.date(Prestamo.fecha_registro) >= inicio)
-                conds_prestamo.append(func.date(Prestamo.fecha_registro) <= fin)
+                fref = prestamo_fecha_referencia_negocio()
+                conds_prestamo.append(fref >= inicio)
+                conds_prestamo.append(fref <= fin)
             except ValueError:
                 pass
 
@@ -462,11 +467,12 @@ def get_financiamiento_tendencia_mensual(
         for i, m in enumerate(meses_list):
             fin_mes = hoy - timedelta(days=30 * (11 - i))
             ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
+            ultimo_d = ultimo_dia.date() if hasattr(ultimo_dia, "date") else ultimo_dia
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
                 .select_from(Prestamo)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(Prestamo.fecha_registro <= ultimo_dia, Prestamo.estado == "APROBADO")
+                .where(prestamo_fecha_referencia_negocio() <= ultimo_d, Prestamo.estado == "APROBADO")
             ) or 0
             resultado.append({
                 "mes": m["mes"],
@@ -584,12 +590,13 @@ def _compute_prestamos_por_concesionario(
     """Agregados préstamos por concesionario (sin caché)."""
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
-        mes_expr = func.to_char(func.date_trunc("month", Prestamo.fecha_registro), "YYYY-MM")
+        fref = prestamo_fecha_referencia_negocio()
+        mes_expr = func.to_char(func.date_trunc("month", fref), "YYYY-MM")
         concesionario_label = func.coalesce(Prestamo.concesionario, "Sin concesionario").label("concesionario")
         conds_base = [
             Prestamo.estado == "APROBADO",
-            func.date(Prestamo.fecha_registro) >= inicio,
-            func.date(Prestamo.fecha_registro) <= fin,
+            fref >= inicio,
+            fref <= fin,
         ]
         if analista:
             conds_base.append(Prestamo.analista == analista)
@@ -641,7 +648,8 @@ def _compute_prestamos_por_modelo(
     """Agregados préstamos por modelo (sin caché)."""
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
-        mes_expr = func.to_char(func.date_trunc("month", Prestamo.fecha_registro), "YYYY-MM")
+        fref = prestamo_fecha_referencia_negocio()
+        mes_expr = func.to_char(func.date_trunc("month", fref), "YYYY-MM")
         producto_valido = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
         modelo_expr = _modelo_label_dashboard_expr(
             producto_valido,
@@ -649,8 +657,8 @@ def _compute_prestamos_por_modelo(
         )
         conds_base = [
             Prestamo.estado == "APROBADO",
-            func.date(Prestamo.fecha_registro) >= inicio,
-            func.date(Prestamo.fecha_registro) <= fin,
+            fref >= inicio,
+            fref <= fin,
         ]
         if analista:
             conds_base.append(Prestamo.analista == analista)

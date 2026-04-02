@@ -221,6 +221,15 @@ export function CrearPrestamoForm({
 
   const modeloInicial = modeloTextoDesdePrestamo(prestamo)
 
+  const apYmdInicial = prestamo?.fecha_aprobacion
+    ? fechaInputYmd(prestamo.fecha_aprobacion)
+    : undefined
+  const baseYmdInicial = prestamo?.fecha_base_calculo
+    ? fechaInputYmd(prestamo.fecha_base_calculo)
+    : undefined
+  // Canon: fecha de aprobacion = fecha de calculo; si la BD divergia, mostrar y enviar la de aprobacion.
+  const fechaBaseInicialAlineada = apYmdInicial ?? baseYmdInicial
+
   const [formData, setFormData] = useState<Partial<PrestamoForm>>({
     cedula: prestamo?.cedula || '',
 
@@ -232,13 +241,9 @@ export function CrearPrestamoForm({
       ? fechaInputYmd(prestamo.fecha_requerimiento)
       : '',
 
-    fecha_aprobacion: prestamo?.fecha_aprobacion
-      ? fechaInputYmd(prestamo.fecha_aprobacion)
-      : undefined,
+    fecha_aprobacion: apYmdInicial,
 
-    fecha_base_calculo: prestamo?.fecha_base_calculo
-      ? fechaInputYmd(prestamo.fecha_base_calculo)
-      : undefined,
+    fecha_base_calculo: fechaBaseInicialAlineada,
 
     tasa_interes:
       prestamo?.tasa_interes != null
@@ -405,17 +410,20 @@ export function CrearPrestamoForm({
   useEffect(() => {
     if (!prestamo?.id) return
     const mv = modeloTextoDesdePrestamo(prestamo)
+    const apYmd = prestamo.fecha_aprobacion
+      ? fechaInputYmd(prestamo.fecha_aprobacion)
+      : undefined
+    const baseYmd = prestamo.fecha_base_calculo
+      ? fechaInputYmd(prestamo.fecha_base_calculo)
+      : undefined
+    const fechaBaseAlineada = apYmd ?? baseYmd
     setFormData({
       cedula: prestamo.cedula || '',
       total_financiamiento: Number(prestamo.total_financiamiento) || 0,
       modalidad_pago: prestamo.modalidad_pago || 'MENSUAL',
       fecha_requerimiento: fechaInputYmd(prestamo.fecha_requerimiento),
-      fecha_aprobacion: prestamo.fecha_aprobacion
-        ? fechaInputYmd(prestamo.fecha_aprobacion)
-        : undefined,
-      fecha_base_calculo: prestamo.fecha_base_calculo
-        ? fechaInputYmd(prestamo.fecha_base_calculo)
-        : undefined,
+      fecha_aprobacion: apYmd,
+      fecha_base_calculo: fechaBaseAlineada,
       tasa_interes:
         prestamo.tasa_interes != null
           ? Number(prestamo.tasa_interes)
@@ -628,6 +636,46 @@ export function CrearPrestamoForm({
       formData.fecha_requerimiento.trim() === ''
     ) {
       errors.push('La fecha de requerimiento es requerida')
+    }
+
+    const fechaReqTrim = String(formData.fecha_requerimiento ?? '').trim()
+    const fechaAprobTrim = String(formData.fecha_aprobacion ?? '').trim()
+
+    if (!prestamo) {
+      if (!fechaAprobTrim) {
+        errors.push(
+          'La fecha de aprobación / desembolso es obligatoria (puede coincidir con la fecha de requerimiento)'
+        )
+      } else if (
+        fechaReqTrim !== '' &&
+        fechaAprobTrim !== '' &&
+        fechaAprobTrim < fechaReqTrim
+      ) {
+        errors.push(
+          'La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento'
+        )
+      }
+    }
+
+    // Aprobados / desembolsados / liquidados: fecha de aprobacion obligatoria (edicion).
+
+    if (prestamo) {
+      const estadoEfectivo = String(formData.estado || prestamo.estado || '')
+        .trim()
+        .toUpperCase()
+
+      const exigeFechaAprobacion =
+        estadoEfectivo === 'APROBADO' ||
+        estadoEfectivo === 'DESEMBOLSADO' ||
+        estadoEfectivo === 'LIQUIDADO'
+
+      const fechaAprobStr = fechaAprobTrim
+
+      if (exigeFechaAprobacion && fechaAprobStr === '') {
+        errors.push(
+          'La fecha de aprobación es obligatoria para préstamos aprobados, desembolsados o liquidados'
+        )
+      }
     }
 
     // Requeridos adicionales del formulario
@@ -1515,56 +1563,62 @@ export function CrearPrestamoForm({
                     />
                   </div>
 
-                  {prestamo ? (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">
-                        Fecha de Aprobacion / Desembolso
-                      </label>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Fecha de Aprobacion / Desembolso{' '}
+                      {!prestamo ? (
+                        <span className="text-red-500">*</span>
+                      ) : null}
+                    </label>
 
-                      <div className="mb-3 flex gap-2">
-                        <Input
-                          type="date"
-                          value={formData.fecha_aprobacion || ''}
-                          onChange={e => {
-                            const valor = e.target.value
-                            const fechaNormalizada = normalizarFechaInput(valor)
-                            setFormData({
-                              ...formData,
-                              fecha_aprobacion: fechaNormalizada || undefined,
-                              fecha_base_calculo: fechaNormalizada || undefined,
-                            })
-                          }}
-                          disabled={isReadOnly}
-                          className="flex-1"
-                        />
+                    <div className="mb-3 flex gap-2">
+                      <Input
+                        type="date"
+                        value={formData.fecha_aprobacion || ''}
+                        min={
+                          formData.fecha_requerimiento &&
+                          String(formData.fecha_requerimiento).trim() !== ''
+                            ? formData.fecha_requerimiento
+                            : undefined
+                        }
+                        onChange={e => {
+                          const valor = e.target.value
+                          const fechaNormalizada = normalizarFechaInput(valor)
+                          setFormData({
+                            ...formData,
+                            fecha_aprobacion: fechaNormalizada || undefined,
+                            fecha_base_calculo: fechaNormalizada || undefined,
+                          })
+                        }}
+                        disabled={isReadOnly}
+                        className="flex-1"
+                      />
 
-                        {prestamo.estado === 'APROBADO' &&
-                          formData.fecha_aprobacion &&
-                          formData.fecha_aprobacion !==
-                            fechaAprobacionAnterior && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={recalcularAmortizacion}
-                              disabled={
-                                isRecalculatingAmortizacion || isReadOnly
-                              }
-                              className="whitespace-nowrap"
-                            >
-                              {isRecalculatingAmortizacion
-                                ? 'Recalculando...'
-                                : 'Recalcular Amortizacion'}
-                            </Button>
-                          )}
-                      </div>
-
-                      <p className="mt-1 text-xs text-gray-500">
-                        Esta fecha determina las fechas de vencimiento de las
-                        cuotas. Al guardar con una fecha distinta, las fechas de
-                        la tabla de amortizacion se recalculan automaticamente.
-                      </p>
+                      {prestamo &&
+                        prestamo.estado === 'APROBADO' &&
+                        formData.fecha_aprobacion &&
+                        formData.fecha_aprobacion !==
+                          fechaAprobacionAnterior && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={recalcularAmortizacion}
+                            disabled={isRecalculatingAmortizacion || isReadOnly}
+                            className="whitespace-nowrap"
+                          >
+                            {isRecalculatingAmortizacion
+                              ? 'Recalculando...'
+                              : 'Recalcular Amortizacion'}
+                          </Button>
+                        )}
                     </div>
-                  ) : null}
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      {!prestamo
+                        ? 'Debe indicarla explicitamente en el alta (puede ser la misma fecha que el requerimiento). Es la misma que se guarda como fecha de calculo de amortizacion.'
+                        : 'Esta fecha es la misma que se guarda como fecha de calculo de amortizacion (fecha base). Determina las fechas de vencimiento de las cuotas; al cambiarla y guardar, puede recalcularse la tabla.'}
+                    </p>
+                  </div>
                 </div>
 
                 {/* fecha_base_calculo se iguala a fecha_aprobacion; la amortización usa fecha_base_calculo */}

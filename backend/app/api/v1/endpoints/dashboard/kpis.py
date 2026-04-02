@@ -16,6 +16,9 @@ from app.models.cuota import Cuota
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+from app.services.prestamos.prestamo_fecha_referencia_query import (
+    prestamo_fecha_referencia_negocio,
+)
 
 from .utils import (
     _CACHE_KPIS,
@@ -322,10 +325,11 @@ def _compute_kpis_dashboard_flat(
     producto_valido = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
     modelo_lbl = _modelo_label_dashboard_expr(producto_valido, incluir_sin_modelo=False)
 
+    fecha_ref = prestamo_fecha_referencia_negocio()
     conds = [
         Prestamo.estado.in_(["APROBADO", "LIQUIDADO"]),
-        func.date(Prestamo.fecha_registro) >= inicio,
-        func.date(Prestamo.fecha_registro) <= fin,
+        fecha_ref >= inicio,
+        fecha_ref <= fin,
     ]
     if analista:
         conds.append(Prestamo.analista == analista)

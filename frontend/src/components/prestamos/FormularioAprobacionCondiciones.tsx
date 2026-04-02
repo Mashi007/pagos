@@ -38,7 +38,7 @@ export function FormularioAprobacionCondiciones({
 }: FormularioAprobacionCondicionesProps) {
   const defaultFechaAprobacion = prestamo.fecha_aprobacion
     ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
-    : prestamo.fecha_base_calculo || new Date().toISOString().split('T')[0]
+    : ''
 
   const [condicionesAprobacion, setCondicionesAprobacion] = useState({
     tasa_interes: 0.0, // Siempre 0% - producto sin interés
@@ -141,8 +141,6 @@ export function FormularioAprobacionCondiciones({
         plazo_maximo: condicionesAprobacion.plazo_maximo,
 
         fecha_aprobacion: condicionesAprobacion.fecha_aprobacion,
-
-        fecha_base_calculo: condicionesAprobacion.fecha_aprobacion,
 
         observaciones:
           condicionesAprobacion.observaciones ||

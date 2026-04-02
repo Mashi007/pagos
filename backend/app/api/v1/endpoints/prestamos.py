@@ -75,6 +75,8 @@ from app.models.reporte_contable_cache import ReporteContableCache
 
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
 
+from app.constants.prestamo_estados import prestamo_estado_exige_fecha_aprobacion
+
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
@@ -105,6 +107,12 @@ from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
     exigir_cliente_cedula_para_prestamo_aprobado,
 )
 from app.services.prestamos.prestamo_huella import ensure_no_duplicate_aprobado_huella
+from app.services.prestamos.fechas_prestamo_coherencia import (
+    alinear_fecha_aprobacion_y_base_calculo,
+)
+from app.services.prestamos.prestamo_fecha_referencia_query import (
+    prestamo_fecha_referencia_negocio,
+)
 
 from app.services.prestamo_estado_coherencia import (
     condicion_filtro_estado_prestamo,
@@ -432,10 +440,8 @@ class AplicarCondicionesBody(BaseModel):
 
     plazo_maximo: Optional[int] = None
 
-    # Formularios: preferir fecha_aprobacion (misma fecha calendario que fecha_base_calculo).
+    # Solo fecha_aprobacion: la base de calculo se copia en servidor (no enviar solo fecha_base).
     fecha_aprobacion: Optional[date] = None
-
-    fecha_base_calculo: Optional[date] = None
 
     observaciones: Optional[str] = None
 
@@ -643,9 +649,9 @@ def listar_prestamos(
 
             fd = datetime.fromisoformat(fecha_inicio.replace("Z", "+00:00")).date()
 
-            q = q.where(func.date(Prestamo.fecha_registro) >= fd)
+            q = q.where(prestamo_fecha_referencia_negocio() >= fd)
 
-            count_q = count_q.where(func.date(Prestamo.fecha_registro) >= fd)
+            count_q = count_q.where(prestamo_fecha_referencia_negocio() >= fd)
 
         except ValueError:
 
@@ -657,9 +663,9 @@ def listar_prestamos(
 
             fh = datetime.fromisoformat(fecha_fin.replace("Z", "+00:00")).date()
 
-            q = q.where(func.date(Prestamo.fecha_registro) <= fh)
+            q = q.where(prestamo_fecha_referencia_negocio() <= fh)
 
-            count_q = count_q.where(func.date(Prestamo.fecha_registro) <= fh)
+            count_q = count_q.where(prestamo_fecha_referencia_negocio() <= fh)
 
         except ValueError:
 
@@ -670,7 +676,7 @@ def listar_prestamos(
     total = db.scalar(count_q) or 0
 
     # Orden alineado con la columna "Fecha" (fecha_aprobacion) en la UI: más reciente primero.
-    # Secundario: fecha_registro e id para empates y préstamos sin fecha de aprobación.
+    # Secundario: fecha_requerimiento e id (no fecha_registro).
 
     q = (
 
@@ -678,7 +684,7 @@ def listar_prestamos(
 
             Prestamo.fecha_aprobacion.desc().nullslast(),
 
-            Prestamo.fecha_registro.desc().nullslast(),
+            Prestamo.fecha_requerimiento.desc(),
 
             Prestamo.id.desc(),
 
@@ -2735,18 +2741,10 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
 
     p.estado = "APROBADO"
 
-    # Fecha unica en formularios: fecha_aprobacion; se replica en fecha_base_calculo para amortizacion.
-    fecha_calendario: Optional[date] = None
-
+    # fecha_aprobacion: solo payload explicito o la ya guardada; nunca base, requerimiento, registro ni hoy.
     if payload.fecha_aprobacion is not None:
 
         fecha_calendario = payload.fecha_aprobacion
-
-    elif payload.fecha_base_calculo is not None:
-
-        fecha_calendario = payload.fecha_base_calculo
-
-    if fecha_calendario is not None:
 
         fecha_req = _fecha_requerimiento_date(p)
 
@@ -2766,33 +2764,37 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
 
     elif p.fecha_aprobacion is None:
 
-        fa = getattr(p, "fecha_base_calculo", None) or date.today()
+        raise HTTPException(
 
-        if hasattr(fa, "date"):
+            status_code=400,
 
-            fa = fa.date() if callable(getattr(fa, "date", None)) else fa
+            detail=(
 
-        fecha_req = _fecha_requerimiento_date(p)
+                "Debe indicar la fecha de aprobación / desembolso en la solicitud. "
 
-        if fecha_req and fa and fa < fecha_req:
+                "No se infiere de la fecha de cálculo, ni de la fecha de registro, ni de la fecha actual."
 
-            raise HTTPException(
+            ),
 
-                status_code=400,
-
-                detail=f"La fecha de aprobación ({fa}) debe ser igual o posterior a la fecha de requerimiento ({fecha_req}).",
-
-            )
-
-        p.fecha_aprobacion = datetime.combine(fa, datetime.min.time())
-
-        p.fecha_base_calculo = fa
+        )
 
     validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
 
     ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
 
     _registrar_en_revision_manual(db, prestamo_id)
+
+    if prestamo_estado_exige_fecha_aprobacion(p.estado) and p.fecha_aprobacion is None:
+
+        raise HTTPException(
+
+            status_code=400,
+
+            detail="Falta la fecha de aprobación. Los préstamos aprobados, desembolsados o liquidados deben tener fecha de aprobación.",
+
+        )
+
+    alinear_fecha_aprobacion_y_base_calculo(p)
 
     db.commit()
 
@@ -3279,7 +3281,10 @@ def rechazar_prestamo(
 
         prestamo.usuario_aprobador = current_user.email
 
-        prestamo.fecha_aprobacion = datetime.now()
+        # Rechazo: no es aprobacion; no se usa fecha del sistema como fecha de aprobacion ni base.
+        prestamo.fecha_aprobacion = None
+
+        prestamo.fecha_base_calculo = None
 
         prestamo.observaciones = f"[RECHAZADO] {motivo}" if prestamo.observaciones else f"Rechazado: {motivo}"
 
@@ -3797,27 +3802,25 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
-    from datetime import date
-
-    hoy = date.today()
-
-    
-
     # Usar email del usuario actual (no hardcoded)
 
     usuario_proponente_email = current_user.email if current_user else "itmaster@rapicreditca.com"
 
     
 
-    es_carga_masiva = getattr(payload, "aprobado_por_carga_masiva", False)
-
     # Siempre crear como APROBADO (individual y carga masiva); cuotas se generan con fecha_aprobacion
 
     estado_inicial = "APROBADO"
 
-    # Carga masiva: fecha_aprobacion = fecha_registro (se asigna después del commit/refresh). Individual: fecha_requerimiento o hoy
-
-    fecha_aprob = None if es_carga_masiva else datetime.combine(payload.fecha_requerimiento or hoy, time.min)
+    # fecha_registro: la pone la BD al insertar; no sustituye fecha_aprobacion ni fecha_base_calculo.
+    fa_d = payload.fecha_aprobacion
+    req_d = payload.fecha_requerimiento
+    if req_d and fa_d < req_d:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La fecha de aprobación ({fa_d}) debe ser igual o posterior a la fecha de requerimiento ({req_d}).",
+        )
+    fecha_aprob = datetime.combine(fa_d, time.min)
 
     analista_nombre, analista_row_id = _resolver_analista_para_prestamo(
         db, payload.analista, payload.analista_id
@@ -3883,32 +3886,13 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
     validar_cupo_nuevo_prestamo_aprobado(db, row.cedula or "", exclude_prestamo_id=None)
 
+    alinear_fecha_aprobacion_y_base_calculo(row)
+
     db.add(row)
 
     db.commit()
 
     db.refresh(row)
-
-    if es_carga_masiva and row.fecha_registro:
-
-        row.fecha_aprobacion = row.fecha_registro
-
-        db.commit()
-
-        db.refresh(row)
-
-    # Regla unica: fecha_base_calculo = misma fecha calendario que fecha_aprobacion
-    if row.fecha_aprobacion:
-
-        ap_d = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
-
-        row.fecha_base_calculo = ap_d
-
-        db.commit()
-
-        db.refresh(row)
-
-    
 
     # Generar cuotas con fecha_base_calculo (alineada con fecha de aprobacion). Creacion individual y carga masiva ya dejan APROBADO y fechas.
 
@@ -3983,6 +3967,22 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
     est_antes = (row.estado or "").strip().upper()
     fecha_base_amort_antes = _fecha_para_amortizacion(row)
+
+    if payload.fecha_base_calculo is not None and payload.fecha_aprobacion is None:
+
+        raise HTTPException(
+
+            status_code=400,
+
+            detail=(
+
+                "No se puede actualizar solo fecha_base_calculo: indique fecha_aprobacion. "
+
+                "La fecha de calculo se copia siempre de la fecha de aprobacion (no se inventa)."
+
+            ),
+
+        )
 
     if est_antes == "DESISTIMIENTO":
 
@@ -4081,15 +4081,12 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         row.observaciones = payload.observaciones
 
-    if payload.fecha_aprobacion is None and payload.fecha_base_calculo is not None:
-
-        row.fecha_base_calculo = payload.fecha_base_calculo
-
-        row.fecha_aprobacion = datetime.combine(payload.fecha_base_calculo, datetime.min.time())
-
     if payload.tasa_interes is not None:
 
         row.tasa_interes = payload.tasa_interes
+
+    # Reparar desalineaciones legacy: la fecha de aprobacion manda; base = misma fecha calendario.
+    alinear_fecha_aprobacion_y_base_calculo(row)
 
     logger.info(f"[update_prestamo] BD después de aplicar cambios: fecha_requerimiento={row.fecha_requerimiento} (type={type(row.fecha_requerimiento).__name__}), fecha_aprobacion={row.fecha_aprobacion} (type={type(row.fecha_aprobacion).__name__})")
 
@@ -4130,6 +4127,16 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
         if cli_des is not None:
 
             cli_des.estado = "FINALIZADO"
+
+    if prestamo_estado_exige_fecha_aprobacion(row.estado) and row.fecha_aprobacion is None:
+
+        raise HTTPException(
+
+            status_code=400,
+
+            detail="Falta la fecha de aprobación. Los préstamos aprobados, desembolsados o liquidados deben tener fecha de aprobación.",
+
+        )
 
     try:
 
@@ -4512,7 +4519,35 @@ async def upload_prestamos_excel(
 
         usuario_email = current_user.email if hasattr(current_user, 'email') else "sistema@rapicredit.com"
 
-        hoy = date.today()
+        from openpyxl.utils.datetime import from_excel as _openpyxl_from_excel
+
+        def _excel_cell_a_date_bulk(v) -> Optional[date]:
+
+            if v is None:
+
+                return None
+
+            if isinstance(v, datetime):
+
+                return v.date()
+
+            if isinstance(v, date):
+
+                return v
+
+            if isinstance(v, (int, float)):
+
+                try:
+
+                    dt = _openpyxl_from_excel(v)
+
+                    return dt.date() if hasattr(dt, "date") else None
+
+                except Exception:
+
+                    return None
+
+            return None
 
         
 
@@ -4541,6 +4576,10 @@ async def upload_prestamos_excel(
                 analista_raw = row[5] if len(row) > 5 else None
 
                 concesionario_raw = row[6] if len(row) > 6 else None
+
+                fecha_req_raw = row[7] if len(row) > 7 else None
+
+                fecha_aprob_raw = row[8] if len(row) > 8 else None
 
                 
 
@@ -4633,6 +4672,30 @@ async def upload_prestamos_excel(
                 # Concesionario es opcional
 
                 concesionario = str(concesionario_raw or "").strip() if concesionario_raw else None
+
+                fecha_requerimiento_x = _excel_cell_a_date_bulk(fecha_req_raw)
+
+                fecha_aprobacion_x = _excel_cell_a_date_bulk(fecha_aprob_raw)
+
+                if fecha_requerimiento_x is None:
+
+                    errores.append("Fecha requerimiento es requerida (columna H, formato fecha)")
+
+                if fecha_aprobacion_x is None:
+
+                    errores.append("Fecha aprobacion/desembolso es requerida (columna I, formato fecha)")
+
+                if (
+
+                    fecha_requerimiento_x is not None
+
+                    and fecha_aprobacion_x is not None
+
+                    and fecha_aprobacion_x < fecha_requerimiento_x
+
+                ):
+
+                    errores.append("Fecha aprobacion debe ser >= fecha requerimiento")
 
                 
 
@@ -4784,8 +4847,7 @@ async def upload_prestamos_excel(
 
                 
 
-                # Carga masiva: préstamo APROBADO y fecha_aprobacion = hoy; cuotas en base a esa fecha
-                # fecha_requerimiento = fecha_aprobacion (misma fecha) para mantener coherencia
+                # Carga masiva: fechas explicitas en Excel (columnas H e I); no se usa fecha_registro ni hoy.
 
                 prestamo = Prestamo(
 
@@ -4797,11 +4859,11 @@ async def upload_prestamos_excel(
 
                     total_financiamiento=monto,
 
-                    fecha_requerimiento=hoy,
+                    fecha_requerimiento=fecha_requerimiento_x,
 
-                    fecha_aprobacion=datetime.combine(hoy, time.min),
+                    fecha_aprobacion=datetime.combine(fecha_aprobacion_x, time.min),
 
-                    fecha_base_calculo=hoy,
+                    fecha_base_calculo=fecha_aprobacion_x,
 
                     modalidad_pago=modalidad,
 
@@ -4827,7 +4889,7 @@ async def upload_prestamos_excel(
 
                 monto_cuota = _resolver_monto_cuota(prestamo, float(monto), cuotas)
 
-                _generar_cuotas_amortizacion(db, prestamo, hoy, cuotas, monto_cuota)
+                _generar_cuotas_amortizacion(db, prestamo, fecha_aprobacion_x, cuotas, monto_cuota)
 
                 aplicar_pagos_pendientes_prestamo(prestamo.id, db)
 

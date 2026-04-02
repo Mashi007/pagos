@@ -28,7 +28,7 @@ Resumen de lo que está integrado en la aplicación (automático o por flujo) y 
 ### 6. Generar cuotas para APROBADO sin cuotas (mantenimiento)
 - **POST `/api/v1/prestamos/generar-cuotas-aprobados-sin-cuotas`** (solo administrador).
 - Busca todos los préstamos en estado APROBADO que no tienen ninguna cuota.
-- Para cada uno: usa **fecha_aprobacion** como fecha base para los vencimientos; si no existe, **fecha_registro**; si no, hoy.
+- Para cada uno: usa **fecha_base_calculo** alineada con **fecha_aprobacion** (`_fecha_para_amortizacion`); si no hay ninguna, se omite con error en el listado de errores (no se usa **fecha_registro** como sustituto).
 - Genera la tabla de amortización con la misma lógica que “Asignar fecha” / “Aprobar manual” (monto según tasa, modalidad, numero_cuotas).
 - Respuesta: `{ "procesados", "cuotas_creadas", "errores", "mensaje" }`.
 - Útil para regularizar datos legacy o préstamos que quedaron sin cuotas.

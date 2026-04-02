@@ -1,7 +1,7 @@
 """Servicio principal para gestión de préstamos."""
 
 from typing import List, Optional, Dict
-from datetime import date, datetime
+from datetime import date, datetime, time as time_d
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_
 
@@ -19,6 +19,7 @@ from .prestamos_excepciones import (
     PrestamoValidationError,
     PrestamoStateError,
 )
+from .fechas_prestamo_coherencia import alinear_fecha_aprobacion_y_base_calculo
 
 
 class PrestamosService:
@@ -203,7 +204,11 @@ class PrestamosService:
 
         query = self.db.query(Prestamo)\
             .filter(Prestamo.cliente_id == cliente_id)\
-            .order_by(desc(Prestamo.fecha_registro))
+            .order_by(
+                Prestamo.fecha_aprobacion.desc().nullslast(),
+                Prestamo.fecha_requerimiento.desc(),
+                Prestamo.id.desc(),
+            )
 
         if estado:
             query = query.filter(Prestamo.estado == estado)
@@ -223,11 +228,19 @@ class PrestamosService:
         if estado:
             query = query.filter(Prestamo.estado == estado)
 
-        # Ordenamiento
+        # Ordenamiento (fecha_registro_*: nombre historico; orden por fecha de negocio, no fecha_registro)
         if orden == 'fecha_registro_desc':
-            query = query.order_by(desc(Prestamo.fecha_registro))
+            query = query.order_by(
+                Prestamo.fecha_aprobacion.desc().nullslast(),
+                Prestamo.fecha_requerimiento.desc(),
+                Prestamo.id.desc(),
+            )
         elif orden == 'fecha_registro_asc':
-            query = query.order_by(Prestamo.fecha_registro)
+            query = query.order_by(
+                Prestamo.fecha_aprobacion.asc().nullslast(),
+                Prestamo.fecha_requerimiento.asc(),
+                Prestamo.id.asc(),
+            )
         elif orden == 'total_asc':
             query = query.order_by(Prestamo.total_financiamiento)
         elif orden == 'total_desc':
@@ -295,7 +308,8 @@ class PrestamosService:
         prestamo_id: int,
         nuevo_estado: str,
         usuario_cambio: Optional[str] = None,
-        observaciones: Optional[str] = None
+        observaciones: Optional[str] = None,
+        fecha_aprobacion: Optional[datetime] = None,
     ) -> Prestamo:
         """
         Cambia el estado de un préstamo con validaciones de transición.
@@ -319,7 +333,22 @@ class PrestamosService:
         # Registrar información del cambio según el nuevo estado
         if nuevo_estado == 'APROBADO':
             prestamo.usuario_aprobador = usuario_cambio or prestamo.usuario_aprobador
-            prestamo.fecha_aprobacion = datetime.now()
+            fa = fecha_aprobacion or prestamo.fecha_aprobacion
+            if fa is None:
+                raise PrestamoValidationError(
+                    "fecha_aprobacion",
+                    "Debe indicar la fecha de aprobacion; no se asigna automaticamente ni con la fecha del sistema.",
+                )
+            if isinstance(fa, datetime):
+                prestamo.fecha_aprobacion = fa
+            elif isinstance(fa, date):
+                prestamo.fecha_aprobacion = datetime.combine(fa, time_d.min)
+            else:
+                raise PrestamoValidationError(
+                    "fecha_aprobacion",
+                    "Tipo de fecha de aprobacion no soportado.",
+                )
+            alinear_fecha_aprobacion_y_base_calculo(prestamo)
 
             # Generar tabla de amortización
             try:
@@ -407,7 +436,11 @@ class PrestamosService:
 
         return self.db.query(Prestamo)\
             .filter(Prestamo.estado == estado)\
-            .order_by(desc(Prestamo.fecha_registro))\
+            .order_by(
+                Prestamo.fecha_aprobacion.desc().nullslast(),
+                Prestamo.fecha_requerimiento.desc(),
+                Prestamo.id.desc(),
+            )\
             .limit(limit)\
             .all()
 

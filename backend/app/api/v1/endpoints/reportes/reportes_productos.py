@@ -18,6 +18,9 @@ from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 
 from app.api.v1.endpoints.reportes_utils import _safe_float, _parse_fecha, _periodos_desde_filtros
+from app.services.prestamos.prestamo_fecha_referencia_query import (
+    prestamo_fecha_referencia_negocio,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -32,7 +35,7 @@ def get_productos_por_mes(
     """Productos por mes: una pestaña por mes. Columnas: Modelo vehículo, Total financiamiento, Valor activo (70%)."""
     resultado: dict = {"meses": []}
     periodos = _periodos_desde_filtros(anos, meses_list, meses)
-    fecha_ref = func.coalesce(func.date(Prestamo.fecha_aprobacion), func.date(Prestamo.fecha_registro))
+    fecha_ref = prestamo_fecha_referencia_negocio()
 
     for (ano, mes) in periodos:
         inicio = date(ano, mes, 1)
