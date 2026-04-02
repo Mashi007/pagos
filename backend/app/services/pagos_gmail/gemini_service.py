@@ -47,7 +47,7 @@ ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
   Las imagenes embebidas suelen tener mas compresion o menos dpi: tolera OCR sucio (guiones rotos, letras pegadas) pero si un campo sigue ilegible -> ninguno, no rellenes por contexto del correo.
 
 OBLIGATORIO — campo "formato" en el JSON: SOLO uno de estos tres valores exactos: A, B, ninguno.
-  A = unicamente plantilla imagen 1 (ticket RAPI-CREDIT / RECAUDACION / terminal descrita abajo).
+  A = plantilla imagen 1: ticket RAPI-CREDIT / RECAUDACION / terminal (abajo) O papeleleta Mercantil DEPOSITO DIVISAS a RAPI-CREDIT con RECAUDACION (VARIANTE MERCANTIL).
   B = unicamente plantilla imagen 2 (recibo BNC a favor de RAPI-CREDIT descrita abajo).
   ninguno = cualquier otra cosa, otra app, otro banco, duda, borroso, selfie, documento que no sea esas dos plantillas.
 Prohibido usar otro valor en "formato" (ni numeros, ni texto libre). Si no es exactamente imagen 1 o imagen 2, formato = ninguno.
@@ -67,8 +67,9 @@ COLUMNAS OBLIGATORIAS Y GMAIL (estrella / etiquetas):
 Objetivo: decidir formato en pocas comprobaciones. Usa la imagen solamente.
 
 PASO 1 - DESCARTE (ninguno al instante):
-  No aparece RAPI-CREDIT (ni RAPI CREDIT / RAPICREDIT razonable) y tampoco BNC reconocible -> ninguno.
-  Es captura de app, Pago Movil, Binance, Zelle, otro banco distinto, selfie, publicidad, borroso sin datos -> ninguno.
+  No aparece RAPI-CREDIT (ni RAPI CREDIT / RAPICREDIT razonable) y tampoco BNC reconocible
+    y tampoco es la variante Mercantil DEPOSITO DIVISAS descrita en "VARIANTE A — MERCANTIL" abajo -> ninguno.
+  Es captura de app, Pago Movil, Binance, Zelle, otro banco distinto (salvo Mercantil con RAPI+RECAUDACION), selfie, publicidad, borroso sin datos -> ninguno.
 
 PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A:
   Nucleo B = (BNC logo o texto) + cuenta con barras ####/####/##/######## (ej. 0191/0127/...) + RAPI-CREDIT como titular o beneficiario de esa cuenta
@@ -77,9 +78,10 @@ PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A:
   Refuerzos utiles de B (opcionales si el nucleo ya es claro): asteriscos antes del monto; Agencia / Terminal / Cajero; "Serial:"; ristra solo digitos >12 que empiece en 7.
 
 PASO 3 - A (imagen 1) solo si PASO 2 no aplico:
-  Nucleo A = RAPI-CREDIT + RECAUDACION (con o sin tilde en OCR) + USD + ticket de recaudacion (vertical/monoespaciado tipico) + grupos FORMATO A (1-5).
+  Nucleo A (terminal / ticket clasico) = RAPI-CREDIT + RECAUDACION (con o sin tilde en OCR) + USD + ticket de recaudacion (vertical/monoespaciado tipico) + grupos FORMATO A (1-5).
   Serial operacion: bloques separados por guiones con 2do bloque = fecha 8 digitos YYYYMMDD.
   Patron fuerte A: misma linea DP:...-NOMBRE APELLIDO (cedula y nombre juntos).
+  Nucleo A (Mercantil papel): ver VARIANTE A — MERCANTIL; si se cumple, es formato A aunque el banco sea Mercantil y no BNC.
 
 PASO 4 - Desempate si queda duda entre A y B:
   Cuenta 0191/... + BNC + RAPI titular + cajero/agencia -> B gana.
@@ -94,16 +96,24 @@ DISCRIMINADOR SERIAL — imagen 1 (A) vs imagen 2 (B) (aplica ademas de RAPI-CRE
     El SEGUNDO bloque (contando de izquierda a derecha o de arriba a abajo en texto vertical) debe ser
     una FECHA como 8 digitos YYYYMMDD (ej. 20260401 = 1 abr 2026). Ejemplo de patron: 9813-20260401-144545-DCME-7643-A.
     Puede incluir DCME, SPDP, letras sueltas al final. Esto NO es una sola ristra de 13+ digitos.
+  VARIANTE MERCANTIL (sigue siendo A / imagen 1): en papeleleta "DEPOSITO DIVISAS" / "DEPÓSITO DIVISAS" (Mercantil) a favor de RAPI-CREDIT con Fondos RECAUDACION,
+    suele aparecer ADEMAS una linea impresa "Serial:" (o similar OCR: Serlal, Serial) con una cadena de SOLO digitos, a menudo 13+ cifras empezando por 7 (ej. 740087418878065).
+    Esa ristra larga en contexto Mercantil+RAPI+RECAUDACION+USD NO es plantilla B: es el numero de operacion del deposito en divisas. Usala como numero_referencia (valor completo, solo digitos) cuando sea el identificador principal visible junto al serial del deposito.
+    Si coexisten (1) cadena con guiones y 2do bloque YYYYMMDD tipo 9213-20260331-143046-DCME-0154-A y (2) Serial: 7400... largo, prefiere el Serial largo (digitos) como numero_referencia para esta variante Mercantil, salvo que solo uno sea legible.
   IMAGEN 2 / B — identificador largo numerico:
-    Suele existir una cadena de SOLO digitos con MAS DE 12 cifras que EMPIEZA POR 7 (ej. 74087406582990),
-    a veces en margen vertical. Esa es señal fuerte de plantilla B. No tiene el segundo bloque-guion = fecha YYYYMMDD.
-  Si el comprobante cumple criterios de A y la linea serial sigue el patron guiones+fecha en 2do bloque -> A.
-  Si cumple BNC y aparece la ristra larga que empieza en 7 (>12 digitos) -> priorizar B y usar esa ristra en numero_referencia si es el id principal.
+    En **recibo BNC** (no Mercantil): cadena de SOLO digitos con MAS DE 12 cifras que EMPIEZA POR 7 (ej. 74087406582990),
+    a veces en margen vertical. Señal fuerte de plantilla B cuando va con logo BNC + cuenta ####/####/##/######## + RAPI titular.
+  Si el comprobante cumple criterios de A (terminal) y la linea serial sigue el patron guiones+fecha en 2do bloque -> A.
+  Si cumple BNC (no Mercantil DEPOSITO DIVISAS) y aparece la ristra larga que empieza en 7 (>12 digitos) -> priorizar B y usar esa ristra en numero_referencia si es el id principal.
 
 DISCRIMINADOR CEDULA / MONTO — imagen 1 (A) vs imagen 2 (B):
   IMAGEN 1 / A (ticket recaudacion RAPI-CREDIT): En la linea del depositante la CEDULA va JUNTO AL NOMBRE en la MISMA linea,
     casi siempre separados por un guion: ej. DP:V-015185092-MIRAIDA JIMENEZ o DP: V-... seguido de guion y nombre en mayusculas.
     Ese patron (identificacion + nombre compartidos en una sola linea) refuerza A. No confundir con solo etiqueta "Cedula Dep" sin nombre en la misma linea.
+  VARIANTE MERCANTIL (A): La cedula puede estar en varias zonas: (1) impreso "Cedula Dep." / "Cédula Dep" con solo digitos (ej. 0028424570) — normaliza a V/E/J + digitos sin ceros a la izquierda tras letra;
+    (2) manuscrito en casillas "Nro. de Cédula" con puntos miles (ej. 28.424.570) — quita puntos y prefijo V si aplica;
+    (3) nombre del depositante puede ir manuscrito en "Depositante" e impreso en mayusculas abreviada en la tira del cajero — usa la cedula mas clara y consistente.
+  En Mercantil DEPOSITO DIVISAS el monto en USD puede ir con asteriscos en la tira impresa (ej. ***********96,00 USD) usando COMA como decimal venezolano; extrae 96.00 USD. Puede coexistir monto manuscrito "96" en casilla — prioriza la linea impresa del sistema si es legible.
   IMAGEN 2 / B (recibo BNC): El MONTO en dolares del deposito casi SIEMPRE aparece con ASTERISCOS (*) inmediatamente antes
     del valor numerico con decimales, ej. **********122.00 o *****96.00 (cantidad de asteriscos variable). Es señal fuerte de plantilla B.
     En A el importe puede mostrarse con USD sin esa cortina de asteriscos tipica de cajero BNC; si ves BNC + linea Debito/Us$ + asteriscos+monto -> B.
@@ -117,6 +127,16 @@ FORMATO A — palabras clave y grupos (deben cumplirse TODOS los grupos 1-5):
     numero_referencia conserva guiones y 2do bloque YYYYMMDD cuando sea visible.
 Palabras secundarias A (refuerzo, no bastan solas): FONDOS, CANT BILLETES, COMISION, TASA, CTA. COM,
   DCME, SPDP, COPIA (vertical), lineas alfanumericas tipo XXXX-YYYYMMDD-hhmmss-...
+
+VARIANTE A — MERCANTIL (DEPOSITO DIVISAS / papeleleta papel, sigue siendo formato A / imagen 1):
+  Reconocimiento visual: cabecera o marca Banco Mercantil / MERCANTIL / "Mercantil, C.A."; titulo "DEPOSITO DIVISAS" o "DEPÓSITO DIVISAS" (Copia Cliente en margen es frecuente).
+  Beneficiario / empresa destino en la tira impresa: RAPI-CREDIT, C.A. o RAPI-CREDIT (misma familia que Grupo 1).
+  Fondos / concepto impreso: RECAUDACION (u OCR sucio RECAUDACION).
+  Moneda: checkbox o texto USD / dolares en el formulario; monto en USD en tira (asteriscos + NN,dd USD) o casilla manuscrita.
+  Grupos equivalentes para esta variante: (1) RAPI-CREDIT como destino, (2) RECAUDACION en fondos, (3) USD, (4) cedula legible (impresa y/o manuscrita), (5) referencia: linea Serial larga digitos y/o codigo operacion con guiones YYYYMMDD en 2do bloque.
+  Cuenta cliente en casillas (ej. 0105 0120 22 5120135978) NO es numero_referencia; no confundir con serial de operacion.
+  fecha_pago: usar fecha de la operacion en tira (2do bloque YYYYMMDD si aparece en el codigo guionado) o fecha manuscrita "31/3/2026" en el formulario si la tira es ilegible — una sola fecha coherente DD/MM/YYYY.
+  Si cumple esta variante Mercantil, clasifica A (no "ninguno" por ser banco Mercantil; no B salvo que cumpla nucleo BNC completo de PASO 2).
 
 FORMATO B — comprobante BNC de deposito a favor de RAPI-CREDIT (segunda plantilla valida; horizontal u horizontal-corta):
   Plantilla tipica (reconoce aunque el orden de lineas varie un poco):
@@ -140,7 +160,8 @@ FORMATO B — comprobante BNC de deposito a favor de RAPI-CREDIT (segunda planti
   Diferencia A vs B: A = ticket RAPI-CREDIT RECAUDACION; B = recibo BNC donde RAPI-CREDIT es titular de cuenta destino.
     Ya decidiste con PASO 2-4 arriba; aqui el detalle de plantilla.
 
-Resumen discriminadores (cruce con PASO 4): serial 2do bloque YYYYMMDD -> A; ristra >12 digitos empezando en 7 -> fuerte B.
+Resumen discriminadores (cruce con PASO 4): serial 2do bloque YYYYMMDD -> A; ristra >12 digitos empezando en 7 + BNC + cuenta slashes -> fuerte B;
+  misma ristra larga 7400... pero Mercantil + DEPOSITO DIVISAS + RAPI + RECAUDACION -> A (variante Mercantil).
   Cedula+nombre misma linea DP:...-NOMBRE -> A; monto *...*122.00 con BNC -> fuerte B.
 
 DESCARTE (refuerzo PASO 1): sin RAPI-CREDIT ni BNC -> ninguno.
@@ -151,9 +172,12 @@ DESCARTE (refuerzo PASO 1): sin RAPI-CREDIT ni BNC -> ninguno.
 Ticket vertical, fuente monoespaciada. Los 5 grupos de palabras clave arriba deben verse; el margen
 "Copia"/SPDP ayuda pero no sustituye empresa+recaudacion+USD+cedula+monto/serial.
 cedula: extraela de la linea DP:... donde vaya seguida de guion y nombre del depositante en la misma linea (imagen 1).
+  En VARIANTE MERCANTIL: prioriza Cédula Dep impresa; si solo hay digitos, antepone V salvo que el comprobante indique E/J.
 numero_referencia: la cadena completa del serial con guiones tal como en el comprobante; verifica que el segundo
   bloque separado por guiones sea 8 digitos fecha (YYYYMMDD). Si OCR pierde guiones, reconstruye la estructura
   minima para que el 2do segmento sea la fecha legible.
+  En VARIANTE MERCANTIL: si existe "Serial:" con solo digitos (13+ cifras tipico), usa esa cadena completa como numero_referencia; si ademas hay 9213-YYYYMMDD-...-DCME-..., el Serial largo tiene prioridad.
+monto: en Mercantil con coma decimal (96,00) devuelve equivalente con punto para el JSON si el esquema lo requiere (ej. 96.00 USD).
 
 === DETALLE FORMATO B ===
 Prioriza la plantilla horizontal BNC anterior. numero_referencia: si hay ristra numerica de mas de 12 digitos

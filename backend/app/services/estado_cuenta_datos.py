@@ -21,6 +21,9 @@ from app.models.pago_reportado import PagoReportado
 from app.models.prestamo import Prestamo
 from app.services.cobros.pago_reportado_documento import claves_documento_pago_para_reportado
 from app.services.cuota_estado import etiqueta_estado_cuota, estado_cuota_para_mostrar, hoy_negocio
+from app.services.pagos.comprobante_link_desde_gmail import (
+    enriquecer_items_link_comprobante_desde_gmail,
+)
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 
 logger = logging.getLogger(__name__)
@@ -300,6 +303,20 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
                 "link_comprobante": link_foto,
             }
         )
+    pend = [r for r in resultado if not (r.get("link_comprobante") or "").strip()]
+    if pend:
+        pseudo = [
+            {
+                "numero_documento": (r.get("numero_documento") or ""),
+                "link_comprobante": None,
+                "documento_ruta": None,
+            }
+            for r in pend
+        ]
+        enriquecer_items_link_comprobante_desde_gmail(db, pseudo)
+        for r, p in zip(pend, pseudo):
+            if (p.get("link_comprobante") or "").strip():
+                r["link_comprobante"] = p["link_comprobante"]
     return resultado
 
 

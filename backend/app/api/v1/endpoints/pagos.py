@@ -96,6 +96,9 @@ from app.services.cobros.pago_reportado_documento import (
     claves_documento_para_lote_reportados,
     documento_numero_desde_pago_reportado,
 )
+from app.services.pagos.comprobante_link_desde_gmail import (
+    enriquecer_items_link_comprobante_desde_gmail,
+)
 from app.services.cuota_estado import (
     clasificar_estado_cuota,
     dias_retraso_desde_vencimiento,
@@ -772,6 +775,8 @@ def listar_pagos(
         items = [_pago_to_response(r) for r in rows]
 
         _enriquecer_pagos_pago_reportado_id(db, items)
+
+        enriquecer_items_link_comprobante_desde_gmail(db, items)
 
         total_pages = (total + per_page - 1) // per_page if total else 0
 
@@ -5168,7 +5173,11 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 
         raise HTTPException(status_code=404, detail="Pago no encontrado")
 
-    return _pago_to_response(row)
+    out = _pago_to_response(row)
+
+    enriquecer_items_link_comprobante_desde_gmail(db, [out])
+
+    return out
 
 
 
