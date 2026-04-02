@@ -40,6 +40,8 @@ class Pago(Base):
     documento_nombre = Column(String(255), nullable=True)
     documento_tipo = Column(String(50), nullable=True)
     documento_ruta = Column(String(255), nullable=True)
+    # URL del comprobante (foto/PDF en Drive u otro repositorio); import desde Excel "Link" / Gmail.
+    link_comprobante = Column(Text, nullable=True)
     # NOT NULL en BD; obligatorio al insertar
     referencia_pago = Column(String(100), nullable=False, server_default=text("''"))
     # Huella normalizada para prevenir duplicados funcionales (prestamo + fecha + monto + referencia).

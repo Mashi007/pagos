@@ -617,6 +617,8 @@ def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict
 
         "documento_ruta": getattr(row, "documento_ruta", None),
 
+        "link_comprobante": getattr(row, "link_comprobante", None),
+
         "cuotas_atrasadas": cuotas_atrasadas,
 
         "moneda_registro": getattr(row, "moneda_registro", None),
@@ -5082,6 +5084,12 @@ def crear_pagos_batch(
 
                     fecha_tasa_referencia=fecha_tasa_b,
 
+                    link_comprobante=(
+                        payload.link_comprobante.strip()
+                        if payload.link_comprobante
+                        else None
+                    ),
+
                 )
 
                 db.add(row)
@@ -5345,6 +5353,8 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             tasa_cambio_bs_usd=tasa_o,
 
             fecha_tasa_referencia=fecha_tasa_o,
+
+            link_comprobante=(payload.link_comprobante.strip() if payload.link_comprobante else None),
 
         )
 

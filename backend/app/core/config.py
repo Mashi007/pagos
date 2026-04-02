@@ -263,6 +263,19 @@ class Settings(BaseSettings):
         default=0,
         description="Máximo de filas al descargar Excel sin fecha (evita memoria/timeout). Con ?fecha= no aplica límite por día.",
     )
+    PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED: bool = Field(
+        default=True,
+        description=(
+            "Si True, el scheduler ejecuta periodicamente el pipeline con filtro pending_identification "
+            "(inbox, adjunto, sin estrella, sin etiquetas IMAGEN 1/2)."
+        ),
+    )
+    PAGOS_GMAIL_SCHEDULED_SCAN_INTERVAL_HOURS: int = Field(
+        default=3,
+        ge=1,
+        le=48,
+        description="Intervalo en horas entre escaneos automaticos Gmail (solo pendientes de identificar).",
+    )
 
     # Tasa USD/Bs Venezuela (reporte contable)
     # ============================================

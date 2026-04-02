@@ -262,6 +262,7 @@ def generar_pdf_estado_cuenta(
                 "F. ingreso",
                 "Monto",
                 "Subtotal (USD)",
+                "Comprobante",
                 "Recibo",
             ]
         ]
@@ -272,18 +273,30 @@ def generar_pdf_estado_cuenta(
             puede_rec = bool(pago_row_id and base_url and recibo_token)
             if puede_rec:
                 url_r = f"{base_url}/api/v1/estado-cuenta/public/recibo-pago?token={recibo_token}&pago_id={pago_row_id}"
+                url_r_esc = str(url_r).replace("&", "&amp;")
                 rec_cell = Paragraph(
-                    f'<a href="{url_r}" color="{COLOR_ACCENT}">Ver recibo</a>',
+                    f'<a href="{url_r_esc}" color="{COLOR_ACCENT}">Ver recibo</a>',
                     styles["EC_Link"],
                 )
             else:
                 rec_cell = Paragraph('<font color="#94a3b8">-</font>', styles["EC_Link"])
+            link_foto = (str(pr.get("link_comprobante") or "")).strip()
+            low = link_foto.lower()
+            if low.startswith(("http://", "https://")):
+                url_f = link_foto.replace("&", "&amp;")
+                foto_cell = Paragraph(
+                    f'<a href="{url_f}" color="{COLOR_ACCENT}">Ver foto</a>',
+                    styles["EC_Link"],
+                )
+            else:
+                foto_cell = Paragraph('<font color="#94a3b8">-</font>', styles["EC_Link"])
             rows_p.append(
                 [
                     str(pr.get("fecha_pago_display") or "-")[:16],
                     str(pr.get("fecha_registro_display") or "-")[:16],
                     str(pr.get("monto_display") or "-")[:22],
                     f"{float(pr.get('subtotal_usd') or 0):,.2f}",
+                    foto_cell,
                     rec_cell,
                 ]
             )
@@ -294,17 +307,19 @@ def generar_pdf_estado_cuenta(
                 "",
                 Paragraph(f"<b>{total_usd:,.2f}</b>", styles["Normal"]),
                 "",
+                "",
             ]
         )
         nrp = len(rows_p)
         tp = Table(
             rows_p,
             colWidths=[
-                1.20 * inch,
+                1.05 * inch,
+                0.95 * inch,
                 1.10 * inch,
-                1.25 * inch,
-                1.20 * inch,
-                0.80 * inch,
+                1.05 * inch,
+                0.78 * inch,
+                0.78 * inch,
             ],
         )
         extras_p = [

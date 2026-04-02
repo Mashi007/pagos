@@ -693,6 +693,10 @@ export function TablaEditablePagos({
                 Documento
               </th>
 
+              <th className="min-w-[200px] border-r p-2 text-left font-semibold">
+                Link comprobante
+              </th>
+
               <th className="min-w-[140px] border-r p-2 text-left font-semibold">
                 Crédito
               </th>
@@ -840,6 +844,16 @@ export function TablaEditablePagos({
                     errorMsg={row._validation.numero_documento?.message}
                     placeholder="VE/xxx"
                     onChange={v => onUpdateCell(row, 'numero_documento', v)}
+                  />
+                </td>
+
+                <td className="border-r p-2">
+                  <CeldaEditable
+                    value={row.link_comprobante ?? ''}
+                    isValid={row._validation.link_comprobante?.isValid}
+                    errorMsg={row._validation.link_comprobante?.message}
+                    placeholder="https:// o ID Drive"
+                    onChange={v => onUpdateCell(row, 'link_comprobante', v)}
                   />
                 </td>
 

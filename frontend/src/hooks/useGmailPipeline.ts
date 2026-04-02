@@ -195,7 +195,9 @@ export function useGmailPipeline({
   )
 
   const run = useCallback(
-    async (scanFilter?: 'unread' | 'read' | 'all') => {
+    async (
+      scanFilter?: 'unread' | 'read' | 'all' | 'pending_identification'
+    ) => {
       if (loading) return
 
       abortedRef.current = false

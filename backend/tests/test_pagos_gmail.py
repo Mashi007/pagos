@@ -31,7 +31,7 @@ from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
 
 @pytest.fixture(scope="session", autouse=True)
 def _ensure_pagos_gmail_sync_correos_revision_column():
-    """Alinea BD de tests con el modelo (columna metricas pipeline manual)."""
+    """Alinea BD de tests con el modelo (columnas pipeline Gmail / Excel)."""
     try:
         with engine.connect() as conn:
             r = conn.execute(
@@ -53,6 +53,23 @@ def _ensure_pagos_gmail_sync_correos_revision_column():
                 conn.commit()
     except Exception:
         pass
+    for tbl in ("pagos_gmail_sync_item", "gmail_temporal"):
+        try:
+            with engine.connect() as conn:
+                r = conn.execute(
+                    text(
+                        """
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = :t AND column_name = 'banco'
+                        """
+                    ),
+                    {"t": tbl},
+                )
+                if r.fetchone() is None:
+                    conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN banco VARCHAR(50) NULL"))
+                    conn.commit()
+        except Exception:
+            pass
     yield
 
 

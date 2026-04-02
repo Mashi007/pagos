@@ -65,6 +65,7 @@ import {
   parsePrestamoIdFromNumeroCredito,
   institucionBancariaDesdeExcel,
   buscarEnMapaPrestamos,
+  linkComprobanteDesdeCeldaExcel,
 } from '../utils/pagoExcelValidation'
 
 import { readExcelToJSON } from '../types/exceljs'
@@ -822,6 +823,13 @@ export function useExcelUploadPagos({
           ...(row.tasa_cambio_manual
             ? { tasa_cambio_manual: row.tasa_cambio_manual }
             : {}),
+
+          ...(() => {
+            const lc = linkComprobanteDesdeCeldaExcel(
+              String(row.link_comprobante ?? '').trim()
+            )
+            return lc ? { link_comprobante: lc } : {}
+          })(),
         }
 
         await pagoService.createPago(pagoData as any)
@@ -1552,6 +1560,13 @@ export function useExcelUploadPagos({
         ...(row.tasa_cambio_manual
           ? { tasa_cambio_manual: row.tasa_cambio_manual }
           : {}),
+
+        ...(() => {
+          const lc = linkComprobanteDesdeCeldaExcel(
+            String(row.link_comprobante ?? '').trim()
+          )
+          return lc ? { link_comprobante: lc } : {}
+        })(),
       }
     }
 
@@ -1982,9 +1997,11 @@ export function useExcelUploadPagos({
 
           let bancoCol = -1
 
+          let linkCol = -1
+
           let cedulaHeaderMatched = false
 
-          for (let i = 0; i < Math.max(headerRow.length, 8); i++) {
+          for (let i = 0; i < Math.max(headerRow.length, 10); i++) {
             if (
               !cedulaHeaderMatched &&
               match(
@@ -2055,6 +2072,15 @@ export function useExcelUploadPagos({
               )
             )
               bancoCol = i
+
+            const hi = h(i)
+            if (
+              hi === 'link' ||
+              hi.includes('link comprobante') ||
+              hi.includes('url comprobante') ||
+              hi === 'ver imagen'
+            )
+              linkCol = i
           }
 
           return {
@@ -2067,6 +2093,7 @@ export function useExcelUploadPagos({
             monedaCol,
             tasaCol,
             bancoCol,
+            linkCol,
           }
         })()
 
@@ -2179,6 +2206,13 @@ export function useExcelUploadPagos({
               ? institucionBancariaDesdeExcel(String(row[cols.bancoCol]))
               : null
 
+          const linkRaw =
+            cols.linkCol >= 0 && row[cols.linkCol] != null
+              ? String(row[cols.linkCol]).trim()
+              : ''
+
+          const link_comprobante = linkComprobanteDesdeCeldaExcel(linkRaw)
+
           const numeroDocStr =
             numeroDoc && numeroDoc !== 'NaN'
               ? (
@@ -2210,6 +2244,8 @@ export function useExcelUploadPagos({
             tasa_cambio_manual,
 
             institucion_bancaria,
+
+            link_comprobante,
           }
 
           // Validaciones locales inmediatas (fecha, monto; documentos duplicados se validan despues)
@@ -2234,6 +2270,8 @@ export function useExcelUploadPagos({
             conciliado: { isValid: true },
 
             institucion_bancaria: { isValid: true },
+
+            link_comprobante: { isValid: true },
           }
 
           rowData._hasErrors =

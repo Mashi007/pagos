@@ -28,6 +28,8 @@ class PagosGmailSyncItem(Base):
     sync_id = Column(Integer, ForeignKey("pagos_gmail_sync.id", ondelete="CASCADE"), nullable=False, index=True)
     correo_origen = Column(String(255), nullable=False)  # remitente; se mantiene por compatibilidad
     asunto = Column(String(500), nullable=True)  # Asunto del correo (columna A en Excel)
+    # Plantilla A (imagen 1) -> Mercantil; plantilla B (imagen 2) -> BNC (etiqueta Excel descarga).
+    banco = Column(String(50), nullable=True)
     fecha_pago = Column(String(100), nullable=True)
     cedula = Column(String(50), nullable=True)
     monto = Column(String(100), nullable=True)
@@ -37,6 +39,8 @@ class PagosGmailSyncItem(Base):
     drive_email_link = Column(String(500), nullable=True)  # link al .eml del correo en Drive (verificar contexto)
     sheet_name = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
+
+
 class GmailTemporal(Base):
     """
     Tabla temporal para exportar a Excel. Cada procesamiento Gmail inserta aqui a continuacion.
@@ -47,6 +51,7 @@ class GmailTemporal(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     correo_origen = Column(String(255), nullable=False)
     asunto = Column(String(500), nullable=True)
+    banco = Column(String(50), nullable=True)
     fecha_pago = Column(String(100), nullable=True)
     cedula = Column(String(50), nullable=True)
     monto = Column(String(100), nullable=True)

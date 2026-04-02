@@ -3,12 +3,24 @@ Schemas Pydantic para Pago (registro de pagos). Alineados con el frontend.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
 # Límite de INTEGER en PostgreSQL (evita 500 cuando se envía número de documento como prestamo_id)
 PRESTAMO_ID_MAX = 2147483647
+
+
+def normalizar_link_comprobante(v: Any) -> Optional[str]:
+    """URL publica del comprobante; acepta id de archivo Drive sin prefijo (misma regla que Excel Gmail)."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    if not s.startswith(("http://", "https://")):
+        s = "https://drive.google.com/file/d/" + s + "/view"
+    return s
 
 
 class PagoCreate(BaseModel):
@@ -23,6 +35,12 @@ class PagoCreate(BaseModel):
     # USD (defecto): monto_pagado en dolares. BS: monto_pagado en bolivares; requiere autorizacion lista Bs + tasa (BD o manual).
     moneda_registro: Optional[str] = "USD"
     tasa_cambio_manual: Optional[Decimal] = None  # Solo si no hay tasa en BD para fecha_pago
+    link_comprobante: Optional[str] = None
+
+    @field_validator("link_comprobante", mode="before")
+    @classmethod
+    def link_comprobante_normalizado(cls, v: object) -> Optional[str]:
+        return normalizar_link_comprobante(v)
 
     @field_validator("numero_documento", mode="before")
     @classmethod
@@ -68,6 +86,12 @@ class PagoUpdate(BaseModel):
     verificado_concordancia: Optional[str] = None  # SI / NO
     moneda_registro: Optional[str] = None
     tasa_cambio_manual: Optional[Decimal] = None
+    link_comprobante: Optional[str] = None
+
+    @field_validator("link_comprobante", mode="before")
+    @classmethod
+    def link_comprobante_normalizado_upd(cls, v: object) -> Optional[str]:
+        return normalizar_link_comprobante(v)
 
     @field_validator("numero_documento", mode="before")
     @classmethod
@@ -114,6 +138,7 @@ class PagoResponse(BaseModel):
     documento_nombre: Optional[str] = None
     documento_tipo: Optional[str] = None
     documento_ruta: Optional[str] = None
+    link_comprobante: Optional[str] = None
     cuotas_atrasadas: Optional[int] = None  # calculado en listado
     moneda_registro: Optional[str] = None
     monto_bs_original: Optional[Decimal] = None

@@ -108,6 +108,16 @@ export async function readExcelToJSON(
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         let val = cell.value
 
+        if (
+          val != null &&
+          typeof val === 'object' &&
+          !('richText' in val) &&
+          'hyperlink' in (val as object) &&
+          (val as { hyperlink?: string }).hyperlink
+        ) {
+          val = String((val as { hyperlink: string }).hyperlink).trim()
+        }
+
         // Número (en cualquier columna): si parece documento (10+ dígitos) o "número como texto", guardar como string para no perder formato
 
         if (typeof val === 'number' && !Number.isNaN(val)) {
@@ -142,6 +152,15 @@ export async function readExcelToJSON(
         ) {
           val =
             (val as any).richText?.map((x: any) => x?.text ?? '').join('') || ''
+        }
+
+        const cellHyp = (cell as { hyperlink?: string }).hyperlink
+        if (
+          typeof cellHyp === 'string' &&
+          cellHyp.trim() &&
+          /^https?:\/\//i.test(cellHyp.trim())
+        ) {
+          val = cellHyp.trim()
         }
 
         // Columnas 1-8: forzar string y limpiar (documento puede estar en cualquier posición típica)

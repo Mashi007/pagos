@@ -70,6 +70,9 @@ export interface PagoExcelRow {
    */
 
   _prestamoIdExistenteDuplicadoBD?: number | null
+
+  /** URL del comprobante (columna Link / Ver imagen en Excel desde Gmail). */
+  link_comprobante?: string | null
 }
 
 /** Valor para API: string recortado o null si vacío (máx. 255). */
@@ -80,6 +83,30 @@ export function institucionBancariaDesdeExcel(
   const s = (v ?? '').toString().trim()
 
   return s ? s.slice(0, 255) : null
+}
+
+/** Misma regla que backend: id Drive sin https se convierte a URL de vista. */
+export function normalizarLinkComprobanteDesdeExcel(
+  v: string | null | undefined
+): string | null {
+  const s = (v ?? '').toString().trim()
+
+  if (!s) return null
+  if (!/^https?:\/\//i.test(s)) {
+    return `https://drive.google.com/file/d/${s}/view`
+  }
+  return s
+}
+
+/** Texto de celda hipervinculada (ej. "Ver imagen") sin URL real: no inventar enlace. */
+export function linkComprobanteDesdeCeldaExcel(
+  raw: string | null | undefined
+): string | null {
+  const t = (raw ?? '').toString().trim()
+
+  if (!t) return null
+  if (/^ver\s*imagen$/i.test(t) || /^ver\s*email$/i.test(t)) return null
+  return normalizarLinkComprobanteDesdeExcel(t)
 }
 
 export function convertirFechaExcelPago(val: unknown): string {

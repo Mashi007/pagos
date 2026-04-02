@@ -25,6 +25,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.api.v1.endpoints import cobranzas
 logger = logging.getLogger(__name__)
@@ -164,6 +165,39 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
         db.close()
 
 
+def _job_pagos_gmail_pending_scan() -> None:
+    """Cada N horas: pipeline Gmail solo correos sin estrella y sin etiquetas IMAGEN 1/2 (no reescanea ya marcados)."""
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import and_, select
+
+    if not getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", True):
+        return
+    db = SessionLocal()
+    try:
+        from app.models.pagos_gmail_sync import PagosGmailSync
+        from app.services.pagos_gmail.pipeline import run_pipeline
+
+        cutoff = datetime.utcnow() - timedelta(hours=2)
+        row = db.execute(
+            select(PagosGmailSync).where(
+                and_(
+                    PagosGmailSync.status == "running",
+                    PagosGmailSync.started_at >= cutoff,
+                )
+            ).limit(1)
+        ).scalars().first()
+        if row is not None:
+            logger.info("[PAGOS_GMAIL] Escaneo programado omitido: sync en curso")
+            return
+        logger.info("[PAGOS_GMAIL] Escaneo programado: pending_identification")
+        run_pipeline(db, existing_sync_id=None, scan_filter="pending_identification")
+    except Exception as e:
+        logger.exception("[PAGOS_GMAIL] Escaneo programado: %s", e)
+    finally:
+        db.close()
+
+
 def _job_campanas_programadas() -> None:
     """Job cada minuto. Ejecuta campaÃ±as CRM en estado programada cuya prÃ³xima ejecuciÃ³n ya llegÃ³."""
     try:
@@ -245,9 +279,21 @@ def start_scheduler() -> None:
         id="campanas_crm_programadas",
         name="Campanas CRM programadas (cada 1 min)",
     )
+    _gmail_log = ""
+    if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", True):
+        _gmail_hours = int(getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_INTERVAL_HOURS", 3) or 3)
+        _gmail_hours = max(1, min(48, _gmail_hours))
+        _scheduler.add_job(
+            _job_pagos_gmail_pending_scan,
+            IntervalTrigger(hours=_gmail_hours),
+            id="pagos_gmail_pending_scan",
+            name=f"Gmail Pagos pendientes (sin estrella/etiqueta) cada {_gmail_hours}h",
+        )
+        _gmail_log = f"; Gmail pagos pendientes cada {_gmail_hours}h"
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: liquidado PDF 01:10; finiquito 02:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
+        "Scheduler iniciado: liquidado PDF 01:10; finiquito 02:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00%s (%s).",
+        _gmail_log,
         SCHEDULER_TZ,
     )
 

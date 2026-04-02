@@ -1,0 +1,71 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/**'
+      - 'requirements.txt'
+      - 'requirements-test.txt'
+      - 'pytest.ini'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'requirements.txt'
+      - 'requirements-test.txt'
+      - 'pytest.ini'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ci -d ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      SECRET_KEY: '0123456789abcdef0123456789abcdef0123456789ab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-test.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ../requirements.txt -r ../requirements-test.txt
+
+      - name: Compile Python (syntax)
+        run: python -m compileall -q app
+
+      - name: Bootstrap DB schema (create_all)
+        run: python scripts/ci_bootstrap_db.py
+
+      - name: Pytest (pagos_gmail)
+        run: pytest tests/test_pagos_gmail.py -q --tb=short

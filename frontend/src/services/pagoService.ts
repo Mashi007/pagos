@@ -43,6 +43,12 @@ export interface Pago {
 
   documento_ruta: string | null
 
+  /** URL del comprobante (foto/PDF); import desde Excel Link / Gmail. */
+  link_comprobante?: string | null
+
+  /** Si el Nº documento enlaza con un pago reportado en Cobros. */
+  pago_reportado_id?: number | null
+
   cuotas_atrasadas?: number // ✅ Campo calculado: cuotas vencidas con pago incompleto
 }
 
@@ -66,6 +72,8 @@ export interface PagoCreate {
   moneda_registro?: 'USD' | 'BS'
 
   tasa_cambio_manual?: number | null
+
+  link_comprobante?: string | null
 }
 
 export interface ApiResponse<T> {
@@ -768,11 +776,11 @@ class PagoService {
     return response.data as Blob
   }
 
-  /** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> BD). force=true permite ejecutar aunque la última sync fue hace poco. scan_filter: "unread" | "read" | "all". */
+  /** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> BD). scan_filter incluye pending_identification (sin estrella/etiquetas plantilla). */
 
   async runGmailNow(
     force = true,
-    scanFilter?: 'unread' | 'read' | 'all'
+    scanFilter?: 'unread' | 'read' | 'all' | 'pending_identification'
   ): Promise<{
     sync_id: number | null
     status: string
@@ -781,7 +789,10 @@ class PagoService {
   }> {
     const params = new URLSearchParams({ force: String(force) })
 
-    if (scanFilter && ['unread', 'read', 'all'].includes(scanFilter)) {
+    if (
+      scanFilter &&
+      ['unread', 'read', 'all', 'pending_identification'].includes(scanFilter)
+    ) {
       params.set('scan_filter', scanFilter)
     }
 

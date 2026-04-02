@@ -1,11 +1,11 @@
 """
 Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
-Solo correos con adjuntos (has:attachment); imagen/PDF solo si esta incrustada en el cuerpo (inline/related/data: HTML).
+Solo correos con adjuntos (has:attachment); imagen/PDF desde cuerpo incrustado, adjuntos o .eml rfc822 (deduplicado).
 Comprobantes plantilla 1 (A) o 2 (B) con cuatro columnas -> BD/Drive; por cada OK: etiqueta Gmail IMAGEN 1 o IMAGEN 2 + estrella.
 Si ningun adjunto OK: sin estrella + no leido (solo con filtro unread).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel: descargar Excel desde BD
-- GET /pagos/gmail/status: ultima ejecucion (sin cron)
+- GET /pagos/gmail/status: ultima ejecucion; escaneo automatico cada N h (solo pending_identification) si esta habilitado en settings
 - POST /pagos/gmail/confirmar-dia: confirmacion si/no; si si, borrado de datos acumulados
 """
 import io
@@ -78,13 +78,13 @@ def count_pending(
     Cuenta cuantos correos se procesarian sin iniciar el pipeline.
     El frontend puede mostrar "Se procesaran N correos. Iniciar? Si / No" y solo llamar
     POST /run-now si el usuario confirma (Si = inicia, No = no hace nada).
-    scan_filter: "unread" | "read" | "all" (mismo que run-now).
+    scan_filter: "unread" | "read" | "all" | "pending_identification" (mismo que run-now).
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
         return {"count": 0, "scan_filter": scan_filter, "error": "no_credentials"}
     from app.services.pagos_gmail.gmail_service import build_gmail_service, count_messages_by_filter
-    if scan_filter not in ("unread", "read", "all"):
+    if scan_filter not in ("unread", "read", "all", "pending_identification"):
         scan_filter = "unread"
     try:
         gmail_svc = build_gmail_service(creds)
@@ -104,8 +104,9 @@ def run_now(
 ):
     """
     Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
-    Solo correos con adjuntos; imagen/PDF solo si van en el cuerpo (inline/related/data: HTML).
-    scan_filter: "unread" | "read" | "all". Etiqueta+estrella por adjunto OK; leido si hubo al menos un OK.
+    Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
+    scan_filter: "unread" | "read" | "all" | "pending_identification".
+    pending_identification: inbox, adjunto, sin estrella, sin etiquetas IMAGEN 1/2 (reprocesar solo no identificados).
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """
@@ -134,7 +135,7 @@ def run_now(
     db.refresh(sync)
     sync_id = sync.id
     # Validar scan_filter
-    if scan_filter not in ("unread", "read", "all"):
+    if scan_filter not in ("unread", "read", "all", "pending_identification"):
         scan_filter = "unread"
     # Lanzar pipeline en segundo plano; el cliente hace polling a /status
     background_tasks.add_task(_run_pipeline_background, sync_id, scan_filter)
@@ -290,7 +291,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
       (cubre backlog de cualquier antigüedad; los correos se procesan mientras estén no leídos).
     - Con ?fecha=YYYY-MM-DD: descarga exactamente esa fecha.
     Si no hay datos devuelve 404 (no se genera Excel vacío).
-    Columnas: Correo Pagador, Fecha Pago, Cédula, Monto, Referencia, Link, Ver email.
+    Columnas A-E: Banco, Cedula, Fecha, Monto, Serial documento; luego Correo Pagador, Link, Ver email.
     """
     from openpyxl import Workbook
     items: list = []
@@ -325,7 +326,18 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
         wb = Workbook()
         ws = wb.active
         ws.title = "Pagos"
-        ws.append(["Correo Pagador", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link", "Ver email"])
+        ws.append(
+            [
+                "Banco",
+                "Cedula",
+                "Fecha",
+                "Monto",
+                "Serial documento",
+                "Correo Pagador",
+                "Link",
+                "Ver email",
+            ]
+        )
         link_font = Font(color="0563C1", underline="single")
         for row_idx, it in enumerate(items, start=2):  # fila 1 = cabecera
             link_url = (it.drive_link or "").strip()
@@ -336,25 +348,28 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
             if email_url and not email_url.startswith("http"):
                 email_url = "https://drive.google.com/file/d/" + email_url + "/view"
             email_text = "Ver email" if email_url else ("—" if link_url else "")
-            ws.append([
-                it.correo_origen or "",
-                it.fecha_pago or "",
-                formatear_cedula(it.cedula or ""),
-                it.monto or "",
-                it.numero_referencia or "",
-                link_text,
-                email_text,
-            ])
+            ws.append(
+                [
+                    it.banco or "",
+                    formatear_cedula(it.cedula or ""),
+                    it.fecha_pago or "",
+                    it.monto or "",
+                    it.numero_referencia or "",
+                    it.correo_origen or "",
+                    link_text,
+                    email_text,
+                ]
+            )
             if link_url:
-                c6 = ws.cell(row=row_idx, column=6)
-                c6.hyperlink = link_url
-                c6.value = "Ver imagen"
-                c6.font = link_font
+                c_link = ws.cell(row=row_idx, column=7)
+                c_link.hyperlink = link_url
+                c_link.value = "Ver imagen"
+                c_link.font = link_font
             if email_url:
-                c7 = ws.cell(row=row_idx, column=7)
-                c7.hyperlink = email_url
-                c7.value = "Ver email"
-                c7.font = link_font
+                c_eml = ws.cell(row=row_idx, column=8)
+                c_eml.hyperlink = email_url
+                c_eml.value = "Ver email"
+                c_eml.font = link_font
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
@@ -398,35 +413,50 @@ def download_excel_temporal(db: Session = Depends(get_db)):
         wb = Workbook()
         ws = wb.active
         ws.title = "Pagos"
-        ws.append(["Correo Pagador", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link", "Ver email"])
+        ws.append(
+            [
+                "Banco",
+                "Cedula",
+                "Fecha",
+                "Monto",
+                "Serial documento",
+                "Correo Pagador",
+                "Link",
+                "Ver email",
+            ]
+        )
         link_font = Font(color="0563C1", underline="single")
         for row_idx, it in enumerate(items, start=2):
             link_url = (it.drive_link or "").strip()
             if link_url and not link_url.startswith("http"):
                 link_url = "https://drive.google.com/file/d/" + link_url + "/view"
+            link_text = "Ver imagen" if link_url else ""
             email_url = (it.drive_email_link or "").strip()
             if email_url and not email_url.startswith("http"):
                 email_url = "https://drive.google.com/file/d/" + email_url + "/view"
-            email_text = "Ver email" if email_url else ""
-            ws.append([
-                it.correo_origen or "",
-                it.fecha_pago or "",
-                formatear_cedula(it.cedula or ""),
-                it.monto or "",
-                it.numero_referencia or "",
-                "Ver imagen" if link_url else "",
-                email_text,
-            ])
+            email_text = "Ver email" if email_url else ("—" if link_url else "")
+            ws.append(
+                [
+                    it.banco or "",
+                    formatear_cedula(it.cedula or ""),
+                    it.fecha_pago or "",
+                    it.monto or "",
+                    it.numero_referencia or "",
+                    it.correo_origen or "",
+                    link_text,
+                    email_text,
+                ]
+            )
             if link_url:
-                c6 = ws.cell(row=row_idx, column=6)
-                c6.hyperlink = link_url
-                c6.value = "Ver imagen"
-                c6.font = link_font
+                c_link = ws.cell(row=row_idx, column=7)
+                c_link.hyperlink = link_url
+                c_link.value = "Ver imagen"
+                c_link.font = link_font
             if email_url:
-                c7 = ws.cell(row=row_idx, column=7)
-                c7.hyperlink = email_url
-                c7.value = "Ver email"
-                c7.font = link_font
+                c_eml = ws.cell(row=row_idx, column=8)
+                c_eml.hyperlink = email_url
+                c_eml.value = "Ver email"
+                c_eml.font = link_font
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
@@ -456,7 +486,7 @@ def diagnostico(db: Session = Depends(get_db)):
         build_gmail_service,
         list_messages_by_filter,
         get_message_full_payload,
-        get_body_embedded_image_pdf_files_for_message,
+        get_pagos_gmail_image_pdf_files_for_pipeline,
     )
     from app.services.pagos_gmail.drive_service import build_drive_service
     from app.services.pagos_gmail.gemini_service import (
@@ -531,12 +561,12 @@ def diagnostico(db: Session = Depends(get_db)):
 
     # PASO 4: Extracción de imágenes del primer correo
     try:
-        attachments = get_body_embedded_image_pdf_files_for_message(
+        attachments = get_pagos_gmail_image_pdf_files_for_pipeline(
             gmail_svc, msg["id"], full_payload
         )
         result["paso_4_imagenes"] = {
             "ok": True,
-            "nota": "Solo incrustadas en cuerpo (inline, multipart/related, data: en HTML); no attachment",
+            "nota": "Cuerpo incrustado + adjuntos imagen/PDF + message/rfc822 (.eml), deduplicado por contenido",
             "total_imagenes": len(attachments),
             "detalle": [
                 {"nombre": f, "bytes": len(c), "mime": m}

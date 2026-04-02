@@ -276,6 +276,9 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
         referencia_tabla = (doc or refp or f"Pago #{pago_id}")[:32]
         cedula_comprobante = (getattr(pg, "cedula_cliente", None) or "").strip() or "-"
         aplicacion_cuotas = desglose_aplicacion_cuotas_por_pago(db, pago_id)
+        lc = (getattr(pg, "link_comprobante", None) or "").strip()
+        doc_ruta = (getattr(pg, "documento_ruta", None) or "").strip()
+        link_foto = lc or doc_ruta or None
         resultado.append(
             {
                 "pago_id": pago_id,
@@ -294,6 +297,7 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
                 "referencia_pago": refp or None,
                 "cedula_comprobante": cedula_comprobante,
                 "aplicacion_cuotas": aplicacion_cuotas,
+                "link_comprobante": link_foto,
             }
         )
     return resultado

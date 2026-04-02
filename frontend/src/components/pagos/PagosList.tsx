@@ -78,7 +78,7 @@ import {
 import { PagosListResumen } from './PagosListResumen'
 import { toast } from 'sonner'
 import { getErrorMessage, isAxiosError } from '../../types/errors'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { BASE_PATH } from '../../config/env'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
@@ -140,7 +140,7 @@ export function PagosList() {
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [gmailScanFilter, setGmailScanFilter] = useState<
-    'unread' | 'read' | 'all'
+    'unread' | 'read' | 'all' | 'pending_identification'
   >('unread')
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
   const [cedulasReportarBsTotal, setCedulasReportarBsTotal] = useState<
@@ -1153,9 +1153,13 @@ export function PagosList() {
                       </label>
                       <Select
                         value={gmailScanFilter}
-                        onValueChange={(v: 'unread' | 'read' | 'all') =>
-                          setGmailScanFilter(v)
-                        }
+                        onValueChange={(
+                          v:
+                            | 'unread'
+                            | 'read'
+                            | 'all'
+                            | 'pending_identification'
+                        ) => setGmailScanFilter(v)}
                       >
                         <SelectTrigger className="h-9 text-sm">
                           <SelectValue />
@@ -1166,12 +1170,22 @@ export function PagosList() {
                           <SelectItem value="all">
                             Todos (leídos y no leídos)
                           </SelectItem>
+                          <SelectItem value="pending_identification">
+                            Solo sin identificar (sin estrella ni etiqueta
+                            IMAGEN 1/2)
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       {gmailScanFilter === 'all' && (
                         <p className="mt-1.5 text-xs text-gray-600">
                           Se descargarán todos los correos (leídos y no leídos)
                           del buzón principal.
+                        </p>
+                      )}
+                      {gmailScanFilter === 'pending_identification' && (
+                        <p className="mt-1.5 text-xs text-gray-600">
+                          Inbox con adjunto, sin destacar y sin etiquetas de
+                          plantilla; no reescanea comprobantes ya marcados.
                         </p>
                       )}
                     </div>
@@ -1666,7 +1680,8 @@ export function PagosList() {
                           <TableHead>Fecha Pago</TableHead>
                           <TableHead>Nº Documento</TableHead>
                           <TableHead>Conciliado</TableHead>
-                          <TableHead>Fotografía</TableHead>
+                          <TableHead>Comprobante</TableHead>
+                          <TableHead>Recibo cobros</TableHead>
                           <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1738,20 +1753,40 @@ export function PagosList() {
                                 )}
                               </TableCell>
                               <TableCell>
-                                {pago.documento_ruta ? (
-                                  <a
-                                    href={pago.documento_ruta}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 font-medium text-blue-600 hover:text-blue-800"
-                                    title="Visualizar fotografía"
+                                {(() => {
+                                  const u =
+                                    (pago.link_comprobante || '').trim() ||
+                                    (pago.documento_ruta || '').trim()
+                                  return u ? (
+                                    <a
+                                      href={u}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 font-medium text-blue-600 hover:text-blue-800"
+                                      title="Abrir comprobante (foto o PDF)"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                      Ver comprobante
+                                    </a>
+                                  ) : (
+                                    <span className="text-sm text-gray-500">
+                                      -
+                                    </span>
+                                  )
+                                })()}
+                              </TableCell>
+                              <TableCell>
+                                {pago.pago_reportado_id != null &&
+                                pago.pago_reportado_id > 0 ? (
+                                  <Link
+                                    to={`/cobros/pagos-reportados/${pago.pago_reportado_id}`}
+                                    className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
                                   >
-                                    <Eye className="h-4 w-4" />
-                                    Ver foto
-                                  </a>
+                                    Ver recibo
+                                  </Link>
                                 ) : (
                                   <span className="text-sm text-gray-500">
-                                    NA
+                                    -
                                   </span>
                                 )}
                               </TableCell>

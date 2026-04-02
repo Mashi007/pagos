@@ -1,7 +1,7 @@
 """
 Gmail: listar correos (no leidos / leidos / todos) que tienen adjuntos (has:attachment).
-Pipeline Pagos: solo procesa imagen/PDF incrustados en el cuerpo (inline, multipart/related, data: en HTML);
-no adjuntos declarados como attachment. Etiquetas IMAGEN 1/2 + estrella solo si Gemini confirma plantilla y columnas.
+Pipeline Pagos: toda imagen/PDF util (archivo adjunto o incrustada en cuerpo/related/HTML/mixed), mas .eml rfc822;
+deduplicado por contenido. La plantilla imagen 1/2 la decide solo Gemini al escanear cada binario.
 """
 import base64
 import hashlib
@@ -23,6 +23,18 @@ logger = logging.getLogger(__name__)
 # Etiquetas de usuario (plantilla prompt A = imagen 1, B = imagen 2). Se crean si no existen.
 PAGOS_GMAIL_LABEL_IMAGEN_1 = "IMAGEN 1"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "IMAGEN 2"
+
+
+def pagos_gmail_pending_identification_query() -> str:
+    """
+    Consulta Gmail (parametro q): inbox, con adjunto, sin estrella, sin etiquetas de plantilla digitalizada.
+    Asi el escaneo periodico no reprocesa correos ya marcados con IMAGEN 1 / IMAGEN 2 o destacados.
+    """
+    return (
+        "in:inbox has:attachment -is:starred "
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}"'
+    )
 
 
 def build_gmail_service(credentials: Any):
@@ -91,7 +103,9 @@ def _parse_gmail_retry_after_seconds(exc: Exception) -> Optional[int]:
 def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[dict]:
     """
     Lista mensajes segun el filtro; solo correos con adjuntos (has:attachment).
-    "unread" | "read" | "all". Misma forma que antes: id, payload, headers.
+    filter_type: "unread" | "read" | "all" | "pending_identification".
+    pending_identification: sin estrella y sin etiquetas IMAGEN 1 / IMAGEN 2 (reintento sin reescanear todo).
+    Misma forma que antes: id, payload, headers.
     """
     from googleapiclient.errors import HttpError
 
@@ -104,6 +118,8 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
             params_base["q"] = "has:attachment"
         elif filter_type == "read":
             params_base["q"] = "is:read in:inbox has:attachment"
+        elif filter_type == "pending_identification":
+            params_base["q"] = pagos_gmail_pending_identification_query()
         else:
             params_base["q"] = "in:inbox has:attachment"
 
@@ -155,7 +171,7 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
 def count_messages_by_filter(service: Any, filter_type: str = "unread") -> int:
     """
     Cuenta mensajes segun el filtro sin obtener metadata (solo list paginado).
-    Mismo criterio que list_messages_by_filter. Util para mostrar N correos a procesar antes de iniciar.
+    Mismo criterio que list_messages_by_filter (incluye pending_identification).
     """
     from googleapiclient.errors import HttpError
 
@@ -168,6 +184,8 @@ def count_messages_by_filter(service: Any, filter_type: str = "unread") -> int:
             params_base["q"] = "has:attachment"
         elif filter_type == "read":
             params_base["q"] = "is:read in:inbox has:attachment"
+        elif filter_type == "pending_identification":
+            params_base["q"] = pagos_gmail_pending_identification_query()
         else:
             params_base["q"] = "in:inbox has:attachment"
         while True:
@@ -330,10 +348,18 @@ def get_attachment_image_pdf_files_for_message(
     service: Any, message_id: str, payload: dict
 ) -> List[Tuple[str, bytes, str]]:
     """
-    Adjuntos declarados (filename + attachmentId), imagen/PDF. No usa reglas de cuerpo incrustado.
-    El pipeline Pagos usa get_body_embedded_image_pdf_files_for_message en su lugar.
+    Partes imagen/PDF con attachmentId (adjunto archivo tipico o parte descargable).
+    Si Gmail no envia filename o la extension no coincide, se usa nombre sintetico para no perder el binario.
+    El pipeline Pagos combina esto con cuerpo incrustado en get_pagos_gmail_image_pdf_files_for_pipeline.
     """
     out: List[Tuple[str, bytes, str]] = []
+
+    def _effective_filename(part: dict, mime: str, att_id: str) -> str:
+        fn = (part.get("filename") or "").strip()
+        if fn and is_allowed_attachment(fn):
+            return fn
+        safe = (att_id or "x").replace("/", "_")[:20]
+        return f"gmail_att_{safe}.{ext_for_mime(mime)}"
 
     def walk(parts: List[dict]) -> None:
         for part in parts:
@@ -341,15 +367,13 @@ def get_attachment_image_pdf_files_for_message(
             if nested:
                 walk(nested)
                 continue
-            filename = (part.get("filename") or "").strip()
-            if not filename or not is_allowed_attachment(filename):
-                continue
             mime = (part.get("mimeType") or "application/octet-stream").strip().lower()
             if mime not in MIME_IMAGE_OR_PDF:
                 continue
             att_id = part.get("body", {}).get("attachmentId")
             if not att_id:
                 continue
+            use_fn = _effective_filename(part, mime, att_id)
             try:
                 att = service.users().messages().attachments().get(
                     userId="me", messageId=message_id, id=att_id
@@ -357,19 +381,19 @@ def get_attachment_image_pdf_files_for_message(
                 data = att.get("data")
                 if data:
                     raw = base64.urlsafe_b64decode(data)
-                    out.append((filename, raw, mime))
+                    out.append((use_fn, raw, mime))
             except Exception as e:
-                logger.warning("Error descargando adjunto %s: %s", filename, e)
+                logger.warning("Error descargando adjunto %s: %s", use_fn, e)
 
     parts = payload.get("parts") or []
     if parts:
         walk(parts)
     else:
         mime = (payload.get("mimeType") or "").strip().lower()
-        fn = (payload.get("filename") or "").strip()
         body = payload.get("body") or {}
         att_id = body.get("attachmentId")
-        if fn and att_id and mime in MIME_IMAGE_OR_PDF and is_allowed_attachment(fn):
+        if att_id and mime in MIME_IMAGE_OR_PDF:
+            use_fn = _effective_filename(payload, mime, att_id)
             try:
                 att = service.users().messages().attachments().get(
                     userId="me", messageId=message_id, id=att_id
@@ -377,9 +401,9 @@ def get_attachment_image_pdf_files_for_message(
                 data = att.get("data")
                 if data:
                     raw = base64.urlsafe_b64decode(data)
-                    out.append((fn, raw, mime))
+                    out.append((use_fn, raw, mime))
             except Exception as e:
-                logger.warning("Error descargando adjunto raiz %s: %s", fn, e)
+                logger.warning("Error descargando adjunto raiz %s: %s", use_fn, e)
     return out
 
 
@@ -423,8 +447,9 @@ def _download_gmail_leaf_part_bytes(service: Any, message_id: str, part: dict) -
 
 def _is_body_embedded_image_pdf_leaf(part: dict, parent_mime: str) -> bool:
     """
-    True: inline, parte de multipart/related (cid), o sin Content-Disposition bajo related.
-    False: Content-Disposition: attachment (adjunto clasico fuera del cuerpo).
+    True: inline, multipart/related (cid), o hijo de multipart/mixed sin disposition attachment
+    (imagen en el cuerpo del correo junto al texto). False si es explicitamente attachment
+    (lo cubre get_attachment_image_pdf_files_for_message; dedupe evita doble escaneo).
     """
     dt = _content_disposition_type(_header_value_from_part_headers(part, "Content-Disposition"))
     if dt == "attachment":
@@ -432,7 +457,11 @@ def _is_body_embedded_image_pdf_leaf(part: dict, parent_mime: str) -> bool:
     if dt == "inline":
         return True
     p = (parent_mime or "").strip().lower()
-    return p == "multipart/related"
+    if p == "multipart/related":
+        return True
+    if p == "multipart/mixed":
+        return True
+    return False
 
 
 def _dedupe_image_pdf_by_content(items: List[Tuple[str, bytes, str]]) -> List[Tuple[str, bytes, str]]:
@@ -451,11 +480,10 @@ def get_body_embedded_image_pdf_files_for_message(
     service: Any, message_id: str, payload: dict
 ) -> List[Tuple[str, bytes, str]]:
     """
-    Imagenes/PDF solo si van incrustadas en el cuerpo del mensaje:
-    - Content-Disposition: inline, o parte hija de multipart/related (p. ej. cid en HTML),
-    - imagenes en HTML como data:image/...;base64,...,
-    - mensaje de una sola parte MIME image/* o PDF sin ser adjunto declarado.
-    Excluye partes con Content-Disposition: attachment (adjunto separado del cuerpo).
+    Imagenes/PDF mostradas en el cuerpo del correo (no como attachment declarado):
+    - Content-Disposition: inline, multipart/related (cid), multipart/mixed sin attachment,
+    - data:image/...;base64,... en HTML,
+    - mensaje de una sola parte image/* o PDF sin Content-Disposition: attachment.
     """
     out: List[Tuple[str, bytes, str]] = []
     parts = payload.get("parts") or []
@@ -592,13 +620,21 @@ def _get_images_from_rfc822_parts(
     service: Any, message_id: str, parts: List[dict], prefix: str = ""
 ) -> List[Tuple[str, bytes, str]]:
     """
-    Extrae imágenes/PDFs de partes message/rfc822 (correos reenviados, "Fwd:").
-    Descarga el .eml adjunto y usa el módulo email de Python para recorrer sus partes.
+    Extrae imagenes/PDFs de partes message/rfc822 (correos reenviados, Fwd:).
+    Recorre el arbol de parts en profundidad; parsea cada .eml con email.message.
     """
     import email as email_lib
-    out = []
+
+    out: List[Tuple[str, bytes, str]] = []
     for i, part in enumerate(parts):
         mime = (part.get("mimeType") or "").strip().lower()
+        nested = part.get("parts") or []
+        if nested:
+            out.extend(
+                _get_images_from_rfc822_parts(
+                    service, message_id, nested, prefix=f"{prefix}{i}_"
+                )
+            )
         if mime != "message/rfc822":
             continue
         body = part.get("body") or {}
@@ -621,7 +657,6 @@ def _get_images_from_rfc822_parts(
                 logger.warning("Error descargando rfc822 %s: %s", att_id, e)
         if not raw:
             continue
-        # Parsear el .eml y extraer imágenes/PDFs dentro
         try:
             embedded_msg = email_lib.message_from_bytes(raw)
             for j, subpart in enumerate(embedded_msg.walk()):
@@ -633,10 +668,38 @@ def _get_images_from_rfc822_parts(
                     continue
                 fname = subpart.get_filename() or f"fwd_{prefix}{i}_{j}.{ext_for_mime(ct)}"
                 out.append((fname, payload_bytes, ct))
-                logger.debug("[PAGOS_GMAIL] rfc822: imagen extraída '%s' (%s, %d bytes)", fname, ct, len(payload_bytes))
+                logger.debug(
+                    "[PAGOS_GMAIL] rfc822: extraido '%s' (%s, %d bytes)",
+                    fname,
+                    ct,
+                    len(payload_bytes),
+                )
         except Exception as e:
             logger.warning("Error parseando rfc822 %s: %s", prefix, e)
     return out
+
+
+def get_pagos_gmail_image_pdf_files_for_pipeline(
+    service: Any, message_id: str, payload: dict
+) -> List[Tuple[str, bytes, str]]:
+    """
+    Candidatos a escanear con Gemini (misma imagen adjunta o en cuerpo se deduplica por hash):
+    1) Incrustado en cuerpo: inline, multipart/related (cid), data: en HTML, hijos image/PDF en multipart/mixed
+       que no sean Content-Disposition: attachment.
+    2) Archivo adjunto: cualquier parte image/PDF con attachmentId (con o sin filename en Gmail).
+    3) Reenvios: binarios image/PDF dentro de message/rfc822 (.eml anidado).
+    Solo pasan a BD/Drive si el modelo devuelve plantilla A o B y columnas completas.
+    """
+    merged: List[Tuple[str, bytes, str]] = []
+    merged.extend(get_body_embedded_image_pdf_files_for_message(service, message_id, payload))
+    merged.extend(get_attachment_image_pdf_files_for_message(service, message_id, payload))
+    try:
+        merged.extend(
+            _get_images_from_rfc822_parts(service, message_id, payload.get("parts", []))
+        )
+    except Exception as e:
+        logger.warning("[PAGOS_GMAIL] rfc822 en pipeline: %s", e)
+    return _dedupe_image_pdf_by_content(merged)
 
 
 def _min_payment_image_bytes() -> int:
@@ -664,12 +727,12 @@ def get_all_images_and_files_for_message(
         for filename, content, mime in items:
             size = len(content)
             if size < min_bytes:
-                logger.warning("[PAGOS_GMAIL] Descartada (< %d bytes): %s (%d bytes)", min_bytes, filename, size)
+                logger.debug("[PAGOS_GMAIL] Descartada (< %d bytes): %s (%d bytes)", min_bytes, filename, size)
                 continue
             key = (filename, size)
             if key not in seen:
                 seen.add(key)
-                logger.warning("[PAGOS_GMAIL] Aceptada: %s (%d bytes, %s)", filename, size, mime)
+                logger.debug("[PAGOS_GMAIL] Aceptada: %s (%d bytes, %s)", filename, size, mime)
                 out.append((filename, content, mime))
 
     _add(get_attachments_for_message(service, message_id, payload))
@@ -678,7 +741,7 @@ def get_all_images_and_files_for_message(
     _add(_get_images_from_rfc822_parts(service, message_id, payload.get("parts", [])))
 
     if not out:
-        logger.warning("[PAGOS_GMAIL] CERO imágenes >= %d bytes para msg %s — todo descartado o correo sin imágenes", min_bytes, message_id)
+        logger.info("[PAGOS_GMAIL] CERO imagenes >= %d bytes para msg %s - todo descartado o correo sin imagenes", min_bytes, message_id)
     return out
 
 
