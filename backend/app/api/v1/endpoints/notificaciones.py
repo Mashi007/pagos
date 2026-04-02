@@ -1,5 +1,6 @@
 """
 Endpoints de notificaciones a clientes retrasados.
+Todo el router exige rol admin (Depends(require_admin) a nivel de APIRouter).
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
 Reglas: 5 pestaÃƒÂ±as por dÃƒÂ­as hasta vencimiento y mora 61+.
 ConfiguraciÃƒÂ³n de envÃƒÂ­os (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
@@ -17,8 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body, Query, File, Upload
 from fastapi.responses import Response, JSONResponse, RedirectResponse
 from starlette.requests import Request
 
-from app.core.deps import get_current_user, require_admin
-from app.schemas.auth import UserResponse
+from app.core.deps import require_admin
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -58,7 +58,7 @@ from app.services.notificaciones_exclusion_desistimiento import (
     cliente_bloqueado_por_desistimiento,
 )
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 def get_notificaciones_envios_config(db: Session) -> dict:
@@ -1215,10 +1215,7 @@ def enviar_caso_manual(payload: dict = Body(...), db: Session = Depends(get_db))
 
 
 @router.get("/estadisticas/resumen")
-def get_notificaciones_resumen(
-    db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin),
-):
+def get_notificaciones_resumen(db: Session = Depends(get_db)):
     """
     Resumen para sidebar: total de envios registrados y fallidos en ventana reciente.
     no_leidas = envios con exito=False (atencion / rebotados) en los ultimos 30 dias.

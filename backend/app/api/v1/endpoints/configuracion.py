@@ -16,7 +16,8 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_admin
+from app.schemas.auth import UserResponse
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -302,13 +303,20 @@ def delete_logo(db: Session = Depends(get_db)):
 
 
 @router.get("/notificaciones/envios")
-def get_notificaciones_envios(db: Session = Depends(get_db)):
+def get_notificaciones_envios(
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin),
+):
     """Configuración de envíos por tipo (habilitado, cco, plantilla_id, programador). Datos desde BD."""
     return get_notificaciones_envios_dict(db)
 
 
 @router.put("/notificaciones/envios")
-def put_notificaciones_envios(payload: dict = Body(...), db: Session = Depends(get_db)):
+def put_notificaciones_envios(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin),
+):
     """Actualizar configuración de envíos. Payload: por tipo {habilitado, cco[], plantilla_id?, programador?, incluir_pdf_anexo?, incluir_adjuntos_fijos?}. Globales: modo_pruebas, email_pruebas, emails_pruebas."""
     if not isinstance(payload, dict):
         raise HTTPException(status_code=422, detail="El cuerpo debe ser un objeto JSON")
@@ -330,7 +338,10 @@ def put_notificaciones_envios(payload: dict = Body(...), db: Session = Depends(g
 
 
 @router.get("/notificaciones/envios/diagnostico-adjuntos")
-def get_notificaciones_envios_diagnostico_adjuntos(db: Session = Depends(get_db)):
+def get_notificaciones_envios_diagnostico_adjuntos(
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin),
+):
     """
     Diagnostico en una respuesta: adjunto global (adjunto_fijo_cobranza) y PDFs por caso (pestaña 3).
     Para cada archivo: ruta resuelta, existe, tamano, cabecera %PDF. Incluye resumen para dias_1_retraso.

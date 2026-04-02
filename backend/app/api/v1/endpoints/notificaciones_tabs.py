@@ -1,5 +1,6 @@
 """
 Endpoints para notificaciones por cuota (retrasadas 1/3/5 dias, prejudicial).
+Routers: solo rol admin (Depends(require_admin)).
 
 Politica: sin envios "previos" ni el dia del vencimiento; previas/dia-pago devuelven listas vacias.
 Datos reales desde BD. get_db en todos los procesos.
@@ -19,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import require_admin
 from app.core.email import cuerpo_parece_html, send_email
 from app.core.email_config_holder import sync_from_db as sync_email_config_from_db
 from app.core.whatsapp_send import send_whatsapp_text
@@ -148,11 +149,11 @@ def _adjuntos_cumplen_paquete_completo(
     return True, ""
 
 
-router_previas = APIRouter(dependencies=[Depends(get_current_user)])
-router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
-router_retrasadas = APIRouter(dependencies=[Depends(get_current_user)])
-router_prejudicial = APIRouter(dependencies=[Depends(get_current_user)])
-router_masivos = APIRouter(dependencies=[Depends(get_current_user)])
+router_previas = APIRouter(dependencies=[Depends(require_admin)])
+router_dia_pago = APIRouter(dependencies=[Depends(require_admin)])
+router_retrasadas = APIRouter(dependencies=[Depends(require_admin)])
+router_prejudicial = APIRouter(dependencies=[Depends(require_admin)])
+router_masivos = APIRouter(dependencies=[Depends(require_admin)])
 
 
 def _enviar_correos_items(
