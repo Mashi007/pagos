@@ -357,7 +357,6 @@ function FiniquitoGestionPageInner() {
         }}
       >
         <Eye className="h-4 w-4" aria-hidden />
-        <span className="sr-only">Abrir revisión</span>
       </Button>
       <Button
         type="button"
@@ -374,7 +373,6 @@ function FiniquitoGestionPageInner() {
         ) : (
           <Download className="h-4 w-4" aria-hidden />
         )}
-        <span className="sr-only">Descargar estado de cuenta PDF</span>
       </Button>
       <Select
         key={`estado-sel-${row.id}-${row.estado}`}
@@ -410,7 +408,6 @@ function FiniquitoGestionPageInner() {
         }}
       >
         <Eye className="h-4 w-4" aria-hidden />
-        <span className="sr-only">Abrir revisión</span>
       </Button>
       <Button
         type="button"
@@ -427,7 +424,6 @@ function FiniquitoGestionPageInner() {
         ) : (
           <Download className="h-4 w-4" aria-hidden />
         )}
-        <span className="sr-only">Descargar estado de cuenta PDF</span>
       </Button>
       {row.estado === 'ACEPTADO' ? (
         <Button

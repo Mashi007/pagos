@@ -25,12 +25,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app.core.config import settings
 from app.core.database import SessionLocal
 from app.api.v1.endpoints import cobranzas
-from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running, _run_pipeline_background
-from app.models.pagos_gmail_sync import PagosGmailSync
-
 logger = logging.getLogger(__name__)
 
 # Zona horaria por defecto (Venezuela). Configurable vÃ­a env si se aÃ±ade SCHEDULER_TZ.
@@ -177,28 +173,6 @@ def _job_campanas_programadas() -> None:
         logger.exception("Error en job campanas_programadas: %s", e)
 
 
-def _job_pagos_gmail_pipeline() -> None:
-    """Job cada N min (PAGOS_GMAIL_CRON_MINUTES): Gmail -> Drive -> Gemini -> BD (solo si no hay otra sync en curso)."""
-    db = SessionLocal()
-    try:
-        if _is_pipeline_running(db):
-            logger.info("Pagos Gmail pipeline: omitido (ya hay una ejecucion en curso)")
-            return
-        sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
-        db.add(sync)
-        db.commit()
-        db.refresh(sync)
-        sync_id = sync.id
-        thread = threading.Thread(target=_run_pipeline_background, args=(sync_id, "unread"), daemon=True)
-        thread.start()
-        logger.info("Pagos Gmail pipeline: lanzado en segundo plano sync_id=%s (solo no leidos)", sync_id)
-    except Exception as e:
-        logger.exception("Error en job pagos_gmail_pipeline: %s", e)
-    finally:
-        db.close()
-
-
-
 def start_scheduler() -> None:
     """Inicia el scheduler: liquidado+PDF 01:10; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; etc."""
     global _scheduler
@@ -271,16 +245,6 @@ def start_scheduler() -> None:
         id="campanas_crm_programadas",
         name="Campanas CRM programadas (cada 1 min)",
     )
-    # Pagos Gmail: intervalo desde PAGOS_GMAIL_CRON_MINUTES (por defecto 30 min; cuota Gemini free ~15 RPM)
-    cron_min = settings.PAGOS_GMAIL_CRON_MINUTES
-    _scheduler.add_job(
-        _job_pagos_gmail_pipeline,
-        IntervalTrigger(minutes=cron_min),
-        id="pagos_gmail_pipeline",
-        name=f"Pagos Gmail pipeline (cada {cron_min} min)",
-    )
-    logger.info("Pagos Gmail sync programado cada %d minutos (PAGOS_GMAIL_CRON_MINUTES=%d)", cron_min, cron_min)
-
     _scheduler.start()
     logger.info(
         "Scheduler iniciado: liquidado PDF 01:10; finiquito 02:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",

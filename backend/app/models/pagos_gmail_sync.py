@@ -16,6 +16,7 @@ class PagosGmailSync(Base):
     status = Column(String(20), nullable=False, default="running")  # running | success | error
     emails_processed = Column(Integer, nullable=False, default=0)
     files_processed = Column(Integer, nullable=False, default=0)
+    correos_marcados_revision = Column(Integer, nullable=False, server_default="0", default=0)
     error_message = Column(Text, nullable=True)
 
 

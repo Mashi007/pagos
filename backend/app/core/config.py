@@ -259,10 +259,6 @@ class Settings(BaseSettings):
         default="gemini-2.5-flash",
         description="Modelo Gemini para extracción de datos. gemini-2.5-flash es la versión estable recomendada. Ver https://ai.google.dev/gemini-api/docs/models",
     )
-    PAGOS_GMAIL_CRON_MINUTES: int = Field(
-        default=30,
-        description="Intervalo en minutos del cron Gmail->Gemini. Gratis: 30–60 min. Gemini de pago: puede bajar a 15 min.",
-    )
     PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS: int = Field(
         default=0,
         description="Máximo de filas al descargar Excel sin fecha (evita memoria/timeout). Con ?fecha= no aplica límite por día.",
