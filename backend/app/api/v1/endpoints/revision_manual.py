@@ -16,6 +16,7 @@ from app.core.deps import get_current_user
 from app.constants.prestamo_estados import prestamo_estado_exige_fecha_aprobacion
 from app.services.prestamos.fechas_prestamo_coherencia import (
     alinear_fecha_aprobacion_y_base_calculo,
+    rellenar_fecha_aprobacion_desde_base_si_falta,
 )
 from app.core.serializers import to_float, format_datetime_iso
 from app.models.cliente import Cliente
@@ -162,6 +163,12 @@ def _validar_permiso_edicion(
 
 
 # ===== SCHEMAS VALIDACION =====
+
+
+def _body_tiene_fecha_iso_no_vacia(val: Optional[str]) -> bool:
+    """True si el cliente envió un string de fecha con contenido (evita '' que no es None en Pydantic)."""
+    return val is not None and bool(str(val).strip())
+
 
 class ClienteUpdateData(BaseModel):
     nombres: Optional[str] = None
@@ -700,7 +707,9 @@ def editar_prestamo_revision(
         prestamo.cuota_periodo = update_data.cuota_periodo
 
     # fecha_aprobacion solo explicita (manual). No se infiere desde fecha_base_calculo.
-    if update_data.fecha_base_calculo is not None and update_data.fecha_aprobacion is None:
+    if _body_tiene_fecha_iso_no_vacia(
+        update_data.fecha_base_calculo
+    ) and not _body_tiene_fecha_iso_no_vacia(update_data.fecha_aprobacion):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -761,6 +770,7 @@ def editar_prestamo_revision(
     if not cambios_dict:
         return {"mensaje": "No hay cambios que guardar", "prestamo_id": prestamo_id}
 
+    rellenar_fecha_aprobacion_desde_base_si_falta(prestamo)
     alinear_fecha_aprobacion_y_base_calculo(prestamo)
 
     if prestamo_estado_exige_fecha_aprobacion(prestamo.estado) and prestamo.fecha_aprobacion is None:

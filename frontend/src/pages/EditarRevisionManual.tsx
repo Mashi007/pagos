@@ -576,6 +576,21 @@ export function EditarRevisionManual() {
     return ''
   }
 
+  /** Incluye fechas en el PUT sin enviar solo fecha_base (el backend responde 400). */
+  const applyFechaAprobacionAlPayload = (out: Record<string, unknown>) => {
+    const faNorm = formatDateForInput(prestamoData.fecha_aprobacion)
+    const fbNorm = formatDateForInput(prestamoData.fecha_base_calculo)
+    if (faNorm) {
+      out.fecha_aprobacion = faNorm
+      out.fecha_base_calculo = faNorm
+      return
+    }
+    if (fbNorm) {
+      out.fecha_aprobacion = fbNorm
+      out.fecha_base_calculo = fbNorm
+    }
+  }
+
   /**
    * Persiste fecha_aprobacion + fecha_base_calculo en BD y recalcula vencimientos de cuotas.
    * Misma lógica de negocio que al guardar cambios con fecha distinta; actualiza listados/reportes vía BD.
@@ -593,7 +608,9 @@ export function EditarRevisionManual() {
     const pid = prestamoData.prestamo_id ?? parseInt(prestamoId, 10)
     if (!Number.isFinite(pid)) return
 
-    const fa = formatDateForInput(prestamoData.fecha_aprobacion)
+    const fa =
+      formatDateForInput(prestamoData.fecha_aprobacion) ||
+      formatDateForInput(prestamoData.fecha_base_calculo)
     if (!fa) {
       toast.error('Indique una fecha de aprobación válida')
       return
@@ -835,16 +852,7 @@ export function EditarRevisionManual() {
         )
           prestamoUpdate.cuota_periodo = prestamoData.cuota_periodo
 
-        if (prestamoData.fecha_aprobacion !== undefined) {
-          prestamoUpdate.fecha_aprobacion =
-            prestamoData.fecha_aprobacion || null
-          // fecha_base_calculo siempre igual a fecha_aprobacion
-          prestamoUpdate.fecha_base_calculo =
-            prestamoData.fecha_aprobacion || null
-        } else if (prestamoData.fecha_base_calculo !== undefined) {
-          prestamoUpdate.fecha_base_calculo =
-            prestamoData.fecha_base_calculo || null
-        }
+        applyFechaAprobacionAlPayload(prestamoUpdate)
 
         if (prestamoData.estado !== undefined)
           prestamoUpdate.estado = prestamoData.estado
@@ -885,7 +893,9 @@ export function EditarRevisionManual() {
             savedSomething = true
 
             // Si cambió la fecha de aprobación y hay cuotas → recalcular SOLO fechas de vencimiento
-            const nuevaFecha = formatDateForInput(prestamoData.fecha_aprobacion)
+            const nuevaFecha =
+              formatDateForInput(prestamoData.fecha_aprobacion) ||
+              formatDateForInput(prestamoData.fecha_base_calculo)
             const pid2 = parseInt(prestamoId, 10)
             if (
               prestamoUpdate.fecha_aprobacion &&
@@ -1213,16 +1223,7 @@ export function EditarRevisionManual() {
         )
           prestamoUpdate.cuota_periodo = prestamoData.cuota_periodo
 
-        if (prestamoData.fecha_aprobacion !== undefined) {
-          prestamoUpdate.fecha_aprobacion =
-            prestamoData.fecha_aprobacion || null
-          // fecha_base_calculo siempre igual a fecha_aprobacion
-          prestamoUpdate.fecha_base_calculo =
-            prestamoData.fecha_aprobacion || null
-        } else if (prestamoData.fecha_base_calculo !== undefined) {
-          prestamoUpdate.fecha_base_calculo =
-            prestamoData.fecha_base_calculo || null
-        }
+        applyFechaAprobacionAlPayload(prestamoUpdate)
 
         if (prestamoData.estado !== undefined)
           prestamoUpdate.estado = prestamoData.estado
@@ -1261,9 +1262,9 @@ export function EditarRevisionManual() {
             )
 
             // Si cambió la fecha de aprobación y hay cuotas → recalcular SOLO fechas de vencimiento
-            const nuevaFechaFinal = formatDateForInput(
-              prestamoData.fecha_aprobacion
-            )
+            const nuevaFechaFinal =
+              formatDateForInput(prestamoData.fecha_aprobacion) ||
+              formatDateForInput(prestamoData.fecha_base_calculo)
             const pidFechas = parseInt(prestamoId, 10)
             if (
               prestamoUpdate.fecha_aprobacion &&
@@ -2256,9 +2257,11 @@ export function EditarRevisionManual() {
                           )}
                           onChange={e => {
                             formDirtyRef.current = true
+                            const v = e.target.value || null
                             setPrestamoData({
                               ...prestamoData,
-                              fecha_aprobacion: e.target.value || null,
+                              fecha_aprobacion: v,
+                              fecha_base_calculo: v,
                             })
                             setCambios({ ...cambios, prestamo: true })
                             if (errores['fecha_aprobacion'])
