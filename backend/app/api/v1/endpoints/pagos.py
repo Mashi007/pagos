@@ -570,7 +570,16 @@ def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict
 
     fp = row.fecha_pago
 
-    fecha_pago_str = fp.date().isoformat() if hasattr(fp, "date") and fp else (fp.isoformat() if fp else "")
+    if fp is None:
+        fecha_pago_str = ""
+    elif isinstance(fp, datetime):
+        fecha_pago_str = fp.date().isoformat()
+    elif isinstance(fp, date):
+        fecha_pago_str = fp.isoformat()
+    elif hasattr(fp, "isoformat"):
+        fecha_pago_str = fp.isoformat()
+    else:
+        fecha_pago_str = str(fp) if fp else ""
 
     return {
 
@@ -5590,7 +5599,23 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
         except Exception as e:
 
-            logger.warning("Al actualizar pago, no se pudo aplicar a cuotas: %s", e)
+            logger.warning(
+                "Al actualizar pago, no se pudo aplicar a cuotas: %s",
+                e,
+                exc_info=True,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                logger.exception("Rollback tras fallo aplicacion cuotas (actualizar_pago pago_id=%s)", pago_id)
+            else:
+                try:
+                    db.refresh(row)
+                except Exception:
+                    logger.warning(
+                        "No se pudo refrescar pago id=%s tras rollback de cascada; se responde con estado en memoria.",
+                        pago_id,
+                    )
 
     return _pago_to_response(row)
 
