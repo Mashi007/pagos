@@ -47,6 +47,9 @@ declare module 'lucide-react' {
 
   export const Info: any
 
+  /** Círculo con signo de interrogación (revisión manual: en revisión). */
+  export const HelpCircle: any
+
   export const CheckCircle2: any
 
   export const Loader2: any

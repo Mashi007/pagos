@@ -1,6 +1,6 @@
 import {
   AlertTriangle,
-  MessageSquare,
+  HelpCircle,
   X,
   CheckCircle,
   Loader2,
@@ -129,7 +129,7 @@ export function EstadoRevisionIcon({
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
             ) : (
-              <MessageSquare className="h-4 w-4 text-blue-600" />
+              <HelpCircle className="h-4 w-4 text-blue-600" />
             )}
             <span className="text-xs font-semibold text-blue-700">
               Revisando

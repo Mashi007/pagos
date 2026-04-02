@@ -16,7 +16,7 @@ import {
   X,
   RefreshCw,
   AlertTriangle,
-  Info,
+  HelpCircle,
   FileSpreadsheet,
   Download,
   Loader2,
@@ -1582,9 +1582,9 @@ export function PrestamosList() {
                                     cls: 'text-amber-500 hover:bg-amber-50',
                                   },
                                   revisando: {
-                                    icon: <Info className="h-4 w-4" />,
+                                    icon: <HelpCircle className="h-4 w-4" />,
                                     title:
-                                      'Revisión manual: En revisión (?) - click para continuar',
+                                      'Revisión manual: En revisión - click para continuar',
                                     cls: 'text-blue-500 hover:bg-blue-50',
                                   },
                                   en_espera: {
