@@ -35,6 +35,7 @@ import {
   Briefcase,
   FileText,
   DollarSign,
+  RefreshCw,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -54,6 +55,8 @@ import { useConcesionariosActivos } from '../hooks/useConcesionarios'
 import { useAnalistasActivos } from '../hooks/useAnalistas'
 
 import { useModelosVehiculosActivos } from '../hooks/useModelosVehiculos'
+
+import { prestamoKeys } from '../hooks/usePrestamos'
 
 import { codigoEstadoCuotaParaUi } from '../utils/cuotaEstadoDisplay'
 
@@ -184,6 +187,9 @@ export function EditarRevisionManual() {
   const [guardandoParcial, setGuardandoParcial] = useState(false)
 
   const [guardandoFinal, setGuardandoFinal] = useState(false)
+
+  const [recalculandoFechasCuotas, setRecalculandoFechasCuotas] =
+    useState(false)
 
   const [showRechazarModal, setShowRechazarModal] = useState(false)
 
@@ -375,6 +381,82 @@ export function EditarRevisionManual() {
       return isoDate.slice(0, 10)
     }
     return ''
+  }
+
+  /**
+   * Persiste fecha_aprobacion + fecha_base_calculo en BD y recalcula vencimientos de cuotas.
+   * Misma lógica de negocio que al guardar cambios con fecha distinta; actualiza listados/reportes vía BD.
+   */
+  const handleGuardarFechaYRecalcularVencimientos = async () => {
+    if (!prestamoId || soloLectura) {
+      if (soloLectura) {
+        toast.info(
+          'Este préstamo está en solo lectura; no se puede modificar la fecha.'
+        )
+      }
+      return
+    }
+
+    const pid = prestamoData.prestamo_id ?? parseInt(prestamoId, 10)
+    if (!Number.isFinite(pid)) return
+
+    const fa = formatDateForInput(prestamoData.fecha_aprobacion)
+    if (!fa) {
+      toast.error('Indique una fecha de aprobación válida')
+      return
+    }
+
+    const faDate = new Date(fa)
+    if (isNaN(faDate.getTime())) {
+      toast.error('Fecha de aprobación inválida')
+      return
+    }
+
+    if (cuotasData.length === 0) {
+      toast.info(
+        'No hay cuotas en este préstamo; no hay vencimientos que recalcular.'
+      )
+      return
+    }
+
+    setRecalculandoFechasCuotas(true)
+    try {
+      await revisionManualService.editarPrestamo(pid, {
+        fecha_aprobacion: fa,
+        fecha_base_calculo: fa,
+      })
+
+      const res = await prestamoService.recalcularFechasAmortizacion(pid)
+      const actualizadas = res?.data?.actualizadas ?? res?.actualizadas ?? '?'
+
+      setFechaAprobacionOriginal(fa)
+
+      const datos = await revisionManualService.getDetallePrestamoRevision(pid)
+      if (datos?.cuotas) {
+        setCuotasData(datos.cuotas)
+      }
+
+      toast.success(
+        `Fecha guardada en el servidor y ${actualizadas} cuota(s) con vencimientos actualizados. Los cambios quedan en la base (estado de cuenta, amortización, etc.).`
+      )
+
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+      queryClient.invalidateQueries({
+        queryKey: ['revision-manual-prestamos'],
+        exact: false,
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['revision-editar', prestamoId],
+      })
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.detail ||
+        'No se pudo guardar la fecha o recalcular vencimientos'
+      toast.error(msg)
+      console.error(err)
+    } finally {
+      setRecalculandoFechasCuotas(false)
+    }
   }
 
   const opcionesBase = (
@@ -1960,32 +2042,64 @@ export function EditarRevisionManual() {
                   {/* Fecha Requerimiento - OCULTO */}
                   {/* Este campo se usa en gestión de préstamos, no en revisión manual */}
 
-                  {/* Fecha Aprobación */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">
+                  {/* Fecha Aprobación + recálculo de vencimientos en la misma caja */}
+                  <div className="rounded-lg border border-gray-200 bg-slate-50/80 p-3 md:col-span-2">
+                    <label className="mb-2 block text-sm font-medium">
                       Fecha de Aprobación
                     </label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                      <Input
-                        type="date"
-                        value={formatDateForInput(
-                          prestamoData.fecha_aprobacion
+                    <p className="mb-2 text-xs text-gray-600">
+                      La fecha base de cálculo es la misma que la de aprobación.
+                      El botón guarda esta fecha en el servidor y recalcula
+                      vencimientos de cuotas. &quot;Guardar cambios&quot; y
+                      &quot;Guardar y cerrar&quot; persisten también el resto de
+                      ediciones en la base (estado de cuenta, reportes, etc.).
+                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                      <div className="relative min-w-0 flex-1">
+                        <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Input
+                          type="date"
+                          disabled={soloLectura}
+                          value={formatDateForInput(
+                            prestamoData.fecha_aprobacion
+                          )}
+                          onChange={e => {
+                            setPrestamoData({
+                              ...prestamoData,
+                              fecha_aprobacion: e.target.value || null,
+                            })
+                            setCambios({ ...cambios, prestamo: true })
+                            if (errores['fecha_aprobacion'])
+                              setErrores({
+                                ...errores,
+                                fecha_aprobacion: '',
+                              })
+                          }}
+                          className={`pl-10 ${errores['fecha_aprobacion'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="shrink-0 sm:max-w-[220px]"
+                        disabled={
+                          soloLectura ||
+                          recalculandoFechasCuotas ||
+                          cuotasData.length === 0
+                        }
+                        onClick={handleGuardarFechaYRecalcularVencimientos}
+                        title="Guarda la fecha en el servidor y recalcula fechas de vencimiento de las cuotas"
+                      >
+                        {recalculandoFechasCuotas ? (
+                          <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-2 h-4 w-4 shrink-0" />
                         )}
-                        onChange={e => {
-                          setPrestamoData({
-                            ...prestamoData,
-                            fecha_aprobacion: e.target.value || null,
-                          })
-                          setCambios({ ...cambios, prestamo: true })
-                          if (errores['fecha_aprobacion'])
-                            setErrores({ ...errores, fecha_aprobacion: '' })
-                        }}
-                        className={`pl-10 ${errores['fecha_aprobacion'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
-                      />
+                        Recalcular vencimientos
+                      </Button>
                     </div>
                     {errores['fecha_aprobacion'] && (
-                      <p className="text-xs text-red-600">
+                      <p className="mt-1 text-xs text-red-600">
                         {errores['fecha_aprobacion']}
                       </p>
                     )}
