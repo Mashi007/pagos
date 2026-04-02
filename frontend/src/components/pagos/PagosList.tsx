@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -85,6 +85,7 @@ import { useGmailPipeline } from '../../hooks/useGmailPipeline'
 
 import { invalidateListasNotificacionesMora } from '../../constants/queryKeys'
 import { getTasaHoy } from '../../services/tasaCambioService'
+import { normalizarNumeroDocumento } from '../../utils/pagoExcelValidation'
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
@@ -565,6 +566,24 @@ export function PagosList() {
     refetchOnMount: true,
     refetchOnWindowFocus: false, // Desactivado para no interrumpir batch con GETs innecesarios
   })
+
+  /** Claves normalizadas de nº documento que aparecen más de una vez en la página actual (advertencia visual). */
+  const documentosDuplicadosEnPagina = useMemo(() => {
+    const pagos = data?.pagos
+    if (!pagos?.length) return new Set<string>()
+    const counts = new Map<string, number>()
+    for (const p of pagos) {
+      const key = normalizarNumeroDocumento(p.numero_documento)
+      if (!key) continue
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    const dup = new Set<string>()
+    for (const [k, n] of counts) {
+      if (n > 1) dup.add(k)
+    }
+    return dup
+  }, [data?.pagos])
+
   const handleFilterChange = (key: string, value: string) => {
     // Convertir "all" a cadena vacía para que el servicio no incluya el filtro
     const filterValue = value === 'all' ? '' : value
@@ -1640,344 +1659,369 @@ export function PagosList() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {data.pagos.map((pago: Pago) => (
-                          <TableRow key={pago.id}>
-                            <TableCell>{pago.id}</TableCell>
-                            <TableCell>{pago.cedula_cliente}</TableCell>
-                            <TableCell>
-                              {pago.prestamo_id ? (
-                                <span className="text-sm font-medium">
-                                  #{pago.prestamo_id}
-                                </span>
-                              ) : (
-                                <span className="text-sm text-amber-600">
-                                  Sin asignar
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell>{getEstadoBadge(pago.estado)}</TableCell>
-                            {esRevisarPagos && (
-                              <TableCell className="text-xs text-amber-700">
-                                {(pago as PagoConError).observaciones ?? '-'}
+                        {data.pagos.map((pago: Pago) => {
+                          const docKey = normalizarNumeroDocumento(
+                            pago.numero_documento
+                          )
+                          const documentoDuplicadoEnVista =
+                            Boolean(docKey) &&
+                            documentosDuplicadosEnPagina.has(docKey)
+                          return (
+                            <TableRow key={pago.id}>
+                              <TableCell>{pago.id}</TableCell>
+                              <TableCell>{pago.cedula_cliente}</TableCell>
+                              <TableCell>
+                                {pago.prestamo_id ? (
+                                  <span className="text-sm font-medium">
+                                    #{pago.prestamo_id}
+                                  </span>
+                                ) : (
+                                  <span className="text-sm text-amber-600">
+                                    Sin asignar
+                                  </span>
+                                )}
                               </TableCell>
-                            )}
-                            <TableCell>
-                              $
-                              {typeof pago.monto_pagado === 'number'
-                                ? pago.monto_pagado.toFixed(2)
-                                : parseFloat(
-                                    String(pago.monto_pagado || 0)
-                                  ).toFixed(2)}
-                            </TableCell>
-                            <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
-                            <TableCell>
-                              {pago.numero_documento ?? '-'}
-                            </TableCell>
-                            <TableCell>
-                              {pago.verificado_concordancia === 'SI' ||
-                              pago.conciliado ? (
-                                <Badge className="bg-green-500 text-white">
-                                  SI
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-gray-500 text-white">
-                                  NO
-                                </Badge>
+                              <TableCell>
+                                {getEstadoBadge(pago.estado)}
+                              </TableCell>
+                              {esRevisarPagos && (
+                                <TableCell className="text-xs text-amber-700">
+                                  {(pago as PagoConError).observaciones ?? '-'}
+                                </TableCell>
                               )}
-                            </TableCell>
-                            <TableCell>
-                              {pago.documento_ruta ? (
-                                <a
-                                  href={pago.documento_ruta}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 font-medium text-blue-600 hover:text-blue-800"
-                                  title="Visualizar fotografía"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                  Ver foto
-                                </a>
-                              ) : (
-                                <span className="text-sm text-gray-500">
-                                  NA
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Popover
-                                open={accionesOpenId === pago.id}
-                                onOpenChange={open =>
-                                  setAccionesOpenId(open ? pago.id : null)
+                              <TableCell>
+                                $
+                                {typeof pago.monto_pagado === 'number'
+                                  ? pago.monto_pagado.toFixed(2)
+                                  : parseFloat(
+                                      String(pago.monto_pagado || 0)
+                                    ).toFixed(2)}
+                              </TableCell>
+                              <TableCell>
+                                {formatDate(pago.fecha_pago)}
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  documentoDuplicadoEnVista &&
+                                    'bg-orange-100 text-orange-950 dark:bg-orange-950/35 dark:text-orange-100'
+                                )}
+                                title={
+                                  documentoDuplicadoEnVista
+                                    ? 'Advertencia: mismo número de documento aparece más de una vez en esta página.'
+                                    : undefined
                                 }
                               >
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    title="Acciones"
-                                    className="h-8 w-8 p-0"
+                                {pago.numero_documento ?? '-'}
+                              </TableCell>
+                              <TableCell>
+                                {pago.verificado_concordancia === 'SI' ||
+                                pago.conciliado ? (
+                                  <Badge className="bg-green-500 text-white">
+                                    SI
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-gray-500 text-white">
+                                    NO
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {pago.documento_ruta ? (
+                                  <a
+                                    href={pago.documento_ruta}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 font-medium text-blue-600 hover:text-blue-800"
+                                    title="Visualizar fotografía"
                                   >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  className="w-56 p-2"
-                                  align="end"
+                                    <Eye className="h-4 w-4" />
+                                    Ver foto
+                                  </a>
+                                ) : (
+                                  <span className="text-sm text-gray-500">
+                                    NA
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Popover
+                                  open={accionesOpenId === pago.id}
+                                  onOpenChange={open =>
+                                    setAccionesOpenId(open ? pago.id : null)
+                                  }
                                 >
-                                  <div className="space-y-0.5">
-                                    <button
-                                      type="button"
-                                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100"
-                                      onClick={() => {
-                                        setPagoEditando(pago)
-                                        setShowRegistrarPago(true)
-                                        setAccionesOpenId(null)
-                                      }}
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      title="Acciones"
+                                      className="h-8 w-8 p-0"
                                     >
-                                      <Edit className="h-4 w-4 text-gray-600" />
-                                      Editar
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                                      onClick={async () => {
-                                        setAccionesOpenId(null)
-                                        if (
-                                          window.confirm(
-                                            `¿Estás seguro de eliminar el pago ID ${pago.id}?`
-                                          )
-                                        ) {
-                                          try {
-                                            if (esRevisarPagos) {
-                                              await pagoConErrorService.delete(
-                                                pago.id
-                                              )
-                                            } else {
-                                              await pagoService.deletePago(
-                                                pago.id
-                                              )
-                                            }
-                                            toast.success(
-                                              'Pago eliminado exitosamente'
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['pagos'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['pagos-con-errores'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['pagos-kpis'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['cuotas-prestamo'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['prestamos'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await invalidateListasNotificacionesMora(
-                                              queryClient
-                                            )
-                                          } catch (error) {
-                                            toast.error(
-                                              'Error al eliminar el pago'
-                                            )
-                                            if (import.meta.env.DEV)
-                                              console.error(
-                                                'Error al eliminar el pago',
-                                                error
-                                              )
-                                          }
-                                        }
-                                      }}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                      Eliminar
-                                    </button>
-                                    {pago.verificado_concordancia === 'SI' ||
-                                    pago.conciliado ? (
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent
+                                    className="w-56 p-2"
+                                    align="end"
+                                  >
+                                    <div className="space-y-0.5">
                                       <button
                                         type="button"
-                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50"
-                                        disabled={conciliandoId === pago.id}
-                                        onClick={async () => {
+                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100"
+                                        onClick={() => {
+                                          setPagoEditando(pago)
+                                          setShowRegistrarPago(true)
                                           setAccionesOpenId(null)
-                                          setConciliandoId(pago.id)
-                                          try {
-                                            await pagoService.updateConciliado(
-                                              pago.id,
-                                              false
-                                            )
-                                            toast.success(
-                                              'Pago marcado como NO conciliado'
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['pagos'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['pagos-kpis'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['cuotas-prestamo'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await invalidateListasNotificacionesMora(
-                                              queryClient
-                                            )
-                                          } catch (error) {
-                                            toast.error(
-                                              'Error al actualizar conciliación'
-                                            )
-                                            if (import.meta.env.DEV)
-                                              console.error(
-                                                'Error al actualizar conciliación',
-                                                error
-                                              )
-                                          } finally {
-                                            setConciliandoId(null)
-                                          }
                                         }}
                                       >
-                                        <XCircle className="h-4 w-4" />
-                                        {conciliandoId === pago.id
-                                          ? 'Actualizando...'
-                                          : 'Conciliar: No'}
+                                        <Edit className="h-4 w-4 text-gray-600" />
+                                        Editar
                                       </button>
-                                    ) : (
                                       <button
                                         type="button"
-                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-green-700 transition-colors hover:bg-green-50"
-                                        disabled={conciliandoId === pago.id}
+                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
                                         onClick={async () => {
                                           setAccionesOpenId(null)
-                                          setConciliandoId(pago.id)
-                                          try {
-                                            await pagoService.updateConciliado(
-                                              pago.id,
-                                              true
+                                          if (
+                                            window.confirm(
+                                              `¿Estás seguro de eliminar el pago ID ${pago.id}?`
                                             )
-                                            if (pago.prestamo_id) {
-                                              try {
-                                                const res =
-                                                  await pagoService.aplicarPagoACuotas(
-                                                    pago.id
-                                                  )
-                                                if (res.ya_aplicado) {
-                                                  toast.success(res.message)
-                                                } else if (
-                                                  res.cuotas_completadas > 0 ||
-                                                  res.cuotas_parciales > 0
-                                                ) {
-                                                  toast.success(
-                                                    `Conciliado. ${res.message}`
-                                                  )
-                                                } else {
-                                                  toast.success(
-                                                    'Pago marcado como conciliado'
-                                                  )
-                                                }
-                                              } catch (applyErr) {
-                                                if (
-                                                  isAxiosError(applyErr) &&
-                                                  applyErr.response?.status ===
-                                                    409
-                                                ) {
-                                                  toast.error(
-                                                    getErrorMessage(applyErr)
-                                                  )
-                                                } else {
-                                                  toast.success(
-                                                    'Pago marcado como conciliado'
-                                                  )
-                                                }
+                                          ) {
+                                            try {
+                                              if (esRevisarPagos) {
+                                                await pagoConErrorService.delete(
+                                                  pago.id
+                                                )
+                                              } else {
+                                                await pagoService.deletePago(
+                                                  pago.id
+                                                )
                                               }
-                                            } else {
                                               toast.success(
-                                                'Pago marcado como conciliado'
+                                                'Pago eliminado exitosamente'
                                               )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['pagos'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: [
+                                                    'pagos-con-errores',
+                                                  ],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['pagos-kpis'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['cuotas-prestamo'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['prestamos'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await invalidateListasNotificacionesMora(
+                                                queryClient
+                                              )
+                                            } catch (error) {
+                                              toast.error(
+                                                'Error al eliminar el pago'
+                                              )
+                                              if (import.meta.env.DEV)
+                                                console.error(
+                                                  'Error al eliminar el pago',
+                                                  error
+                                                )
                                             }
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['pagos'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['pagos-kpis'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['dashboard'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['cuotas-prestamo'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await queryClient.invalidateQueries(
-                                              {
-                                                queryKey: ['prestamos'],
-                                                exact: false,
-                                              }
-                                            )
-                                            await invalidateListasNotificacionesMora(
-                                              queryClient
-                                            )
-                                          } catch (error) {
-                                            toast.error(
-                                              'Error al actualizar conciliación'
-                                            )
-                                            if (import.meta.env.DEV)
-                                              console.error(
-                                                'Error al actualizar conciliación',
-                                                error
-                                              )
-                                          } finally {
-                                            setConciliandoId(null)
                                           }
                                         }}
                                       >
-                                        <CheckCircle className="h-4 w-4" />
-                                        {conciliandoId === pago.id
-                                          ? 'Actualizando...'
-                                          : 'Conciliar: Sí'}
+                                        <Trash2 className="h-4 w-4" />
+                                        Eliminar
                                       </button>
-                                    )}
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                                      {pago.verificado_concordancia === 'SI' ||
+                                      pago.conciliado ? (
+                                        <button
+                                          type="button"
+                                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50"
+                                          disabled={conciliandoId === pago.id}
+                                          onClick={async () => {
+                                            setAccionesOpenId(null)
+                                            setConciliandoId(pago.id)
+                                            try {
+                                              await pagoService.updateConciliado(
+                                                pago.id,
+                                                false
+                                              )
+                                              toast.success(
+                                                'Pago marcado como NO conciliado'
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['pagos'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['pagos-kpis'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['cuotas-prestamo'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await invalidateListasNotificacionesMora(
+                                                queryClient
+                                              )
+                                            } catch (error) {
+                                              toast.error(
+                                                'Error al actualizar conciliación'
+                                              )
+                                              if (import.meta.env.DEV)
+                                                console.error(
+                                                  'Error al actualizar conciliación',
+                                                  error
+                                                )
+                                            } finally {
+                                              setConciliandoId(null)
+                                            }
+                                          }}
+                                        >
+                                          <XCircle className="h-4 w-4" />
+                                          {conciliandoId === pago.id
+                                            ? 'Actualizando...'
+                                            : 'Conciliar: No'}
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-green-700 transition-colors hover:bg-green-50"
+                                          disabled={conciliandoId === pago.id}
+                                          onClick={async () => {
+                                            setAccionesOpenId(null)
+                                            setConciliandoId(pago.id)
+                                            try {
+                                              await pagoService.updateConciliado(
+                                                pago.id,
+                                                true
+                                              )
+                                              if (pago.prestamo_id) {
+                                                try {
+                                                  const res =
+                                                    await pagoService.aplicarPagoACuotas(
+                                                      pago.id
+                                                    )
+                                                  if (res.ya_aplicado) {
+                                                    toast.success(res.message)
+                                                  } else if (
+                                                    res.cuotas_completadas >
+                                                      0 ||
+                                                    res.cuotas_parciales > 0
+                                                  ) {
+                                                    toast.success(
+                                                      `Conciliado. ${res.message}`
+                                                    )
+                                                  } else {
+                                                    toast.success(
+                                                      'Pago marcado como conciliado'
+                                                    )
+                                                  }
+                                                } catch (applyErr) {
+                                                  if (
+                                                    isAxiosError(applyErr) &&
+                                                    applyErr.response
+                                                      ?.status === 409
+                                                  ) {
+                                                    toast.error(
+                                                      getErrorMessage(applyErr)
+                                                    )
+                                                  } else {
+                                                    toast.success(
+                                                      'Pago marcado como conciliado'
+                                                    )
+                                                  }
+                                                }
+                                              } else {
+                                                toast.success(
+                                                  'Pago marcado como conciliado'
+                                                )
+                                              }
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['pagos'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['pagos-kpis'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['dashboard'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['cuotas-prestamo'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await queryClient.invalidateQueries(
+                                                {
+                                                  queryKey: ['prestamos'],
+                                                  exact: false,
+                                                }
+                                              )
+                                              await invalidateListasNotificacionesMora(
+                                                queryClient
+                                              )
+                                            } catch (error) {
+                                              toast.error(
+                                                'Error al actualizar conciliación'
+                                              )
+                                              if (import.meta.env.DEV)
+                                                console.error(
+                                                  'Error al actualizar conciliación',
+                                                  error
+                                                )
+                                            } finally {
+                                              setConciliandoId(null)
+                                            }
+                                          }}
+                                        >
+                                          <CheckCircle className="h-4 w-4" />
+                                          {conciliandoId === pago.id
+                                            ? 'Actualizando...'
+                                            : 'Conciliar: Sí'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
                       </TableBody>
                     </Table>
                   </div>
