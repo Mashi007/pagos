@@ -35,6 +35,8 @@ const TIPOS_CASO: { value: string; label: string }[] = [
 
   { value: 'dias_5_retraso', label: '5 días retraso' },
 
+  { value: 'dias_30_retraso', label: '30 días retraso' },
+
   { value: 'prejudicial', label: 'Prejudicial' },
   { value: 'masivos', label: 'Masivos' },
 ]

@@ -88,7 +88,7 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
       return 'dias_5_retraso'
 
     case 'dias_30_atraso':
-      return 'prejudicial'
+      return 'dias_30_retraso'
 
     case 'masivos':
       return 'masivos'
@@ -111,10 +111,8 @@ function cfgSlugParaPestanaListado(tab: TabId): ConfigEnvioSeccionId | null {
   switch (tab) {
     case 'dias_1_atraso':
     case 'dias_5_atraso':
-      return 'retrasada'
-
     case 'dias_30_atraso':
-      return 'prejudicial'
+      return 'retrasada'
 
     case 'masivos':
       return 'comunicaciones'
@@ -131,7 +129,7 @@ function tipoConfigPlantillaParaPestana(
 ):
   | 'PAGO_1_DIA_ATRASADO'
   | 'PAGO_5_DIAS_ATRASADO'
-  | 'PREJUDICIAL'
+  | 'PAGO_30_DIAS_ATRASADO'
   | 'MASIVOS'
   | null {
   switch (tab) {
@@ -142,7 +140,7 @@ function tipoConfigPlantillaParaPestana(
       return 'PAGO_5_DIAS_ATRASADO'
 
     case 'dias_30_atraso':
-      return 'PREJUDICIAL'
+      return 'PAGO_30_DIAS_ATRASADO'
 
     case 'masivos':
       return 'MASIVOS'
@@ -305,6 +303,8 @@ export function Notificaciones() {
       dias_3_retraso: { enviados: 0, rebotados: 0 },
 
       dias_5_retraso: { enviados: 0, rebotados: 0 },
+
+      dias_30_retraso: { enviados: 0, rebotados: 0 },
 
       prejudicial: { enviados: 0, rebotados: 0 },
 
@@ -789,10 +789,17 @@ export function Notificaciones() {
 
             {activeTab === 'dias_30_atraso' && (
               <p className="mb-4 text-xs text-gray-500">
-                Los KPI y el informe Excel corresponden al envio prejudicial
-                (tipo_tab{' '}
-                <code className="rounded bg-gray-100 px-1">prejudicial</code> en
-                la base de datos).
+                Listado y envíos usan la cuota cuya{' '}
+                <span className="font-medium">fecha de vencimiento</span> fue
+                hace 30 días calendario (misma regla que el servidor). KPI y
+                Excel de rebotados: tipo_tab{' '}
+                <code className="rounded bg-gray-100 px-1">
+                  dias_30_retraso
+                </code>
+                . El caso{' '}
+                <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code>{' '}
+                (3+ cuotas morosas) se configura y envía aparte en
+                Configuración.
               </p>
             )}
 

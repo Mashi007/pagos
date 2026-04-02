@@ -179,6 +179,8 @@ export function PlantillasNotificaciones({
       { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
 
       { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso' },
+
+      { valor: 'PAGO_30_DIAS_ATRASADO', label: '30 días de retraso' },
     ],
 
     prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
@@ -192,6 +194,7 @@ export function PlantillasNotificaciones({
     'PAGO_1_DIA_ATRASADO',
     'PAGO_3_DIAS_ATRASADO',
     'PAGO_5_DIAS_ATRASADO',
+    'PAGO_30_DIAS_ATRASADO',
     'PREJUDICIAL',
     'MASIVOS',
     'COBRANZA',
@@ -1586,6 +1589,11 @@ export function PlantillasNotificaciones({
       caso: '5 días de retraso',
     },
 
+    PAGO_30_DIAS_ATRASADO: {
+      categoria: 'Notificación retrasada',
+      caso: '30 días de retraso',
+    },
+
     PREJUDICIAL: { categoria: 'Prejudicial', caso: 'Prejudicial' },
 
     MASIVOS: {
@@ -1615,6 +1623,12 @@ export function PlantillasNotificaciones({
       tipo: 'PAGO_5_DIAS_ATRASADO',
       label: '5 días de retraso',
       borderColor: 'border-amber-600',
+    },
+
+    {
+      tipo: 'PAGO_30_DIAS_ATRASADO',
+      label: '30 días de retraso',
+      borderColor: 'border-orange-700',
     },
 
     {

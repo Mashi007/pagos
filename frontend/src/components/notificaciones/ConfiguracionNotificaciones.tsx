@@ -167,6 +167,12 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
     color: 'orange',
   },
   {
+    tipo: 'PAGO_30_DIAS_ATRASADO',
+    label: '30 días de retraso',
+    categoria: 'Retrasada',
+    color: 'orange',
+  },
+  {
     tipo: 'PREJUDICIAL',
     label: 'Prejudicial',
     categoria: 'Prejudicial',
@@ -229,6 +235,12 @@ export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
   {
     tipo: 'PAGO_5_DIAS_ATRASADO',
     label: '5 días atrasado',
+    categoria: 'Retrasada',
+    color: 'orange',
+  },
+  {
+    tipo: 'PAGO_30_DIAS_ATRASADO',
+    label: '30 días de retraso',
     categoria: 'Retrasada',
     color: 'orange',
   },

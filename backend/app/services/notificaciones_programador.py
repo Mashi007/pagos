@@ -259,7 +259,10 @@ def ejecutar_envios_por_programador(db: Session) -> Dict[str, Any]:
         ("dia_pago", data["hoy"], asunto_h, cuerpo_h, _tipo_dia_pago),
         (
             "retrasadas",
-            data["dias_1_retraso"] + data["dias_3_retraso"] + data["dias_5_retraso"],
+            data["dias_1_retraso"]
+            + data["dias_3_retraso"]
+            + data["dias_5_retraso"]
+            + data["dias_30_retraso"],
             asunto_r,
             cuerpo_r,
             _tipo_retrasadas,

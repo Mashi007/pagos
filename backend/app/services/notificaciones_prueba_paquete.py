@@ -15,6 +15,7 @@ TIPOS_PRUEBA_PAQUETE = frozenset(
         "PAGO_1_DIA_ATRASADO",
         "PAGO_3_DIAS_ATRASADO",
         "PAGO_5_DIAS_ATRASADO",
+        "PAGO_30_DIAS_ATRASADO",
         "PREJUDICIAL",
     }
 )
@@ -59,7 +60,12 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
             detail="No hay datos de ejemplo en BD para este criterio. Debe existir al menos un cliente en la lista correspondiente.",
         )
 
-    if tipo in ("PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO"):
+    if tipo in (
+        "PAGO_1_DIA_ATRASADO",
+        "PAGO_3_DIAS_ATRASADO",
+        "PAGO_5_DIAS_ATRASADO",
+        "PAGO_30_DIAS_ATRASADO",
+    ):
         get_tipo = nt._tipo_retrasadas
         asunto = "Cuenta con cuota atrasada - Rapicredit"
         cuerpo = (
@@ -179,7 +185,12 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
             ),
         }
 
-    if tipo in ("PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO"):
+    if tipo in (
+        "PAGO_1_DIA_ATRASADO",
+        "PAGO_3_DIAS_ATRASADO",
+        "PAGO_5_DIAS_ATRASADO",
+        "PAGO_30_DIAS_ATRASADO",
+    ):
         get_tipo = nt._tipo_retrasadas
         asunto_base = "Cuenta con cuota atrasada - Rapicredit"
         cuerpo_base = "Prueba diagnostico"

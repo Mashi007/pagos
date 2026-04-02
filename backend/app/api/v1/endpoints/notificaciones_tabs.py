@@ -62,6 +62,7 @@ _CONFIG_TIPO_TO_TAB = {
     "PAGO_1_DIA_ATRASADO": "dias_1_retraso",
     "PAGO_3_DIAS_ATRASADO": "dias_3_retraso",
     "PAGO_5_DIAS_ATRASADO": "dias_5_retraso",
+    "PAGO_30_DIAS_ATRASADO": "dias_30_retraso",
     "PREJUDICIAL": "prejudicial",
     "MASIVOS": "masivos",
 }
@@ -608,19 +609,30 @@ def enviar_notificaciones_dia_pago(db: Session = Depends(get_db)):
 def get_notificaciones_retrasadas(estado: str = None, db: Session = Depends(get_db)):
     """Lista de notificaciones retrasadas: cuotas con 1, 3 o 5 d�as de atraso. Email desde tabla clientes."""
     data = get_notificaciones_tabs_data(db)
-    items = data["dias_1_retraso"] + data["dias_3_retraso"] + data["dias_5_retraso"]
+    items = (
+        data["dias_1_retraso"]
+        + data["dias_3_retraso"]
+        + data["dias_5_retraso"]
+        + data["dias_30_retraso"]
+    )
     return {
         "items": items,
         "total": len(items),
         "dias_1": len(data["dias_1_retraso"]),
         "dias_3": len(data["dias_3_retraso"]),
         "dias_5": len(data["dias_5_retraso"]),
+        "dias_30": len(data["dias_30_retraso"]),
     }
 
 
 def _tipo_retrasadas(item: dict) -> str:
     d = item.get("dias_atraso")
-    return {1: "PAGO_1_DIA_ATRASADO", 3: "PAGO_3_DIAS_ATRASADO", 5: "PAGO_5_DIAS_ATRASADO"}.get(d, "PAGO_1_DIA_ATRASADO")
+    return {
+        1: "PAGO_1_DIA_ATRASADO",
+        3: "PAGO_3_DIAS_ATRASADO",
+        5: "PAGO_5_DIAS_ATRASADO",
+        30: "PAGO_30_DIAS_ATRASADO",
+    }.get(d, "PAGO_1_DIA_ATRASADO")
 
 
 @router_retrasadas.post("/enviar")
@@ -628,7 +640,12 @@ def enviar_notificaciones_retrasadas(db: Session = Depends(get_db)):
     """Env�a correo a cada cliente con cuota retrasada. Respeta config env�os (habilitado/CCO) desde BD."""
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
-    items = data["dias_1_retraso"] + data["dias_3_retraso"] + data["dias_5_retraso"]
+    items = (
+        data["dias_1_retraso"]
+        + data["dias_3_retraso"]
+        + data["dias_5_retraso"]
+        + data["dias_30_retraso"]
+    )
     asunto = "Cuenta con cuota atrasada - Rapicredit"
     cuerpo = (
         "Estimado/a {nombre} (c�dula {cedula}),\n\n"
@@ -967,6 +984,7 @@ TIPOS_CASO_MANUAL = frozenset(
         "PAGO_1_DIA_ATRASADO",
         "PAGO_3_DIAS_ATRASADO",
         "PAGO_5_DIAS_ATRASADO",
+        "PAGO_30_DIAS_ATRASADO",
         "PREJUDICIAL",
         "MASIVOS",
     }
@@ -1069,6 +1087,9 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
     elif tipo == "PAGO_5_DIAS_ATRASADO":
         items = data["dias_5_retraso"]
         res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+    elif tipo == "PAGO_30_DIAS_ATRASADO":
+        items = data["dias_30_retraso"]
+        res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
     elif tipo == "PREJUDICIAL":
         items = data["prejudicial"]
         res = _enviar_correos_items(items, asunto_prej, cuerpo_prej, config_envios, _tipo_prejudicial, db)
@@ -1148,7 +1169,12 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     detalles["dia_pago"] = r
 
     # Retrasadas (1, 3, 5 d�as atraso)
-    items_retrasadas = data["dias_1_retraso"] + data["dias_3_retraso"] + data["dias_5_retraso"]
+    items_retrasadas = (
+        data["dias_1_retraso"]
+        + data["dias_3_retraso"]
+        + data["dias_5_retraso"]
+        + data["dias_30_retraso"]
+    )
     asunto_r = "Cuenta con cuota atrasada - Rapicredit"
     cuerpo_r = (
         "Estimado/a {nombre} (c�dula {cedula}),\n\n"

@@ -125,6 +125,8 @@ def _sustituir_variables(texto: str, item: dict) -> str:
     fecha_v = item.get("fecha_vencimiento") or ""
     numero_cuota = item.get("numero_cuota")
     monto = item.get("monto_cuota")
+    if monto is None and item.get("monto") is not None:
+        monto = item.get("monto")
     dias_atraso = item.get("dias_atraso")
     replacements = {
         "{{nombre}}": str(nombre),
@@ -213,6 +215,12 @@ def get_plantilla_asunto_cuerpo(db: Session, plantilla_id: Optional[int], item: 
                     contexto_cobranza["LOGO_URL"] = f"{base}/logos/rapicredit-public.png"
                 asunto = render_plantilla_cobranza(plantilla.asunto, contexto_cobranza)
                 cuerpo = render_plantilla_cobranza(plantilla.cuerpo, contexto_cobranza)
+                # Variables simples ({{fecha_vencimiento}}, {{monto}}, etc.) no forman parte del contexto
+                # de cobranza; FECHA_CARTA es la fecha del documento (hoy). Sin este paso, mezclas
+                # COBRANZA + {{fecha_vencimiento}} dejaban la variable sin reemplazar o inducen a usar
+                # FECHA_CARTA creyendo que es el vencimiento.
+                asunto = _sustituir_variables(asunto, item)
+                cuerpo = _sustituir_variables(cuerpo, item)
                 return (asunto, cuerpo)
             asunto = _sustituir_variables(plantilla.asunto, item)
             cuerpo = _sustituir_variables(plantilla.cuerpo, item)
@@ -222,6 +230,8 @@ def get_plantilla_asunto_cuerpo(db: Session, plantilla_id: Optional[int], item: 
     fecha_v = item.get("fecha_vencimiento") or ""
     numero_cuota = item.get("numero_cuota")
     monto = item.get("monto_cuota")
+    if monto is None and item.get("monto") is not None:
+        monto = item.get("monto")
     asunto = asunto_default.format(nombre=nombre, cedula=cedula, fecha_vencimiento=fecha_v, numero_cuota=numero_cuota or "", monto=monto if monto is not None else "")
     cuerpo = cuerpo_default.format(nombre=nombre, cedula=cedula, fecha_vencimiento=fecha_v, numero_cuota=numero_cuota or "", monto=monto if monto is not None else "")
     return (asunto, cuerpo)
@@ -300,6 +310,22 @@ def build_contexto_cobranza_para_item(
         cedula=cedula,
         numero_correlativo=next_correlativo,
     )
+    # Cuota concreta del envío (pestaña 1 día después, etc.): no confundir con FECHA_CARTA (hoy).
+    fv_item = item.get("fecha_vencimiento")
+    if fv_item:
+        ctx["fecha_vencimiento"] = fv_item
+        ctx["FECHA_VENCIMIENTO"] = fv_item
+    nc_item = item.get("numero_cuota")
+    if nc_item is not None:
+        ctx["numero_cuota"] = nc_item
+    m_item = item.get("monto_cuota")
+    if m_item is None and item.get("monto") is not None:
+        m_item = item.get("monto")
+    if m_item is not None:
+        ctx["monto_cuota"] = m_item
+        ctx["monto"] = m_item
+    if item.get("dias_atraso") is not None:
+        ctx["dias_atraso"] = item.get("dias_atraso")
     return ctx, next_correlativo
 
 @router.get("/plantillas")
@@ -336,6 +362,7 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_5_DIAS_ANTES", "PAGO_3_DIAS_ANTES", "PAGO_1_DIA_ANTES",
     "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO",
+    "PAGO_30_DIAS_ATRASADO",
     "PREJUDICIAL", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
 ])
@@ -701,7 +728,10 @@ def get_adjuntos_fijos_cobranza(db: Session = Depends(get_db)):
 
 @router.post("/adjuntos-fijos-cobranza/upload")
 def upload_adjunto_fijo_cobranza(
-    tipo_caso: str = Query(..., description="Caso: dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, masivos"),
+    tipo_caso: str = Query(
+        ...,
+        description="Caso: dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, prejudicial, masivos",
+    ),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -715,7 +745,7 @@ def upload_adjunto_fijo_cobranza(
     if tipo_caso not in TIPOS_CASO_VALIDOS:
         raise HTTPException(
             status_code=400,
-            detail="tipo_caso debe ser uno de: dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, masivos",
+            detail="tipo_caso debe ser uno de: dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, prejudicial, masivos",
         )
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se permiten documentos PDF")
@@ -1230,6 +1260,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "dias_1_retraso": {"enviados": 0, "rebotados": 0},
         "dias_3_retraso": {"enviados": 0, "rebotados": 0},
         "dias_5_retraso": {"enviados": 0, "rebotados": 0},
+        "dias_30_retraso": {"enviados": 0, "rebotados": 0},
         "prejudicial": {"enviados": 0, "rebotados": 0},
         "masivos": {"enviados": 0, "rebotados": 0},
         "liquidados": {"enviados": 0, "rebotados": 0},
@@ -1243,6 +1274,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
             "dias_1_retraso",
             "dias_3_retraso",
             "dias_5_retraso",
+            "dias_30_retraso",
             "prejudicial",
             "masivos",
             "liquidados",
@@ -1273,6 +1305,7 @@ TIPOS_TAB_NOTIFICACIONES = (
     "dias_1_retraso",
     "dias_3_retraso",
     "dias_5_retraso",
+    "dias_30_retraso",
     "prejudicial",
     "masivos",
     "liquidados",
@@ -1317,7 +1350,7 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 def get_rebotados_por_tab(
     tipo: str = Query(
         ...,
-        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, masivos, liquidados",
+        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, prejudicial, masivos, liquidados",
     ),
     db: Session = Depends(get_db),
 ):
@@ -1775,7 +1808,7 @@ def get_notificaciones_tabs_data(db: Session):
     Datos para envio de notificaciones (retrasadas, prejudicial).
     Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1/3/5 dias de atraso)
     y prejudicial. Claves dias_5, dias_3, dias_1, hoy van vacias (compat API).
-    Fuente: cuotas pendientes con fecha_vencimiento en {hoy-1, hoy-3, hoy-5} (consulta acotada).
+    Fuente: cuotas pendientes con fecha_vencimiento en {hoy-1, hoy-3, hoy-5, hoy-30} (consulta acotada).
     Fecha de corte: America/Caracas.
 
     Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
@@ -1784,7 +1817,12 @@ def get_notificaciones_tabs_data(db: Session):
     from sqlalchemy import func
 
     hoy = hoy_negocio()
-    fechas_retraso = (hoy - timedelta(days=1), hoy - timedelta(days=3), hoy - timedelta(days=5))
+    fechas_retraso = (
+        hoy - timedelta(days=1),
+        hoy - timedelta(days=3),
+        hoy - timedelta(days=5),
+        hoy - timedelta(days=30),
+    )
     rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
 
     dias_5: List[dict] = []
@@ -1794,6 +1832,7 @@ def get_notificaciones_tabs_data(db: Session):
     dias_1_retraso: List[dict] = []
     dias_3_retraso: List[dict] = []
     dias_5_retraso: List[dict] = []
+    dias_30_retraso: List[dict] = []
 
     for (cuota, cliente) in rows:
         fv = cuota.fecha_vencimiento
@@ -1809,6 +1848,8 @@ def get_notificaciones_tabs_data(db: Session):
                 dias_3_retraso.append(_item_tab(cliente, cuota, dias_atraso=3))
             elif dias_atraso == 5:
                 dias_5_retraso.append(_item_tab(cliente, cuota, dias_atraso=5))
+            elif dias_atraso == 30:
+                dias_30_retraso.append(_item_tab(cliente, cuota, dias_atraso=30))
 
     # Prejudicial: clientes con 3 o mÃƒÂ¡s cuotas atrasadas (fecha_vencimiento < hoy, no pagado)
     # Solo cuotas con cliente_id no nulo para poder resolver Cliente
@@ -1862,6 +1903,7 @@ def get_notificaciones_tabs_data(db: Session):
         "dias_1_retraso": dias_1_retraso,
         "dias_3_retraso": dias_3_retraso,
         "dias_5_retraso": dias_5_retraso,
+        "dias_30_retraso": dias_30_retraso,
         "prejudicial": prejudicial,
     }
 

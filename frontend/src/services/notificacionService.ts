@@ -146,6 +146,8 @@ export interface EstadisticasPorTab {
 
   dias_5_retraso: EstadisticasTabItem
 
+  dias_30_retraso: EstadisticasTabItem
+
   prejudicial: EstadisticasTabItem
 
   masivos: EstadisticasTabItem
