@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -80,6 +80,8 @@ interface MenuItem {
 
 export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const location = useLocation()
+
+  const navigate = useNavigate()
 
   const { user, logout, refreshUser } = useSimpleAuth()
 
@@ -916,8 +918,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     <div className="relative">
                       <NavLink
                         to={item.href!}
-                        onClick={() => {
-                          // Cerrar sidebar en móvil al hacer click
+                        onClick={e => {
+                          if (item.href === '/prestamos') {
+                            e.preventDefault()
+                            navigate('/prestamos', {
+                              state: { focusPrestamosSearch: true },
+                            })
+                          }
 
                           if (window.innerWidth < 1024) {
                             onClose()
