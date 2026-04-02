@@ -255,7 +255,7 @@ export function EditarRevisionManual() {
       'prestamoScrollPosition',
       scrollPosition.toString()
     )
-    navigate(RUTA_LISTA_PRESTAMOS)
+    navigate(RUTA_LISTA_PRESTAMOS, { state: { focusPrestamosSearch: true } })
     setTimeout(() => {
       const savedPosition = sessionStorage.getItem('prestamoScrollPosition')
       if (savedPosition) {
@@ -1485,7 +1485,14 @@ export function EditarRevisionManual() {
             No se pudieron cargar los datos del préstamo
           </p>
 
-          <Button type="button" onClick={() => navigate(RUTA_LISTA_PRESTAMOS)}>
+          <Button
+            type="button"
+            onClick={() =>
+              navigate(RUTA_LISTA_PRESTAMOS, {
+                state: { focusPrestamosSearch: true },
+              })
+            }
+          >
             Volver a lista de préstamos
           </Button>
         </div>

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react'
 
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 
 import {
   Plus,
@@ -107,10 +107,18 @@ const REVISION_MANUAL_FILTRO_URL = new Set([
   'rechazado',
 ])
 
+type PrestamosLocationState = {
+  focusPrestamosSearch?: boolean
+}
+
 export function PrestamosList() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const navigate = useNavigate()
+
+  const location = useLocation()
+
+  const buscarGeneralRef = useRef<HTMLInputElement>(null)
 
   const [page, setPage] = useState(1)
 
@@ -186,6 +194,16 @@ export function PrestamosList() {
 
     revision_manual_estado: revisionManualValidInit,
   })
+
+  useLayoutEffect(() => {
+    const st = location.state as PrestamosLocationState | null
+    if (!st?.focusPrestamosSearch) return
+    buscarGeneralRef.current?.focus()
+    navigate(
+      { pathname: location.pathname, search: location.search },
+      { replace: true, state: {} }
+    )
+  }, [location.state, location.pathname, location.search, navigate])
 
   // Efecto para actualizar filtros cuando cambien los parámetros de URL
 
@@ -1171,6 +1189,7 @@ export function PrestamosList() {
                   <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 transform text-gray-400" />
 
                   <Input
+                    ref={buscarGeneralRef}
                     placeholder="Buscar por cédula, nombre o ID de préstamo..."
                     value={filters.search || ''}
                     onChange={e =>
