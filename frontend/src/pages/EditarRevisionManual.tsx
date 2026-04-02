@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -168,12 +168,33 @@ interface CuotaData {
   observaciones: string
 }
 
+const ALLOWED_REVISION_RETURN_PATHS = ['/revision-manual', '/prestamos'] as const
+
+function resolveRevisionEditorReturnPath(
+  state: unknown
+): (typeof ALLOWED_REVISION_RETURN_PATHS)[number] {
+  const raw = (state as { returnTo?: string } | null)?.returnTo
+  if (
+    typeof raw === 'string' &&
+    ALLOWED_REVISION_RETURN_PATHS.includes(
+      raw as (typeof ALLOWED_REVISION_RETURN_PATHS)[number]
+    )
+  ) {
+    return raw as (typeof ALLOWED_REVISION_RETURN_PATHS)[number]
+  }
+  return '/revision-manual'
+}
+
 export function EditarRevisionManual() {
   const { prestamoId } = useParams()
 
   const navigate = useNavigate()
 
+  const location = useLocation()
+
   const queryClient = useQueryClient()
+
+  const returnTo = resolveRevisionEditorReturnPath(location.state)
 
   const [clienteData, setClienteData] = useState<Partial<ClienteData>>({})
 
@@ -1150,28 +1171,27 @@ export function EditarRevisionManual() {
           exact: false,
         })
 
-        // Guardar posición de scroll antes de navegar
-        const scrollPosition = window.scrollY
-        sessionStorage.setItem(
-          'prestamoScrollPosition',
-          scrollPosition.toString()
-        )
-
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
-
         setTimeout(() => {
-          navigate('/prestamos')
-
-          // Restaurar posición después de que se renderice
-          setTimeout(() => {
-            const savedPosition = sessionStorage.getItem(
-              'prestamoScrollPosition'
+          if (returnTo === '/revision-manual') {
+            navigate('/revision-manual', { state: { fromFinalize: true } })
+          } else {
+            const scrollPosition = window.scrollY
+            sessionStorage.setItem(
+              'prestamoScrollPosition',
+              scrollPosition.toString()
             )
-            if (savedPosition) {
-              window.scrollTo(0, parseInt(savedPosition, 10))
-              sessionStorage.removeItem('prestamoScrollPosition')
-            }
-          }, 100)
+            navigate('/prestamos')
+            setTimeout(() => {
+              const savedPosition = sessionStorage.getItem(
+                'prestamoScrollPosition'
+              )
+              if (savedPosition) {
+                window.scrollTo(0, parseInt(savedPosition, 10))
+                sessionStorage.removeItem('prestamoScrollPosition')
+              }
+            }, 100)
+          }
         }, 1500)
       } catch (err: any) {
         throw new Error(
@@ -1223,9 +1243,7 @@ export function EditarRevisionManual() {
       setMotivoRechazo('')
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['prestamos'] })
-      const scrollY = window.scrollY
-      sessionStorage.setItem('revision_manual_scroll', String(scrollY))
-      navigate('/prestamos')
+      navigate(returnTo)
     } catch (err: any) {
       const msg = err?.response?.data?.detail || 'Error al rechazar'
       toast.error(msg)
@@ -1262,21 +1280,20 @@ export function EditarRevisionManual() {
 
     queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
 
-    // Guardar posición de scroll antes de navegar
-    const scrollPosition = window.scrollY
-    sessionStorage.setItem('prestamoScrollPosition', scrollPosition.toString())
-
-    // Navegar a prestamos
-    navigate('/prestamos')
-
-    // Restaurar posición después de que se renderice
-    setTimeout(() => {
-      const savedPosition = sessionStorage.getItem('prestamoScrollPosition')
-      if (savedPosition) {
-        window.scrollTo(0, parseInt(savedPosition, 10))
-        sessionStorage.removeItem('prestamoScrollPosition')
-      }
-    }, 100)
+    if (returnTo === '/prestamos') {
+      const scrollPosition = window.scrollY
+      sessionStorage.setItem('prestamoScrollPosition', scrollPosition.toString())
+      navigate('/prestamos')
+      setTimeout(() => {
+        const savedPosition = sessionStorage.getItem('prestamoScrollPosition')
+        if (savedPosition) {
+          window.scrollTo(0, parseInt(savedPosition, 10))
+          sessionStorage.removeItem('prestamoScrollPosition')
+        }
+      }, 100)
+    } else {
+      navigate('/revision-manual')
+    }
   }
 
   if (isLoading) {
@@ -1376,6 +1393,7 @@ export function EditarRevisionManual() {
         <div className="sticky top-0 z-10 -mx-6 mb-4 flex items-center justify-between bg-white p-4 shadow-sm">
           <div className="flex items-center gap-3">
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={handleCerrar}
@@ -1400,6 +1418,7 @@ export function EditarRevisionManual() {
 
           <div className="flex gap-2">
             <Button
+              type="button"
               variant="outline"
               onClick={handleGuardarParciales}
               disabled={soloLectura || guardandoParcial || guardandoFinal}
@@ -1411,6 +1430,7 @@ export function EditarRevisionManual() {
             </Button>
 
             <Button
+              type="button"
               variant="outline"
               onClick={() => setShowRechazarModal(true)}
               disabled={guardandoParcial || guardandoFinal || guardandoRechazo}
@@ -1422,6 +1442,7 @@ export function EditarRevisionManual() {
             </Button>
 
             <Button
+              type="button"
               className="gap-2 bg-green-600 text-white hover:bg-green-700"
               onClick={handleGuardarYCerrar}
               disabled={soloLectura || guardandoParcial || guardandoFinal}
@@ -2531,6 +2552,7 @@ export function EditarRevisionManual() {
 
         <div className="sticky bottom-6 -mx-6 flex justify-end gap-3 rounded-t-lg bg-white p-4 shadow-lg">
           <Button
+            type="button"
             variant="outline"
             onClick={handleGuardarParciales}
             disabled={soloLectura || guardandoParcial || guardandoFinal}
@@ -2542,6 +2564,7 @@ export function EditarRevisionManual() {
           </Button>
 
           <Button
+            type="button"
             variant="outline"
             onClick={() => setShowRechazarModal(true)}
             disabled={guardandoParcial || guardandoFinal || guardandoRechazo}
@@ -2553,6 +2576,7 @@ export function EditarRevisionManual() {
           </Button>
 
           <Button
+            type="button"
             className="gap-2 bg-green-600 text-white hover:bg-green-700"
             onClick={handleGuardarYCerrar}
             disabled={soloLectura || guardandoParcial || guardandoFinal}
