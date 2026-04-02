@@ -121,9 +121,9 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
                   gmailStatus.last_correos_marcados_revision > 0 ? (
                     <>
                       <br />
-                      <span className="text-amber-700">
-                        {gmailStatus.last_correos_marcados_revision} con
-                        estrella (revisar en Gmail).
+                      <span className="text-emerald-800">
+                        {gmailStatus.last_correos_marcados_revision} correo(s)
+                        con comprobante OK (IMAGEN 1 / IMAGEN 2 + estrella).
                       </span>
                     </>
                   ) : null}

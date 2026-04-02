@@ -29,29 +29,68 @@ PAGOS_NA = "NA"
 
 PagosGmailFormato = Literal["A", "B", "ninguno"]
 
-GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = (
-    "Analiza UNICAMENTE la imagen o PDF adjunto (comprobante escaneado o foto). "
-    "Ignora cualquier contexto externo: no uses asunto ni cuerpo de correo.\n\n"
-    "PASO 1 — Clasifica el documento en exactamente UNO de estos formatos:\n"
-    "- Formato A (rapicredit_terminal): comprobante de recaudacion/terminal con la empresa "
-    '"RAPI-CREDIT" o "RAPI-CREDIT, C.A." visible; suele incluir etiquetas como '
-    '"Cedula Dep." o "C.I. del Depositante", "Monto:" (a veces con asteriscos antes del importe), '
-    '"USD", "RECAUDACION", "Serial:" o lineas de referencia largas.\n'
-    "- Formato B (bnc): comprobante del Banco Nacional de Credito (BNC): texto o marca "
-    '"BNC", "Banco Nacional de Credito", agencia, terminal/cajero, cuenta con barras, '
-    '"Deposito Us$" o deposito en dolares, beneficiario "RAPI-CREDIT".\n'
-    "- Si NO encaja claramente en A ni en B (otro banco, captura de app, documento ilegible, "
-    "foto irrelevante): formato = ninguno.\n\n"
-    "PASO 2 — Si formato es A o B, extrae SOLO de la imagen estos campos (no inventes; usa NA si no se lee):\n"
-    "- fecha_pago: fecha de la operacion\n"
-    "- cedula: cedula o documento del depositante/pagador (normaliza: quita guiones; sin ceros a la izquierda "
-    "del numero despues de V/E/J; ej. DP:V-018031623 -> V18031623)\n"
-    "- monto: importe con moneda si aparece (ej. 236.00 USD)\n"
-    "- numero_referencia: serial, ref, operacion o numero largo identificador de la transaccion\n\n"
-    "Si formato es ninguno: los cuatro campos deben ser exactamente \"NA\".\n\n"
-    'Responde UNICAMENTE con JSON valido (sin markdown): '
-    '{"formato":"A"|"B"|"ninguno","fecha_pago":"...","cedula":"...","monto":"...","numero_referencia":"..."}'
-)
+GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = """
+Eres un clasificador estricto. Una sola imagen o PDF. Sin asunto/cuerpo de correo.
+Si hay duda -> formato "ninguno" y los cuatro campos "NA". No inventes datos.
+REGLA SISTEMA: Devuelve "A" o "B" solo si puedes extraer del comprobante los CUATRO campos con valor real
+(fecha_pago, cedula, monto, numero_referencia). Si la plantilla parece A o B pero algun campo no es legible
+con certeza, devuelve formato "ninguno" y los cuatro "NA".
+
+=== IDENTIFICACION RAPIDA (haz este barrido primero; rechaza pronto si falla) ===
+
+FORMATO A — palabras clave y grupos (deben cumplirse TODOS los grupos 1-5):
+  Grupo 1 (empresa): RAPI-CREDIT | RAPI CREDIT | RAPI-CREDIT, C.A. | RAPICREDIT (OCR sucio)
+  Grupo 2 (concepto): RECAUDACION | RECAUDACIÓN (tolerar sin tilde: RECAUDACION)
+  Grupo 3 (moneda): USD en linea de monto o junto al importe
+  Grupo 4 (depositante): CEDULA DEP | Cédula Dep | Cedula Dep. | CI DEP | NRO. DE CEDULA DEL DEPOSITANTE
+  Grupo 5 (operacion): MONTO (linea con asteriscos * antes del numero es tipico) y/o SERIAL (numero largo)
+Palabras secundarias A (refuerzo, no bastan solas): FONDOS, CANT BILLETES, COMISION, TASA, CTA. COM,
+  DCME, SPDP, COPIA (vertical), lineas alfanumericas tipo XXXX-YYYYMMDD-hhmmss-...
+
+FORMATO B — comprobante BNC de deposito a favor de RAPI-CREDIT (segunda plantilla valida; horizontal u horizontal-corta):
+  Plantilla tipica (reconoce aunque el orden de lineas varie un poco):
+    - Esquina superior izquierda o cabecera: logo/texto BNC.
+    - Puede haber referencia arriba a la derecha (numero distinto al serial).
+    - Lineas tipo: Agencia: ... | Terminal: ... | Cajero: ... (nombres de cajero frecuentes).
+    - Fecha y hora de operacion en una linea (ej. DD/MM/YYYY HH:MM:SS).
+    - Etiqueta Serial: seguida de digitos (serial de operacion).
+    - Cuenta del beneficiario con barras: patron ####/####/##/########## (ej. 0191/0127/48/2300080639).
+    - Titular de la cuenta visible como RAPI-CREDIT, C.A. | RAPI-CREDIT C.A. | RAPI-CREDIT (misma familia que formato A pero aqui es CUENTA DESTINO en recibo BNC, no ticket de recaudacion).
+    - Depositante: linea DP:V-######## o DP:E-... seguida del nombre (extrae cedula de DP:).
+    - Monto: muchas veces enmascarado con asteriscos y decimales (ej. ************122.00); moneda puede
+      aparecer como Us$ | US$ | USD | DOLARES cerca del sello, del monto o al pie (no exijas la frase literal "Deposito Us$" si ya hay BNC + monto en divisas + RAPI-CREDIT como titular).
+    - Fondo con patron gris repetido (floral/hojas) y texto impreso tipo matriz de puntos; sello azul
+      "Banco Nacional de Credito" opcional — refuerza B pero no es obligatorio si el resto coincide.
+  Criterio B (minimo): BNC + cuenta con slashes tipo 0191/... + RAPI-CREDIT como beneficiario/titular
+    + indicio claro de dolares (Us$, US$, USD, o monto con **... y decimales tipo deposito) + Agencia o Terminal/Cajero o Serial.
+  NO es B si es otro banco, solo captura de app, o BNC sin RAPI-CREDIT en la zona de cuenta/beneficiario.
+
+  Diferencia A vs B: A es ticket vertical RAPI-CREDIT con RECAUDACION explicita; B es recibo del BANCO BNC
+    donde RAPI-CREDIT aparece como titular de CUENTA y hay BNC/Agencia/Terminal — si ves BNC + cuenta 0191/... + RAPI-CREDIT, clasifica B aunque tambien diga RAPI-CREDIT (no fuerces A).
+
+DESCARTE RAPIDO (formato ninguno sin analizar mas):
+  No aparece RAPI-CREDIT ni BNC -> ninguno.
+  Ticket RAPI-CREDIT con RECAUDACION + USD + cedula dep + monto/serial pero SIN recibo BNC (sin BNC/agencia/cuenta 0191) -> A. Si falta grupo obligatorio de A -> no es A.
+  Recibo BNC con RAPI-CREDIT como titular y dolares -> B (no ninguno por falta de "Deposito Us$" literal).
+  Solo captura de app, Pago Movil, Binance, Zelle, otro banco distinto, ilegible -> ninguno.
+
+=== DETALLE FORMATO A ===
+Ticket vertical, fuente monoespaciada. Los 5 grupos de palabras clave arriba deben verse; el margen
+"Copia"/SPDP ayuda pero no sustituye empresa+recaudacion+USD+cedula+monto/serial.
+
+=== DETALLE FORMATO B ===
+Prioriza la plantilla horizontal BNC anterior. numero_referencia: si hay "Serial:" con digitos, usa ese
+  valor; si no hay Serial legible pero si referencia operativa clara arriba o al lado, usa esa. monto: lee
+  la cifra tras los asteriscos y anade USD (ej. 122.00 USD). fecha_pago: fecha/hora impresa de la operacion.
+
+=== EXTRACCION (solo si formato A o B) ===
+fecha_pago, cedula (normaliza V/E/J + digitos sin ceros a la izquierda tras la letra; en B suele venir en DP:),
+monto con moneda (en B normalizar Us$/US$ a USD en la salida si aplica),
+numero_referencia (Serial preferido en BNC; sin etiqueta en el JSON).
+
+Salida: solo JSON, sin markdown:
+{"formato":"A"|"B"|"ninguno","fecha_pago":"...","cedula":"...","monto":"...","numero_referencia":"..."}
+""".strip()
 
 
 GEMINI_PROMPT = (

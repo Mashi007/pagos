@@ -1,7 +1,8 @@
 """
 Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
 Solo correos con adjuntos (has:attachment); solo imagenes/PDF adjuntos (no cuerpo ni inline).
-Comprobantes RAPI-CREDIT terminal (formato A) o BNC (formato B); otros: destacado + no leido.
+Comprobantes plantilla 1 (A) o 2 (B) con cuatro columnas -> BD/Drive; por cada OK: etiqueta Gmail IMAGEN 1 o IMAGEN 2 + estrella.
+Si ningun adjunto OK: sin estrella + no leido (solo con filtro unread).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel: descargar Excel desde BD
 - GET /pagos/gmail/status: ultima ejecucion (sin cron)
@@ -104,7 +105,7 @@ def run_now(
     """
     Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
     Solo correos con adjuntos; solo imagenes/PDF adjuntos (formatos RAPI-CREDIT terminal o BNC).
-    scan_filter: "unread" | "read" | "all". Con unread, los no reconocidos quedan destacados y sin leer.
+    scan_filter: "unread" | "read" | "all". Etiqueta+estrella por adjunto OK; leido si hubo al menos un OK.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """

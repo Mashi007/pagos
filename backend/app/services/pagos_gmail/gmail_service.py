@@ -1,14 +1,14 @@
 """
 Gmail: listar correos (no leidos / leidos / todos) que tienen adjuntos (has:attachment),
 descargar solo adjuntos imagen/PDF con filename (sin cuerpo, inline ni HTML),
-marcar leido o destacado+no leido segun el pipeline de pagos.
+marcar segun pipeline: por cada comprobante OK, etiqueta IMAGEN 1 o IMAGEN 2 + estrella; cierre leido si hubo al menos un OK.
 """
 import base64
 import logging
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
@@ -18,6 +18,10 @@ from app.services.pagos_gmail.helpers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Etiquetas de usuario (plantilla prompt A = imagen 1, B = imagen 2). Se crean si no existen.
+PAGOS_GMAIL_LABEL_IMAGEN_1 = "IMAGEN 1"
+PAGOS_GMAIL_LABEL_IMAGEN_2 = "IMAGEN 2"
 
 
 def build_gmail_service(credentials: Any):
@@ -628,6 +632,59 @@ def extract_forwarded_sender(full_payload: dict) -> Optional[str]:
     return None
 
 
+def ensure_user_label_id(service: Any, label_name: str) -> Optional[str]:
+    """
+    Obtiene el id de una etiqueta de usuario por nombre exacto; la crea si no existe.
+    """
+    try:
+        resp = service.users().labels().list(userId="me").execute()
+        for lb in resp.get("labels", []):
+            if lb.get("name") == label_name:
+                return lb.get("id")
+        created = service.users().labels().create(
+            userId="me",
+            body={
+                "name": label_name,
+                "labelListVisibility": "labelShow",
+                "messageListVisibility": "show",
+            },
+        ).execute()
+        return created.get("id")
+    except Exception as e:
+        logger.warning("ensure_user_label_id %s: %s", label_name, e)
+        return None
+
+
+def get_or_create_pagos_gmail_plantilla_label_ids(
+    service: Any, cache: Optional[Dict[str, Optional[str]]] = None
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Resuelve ids para PAGOS_GMAIL_LABEL_IMAGEN_1 / _2 con cache opcional por nombre.
+    """
+    c = cache if cache is not None else {}
+    k1, k2 = PAGOS_GMAIL_LABEL_IMAGEN_1, PAGOS_GMAIL_LABEL_IMAGEN_2
+    if k1 not in c:
+        c[k1] = ensure_user_label_id(service, k1)
+    if k2 not in c:
+        c[k2] = ensure_user_label_id(service, k2)
+    return c[k1], c[k2]
+
+
+def add_message_star_and_user_labels(
+    service: Any, message_id: str, user_label_ids: List[str]
+) -> None:
+    """Anade STARRED y las etiquetas de usuario indicadas (ids Gmail)."""
+    add_ids = ["STARRED"] + [x for x in user_label_ids if x]
+    try:
+        service.users().messages().modify(
+            userId="me",
+            id=message_id,
+            body={"addLabelIds": add_ids},
+        ).execute()
+    except Exception as e:
+        logger.warning("add_message_star_and_user_labels %s: %s", message_id, e)
+
+
 def mark_as_read(service: Any, message_id: str) -> None:
     """Marca el mensaje como leído en Gmail (quita UNREAD). No se volverá a leer ni a procesar; evita reprocesar desde cero."""
     try:
@@ -649,7 +706,7 @@ def mark_read_and_clear_star(service: Any, message_id: str) -> None:
 
 
 def mark_starred_and_unread(service: Any, message_id: str) -> None:
-    """Destaca el mensaje y lo deja como no leido (formato no reconocido o sin datos procesables)."""
+    """Destaca el mensaje y lo deja como no leido (legacy; pipeline actual usa mark_starred_and_read / mark_unread_clear_star)."""
     try:
         service.users().messages().modify(
             userId="me",
@@ -658,3 +715,27 @@ def mark_starred_and_unread(service: Any, message_id: str) -> None:
         ).execute()
     except Exception as e:
         logger.warning("Error mark_starred_and_unread %s: %s", message_id, e)
+
+
+def mark_starred_and_read(service: Any, message_id: str) -> None:
+    """Estrella el mensaje y quita no leido: digitalizacion completa (formato A/B y las cuatro columnas)."""
+    try:
+        service.users().messages().modify(
+            userId="me",
+            id=message_id,
+            body={"addLabelIds": ["STARRED"], "removeLabelIds": ["UNREAD"]},
+        ).execute()
+    except Exception as e:
+        logger.warning("Error mark_starred_and_read %s: %s", message_id, e)
+
+
+def mark_unread_clear_star(service: Any, message_id: str) -> None:
+    """Quita estrella y deja no leido: sin digitalizar o datos incompletos (reintento manual)."""
+    try:
+        service.users().messages().modify(
+            userId="me",
+            id=message_id,
+            body={"addLabelIds": ["UNREAD"], "removeLabelIds": ["STARRED"]},
+        ).execute()
+    except Exception as e:
+        logger.warning("Error mark_unread_clear_star %s: %s", message_id, e)

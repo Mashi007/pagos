@@ -1,13 +1,14 @@
 """
-Orquestacion: Gmail -> Drive (adjuntos imagen/PDF + .eml) -> Gemini (formato A/B + extraccion) -> BD.
+Orquestacion: Gmail -> Gemini (solo adjuntos imagen/PDF) -> si formato A o B y cuatro columnas completas
+  -> Drive + BD; si no cumple plantillas 1/2 o faltan columnas -> no fila ni archivo en Drive para ese adjunto.
 
-Criterios: has:attachment; solo adjuntos imagen/PDF; clasificacion A (RAPI-CREDIT terminal) o B (BNC);
-  si todo OK -> leido sin estrella; si no -> destacado + no leido (filtro unread). Una pasada por ejecucion.
+Por cada adjunto digitalizado OK: etiqueta Gmail IMAGEN 1 (formato A) o IMAGEN 2 (formato B) + estrella.
+Al cerrar el correo: leido si hubo al menos un OK; si no y filtro unread, sin estrella + no leido.
 Excel: GET /pagos/gmail/download-excel.
 """
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Dict, Optional
 
 from sqlalchemy.orm import Session
 
@@ -19,14 +20,18 @@ from app.services.pagos_gmail.drive_service import (
     upload_file,
 )
 from app.services.pagos_gmail.gmail_service import (
+    add_message_star_and_user_labels,
     build_gmail_service,
     get_attachment_image_pdf_files_for_message,
     get_message_date,
     get_message_full_payload,
     get_message_raw_bytes,
+    get_or_create_pagos_gmail_plantilla_label_ids,
     list_messages_by_filter,
-    mark_read_and_clear_star,
-    mark_starred_and_unread,
+    mark_as_read,
+    mark_unread_clear_star,
+    PAGOS_GMAIL_LABEL_IMAGEN_1,
+    PAGOS_GMAIL_LABEL_IMAGEN_2,
 )
 from app.services.pagos_gmail.gemini_service import (
     classify_and_extract_pagos_gmail_attachment,
@@ -50,12 +55,12 @@ def run_pipeline(
     scan_filter: str = "unread",
 ) -> tuple[Optional[int], str]:
     """
-    Ejecuta el pipeline Gmail -> Drive -> Gemini -> BD.
-    scan_filter: "unread" | "read" | "all" — que correos listar (todos con has:attachment).
-    Una sola pasada por ejecucion. Solo con "unread" se ajustan STARRED/UNREAD al final.
+    Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD solo si plantilla 1/2 y columnas completas).
+    Por adjunto OK: etiqueta IMAGEN 1 (A) o IMAGEN 2 (B) + estrella; cierre: leido si hubo algun OK.
+    scan_filter: "unread" | "read" | "all".
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
-    logger.warning("[PAGOS_GMAIL] â–¶ INICIO pipeline (existing_sync_id=%s, scan_filter=%s)", existing_sync_id, scan_filter)
+    logger.warning("[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s)", existing_sync_id, scan_filter)
     creds = get_pagos_gmail_credentials()
     if not creds:
         if existing_sync_id:
@@ -69,13 +74,13 @@ def run_pipeline(
                     db.commit()
             except Exception:
                 pass
-        logger.warning("[PAGOS_GMAIL] âœ— Sin credenciales â€” pipeline abortado")
+        logger.warning("[PAGOS_GMAIL] Sin credenciales; pipeline abortado")
         return existing_sync_id, "no_credentials"
 
-    logger.warning("[PAGOS_GMAIL] âœ“ Credenciales OK â€” construyendo servicios Google")
+    logger.warning("[PAGOS_GMAIL] Credenciales OK; construyendo servicios Google")
     drive_svc, MediaIoBaseUpload = build_drive_service(creds)
     gmail_svc = build_gmail_service(creds)
-    logger.warning("[PAGOS_GMAIL] âœ“ Servicios Drive/Gmail construidos (Sheets eliminado)")
+    logger.warning("[PAGOS_GMAIL] Servicios Drive/Gmail construidos (Sheets eliminado)")
 
     if existing_sync_id:
         from sqlalchemy import select as sa_select
@@ -95,11 +100,13 @@ def run_pipeline(
     emails_ok = 0
     files_ok = 0
     drive_errors = 0
+    # Correos que quedaron con estrella tras digitalizacion completa (cuatro columnas).
     correos_marcados_revision = 0
     processed_msg_ids: set[str] = set()
+    plantilla_label_cache: Dict[str, Optional[str]] = {}
 
     try:
-        logger.warning("[PAGOS_GMAIL] â†’ Listando correos (filtro=%s)...", scan_filter)
+        logger.warning("[PAGOS_GMAIL] Listando correos (filtro=%s)...", scan_filter)
         raw_messages = list_messages_by_filter(gmail_svc, scan_filter)
         seen_ids: set[str] = set()
         messages: list[dict] = []
@@ -198,7 +205,6 @@ def run_pipeline(
                 attachments = get_attachment_image_pdf_files_for_message(
                     gmail_svc, msg_id, full_payload or {}
                 )
-                raw_attachments = attachments
 
                 logger.warning(
                     "[PAGOS_GMAIL]   adjuntos imagen/PDF: %d — %s",
@@ -208,12 +214,17 @@ def run_pipeline(
                     else "ninguno",
                 )
 
-                had_recognized_format = False
-                any_unrecognized = False
-                if not raw_attachments:
-                    any_unrecognized = True
-                elif not attachments:
-                    any_unrecognized = True
+                had_complete_digitalization = False
+                any_incomplete_or_skipped = False
+                if not attachments:
+                    any_incomplete_or_skipped = True
+
+                def _campos_completos(fecha: str, cedula: str, monto: str, ref: str) -> bool:
+                    def ok(val: str) -> bool:
+                        s = (val or "").strip()
+                        return bool(s) and s.upper() != PAGOS_NA
+
+                    return ok(fecha) and ok(cedula) and ok(monto) and ok(ref)
 
                 def _guardar_en_bd(
                     correo: str,
@@ -268,6 +279,31 @@ def run_pipeline(
 
                 for filename, content, mime_type in attachments:
                     try:
+                        fmt, data = classify_and_extract_pagos_gmail_attachment(
+                            content, filename
+                        )
+
+                        if fmt == "ninguno":
+                            any_incomplete_or_skipped = True
+                            logger.warning(
+                                "[PAGOS_GMAIL]   No coincide plantilla 1/2 — no Drive/BD: %s",
+                                filename,
+                            )
+                            continue
+
+                        f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
+                        c = formatear_cedula(_v(data.get("cedula")))
+                        m = _v(data.get("monto"))
+                        r = normalizar_referencia(_v(data.get("numero_referencia")))
+                        if not _campos_completos(f, c, m, r):
+                            any_incomplete_or_skipped = True
+                            logger.warning(
+                                "[PAGOS_GMAIL]   Formato %s pero columnas incompletas — no Drive/BD: %s",
+                                fmt,
+                                filename,
+                            )
+                            continue
+
                         up = upload_file(
                             drive_svc,
                             MediaIoBaseUpload,
@@ -285,48 +321,63 @@ def run_pipeline(
                                 filename,
                                 drive_link[:60],
                             )
-
-                        fmt, data = classify_and_extract_pagos_gmail_attachment(
-                            content, filename
-                        )
-
-                        if fmt == "ninguno":
-                            any_unrecognized = True
+                        else:
                             logger.warning(
-                                "[PAGOS_GMAIL]   Formato no A/B — no fila BD: %s",
+                                "[PAGOS_GMAIL]   Drive fallo subida — no fila BD: %s",
                                 filename,
                             )
+                            any_incomplete_or_skipped = True
                             continue
 
-                        had_recognized_format = True
-                        f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
-                        c = formatear_cedula(_v(data.get("cedula")))
-                        m = _v(data.get("monto"))
-                        r = normalizar_referencia(_v(data.get("numero_referencia")))
-                        _guardar_en_bd(
+                        ok_db = _guardar_en_bd(
                             sender,
-                            f or PAGOS_NA,
-                            c or PAGOS_NA,
-                            m or PAGOS_NA,
-                            r or PAGOS_NA,
+                            f,
+                            c,
+                            m,
+                            r,
                             drive_file_id=file_id,
                             drive_lnk=drive_link or "",
                             email_lnk=drive_email_link,
                         )
+                        if ok_db:
+                            had_complete_digitalization = True
+                            id_a, id_b = get_or_create_pagos_gmail_plantilla_label_ids(
+                                gmail_svc, plantilla_label_cache
+                            )
+                            label_id = id_a if fmt == "A" else id_b
+                            add_message_star_and_user_labels(
+                                gmail_svc,
+                                msg_id,
+                                [label_id] if label_id else [],
+                            )
+                            etiqueta_nombre = (
+                                PAGOS_GMAIL_LABEL_IMAGEN_1
+                                if fmt == "A"
+                                else PAGOS_GMAIL_LABEL_IMAGEN_2
+                            )
+                            logger.warning(
+                                "[PAGOS_GMAIL]   Gmail: estrella + etiqueta %s (%s)",
+                                etiqueta_nombre,
+                                filename,
+                            )
+                        else:
+                            any_incomplete_or_skipped = True
                     except Exception as e:
                         logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
-                        any_unrecognized = True
+                        any_incomplete_or_skipped = True
 
-                if scan_filter == "unread":
-                    if any_unrecognized or not had_recognized_format:
-                        mark_starred_and_unread(gmail_svc, msg_id)
+                if had_complete_digitalization:
+                    mark_as_read(gmail_svc, msg_id)
+                    if scan_filter == "unread":
                         correos_marcados_revision += 1
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Gmail: destacado + no leido (formato incompleto o no reconocido)"
-                        )
-                    else:
-                        mark_read_and_clear_star(gmail_svc, msg_id)
-                        logger.warning("[PAGOS_GMAIL]   Gmail: leido, estrella quitada (todos adjuntos A o B)")
+                    logger.warning(
+                        "[PAGOS_GMAIL]   Gmail: leido (al menos un adjunto digitalizado; estrella/etiqueta por archivo)"
+                    )
+                elif scan_filter == "unread":
+                    mark_unread_clear_star(gmail_svc, msg_id)
+                    logger.warning(
+                        "[PAGOS_GMAIL]   Gmail: sin estrella + no leido (ningun adjunto digitalizado)"
+                    )
 
                 emails_ok += 1
 
@@ -358,7 +409,7 @@ def run_pipeline(
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok
         sync.correos_marcados_revision = correos_marcados_revision
-        logger.warning("[PAGOS_GMAIL] â–  FIN pipeline: emails=%d filas=%d drive_errors=%d",
+        logger.warning("[PAGOS_GMAIL] FIN pipeline: emails=%d filas=%d drive_errors=%d",
             emails_ok, files_ok, drive_errors)
 
         if drive_errors > 0 and emails_ok == 0:

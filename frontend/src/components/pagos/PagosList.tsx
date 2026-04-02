@@ -1085,9 +1085,10 @@ export function PagosList() {
                     gmailStatus.last_correos_marcados_revision > 0 ? (
                       <>
                         <br />
-                        <span className="text-amber-700">
-                          {gmailStatus.last_correos_marcados_revision}{' '}
-                          destacado(s) en Gmail (revisar formato).
+                        <span className="text-emerald-800">
+                          {gmailStatus.last_correos_marcados_revision} correo(s)
+                          leidos con al menos un comprobante (etiqueta IMAGEN 1
+                          / IMAGEN 2 + estrella).
                         </span>
                       </>
                     ) : null}

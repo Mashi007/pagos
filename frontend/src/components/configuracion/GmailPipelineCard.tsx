@@ -221,10 +221,10 @@ export function GmailPipelineCard() {
 
             {typeof status.last_correos_marcados_revision === 'number' &&
               status.last_correos_marcados_revision > 0 && (
-                <p className="text-xs text-amber-800 dark:text-amber-200">
+                <p className="text-xs text-emerald-800 dark:text-emerald-200">
                   Última ejecución: {status.last_correos_marcados_revision}{' '}
-                  correo(s) quedaron destacados en Gmail (formato no
-                  reconocido).
+                  correo(s) con al menos un OK (etiquetas IMAGEN 1 / IMAGEN 2 +
+                  estrella).
                 </p>
               )}
 
