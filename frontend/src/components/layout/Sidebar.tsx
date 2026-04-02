@@ -39,6 +39,7 @@ import {
 import { cn } from '../../utils'
 
 import { isAdminRole, isOperatorRole } from '../../utils/rol'
+import { isHrefDelegatedForRol } from '../../config/roleRoutes'
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 
@@ -161,11 +162,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const submenuContainsActiveRoute = (item: MenuItem): boolean => {
     if (!item.isSubmenu || !item.children) return false
 
-    const isAdmin = isAdminRole(user?.rol)
-
-    const visibleChildren = item.children.filter(
-      child => !child.adminOnly || isAdmin
-    )
+    const visibleChildren = item.children
 
     return visibleChildren.some(child => {
       if (!child.href) return false
@@ -346,18 +343,67 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
   ]
 
+  // Menú según rutas delegadas (lista blanca en config/roleRoutes.ts)
+  const filteredMenuItems: MenuItem[] = menuItems
+    .map(item => {
+      const isAdmin = isAdminRole(user?.rol)
+
+      if (item.isSubmenu && item.children) {
+        let children = item.children.filter(child => {
+          if (!child.href) return false
+          if (child.adminOnly) {
+            if (isAdmin) return isHrefDelegatedForRol(user?.rol, child.href)
+            if (
+              isOperatorRole(user?.rol) &&
+              child.href.split('?')[0] === '/finiquitos/gestion'
+            ) {
+              return isHrefDelegatedForRol(user?.rol, child.href)
+            }
+            return false
+          }
+          return isHrefDelegatedForRol(user?.rol, child.href)
+        })
+
+        if (isOperatorRole(user?.rol) && item.title === 'CRM') {
+          const hasInfopagos = children.some(c =>
+            (c.href || '').split('?')[0].startsWith('/infopagos')
+          )
+          if (
+            !hasInfopagos &&
+            isHrefDelegatedForRol(user?.rol, '/infopagos')
+          ) {
+            children = [
+              ...children,
+              {
+                title: 'Infopagos',
+                href: '/infopagos',
+                icon: Building2,
+              } as MenuItem,
+            ]
+          }
+        }
+
+        if (children.length === 0) return null
+        return { ...item, children }
+      }
+
+      if (item.href) {
+        if (!isHrefDelegatedForRol(user?.rol, item.href)) return null
+        return item
+      }
+
+      return null
+    })
+    .filter((x): x is MenuItem => x !== null)
+
   // Abrir automáticamente el submenú si alguna de sus rutas está activa
 
   useEffect(() => {
     const pathname = location.pathname
 
-    const isAdmin = isAdminRole(user?.rol)
-
-    menuItems.forEach(item => {
+    filteredMenuItems.forEach(item => {
       if (item.isSubmenu && item.children) {
-        const visibleChildren = item.children.filter(
-          child => !child.adminOnly || isAdmin
-        )
+        const visibleChildren = item.children
 
         const hasActiveChild = visibleChildren.some(child => {
           if (!child.href) return false
@@ -403,61 +449,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [isOpen, onClose])
-
-  // Filtro de menú según rol RBAC
-  const filteredMenuItems = menuItems
-    .filter(item => {
-      const rol = (user?.rol || 'viewer').toLowerCase()
-      const isAdmin = isAdminRole(rol)
-      const isOperator = isOperatorRole(user?.rol)
-
-      // operator: solo ve CRM (clientes), Préstamos y Reportes (contiene Finiquito gestión)
-      // Dashboard queda oculto porque /dashboard/menu no está en sus rutas permitidas
-      if (isOperator) {
-        return (
-          item.title === 'CRM' ||
-          item.title === 'Préstamos' ||
-          item.title === 'Reportes'
-        )
-      }
-
-      // No-admin: ocultar Configuración
-      if (item.title === 'Configuración') return isAdmin
-
-      return true
-    })
-    .map(item => {
-      const isOperator = isOperatorRole(user?.rol)
-
-      if (isOperator) {
-        // CRM: mostrar solo Clientes e Infopagos
-        if (item.title === 'CRM' && item.children) {
-          return {
-            ...item,
-            children: [
-              ...item.children.filter(c => c.title === 'Clientes'),
-              {
-                title: 'Infopagos',
-                href: '/infopagos',
-                icon: Building2,
-              } as MenuItem,
-            ],
-          }
-        }
-
-        // Reportes: mostrar solo Finiquito (gestión), sin restricción adminOnly
-        if (item.title === 'Reportes' && item.children) {
-          return {
-            ...item,
-            children: item.children
-              .filter(c => c.title === 'Finiquito (gestión)')
-              .map(c => ({ ...c, adminOnly: false })),
-          }
-        }
-      }
-
-      return item
-    })
 
   const isActiveRoute = (href: string) => {
     if (href === '/dashboard') {
@@ -831,13 +822,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                 isCompact ? 'ml-0' : 'ml-6'
                               )}
                             >
-                              {item.children
-                                .filter(
-                                  child =>
-                                    !child.adminOnly ||
-                                    isAdminRole(user?.rol)
-                                )
-                                .map(child =>
+                              {item.children.map(child =>
                                   child.external ? (
                                     <a
                                       key={child.href}

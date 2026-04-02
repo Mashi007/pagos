@@ -3,7 +3,7 @@
  * es redirigido a su inicio por rol. Admin no se evalúa aquí (acceso total).
  */
 import type { UserRol } from '../types'
-import { canonicalRol } from '../utils/rol'
+import { canonicalRol, isAdminRole } from '../utils/rol'
 
 /** Prefijos de ruta (sin basename). Coincidencia: igualdad o pathname.startsWith(prefix + '/') */
 const MANAGER_PREFIXES = [
@@ -57,7 +57,15 @@ export function isDelegatedPathForRol(
 ): boolean {
   const r = canonicalRol(rol) as UserRol
   if (r === 'admin') return true
-  if (r === 'manager') return matchesDelegatedPath(pathname, MANAGER_PREFIXES)
+  if (r === 'manager') {
+    if (
+      pathname === '/finiquitos/gestion' ||
+      pathname.startsWith('/finiquitos/gestion/')
+    ) {
+      return false
+    }
+    return matchesDelegatedPath(pathname, MANAGER_PREFIXES)
+  }
   if (r === 'operator')
     return matchesDelegatedPath(pathname, OPERATOR_PREFIXES)
   if (r === 'viewer') return matchesDelegatedPath(pathname, VIEWER_PREFIXES)
@@ -77,6 +85,7 @@ export function isHrefDelegatedForRol(
   href: string
 ): boolean {
   if (!href) return false
+  if (isAdminRole(rol)) return true
   const pathOnly = href.split('?')[0] || href
   return isDelegatedPathForRol(rol, pathOnly)
 }

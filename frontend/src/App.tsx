@@ -23,6 +23,10 @@ import { BASE_PATH, PUBLIC_FLOW_SESSION_KEY } from './config/env'
 import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
 import { isAdminRole, isOperatorRole } from './utils/rol'
+import {
+  defaultHomePathForRol,
+  isDelegatedPathForRol,
+} from './config/roleRoutes'
 
 /**
  * Acceso publico SIN login de personal: estas URLs siguen abiertas (formulario cobros, etc.).
@@ -83,22 +87,15 @@ function RootLayoutWrapper() {
     return <Navigate to="/login" replace />
   }
 
-  // GUARD OPERATOR: rol operator solo puede acceder a /clientes, /prestamos, /infopagos y /finiquitos/gestion
-  const OPERATOR_ALLOWED_PATHS = [
-    '/clientes',
-    '/prestamos',
-    '/infopagos',
-    '/finiquitos/gestion',
-  ]
-  const isOperator = user && isOperatorRole(user.rol)
-  const isAdmin = user && isAdminRole(user.rol)
-  if (isOperator && !isAdmin) {
-    const allowed = OPERATOR_ALLOWED_PATHS.some(
-      p => pathname === p || pathname.startsWith(p + '/')
-    )
-    if (!allowed) {
-      return <Navigate to="/clientes" replace />
-    }
+  // Lista blanca por rol (admin: sin filtro). Fuera de rutas delegadas → inicio del rol.
+  if (
+    !isLoading &&
+    isAuthenticated &&
+    user &&
+    !isAdminRole(user.rol) &&
+    !isDelegatedPathForRol(user.rol, pathname)
+  ) {
+    return <Navigate to={defaultHomePathForRol(user.rol)} replace />
   }
 
   const esGestionFiniquito = pathname === '/finiquitos/gestion'

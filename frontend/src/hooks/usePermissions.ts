@@ -2,6 +2,7 @@ import { useSimpleAuth } from '../store/simpleAuthStore'
 
 import { User } from '../types'
 
+import { isDelegatedPathForRol } from '../config/roleRoutes'
 import { canonicalRol, isAdminRole } from '../utils/rol'
 
 /**
@@ -63,38 +64,11 @@ export function usePermissions() {
   }
 
   /**
-   * Verifica si una ruta está permitida para el usuario actual
-   * - Finiquitador: SOLO /finiquitos/gestion
-   * - Administrador: todas
-   * - Operativo: reportes, préstamos, etc (excluyendo finiquito gestion)
+   * Misma lista blanca que el guard de rutas (config/roleRoutes.ts).
    */
 
   const canAccessPath = (pathname: string): boolean => {
-    const rol = canonicalRol(user?.rol)
-
-    // admin: acceso total
-    if (rol === 'admin') {
-      return true
-    }
-
-    if (rol === 'manager') {
-      return true
-    }
-
-    if (rol === 'operator') {
-      const OPERATOR_ALLOWED = [
-        '/clientes',
-        '/prestamos',
-        '/infopagos',
-        '/finiquitos/gestion',
-      ]
-      return OPERATOR_ALLOWED.some(
-        p => pathname === p || pathname.startsWith(p + '/')
-      )
-    }
-
-    // viewer: sin panel admin de finiquito; el resto lo limitan rutas con requireAdmin en App
-    return pathname !== '/finiquitos/gestion'
+    return isDelegatedPathForRol(user?.rol, pathname)
   }
 
   /**
