@@ -48,7 +48,8 @@ class TestPrestamosSmokeTests:
         prestamo = prestamos_service.cambiar_estado_prestamo(
             test_prestamo.id,
             "APROBADO",
-            usuario_cambio="test@rapicreditca.com"
+            usuario_cambio="test@rapicreditca.com",
+            fecha_aprobacion=datetime(2026, 1, 20),
         )
         
         assert prestamo.estado == "APROBADO"
@@ -152,7 +153,8 @@ class TestPrestamosSmokeTests:
         # DRAFT -> APROBADO
         prestamo = prestamos_service.cambiar_estado_prestamo(
             test_prestamo.id,
-            "APROBADO"
+            "APROBADO",
+            fecha_aprobacion=datetime(2026, 1, 20),
         )
         assert prestamo.estado == "APROBADO"
         

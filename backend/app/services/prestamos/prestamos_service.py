@@ -1,7 +1,7 @@
 """Servicio principal para gestión de préstamos."""
 
 from typing import List, Optional, Dict
-from datetime import date, datetime, time as time_d
+from datetime import date, datetime, time as dt_time
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_
 
@@ -20,6 +20,21 @@ from .prestamos_excepciones import (
     PrestamoStateError,
 )
 from .fechas_prestamo_coherencia import alinear_fecha_aprobacion_y_base_calculo
+
+
+def _fecha_aprobacion_desde_dict(datos: dict) -> Optional[datetime]:
+    """Parsea fecha_aprobacion opcional del dict (date o datetime)."""
+    v = datos.get("fecha_aprobacion")
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v
+    if isinstance(v, date):
+        return datetime.combine(v, dt_time.min)
+    raise PrestamoValidationError(
+        "fecha_aprobacion",
+        "fecha_aprobacion debe ser date o datetime cuando se envia.",
+    )
 
 
 class PrestamosService:
@@ -98,6 +113,13 @@ class PrestamosService:
         estado = datos_prestamo.get('estado', 'DRAFT')
         self.validacion.validar_estado_prestamo(estado)
 
+        fa_parsed = _fecha_aprobacion_desde_dict(datos_prestamo)
+        if estado == "APROBADO" and fa_parsed is None:
+            raise PrestamoValidationError(
+                "fecha_aprobacion",
+                "Estado APROBADO requiere fecha_aprobacion explicita en los datos.",
+            )
+
         # Validar campos opcionales
         if 'observaciones' in datos_prestamo:
             self.validacion.validar_observaciones(datos_prestamo['observaciones'])
@@ -121,15 +143,13 @@ class PrestamosService:
             cedula=cliente.cedula or "",
             nombres=datos_prestamo['nombres'],
             total_financiamiento=total_financiamiento,
-            fecha_requerimiento=datos_prestamo.get(
-                'fecha_requerimiento',
-                date.today()
-            ),
+            fecha_requerimiento=datos_prestamo["fecha_requerimiento"],
             modalidad_pago=modalidad,
             numero_cuotas=numero_cuotas,
             cuota_periodo=cuota_periodo,
             tasa_interes=tasa_interes,
-            fecha_base_calculo=datos_prestamo.get('fecha_base_calculo'),
+            fecha_base_calculo=datos_prestamo.get("fecha_base_calculo"),
+            fecha_aprobacion=fa_parsed,
             producto=datos_prestamo.get('producto', ''),
             estado=estado,
             usuario_proponente=datos_prestamo.get(
@@ -169,6 +189,9 @@ class PrestamosService:
         except PrestamoCedulaClienteError as e:
             raise PrestamoValidationError("cedula", str(e)) from e
 
+        if fa_parsed is not None:
+            alinear_fecha_aprobacion_y_base_calculo(nuevo_prestamo)
+
         self.db.add(nuevo_prestamo)
         self.db.commit()
         self.db.refresh(nuevo_prestamo)
@@ -178,7 +201,7 @@ class PrestamosService:
             try:
                 self.amortizacion.generar_tabla_amortizacion(
                     nuevo_prestamo.id,
-                    fecha_inicio=datos_prestamo.get('fecha_base_calculo')
+                    fecha_inicio=nuevo_prestamo.fecha_base_calculo,
                 )
             except Exception:
                 # No fallar si no se puede generar la tabla
@@ -342,7 +365,7 @@ class PrestamosService:
             if isinstance(fa, datetime):
                 prestamo.fecha_aprobacion = fa
             elif isinstance(fa, date):
-                prestamo.fecha_aprobacion = datetime.combine(fa, time_d.min)
+                prestamo.fecha_aprobacion = datetime.combine(fa, dt_time.min)
             else:
                 raise PrestamoValidationError(
                     "fecha_aprobacion",

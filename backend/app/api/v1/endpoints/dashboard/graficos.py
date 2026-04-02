@@ -1,6 +1,12 @@
 """
 Dashboard gráficos: cobranzas-semanales, composicion-morosidad, morosidad-analista,
 cuentas-cobrar-tendencias, y demás endpoints de gráficos.
+
+Criterios de fecha en prestamos: los graficos que agrupan por tiempo de operacion
+suelen filtrar con `prestamo_fecha_referencia_negocio` (base de calculo primero,
+luego dia de aprobacion, luego requerimiento), coherente con cuotas ya generadas.
+Para vistas explicitamente por mes de aprobacion use la variante
+`prestamo_fecha_referencia_por_aprobacion` del modulo de consulta.
 """
 import logging
 from datetime import date, datetime, timedelta, timezone

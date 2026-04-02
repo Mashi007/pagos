@@ -1,4 +1,6 @@
 -- Diagnostico: casos donde no basta un solo COALESCE entre aprobacion, base y requerimiento.
+-- Contraste con la app: KPIs/graficos suelen usar coalesce base > aprobacion > requerimiento
+-- (prestamo_fecha_referencia_negocio); este script clasifica filas por las tres columnas en BD.
 --
 -- Si el resumen muestra una sola fila "F_base_null" sin mas texto, es una VERSION ANTIGUA
 -- del CASE: vuelve a ejecutar solo el bloque (1) de abajo. En la version actual:

@@ -188,7 +188,10 @@ class TestPrestamosServiceIntegration:
                 "cuota_periodo": Decimal("883.33"),
                 "estado": estado,
                 "analista": "Test",
+                "producto": "Test",
             }
+            if estado == "APROBADO":
+                datos["fecha_aprobacion"] = datetime(2026, 1, 20)
             prestamos_service.crear_prestamo(datos)
         
         prestamos_draft = prestamos_service.obtener_prestamos_cliente(
@@ -233,7 +236,8 @@ class TestPrestamosServiceIntegration:
         prestamo = prestamos_service.cambiar_estado_prestamo(
             test_prestamo.id,
             "APROBADO",
-            usuario_cambio="test_aprobador@rapicreditca.com"
+            usuario_cambio="test_aprobador@rapicreditca.com",
+            fecha_aprobacion=datetime(2026, 1, 20),
         )
         
         assert prestamo.estado == "APROBADO"
@@ -418,7 +422,10 @@ class TestPrestamosServiceIntegration:
                 "cuota_periodo": Decimal("883.33"),
                 "estado": estado,
                 "analista": "Test",
+                "producto": "Test",
             }
+            if estado == "APROBADO":
+                datos["fecha_aprobacion"] = datetime(2026, 1, 20)
             prestamos_service.crear_prestamo(datos)
         
         stats = prestamos_service.obtener_estadistica_prestamos()

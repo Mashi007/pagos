@@ -1,5 +1,12 @@
 """
 Dashboard KPIs: opciones-filtros, kpis-principales, admin.
+
+Criterios de fecha en prestamos: la mayoria de agregados que filtran por periodo
+usan `prestamo_fecha_referencia_negocio` (coalesce: fecha_base_calculo,
+date(fecha_aprobacion), fecha_requerimiento) para alinear con el inicio de cuotas
+cuando en datos historicos la base y la aprobacion difieren. Los conteos
+explicitos por mes de aprobacion administrativa deben usar
+`prestamo_fecha_referencia_por_aprobacion` (aprobacion primero).
 """
 import logging
 from datetime import date, datetime, timedelta, timezone

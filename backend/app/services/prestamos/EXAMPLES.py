@@ -12,7 +12,7 @@ de préstamos en endpoints y otros contextos.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import date
+from datetime import date, datetime
 
 from app.core.database import get_db
 from app.services.prestamos import (
@@ -40,7 +40,7 @@ def crear_prestamo(datos: dict, db: Session = Depends(get_db)):
         'cedula': datos['cedula'],
         'nombres': datos['nombres'],
         'total_financiamiento': datos['monto'],
-        'fecha_requerimiento': date.today(),
+        'fecha_requerimiento': date(2026, 1, 15),
         'modalidad_pago': datos.get('modalidad_pago', 'MENSUAL'),
         'numero_cuotas': datos['cuotas'],
         'cuota_periodo': datos['cuota_fija'],
@@ -404,6 +404,7 @@ def calcular_cuota_fija(
 def procesar_prestamo_completo(cliente_id: int, db: Session):
     """
     Ejemplo de flujo completo: crear, aprobar, generar amortización.
+    La aprobacion exige fecha_aprobacion explicita (no se usa la fecha del sistema).
     """
     service = PrestamosService(db)
 
@@ -414,7 +415,7 @@ def procesar_prestamo_completo(cliente_id: int, db: Session):
             'cedula': '123456789',
             'nombres': 'Cliente Test',
             'total_financiamiento': 10000.0,
-            'fecha_requerimiento': date.today(),
+            'fecha_requerimiento': date(2026, 1, 15),
             'modalidad_pago': 'MENSUAL',
             'numero_cuotas': 12,
             'cuota_periodo': 833.33,
@@ -430,11 +431,12 @@ def procesar_prestamo_completo(cliente_id: int, db: Session):
             usuario_cambio='gerente@empresa.com'
         )
 
-        # 3. Aprobar
+        # 3. Aprobar (fecha explicita, >= fecha_requerimiento)
         prestamo = service.cambiar_estado_prestamo(
             prestamo.id,
             'APROBADO',
-            usuario_cambio='jefe@empresa.com'
+            usuario_cambio='jefe@empresa.com',
+            fecha_aprobacion=datetime(2026, 1, 20),
         )
 
         # 4. Obtener tabla de amortización

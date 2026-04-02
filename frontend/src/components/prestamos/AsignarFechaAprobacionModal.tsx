@@ -36,15 +36,11 @@ export function AsignarFechaAprobacionModal({
 }: AsignarFechaAprobacionModalProps) {
   const queryClient = useQueryClient()
 
-  const [fechaAprobacion, setFechaAprobacion] = useState<string>(() => {
-    if (prestamo.fecha_aprobacion)
-      return new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
-
-    if (prestamo.fecha_requerimiento)
-      return new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
-
-    return new Date().toISOString().split('T')[0]
-  })
+  const [fechaAprobacion, setFechaAprobacion] = useState<string>(() =>
+    prestamo.fecha_aprobacion
+      ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
+      : ''
+  )
 
   const [isLoading, setIsLoading] = useState(false)
 
@@ -202,8 +198,9 @@ export function AsignarFechaAprobacionModal({
 
                   <p className="text-xs text-gray-500">
                     Esta fecha será la base para calcular las fechas de
-                    vencimiento de todas las cuotas. La fecha de registro en
-                    sistema no limita esta elección.
+                    vencimiento de todas las cuotas. Elijala explicitamente; no
+                    se rellena con la fecha del sistema salvo que ya exista en
+                    el préstamo.
                   </p>
                 </div>
               </div>

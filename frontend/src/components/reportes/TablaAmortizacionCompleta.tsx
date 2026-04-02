@@ -564,13 +564,15 @@ export function TablaAmortizacionCompleta() {
   const handleAbrirDialogoFecha = (prestamo: any) => {
     setPrestamoParaGenerar(prestamo)
 
-    let ymd: string
+    let ymd = ''
     if (prestamo.fecha_aprobacion) {
       ymd = new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
     } else if (prestamo.fecha_base_calculo) {
-      ymd = prestamo.fecha_base_calculo
-    } else {
-      ymd = new Date().toISOString().split('T')[0]
+      const raw = prestamo.fecha_base_calculo
+      ymd =
+        typeof raw === 'string'
+          ? raw.slice(0, 10)
+          : new Date(raw).toISOString().split('T')[0]
     }
     setFechaBaseCalculo(ymd)
 
@@ -584,6 +586,18 @@ export function TablaAmortizacionCompleta() {
       toast.error('Por favor, ingrese una fecha válida')
 
       return
+    }
+
+    if (prestamoParaGenerar.fecha_requerimiento) {
+      const reqYmd = new Date(prestamoParaGenerar.fecha_requerimiento)
+        .toISOString()
+        .split('T')[0]
+      if (fechaBaseCalculo < reqYmd) {
+        toast.error(
+          'La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento'
+        )
+        return
+      }
     }
 
     setProcesandoGenerarCuotasYPagos(true)
@@ -1931,11 +1945,19 @@ export function TablaAmortizacionCompleta() {
                 onChange={e => setFechaBaseCalculo(e.target.value)}
                 required
                 className="mt-1"
+                min={
+                  prestamoParaGenerar?.fecha_requerimiento
+                    ? new Date(prestamoParaGenerar.fecha_requerimiento)
+                        .toISOString()
+                        .split('T')[0]
+                    : undefined
+                }
               />
 
               <p className="mt-1 text-xs text-gray-500">
                 Se guarda igual en la fecha base de cálculo; con ella se generan
-                las cuotas del préstamo.
+                las cuotas. Si no hay fecha previa en el préstamo, elija la de
+                aprobación explicitamente (no se sugiere la fecha del sistema).
               </p>
             </div>
 

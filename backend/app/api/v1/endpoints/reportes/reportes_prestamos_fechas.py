@@ -46,7 +46,9 @@ def _generar_excel_fechas_prestamos(rows: list[dict]) -> bytes:
         [
             "ID prestamo",
             "C\u00e9dula",
+            "Estado",
             "Fecha de registro",
+            "Fecha de requerimiento",
             "Fecha de aprobaci\u00f3n",
             "Fecha de c\u00e1lculo",
             "Total financiamiento",
@@ -57,7 +59,9 @@ def _generar_excel_fechas_prestamos(rows: list[dict]) -> bytes:
             [
                 r["id_prestamo"],
                 r["cedula"],
+                r["estado"],
                 r["fecha_registro"],
+                r["fecha_requerimiento"],
                 r["fecha_aprobacion"],
                 r["fecha_calculo"],
                 r["total_financiamiento"],
@@ -72,7 +76,8 @@ def _generar_excel_fechas_prestamos(rows: list[dict]) -> bytes:
 def exportar_prestamos_fechas_excel(db: Session = Depends(get_db)):
     """
     Descarga Excel (hoja FECHAS) con todos los prestamos en cualquier estado:
-    A ID, B cedula, C fecha registro, D fecha aprobacion, E fecha calculo (base), F total financiamiento.
+    ID, cedula, estado, fecha registro, fecha requerimiento, fecha aprobacion,
+    fecha calculo (base), total financiamiento.
     """
     prestamos = db.execute(select(Prestamo).order_by(Prestamo.id)).scalars().all()
     out: list[dict] = []
@@ -88,7 +93,11 @@ def exportar_prestamos_fechas_excel(db: Session = Depends(get_db)):
             {
                 "id_prestamo": p.id,
                 "cedula": cedula,
+                "estado": (getattr(p, "estado", None) or "").strip(),
                 "fecha_registro": _fmt_dt(getattr(p, "fecha_registro", None)),
+                "fecha_requerimiento": _fmt_date(
+                    getattr(p, "fecha_requerimiento", None)
+                ),
                 "fecha_aprobacion": _fmt_dt(getattr(p, "fecha_aprobacion", None)),
                 "fecha_calculo": _fmt_date(getattr(p, "fecha_base_calculo", None)),
                 "total_financiamiento": round(_safe_float(p.total_financiamiento), 2),

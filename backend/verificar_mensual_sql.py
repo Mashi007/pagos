@@ -1,4 +1,11 @@
-"""Ejecuta la verificacion SQL de cuotas MENSUAL (mismo dia cada mes) e imprime resultado."""
+"""Ejecuta la verificacion SQL de cuotas MENSUAL (mismo dia cada mes) e imprime resultado.
+
+El CTE `base` usa COALESCE((fecha_aprobacion)::date, fecha_base_calculo): prioriza
+el dia de aprobacion y, si falta, la base. Eso puede diferir del criterio del
+dashboard (`prestamo_fecha_referencia_negocio`, base primero) cuando solo una de
+las dos fechas esta poblada en legado. Tras alineacion en altas actuales, base y
+aprobacion suelen coincidir en el dia.
+"""
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

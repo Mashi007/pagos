@@ -62,9 +62,9 @@ export function AprobarPrestamoManualModal({
   const queryClient = useQueryClient()
 
   const [fechaAprobacion, setFechaAprobacion] = useState<string>(() =>
-    prestamo.fecha_requerimiento
-      ? new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0]
+    prestamo.fecha_aprobacion
+      ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
+      : ''
   )
 
   const [documentosAnalizados, setDocumentosAnalizados] = useState(false)
@@ -382,7 +382,9 @@ export function AprobarPrestamoManualModal({
                 </div>
 
                 <p className="mt-1 text-xs text-gray-500">
-                  Base para la tabla de amortización.
+                  Base para la tabla de amortización. Debe elegirla
+                  explicitamente; no se rellena con la fecha del sistema ni con
+                  la de requerimiento.
                 </p>
               </div>
             </div>

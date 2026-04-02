@@ -1743,6 +1743,60 @@ def _fecha_requerimiento_date(p: "Prestamo") -> Optional[date]:
 
 
 
+def _ajustar_req_si_mayor_que_aprobacion(
+    db: Session,
+    row: Prestamo,
+    *,
+    origen: str,
+    usuario_id: int,
+) -> None:
+    """
+    Si fecha_requerimiento > dia de fecha_aprobacion, iguala requerimiento a ese dia.
+    Deja rastro en observaciones y en tabla auditoria.
+    """
+    if not row.fecha_aprobacion or not row.fecha_requerimiento:
+        return
+    ap_date = (
+        row.fecha_aprobacion.date()
+        if hasattr(row.fecha_aprobacion, "date")
+        else row.fecha_aprobacion
+    )
+    req_date = row.fecha_requerimiento
+    if req_date <= ap_date:
+        return
+    req_old = req_date
+    row.fecha_requerimiento = ap_date
+    logger.info(
+        "[%s] Auto-ajuste fecha_requerimiento %s -> %s (fecha_aprobacion %s)",
+        origen,
+        req_old,
+        ap_date,
+        ap_date,
+    )
+    note = (
+        f"\n[AUTO {origen}] fecha_requerimiento ajustada de {req_old} a {ap_date} "
+        f"(alineada con fecha_aprobacion)."
+    )
+    prev_obs = (row.observaciones or "").strip()
+    row.observaciones = (prev_obs + note).strip() if prev_obs else note.strip()
+    db.add(
+        Auditoria(
+            usuario_id=usuario_id,
+            accion="AJUSTE_FECHA_REQUERIMIENTO",
+            entidad="prestamos",
+            entidad_id=getattr(row, "id", None),
+            detalles=(
+                f"{origen}: fecha_requerimiento {req_old} -> {ap_date} "
+                f"(coherencia con fecha_aprobacion)."
+            ),
+            exito=True,
+        )
+    )
+
+
+
+
+
 def _fecha_para_amortizacion(p: "Prestamo") -> Optional[date]:
 
     """
@@ -3862,14 +3916,6 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
     )
 
-    # Auto-ajuste de coherencia: si fecha_requerimiento > fecha_aprobacion, ajustar automáticamente.
-    if row.fecha_aprobacion and row.fecha_requerimiento:
-        ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
-        req_date = row.fecha_requerimiento
-        if req_date > ap_date:
-            logger.info(f"[create_prestamo] Auto-ajuste: fecha_requerimiento ({req_date}) > fecha_aprobacion ({ap_date}). Ajustando.")
-            row.fecha_requerimiento = ap_date
-
     try:
 
         asegurar_prestamo_alineado_con_cliente(
@@ -3889,6 +3935,15 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
     alinear_fecha_aprobacion_y_base_calculo(row)
 
     db.add(row)
+
+    db.flush()
+
+    _ajustar_req_si_mayor_que_aprobacion(
+        db,
+        row,
+        origen="POST_prestamos",
+        usuario_id=_audit_user_id(db, current_user),
+    )
 
     db.commit()
 
@@ -3950,7 +4005,12 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
 @router.put("/{prestamo_id}", response_model=PrestamoResponse)
 
-def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Depends(get_db)):
+def update_prestamo(
+    prestamo_id: int,
+    payload: PrestamoUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Actualiza un préstamo en BD."""
 
@@ -4090,17 +4150,12 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
     logger.info(f"[update_prestamo] BD después de aplicar cambios: fecha_requerimiento={row.fecha_requerimiento} (type={type(row.fecha_requerimiento).__name__}), fecha_aprobacion={row.fecha_aprobacion} (type={type(row.fecha_aprobacion).__name__})")
 
-    # Auto-ajuste de coherencia: si fecha_requerimiento > fecha_aprobacion, ajustar automáticamente.
-    # Esto sucede frecuentemente en préstamos de carga masiva donde fecha_requerimiento se asignó
-    # como date.today() en el momento de la carga, pero fecha_aprobacion corresponde a una fecha
-    # histórica anterior.
-    if row.fecha_aprobacion and row.fecha_requerimiento:
-        ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
-        req_date = row.fecha_requerimiento
-
-        if req_date > ap_date:
-            logger.info(f"[update_prestamo] Auto-ajuste: fecha_requerimiento ({req_date}) > fecha_aprobacion ({ap_date}). Ajustando fecha_requerimiento = fecha_aprobacion.")
-            row.fecha_requerimiento = ap_date
+    _ajustar_req_si_mayor_que_aprobacion(
+        db,
+        row,
+        origen="PUT_prestamos",
+        usuario_id=_audit_user_id(db, current_user),
+    )
 
     est_despues = (row.estado or "").strip().upper()
 

@@ -48,6 +48,10 @@ export function EvaluacionRiesgoForm({
 
   const { isAdmin } = usePermissions()
 
+  const fechaRequerimientoMin = prestamo.fecha_requerimiento
+    ? new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
+    : undefined
+
   const {
     formData,
 
@@ -431,13 +435,14 @@ export function EvaluacionRiesgoForm({
                                   })
                                 }
                                 className="pl-10"
-                                min={new Date().toISOString().split('T')[0]}
+                                min={fechaRequerimientoMin}
                               />
                             </div>
 
                             <p className="text-xs text-gray-500">
                               Se replica en la fecha base de cálculo de la
-                              amortización
+                              amortización. Minimo: fecha de requerimiento (no
+                              la fecha del sistema).
                             </p>
                           </div>
                         </div>

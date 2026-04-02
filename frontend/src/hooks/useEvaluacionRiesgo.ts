@@ -194,7 +194,9 @@ export function useEvaluacionRiesgo({
 
     plazo_maximo: 36,
 
-    fecha_aprobacion: new Date().toISOString().split('T')[0],
+    fecha_aprobacion: prestamo.fecha_aprobacion
+      ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
+      : '',
 
     observaciones: '',
   })
@@ -289,7 +291,9 @@ export function useEvaluacionRiesgo({
 
         plazo_maximo: resultado.sugerencias.plazo_maximo_sugerido || 36,
 
-        fecha_aprobacion: new Date().toISOString().split('T')[0],
+        fecha_aprobacion: prestamo.fecha_aprobacion
+          ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
+          : '',
 
         observaciones: `Aprobado después de evaluación de riesgo. Puntuación: ${resultado.puntuacion_total?.toFixed(2)}/100, Riesgo: ${resultado.clasificacion_riesgo}`,
       })

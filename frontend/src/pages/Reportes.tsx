@@ -670,6 +670,51 @@ export function Reportes() {
         }
       />
 
+      <Card className="border-slate-200 bg-slate-50/80 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-900">
+            <Calendar className="h-4 w-4 text-slate-600" aria-hidden />
+            Glosario de fechas (reportes y cuadros)
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="space-y-2 pb-4 pt-0 text-sm leading-relaxed text-slate-700">
+          <p>
+            <strong className="font-medium text-slate-900">
+              Fecha de requerimiento:
+            </strong>{' '}
+            dia en que se registró la solicitud o necesidad del credito.
+          </p>
+
+          <p>
+            <strong className="font-medium text-slate-900">
+              Fecha de aprobacion / desembolso:
+            </strong>{' '}
+            dia administrativo en que se aprueba o desembolsa; en flujos
+            actuales alinea la base de la tabla de amortizacion.
+          </p>
+
+          <p>
+            <strong className="font-medium text-slate-900">
+              Fecha de calculo (base):
+            </strong>{' '}
+            inicio para vencimientos de cuotas; debe coincidir con el dia de la
+            fecha de aprobacion en altas recientes. En datos antiguos puede
+            diferir.
+          </p>
+
+          <p>
+            <strong className="font-medium text-slate-900">
+              Dashboard y Excel Fechas:
+            </strong>{' '}
+            muchos totales por periodo usan primero la base de calculo, luego la
+            aprobacion y luego el requerimiento, para cuadrar con cuotas ya
+            generadas; conteos por &quot;mes de aprobacion&quot; pueden
+            priorizar la fecha de aprobacion.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* --- Sección: Enlaces para compartir --- */}
 
       <section className="space-y-3">
