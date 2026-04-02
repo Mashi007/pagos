@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useRef } from 'react'
+import { useState, useLayoutEffect, useRef, useEffect } from 'react'
 
 import { useParams, useNavigate } from 'react-router-dom'
 
@@ -168,6 +168,77 @@ interface CuotaData {
   observaciones: string
 }
 
+/** Fecha comparable YYYY-MM-DD para detectar cambios vs carga inicial. */
+function normDateCmp(v: string | null | undefined): string {
+  if (v == null || v === '') return ''
+  if (typeof v === 'string' && v.length >= 10) return v.slice(0, 10)
+  try {
+    const d = new Date(v)
+    return isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0, 10)
+  } catch {
+    return String(v)
+  }
+}
+
+function firmaSoloCliente(cliente: Partial<ClienteData>): string {
+  return JSON.stringify({
+    nombres: String(cliente.nombres ?? '').trim(),
+    telefono: String(cliente.telefono ?? '').trim(),
+    email: String(cliente.email ?? '').trim(),
+    direccion: String(cliente.direccion ?? '').trim(),
+    ocupacion: String(cliente.ocupacion ?? '').trim(),
+    estado: String(cliente.estado ?? '').trim(),
+    fn:
+      cliente.fecha_nacimiento == null || cliente.fecha_nacimiento === ''
+        ? ''
+        : normDateCmp(String(cliente.fecha_nacimiento)),
+    notas: String(cliente.notas ?? ''),
+  })
+}
+
+function firmaSoloPrestamo(p: Partial<PrestamoData>): string {
+  return JSON.stringify({
+    tf: Number(p.total_financiamiento) || 0,
+    nc: Number(p.numero_cuotas) || 0,
+    ti: Number(p.tasa_interes) || 0,
+    producto: String(p.producto ?? '').trim(),
+    obs: String(p.observaciones ?? ''),
+    cedula: String(p.cedula ?? '').trim(),
+    nombres: String(p.nombres ?? '').trim(),
+    fr: normDateCmp(p.fecha_requerimiento as string | null | undefined),
+    mod: String(p.modalidad_pago ?? '').trim(),
+    cp: Number(p.cuota_periodo) || 0,
+    fa: normDateCmp(p.fecha_aprobacion as string | null | undefined),
+    estado: String(p.estado ?? '').trim(),
+    conc: String(p.concesionario ?? '').trim(),
+    analista: String(p.analista ?? '').trim(),
+    mv: String(p.modelo_vehiculo ?? '').trim(),
+    va: p.valor_activo == null ? null : Number(p.valor_activo),
+    up: String(p.usuario_proponente ?? '').trim(),
+    ua: String(p.usuario_aprobador ?? '').trim(),
+  })
+}
+
+function firmaSoloCuotas(cuotas: Partial<CuotaData>[]): string {
+  const sorted = [...cuotas].sort(
+    (a, b) => (a.cuota_id ?? 0) - (b.cuota_id ?? 0)
+  )
+  return JSON.stringify(
+    sorted.map(c => ({
+      id: c.cuota_id,
+      num: c.numero_cuota,
+      m: Number(c.monto) || 0,
+      fv: normDateCmp(c.fecha_vencimiento as string | null | undefined),
+      fp: normDateCmp(c.fecha_pago as string | null | undefined),
+      tp: Number(c.total_pagado) || 0,
+      est: String(c.estado ?? '').trim(),
+      obs: String(c.observaciones ?? ''),
+    }))
+  )
+}
+
+type FirmaCargaRevision = { cliente: string; prestamo: string; cuotas: string }
+
 /** Lista de préstamos (en producción: /pagos/prestamos vía basename). */
 const RUTA_LISTA_PRESTAMOS = '/prestamos'
 
@@ -240,6 +311,9 @@ export function EditarRevisionManual() {
    * para no pisar lo que el usuario está editando (típico: fecha de aprobación).
    */
   const formDirtyRef = useRef(false)
+
+  /** Firma del detalle servida por API (sin depender de flags cambios.* en cada campo). */
+  const firmaCargaInicialRef = useRef<FirmaCargaRevision | null>(null)
 
   useLayoutEffect(() => {
     formDirtyRef.current =
@@ -426,6 +500,63 @@ export function EditarRevisionManual() {
 
   const soloLectura = estadoRevision === 'revisado'
 
+  useEffect(() => {
+    if (!detalleData) return
+    if (formDirtyRef.current) return
+    const fn = detalleData.cliente?.fecha_nacimiento
+    const fnNorm =
+      typeof fn === 'string' && fn.length >= 10 ? fn.slice(0, 10) : fn
+    const clienteNorm = {
+      ...detalleData.cliente,
+      fecha_nacimiento: (fnNorm ?? null) as string | null,
+    }
+    firmaCargaInicialRef.current = {
+      cliente: firmaSoloCliente(clienteNorm),
+      prestamo: firmaSoloPrestamo(detalleData.prestamo),
+      cuotas: firmaSoloCuotas(detalleData.cuotas ?? []),
+    }
+  }, [detalleData])
+
+  const hayDiferenciaVsCargaInicial = (): boolean => {
+    const s = firmaCargaInicialRef.current
+    if (!s) return true
+    return (
+      firmaSoloCliente(clienteData) !== s.cliente ||
+      firmaSoloPrestamo(prestamoData) !== s.prestamo ||
+      firmaSoloCuotas(cuotasData) !== s.cuotas
+    )
+  }
+
+  /**
+   * Guarda en BD el texto actual de observaciones (préstamo + cuotas) y notas del cliente.
+   * Se usa antes de rechazar o finalizar para no perder comentarios aunque no hubiera otros "cambios".
+   */
+  const persistObservacionesYNotasRevision = async () => {
+    if (soloLectura || !prestamoId) return
+    const pid = parseInt(prestamoId, 10)
+    if (!Number.isFinite(pid)) return
+
+    if (prestamoData.prestamo_id) {
+      await revisionManualService.editarPrestamo(prestamoData.prestamo_id, {
+        observaciones: String(prestamoData.observaciones ?? ''),
+      })
+    }
+    if (clienteData.cliente_id) {
+      await revisionManualService.editarCliente(
+        clienteData.cliente_id,
+        { notas: String(clienteData.notas ?? '') },
+        { prestamoId: pid }
+      )
+    }
+    for (const cuota of cuotasData) {
+      if (cuota.cuota_id) {
+        await revisionManualService.editarCuota(cuota.cuota_id, {
+          observaciones: String(cuota.observaciones ?? ''),
+        })
+      }
+    }
+  }
+
   // Estados de cliente desde BD (tabla estados_cliente)
 
   const { opciones: opcionesBD } = useEstadosCliente({ alwaysFresh: true })
@@ -563,23 +694,19 @@ export function EditarRevisionManual() {
       return
     }
 
-    // Validar si hay cambios
-
-    if (
-      !cambios.cliente &&
-      !cambios.prestamo &&
-      !cambios.cuotas &&
-      cuotasIdsAEliminar.length === 0
-    ) {
+    // Sin cambios reales vs datos cargados: no operar (no es validación de negocio)
+    if (cuotasIdsAEliminar.length === 0 && !hayDiferenciaVsCargaInicial()) {
       toast.info('ℹ️ No hay cambios para guardar')
-
       return
     }
 
     // Confirmar si cambió la fecha de aprobación y hay cuotas
     const nuevaFechaCheck = formatDateForInput(prestamoData.fecha_aprobacion)
+    const snapFecha = firmaCargaInicialRef.current
+    const prestamoDistintoVsInicial =
+      !snapFecha || firmaSoloPrestamo(prestamoData) !== snapFecha.prestamo
     if (
-      cambios.prestamo &&
+      prestamoDistintoVsInicial &&
       nuevaFechaCheck &&
       fechaAprobacionOriginal &&
       nuevaFechaCheck !== fechaAprobacionOriginal &&
@@ -603,9 +730,19 @@ export function EditarRevisionManual() {
 
       let errorOccurred = false
 
-      // Solo guardar cliente si hay cambios
+      const snap = firmaCargaInicialRef.current
+      const needGuardarCliente =
+        !!clienteData.cliente_id &&
+        (!snap || firmaSoloCliente(clienteData) !== snap.cliente)
+      const needGuardarPrestamo =
+        !!prestamoData.prestamo_id &&
+        (!snap || firmaSoloPrestamo(prestamoData) !== snap.prestamo)
+      const needGuardarCuotas =
+        !snap || firmaSoloCuotas(cuotasData) !== snap.cuotas
 
-      if (cambios.cliente && clienteData.cliente_id) {
+      // Guardar cliente si el formulario difiere de la carga inicial
+
+      if (needGuardarCliente) {
         const clienteUpdate: Record<string, any> = {}
 
         if (clienteData.nombres) clienteUpdate.nombres = clienteData.nombres
@@ -625,10 +762,12 @@ export function EditarRevisionManual() {
         if (clienteData.fecha_nacimiento !== undefined)
           clienteUpdate.fecha_nacimiento = clienteData.fecha_nacimiento || null
 
-        if (clienteData.notas !== undefined)
-          clienteUpdate.notas = clienteData.notas
+        clienteUpdate.notas = String(clienteData.notas ?? '')
 
-        if (Object.keys(clienteUpdate).length > 0) {
+        if (
+          Object.keys(clienteUpdate).length > 0 &&
+          clienteData.cliente_id != null
+        ) {
           try {
             await revisionManualService.editarCliente(
               clienteData.cliente_id,
@@ -650,9 +789,9 @@ export function EditarRevisionManual() {
         }
       }
 
-      // Solo guardar préstamo si hay cambios
+      // Guardar préstamo si difiere de la carga inicial
 
-      if (cambios.prestamo && prestamoData.prestamo_id) {
+      if (needGuardarPrestamo) {
         const prestamoUpdate: Record<string, any> = {}
 
         if (
@@ -676,9 +815,6 @@ export function EditarRevisionManual() {
 
         if (prestamoData.producto !== undefined)
           prestamoUpdate.producto = prestamoData.producto
-
-        if (prestamoData.observaciones !== undefined)
-          prestamoUpdate.observaciones = prestamoData.observaciones
 
         if (prestamoData.cedula !== undefined)
           prestamoUpdate.cedula = prestamoData.cedula
@@ -734,7 +870,12 @@ export function EditarRevisionManual() {
         if (prestamoData.usuario_aprobador !== undefined)
           prestamoUpdate.usuario_aprobador = prestamoData.usuario_aprobador
 
-        if (Object.keys(prestamoUpdate).length > 0) {
+        prestamoUpdate.observaciones = String(prestamoData.observaciones ?? '')
+
+        if (
+          Object.keys(prestamoUpdate).length > 0 &&
+          prestamoData.prestamo_id != null
+        ) {
           try {
             await revisionManualService.editarPrestamo(
               prestamoData.prestamo_id,
@@ -819,12 +960,14 @@ export function EditarRevisionManual() {
         if (eliminacionesOk) setCuotasIdsAEliminar([])
       }
 
-      // Guardar cuotas si hay cambios en filas restantes
+      // Guardar cuotas si difieren de la carga inicial
 
-      if (cambios.cuotas) {
+      if (needGuardarCuotas) {
         for (const cuota of cuotasData) {
           if (cuota.cuota_id) {
-            const cuotaUpdate: Record<string, any> = {}
+            const cuotaUpdate: Record<string, any> = {
+              observaciones: String(cuota.observaciones ?? ''),
+            }
 
             if (cuota.fecha_pago)
               cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
@@ -840,9 +983,6 @@ export function EditarRevisionManual() {
               cuotaUpdate.total_pagado = cuota.total_pagado
 
             if (cuota.estado) cuotaUpdate.estado = cuota.estado
-
-            if (cuota.observaciones !== undefined)
-              cuotaUpdate.observaciones = cuota.observaciones
 
             if (Object.keys(cuotaUpdate).length > 0) {
               try {
@@ -932,12 +1072,20 @@ export function EditarRevisionManual() {
       return
     }
 
+    if (cuotasIdsAEliminar.length === 0 && !hayDiferenciaVsCargaInicial()) {
+      toast.info('No hay cambios respecto a los datos cargados')
+      return
+    }
+
     // Confirmar si cambió la fecha de aprobación y hay cuotas
     const nuevaFechaFinalCheck = formatDateForInput(
       prestamoData.fecha_aprobacion
     )
+    const snapFin = firmaCargaInicialRef.current
+    const prestamoDistintoFin =
+      !snapFin || firmaSoloPrestamo(prestamoData) !== snapFin.prestamo
     if (
-      cambios.prestamo &&
+      prestamoDistintoFin &&
       nuevaFechaFinalCheck &&
       fechaAprobacionOriginal &&
       nuevaFechaFinalCheck !== fechaAprobacionOriginal &&
@@ -971,9 +1119,17 @@ export function EditarRevisionManual() {
     setGuardandoFinal(true)
 
     try {
-      // Guardar todos los cambios primero
+      const snapCierre = firmaCargaInicialRef.current
+      const needClienteCierre =
+        !!clienteData.cliente_id &&
+        (!snapCierre || firmaSoloCliente(clienteData) !== snapCierre.cliente)
+      const needPrestamoCierre =
+        !!prestamoData.prestamo_id &&
+        (!snapCierre || firmaSoloPrestamo(prestamoData) !== snapCierre.prestamo)
+      const needCuotasCierre =
+        !snapCierre || firmaSoloCuotas(cuotasData) !== snapCierre.cuotas
 
-      if (cambios.cliente && clienteData.cliente_id) {
+      if (needClienteCierre) {
         const clienteUpdate: Record<string, any> = {}
 
         if (clienteData.nombres) clienteUpdate.nombres = clienteData.nombres
@@ -993,10 +1149,12 @@ export function EditarRevisionManual() {
         if (clienteData.fecha_nacimiento !== undefined)
           clienteUpdate.fecha_nacimiento = clienteData.fecha_nacimiento || null
 
-        if (clienteData.notas !== undefined)
-          clienteUpdate.notas = clienteData.notas
+        clienteUpdate.notas = String(clienteData.notas ?? '')
 
-        if (Object.keys(clienteUpdate).length > 0) {
+        if (
+          Object.keys(clienteUpdate).length > 0 &&
+          clienteData.cliente_id != null
+        ) {
           try {
             await revisionManualService.editarCliente(
               clienteData.cliente_id,
@@ -1011,7 +1169,7 @@ export function EditarRevisionManual() {
         }
       }
 
-      if (cambios.prestamo && prestamoData.prestamo_id) {
+      if (needPrestamoCierre) {
         const prestamoUpdate: Record<string, any> = {}
 
         if (
@@ -1035,9 +1193,6 @@ export function EditarRevisionManual() {
 
         if (prestamoData.producto !== undefined)
           prestamoUpdate.producto = prestamoData.producto
-
-        if (prestamoData.observaciones !== undefined)
-          prestamoUpdate.observaciones = prestamoData.observaciones
 
         if (prestamoData.cedula !== undefined)
           prestamoUpdate.cedula = prestamoData.cedula
@@ -1093,7 +1248,12 @@ export function EditarRevisionManual() {
         if (prestamoData.usuario_aprobador !== undefined)
           prestamoUpdate.usuario_aprobador = prestamoData.usuario_aprobador
 
-        if (Object.keys(prestamoUpdate).length > 0) {
+        prestamoUpdate.observaciones = String(prestamoData.observaciones ?? '')
+
+        if (
+          Object.keys(prestamoUpdate).length > 0 &&
+          prestamoData.prestamo_id != null
+        ) {
           try {
             await revisionManualService.editarPrestamo(
               prestamoData.prestamo_id,
@@ -1144,10 +1304,12 @@ export function EditarRevisionManual() {
 
       setCuotasIdsAEliminar([])
 
-      if (cambios.cuotas) {
+      if (needCuotasCierre) {
         for (const cuota of cuotasData) {
           if (cuota.cuota_id) {
-            const cuotaUpdate: Record<string, any> = {}
+            const cuotaUpdate: Record<string, any> = {
+              observaciones: String(cuota.observaciones ?? ''),
+            }
 
             if (cuota.fecha_pago)
               cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
@@ -1164,9 +1326,6 @@ export function EditarRevisionManual() {
 
             if (cuota.estado) cuotaUpdate.estado = cuota.estado
 
-            if (cuota.observaciones !== undefined)
-              cuotaUpdate.observaciones = cuota.observaciones
-
             if (Object.keys(cuotaUpdate).length > 0) {
               try {
                 await revisionManualService.editarCuota(
@@ -1182,6 +1341,8 @@ export function EditarRevisionManual() {
           }
         }
       }
+
+      await persistObservacionesYNotasRevision()
 
       // Finalizar revisión
 
@@ -1257,6 +1418,7 @@ export function EditarRevisionManual() {
     }
     setGuardandoRechazo(true)
     try {
+      await persistObservacionesYNotasRevision()
       await revisionManualService.cambiarEstadoRevision(Number(prestamoId), {
         nuevo_estado: 'rechazado',
         motivo_rechazo: motivoRechazo.trim(),
@@ -1279,10 +1441,8 @@ export function EditarRevisionManual() {
     // Si hay cambios sin guardar, advertir
 
     if (
-      cambios.cliente ||
-      cambios.prestamo ||
-      cambios.cuotas ||
-      cuotasIdsAEliminar.length > 0
+      cuotasIdsAEliminar.length > 0 ||
+      hayDiferenciaVsCargaInicial()
     ) {
       const confirmar = window.confirm(
         '⚠️ Tienes cambios sin guardar.\n\n' +
