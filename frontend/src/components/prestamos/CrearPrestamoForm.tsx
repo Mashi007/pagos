@@ -1531,6 +1531,7 @@ export function CrearPrestamoForm({
                             setFormData({
                               ...formData,
                               fecha_aprobacion: fechaNormalizada || undefined,
+                              fecha_base_calculo: fechaNormalizada || undefined,
                             })
                           }}
                           disabled={isReadOnly}
@@ -1566,7 +1567,7 @@ export function CrearPrestamoForm({
                   ) : null}
                 </div>
 
-                {/* fecha_base_calculo es solo informativo; la amortizacion se calcula con fecha_aprobacion */}
+                {/* fecha_base_calculo se iguala a fecha_aprobacion; la amortización usa fecha_base_calculo */}
 
                 {/* Eliminados campos duplicados de Producto y Analista Asignado */}
 

@@ -685,6 +685,8 @@ def editar_prestamo_revision(
             fecha_base = datetime.strptime(update_data.fecha_base_calculo, "%Y-%m-%d").date()
             cambios_dict['fecha_base_calculo'] = (str(prestamo.fecha_base_calculo), str(fecha_base))
             prestamo.fecha_base_calculo = fecha_base
+            # Alineacion con fecha de aprobacion (misma fecha calendario)
+            prestamo.fecha_aprobacion = datetime.combine(fecha_base, datetime.min.time())
         except ValueError:
             pass
 

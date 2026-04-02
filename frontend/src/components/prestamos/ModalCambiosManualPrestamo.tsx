@@ -52,6 +52,7 @@ export function ModalCambiosManualPrestamo({
       // Primero actualizar la fecha de aprobación
       await prestamoService.updatePrestamo(prestamo.id, {
         fecha_aprobacion: `${fechaAprobacion}T00:00:00`,
+        fecha_base_calculo: fechaAprobacion,
       })
 
       // Luego recalcular las fechas de amortización

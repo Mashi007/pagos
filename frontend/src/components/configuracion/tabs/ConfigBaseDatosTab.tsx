@@ -56,7 +56,9 @@ export function ConfigBaseDatosTab() {
         </div>
 
         <div>
-          <label className="text-sm font-medium">Retención referencial (días)</label>
+          <label className="text-sm font-medium">
+            Retención referencial (días)
+          </label>
 
           <Input
             type="number"

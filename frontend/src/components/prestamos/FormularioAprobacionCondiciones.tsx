@@ -36,13 +36,16 @@ export function FormularioAprobacionCondiciones({
   onClose,
   onSuccess,
 }: FormularioAprobacionCondicionesProps) {
+  const defaultFechaAprobacion = prestamo.fecha_aprobacion
+    ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
+    : prestamo.fecha_base_calculo || new Date().toISOString().split('T')[0]
+
   const [condicionesAprobacion, setCondicionesAprobacion] = useState({
     tasa_interes: 0.0, // Siempre 0% - producto sin interés
 
     plazo_maximo: prestamo.numero_cuotas || 36,
 
-    fecha_base_calculo:
-      prestamo.fecha_base_calculo || new Date().toISOString().split('T')[0],
+    fecha_aprobacion: defaultFechaAprobacion,
 
     observaciones: prestamo.observaciones || '',
   })
@@ -78,8 +81,8 @@ export function FormularioAprobacionCondiciones({
 
     // Validaciones
 
-    if (!condicionesAprobacion.fecha_base_calculo) {
-      console.error('âŒ Validación fallida: fecha_base_calculo vacía')
+    if (!condicionesAprobacion.fecha_aprobacion) {
+      console.error('Validacion fallida: fecha_aprobacion vacia')
 
       toast.error('Debe seleccionar una fecha de desembolso')
 
@@ -117,7 +120,7 @@ export function FormularioAprobacionCondiciones({
       `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
       `• Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
       `• Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
-      `• Fecha de Aprobacion / Desembolso: ${new Date(condicionesAprobacion.fecha_base_calculo).toLocaleDateString()}`
+      `• Fecha de Aprobacion / Desembolso: ${new Date(condicionesAprobacion.fecha_aprobacion).toLocaleDateString()}`
 
     if (!window.confirm(mensajeConfirmacion)) {
       console.log('âŒ Usuario canceló la confirmación')
@@ -137,7 +140,9 @@ export function FormularioAprobacionCondiciones({
 
         plazo_maximo: condicionesAprobacion.plazo_maximo,
 
-        fecha_base_calculo: condicionesAprobacion.fecha_base_calculo,
+        fecha_aprobacion: condicionesAprobacion.fecha_aprobacion,
+
+        fecha_base_calculo: condicionesAprobacion.fecha_aprobacion,
 
         observaciones:
           condicionesAprobacion.observaciones ||
@@ -298,12 +303,12 @@ export function FormularioAprobacionCondiciones({
 
                         <Input
                           type="date"
-                          value={condicionesAprobacion.fecha_base_calculo}
+                          value={condicionesAprobacion.fecha_aprobacion}
                           onChange={e =>
                             setCondicionesAprobacion({
                               ...condicionesAprobacion,
 
-                              fecha_base_calculo: e.target.value,
+                              fecha_aprobacion: e.target.value,
                             })
                           }
                           className="pl-10"
@@ -312,7 +317,8 @@ export function FormularioAprobacionCondiciones({
                       </div>
 
                       <p className="text-xs text-gray-500">
-                        Fecha desde la cual se calcularán las cuotas
+                        Misma fecha se guarda como base de cálculo de la
+                        amortización
                       </p>
                     </div>
                   </div>
@@ -362,13 +368,13 @@ export function FormularioAprobacionCondiciones({
                   }}
                   disabled={
                     isLoading ||
-                    !condicionesAprobacion.fecha_base_calculo ||
+                    !condicionesAprobacion.fecha_aprobacion ||
                     condicionesAprobacion.tasa_interes < 0 ||
                     condicionesAprobacion.tasa_interes > 100 ||
                     condicionesAprobacion.plazo_maximo <= 0
                   }
                   title={
-                    !condicionesAprobacion.fecha_base_calculo
+                    !condicionesAprobacion.fecha_aprobacion
                       ? 'Debe seleccionar una fecha de desembolso'
                       : condicionesAprobacion.tasa_interes < 0 ||
                           condicionesAprobacion.tasa_interes > 100

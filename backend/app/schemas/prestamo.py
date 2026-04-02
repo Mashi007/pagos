@@ -161,7 +161,7 @@ class PrestamoResponse(BaseModel):
     nombres: Optional[str] = None
     cuota_periodo: Optional[Decimal] = None
     fecha_requerimiento: Optional[date] = None
-    fecha_base_calculo: Optional[date] = None  # Solo informativa; regla obligatoria: la tabla de amortización se calcula únicamente con fecha_aprobacion
+    fecha_base_calculo: Optional[date] = None  # Amortizacion: misma fecha calendario que fecha_aprobacion (formularios muestran aprobacion; BD usa base para calculo)
     tasa_interes: Optional[Decimal] = Decimal("0.00")  # Siempre 0% por defecto (producto sin interés)
     producto: Optional[str] = None
     valor_activo: Optional[Decimal] = None

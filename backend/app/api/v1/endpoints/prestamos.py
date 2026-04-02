@@ -432,6 +432,9 @@ class AplicarCondicionesBody(BaseModel):
 
     plazo_maximo: Optional[int] = None
 
+    # Formularios: preferir fecha_aprobacion (misma fecha calendario que fecha_base_calculo).
+    fecha_aprobacion: Optional[date] = None
+
     fecha_base_calculo: Optional[date] = None
 
     observaciones: Optional[str] = None
@@ -1734,15 +1737,27 @@ def _fecha_requerimiento_date(p: "Prestamo") -> Optional[date]:
 
 
 
-def _fecha_aprobacion_para_amortizacion(p: "Prestamo") -> Optional[date]:
+def _fecha_para_amortizacion(p: "Prestamo") -> Optional[date]:
 
     """
 
-    Regla obligatoria: la tabla de amortización se calcula únicamente con la fecha de aprobación.
+    Regla unica: la amortizacion usa fecha_base_calculo (copia de la fecha de aprobacion en formularios).
 
-    Devuelve la parte fecha de fecha_aprobacion del préstamo, o None si no está definida.
+    Compatibilidad: si fecha_base_calculo es NULL (datos antiguos), se usa la parte fecha de fecha_aprobacion.
 
     """
+
+    fb = getattr(p, "fecha_base_calculo", None)
+
+    if fb is not None:
+
+        if isinstance(fb, datetime):
+
+            return fb.date()
+
+        if isinstance(fb, date):
+
+            return fb
 
     fa = getattr(p, "fecha_aprobacion", None)
 
@@ -1804,7 +1819,7 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
 
     Genera filas en tabla cuotas para el préstamo dado.
 
-    Regla obligatoria: fecha_base debe ser la fecha de aprobación del préstamo (única fecha para el cálculo).
+    Regla unica: fecha_base debe ser fecha_base_calculo del prestamo (misma fecha calendario que fecha_aprobacion).
 
 
 
@@ -1917,7 +1932,7 @@ def _recalcular_fechas_vencimiento_cuotas(db: Session, p: Prestamo, fecha_base: 
     Mantiene: montos, pagos, saldos de capital.
     Recalcula: fecha_vencimiento y estado de cuota (VENCIDO, PENDIENTE, MOROSO, etc.).
     
-    Regla: fecha_base debe ser la nueva fecha de aprobación del préstamo.
+    Regla: fecha_base debe ser la nueva fecha_base_calculo del prestamo (alineada con fecha_aprobacion).
     
     Returns: dict con estadísticas de actualización.
     """
@@ -2585,9 +2600,9 @@ def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
 
     monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
 
-    # Regla obligatoria: la tabla de amortización se calcula únicamente con la fecha de aprobación.
+    # Regla unica: amortizacion con fecha_base_calculo (alineada con fecha de aprobacion en formularios).
 
-    fecha_base = _fecha_aprobacion_para_amortizacion(p)
+    fecha_base = _fecha_para_amortizacion(p)
 
     if not fecha_base:
 
@@ -2595,7 +2610,7 @@ def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
 
             status_code=400,
 
-            detail="El préstamo debe tener fecha de aprobación para generar la tabla de amortización. Asigne la fecha de aprobación primero.",
+            detail="El préstamo debe tener fecha base de cálculo (o fecha de aprobación en datos antiguos) para generar la tabla de amortización.",
 
         )
 
@@ -2618,7 +2633,8 @@ def recalcular_fechas_amortizacion(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    Recalcula SOLO las fechas de vencimiento de las cuotas existentes cuando cambia la fecha de aprobación.
+    Recalcula SOLO las fechas de vencimiento de las cuotas existentes cuando cambia fecha_base_calculo
+    (misma fecha calendario que fecha de aprobacion en formularios).
     
     Mantiene:
     - Montos de cuota iguales
@@ -2626,23 +2642,22 @@ def recalcular_fechas_amortizacion(
     - Saldos de capital iniciales y finales
     
     Recalcula:
-    - Fechas de vencimiento (desde nueva fecha de aprobación)
+    - Fechas de vencimiento desde la nueva fecha base
     - Estados de cuota (VENCIDO, PENDIENTE, MOROSO, etc.) según nueva fecha de vencimiento
     
-    Debe llamarse después de actualizar fecha_aprobacion del préstamo.
+    Debe llamarse después de alinear fecha_aprobacion y fecha_base_calculo en el prestamo.
     """
     p = db.get(Prestamo, prestamo_id)
     
     if not p:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
     
-    # Validar que existe fecha de aprobación
-    fecha_base = _fecha_aprobacion_para_amortizacion(p)
+    fecha_base = _fecha_para_amortizacion(p)
     
     if not fecha_base:
         raise HTTPException(
             status_code=400,
-            detail="El préstamo debe tener fecha de aprobación para recalcular fechas de vencimiento."
+            detail="El préstamo debe tener fecha base de cálculo (o fecha de aprobación en datos antiguos) para recalcular fechas de vencimiento."
         )
     
     # Verificar que existen cuotas
@@ -2714,25 +2729,48 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
 
         p.numero_cuotas = payload.plazo_maximo
 
-    if payload.fecha_base_calculo is not None:
-
-        p.fecha_base_calculo = payload.fecha_base_calculo
-
     if payload.observaciones is not None:
 
         p.observaciones = payload.observaciones
 
     p.estado = "APROBADO"
 
-    if p.fecha_aprobacion is None:
+    # Fecha unica en formularios: fecha_aprobacion; se replica en fecha_base_calculo para amortizacion.
+    fecha_calendario: Optional[date] = None
 
-        fa = payload.fecha_base_calculo or getattr(p, "fecha_base_calculo", None) or date.today()
+    if payload.fecha_aprobacion is not None:
+
+        fecha_calendario = payload.fecha_aprobacion
+
+    elif payload.fecha_base_calculo is not None:
+
+        fecha_calendario = payload.fecha_base_calculo
+
+    if fecha_calendario is not None:
+
+        fecha_req = _fecha_requerimiento_date(p)
+
+        if fecha_req and fecha_calendario < fecha_req:
+
+            raise HTTPException(
+
+                status_code=400,
+
+                detail=f"La fecha de aprobación ({fecha_calendario}) debe ser igual o posterior a la fecha de requerimiento ({fecha_req}).",
+
+            )
+
+        p.fecha_base_calculo = fecha_calendario
+
+        p.fecha_aprobacion = datetime.combine(fecha_calendario, datetime.min.time())
+
+    elif p.fecha_aprobacion is None:
+
+        fa = getattr(p, "fecha_base_calculo", None) or date.today()
 
         if hasattr(fa, "date"):
 
             fa = fa.date() if callable(getattr(fa, "date", None)) else fa
-
-        # Coherencia: fecha de aprobación >= fecha de requerimiento
 
         fecha_req = _fecha_requerimiento_date(p)
 
@@ -2748,6 +2786,8 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
 
         p.fecha_aprobacion = datetime.combine(fa, datetime.min.time())
 
+        p.fecha_base_calculo = fa
+
     validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
 
     ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
@@ -2756,13 +2796,13 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
 
     db.commit()
 
-    # Generar cuotas si no existen (regla obligatoria: solo fecha de aprobación)
+    # Generar cuotas si no existen (fecha_base_calculo alineada con fecha de aprobacion)
 
     existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
 
     if existentes == 0:
 
-        fecha_base = _fecha_aprobacion_para_amortizacion(p)
+        fecha_base = _fecha_para_amortizacion(p)
 
         if fecha_base:
 
@@ -2927,7 +2967,7 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
 
         monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
 
-        fecha_base = payload.fecha_aprobacion
+        fecha_base = fecha_ap_date
 
         cuotas_recalculadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
 
@@ -3375,7 +3415,7 @@ def generar_cuotas_aprobados_sin_cuotas(
 
     Genera cuotas para todos los préstamos en estado APROBADO que no tienen cuotas.
 
-    Regla obligatoria: solo se usa fecha_aprobacion para el cálculo; se omiten préstamos sin fecha de aprobación.
+    Regla unica: se usa fecha_base_calculo para el calculo; se omiten prestamos sin fecha base ni fecha de aprobacion (legacy).
 
     Solo administrador. Útil para regularizar datos legacy o préstamos que quedaron sin tabla de amortización.
 
@@ -3427,13 +3467,11 @@ def generar_cuotas_aprobados_sin_cuotas(
 
         try:
 
-            # Regla obligatoria: solo fecha de aprobación para tabla de amortización
-
-            fecha_base = _fecha_aprobacion_para_amortizacion(p)
+            fecha_base = _fecha_para_amortizacion(p)
 
             if not fecha_base:
 
-                errores.append({"prestamo_id": p.id, "error": "Sin fecha de aprobación; obligatoria para generar amortización."})
+                errores.append({"prestamo_id": p.id, "error": "Sin fecha base de cálculo ni fecha de aprobación; obligatorias para generar amortización."})
 
                 continue
 
@@ -3859,9 +3897,20 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
         db.refresh(row)
 
+    # Regla unica: fecha_base_calculo = misma fecha calendario que fecha_aprobacion
+    if row.fecha_aprobacion:
+
+        ap_d = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
+
+        row.fecha_base_calculo = ap_d
+
+        db.commit()
+
+        db.refresh(row)
+
     
 
-    # Generar cuotas automáticamente con fecha_aprobacion (regla obligatoria). Creación individual y carga masiva ya dejan APROBADO y fecha_aprobacion.
+    # Generar cuotas con fecha_base_calculo (alineada con fecha de aprobacion). Creacion individual y carga masiva ya dejan APROBADO y fechas.
 
     numero_cuotas = payload.numero_cuotas or 12
 
@@ -3875,7 +3924,7 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
     try:
 
-        fecha_base_cuotas = _fecha_aprobacion_para_amortizacion(row)
+        fecha_base_cuotas = _fecha_para_amortizacion(row)
 
         if fecha_base_cuotas:
 
@@ -3887,7 +3936,7 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
             logger.info(f"Préstamo {prestamo_id}: {cuotas_generadas} cuotas generadas automáticamente (fecha_base={fecha_base_cuotas})")
 
-        # Si no hay fecha_aprobacion (ej. DRAFT desde modal): no generar cuotas; se generarán al aprobar con fecha.
+        # Si no hay fecha base ni aprobacion (ej. DRAFT): no generar cuotas; se generaran al aprobar con fecha.
 
     except Exception as e:
 
@@ -3933,7 +3982,7 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
     logger.info(f"[update_prestamo] BD antes: fecha_requerimiento={row.fecha_requerimiento} (type={type(row.fecha_requerimiento).__name__}), fecha_aprobacion={row.fecha_aprobacion} (type={type(row.fecha_aprobacion).__name__})")
 
     est_antes = (row.estado or "").strip().upper()
-    fecha_aprobacion_antes = _fecha_aprobacion_para_amortizacion(row)
+    fecha_base_amort_antes = _fecha_para_amortizacion(row)
 
     if est_antes == "DESISTIMIENTO":
 
@@ -4007,10 +4056,14 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         row.fecha_aprobacion = payload.fecha_aprobacion
 
-        # fecha_base_calculo siempre igual a fecha_aprobacion
-        fa_date = payload.fecha_aprobacion.date() if hasattr(payload.fecha_aprobacion, "date") and callable(getattr(payload.fecha_aprobacion, "date", None)) else payload.fecha_aprobacion
-        if payload.fecha_base_calculo is None:
-            row.fecha_base_calculo = fa_date
+        fa_date = (
+            payload.fecha_aprobacion.date()
+            if hasattr(payload.fecha_aprobacion, "date")
+            and callable(getattr(payload.fecha_aprobacion, "date", None))
+            else payload.fecha_aprobacion
+        )
+
+        row.fecha_base_calculo = fa_date
 
     if payload.cuota_periodo is not None:
 
@@ -4028,9 +4081,11 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
         row.observaciones = payload.observaciones
 
-    if payload.fecha_base_calculo is not None:
+    if payload.fecha_aprobacion is None and payload.fecha_base_calculo is not None:
 
         row.fecha_base_calculo = payload.fecha_base_calculo
+
+        row.fecha_aprobacion = datetime.combine(payload.fecha_base_calculo, datetime.min.time())
 
     if payload.tasa_interes is not None:
 
@@ -4107,7 +4162,7 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
     if row.estado == "APROBADO":
 
         existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
-        fecha_base = _fecha_aprobacion_para_amortizacion(row)
+        fecha_base = _fecha_para_amortizacion(row)
 
         if existentes == 0:
 
@@ -4137,9 +4192,9 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
                         raise
 
-        elif existentes > 0 and fecha_base and fecha_base != fecha_aprobacion_antes:
+        elif existentes > 0 and fecha_base and fecha_base != fecha_base_amort_antes:
             logger.info(
-                f"[update_prestamo] fecha_aprobacion cambió de {fecha_aprobacion_antes} a {fecha_base} — "
+                f"[update_prestamo] fecha base amortizacion cambio de {fecha_base_amort_antes} a {fecha_base} — "
                 f"recalculando fechas de vencimiento de {existentes} cuota(s)"
             )
             resultado_recalc = _recalcular_fechas_vencimiento_cuotas(db, row, fecha_base)
@@ -4153,7 +4208,7 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
                 entidad_id=prestamo_id,
                 detalles=(
                     f"Recalculo automatico de fechas de cuotas. "
-                    f"Fecha aprobacion anterior: {fecha_aprobacion_antes}, "
+                    f"Fecha base anterior: {fecha_base_amort_antes}, "
                     f"nueva: {fecha_base}. "
                     f"Cuotas actualizadas: {resultado_recalc.get('actualizadas', 0)}"
                 ),
@@ -4745,6 +4800,8 @@ async def upload_prestamos_excel(
                     fecha_requerimiento=hoy,
 
                     fecha_aprobacion=datetime.combine(hoy, time.min),
+
+                    fecha_base_calculo=hoy,
 
                     modalidad_pago=modalidad,
 

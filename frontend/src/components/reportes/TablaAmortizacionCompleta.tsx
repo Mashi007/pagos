@@ -564,19 +564,15 @@ export function TablaAmortizacionCompleta() {
   const handleAbrirDialogoFecha = (prestamo: any) => {
     setPrestamoParaGenerar(prestamo)
 
-    // Si ya tiene fecha_base_calculo, usarla como valor por defecto
-
-    if (prestamo.fecha_base_calculo) {
-      setFechaBaseCalculo(prestamo.fecha_base_calculo)
+    let ymd: string
+    if (prestamo.fecha_aprobacion) {
+      ymd = new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
+    } else if (prestamo.fecha_base_calculo) {
+      ymd = prestamo.fecha_base_calculo
     } else {
-      // Usar fecha de aprobación o fecha actual como sugerencia
-
-      const fechaSugerida = prestamo.fecha_aprobacion
-        ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0]
-
-      setFechaBaseCalculo(fechaSugerida)
+      ymd = new Date().toISOString().split('T')[0]
     }
+    setFechaBaseCalculo(ymd)
 
     setMostrarDialogFecha(true)
   }
@@ -593,17 +589,18 @@ export function TablaAmortizacionCompleta() {
     setProcesandoGenerarCuotasYPagos(true)
 
     try {
-      // Paso 1: Actualizar fecha_base_calculo en el préstamo
+      // Paso 1: Guardar fecha de aprobación y base de cálculo (misma fecha calendario)
 
-      if (!prestamoParaGenerar.fecha_base_calculo) {
-        await mutationActualizarPrestamo.mutateAsync({
-          prestamoId: prestamoParaGenerar.id,
+      await mutationActualizarPrestamo.mutateAsync({
+        prestamoId: prestamoParaGenerar.id,
 
-          data: { fecha_base_calculo: fechaBaseCalculo },
-        })
+        data: {
+          fecha_aprobacion: `${fechaBaseCalculo}T00:00:00`,
+          fecha_base_calculo: fechaBaseCalculo,
+        },
+      })
 
-        toast.success('Fecha base de cálculo guardada')
-      }
+      toast.success('Fecha de aprobación y base de cálculo guardadas')
 
       // Paso 2: Generar las cuotas
 
@@ -1923,12 +1920,12 @@ export function TablaAmortizacionCompleta() {
             )}
 
             <div>
-              <Label htmlFor="fecha_base_calculo">
-                Fecha Base de Cálculo *
+              <Label htmlFor="fecha_aprobacion_amort">
+                Fecha de Aprobación / Desembolso *
               </Label>
 
               <Input
-                id="fecha_base_calculo"
+                id="fecha_aprobacion_amort"
                 type="date"
                 value={fechaBaseCalculo}
                 onChange={e => setFechaBaseCalculo(e.target.value)}
@@ -1937,8 +1934,8 @@ export function TablaAmortizacionCompleta() {
               />
 
               <p className="mt-1 text-xs text-gray-500">
-                Esta fecha será guardada y usada para generar las cuotas del
-                préstamo.
+                Se guarda igual en la fecha base de cálculo; con ella se generan
+                las cuotas del préstamo.
               </p>
             </div>
 

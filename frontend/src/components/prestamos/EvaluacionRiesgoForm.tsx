@@ -422,12 +422,12 @@ export function EvaluacionRiesgoForm({
 
                               <Input
                                 type="date"
-                                value={condicionesAprobacion.fecha_base_calculo}
+                                value={condicionesAprobacion.fecha_aprobacion}
                                 onChange={e =>
                                   setCondicionesAprobacion({
                                     ...condicionesAprobacion,
 
-                                    fecha_base_calculo: e.target.value,
+                                    fecha_aprobacion: e.target.value,
                                   })
                                 }
                                 className="pl-10"
@@ -436,7 +436,8 @@ export function EvaluacionRiesgoForm({
                             </div>
 
                             <p className="text-xs text-gray-500">
-                              Fecha desde la cual se calcularán las cuotas
+                              Se replica en la fecha base de cálculo de la
+                              amortización
                             </p>
                           </div>
                         </div>

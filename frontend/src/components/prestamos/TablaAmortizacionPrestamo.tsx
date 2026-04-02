@@ -301,7 +301,7 @@ export function TablaAmortizacionPrestamo({
                 No hay tabla de amortización generada para este préstamo.
               </p>
 
-              {prestamo.fecha_base_calculo &&
+              {(prestamo.fecha_base_calculo || prestamo.fecha_aprobacion) &&
                 prestamo.estado !== 'LIQUIDADO' && (
                   <Button
                     size="sm"

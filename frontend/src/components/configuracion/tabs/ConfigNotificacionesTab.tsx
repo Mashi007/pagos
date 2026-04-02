@@ -94,7 +94,9 @@ export function ConfigNotificacionesTab() {
 
       <Card key={demoKey}>
         <CardHeader>
-          <CardTitle className="text-base">Referencia local (no persiste)</CardTitle>
+          <CardTitle className="text-base">
+            Referencia local (no persiste)
+          </CardTitle>
           <CardDescription>
             Sin horarios ni programación: los campos son solo demostración en el
             navegador.
@@ -136,9 +138,7 @@ export function ConfigNotificacionesTab() {
                 className="rounded"
               />
 
-              <label className="text-sm font-medium">
-                Notificaciones Push
-              </label>
+              <label className="text-sm font-medium">Notificaciones Push</label>
             </div>
           </div>
 
