@@ -1582,10 +1582,12 @@ export function PrestamosList() {
                                     cls: 'text-amber-500 hover:bg-amber-50',
                                   },
                                   revisando: {
-                                    icon: <HelpCircle className="h-4 w-4" />,
+                                    icon: (
+                                      <HelpCircle className="h-4 w-4 text-orange-600" />
+                                    ),
                                     title:
                                       'Revisión manual: En revisión - click para continuar',
-                                    cls: 'text-blue-500 hover:bg-blue-50',
+                                    cls: 'text-orange-600 hover:bg-orange-50',
                                   },
                                   en_espera: {
                                     icon: <X className="h-4 w-4" />,

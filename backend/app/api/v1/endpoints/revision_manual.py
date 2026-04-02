@@ -7,7 +7,7 @@ import logging
 from datetime import date, datetime
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
-from sqlalchemy import select, func, and_, case, literal_column
+from sqlalchemy import select, func, and_, case, literal_column, text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,7 @@ from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
+from app.models.auditoria import Auditoria
 from app.models.estado_cliente import EstadoCliente
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 from app.services.prestamo_estado_coherencia import prestamo_bloquea_nuevas_cuotas_o_cambio_plazo
@@ -635,7 +636,12 @@ def editar_prestamo_revision(
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
     _validar_permiso_edicion(db, prestamo_id, current_user, actor)
-    
+
+    # Misma regla que PUT prestamos: comparar fecha base de amortización antes/después.
+    from app.api.v1.endpoints.prestamos import _fecha_para_amortizacion
+
+    fecha_base_amort_antes = _fecha_para_amortizacion(prestamo)
+
     cambios_dict = {}
     
     if update_data.total_financiamiento is not None and update_data.total_financiamiento >= 0:
@@ -789,6 +795,41 @@ def editar_prestamo_revision(
         resumen_campos=list(cambios_dict.keys()),
     )
 
+    resultado_recalc = None
+    # Préstamo APROBADO o LIQUIDADO con cuotas: si cambió fecha_aprobacion/fecha_base_calculo, persistir nuevas fechas de vencimiento en cuotas (BD).
+    if (prestamo.estado or "").strip().upper() in ("APROBADO", "LIQUIDADO"):
+        existentes = (
+            db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
+        )
+        fecha_base = _fecha_para_amortizacion(prestamo)
+        if existentes > 0 and fecha_base and fecha_base != fecha_base_amort_antes:
+            from app.api.v1.endpoints.prestamos import _recalcular_fechas_vencimiento_cuotas
+
+            logger.info(
+                "[revision_manual] editar_prestamo: fecha base amortización %s -> %s; recalculando %s cuota(s), prestamo_id=%s",
+                fecha_base_amort_antes,
+                fecha_base,
+                existentes,
+                prestamo_id,
+            )
+            resultado_recalc = _recalcular_fechas_vencimiento_cuotas(db, prestamo, fecha_base)
+            _fallback_uid = db.execute(text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")).scalar() or 1
+            db.add(
+                Auditoria(
+                    usuario_id=_fallback_uid,
+                    accion="RECALCULO_FECHAS_AMORTIZACION",
+                    entidad="prestamos",
+                    entidad_id=prestamo_id,
+                    detalles=(
+                        "Recalculo automatico de fechas de cuotas (revision_manual PUT prestamos). "
+                        f"Fecha base anterior: {fecha_base_amort_antes}, nueva: {fecha_base}. "
+                        f"Cuotas actualizadas: {resultado_recalc.get('actualizadas', 0)}"
+                    ),
+                    exito=True,
+                )
+            )
+            db.commit()
+
     usuario_id = getattr(current_user, "id", None)
     if usuario_id:
         try:
@@ -807,11 +848,14 @@ def editar_prestamo_revision(
         except Exception:
             logger.warning("revision_manual: no se pudo registrar auditoría edición préstamo id=%s", prestamo_id)
 
-    return {
+    out: dict = {
         "mensaje": "Préstamo actualizado exitosamente",
         "prestamo_id": prestamo_id,
-        "cambios": {k: {"anterior": v[0], "nuevo": v[1]} for k, v in cambios_dict.items()}
+        "cambios": {k: {"anterior": v[0], "nuevo": v[1]} for k, v in cambios_dict.items()},
     }
+    if resultado_recalc is not None:
+        out["recalculo_cuotas"] = resultado_recalc
+    return out
 
 
 @router.delete("/prestamos/{prestamo_id}")

@@ -122,16 +122,16 @@ export function EstadoRevisionIcon({
       case 'revisando':
         return (
           <div
-            className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-blue-100 px-2 py-1 transition-all hover:bg-blue-200"
+            className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-orange-100 px-2 py-1 transition-all hover:bg-orange-200"
             onClick={handleShowDialog}
             title="Click para cambiar estado"
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
             ) : (
-              <HelpCircle className="h-4 w-4 text-blue-600" />
+              <HelpCircle className="h-4 w-4 text-orange-600" />
             )}
-            <span className="text-xs font-semibold text-blue-700">
+            <span className="text-xs font-semibold text-orange-700">
               Revisando
             </span>
           </div>

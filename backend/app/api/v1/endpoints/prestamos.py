@@ -4219,14 +4219,16 @@ def update_prestamo(
 
         raise
 
-    # Si quedó en APROBADO y no tiene cuotas, generar tabla de amortización (solo si tiene fecha de aprobación)
+    # APROBADO: sin cuotas, generar tabla; APROBADO o LIQUIDADO con cuotas: recalcular fechas si cambió la fecha base.
 
-    if row.estado == "APROBADO":
+    _est_amort = (row.estado or "").strip().upper()
+
+    if _est_amort in ("APROBADO", "LIQUIDADO"):
 
         existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
         fecha_base = _fecha_para_amortizacion(row)
 
-        if existentes == 0:
+        if existentes == 0 and _est_amort == "APROBADO":
 
             if fecha_base:
 
