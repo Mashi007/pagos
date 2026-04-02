@@ -1,10 +1,10 @@
 """
-Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos).
+Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
 Solo correos con adjuntos (has:attachment); solo imagenes/PDF adjuntos (no cuerpo ni inline).
 Comprobantes RAPI-CREDIT terminal (formato A) o BNC (formato B); otros: destacado + no leido.
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel: descargar Excel desde BD
-- GET /pagos/gmail/status: ultima ejecucion y proxima programada
+- GET /pagos/gmail/status: ultima ejecucion (sin cron)
 - POST /pagos/gmail/confirmar-dia: confirmacion si/no; si si, borrado de datos acumulados
 """
 import io
@@ -147,22 +147,21 @@ def run_now(
 
 @router.get("/status")
 def status(db: Session = Depends(get_db)):
-    """Última ejecución, próxima y última fecha con datos disponibles para descargar."""
+    """Ultima ejecucion manual; sin proxima ejecucion programada (pipeline solo desde la UI)."""
     last = db.execute(select(PagosGmailSync).order_by(desc(PagosGmailSync.started_at)).limit(1)).scalars().first()
-    from app.core.config import settings
-    cron_min = settings.PAGOS_GMAIL_CRON_MINUTES
-    next_at = None
-    if last and last.started_at:
-        next_at = last.started_at + timedelta(minutes=cron_min)
     latest_data_date = _get_latest_date_with_data(db)
+    marcados = 0
+    if last is not None:
+        marcados = int(getattr(last, "correos_marcados_revision", 0) or 0)
     return {
         "last_run": last.started_at.isoformat() if last and last.started_at else None,
         "last_status": last.status if last else None,
         "last_emails": last.emails_processed if last else 0,
         "last_files": last.files_processed if last else 0,
         "last_error": last.error_message if last and last.status == "error" else None,
-        "next_run_approx": next_at.isoformat() if next_at else None,
-        "latest_data_date": latest_data_date,  # fecha más reciente con datos para descargar
+        "next_run_approx": None,
+        "latest_data_date": latest_data_date,
+        "last_correos_marcados_revision": marcados,
     }
 
 

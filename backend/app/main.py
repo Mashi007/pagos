@@ -256,6 +256,21 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
             except Exception as col_err:
                 logger.warning("[DB Startup] drive_email_link (no crÃ­tico): %s", col_err)
 
+            try:
+                with engine.connect() as conn:
+                    r = conn.execute(text("""
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'pagos_gmail_sync' AND column_name = 'correos_marcados_revision'
+                    """))
+                    if r.fetchone() is None:
+                        conn.execute(text(
+                            "ALTER TABLE pagos_gmail_sync ADD COLUMN correos_marcados_revision INTEGER NOT NULL DEFAULT 0"
+                        ))
+                        conn.commit()
+                        logger.info("[DB Startup] Columna pagos_gmail_sync.correos_marcados_revision anadida.")
+            except Exception as col_err2:
+                logger.warning("[DB Startup] correos_marcados_revision (no critico): %s", col_err2)
+
             return
 
         except Exception as e:

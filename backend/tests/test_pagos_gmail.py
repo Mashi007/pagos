@@ -10,12 +10,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, engine
 
 from app.api.v1.endpoints.pagos_gmail import (
     _find_most_recent_data,
@@ -27,6 +27,33 @@ from app.api.v1.endpoints.pagos_gmail import (
     status,
 )
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_pagos_gmail_sync_correos_revision_column():
+    """Alinea BD de tests con el modelo (columna metricas pipeline manual)."""
+    try:
+        with engine.connect() as conn:
+            r = conn.execute(
+                text(
+                    """
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'pagos_gmail_sync'
+                      AND column_name = 'correos_marcados_revision'
+                    """
+                )
+            )
+            if r.fetchone() is None:
+                conn.execute(
+                    text(
+                        "ALTER TABLE pagos_gmail_sync ADD COLUMN "
+                        "correos_marcados_revision INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
+                conn.commit()
+    except Exception:
+        pass
+    yield
 
 
 @pytest.fixture(scope="function")
@@ -58,6 +85,8 @@ def test_status_endpoint_returns_structure(db: Session):
     assert "last_files" in resp
     assert "next_run_approx" in resp
     assert "latest_data_date" in resp
+    assert "last_correos_marcados_revision" in resp
+    assert resp["next_run_approx"] is None
 
 
 def test_status_when_no_sync(db: Session):

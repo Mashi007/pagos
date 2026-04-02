@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-import { Upload, FileSpreadsheet, ChevronDown, Mail, X } from 'lucide-react'
+import { Upload, FileSpreadsheet, ChevronDown, Mail } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
 
@@ -9,14 +9,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '../../components/ui/popover'
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select'
 
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 
@@ -30,8 +22,6 @@ import { pagoService } from '../../services/pagoService'
 
 import { formatLastSyncDate } from '../../utils'
 
-import { useGmailPipeline } from '../../hooks/useGmailPipeline'
-
 interface CargaMasivaMenuProps {
   onSuccess?: () => void
 }
@@ -43,37 +33,11 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
 
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
 
-  const [scanFilter, setScanFilter] = useState<'unread' | 'read' | 'all'>(
-    'unread'
-  )
+  const [gmailStatus, setGmailStatus] = useState<Awaited<
+    ReturnType<typeof pagoService.getGmailStatus>
+  > | null>(null)
 
   const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
-
-  const {
-    loading: loadingGmail,
-    gmailStatus,
-    setGmailStatus,
-    run: runGmail,
-    stopPolling: stopGmailPolling,
-  } = useGmailPipeline({
-    onStatusUpdate: s => {
-      setGmailStatus(s)
-
-      if (s?.last_status === 'success' && s?.latest_data_date && s?.last_run) {
-        if (lastRunForWhichWeShowedDialogRef.current !== s.last_run) {
-          lastRunForWhichWeShowedDialogRef.current = s.last_run
-
-          setShowConfirmarBorrar(true)
-        }
-      }
-    },
-
-    onDone: s => {
-      if (s?.last_run) lastRunForWhichWeShowedDialogRef.current = s.last_run
-
-      setShowConfirmarBorrar(true)
-    },
-  })
 
   useEffect(() => {
     pagoService
@@ -105,26 +69,6 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
       .catch(() => setGmailStatus(null))
   }, [isOpen])
 
-  useEffect(() => {
-    return () => {
-      stopGmailPolling()
-    }
-  }, [stopGmailPolling])
-
-  function handleDetenerSeguimientoGmail() {
-    stopGmailPolling()
-    toast(
-      'Seguimiento en pantalla detenido. El servidor puede seguir procesando el pipeline en segundo plano.',
-      { duration: 5000 }
-    )
-  }
-
-  async function handleGenerarExcelDesdeGmail() {
-    setIsOpen(false)
-
-    runGmail(scanFilter)
-  }
-
   return (
     <>
       <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -154,11 +98,17 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
           </button>
 
           <p className="mb-1 mt-2 border-t border-gray-100 px-2 py-1 pt-2 text-xs text-gray-500">
-            Otros
+            Gmail
+          </p>
+
+          <p className="mb-2 flex items-start gap-2 px-2 text-xs text-gray-600">
+            <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Para procesar correos use la lista Pagos: Agregar pago → Generar
+            Excel desde email → Procesar correos.
           </p>
 
           {gmailStatus && (
-            <p className="mb-1 border-b border-gray-100 px-2 py-1 text-xs text-gray-600">
+            <p className="mb-1 border-t border-gray-100 px-2 py-1 text-xs text-gray-600">
               {gmailStatus.last_status === 'error' ? (
                 <span className="text-amber-600">Última sync falló</span>
               ) : gmailStatus.last_run ? (
@@ -166,74 +116,27 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
                   Última sync: {formatLastSyncDate(gmailStatus.last_run)} -{' '}
                   {gmailStatus.last_emails} correos, {gmailStatus.last_files}{' '}
                   archivos
+                  {typeof gmailStatus.last_correos_marcados_revision ===
+                    'number' &&
+                  gmailStatus.last_correos_marcados_revision > 0 ? (
+                    <>
+                      <br />
+                      <span className="text-amber-700">
+                        {
+                          gmailStatus.last_correos_marcados_revision
+                        }{' '}
+                        con estrella (revisar en Gmail).
+                      </span>
+                    </>
+                  ) : null}
                 </>
               ) : (
                 <span className="text-gray-500">Sin sync aún</span>
               )}
             </p>
           )}
-
-          <div className="space-y-1">
-            <div className="px-2 py-1">
-              <label className="mb-1 block text-xs text-gray-600">
-                Correos a escanear
-              </label>
-
-              <Select
-                value={scanFilter}
-                onValueChange={(v: 'unread' | 'read' | 'all') =>
-                  setScanFilter(v)
-                }
-              >
-                <SelectTrigger className="h-8 w-full text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-
-                <SelectContent>
-                  <SelectItem value="unread">No leídos</SelectItem>
-
-                  <SelectItem value="read">Leídos</SelectItem>
-
-                  <SelectItem value="all">
-                    Todos (leídos y no leídos)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <button
-              className="flex w-full items-center rounded-md px-3 py-2.5 text-sm transition-colors hover:bg-gray-100 disabled:opacity-50"
-              onClick={handleGenerarExcelDesdeGmail}
-              disabled={loadingGmail}
-            >
-              <Mail className="mr-2 h-4 w-4" />
-
-              {loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}
-            </button>
-
-            {loadingGmail && (
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-amber-800 transition-colors hover:bg-amber-50"
-                onClick={handleDetenerSeguimientoGmail}
-              >
-                <X className="h-4 w-4 shrink-0" />
-                Detener seguimiento (deja de consultar el estado)
-              </button>
-            )}
-
-            <p className="mt-1 border-t border-gray-100 px-2 py-1 text-xs text-gray-500">
-              {scanFilter === 'unread'
-                ? 'Solo no leídos. Al terminar se vuelve a revisar la bandeja.'
-                : scanFilter === 'read'
-                  ? 'Solo correos leídos.'
-                  : 'Con «Todos»: leídos y no leídos de toda la bandeja.'}
-            </p>
-          </div>
         </PopoverContent>
       </Popover>
-
-      {/* Revisar y editar antes de guardar (Pagos Excel) */}
 
       {showPagos && (
         <ExcelUploaderPagosUI

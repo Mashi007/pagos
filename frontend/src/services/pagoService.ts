@@ -806,6 +806,8 @@ class PagoService {
     next_run_approx: string | null
 
     latest_data_date?: string | null
+
+    last_correos_marcados_revision?: number
   }> {
     return await apiClient.get(`${this.baseUrl}/gmail/status`)
   }

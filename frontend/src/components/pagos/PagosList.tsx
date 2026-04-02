@@ -1080,6 +1080,19 @@ export function PagosList() {
                     Última sync: {formatLastSyncDate(gmailStatus.last_run)} -{' '}
                     {gmailStatus.last_emails} correos, {gmailStatus.last_files}{' '}
                     archivos
+                    {typeof gmailStatus.last_correos_marcados_revision ===
+                      'number' &&
+                    gmailStatus.last_correos_marcados_revision > 0 ? (
+                      <>
+                        <br />
+                        <span className="text-amber-700">
+                          {
+                            gmailStatus.last_correos_marcados_revision
+                          }{' '}
+                          destacado(s) en Gmail (revisar formato).
+                        </span>
+                      </>
+                    ) : null}
                   </>
                 ) : (
                   <span className="text-gray-500">Sin sync Gmail aún</span>
@@ -1115,7 +1128,7 @@ export function PagosList() {
                 </span>
               </button>
 
-              {/* Submenú: Generar Excel desde email */}
+              {/* Submenu: Gmail (unico disparo manual: Procesar correos) */}
               <div className="mt-2 border-t border-gray-100 pt-2">
                 <button
                   type="button"

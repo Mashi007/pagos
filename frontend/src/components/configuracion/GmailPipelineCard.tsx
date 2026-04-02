@@ -74,6 +74,8 @@ interface GmailStatus {
   next_run_approx: string | null
 
   latest_data_date: string | null
+
+  last_correos_marcados_revision?: number
 }
 
 export function GmailPipelineCard() {
@@ -82,8 +84,6 @@ export function GmailPipelineCard() {
   const [loadingStatus, setLoadingStatus] = useState(true)
 
   const [downloadingExcel, setDownloadingExcel] = useState(false)
-
-  const [starting, setStarting] = useState(false)
 
   const [refreshing, setRefreshing] = useState(false)
 
@@ -113,32 +113,6 @@ export function GmailPipelineCard() {
       await fetchStatus()
     } finally {
       setRefreshing(false)
-    }
-  }
-
-  const handleRunNow = async () => {
-    try {
-      setStarting(true)
-
-      await apiClient.post(
-        '/api/v1/pagos/gmail/run-now',
-        {},
-        { params: { force: true, scan_filter: 'unread' } }
-      )
-
-      toast.success(
-        'Descarga de correos iniciada. El Excel se irá llenando en la tabla temporal.'
-      )
-
-      fetchStatus()
-    } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? 'Error al iniciar'
-
-      toast.error(typeof msg === 'string' ? msg : 'Error al iniciar descarga')
-    } finally {
-      setStarting(false)
     }
   }
 
@@ -207,9 +181,9 @@ export function GmailPipelineCard() {
         </CardTitle>
 
         <CardDescription>
-          Iniciar descarga de correos no leídos; actualice el estado con el
-          botón (sin sondeo automático). Luego descargue Excel desde la tabla
-          temporal (al descargar se vacía la tabla).
+          El procesamiento de Gmail es manual: use Pagos → Agregar pago →
+          Generar Excel desde email → Procesar correos. Aquí puede ver el último
+          resultado y descargar Excel temporal.
         </CardDescription>
       </CardHeader>
 
@@ -245,6 +219,15 @@ export function GmailPipelineCard() {
               </p>
             )}
 
+            {typeof status.last_correos_marcados_revision === 'number' &&
+              status.last_correos_marcados_revision > 0 && (
+                <p className="text-xs text-amber-800 dark:text-amber-200">
+                  Última ejecución: {status.last_correos_marcados_revision}{' '}
+                  correo(s) quedaron destacados en Gmail (formato no
+                  reconocido).
+                </p>
+              )}
+
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -259,26 +242,6 @@ export function GmailPipelineCard() {
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
                 Actualizar estado
-              </Button>
-
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                onClick={handleRunNow}
-                disabled={starting || isRunning}
-              >
-                {starting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Mail className="mr-2 h-4 w-4" />
-                )}
-
-                {isRunning
-                  ? 'Generando…'
-                  : starting
-                    ? 'Iniciando…'
-                    : 'Iniciar descarga de correos'}
               </Button>
 
               <Button

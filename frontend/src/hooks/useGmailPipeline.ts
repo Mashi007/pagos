@@ -46,6 +46,8 @@ interface GmailStatus {
   next_run_approx: string | null
 
   latest_data_date?: string | null // fecha más reciente con datos disponibles para descargar
+
+  last_correos_marcados_revision?: number
 }
 
 interface UseGmailPipelineOptions {

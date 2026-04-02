@@ -95,6 +95,8 @@ def run_pipeline(
     emails_ok = 0
     files_ok = 0
     drive_errors = 0
+    correos_marcados_revision = 0
+    processed_msg_ids: set[str] = set()
 
     try:
         logger.warning("[PAGOS_GMAIL] â†’ Listando correos (filtro=%s)...", scan_filter)
@@ -122,7 +124,7 @@ def run_pipeline(
             logger.warning("[PAGOS_GMAIL] No hay correos con filtro %s", scan_filter)
 
         def process_message_batch(batch: list[dict], label: str) -> None:
-            nonlocal emails_ok, files_ok, drive_errors
+            nonlocal emails_ok, files_ok, drive_errors, correos_marcados_revision
             if batch:
                 logger.warning(
                     "[PAGOS_GMAIL] Procesando lote %s: %d correos (adjuntos imagen/PDF, formatos A/B)",
@@ -158,6 +160,8 @@ def run_pipeline(
                         msg_id,
                     )
                     continue
+
+                processed_msg_ids.add(msg_id)
 
                 logger.warning("[PAGOS_GMAIL]   folder_id=%s", folder_id)
 
@@ -316,6 +320,7 @@ def run_pipeline(
                 if scan_filter == "unread":
                     if any_unrecognized or not had_recognized_format:
                         mark_starred_and_unread(gmail_svc, msg_id)
+                        correos_marcados_revision += 1
                         logger.warning(
                             "[PAGOS_GMAIL]   Gmail: destacado + no leido (formato incompleto o no reconocido)"
                         )
@@ -331,9 +336,28 @@ def run_pipeline(
 
         process_message_batch(messages, "run")
 
+        if scan_filter == "unread" and messages:
+            raw_b = list_messages_by_filter(gmail_svc, "unread")
+            seen_b: set[str] = set()
+            messages_b: list[dict] = []
+            for m in raw_b:
+                mid = m["id"]
+                if mid in seen_b:
+                    continue
+                seen_b.add(mid)
+                if mid not in processed_msg_ids:
+                    messages_b.append(m)
+            if messages_b:
+                logger.warning(
+                    "[PAGOS_GMAIL] Segunda pasada (no leidos no vistos en 1a): %d",
+                    len(messages_b),
+                )
+                process_message_batch(messages_b, "repaso")
+
         sync.finished_at = datetime.utcnow()
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok
+        sync.correos_marcados_revision = correos_marcados_revision
         logger.warning("[PAGOS_GMAIL] â–  FIN pipeline: emails=%d filas=%d drive_errors=%d",
             emails_ok, files_ok, drive_errors)
 
@@ -357,5 +381,6 @@ def run_pipeline(
         sync.error_message = str(e)[:2000]
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok
+        sync.correos_marcados_revision = correos_marcados_revision
         db.commit()
         return sync_id, "error"
