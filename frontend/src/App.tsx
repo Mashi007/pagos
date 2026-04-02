@@ -22,7 +22,7 @@ import { BASE_PATH, PUBLIC_FLOW_SESSION_KEY } from './config/env'
 
 import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
-import { isOperatorRole } from './utils/rol'
+import { isAdminRole, isOperatorRole } from './utils/rol'
 
 /**
  * Acceso publico SIN login de personal: estas URLs siguen abiertas (formulario cobros, etc.).
@@ -91,7 +91,7 @@ function RootLayoutWrapper() {
     '/finiquitos/gestion',
   ]
   const isOperator = user && isOperatorRole(user.rol)
-  const isAdmin = user && (user.rol || '').toLowerCase() === 'admin'
+  const isAdmin = user && isAdminRole(user.rol)
   if (isOperator && !isAdmin) {
     const allowed = OPERATOR_ALLOWED_PATHS.some(
       p => pathname === p || pathname.startsWith(p + '/')
@@ -105,7 +105,7 @@ function RootLayoutWrapper() {
 
   const tokenPortalFiniquito = getFiniquitoAccessToken()?.trim()
 
-  const esAdminPanel = isAuthenticated && (user?.rol || 'viewer') === 'admin'
+  const esAdminPanel = isAuthenticated && isAdminRole(user?.rol)
 
   const esOperatorPanel = isAuthenticated && isOperatorRole(user?.rol)
 

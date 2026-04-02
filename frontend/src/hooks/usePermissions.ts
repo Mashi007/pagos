@@ -2,7 +2,7 @@ import { useSimpleAuth } from '../store/simpleAuthStore'
 
 import { User } from '../types'
 
-import { canonicalRol } from '../utils/rol'
+import { canonicalRol, isAdminRole } from '../utils/rol'
 
 /**
 
@@ -42,17 +42,16 @@ export function usePermissions() {
    */
 
   const isAdmin = (): boolean => {
-    return (user?.rol || 'viewer') === 'admin'
+    return isAdminRole(user?.rol)
   }
 
   /**
-   * Verifica si el usuario puede acceder a finiquito gestion
-   * - Solo finiquitador o administrador
+   * Panel interno /finiquitos/gestion (bandeja admin): solo rol admin (alias legados incl.).
+   * Colaboradores externos usan OTP (FiniquitoPanelPage), no este flag.
    */
 
   const isFiniquitador = (): boolean => {
-    const rol = (user?.rol || 'viewer').toLowerCase()
-    return rol === 'admin' || rol === 'manager'
+    return isAdminRole(user?.rol)
   }
 
   /**
@@ -78,12 +77,10 @@ export function usePermissions() {
       return true
     }
 
-    // manager: acceso total excepto configuracion de usuarios
     if (rol === 'manager') {
       return true
     }
 
-    // operator (RBAC y alias operador/operario): solo rutas permitidas
     if (rol === 'operator') {
       const OPERATOR_ALLOWED = [
         '/clientes',
@@ -96,7 +93,7 @@ export function usePermissions() {
       )
     }
 
-    // manager / viewer / operativo (legacy): acceso a todo excepto finiquito gestion
+    // viewer: sin panel admin de finiquito; el resto lo limitan rutas con requireAdmin en App
     return pathname !== '/finiquitos/gestion'
   }
 

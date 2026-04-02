@@ -15,6 +15,7 @@ import {
 } from '../config/env'
 
 import { useSimpleAuth } from '../store/simpleAuthStore'
+import { isAdminRole } from '../utils/rol'
 
 import { cn } from '../utils'
 
@@ -45,7 +46,7 @@ export function FiniquitoRootPage() {
     )
   }
 
-  if (isAuthenticated && user && (user.rol || 'viewer') === 'admin') {
+  if (isAuthenticated && user && isAdminRole(user.rol)) {
     return <Navigate to="/finiquitos/gestion" replace />
   }
 

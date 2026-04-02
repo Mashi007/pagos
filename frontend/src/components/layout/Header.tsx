@@ -5,6 +5,7 @@ import { Bell, Menu, LogOut, Settings, User, ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
+import { isAdminRole } from '../../utils/rol'
 
 import { Button } from '../../components/ui/button'
 
@@ -45,8 +46,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
-  const userRole =
-    (user?.rol || 'viewer') === 'admin' ? 'Administrador' : 'Operativo'
+  const userRole = isAdminRole(user?.rol) ? 'Administrador' : 'Operativo'
 
   // Mock de notificaciones - en producción vendrían del backend
 
@@ -254,7 +254,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
                         <Badge
                           className={getRoleColor(
-                            (user?.rol || 'viewer') === 'admin'
+                            isAdminRole(user?.rol)
                           )}
                         >
                           {userRole}
@@ -276,7 +276,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                       <span>Configuración</span>
                     </button>
 
-                    {(user?.rol || 'viewer') !== 'admin' && (
+                    {!isAdminRole(user?.rol) && (
                       <button
                         onClick={async () => {
                           try {

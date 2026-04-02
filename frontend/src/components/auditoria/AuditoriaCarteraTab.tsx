@@ -56,6 +56,7 @@ import {
 } from '../../services/auditoriaService'
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
+import { isAdminRole } from '../../utils/rol'
 
 import { canonicalRol } from '../../utils/rol'
 
@@ -199,7 +200,7 @@ function saveCarteraSessionCache(payload: {
 export function AuditoriaCarteraTab() {
   const { user } = useSimpleAuth()
 
-  const esAdmin = (user?.rol || 'viewer') === 'admin'
+  const esAdmin = isAdminRole(user?.rol)
 
   const puedeAuditoriaCartera = useMemo(() => {
     const r = canonicalRol(user?.rol)

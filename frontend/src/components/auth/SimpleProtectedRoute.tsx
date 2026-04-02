@@ -9,6 +9,7 @@ import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { LoadingSpinner } from '../../components/ui/loading-spinner'
 
 import { BASE_PATH } from '../../config/env'
+import { isAdminRole } from '../../utils/rol'
 
 import { isOperatorRole } from '../../utils/rol'
 
@@ -113,7 +114,7 @@ export function SimpleProtectedRoute({
 
   // Si se requiere admin y el usuario no es admin
 
-  if (requireAdmin && (user.rol || 'viewer') !== 'admin') {
+  if (requireAdmin && !isAdminRole(user.rol)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="w-full max-w-md rounded-lg bg-white p-8 text-center shadow-lg">
@@ -149,9 +150,7 @@ export function SimpleProtectedRoute({
 
               <p className="text-sm text-gray-700">
                 <strong>Su rol actual:</strong>{' '}
-                {(user.rol || 'viewer') === 'admin'
-                  ? 'Administrador'
-                  : 'Operativo'}
+                {isAdminRole(user.rol) ? 'Administrador' : user.rol || 'viewer'}
               </p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 """
 Modelo SQLAlchemy para Usuario (auth y gestión de usuarios).
-Tabla: usuarios. Campos: email, cedula (opcional), password_hash, nombre, apellido, cargo, rol, is_active, timestamps.
+Tabla: usuarios. Campos: email, password_hash, nombre, apellido, cargo, rol, is_active, timestamps.
 
 Roles estandarizados según RBAC (Role-Based Access Control - ISO/IEC 12207):
   - admin: Acceso total (Administrador del Sistema)

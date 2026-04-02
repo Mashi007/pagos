@@ -38,7 +38,7 @@ import {
 
 import { cn } from '../../utils'
 
-import { isOperatorRole } from '../../utils/rol'
+import { isAdminRole, isOperatorRole } from '../../utils/rol'
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 
@@ -138,7 +138,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
   const userRoleDisplay =
-    (user?.rol || 'viewer') === 'admin' ? 'Administrador' : 'Operativo'
+    isAdminRole(user?.rol) ? 'Administrador' : 'Operativo'
 
   const handleLogout = async () => {
     await logout()
@@ -161,7 +161,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const submenuContainsActiveRoute = (item: MenuItem): boolean => {
     if (!item.isSubmenu || !item.children) return false
 
-    const isAdmin = (user?.rol || 'viewer') === 'admin'
+    const isAdmin = isAdminRole(user?.rol)
 
     const visibleChildren = item.children.filter(
       child => !child.adminOnly || isAdmin
@@ -351,7 +351,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   useEffect(() => {
     const pathname = location.pathname
 
-    const isAdmin = (user?.rol || 'viewer') === 'admin'
+    const isAdmin = isAdminRole(user?.rol)
 
     menuItems.forEach(item => {
       if (item.isSubmenu && item.children) {
@@ -408,7 +408,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const filteredMenuItems = menuItems
     .filter(item => {
       const rol = (user?.rol || 'viewer').toLowerCase()
-      const isAdmin = rol === 'admin'
+      const isAdmin = isAdminRole(rol)
       const isOperator = isOperatorRole(user?.rol)
 
       // operator: solo ve CRM (clientes), Préstamos y Reportes (contiene Finiquito gestión)
@@ -835,7 +835,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                 .filter(
                                   child =>
                                     !child.adminOnly ||
-                                    (user?.rol || 'viewer') === 'admin'
+                                    isAdminRole(user?.rol)
                                 )
                                 .map(child =>
                                   child.external ? (
@@ -1055,7 +1055,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           <span>Mi Perfil</span>
                         </button>
 
-                        {(user?.rol || 'viewer') === 'admin' && (
+                        {isAdminRole(user?.rol) && (
                           <NavLink
                             to="/configuracion"
                             className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
@@ -1066,7 +1066,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           </NavLink>
                         )}
 
-                        {(user?.rol || 'viewer') !== 'admin' && (
+                        {!isAdminRole(user?.rol) && (
                           <button
                             type="button"
                             onClick={async () => {

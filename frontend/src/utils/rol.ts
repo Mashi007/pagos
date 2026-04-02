@@ -22,3 +22,12 @@ export function canonicalRol(rol: string | null | undefined): string {
 export function isOperatorRole(rol: string | null | undefined): boolean {
   return canonicalRol(rol) === 'operator'
 }
+
+/** Igual que el backend `canonical_rol` + comprobación admin (incluye administrador/finiquitador legados). */
+export function isAdminRole(rol: string | null | undefined): boolean {
+  return canonicalRol(rol) === 'admin'
+}
+
+export function isManagerRole(rol: string | null | undefined): boolean {
+  return canonicalRol(rol) === 'manager'
+}
