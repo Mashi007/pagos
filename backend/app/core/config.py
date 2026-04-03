@@ -266,15 +266,9 @@ class Settings(BaseSettings):
     PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED: bool = Field(
         default=True,
         description=(
-            "Si True, el scheduler ejecuta periodicamente el pipeline con filtro pending_identification "
-            "(inbox, adjunto, sin estrella, sin etiquetas IMAGEN 1/2/3)."
+            "Si True, el scheduler ejecuta el pipeline pending_identification a las 4:00, 11:00 y 20:00 "
+            "(America/Caracas): inbox con adjunto, sin estrella, sin etiquetas IMAGEN 1/2/3."
         ),
-    )
-    PAGOS_GMAIL_SCHEDULED_SCAN_INTERVAL_HOURS: int = Field(
-        default=3,
-        ge=1,
-        le=48,
-        description="Intervalo en horas entre escaneos automaticos Gmail (solo pendientes de identificar).",
     )
     PAGOS_GMAIL_UNREAD_MAX_PASSES: int = Field(
         default=30,

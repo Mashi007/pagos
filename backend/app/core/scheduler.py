@@ -1,33 +1,23 @@
 """
 Scheduler para tareas programadas (zona America/Caracas).
 
-ActualizaciÃ³n periÃ³dica de informes y reportes:
-- 01:00  Reportes cobranzas (resumen + diagnÃ³stico).
-- 06:00  Informe de pagos por email (link Google Sheet).
-- 13:00  Reportes cobranzas.
-- 13:00  Informe de pagos por email.
-- 16:00  CachÃ© dashboard (hilo aparte en main: 1:00, 13:00).
-- 16:30  Informe de pagos por email.
-- 01:10  Emails credito liquidado: PDF estado de cuenta (dias 1 y 2 despues de fecha_liquidado; America/Caracas).
+- 01:10  Emails credito liquidado: PDF estado de cuenta (dias 1 y 2 despues de fecha_liquidado).
+- 02:00  Finiquito: refrescar tabla finiquito_casos.
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
-- 02:00  Finiquito: refrescar tabla finiquito_casos (total_financiamiento = sum cuotas.total_pagado exacto).
+- 04:00  Limpieza codigos estado de cuenta.
+- 04:00, 11:00, 20:00  Gmail pagos pendientes (si esta habilitado; America/Caracas).
 
-Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
-se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.
-
-Notificaciones por mora/masivos: no hay jobs en este modulo; disparo manual via API (sin programador por hora).
+Reportes cobranzas, informe de pagos por email y campanas CRM programadas ya no se disparan por scheduler; bajo demanda o manual.
 """
 import logging
-import threading
 from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.api.v1.endpoints import cobranzas
+
 logger = logging.getLogger(__name__)
 
 # Zona horaria por defecto (Venezuela). Configurable vÃ­a env si se aÃ±ade SCHEDULER_TZ.
@@ -56,36 +46,6 @@ def _job_emails_liquidado_diferidos() -> None:
         db.close()
 
 
-def _job_actualizar_reportes_cobranzas() -> None:
-    """
-    Job que se ejecuta a las 1:00 y 13:00. Actualiza reportes de cobranzas
-    (resumen + diagnÃ³stico) usando sesiÃ³n de BD.
-    """
-    db = SessionLocal()
-    try:
-        resumen = cobranzas.ejecutar_actualizacion_reportes(db)
-        logger.info(
-            "Reportes cobranzas actualizados: cuotas_vencidas=%s monto_adeudado=%s clientes_atrasados=%s",
-            resumen.get("total_cuotas_vencidas"),
-            resumen.get("monto_total_adeudado"),
-            resumen.get("clientes_atrasados"),
-        )
-    except Exception as e:
-        logger.exception("Error en job actualizar_reportes_cobranzas: %s", e)
-    finally:
-        db.close()
-
-
-def _job_informe_pagos_email() -> None:
-    """Job que envÃ­a email con link a Google Sheet del informe de pagos (6:00, 13:00, 16:30)."""
-    try:
-        from app.core.informe_pagos_email import enviar_informe_pagos_email
-        enviar_informe_pagos_email()
-    except Exception as e:
-        logger.exception("Error en job informe_pagos_email: %s", e)
-
-
-
 def _job_finiquito_refresh() -> None:
     """Job 02:00. Rellena/actualiza finiquito_casos (prestamos con suma total_pagado = total_financiamiento)."""
     db = SessionLocal()
@@ -104,8 +64,6 @@ def _job_finiquito_refresh() -> None:
         logger.exception("Error en job finiquito_refresh: %s", e)
     finally:
         db.close()
-
-
 
 
 def _job_auditoria_cartera_prestamos() -> None:
@@ -166,7 +124,7 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
 
 
 def _job_pagos_gmail_pending_scan() -> None:
-    """Cada N horas: pipeline Gmail solo correos sin estrella y sin etiquetas IMAGEN 1/2/3 (no reescanea ya marcados)."""
+    """Cron 4:00, 11:00 y 20:00 (America/Caracas): pipeline Gmail correos sin estrella y sin etiquetas IMAGEN 1/2/3."""
     from datetime import datetime, timedelta
 
     from sqlalchemy import and_, select
@@ -198,17 +156,8 @@ def _job_pagos_gmail_pending_scan() -> None:
         db.close()
 
 
-def _job_campanas_programadas() -> None:
-    """Job cada minuto. Ejecuta campaÃ±as CRM en estado programada cuya prÃ³xima ejecuciÃ³n ya llegÃ³."""
-    try:
-        from app.api.v1.endpoints import crm_campanas
-        crm_campanas.ejecutar_campanas_programadas()
-    except Exception as e:
-        logger.exception("Error en job campanas_programadas: %s", e)
-
-
 def start_scheduler() -> None:
-    """Inicia el scheduler: liquidado+PDF 01:10; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; etc."""
+    """Inicia el scheduler: liquidado 01:10; finiquito 02:00; auditoria 03:00; limpieza 04:00; Gmail 04/11/20 opcional."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
@@ -233,38 +182,6 @@ def start_scheduler() -> None:
         id="auditoria_cartera_prestamos_0300",
         name="Auditoria cartera prestamos 03:00",
     )
-    # 1:00 y 13:00 - Reportes cobranzas (actualizaciÃ³n automÃ¡tica de informes)
-    _scheduler.add_job(
-        _job_actualizar_reportes_cobranzas,
-        CronTrigger(hour=1, minute=0, timezone=SCHEDULER_TZ),
-        id="reportes_cobranzas_1am",
-        name="Actualizar reportes cobranzas 1:00",
-    )
-    _scheduler.add_job(
-        _job_actualizar_reportes_cobranzas,
-        CronTrigger(hour=13, minute=0, timezone=SCHEDULER_TZ),
-        id="reportes_cobranzas_1pm",
-        name="Actualizar reportes cobranzas 13:00",
-    )
-    # Informe de pagos: email con link a Google Sheet a las 6:00, 13:00 y 16:30
-    _scheduler.add_job(
-        _job_informe_pagos_email,
-        CronTrigger(hour=6, minute=0, timezone=SCHEDULER_TZ),
-        id="informe_pagos_6am",
-        name="Email informe pagos 6:00",
-    )
-    _scheduler.add_job(
-        _job_informe_pagos_email,
-        CronTrigger(hour=13, minute=0, timezone=SCHEDULER_TZ),
-        id="informe_pagos_1pm",
-        name="Email informe pagos 13:00",
-    )
-    _scheduler.add_job(
-        _job_informe_pagos_email,
-        CronTrigger(hour=16, minute=30, timezone=SCHEDULER_TZ),
-        id="informe_pagos_4h30",
-        name="Email informe pagos 16:30",
-    )
     # 4:00 - Limpieza de cÃ³digos de estado de cuenta (expirados o usados > 24 h)
     _scheduler.add_job(
         _job_limpiar_estado_cuenta_codigos,
@@ -272,27 +189,23 @@ def start_scheduler() -> None:
         id="limpiar_estado_cuenta_codigos",
         name="Limpiar cÃ³digos estado de cuenta 4:00",
     )
-    # CampaÃ±as CRM programadas: cada 1 minuto revisar si hay que enviar
-    _scheduler.add_job(
-        _job_campanas_programadas,
-        IntervalTrigger(minutes=1),
-        id="campanas_crm_programadas",
-        name="Campanas CRM programadas (cada 1 min)",
-    )
     _gmail_log = ""
     if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", True):
-        _gmail_hours = int(getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_INTERVAL_HOURS", 3) or 3)
-        _gmail_hours = max(1, min(48, _gmail_hours))
-        _scheduler.add_job(
-            _job_pagos_gmail_pending_scan,
-            IntervalTrigger(hours=_gmail_hours),
-            id="pagos_gmail_pending_scan",
-            name=f"Gmail Pagos pendientes (sin estrella/etiqueta) cada {_gmail_hours}h",
-        )
-        _gmail_log = f"; Gmail pagos pendientes cada {_gmail_hours}h"
+        for _h, _jid, _label in (
+            (4, "pagos_gmail_pending_scan_0400", "4:00"),
+            (11, "pagos_gmail_pending_scan_1100", "11:00"),
+            (20, "pagos_gmail_pending_scan_2000", "20:00"),
+        ):
+            _scheduler.add_job(
+                _job_pagos_gmail_pending_scan,
+                CronTrigger(hour=_h, minute=0, timezone=SCHEDULER_TZ),
+                id=_jid,
+                name=f"Gmail Pagos pendientes {_label}",
+            )
+        _gmail_log = "; Gmail pagos pendientes 4:00, 11:00 y 20:00"
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: liquidado PDF 01:10; finiquito 02:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00%s (%s).",
+        "Scheduler iniciado: liquidado PDF 01:10; finiquito 02:00; auditoria 03:00; limpieza estado_cuenta_codigos 4:00%s (%s).",
         _gmail_log,
         SCHEDULER_TZ,
     )
