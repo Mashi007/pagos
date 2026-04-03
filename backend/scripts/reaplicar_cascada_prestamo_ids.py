@@ -4,7 +4,7 @@ Reaplica cascada (reset cuota_pagos + aplicar pagos) para cada prestamo_id dado.
 Misma logica que POST /api/v1/prestamos/reaplicar-cascada-aplicacion-masiva.
 
 Uso (desde carpeta backend, DATABASE_URL en .env):
-  python scripts/reaplicar_cascada_prestamo_ids.py 201 255 274
+  python scripts/reaplicar_cascada_prestamo_ids.py 201 255 274 280 321 442 1322 1324 1514
 """
 from __future__ import annotations
 

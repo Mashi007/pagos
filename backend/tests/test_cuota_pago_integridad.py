@@ -177,3 +177,76 @@ def test_aplicar_pago_cuotas_segunda_llamada_idempotente(db: Session):
         select(func.count()).select_from(CuotaPago).where(CuotaPago.pago_id == pago.id)
     )
     assert int(n2 or 0) == int(n1 or 0)
+
+
+def test_aplicar_pagos_pendientes_incluye_pagado_sin_conciliar(db: Session):
+    """Reaplicacion: estado PAGADO sin conciliado debe articularse (control 15 / migraciones)."""
+    from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
+
+    hoy = date.today()
+    cedula = f"VPC{datetime.now().strftime('%H%M%S')}"
+    cliente = Cliente(
+        cedula=cedula,
+        nombres="Test PAGADO sin conciliar",
+        telefono="0",
+        email="vpc@test.local",
+        direccion="X",
+        fecha_nacimiento=date(1990, 1, 1),
+        ocupacion="T",
+        estado="ACTIVO",
+        usuario_registro="test@test.local",
+        notas="aplicar_pagos_pendientes PAGADO",
+    )
+    db.add(cliente)
+    db.flush()
+    prestamo = Prestamo(
+        cliente_id=cliente.id,
+        cedula=cliente.cedula,
+        nombres=cliente.nombres,
+        total_financiamiento=Decimal("100.00"),
+        fecha_requerimiento=hoy,
+        modalidad_pago="MENSUAL",
+        numero_cuotas=1,
+        cuota_periodo=Decimal("100.00"),
+        producto="T",
+        analista="test@test.local",
+    )
+    db.add(prestamo)
+    db.flush()
+    db.add(
+        Cuota(
+            prestamo_id=prestamo.id,
+            numero_cuota=1,
+            fecha_vencimiento=hoy + timedelta(days=30),
+            monto=Decimal("100.00"),
+            saldo_capital_inicial=Decimal("100.00"),
+            saldo_capital_final=Decimal("0.00"),
+            monto_capital=Decimal("100.00"),
+            monto_interes=Decimal("0.00"),
+            total_pagado=None,
+            estado="PENDIENTE",
+        )
+    )
+    db.flush()
+    doc = f"VPC-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    pago = Pago(
+        prestamo_id=prestamo.id,
+        cedula_cliente=cliente.cedula,
+        fecha_pago=datetime.now(),
+        monto_pagado=Decimal("100.00"),
+        numero_documento=doc,
+        referencia_pago=doc,
+        conciliado=False,
+        verificado_concordancia="NO",
+        estado="PAGADO",
+    )
+    db.add(pago)
+    db.flush()
+
+    n = aplicar_pagos_pendientes_prestamo(prestamo.id, db)
+    db.flush()
+    assert n == 1
+    n_cp = db.scalar(
+        select(func.count()).select_from(CuotaPago).where(CuotaPago.pago_id == pago.id)
+    )
+    assert int(n_cp or 0) >= 1

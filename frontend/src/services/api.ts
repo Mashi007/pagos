@@ -906,8 +906,26 @@ class ApiClient {
         url.includes('/clientes/check-emails') ||
         url.includes('/clientes/check-cedulas') // Pipeline Gmail: puede tardar si el backend es síncrono (credenciales OAuth)
 
-      const defaultTimeout = isSlowEndpoint
-        ? url.includes('/prestamos/cedula/batch')
+      // Auditoria cartera en Render: sincroniza decenas de miles de cuotas + cascadas masivas (siempre >30s).
+      const isAuditoriaCarteraCorregir = url.includes(
+        '/auditoria/prestamos/cartera/corregir'
+      )
+      const isAuditoriaCarteraEjecutar = url.includes(
+        '/auditoria/prestamos/cartera/ejecutar'
+      )
+      const isAuditoriaCarteraSyncCuotas = url.includes(
+        '/auditoria/prestamos/cartera/sincronizar-estados-cuotas'
+      )
+
+      let defaultTimeout = DEFAULT_TIMEOUT_MS
+      if (isAuditoriaCarteraCorregir) {
+        defaultTimeout = 300000 // 5 min
+      } else if (isAuditoriaCarteraEjecutar) {
+        defaultTimeout = 180000 // 3 min
+      } else if (isAuditoriaCarteraSyncCuotas) {
+        defaultTimeout = 120000 // alinear muchas cuotas
+      } else if (isSlowEndpoint) {
+        defaultTimeout = url.includes('/prestamos/cedula/batch')
           ? 60000
           : url.includes('/pagos/upload')
             ? 120000
@@ -919,7 +937,7 @@ class ApiClient {
                     url.includes('/clientes/check-cedulas')
                   ? 60000
                   : 300000
-        : DEFAULT_TIMEOUT_MS
+      }
 
       // Priorizar timeout explícito si se proporciona, sino usar el calculado
 

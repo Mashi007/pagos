@@ -213,6 +213,25 @@ def _ajuste_conteos_sin_filas(
     return cc, len(pids_restantes)
 
 
+def _prestamo_ids_alerta_por_control_desde_pares(
+    pares: set[tuple[int, str]],
+    *,
+    excluir_marcar_ok: bool,
+    ok_pairs: set[tuple[int, str]],
+) -> dict[str, list[int]]:
+    """Mapa control -> prestamo_ids (unicos ordenados), respetando exclusion MARCAR_OK si aplica."""
+    eff = pares
+    if excluir_marcar_ok:
+        eff = {(p, c) for p, c in pares if (p, c) not in ok_pairs}
+    by_c: dict[str, list[int]] = {}
+    for p, c in eff:
+        cod = str(c or "").strip()
+        if not cod:
+            continue
+        by_c.setdefault(cod, []).append(int(p))
+    return {k: sorted(set(v)) for k, v in by_c.items()}
+
+
 def ejecutar_auditoria_cartera(
     db: Session,
     *,
@@ -222,6 +241,7 @@ def ejecutar_auditoria_cartera(
     skip: int = 0,
     limit: Optional[int] = None,
     incluir_filas: bool = True,
+    incluir_mapa_ids_por_control: bool = False,
     excluir_marcar_ok: bool = False,
     codigo_control: Optional[str] = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -233,6 +253,8 @@ def ejecutar_auditoria_cartera(
     prestamo_id / cedula_contiene: acotan que prestamos se evaluan (misma logica de controles sobre el universo completo).
     skip / limit: paginacion sobre la lista de prestamos con alerta (despues de filtrar por prestamo/cedula).
     incluir_filas: si False, no construye la lista de prestamos (ahorra memoria); resumen y conteos igual.
+    incluir_mapa_ids_por_control: si True, meta incluye `prestamo_ids_alerta_por_control` (codigo -> ids) para
+        evitar una segunda pasada con filas completas (p. ej. POST corregir antes de reaplicar cascada).
     excluir_marcar_ok: si True, omite solo pares con ultimo MARCAR_OK en bitacora (aceptacion); el resto de filas
         desaparecen del listado unicamente cuando el motor deja de marcar SI. Job 03:00 y persistencia usan False.
     codigo_control: si se indica, solo entran prestamos con ese control en SI; la paginacion skip/limit aplica a esa lista.
@@ -833,6 +855,14 @@ def ejecutar_auditoria_cartera(
         control_counts_eff = dict(control_counts)
         con_alerta_eff = con_alerta_count
 
+    mapa_ids_por_control: Optional[dict[str, list[int]]] = None
+    if incluir_mapa_ids_por_control:
+        mapa_ids_por_control = _prestamo_ids_alerta_por_control_desde_pares(
+            pares_alerta_si,
+            excluir_marcar_ok=excluir_marcar_ok,
+            ok_pairs=ok_pairs,
+        )
+
     conteos_globales_meta = dict(control_counts_eff)
     codigo_f = (codigo_control or "").strip() or None
 
@@ -875,6 +905,8 @@ def ejecutar_auditoria_cartera(
             "excluye_marcar_ok": excluir_marcar_ok,
             "filtrado_por_codigo_control": codigo_f,
         }
+        if mapa_ids_por_control is not None:
+            meta["prestamo_ids_alerta_por_control"] = mapa_ids_por_control
         return [], meta
 
     skip_clamped = max(0, int(skip))
@@ -895,6 +927,8 @@ def ejecutar_auditoria_cartera(
         "excluye_marcar_ok": excluir_marcar_ok,
         "filtrado_por_codigo_control": codigo_f,
     }
+    if mapa_ids_por_control is not None:
+        meta["prestamo_ids_alerta_por_control"] = mapa_ids_por_control
     return page, meta
 
 

@@ -121,16 +121,15 @@ def prestamo_requiere_correccion_cascada(db: Session, prestamo_id: int) -> bool:
     integ = integridad_cuotas_prestamo(db, prestamo_id)
     if integ.get("ok") and not integ.get("integridad_ok"):
         return True
+    from app.api.v1.endpoints.pagos import _where_pago_elegible_reaplicacion_cascada
+
     subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
     n_orphans = db.scalar(
         select(func.count())
         .select_from(Pago)
         .where(
             Pago.prestamo_id == prestamo_id,
-            or_(
-                Pago.conciliado.is_(True),
-                func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
-            ),
+            _where_pago_elegible_reaplicacion_cascada(),
             Pago.monto_pagado > 0,
             ~Pago.id.in_(subq),
         )

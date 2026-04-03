@@ -47,7 +47,7 @@ from fastapi.responses import StreamingResponse
 
 from pydantic import BaseModel, field_validator
 
-from sqlalchemy import and_, case, delete, exists, func, or_, select, text
+from sqlalchemy import and_, case, delete, exists, func, not_, or_, select, text
 
 from sqlalchemy.orm import Session
 
@@ -302,6 +302,33 @@ def _debe_aplicar_cascada_pago(pago: Pago) -> bool:
         return False
 
     return True
+
+
+def _where_pago_elegible_reaplicacion_cascada():
+    """
+    Condicion SQLAlchemy para pagos que deben articularse al reconstruir la cascada
+    (reset cuota_pagos + aplicar_pagos_pendientes_prestamo).
+
+    Antes solo entraban conciliado o verificado_concordancia SI; muchos registros en PAGADO
+    (carga, migracion, revision manual) quedaban fuera y el control 15 marcaba huérfanos.
+
+    Incluye: conciliado, verificado SI, o estado PAGADO.
+    Excluye: mismo criterio que totales de cartera en auditoria (_sql_fragment_pago_excluido_cartera).
+    """
+    est = func.upper(func.coalesce(func.trim(Pago.estado), ""))
+    est_lower = func.lower(func.coalesce(func.trim(Pago.estado), ""))
+    excl = or_(
+        est.in_(["ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO"]),
+        est.like("%ANUL%"),
+        est.like("%REVERS%"),
+        est_lower.in_(["cancelado", "rechazado"]),
+    )
+    incl = or_(
+        Pago.conciliado.is_(True),
+        func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
+        est == "PAGADO",
+    )
+    return and_(incl, not_(excl))
 
 
 def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuotas_parciales: int) -> str:
@@ -6245,11 +6272,12 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
 
     """
 
-    Aplica a cuotas los pagos conciliados del préstamo que aún no tienen enlaces en cuota_pagos
+    Aplica a cuotas los pagos del préstamo que aún no tienen enlaces en cuota_pagos.
 
-    (p. ej. el pago se creó/concilió antes de que existieran las cuotas). No hace commit.
+    Criterio de elegibilidad: conciliado, verificado_concordancia SI, o estado PAGADO;
+    excluye anulados/reversados/duplicado declarado (alineado con auditoria cartera).
 
-    Retorna el número de pagos a los que se les aplicó algo.
+    No hace commit. Retorna el número de pagos a los que se les aplicó algo (cc o cp > 0).
 
     """
 
@@ -6261,16 +6289,11 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
 
     subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
 
-    # Mismo criterio que get_cuotas_prestamo: conciliado O verificado_concordancia SI.
-
     rows = db.execute(
         select(Pago)
         .where(
             Pago.prestamo_id == prestamo_id,
-            or_(
-                Pago.conciliado.is_(True),
-                func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
-            ),
+            _where_pago_elegible_reaplicacion_cascada(),
             Pago.monto_pagado > 0,
             ~Pago.id.in_(subq),
         )

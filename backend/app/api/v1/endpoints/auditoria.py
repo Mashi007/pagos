@@ -48,8 +48,6 @@ from app.services.prestamo_cartera_auditoria import (
     leer_meta_ejecucion,
     listar_pagos_sin_aplicacion_cuotas_por_prestamo,
     persistir_meta_ejecucion,
-    prestamos_ids_alerta_pagos_sin_aplicacion_cuotas,
-    prestamos_ids_alerta_total_pagos_vs_aplicado,
 )
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -631,19 +629,22 @@ def corregir_auditoria_cartera(
     reaplicar_resultados: list[dict[str, Any]] = []
     need_reap = body.reaplicar_cascada_desajuste_pagos or body.reaplicar_cascada_pagos_sin_aplicacion_cuotas
     if need_reap:
-        rows_pre, _ = ejecutar_auditoria_cartera(
+        _, meta_pre = ejecutar_auditoria_cartera(
             db,
             solo_con_alerta=False,
             skip=0,
             limit=None,
+            incluir_filas=False,
+            incluir_mapa_ids_por_control=True,
             excluir_marcar_ok=False,
             codigo_control=None,
         )
+        mapa = meta_pre.get("prestamo_ids_alerta_por_control") or {}
         pids_set: set[int] = set()
         if body.reaplicar_cascada_desajuste_pagos:
-            pids_set.update(prestamos_ids_alerta_total_pagos_vs_aplicado(rows_pre))
+            pids_set.update(int(x) for x in mapa.get("total_pagado_vs_aplicado_cuotas", []))
         if body.reaplicar_cascada_pagos_sin_aplicacion_cuotas:
-            pids_set.update(prestamos_ids_alerta_pagos_sin_aplicacion_cuotas(rows_pre))
+            pids_set.update(int(x) for x in mapa.get("pagos_sin_aplicacion_a_cuotas", []))
         pids = sorted(pids_set)[: int(body.max_reaplicaciones)]
         for pid in pids:
             try:
