@@ -772,7 +772,9 @@ def finiquito_admin_listar(
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_admin),
 ):
-    q = db.query(FiniquitoCaso)
+    # Filtros reutilizables: no usar .count() y luego el mismo Query con order_by
+    # (en SQLAlchemy eso puede dejar el objeto en estado invalido y producir 500).
+    filters: List[Any] = []
     if estado_in and estado_in.strip():
         parts = [p.strip().upper() for p in estado_in.split(",") if p.strip()]
         if not parts:
@@ -780,17 +782,27 @@ def finiquito_admin_listar(
         bad = [p for p in parts if p not in ESTADOS_VALIDOS]
         if bad:
             raise HTTPException(status_code=400, detail="Estado invalido en estado_in")
-        q = q.filter(FiniquitoCaso.estado.in_(parts))
+        filters.append(FiniquitoCaso.estado.in_(parts))
     elif estado:
         e = estado.upper().strip()
         if e not in ESTADOS_VALIDOS:
             raise HTTPException(status_code=400, detail="Estado invalido")
-        q = q.filter(FiniquitoCaso.estado == e)
+        filters.append(FiniquitoCaso.estado == e)
     if cedula and cedula.strip():
-        q = q.filter(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
-    total = int(q.count())
+        filters.append(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
+
+    count_q = db.query(func.count(FiniquitoCaso.id))
+    list_q = db.query(FiniquitoCaso)
+    if filters:
+        count_q = count_q.filter(*filters)
+        list_q = list_q.filter(*filters)
+    total_raw = count_q.scalar()
+    total = int(total_raw or 0)
     casos = (
-        q.order_by(FiniquitoCaso.id.desc()).offset(offset).limit(limit).all()
+        list_q.order_by(FiniquitoCaso.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
     )
     items = _admin_casos_to_items(db, casos)
     return FiniquitoCasoListaResponse(
