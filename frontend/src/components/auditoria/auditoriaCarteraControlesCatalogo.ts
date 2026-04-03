@@ -35,6 +35,8 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     n: 5,
     codigo: 'pagos_mismo_dia_monto',
     titulo: 'Pagos duplicados (misma fecha y monto)',
+    notaOperativa:
+      'El conteo de casos es por prestamo afectado. SQL de diagnostico: backend/sql/control_5_pagos_duplicados_misma_fecha_monto.sql (pasos 1-3). Tras revisar comprobantes, anular duplicado real o unificar referencia; luego reaplicar cascada si aplica.',
   },
   {
     n: 6,
