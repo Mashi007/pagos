@@ -48,7 +48,7 @@ CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
 # Identificador estable de la definicion de controles en este modulo (17 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "21c7-total-pagos-vs-aplicado-solo-LIQUIDADO-2026-04-02"
+AUDITORIA_CARTERA_REGLAS_VERSION = "22a-control5-excluir-visto-doc-2026-04-02"
 
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
@@ -340,6 +340,7 @@ def ejecutar_auditoria_cartera(
     excl_pg = _sql_fragment_pago_excluido_cartera("pg")
 
     # Pagos duplicados mismo dia y monto (posible fraude / doble registro); excluye anulados/reversados
+    # y filas con Visto control 5 (excluir_control_pagos_mismo_dia_monto).
     dup_pagos_rows = db.execute(
         text(
             f"""
@@ -348,6 +349,7 @@ def ejecutar_auditoria_cartera(
               SELECT p.prestamo_id, CAST(p.fecha_pago AS date) AS fd, p.monto_pagado, COUNT(*) AS cnt
               FROM pagos p
               WHERE p.prestamo_id IS NOT NULL AND NOT {excl_p}
+                AND NOT COALESCE(p.excluir_control_pagos_mismo_dia_monto, false)
               GROUP BY p.prestamo_id, CAST(p.fecha_pago AS date), p.monto_pagado
               HAVING COUNT(*) > 1
             ) t

@@ -4,6 +4,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleCheck,
   Download,
   FileText,
   Filter,
@@ -55,6 +56,7 @@ import {
   auditoriaService,
   PrestamoCarteraChequeo,
   type CarteraRevisionItem,
+  type Control5DuplicadoFechaMontoItem,
 } from '../../services/auditoriaService'
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
@@ -76,6 +78,8 @@ function controlDismissKey(prestamoId: number, codigo: string) {
 }
 
 const COD_DESAJUSTE_PAGOS = 'total_pagado_vs_aplicado_cuotas'
+
+const COD_CTRL_PAGOS_MISMO_DIA_MONTO = 'pagos_mismo_dia_monto'
 
 const PAGE_SIZE_DEFAULT = 25
 
@@ -304,6 +308,20 @@ export function AuditoriaCarteraTab() {
 
   const [revokeSubmitting, setRevokeSubmitting] = useState(false)
 
+  const [vistoDialogOpen, setVistoDialogOpen] = useState(false)
+
+  const [vistoPrestamoId, setVistoPrestamoId] = useState<number | null>(null)
+
+  const [vistoFilas, setVistoFilas] = useState<Control5DuplicadoFechaMontoItem[]>(
+    []
+  )
+
+  const [vistoCargando, setVistoCargando] = useState(false)
+
+  const [vistoAplicandoPagoId, setVistoAplicandoPagoId] = useState<number | null>(
+    null
+  )
+
   useEffect(() => {
     if (!puedeAuditoriaCartera) return
     let cancel = false
@@ -419,6 +437,55 @@ export function AuditoriaCarteraTab() {
       syncOcultosConItems,
       puedeAuditoriaCartera,
     ]
+  )
+
+  const abrirDialogoVistoControl5 = useCallback(async (prestamoId: number) => {
+    setVistoPrestamoId(prestamoId)
+    setVistoDialogOpen(true)
+    setVistoCargando(true)
+    setVistoFilas([])
+    try {
+      const r = await auditoriaService.listarControl5DuplicadosPorPrestamo(
+        prestamoId
+      )
+      setVistoFilas(Array.isArray(r.items) ? r.items : [])
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'No se pudo cargar la lista (solo administrador)'
+      toast.error(msg)
+      setVistoDialogOpen(false)
+      setVistoPrestamoId(null)
+    } finally {
+      setVistoCargando(false)
+    }
+  }, [])
+
+  const aplicarVistoControl5EnPago = useCallback(
+    async (pagoId: number, prestamoId: number) => {
+      setVistoAplicandoPagoId(pagoId)
+      try {
+        const out = await auditoriaService.aplicarControl5VistoPago(pagoId)
+        toast.success(
+          `Visto aplicado. Nuevo documento: ${out.numero_documento_nuevo} (sufijo ${out.sufijo_cuatro_digitos})`
+        )
+        const r = await auditoriaService.listarControl5DuplicadosPorPrestamo(
+          prestamoId
+        )
+        setVistoFilas(Array.isArray(r.items) ? r.items : [])
+        void fetchLista({ silent: true })
+      } catch (e: unknown) {
+        const msg =
+          e && typeof e === 'object' && 'message' in e
+            ? String((e as { message?: string }).message)
+            : 'Error al aplicar Visto'
+        toast.error(msg)
+      } finally {
+        setVistoAplicandoPagoId(null)
+      }
+    },
+    [fetchLista]
   )
 
   /** Mientras la BD responde lento (p. ej. script masivo), no ocultar resumen ni tabla en cache. */
@@ -1271,6 +1338,24 @@ export function AuditoriaCarteraTab() {
 
                               <TableCell className="text-right align-top">
                                 <div className="flex flex-col items-end gap-1.5">
+                                  {esAdmin &&
+                                  c.codigo === COD_CTRL_PAGOS_MISMO_DIA_MONTO ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 w-8 shrink-0 p-0"
+                                      title="Visto (admin): autorizar duplicado legitimo; anexa 4 digitos al documento y registra auditoria."
+                                      aria-label={`Visto control 5 — prestamo ${row.prestamo_id}`}
+                                      onClick={() =>
+                                        void abrirDialogoVistoControl5(
+                                          row.prestamo_id
+                                        )
+                                      }
+                                    >
+                                      <CircleCheck className="h-4 w-4 text-emerald-700" />
+                                    </Button>
+                                  ) : null}
                                   <Button
                                     type="button"
                                     variant="outline"

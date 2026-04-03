@@ -10,6 +10,7 @@ from app.models.pagos_informe import PagosInforme
 from app.models.configuracion import Configuracion
 from app.models.auditoria import Auditoria
 from app.models.auditoria_cartera_revision import AuditoriaCarteraRevision
+from app.models.auditoria_pago_control5_visto import AuditoriaPagoControl5Visto
 from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
 from app.models.registro_cambios import RegistroCambios
 from app.models.user import User
@@ -66,6 +67,7 @@ __all__ = [
     "Configuracion",
     "Auditoria",
     "AuditoriaCarteraRevision",
+    "AuditoriaPagoControl5Visto",
     "AuditoriaConciliacionManual",
     "RegistroCambios",
     "User",

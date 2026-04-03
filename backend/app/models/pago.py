@@ -51,6 +51,10 @@ class Pago(Base):
     monto_bs_original = Column(Numeric(15, 2), nullable=True)
     tasa_cambio_bs_usd = Column(Numeric(15, 6), nullable=True)
     fecha_tasa_referencia = Column(Date, nullable=True)  # misma fecha de pago usada para buscar tasa
+    # Control auditoria 5: duplicado misma fecha+monto autorizado por admin (sufijo en documento + bitacora).
+    excluir_control_pagos_mismo_dia_monto = Column(
+        Boolean, nullable=False, server_default=text("false")
+    )
 
 
 

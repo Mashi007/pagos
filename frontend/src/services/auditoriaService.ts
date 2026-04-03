@@ -177,6 +177,45 @@ export interface CarteraRevisionItem {
   payload_snapshot?: Record<string, unknown> | null
 }
 
+/** Control 5: pagos en grupo duplicado (misma fecha y monto) por prestamo. */
+export interface Control5DuplicadoFechaMontoItem {
+  pago_id: number
+
+  prestamo_id?: number | null
+
+  fecha_pago?: string | null
+
+  monto_pagado?: number | null
+
+  conciliado: boolean
+
+  estado_pago: string
+
+  numero_documento: string
+
+  referencia_pago: string
+
+  institucion_bancaria: string
+}
+
+export interface Control5DuplicadosListaResponse {
+  items: Control5DuplicadoFechaMontoItem[]
+}
+
+export interface Control5VistoResponse {
+  pago_id: number
+
+  prestamo_id?: number | null
+
+  numero_documento_anterior?: string | null
+
+  numero_documento_nuevo: string
+
+  sufijo_cuatro_digitos: string
+
+  auditoria_id: number
+}
+
 class AuditoriaService {
   private baseUrl = '/api/v1/auditoria'
 
@@ -434,6 +473,23 @@ class AuditoriaService {
 
       throw error
     }
+  }
+
+  /** Solo admin. Lista pagos que participan en duplicado fecha+monto (control 5). */
+  async listarControl5DuplicadosPorPrestamo(
+    prestamoId: number
+  ): Promise<Control5DuplicadosListaResponse> {
+    return apiClient.get<Control5DuplicadosListaResponse>(
+      `${this.baseUrl}/prestamos/cartera/control-5-pagos-duplicados-fecha-monto/${prestamoId}`
+    )
+  }
+
+  /** Solo admin. Visto: sufijo -XXXX al documento, exclusion del control, bitacora. */
+  async aplicarControl5VistoPago(pagoId: number): Promise<Control5VistoResponse> {
+    return apiClient.post<Control5VistoResponse>(
+      `${this.baseUrl}/prestamos/cartera/control-5-pagos-duplicados-fecha-monto/${pagoId}/visto`,
+      undefined
+    )
   }
 }
 

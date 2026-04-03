@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, require_auditoria_cartera_access
+from app.core.deps import get_current_user, require_admin, require_auditoria_cartera_access
 from app.core.rol_normalization import canonical_rol
 from app.models.auditoria import Auditoria
 from app.models.auditoria_cartera_revision import AuditoriaCarteraRevision
@@ -37,6 +37,10 @@ from app.services.auditoria_cartera_revision_service import (
 from app.services.auditoria_cartera_revision_snapshot import (
     construir_payload_snapshot_marcar_ok,
     payload_minimo_revocar_ok,
+)
+from app.services.pago_control5_visto_service import (
+    aplicar_visto_control5_duplicado_fecha_monto,
+    listar_pagos_duplicados_fecha_monto_por_prestamo,
 )
 from app.services.prestamo_cartera_auditoria import (
     ejecutar_auditoria_cartera,
@@ -870,6 +874,77 @@ def historial_revision_cartera(
             )
         )
     return out
+
+
+class Control5PagoDuplicadoItem(BaseModel):
+    pago_id: int
+    prestamo_id: Optional[int] = None
+    fecha_pago: Optional[str] = None
+    monto_pagado: Optional[float] = None
+    conciliado: bool = False
+    estado_pago: str = ""
+    numero_documento: str = ""
+    referencia_pago: str = ""
+    institucion_bancaria: str = ""
+
+
+class Control5DuplicadosListaResponse(BaseModel):
+    items: List[Control5PagoDuplicadoItem]
+
+
+class Control5VistoAplicarResponse(BaseModel):
+    pago_id: int
+    prestamo_id: Optional[int] = None
+    numero_documento_anterior: Optional[str] = None
+    numero_documento_nuevo: str
+    sufijo_cuatro_digitos: str
+    auditoria_id: int
+
+
+@router.get(
+    "/prestamos/cartera/control-5-pagos-duplicados-fecha-monto/{prestamo_id}",
+    response_model=Control5DuplicadosListaResponse,
+)
+def listar_control5_pagos_duplicados_por_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+):
+    """
+    Control 5: pagos operativos que comparten (prestamo, fecha calendario, monto) con otro pago.
+    Solo administrador. Usado para aplicar Visto (sufijo aleatorio en documento + bitacora).
+    """
+    if not db.get(Prestamo, prestamo_id):
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+    raw = listar_pagos_duplicados_fecha_monto_por_prestamo(db, prestamo_id)
+    return Control5DuplicadosListaResponse(
+        items=[Control5PagoDuplicadoItem(**x) for x in raw]
+    )
+
+
+@router.post(
+    "/prestamos/cartera/control-5-pagos-duplicados-fecha-monto/{pago_id}/visto",
+    response_model=Control5VistoAplicarResponse,
+)
+def aplicar_control5_visto_duplicado_fecha_monto(
+    pago_id: int,
+    db: Session = Depends(get_db),
+    admin: UserResponse = Depends(require_admin),
+):
+    """
+    Solo administrador. Anexa `-XXXX` (4 digitos aleatorios) a `numero_documento`, marca exclusion
+    del motor control 5 y registra fila en `auditoria_pago_control5_visto`.
+    """
+    try:
+        out = aplicar_visto_control5_duplicado_fecha_monto(db, pago_id, admin.id)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    return Control5VistoAplicarResponse(**out)
 
 
 @router.get("/{auditoria_id}", response_model=AuditoriaItem)

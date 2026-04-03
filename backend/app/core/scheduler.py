@@ -209,6 +209,20 @@ def start_scheduler() -> None:
         _gmail_log,
         SCHEDULER_TZ,
     )
+    if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", True):
+        for _gjid in (
+            "pagos_gmail_pending_scan_0400",
+            "pagos_gmail_pending_scan_1100",
+            "pagos_gmail_pending_scan_2000",
+        ):
+            _gj = _scheduler.get_job(_gjid)
+            if _gj is not None:
+                logger.info(
+                    "[PAGOS_GMAIL] Job %s proxima_ejecucion=%s (referencia tz=%s)",
+                    _gjid,
+                    _gj.next_run_time,
+                    SCHEDULER_TZ,
+                )
 
 
 def stop_scheduler() -> None:
