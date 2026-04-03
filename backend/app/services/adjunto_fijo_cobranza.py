@@ -28,6 +28,15 @@ TIPOS_CASO_VALIDOS = frozenset([
 # Evitar repetir el mismo WARNING por cada ítem del batch (Render: disco efímero, archivos no existen)
 _warned_adjuntos_caso_vacio: set = set()
 _warned_adjunto_path: set = set()
+_warned_adjunto_bd_faltante: set = set()
+
+
+def _item_adjunto_config_valido(x: Any) -> bool:
+    if not isinstance(x, dict) or not x.get("id") or not x.get("nombre_archivo"):
+        return False
+    if x.get("en_bd") is True:
+        return True
+    return bool((x.get("ruta") or "").strip())
 
 
 def _resolve_path(ruta: str) -> Optional[str]:
@@ -133,7 +142,7 @@ def _get_adjuntos_por_caso_raw(db):
         out = {}
         for k, v in data.items():
             if k in TIPOS_CASO_VALIDOS and isinstance(v, list):
-                out[k] = [x for x in v if isinstance(x, dict) and x.get("id") and x.get("nombre_archivo") and x.get("ruta")]
+                out[k] = [x for x in v if _item_adjunto_config_valido(x)]
             else:
                 out[k] = []
         return out
@@ -152,9 +161,38 @@ def get_adjuntos_fijos_por_caso(db, tipo_caso: str):
     lista = raw.get(tipo_caso, [])
     base_dir = _get_base_dir_adjuntos()
     result = []
+    try:
+        from app.models.adjunto_fijo_cobranza_documento import AdjuntoFijoCobranzaDocumento
+    except Exception:
+        AdjuntoFijoCobranzaDocumento = None  # type: ignore
     for item in lista:
-        ruta_rel = (item.get("ruta") or "").strip()
         nombre = (item.get("nombre_archivo") or "").strip() or "documento.pdf"
+        if item.get("en_bd") is True and AdjuntoFijoCobranzaDocumento is not None:
+            doc_id = item.get("id")
+            if not doc_id:
+                continue
+            try:
+                row_doc = db.get(AdjuntoFijoCobranzaDocumento, str(doc_id))
+            except Exception as e:
+                logger.warning("Adjunto BD caso %s id=%s: error lectura: %s", tipo_caso, doc_id, e)
+                continue
+            if not row_doc or row_doc.tipo_caso != tipo_caso:
+                key = (tipo_caso, str(doc_id))
+                if key not in _warned_adjunto_bd_faltante:
+                    _warned_adjunto_bd_faltante.add(key)
+                    logger.warning(
+                        "Adjunto por caso %s id=%s: fila en BD no encontrada o tipo_caso distinto (migracion o datos huérfanos).",
+                        tipo_caso,
+                        doc_id,
+                    )
+                continue
+            blob = row_doc.pdf_data
+            if not blob or not _bytes_es_pdf_valido(blob[: min(16, len(blob))]):
+                logger.warning("Adjunto BD caso %s id=%s: PDF vacío o cabecera inválida", tipo_caso, doc_id)
+                continue
+            result.append((nombre, blob))
+            continue
+        ruta_rel = (item.get("ruta") or "").strip()
         if not ruta_rel:
             continue
         path = os.path.normpath(os.path.join(base_dir, ruta_rel))
@@ -174,7 +212,7 @@ def get_adjuntos_fijos_por_caso(db, tipo_caso: str):
     if lista and not result:
         if tipo_caso not in _warned_adjuntos_caso_vacio:
             _warned_adjuntos_caso_vacio.add(tipo_caso)
-            logger.warning("Adjuntos fijos caso %s: config tiene entradas pero ningun archivo encontrado. base_dir=%s (Render: usar disco persistente)", tipo_caso, base_dir[:150])
+            logger.warning("Adjuntos fijos caso %s: config tiene entradas pero ningun archivo encontrado. base_dir=%s (Render: subir de nuevo o usar adjuntos en BD)", tipo_caso, base_dir[:150])
     elif result:
         logger.info("Adjuntos fijos caso %s: %d archivo(s) anexados", tipo_caso, len(result))
     return result
@@ -318,7 +356,38 @@ def diagnostico_adjuntos_notificaciones_cobranza(db) -> dict:
             ruta_rel = (item.get("ruta") or "").strip()
             nombre = (item.get("nombre_archivo") or "").strip() or "documento.pdf"
             _id = item.get("id")
-            valido_cfg = bool(_id and item.get("nombre_archivo") and item.get("ruta"))
+            en_bd = item.get("en_bd") is True
+            valido_cfg = _item_adjunto_config_valido(item)
+            if en_bd and db is not None:
+                try:
+                    from app.models.adjunto_fijo_cobranza_documento import AdjuntoFijoCobranzaDocumento
+
+                    row_d = db.get(AdjuntoFijoCobranzaDocumento, str(_id)) if _id else None
+                except Exception:
+                    row_d = None
+                tam = len(row_d.pdf_data) if row_d and row_d.pdf_data else 0
+                head = row_d.pdf_data[: min(16, tam)] if row_d and row_d.pdf_data else b""
+                pdf_ok = bool(row_d and row_d.tipo_caso == tipo_caso and tam and _bytes_es_pdf_valido(head))
+                if pdf_ok:
+                    cargables += 1
+                entradas.append(
+                    {
+                        "id": _id,
+                        "nombre_archivo": nombre,
+                        "en_bd": True,
+                        "ruta_relativa": None,
+                        "valido_para_envio": valido_cfg,
+                        "detalle": {
+                            "origen": "base_datos",
+                            "fila_existe": row_d is not None,
+                            "tipo_caso_coincide": row_d is not None and row_d.tipo_caso == tipo_caso,
+                            "tamano_bytes": tam if row_d else None,
+                            "cabecera_pdf": _bytes_es_pdf_valido(head) if head else False,
+                        },
+                        "pdf_valido": pdf_ok,
+                    }
+                )
+                continue
             path_abs = None
             motivo_path = None
             if not ruta_rel:
@@ -339,6 +408,7 @@ def diagnostico_adjuntos_notificaciones_cobranza(db) -> dict:
                 {
                     "id": _id,
                     "nombre_archivo": nombre,
+                    "en_bd": False,
                     "ruta_relativa": ruta_rel or None,
                     "valido_para_envio": valido_cfg,
                     "detalle": diag,
@@ -370,7 +440,8 @@ def diagnostico_adjuntos_notificaciones_cobranza(db) -> dict:
             "segundo_pdf_disponible_para_dias_1_retraso": segundo_pdf_d1,
             "texto": (
                 "Con NOTIFICACIONES_PAQUETE_ESTRICTO=true hace falta Carta_Cobranza.pdf + al menos un PDF fijo valido. "
-                "Ese segundo PDF puede venir del adjunto global o de la pestaña 3 para dias_1_retraso; deben existir en disco (Render: volumen persistente)."
+                "Ese segundo PDF puede venir del adjunto global o de Documentos PDF anexos; los nuevos se guardan en BD (BYTEA). "
+                "Entradas antiguas solo en disco requieren volumen persistente en Render o volver a subir."
             ),
         },
     }

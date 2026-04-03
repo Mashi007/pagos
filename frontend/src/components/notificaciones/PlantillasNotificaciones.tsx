@@ -64,12 +64,15 @@ import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
 
 type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 
+/** Unico servicio de plantilla de correo para el listado de notificaciones. */
+const TIPO_SERVICIO_PLANTILLA = 'PAGO_1_DIA_ATRASADO'
+
 interface PlantillasNotificacionesProps {
   plantillaInicial?: NotificacionPlantilla | null
 
   onPlantillaCargada?: () => void
 
-  /** Cuando el padre est? en la pesta?a "plantillas", se recargan las variables para integrar las creadas en Variables Personalizadas. */
+  /** Cuando el padre esta en la pestana "plantillas", se recargan las variables para integrar las creadas en Variables Personalizadas. */
 
   tabSeccionActiva?: string
 }
@@ -109,9 +112,11 @@ export function PlantillasNotificaciones({
 
   const [nombre, setNombre] = useState('')
 
-  const [tipo, setTipo] = useState('') // Mantener para compatibilidad con edici?n individual
+  const [tipo, setTipo] = useState('') // Mantener para compatibilidad con edicion individual
 
-  const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([]) // Para creaci?n m?ltiple
+  const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([
+    TIPO_SERVICIO_PLANTILLA,
+  ])
 
   const [activa, setActiva] = useState(true)
 
@@ -166,7 +171,7 @@ export function PlantillasNotificaciones({
 
     {
       key: 'dias_atraso',
-      label: 'Dias desde venc. cuota ref. (1/3/5/30)',
+      label: 'Dias desde vencimiento cuota de referencia',
     },
 
     {
@@ -174,542 +179,6 @@ export function PlantillasNotificaciones({
       label: 'Cuotas atrasadas (estado de cuenta)',
     },
   ]
-
-  // Tipos organizados por categor?as
-
-  const tiposPorCategoria = {
-    retraso: [
-      {
-        valor: 'PAGO_1_DIA_ATRASADO',
-        label: 'Día siguiente al vencimiento (1 día después)',
-      },
-
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
-
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso' },
-
-      { valor: 'PAGO_30_DIAS_ATRASADO', label: '30 días de retraso' },
-    ],
-
-    prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
-
-    masivos: [
-      { valor: 'MASIVOS', label: 'Comunicaciones masivas (caso MASIVOS)' },
-    ],
-
-    cobranza: [{ valor: 'COBRANZA', label: 'Carta de cobranza' }],
-  }
-
-  const tiposSugeridos = [
-    'PAGO_1_DIA_ATRASADO',
-    'PAGO_3_DIAS_ATRASADO',
-    'PAGO_5_DIAS_ATRASADO',
-    'PAGO_30_DIAS_ATRASADO',
-    'PREJUDICIAL',
-    'MASIVOS',
-    'COBRANZA',
-  ]
-
-  const todosLosTipos = [
-    ...tiposPorCategoria.retraso,
-
-    ...tiposPorCategoria.prejudicial,
-
-    ...tiposPorCategoria.masivos,
-
-    ...(tiposPorCategoria.cobranza || []),
-  ]
-
-  /** Variables para plantilla de cobranza: {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}. Ver docs/PLANTILLA_COBRANZA_ANALISIS_Y_MECANISMOS.md */
-
-  const VARIABLES_COBRANZA = [
-    { key: 'CLIENTES.TRATAMIENTO', label: 'Tratamiento' },
-
-    { key: 'CLIENTES.NOMBRE_COMPLETO', label: 'Nombre completo' },
-
-    { key: 'PRESTAMOS.ID', label: 'N? cr?dito' },
-
-    { key: 'FECHA_CARTA', label: 'Fecha carta' },
-
-    { key: 'LOGO_URL', label: 'URL del logo (se rellena al enviar)' },
-  ]
-
-  const BLOQUE_CUOTAS_VENCIDAS = `{{#CUOTAS.VENCIMIENTOS}}
-
-
-
-
-  ? Cuota N? {{CUOTA.NUMERO}} con vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ? Monto: {{CUOTA.MONTO}}
-
-
-
-
-{{/CUOTAS.VENCIMIENTOS}}`
-
-  const PLANTILLA_COBRANZA_ASUNTO =
-    'Recordatorio de cuotas pendientes - Rapi-Credit, C.A.'
-
-  /** Al cargar la plantilla se usa una URL de ejemplo; al enviar el correo el backend sustituye {{LOGO_URL}} por la URL p?blica del logo. */
-
-  const PLANTILLA_COBRANZA_CUERPO = `<!DOCTYPE html>
-
-
-
-
-<html lang="es">
-
-
-
-
-<head>
-
-
-
-
-  <meta charset="UTF-8">
-
-
-
-
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-
-
-
-  <title>Recordatorio de cobranza</title>
-
-
-
-
-</head>
-
-
-
-
-<body style="margin:0; padding:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8;">
-
-
-
-
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f6f8;">
-
-
-
-
-    <tr>
-
-
-
-
-      <td align="center" style="padding: 24px 16px;">
-
-
-
-
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; background: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden;">
-
-
-
-
-          <!-- Encabezado con logo -->
-
-
-
-
-          <tr>
-
-
-
-
-            <td style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 28px 32px; text-align: center;">
-
-
-
-
-              <img src="{{LOGO_URL}}" alt="RapiCredit" width="180" height="auto" style="display: inline-block; max-height: 56px; width: auto;" />
-
-
-
-
-            </td>
-
-
-
-
-          </tr>
-
-
-
-
-          <!-- Saludo -->
-
-
-
-
-          <tr>
-
-
-
-
-            <td style="padding: 28px 32px 24px 32px;">
-
-
-
-
-              <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #1a202c;">
-
-
-
-
-                Estimado {{CLIENTES.TRATAMIENTO}} <strong>{{CLIENTES.NOMBRE_COMPLETO}}</strong>,
-
-
-
-
-              </p>
-
-
-
-
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-
-
-
-
-                Nos dirigimos a usted con el mayor respeto en nombre de <strong>Rapi-Credit, C.A.</strong>, con motivo del vencimiento de cuotas correspondientes a su cr?dito N? <strong>{{PRESTAMOS.ID}}</strong> vigente con nuestra empresa.
-
-
-
-
-              </p>
-
-
-
-
-              <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-
-
-
-
-                Seg?n nuestros registros al <strong>{{FECHA_CARTA}}</strong>, se encuentran pendientes de pago las siguientes cuotas:
-
-
-
-
-              </p>
-
-
-
-
-              <!-- Bloque cuotas -->
-
-
-
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 20px 0; border: 1px solid #e2e8f0; border-radius: 6px;">
-
-
-
-
-                <tr>
-
-
-
-
-                  <td style="padding: 12px 16px; background-color: #1e3a5f; color: #fff; font-size: 13px; font-weight: 600;">Detalle de cuotas pendientes</td>
-
-
-
-
-                </tr>
-
-
-
-
-                <tr>
-
-
-
-
-                  <td style="padding: 16px;">
-
-
-
-
-{{#CUOTAS.VENCIMIENTOS}}
-
-
-
-
-                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #2d3748;">? Cuota N? {{CUOTA.NUMERO}} ? Vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ? Monto: {{CUOTA.MONTO}}</p>
-
-
-
-
-{{/CUOTAS.VENCIMIENTOS}}
-
-
-
-
-                  </td>
-
-
-
-
-                </tr>
-
-
-
-
-              </table>
-
-
-
-
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-
-
-
-
-                Le recordamos que dichas cuotas forman parte del compromiso adquirido al momento de la aprobaci?n de su cr?dito, y su cancelaci?n oportuna contribuye significativamente a mantener su historial financiero en condiciones favorables.
-
-
-
-
-              </p>
-
-
-
-
-              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #c53030; font-weight: 600;">
-
-
-
-
-                LE REMITIMOS LAS CUENTAS DONDE PUEDE REALIZAR SUS PAGOS. NO CONTAMOS CON ZELLE.
-
-
-
-
-              </p>
-
-
-
-
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-
-
-
-
-                En virtud de lo anterior, le invitamos cordialmente a regularizar su situaci?n en un lapso no mayor a <strong>48 horas</strong>, realizando el pago de las cuotas adeudadas a trav?s de nuestros canales habituales.
-
-
-
-
-              </p>
-
-
-
-
-              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #2b6cb0; font-weight: 600;">
-
-
-
-
-                SI YA HA EFECTUADO EL PAGO, LE AGRADECEMOS HACER CASO OMISO A ESTA COMUNICACI?N.
-
-
-
-
-              </p>
-
-
-
-
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-
-
-
-
-                De lo contrario, le exhortamos a comunicarse con nosotros para coordinar una soluci?n adecuada y evitar medidas adicionales.
-
-
-
-
-              </p>
-
-
-
-
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-
-
-
-
-                Nuestro objetivo es brindarle siempre un servicio confiable y accesible, por lo cual quedamos atentos para atender cualquier duda o inconveniente que desee plantear.
-
-
-
-
-              </p>
-
-
-
-
-              <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-
-
-
-
-                Agradeciendo de antemano su pronta atenci?n a esta solicitud, nos despedimos cordialmente.
-
-
-
-
-              </p>
-
-
-
-
-              <!-- Firma -->
-
-
-
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top: 2px solid #e2e8f0; padding-top: 20px;">
-
-
-
-
-                <tr>
-
-
-
-
-                  <td>
-
-
-
-
-                    <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #1e3a5f;">Atentamente,</p>
-
-
-
-
-                    <p style="margin: 0 0 4px 0; font-size: 14px; color: #2d3748;">Departamento de Cobranza</p>
-
-
-
-
-                    <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #1e3a5f;">Rapi-Credit, C.A.</p>
-
-
-
-
-                    <p style="margin: 0; font-size: 12px; color: #718096;">Fecha de emisi?n: {{FECHA_CARTA}}</p>
-
-
-
-
-                  </td>
-
-
-
-
-                </tr>
-
-
-
-
-              </table>
-
-
-
-
-            </td>
-
-
-
-
-          </tr>
-
-
-
-
-          <!-- Pie con color corporativo -->
-
-
-
-
-          <tr>
-
-
-
-
-            <td style="padding: 12px 32px; background-color: #1e3a5f; color: #a0aec0; font-size: 11px; text-align: center;">
-
-
-
-
-              Este correo es un recordatorio oficial de Rapi-Credit, C.A. Por favor no responda a este mensaje de forma autom?tica.
-
-
-
-
-            </td>
-
-
-
-
-          </tr>
-
-
-
-
-        </table>
-
-
-
-
-      </td>
-
-
-
-
-    </tr>
-
-
-
-
-  </table>
-
-
-
-
-</body>
-
-
-
-
-</html>`
-
-  const cargarPlantillaCobranzaPorDefecto = () => {
-    setTipo('COBRANZA')
-
-    setTiposSeleccionados(['COBRANZA'])
-
-    setAsunto(PLANTILLA_COBRANZA_ASUNTO)
-
-    setEncabezado('')
-
-    setCuerpo(PLANTILLA_COBRANZA_CUERPO)
-
-    setFirma('')
-
-    setNombre('Carta de cobranza')
-
-    toast.success('Plantilla de cobranza cargada. Revise y guarde.')
-  }
 
   // Generar variables precargadas desde los campos de las tablas
 
@@ -1030,7 +499,7 @@ export function PlantillasNotificaciones({
 
     setTipo('')
 
-    setTiposSeleccionados([])
+    setTiposSeleccionados([TIPO_SERVICIO_PLANTILLA])
 
     setActiva(true)
 
@@ -1061,24 +530,6 @@ export function PlantillasNotificaciones({
     setCuerpo(replaceBase64ImagesWithLogoUrl(p.cuerpo || ''))
 
     setFirma('')
-  }
-
-  const toggleTipo = (tipoValor: string) => {
-    setTiposSeleccionados(prev => {
-      if (prev.includes(tipoValor)) {
-        return prev.filter(t => t !== tipoValor)
-      } else {
-        return [...prev, tipoValor]
-      }
-    })
-  }
-
-  const seleccionarTodos = () => {
-    setTiposSeleccionados(todosLosTipos.map(t => t.valor))
-  }
-
-  const deseleccionarTodos = () => {
-    setTiposSeleccionados([])
   }
 
   const insertarVariable = (nombreVariable?: string) => {
@@ -1278,29 +729,6 @@ export function PlantillasNotificaciones({
 
         toast.success('Plantilla actualizada exitosamente')
 
-        const otrosTipos = tiposSeleccionados.filter(t => t !== tipoActual)
-
-        for (const tipoOtro of otrosTipos) {
-          try {
-            const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoOtro)?.label || tipoOtro}`
-
-            await notificacionService.crearPlantilla({
-              nombre: nombrePlantilla,
-              tipo: tipoOtro,
-              asunto,
-              cuerpo: cuerpoFinal,
-              activa,
-            })
-          } catch (err) {
-            toast.error('Error al crear copia para otro caso')
-          }
-        }
-
-        if (otrosTipos.length > 0)
-          toast.success(
-            `Se crearon ${otrosTipos.length} plantilla(s) para los otros casos`
-          )
-
         await queryClient.invalidateQueries({
           queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
         })
@@ -1319,14 +747,6 @@ export function PlantillasNotificaciones({
       return
     }
 
-    // Si estamos creando nuevas plantillas, validar tipos seleccionados
-
-    if (tiposSeleccionados.length === 0) {
-      toast.error('Seleccione al menos un tipo de notificaci?n')
-
-      return
-    }
-
     if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
       toast.error('Complete todos los campos obligatorios')
 
@@ -1334,53 +754,19 @@ export function PlantillasNotificaciones({
     }
 
     try {
-      // Crear una plantilla para cada tipo seleccionado
+      const tipoNuevo = TIPO_SERVICIO_PLANTILLA
 
-      const plantillasCreadas: string[] = []
+      await notificacionService.crearPlantilla({
+        nombre: nombre.trim(),
+        tipo: tipoNuevo,
+        asunto,
+        cuerpo: cuerpoFinal,
+        activa,
+      })
 
-      const erroresCreacion: string[] = []
+      toast.success('Plantilla creada exitosamente')
 
-      for (const tipoSeleccionado of tiposSeleccionados) {
-        try {
-          const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoSeleccionado)?.label || tipoSeleccionado}`
-
-          const payload = {
-            nombre: nombrePlantilla,
-
-            tipo: tipoSeleccionado,
-
-            asunto,
-
-            cuerpo: cuerpoFinal,
-
-            activa,
-          }
-
-          await notificacionService.crearPlantilla(payload)
-
-          plantillasCreadas.push(tipoSeleccionado)
-        } catch (error: any) {
-          erroresCreacion.push(
-            `${tipoSeleccionado}: ${error?.response?.data?.detail || 'Error'}`
-          )
-        }
-      }
-
-      if (plantillasCreadas.length > 0) {
-        toast.success(
-          `Se crearon ${plantillasCreadas.length} plantilla(s) exitosamente`
-        )
-
-        // Cambiar a la pesta?a de resumen despu?s de guardar
-
-        setActiveTab('resumen')
-      }
-
-      if (erroresCreacion.length > 0) {
-        toast.error(
-          `Errores al crear algunas plantillas: ${erroresCreacion.join(', ')}`
-        )
-      }
+      setActiveTab('resumen')
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
@@ -1389,7 +775,7 @@ export function PlantillasNotificaciones({
       limpiar()
     } catch (error: any) {
       toast.error(
-        error?.response?.data?.detail || 'Error al guardar plantillas'
+        error?.response?.data?.detail || 'Error al guardar la plantilla'
       )
     }
   }
@@ -1490,9 +876,11 @@ export function PlantillasNotificaciones({
 
       setSelected(null)
 
+      setTiposSeleccionados([TIPO_SERVICIO_PLANTILLA])
+
       setActiveTab('armar')
 
-      toast.success('Plantilla importada. Revise y guarde cuando est? lista.')
+      toast.success('Plantilla importada. Al guardar se creará solo para el servicio activo (día siguiente al vencimiento).')
     } catch (error: any) {
       toast.error(
         'Error al leer el archivo JSON: ' +
@@ -1618,47 +1006,19 @@ export function PlantillasNotificaciones({
 
   const ordenCasos: { tipo: string; label: string; borderColor: string }[] = [
     {
-      tipo: 'PAGO_1_DIA_ATRASADO',
-      label: 'Día siguiente al venc.',
+      tipo: TIPO_SERVICIO_PLANTILLA,
+      label: 'Día siguiente al vencimiento (1 día de atraso calendario)',
       borderColor: 'border-amber-400',
     },
-
-    {
-      tipo: 'PAGO_3_DIAS_ATRASADO',
-      label: '3 días de retraso',
-      borderColor: 'border-amber-500',
-    },
-
-    {
-      tipo: 'PAGO_5_DIAS_ATRASADO',
-      label: '5 días de retraso',
-      borderColor: 'border-amber-600',
-    },
-
-    {
-      tipo: 'PAGO_30_DIAS_ATRASADO',
-      label: '30 días de retraso',
-      borderColor: 'border-orange-700',
-    },
-
-    {
-      tipo: 'PREJUDICIAL',
-      label: 'Prejudicial',
-      borderColor: 'border-red-500',
-    },
-
-    {
-      tipo: 'MASIVOS',
-      label: 'Comunicaciones masivas',
-      borderColor: 'border-teal-500',
-    },
-
-    {
-      tipo: 'COBRANZA',
-      label: 'Carta de cobranza',
-      borderColor: 'border-violet-500',
-    },
   ]
+
+  const tiposPlantillaHeredados = useMemo(() => {
+    const u = new Set<string>()
+    plantillas.forEach(p => {
+      if (p.tipo !== TIPO_SERVICIO_PLANTILLA) u.add(p.tipo)
+    })
+    return Array.from(u).sort()
+  }, [plantillas])
 
   /** Banco por caso: plantillas agrupadas por tipo */
 
@@ -1855,8 +1215,9 @@ export function PlantillasNotificaciones({
             <h2 className="text-lg font-semibold">Armar plantilla</h2>
 
             <p className="text-sm text-gray-500">
-              Elige el caso, escribe asunto y cuerpo, inserta variables y
-              guarda. Luego as?gnala en Notificaciones ? Configuraci?n.
+              Un solo servicio activo: día siguiente al vencimiento. Escriba
+              asunto y cuerpo, inserte variables y guarde. Luego asígnela en
+              Notificaciones → Configuración.
             </p>
           </div>
 
@@ -1879,16 +1240,6 @@ export function PlantillasNotificaciones({
               className="hidden"
             />
 
-            <Button
-              onClick={cargarPlantillaCobranzaPorDefecto}
-              variant="outline"
-              size="sm"
-              title="Cargar plantilla de cobranza con variables {{TABLA.CAMPO}} y bloque de cuotas"
-            >
-              <FileText className="mr-1 h-4 w-4" />
-              Cargar plantilla cobranza
-            </Button>
-
             <Button onClick={limpiar} variant="secondary" size="sm">
               Nueva plantilla
             </Button>
@@ -1907,128 +1258,25 @@ export function PlantillasNotificaciones({
               />
             </div>
 
-            <div className="space-y-4 rounded-lg border bg-gray-50 p-4">
-              <label className="block text-sm font-medium text-gray-700">
-                Usar esta plantilla para (seleccione uno o m?s casos)
-              </label>
-
-              <p className="mb-2 text-xs text-gray-500">
-                Marque los casos en los que se usar? esta plantilla (ej. 1 d?a,
-                3 d?as y 5 d?as de retraso).
+            <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+              <p className="text-sm font-semibold text-amber-900">
+                Servicio de notificación
               </p>
-
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600">
-                  {tiposSeleccionados.length} caso(s) seleccionado(s)
-                </span>
-
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={seleccionarTodos}
-                    className="text-xs"
-                  >
-                    Seleccionar todos
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={deseleccionarTodos}
-                    className="text-xs"
-                  >
-                    Deseleccionar todos
-                  </Button>
-                </div>
-              </div>
-
-              {/* Desde el día siguiente al vencimiento y más días de retraso */}
-
-              <div>
-                <h4 className="mb-2 text-sm font-semibold text-orange-700">
-                  Tras la fecha de vencimiento
-                </h4>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {tiposPorCategoria.retraso.map(t => (
-                    <label
-                      key={t.valor}
-                      className="flex cursor-pointer items-center gap-2 rounded border p-2 hover:bg-white"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={tiposSeleccionados.includes(t.valor)}
-                        onChange={() => toggleTipo(t.valor)}
-                        className="rounded"
-                      />
-
-                      <span className="text-sm">{t.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Prejudicial */}
-
-              <div>
-                <h4 className="mb-2 text-sm font-semibold text-red-700">
-                  Prejudicial
-                </h4>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {tiposPorCategoria.prejudicial.map(t => (
-                    <label
-                      key={t.valor}
-                      className="flex cursor-pointer items-center gap-2 rounded border p-2 hover:bg-white"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={tiposSeleccionados.includes(t.valor)}
-                        onChange={() => toggleTipo(t.valor)}
-                        className="rounded"
-                      />
-
-                      <span className="text-sm">{t.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Comunicaciones masivas (caso MASIVOS); sin cuota/préstamo */}
-
-              <div>
-                <h4 className="mb-2 text-sm font-semibold text-teal-700">
-                  Comunicaciones masivas
-                </h4>
-
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {tiposPorCategoria.masivos.map(t => (
-                    <label
-                      key={t.valor}
-                      className="flex cursor-pointer items-center gap-2 rounded border border-teal-200 p-2 hover:bg-white"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={tiposSeleccionados.includes(t.valor)}
-                        onChange={() => toggleTipo(t.valor)}
-                        className="rounded"
-                      />
-
-                      <span className="text-sm">{t.label}</span>
-                    </label>
-                  ))}
-                </div>
-
-                <p className="mt-1 text-xs text-gray-500">
-                  Asigna la plantilla al caso MASIVOS en Notificaciones &gt;
-                  Configuración &gt; Comunicaciones. Los PDF fijos para este caso
-                  se suben en Documentos PDF anexos (caso comunicaciones
-                  masivas).
+              <p className="text-sm text-gray-800">
+                Día siguiente al vencimiento (1 día de atraso calendario)
+              </p>
+              <p className="text-xs text-gray-600">
+                Las plantillas nuevas se guardan solo para este caso (
+                <code className="rounded bg-white px-1">PAGO_1_DIA_ATRASADO</code>
+                ).
+              </p>
+              {selected && selected.tipo !== TIPO_SERVICIO_PLANTILLA ? (
+                <p className="rounded border border-amber-300 bg-amber-100 px-2 py-1.5 text-xs text-amber-950">
+                  Esta plantilla es de un tipo heredado ({selected.tipo}). Puede
+                  editarla o eliminarla; no se ofrecen nuevos tipos desde esta
+                  pantalla.
                 </p>
-              </div>
+              ) : null}
             </div>
 
             <div className="flex items-center gap-2">
@@ -2040,7 +1288,7 @@ export function PlantillasNotificaciones({
               />
 
               <label htmlFor="activa" className="text-sm">
-                Habilitar env?o autom?tico a las 3:00 AM
+                Habilitar envío automático a las 3:00 AM
               </label>
             </div>
           </div>
@@ -2052,144 +1300,34 @@ export function PlantillasNotificaciones({
               Insertar variable en asunto o cuerpo (clic en la variable):
             </p>
 
-            {tipo === 'COBRANZA' || tiposSeleccionados.includes('COBRANZA') ? (
-              <>
-                <p className="mb-2 text-xs text-blue-700">
-                  Plantilla de cobranza: use{' '}
-                  <code className="rounded bg-white px-1">
-                    {'{{TABLA.CAMPO}}'}
-                  </code>{' '}
-                  y el bloque de cuotas vencidas. Datos desde clientes,
-                  pr?stamos y cuotas seg?n filtros de las pesta?as de
-                  Notificaciones.
-                </p>
+            <>
+              <p className="mb-2 text-xs text-blue-700">
+                Las variables de la pestaña{' '}
+                <strong>Variables Personalizadas</strong> aparecen abajo en el
+                Banco de Variables y se copian aquí al hacer clic.
+              </p>
 
-                <div className="mb-2 flex flex-wrap gap-2">
-                  {VARIABLES_COBRANZA.map(({ key, label }) => (
-                    <Button
-                      key={key}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-blue-300 bg-white font-mono text-xs text-blue-800 hover:bg-blue-100"
-                      onClick={() => {
-                        insertarVariable(key)
-
-                        toast.success(`{{${key}}} insertado`, {
-                          duration: 1200,
-                        })
-                      }}
-                    >
-                      {`{{${key}}}`}
-                    </Button>
-                  ))}
-
+              <div className="flex flex-wrap gap-2">
+                {VARIABLES_NOTIFICACION.map(({ key, label }) => (
                   <Button
+                    key={key}
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="border-amber-300 bg-amber-50 font-mono text-xs text-amber-900 hover:bg-amber-100"
+                    className="border-blue-300 bg-white font-mono text-xs text-blue-800 hover:bg-blue-100"
                     onClick={() => {
-                      const insertInto = (
-                        el: HTMLTextAreaElement | HTMLInputElement | null,
-                        setter: (v: string) => void,
-                        current: string
-                      ) => {
-                        if (!el && cuerpoRef.current) {
-                          setter(current + '\n' + BLOQUE_CUOTAS_VENCIDAS)
+                      insertarVariable(key)
 
-                          return
-                        }
-
-                        const elTarget = (
-                          focus === 'cuerpo'
-                            ? cuerpoRef.current
-                            : focus === 'firma'
-                              ? firmaRef.current
-                              : focus === 'encabezado'
-                                ? encRef.current
-                                : null
-                        ) as HTMLTextAreaElement | null
-
-                        const setterTarget =
-                          focus === 'cuerpo'
-                            ? setCuerpo
-                            : focus === 'firma'
-                              ? setFirma
-                              : setEncabezado
-
-                        const currentTarget =
-                          focus === 'cuerpo'
-                            ? cuerpo
-                            : focus === 'firma'
-                              ? firma
-                              : encabezado
-
-                        if (!elTarget) {
-                          setterTarget(
-                            currentTarget + '\n' + BLOQUE_CUOTAS_VENCIDAS
-                          )
-                          return
-                        }
-
-                        const start =
-                          elTarget.selectionStart ?? currentTarget.length
-
-                        const end =
-                          elTarget.selectionEnd ?? currentTarget.length
-
-                        const next =
-                          currentTarget.slice(0, start) +
-                          '\n' +
-                          BLOQUE_CUOTAS_VENCIDAS +
-                          currentTarget.slice(end)
-
-                        setterTarget(next)
-                      }
-
-                      insertInto(cuerpoRef.current, setCuerpo, cuerpo)
-
-                      setFocus('cuerpo')
-
-                      toast.success('Bloque de cuotas vencidas insertado', {
-                        duration: 2000,
+                      toast.success(`{{${key}}} insertado`, {
+                        duration: 1200,
                       })
                     }}
                   >
-                    Insertar bloque: lista cuotas vencidas
+                    {`{{${key}}}`}
                   </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="mb-2 text-xs text-blue-700">
-                  Las variables de la pesta?a{' '}
-                  <strong>Variables Personalizadas</strong> aparecen abajo en el
-                  Banco de Variables y se copian aqu? al hacer clic.
-                </p>
-
-                <div className="flex flex-wrap gap-2">
-                  {VARIABLES_NOTIFICACION.map(({ key, label }) => (
-                    <Button
-                      key={key}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-blue-300 bg-white font-mono text-xs text-blue-800 hover:bg-blue-100"
-                      onClick={() => {
-                        insertarVariable(key)
-
-                        toast.success(`{{${key}}} insertado`, {
-                          duration: 1200,
-                        })
-                      }}
-                    >
-                      {`{{${key}}}`}
-                    </Button>
-                  ))}
-                </div>
-              </>
-            )}
+                ))}
+              </div>
+            </>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -2600,9 +1738,9 @@ export function PlantillasNotificaciones({
             </CardTitle>
 
             <CardDescription>
-              Cada caso (1 d?a, 5 d?as, hoy vence, 61+ mora, etc.) tiene su
-              banco. Estos nombres aparecen en Notificaciones ? Configuraci?n al
-              elegir la plantilla a enviar.
+              Servicio activo: día siguiente al vencimiento (1 día de atraso
+              calendario). Las plantillas heredadas de otros tipos, si existen,
+              aparecen aparte para revisión o eliminación.
             </CardDescription>
           </CardHeader>
 
@@ -2632,6 +1770,13 @@ export function PlantillasNotificaciones({
                   {ordenCasos.map(c => (
                     <option key={c.tipo} value={c.tipo}>
                       {c.label}
+                    </option>
+                  ))}
+
+                  {tiposPlantillaHeredados.map(ht => (
+                    <option key={ht} value={ht}>
+                      {mapeoTipos[ht as keyof typeof mapeoTipos]?.caso ?? ht}{' '}
+                      (heredado)
                     </option>
                   ))}
                 </select>
@@ -2665,8 +1810,8 @@ export function PlantillasNotificaciones({
                 <p>No hay plantillas configuradas.</p>
 
                 <p className="mt-2 text-sm">
-                  Vaya a la pesta?a "Armar plantilla" para crear nuevas
-                  plantillas.
+                  Vaya a la pestaña &quot;Armar plantilla&quot; para crear
+                  nuevas plantillas.
                 </p>
               </div>
             ) : (
@@ -2697,7 +1842,128 @@ export function PlantillasNotificaciones({
 
                                 <TableHead>Asunto</TableHead>
 
-                                <TableHead>Fecha actualizaci?n</TableHead>
+                                <TableHead>Fecha actualización</TableHead>
+
+                                <TableHead>Estado</TableHead>
+
+                                <TableHead className="text-right">
+                                  Acciones
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+
+                            <TableBody>
+                              {lista.map(plantilla => (
+                                <TableRow key={plantilla.id}>
+                                  <TableCell
+                                    className="font-medium"
+                                    title={plantilla.nombre}
+                                  >
+                                    {plantilla.nombre}
+                                  </TableCell>
+
+                                  <TableCell
+                                    className="max-w-xs truncate text-sm text-gray-600"
+                                    title={plantilla.asunto || ''}
+                                  >
+                                    {plantilla.asunto || 'Sin asunto'}
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                                      <Calendar className="h-3 w-3" />
+
+                                      {formatearFecha(
+                                        plantilla.fecha_actualizacion
+                                      )}
+                                    </div>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    {plantilla.activa ? (
+                                      <Badge
+                                        variant="default"
+                                        className="bg-green-600"
+                                      >
+                                        Activa
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="secondary">
+                                        Inactiva
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+
+                                  <TableCell className="text-right">
+                                    <div className="flex justify-end gap-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                          handleEditarDesdeResumen(plantilla)
+                                        }
+                                        title="Editar plantilla"
+                                      >
+                                        <Edit2 className="h-4 w-4" />
+                                      </Button>
+
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="hover:bg-red-100 hover:text-red-600"
+                                        onClick={() =>
+                                          handleEliminarDesdeResumen(plantilla)
+                                        }
+                                        title="Eliminar plantilla"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+
+                {tiposPlantillaHeredados.map(tipoH => {
+                  const lista = plantillasPorCaso[tipoH] || []
+
+                  if (lista.length === 0) return null
+
+                  const etiqueta =
+                    mapeoTipos[tipoH as keyof typeof mapeoTipos]?.caso ?? tipoH
+
+                  return (
+                    <Card key={tipoH} className="border-l-4 border-slate-400">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <FileText className="h-5 w-5 text-gray-500" />
+                          Banco heredado: {etiqueta}
+                          <Badge variant="outline" className="ml-2">
+                            {lista.length} plantilla(s)
+                          </Badge>
+                        </CardTitle>
+                        <p className="text-xs text-amber-800">
+                          Tipo descontinuado en esta pantalla; puede editar o
+                          eliminar.
+                        </p>
+                      </CardHeader>
+
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Nombre</TableHead>
+
+                                <TableHead>Asunto</TableHead>
+
+                                <TableHead>Fecha actualización</TableHead>
 
                                 <TableHead>Estado</TableHead>
 

@@ -42,6 +42,7 @@ from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.variable_notificacion import VariableNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
 from app.models.envio_notificacion_adjunto import EnvioNotificacionAdjunto
+from app.models.adjunto_fijo_cobranza_documento import AdjuntoFijoCobranzaDocumento
 from app.services.notificacion_logging import (
     log_historial_consulta,
     log_historial_excel,
@@ -757,7 +758,6 @@ def upload_adjunto_fijo_cobranza(
         TIPOS_CASO_VALIDOS,
         CLAVE_ADJUNTOS_FIJOS_POR_CASO,
         _get_adjuntos_por_caso_raw,
-        _get_base_dir_adjuntos,
     )
     if tipo_caso not in TIPOS_CASO_VALIDOS:
         raise HTTPException(
@@ -776,22 +776,24 @@ def upload_adjunto_fijo_cobranza(
         raise HTTPException(status_code=500, detail="Error al leer el archivo")
     if not data[:5] == b"%PDF-":
         raise HTTPException(status_code=400, detail="El archivo no parece ser un PDF valido")
-    base_dir = _get_base_dir_adjuntos()
-    caso_dir = os.path.join(base_dir, tipo_caso)
-    os.makedirs(caso_dir, exist_ok=True)
+    max_pdf = 12 * 1024 * 1024
+    if len(data) > max_pdf:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El PDF supera el tamaño máximo permitido ({max_pdf // (1024 * 1024)} MB)",
+        )
     doc_id = str(uuid.uuid4())
     safe_name = "".join(c for c in file.filename if c.isalnum() or c in "._- ") or "documento"
     ext = ".pdf"
-    rel_ruta = f"{tipo_caso}/{doc_id}{ext}"
-    abs_path = os.path.join(base_dir, rel_ruta)
-    try:
-        with open(abs_path, "wb") as f:
-            f.write(data)
-    except Exception as e:
-        logger.exception("Error guardando PDF: %s", e)
-        raise HTTPException(status_code=500, detail="Error al guardar el archivo")
     nombre_archivo = (safe_name + ext) if not safe_name.endswith(".pdf") else safe_name
-    entry = {"id": doc_id, "nombre_archivo": nombre_archivo, "ruta": rel_ruta}
+    entry = {"id": doc_id, "nombre_archivo": nombre_archivo, "ruta": "", "en_bd": True}
+    row_doc = AdjuntoFijoCobranzaDocumento(
+        id=doc_id,
+        tipo_caso=tipo_caso,
+        nombre_archivo=nombre_archivo,
+        pdf_data=data,
+    )
+    db.add(row_doc)
     config = _get_adjuntos_por_caso_raw(db)
     config.setdefault(tipo_caso, [])
     config[tipo_caso].append(entry)
@@ -806,11 +808,6 @@ def upload_adjunto_fijo_cobranza(
         db.refresh(row)
     except Exception as e:
         db.rollback()
-        if os.path.isfile(abs_path):
-            try:
-                os.remove(abs_path)
-            except Exception:
-                pass
         logger.exception("Error guardando config: %s", e)
         raise HTTPException(status_code=500, detail="Error al guardar la configuracion")
     return {"id": doc_id, "nombre_archivo": nombre_archivo, "tipo_caso": tipo_caso, "tipo_casos": [tipo_caso]}
@@ -832,13 +829,20 @@ def delete_adjunto_fijo_cobranza(doc_id: str, db: Session = Depends(get_db)):
                 ruta_rel = (item.get("ruta") or "").strip()
                 lista.pop(i)
                 found = True
-                base_dir = _get_base_dir_adjuntos()
-                path = os.path.normpath(os.path.join(base_dir, ruta_rel))
-                if path.startswith(base_dir) and os.path.isfile(path):
-                    try:
-                        os.remove(path)
-                    except Exception as e:
-                        logger.warning("Error eliminando archivo %s: %s", path, e)
+                if item.get("en_bd") is True:
+                    row_doc = db.get(AdjuntoFijoCobranzaDocumento, doc_id)
+                    if row_doc:
+                        db.delete(row_doc)
+                else:
+                    from app.services.adjunto_fijo_cobranza import _get_base_dir_adjuntos
+
+                    base_dir = _get_base_dir_adjuntos()
+                    path = os.path.normpath(os.path.join(base_dir, ruta_rel))
+                    if path.startswith(base_dir) and os.path.isfile(path):
+                        try:
+                            os.remove(path)
+                        except Exception as e:
+                            logger.warning("Error eliminando archivo %s: %s", path, e)
                 break
         if found:
             break

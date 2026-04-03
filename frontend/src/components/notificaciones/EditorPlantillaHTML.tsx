@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 import {
   notificacionService,
@@ -20,16 +20,6 @@ import {
   CardHeader,
   CardTitle,
 } from '../../components/ui/card'
-
-import { Badge } from '../../components/ui/badge'
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select'
 
 import { toast } from 'sonner'
 
@@ -68,7 +58,9 @@ export function EditorPlantillaHTML({
 
   const [descripcion, setDescripcion] = useState(plantilla?.descripcion ?? '')
 
-  const [tipo, setTipo] = useState(plantilla?.tipo ?? '')
+  const [tipo, setTipo] = useState(
+    plantilla?.tipo ?? 'PAGO_1_DIA_ATRASADO'
+  )
 
   const [asunto, setAsunto] = useState(plantilla?.asunto ?? '')
 
@@ -84,32 +76,7 @@ export function EditorPlantillaHTML({
 
   const [mostrarPreview, setMostrarPreview] = useState(true)
 
-  // Tipos disponibles
-
-  const tiposPorCategoria = {
-    retraso: [
-      {
-        valor: 'PAGO_1_DIA_ATRASADO',
-        label: 'Día siguiente al vencimiento (1 día después)',
-      },
-
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
-
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso' },
-
-      { valor: 'PAGO_30_DIAS_ATRASADO', label: '30 días de retraso' },
-    ],
-
-    prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
-
-    masivos: [
-      { valor: 'MASIVOS', label: 'Comunicaciones masivas (caso MASIVOS)' },
-    ],
-
-    cobranza: [{ valor: 'COBRANZA', label: 'Carta de cobranza' }],
-  }
-
-  const allTipos = Object.values(tiposPorCategoria).flat()
+  const TIPO_SERVICIO_EDITOR = 'PAGO_1_DIA_ATRASADO'
 
   const handleGuardar = async () => {
     if (!nombre.trim()) {
@@ -144,7 +111,7 @@ export function EditorPlantillaHTML({
 
         descripcion: descripcion.trim() || null,
 
-        tipo,
+        tipo: id ? tipo : TIPO_SERVICIO_EDITOR,
 
         asunto: asunto.trim(),
 
@@ -244,29 +211,21 @@ export function EditorPlantillaHTML({
             <div>
               <label className="text-sm font-medium text-gray-700">Tipo</label>
 
-              <Select value={tipo} onValueChange={setTipo}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Selecciona un tipo" />
-                </SelectTrigger>
+              <div className="mt-1 rounded-md border border-gray-200 bg-slate-50 px-3 py-2 text-sm text-gray-800">
+                Día siguiente al vencimiento (1 día de atraso calendario)
+              </div>
 
-                <SelectContent>
-                  <SelectItem value="__default__">
-                    Selecciona un tipo
-                  </SelectItem>
-
-                  {Object.entries(tiposPorCategoria).map(
-                    ([categoria, tipos]) => (
-                      <div key={categoria}>
-                        {tipos.map(t => (
-                          <SelectItem key={t.valor} value={t.valor}>
-                            {t.label}
-                          </SelectItem>
-                        ))}
-                      </div>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
+              {id != null && tipo !== TIPO_SERVICIO_EDITOR ? (
+                <p className="mt-1 text-xs text-amber-800">
+                  Esta fila en BD es tipo heredado{' '}
+                  <code className="rounded bg-amber-100 px-1">{tipo}</code>; al
+                  actualizar se conserva. Las plantillas nuevas usan solo{' '}
+                  <code className="rounded bg-amber-100 px-1">
+                    {TIPO_SERVICIO_EDITOR}
+                  </code>
+                  .
+                </p>
+              ) : null}
             </div>
           </div>
 

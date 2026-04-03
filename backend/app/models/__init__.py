@@ -37,6 +37,7 @@ from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 from app.models.cobros_publico_codigo import CobrosPublicoCodigo
 from app.models.envio_notificacion import EnvioNotificacion
 from app.models.envio_notificacion_adjunto import EnvioNotificacionAdjunto
+from app.models.adjunto_fijo_cobranza_documento import AdjuntoFijoCobranzaDocumento
 from app.models.crm_campana import CampanaCrm
 from app.models.crm_campana_envio import CampanaEnvioCrm
 from app.models.cedula_reportar_bs import CedulaReportarBs
@@ -90,6 +91,7 @@ __all__ = [
     "CobrosPublicoCodigo",
     "EnvioNotificacion",
     "EnvioNotificacionAdjunto",
+    "AdjuntoFijoCobranzaDocumento",
     "CampanaCrm",
     "CampanaEnvioCrm",
     "CedulaReportarBs",
