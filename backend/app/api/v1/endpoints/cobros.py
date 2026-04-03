@@ -523,8 +523,9 @@ def _estado_label_excel(estado: str) -> str:
 
 def _item_falla_validadores_cobros_excel(it: PagoReportadoListItem) -> bool:
     """
-    True si el reporte debe ir al Excel de corrección / carga masiva:
-    verificación Gemini NO o error, u observación de reglas (NO CLIENTES, duplicado, Bs., discrepancias).
+    Criterio "no cumple validadores" para el Excel Cobros: Gemini NO/error u observación de reglas
+    (NO CLIENTES, duplicado, Bs., discrepancias). Regla de pantalla: mientras no se descargue el Excel,
+    siguen listándose; al descargar (solo esas filas) pasan a exportados y dejan la cola por defecto.
     """
     gem = (it.gemini_coincide_exacto or "").strip().lower()
     if gem in ("false", "error"):
@@ -890,8 +891,9 @@ def exportar_pagos_aprobados_excel(
 ):
     """
     Solo filas que no cumplen validadores (Gemini NO/error u observación de reglas), pendiente o en revisión,
-    aún no exportadas: pasan al Excel y se marcan exportadas; dejan de listarse en Cobros (cola operativa y
-    filtros pendiente/en revisión). Mismos filtros opcionales (cédula, institución); sin fechas.
+    aún no exportadas. Al descargar: van al Excel y se marcan en pagos_reportados_exportados; entonces dejan
+    de mostrarse en listado (hasta incluir_exportados=true). Si el usuario no descarga, esas filas siguen en pantalla.
+    Filtros opcionales: cédula, institución; sin fechas.
     """
     from io import BytesIO
     from openpyxl import Workbook

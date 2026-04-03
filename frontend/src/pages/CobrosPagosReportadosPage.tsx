@@ -9,7 +9,7 @@
 
 
  * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
- * Vista por defecto: sin aprobados/importados/rechazados ni exportados al Excel; con checkbox se incluyen exportados para seguir gestionando en Cobranzas. El Excel solo vuelca fallas de validación.
+ * No validan: sin descarga Excel siguen en lista; al descargar Excel salen (checkbox incluir exportados las trae de vuelta). El Excel solo incluye filas que fallan validación.
 
 
 
@@ -543,9 +543,7 @@ export default function CobrosPagosReportadosPage() {
 
               <option value="en_revision">En revisión</option>
 
-              <option value="aprobado">
-                Aprobado (pendientes de exportar)
-              </option>
+              <option value="aprobado">Aprobado</option>
 
               <option value="rechazado">Rechazado</option>
 
@@ -553,11 +551,12 @@ export default function CobrosPagosReportadosPage() {
             </select>
 
             <p className="text-xs text-muted-foreground">
-              Vista por defecto: cola sin filas ya exportadas al Excel de
-              corrección; puede marcar &quot;Incluir ya exportados&quot; para
-              seguir resolviendo desde esta pantalla (aprobar, editar,
-              rechazar). &quot;Excel no validan&quot; solo vuelca quienes
-              fallan validadores. Los rechazados no se listan aquí salvo filtro.
+              <strong>No cumplen validadores:</strong> si aún no descargó el
+              Excel de corrección, siguen en pantalla; al descargarlo, dejan
+              esta lista (use &quot;Incluir ya exportados&quot; para
+              mostrarlas otra vez y seguir aprobando o editando). Vista por
+              defecto sin aprobados/importados/rechazados ni ya exportados.
+              Los rechazados solo con filtro o tarjeta.
             </p>
           </div>
 
@@ -606,8 +605,9 @@ export default function CobrosPagosReportadosPage() {
               }}
             />
             <span>
-              Incluir ya exportados a Excel: sigue viendo esas filas para
-              aprobar, editar o rechazar desde Cobranzas con normalidad.
+              Incluir ya exportados a Excel: tras descargar, esas filas salen de
+              la vista normal; aquí las vuelve a mostrar para aprobar, editar o
+              rechazar.
             </span>
           </label>
 
@@ -617,7 +617,7 @@ export default function CobrosPagosReportadosPage() {
             variant="outline"
             onClick={handleDescargarExcelAprobados}
             disabled={descargandoExcelAprobados}
-            title="Solo filas con falla de validadores. Al descargar van al Excel y salen de la cola por defecto; marque Incluir ya exportados para seguir gestionándolas aquí. Sin fechas; sí cédula/institución si las llenaste."
+            title="Solo no cumplen validadores. Sin descargar: siguen en pantalla. Al descargar: van al archivo y salen de la lista hasta marcar Incluir ya exportados. Sin fechas; sí cédula/institución."
           >
             {descargandoExcelAprobados ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
