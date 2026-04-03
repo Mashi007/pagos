@@ -553,10 +553,10 @@ export default function CobrosPagosReportadosPage() {
             <p className="text-xs text-muted-foreground">
               <strong>No cumplen validadores:</strong> si aún no descargó el
               Excel de corrección, siguen en pantalla; al descargarlo, dejan
-              esta lista (use &quot;Incluir ya exportados&quot; para
-              mostrarlas otra vez y seguir aprobando o editando). Vista por
-              defecto sin aprobados/importados/rechazados ni ya exportados.
-              Los rechazados solo con filtro o tarjeta.
+              esta lista (use &quot;Incluir ya exportados&quot; para mostrarlas
+              otra vez y seguir aprobando o editando). Vista por defecto sin
+              aprobados/importados/rechazados ni ya exportados. Los rechazados
+              solo con filtro o tarjeta.
             </p>
           </div>
 

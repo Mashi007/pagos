@@ -25,6 +25,31 @@ export interface TasaCambioHistorial {
   updated_at?: string
 }
 
+export interface TasaProblematicaFila {
+  fecha: string
+  tasa_oficial: number | null
+  usuario_email?: string | null
+}
+
+export interface TasasProblematicasResponse {
+  total: number
+  filas: TasaProblematicaFila[]
+}
+
+export interface RellenarTasasDesdeVecinoCambio {
+  fecha: string
+  tasa_anterior: number | null
+  tasa_propuesta: number | null
+  aplicable: boolean
+}
+
+export interface RellenarTasasDesdeVecinoResponse {
+  dry_run: boolean
+  filas_problematicas: number
+  filas_con_propuesta: number
+  cambios: RellenarTasasDesdeVecinoCambio[]
+}
+
 const ADMIN_TASAS = '/admin/tasas-cambio'
 
 function throwFromAxios(e: unknown, fallback: string): never {
@@ -110,5 +135,35 @@ export async function getHistorialTasas(
   } catch (e) {
     console.error('Error fetching historial:', e)
     throwFromAxios(e, 'Error al obtener historial de tasas')
+  }
+}
+
+/** Tasas <= 0 o valor tipo placeholder de plantillas (ej. 99999.99). */
+export async function getTasasProblematicas(): Promise<TasasProblematicasResponse> {
+  try {
+    return await apiClient.get<TasasProblematicasResponse>(
+      ADMIN_TASAS + '/tasas-problematicas'
+    )
+  } catch (e) {
+    console.error('Error tasas problematicas:', e)
+    throwFromAxios(e, 'Error al listar tasas problematicas')
+  }
+}
+
+/**
+ * Propone o aplica tasa copiada desde la fecha valida mas cercana en la tabla.
+ * dry_run=true solo simula.
+ */
+export async function rellenarTasasDesdeVecino(
+  dryRun: boolean
+): Promise<RellenarTasasDesdeVecinoResponse> {
+  try {
+    return await apiClient.post<RellenarTasasDesdeVecinoResponse>(
+      ADMIN_TASAS + '/rellenar-desde-vecino',
+      { dry_run: dryRun }
+    )
+  } catch (e) {
+    console.error('Error rellenar tasas:', e)
+    throwFromAxios(e, 'Error al rellenar tasas desde vecino')
   }
 }

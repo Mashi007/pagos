@@ -16,6 +16,8 @@ import { Button } from '../ui/button'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 
+import { AlertWithIcon } from '../ui/alert'
+
 import { Input } from '../ui/input'
 
 import { Label } from '../ui/label'
@@ -1099,6 +1101,23 @@ export function AuditoriaCarteraTab() {
           </div>
         </CardContent>
       </Card>
+
+      {(() => {
+        const cod = filtrosApi.codigo_control?.trim()
+        if (!cod) return null
+        const def = AUDITORIA_CARTERA_CONTROLES_CATALOGO.find(
+          d => d.codigo === cod
+        )
+        if (!def?.notaOperativa) return null
+        return (
+          <AlertWithIcon
+            variant="info"
+            title={`Control ${def.n}: accion sugerida`}
+            description={def.notaOperativa}
+            className="mb-4"
+          />
+        )
+      })()}
 
       {hayAlertas && !bloqueoListaCompleta && totalPages > 1 ? (
         <div className="flex flex-wrap items-center gap-2">

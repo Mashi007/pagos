@@ -15,11 +15,13 @@ from app.models.tasa_cambio_diaria import TasaCambioDiaria
 from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.services.tasa_cambio_service import (
-    obtener_tasa_hoy,
-    obtener_tasa_por_fecha,
+    debe_ingresar_tasa,
     guardar_tasa_diaria,
     guardar_tasa_para_fecha,
-    debe_ingresar_tasa,
+    listar_tasas_problematicas,
+    obtener_tasa_hoy,
+    obtener_tasa_por_fecha,
+    rellenar_tasas_problematicas_desde_vecino,
 )
 
 router = APIRouter(prefix="/admin/tasas-cambio", tags=["admin-tasas-cambio"])
@@ -56,6 +58,15 @@ class GuardarTasaPorFechaRequest(BaseModel):
 
     fecha: date = Field(..., description="Fecha calendario YYYY-MM-DD (fecha_pago del reporte)")
     tasa_oficial: float = Field(..., gt=0, description="Bs. por 1 USD")
+
+
+class RellenarTasasDesdeVecinoBody(BaseModel):
+    """Simula o aplica copia de tasa desde la fecha valida mas cercana en BD."""
+
+    dry_run: bool = Field(
+        True,
+        description="Si true, solo devuelve propuesta sin escribir en BD.",
+    )
 
 
 @router.get("/hoy", response_model=Optional[TasaCambioResponse])
@@ -111,12 +122,15 @@ def guardar_tasa(
     usuario_id = db_user.id if db_user else None
     usuario_email = current_user.email
 
-    tasa = guardar_tasa_diaria(
-        db=db,
-        tasa_oficial=req.tasa_oficial,
-        usuario_id=usuario_id,
-        usuario_email=usuario_email,
-    )
+    try:
+        tasa = guardar_tasa_diaria(
+            db=db,
+            tasa_oficial=req.tasa_oficial,
+            usuario_id=usuario_id,
+            usuario_email=usuario_email,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     return tasa
 
@@ -138,14 +152,64 @@ def guardar_tasa_por_fecha_endpoint(
     usuario_id = db_user.id if db_user else None
     usuario_email = current_user.email
 
-    tasa = guardar_tasa_para_fecha(
-        db=db,
-        fecha=req.fecha,
-        tasa_oficial=req.tasa_oficial,
-        usuario_id=usuario_id,
-        usuario_email=usuario_email,
-    )
+    try:
+        tasa = guardar_tasa_para_fecha(
+            db=db,
+            fecha=req.fecha,
+            tasa_oficial=req.tasa_oficial,
+            usuario_id=usuario_id,
+            usuario_email=usuario_email,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return tasa
+
+
+@router.get("/tasas-problematicas")
+def get_tasas_problematicas(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Lista filas con tasa <= 0 o valor tipo placeholder (99999.99 de plantillas).
+    Usar antes de rellenar desde vecino o para auditoria.
+    """
+    if not user_is_administrator(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+
+    rows = listar_tasas_problematicas(db)
+    return {
+        "total": len(rows),
+        "filas": [
+            {
+                "fecha": r.fecha.isoformat(),
+                "tasa_oficial": float(r.tasa_oficial) if r.tasa_oficial is not None else None,
+                "usuario_email": r.usuario_email,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.post("/rellenar-desde-vecino")
+def post_rellenar_tasas_desde_vecino(
+    body: RellenarTasasDesdeVecinoBody,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Para tasas problematicas, asigna la tasa de la fecha valida mas cercana en la misma tabla.
+    Por defecto dry_run=true. Revise el resultado y ejecute con dry_run=false para persistir.
+    """
+    if not user_is_administrator(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+
+    email = (current_user.email or "admin").strip() or "admin"
+    return rellenar_tasas_problematicas_desde_vecino(
+        db,
+        dry_run=body.dry_run,
+        usuario_email=email,
+    )
 
 
 @router.get("/por-fecha", response_model=Optional[TasaCambioResponse])

@@ -847,7 +847,7 @@ def finiquito_admin_patch_estado(
             ok=False,
             error=(
                 "Aplique la migracion de finiquito area de trabajo en la base de datos "
-                "(sql/2026-03-24_finiquito_area_trabajo_auditoria.sql o alembic 025_finiquito_area_trabajo)."
+                "(backend/sql/2026-03-24_finiquito_area_trabajo_auditoria.sql o alembic upgrade head / 025_finiquito_area_trabajo)."
             ),
         )
 

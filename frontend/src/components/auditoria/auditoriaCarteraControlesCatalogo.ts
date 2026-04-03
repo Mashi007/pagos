@@ -6,6 +6,8 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
   n: number
   codigo: string
   titulo: string
+  /** Texto corto de accion sugerida (solo UI). */
+  notaOperativa?: string
 }> = [
   {
     n: 1,
@@ -68,11 +70,15 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     n: 12,
     codigo: 'estado_cuota_vs_calculo',
     titulo: 'Estado en tabla cuotas vs regla de negocio (vencimiento y pagos)',
+    notaOperativa:
+      'Use el boton Alinear estados de cuotas en esta pestana para masificar la correccion en cartera; luego vuelva a ejecutar el control.',
   },
   {
     n: 13,
     codigo: 'pago_bs_sin_tasa_cambio_diaria',
     titulo: 'Pago en bolivares sin tasa oficial del dia (tasas_cambio_diaria)',
+    notaOperativa:
+      'En Admin > Tasa de cambio: agregue la tasa por fecha de pago. Si hay filas con tasa 0 o valor de plantilla (99999.99), use Consultar problematicas y Rellenar desde vecino (simular antes de aplicar).',
   },
   {
     n: 14,
@@ -83,6 +89,8 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     n: 15,
     codigo: 'pagos_sin_aplicacion_a_cuotas',
     titulo: 'Pagos operativos sin aplicacion a cuotas o saldo sin aplicar',
+    notaOperativa:
+      'Tras corregir montos/tasas, reaplique FIFO al prestamo. Si el total pagado supera la suma de cuotas del plan, puede quedar saldo sin cuota que absorba (revision de negocio: duplicado, abono a capital, etc.).',
   },
   {
     n: 16,

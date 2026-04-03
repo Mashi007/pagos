@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react'
 
-import { TrendingUp, Calendar, Check, AlertCircle, Plus } from 'lucide-react'
+import {
+  TrendingUp,
+  Calendar,
+  Check,
+  AlertCircle,
+  Plus,
+  RefreshCw,
+  Wrench,
+} from 'lucide-react'
 
 import { TasaCambioModal } from '../components/TasaCambioModal'
 
@@ -11,7 +19,11 @@ import {
   guardarTasa,
   guardarTasaPorFecha,
   getHistorialTasas,
-  TasaCambioHistorial,
+  getTasasProblematicas,
+  rellenarTasasDesdeVecino,
+  type RellenarTasasDesdeVecinoResponse,
+  type TasasProblematicasResponse,
+  type TasaCambioHistorial,
 } from '../services/tasaCambioService'
 import { toast } from 'sonner'
 
@@ -35,6 +47,16 @@ export const AdminTasaCambioPage: React.FC = () => {
   const [tasaGuardadaExito, setTasaGuardadaExito] = useState(false)
 
   const [mostrarFormAgregar, setMostrarFormAgregar] = useState(false)
+
+  const [tasasProblematicasRes, setTasasProblematicasRes] =
+    useState<TasasProblematicasResponse | null>(null)
+
+  const [cargandoProblematicas, setCargandoProblematicas] = useState(false)
+
+  const [propuestaRelleno, setPropuestaRelleno] =
+    useState<RellenarTasasDesdeVecinoResponse | null>(null)
+
+  const [rellenoEnCurso, setRellenoEnCurso] = useState(false)
 
   useEffect(() => {
     cargarDatos()
@@ -103,6 +125,63 @@ export const AdminTasaCambioPage: React.FC = () => {
       toast.error(err?.message || 'No se pudo guardar la tasa')
     } finally {
       setGuardandoFecha(false)
+    }
+  }
+
+  const consultarProblematicas = async (clearPropuesta = true) => {
+    setCargandoProblematicas(true)
+    if (clearPropuesta) setPropuestaRelleno(null)
+    try {
+      const res = await getTasasProblematicas()
+      setTasasProblematicasRes(res)
+      if (res.total === 0) {
+        toast.success('No hay tasas problematicas en la tabla')
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo consultar')
+      setTasasProblematicasRes(null)
+    } finally {
+      setCargandoProblematicas(false)
+    }
+  }
+
+  const simularRelleno = async () => {
+    setRellenoEnCurso(true)
+    try {
+      const res = await rellenarTasasDesdeVecino(true)
+      setPropuestaRelleno(res)
+      toast.message(
+        `Simulacion: ${String(res.filas_con_propuesta)} de ${String(res.filas_problematicas)} filas con vecino valido`
+      )
+    } catch (err: any) {
+      toast.error(err?.message || 'Error en simulacion')
+    } finally {
+      setRellenoEnCurso(false)
+    }
+  }
+
+  const aplicarRelleno = async () => {
+    if (
+      !window.confirm(
+        'Se actualizaran en la base de datos las tasas problematicas usando la tasa de la fecha valida mas cercana. ¿Continuar?'
+      )
+    ) {
+      return
+    }
+    setRellenoEnCurso(true)
+    try {
+      const res = await rellenarTasasDesdeVecino(false)
+      setPropuestaRelleno(res)
+      toast.success(
+        `Actualizadas ${String(res.filas_con_propuesta)} fila(s). Revise contra la fuente BCV si aplica.`
+      )
+      await consultarProblematicas(false)
+      const hist = await getHistorialTasas(60)
+      setHistorial(hist)
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo aplicar')
+    } finally {
+      setRellenoEnCurso(false)
     }
   }
 
@@ -232,7 +311,7 @@ export const AdminTasaCambioPage: React.FC = () => {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Debe ser mayor a 0
+                    Mayor a 0; no use valores de plantilla SQL (ej. 99999.99)
                   </p>
                 </div>
 
@@ -290,9 +369,144 @@ export const AdminTasaCambioPage: React.FC = () => {
             <div>
               <strong>Nota:</strong> Esta tasa se usará automáticamente para
               pagos registrados en Bs. con la misma fecha. Si el reporte tiene
-              múltiples fechas, agrégalas todas.
+              múltiples fechas, agrégalas todas. La API rechaza tasas de ejemplo
+              tipo 99999.99 de scripts; use la tasa BCV real.
             </div>
           </div>
+        </div>
+
+        {/* Tasas invalidas / relleno desde vecino */}
+
+        <div className="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <Wrench className="mt-0.5 h-5 w-5 shrink-0 text-slate-600" />
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Tasas problematicas (0, negativas o placeholder)
+                </h2>
+                <p className="text-sm text-gray-600">
+                  Detecta filas en{' '}
+                  <code className="text-xs">tasas_cambio_diaria</code> que
+                  rompen conversiones BS/USD. Puede simular o aplicar un relleno
+                  copiando la tasa de la fecha valida mas cercana (no sustituye
+                  verificar el dato oficial BCV).
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={cargandoProblematicas || rellenoEnCurso}
+              onClick={() => void consultarProblematicas()}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              {cargandoProblematicas ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Consultar problematicas
+            </button>
+          </div>
+
+          {tasasProblematicasRes != null && tasasProblematicasRes.total > 0 ? (
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-amber-800">
+                {tasasProblematicasRes.total} fecha(s) con tasa invalida o de
+                ejemplo
+              </p>
+              <div className="max-h-48 overflow-auto rounded border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-100">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Fecha</th>
+                      <th className="px-3 py-2 text-left">Tasa actual</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {tasasProblematicasRes.filas.map(f => (
+                      <tr key={f.fecha}>
+                        <td className="px-3 py-2 font-mono">{f.fecha}</td>
+                        <td className="px-3 py-2">
+                          {f.tasa_oficial != null
+                            ? f.tasa_oficial.toFixed(2)
+                            : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={rellenoEnCurso}
+                  onClick={() => void simularRelleno()}
+                  className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:bg-gray-400"
+                >
+                  Simular relleno desde vecino
+                </button>
+                <button
+                  type="button"
+                  disabled={rellenoEnCurso}
+                  onClick={() => void aplicarRelleno()}
+                  className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:bg-gray-400"
+                >
+                  Aplicar relleno en BD
+                </button>
+              </div>
+            </div>
+          ) : tasasProblematicasRes != null ? (
+            <p className="text-sm text-green-700">
+              La ultima consulta no encontro filas problematicas.
+            </p>
+          ) : null}
+
+          {propuestaRelleno != null && propuestaRelleno.cambios.length > 0 ? (
+            <div className="mt-6 border-t border-slate-200 pt-4">
+              <h3 className="mb-2 text-sm font-semibold text-slate-800">
+                {propuestaRelleno.dry_run
+                  ? 'Resultado simulacion'
+                  : 'Ultimo resultado (aplicado)'}
+              </h3>
+              <p className="mb-2 text-xs text-slate-600">
+                Con propuesta: {propuestaRelleno.filas_con_propuesta} /{' '}
+                {propuestaRelleno.filas_problematicas}
+              </p>
+              <div className="max-h-56 overflow-auto rounded border border-slate-200">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-slate-50">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left">Fecha</th>
+                      <th className="px-2 py-1.5 text-left">Antes</th>
+                      <th className="px-2 py-1.5 text-left">Propuesta</th>
+                      <th className="px-2 py-1.5 text-left">OK</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {propuestaRelleno.cambios.map(c => (
+                      <tr key={c.fecha}>
+                        <td className="px-2 py-1.5 font-mono">{c.fecha}</td>
+                        <td className="px-2 py-1.5">
+                          {c.tasa_anterior != null
+                            ? c.tasa_anterior.toFixed(2)
+                            : '-'}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          {c.tasa_propuesta != null
+                            ? c.tasa_propuesta.toFixed(2)
+                            : '-'}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          {c.aplicable ? 'Si' : 'No'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Historial de Tasas */}
