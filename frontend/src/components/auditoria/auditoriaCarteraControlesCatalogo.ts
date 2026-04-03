@@ -94,7 +94,7 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     codigo: 'pagos_sin_aplicacion_a_cuotas',
     titulo: 'Pagos operativos sin aplicacion a cuotas o saldo sin aplicar',
     notaOperativa:
-      'Tras corregir montos/tasas, reaplique FIFO al prestamo. Si el total pagado supera la suma de cuotas del plan, puede quedar saldo sin cuota que absorba (revision de negocio: duplicado, abono a capital, etc.).',
+      'En la tabla: Ver pagos (detalle) y Cascada por prestamo, o el boton masivo Reaplicar cascada (control 15). Tras corregir montos/tasas, use cascada; si el total pagado supera la suma de cuotas del plan, puede quedar saldo sin cuota que absorba (revision de negocio).',
   },
   {
     n: 16,

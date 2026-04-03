@@ -1,5 +1,10 @@
 import { apiClient } from './api'
 
+/** POST ejecutar/corregir cartera recorre la BD y puede reaplicar muchas cascadas; 30s no alcanza en Render. */
+const AUDITORIA_CARTERA_EJECUTAR_TIMEOUT_MS = 180000
+
+const AUDITORIA_CARTERA_CORREGIR_TIMEOUT_MS = 300000
+
 export interface Auditoria {
   id: number
 
@@ -418,7 +423,8 @@ class AuditoriaService {
   async ejecutarCartera(): Promise<PrestamoCarteraChequeoResponse> {
     return apiClient.post<PrestamoCarteraChequeoResponse>(
       `${this.baseUrl}/prestamos/cartera/ejecutar`,
-      undefined
+      undefined,
+      { timeout: AUDITORIA_CARTERA_EJECUTAR_TIMEOUT_MS }
     )
   }
 
@@ -446,7 +452,8 @@ class AuditoriaService {
         reaplicar_cascada_pagos_sin_aplicacion_cuotas:
           body.reaplicar_cascada_pagos_sin_aplicacion_cuotas ?? false,
         max_reaplicaciones: body.max_reaplicaciones ?? 50,
-      }
+      },
+      { timeout: AUDITORIA_CARTERA_CORREGIR_TIMEOUT_MS }
     )
   }
 

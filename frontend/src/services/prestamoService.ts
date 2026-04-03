@@ -976,7 +976,8 @@ class PrestamoService {
   ): Promise<Record<string, unknown>> {
     return apiClient.post<Record<string, unknown>>(
       `${this.baseUrl}/${prestamoId}/reaplicar-cascada-aplicacion`,
-      undefined
+      undefined,
+      { timeout: 120000 }
     )
   }
 
@@ -986,7 +987,8 @@ class PrestamoService {
   ): Promise<Record<string, unknown>> {
     return apiClient.post<Record<string, unknown>>(
       `${this.baseUrl}/reaplicar-cascada-aplicacion-masiva`,
-      { prestamo_ids: prestamoIds }
+      { prestamo_ids: prestamoIds },
+      { timeout: 300000 }
     )
   }
 }
