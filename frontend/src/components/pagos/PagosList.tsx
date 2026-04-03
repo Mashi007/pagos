@@ -1555,6 +1555,18 @@ export function PagosList() {
           <Card>
             <CardHeader>
               <CardTitle>Lista de Pagos</CardTitle>
+              {!esRevisarPagos && (
+                <p className="text-sm text-gray-600">
+                  Vista de cartera activa: pagos sin crédito asignado o con
+                  préstamo en estado <strong>Aprobado</strong>. No se listan
+                  pagos de créditos liquidados u otros estados (use
+                  exportación/API con{' '}
+                  <code className="rounded bg-gray-100 px-1 text-xs">
+                    prestamo_cartera=todos
+                  </code>{' '}
+                  si necesita el histórico completo).
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               {isLoading ? (

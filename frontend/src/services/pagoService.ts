@@ -232,6 +232,8 @@ class PagoService {
     conciliado?: string
 
     sin_prestamo?: string
+
+    prestamo_cartera?: 'activa' | 'todos'
   }): Promise<Pago[]> {
     const all: Pago[] = []
 

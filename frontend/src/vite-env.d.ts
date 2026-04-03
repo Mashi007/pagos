@@ -16,6 +16,9 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_REPORTS: string
 
   readonly VITE_ENABLE_CONCILIATION: string
+
+  /** Opcional: umbral Bs para auto-flujo tasa en carga masiva (alinear con PAGOS_BS_MONTO_EXENTO_LISTA_CEDULA en API). */
+  readonly VITE_PAGOS_MONTO_AUTO_BS?: string
 }
 
 interface ImportMeta {

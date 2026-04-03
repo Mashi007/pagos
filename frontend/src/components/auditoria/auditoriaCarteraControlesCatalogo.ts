@@ -44,8 +44,7 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
   {
     n: 7,
     codigo: 'total_pagado_vs_aplicado_cuotas',
-    titulo:
-      'Total pagos vs aplicado a cuotas (solo LIQUIDADO marca alerta SI)',
+    titulo: 'Total pagos vs aplicado a cuotas (solo LIQUIDADO marca alerta SI)',
     notaOperativa:
       'La alerta SI solo aplica a prestamos en estado LIQUIDADO; en APROBADO el diff es informativo. Prioridad: diagnosticar Bs mal cargados como USD (monto_pagado inflado). Backend: python scripts/diagnostico_control_7_prioridad_critica.py y sql/control_7_prioridad_critica.sql. Corregir pagos con comprobante, luego reaplicar cascada por prestamo; ver control_7_total_pagos_vs_aplicado_diagnostico_y_correccion.sql.',
   },

@@ -8,7 +8,8 @@ import logging
 import random
 import string
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -78,6 +79,38 @@ from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _json_safe_revision_subpayload(obj: Any) -> Any:
+    """
+    Convierte salidas de listar_prestamos / listar_pagos (Pydantic, Decimal, fechas)
+    a estructura serializable; evita fallos de jsonable_encoder en revision-datos.
+    """
+    if obj is None:
+        return None
+    if hasattr(obj, "model_dump") and callable(obj.model_dump):
+        try:
+            return obj.model_dump(mode="json")
+        except Exception:
+            return obj.model_dump()
+    if hasattr(obj, "dict") and callable(getattr(obj, "dict", None)):
+        try:
+            return obj.dict()
+        except Exception:
+            pass
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, timedelta):
+        return str(obj)
+    if isinstance(obj, list):
+        return [_json_safe_revision_subpayload(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _json_safe_revision_subpayload(v) for k, v in obj.items()}
+    return obj
 
 _ADMIN_CASOS_DEFAULT_LIMIT = 500
 _ADMIN_CASOS_MAX_LIMIT = 2000
@@ -326,37 +359,53 @@ def _build_revision_datos_payload(db: Session, caso: FiniquitoCaso) -> dict[str,
     from app.api.v1.endpoints.prestamos import listar_prestamos
 
     cedula = (caso.cedula or "").strip()
-    # Pasar valores reales (None/str), no omitir parametros: sus defaults son
-    # objetos Query(...) y listar_* hacen .strip() → AttributeError → 500.
-    prestamos_payload = listar_prestamos(
-        page=1,
-        per_page=100,
-        cliente_id=None,
-        estado=None,
-        analista=None,
-        concesionario=None,
-        cedula=cedula,
-        fecha_inicio=None,
-        fecha_fin=None,
-        requiere_revision=None,
-        modelo=None,
-        search=None,
-        revision_manual_estado=None,
-        db=db,
-    )
-    pagos_payload = listar_pagos(
-        page=1,
-        per_page=100,
-        cedula=cedula,
-        estado=None,
-        fecha_desde=None,
-        fecha_hasta=None,
-        analista=None,
-        conciliado=None,
-        sin_prestamo=None,
-        prestamo_cartera="todos",
-        db=db,
-    )
+    try:
+        # Pasar valores reales (None/str), no omitir parametros: sus defaults son
+        # objetos Query(...) y listar_* hacen .strip() → AttributeError → 500.
+        prestamos_payload = listar_prestamos(
+            page=1,
+            per_page=100,
+            cliente_id=None,
+            estado=None,
+            analista=None,
+            concesionario=None,
+            cedula=cedula,
+            fecha_inicio=None,
+            fecha_fin=None,
+            requiere_revision=None,
+            modelo=None,
+            search=None,
+            revision_manual_estado=None,
+            db=db,
+        )
+        pagos_payload = listar_pagos(
+            page=1,
+            per_page=100,
+            cedula=cedula,
+            estado=None,
+            fecha_desde=None,
+            fecha_hasta=None,
+            analista=None,
+            conciliado=None,
+            sin_prestamo=None,
+            prestamo_cartera="todos",
+            db=db,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            "finiquito revision-datos: fallo listar_prestamos/pagos cedula=%s caso_id=%s",
+            cedula,
+            caso.id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al cargar listados por cedula: {type(e).__name__}: {e}",
+        ) from e
+
+    prestamos_payload = _json_safe_revision_subpayload(prestamos_payload)
+    pagos_payload = _json_safe_revision_subpayload(pagos_payload)
 
     prestamo_caso: Optional[dict[str, Any]] = None
     cuotas_caso: List[dict[str, Any]] = []

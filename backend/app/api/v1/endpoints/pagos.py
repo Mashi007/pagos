@@ -641,17 +641,43 @@ def _enriquecer_pagos_pago_reportado_id(db: Session, items: list) -> None:
     Si el Nº documento del pago coincide (normalizado) con alguna clave del reporte en Cobros
     (numero_operacion, referencia_interna, formatos legacy COB-+RPC), expone pago_reportado_id
     para enlazar al detalle / comprobante / recibo.
+
+    Optimización: solo lee pagos_reportados cuyo numero_operacion o referencia_interna aparece
+    en los documentos de la página (evita escanear toda la tabla en cada GET /pagos).
     """
     if not items:
         return
+    cands: set[str] = set()
+    for it in items:
+        d = (it.get("numero_documento") or "").strip()
+        if d:
+            cands.add(d)
+            nd0 = normalize_documento(d)
+            if nd0:
+                cands.add(nd0)
+    by_nd: dict[str, int] = {}
+    _MAX_CANDS = 500
+    if not cands:
+        for it in items:
+            it["pago_reportado_id"] = None
+        return
+    cands_list = list(cands)
+    if len(cands_list) > _MAX_CANDS:
+        cands_list = cands_list[:_MAX_CANDS]
     rows = db.execute(
         select(
             PagoReportado.id,
             PagoReportado.referencia_interna,
             PagoReportado.numero_operacion,
-        ).order_by(PagoReportado.id.asc())
+        )
+        .where(
+            or_(
+                PagoReportado.numero_operacion.in_(cands_list),
+                PagoReportado.referencia_interna.in_(cands_list),
+            )
+        )
+        .order_by(PagoReportado.id.asc())
     ).all()
-    by_nd: dict[str, int] = {}
     for rid, ref_int, num_op in rows:
         for k in claves_documento_pago_desde_campos(ref_int, num_op):
             nd = normalize_documento(k)
@@ -708,6 +734,32 @@ def listar_pagos(
     """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista, conciliado, sin_prestamo, prestamo_cartera."""
 
     try:
+
+        # Invocación directa (p. ej. finiquito): defaults sin resolver siguen siendo Query().
+
+        def _solo_str_lp(v: Any) -> Optional[str]:
+
+            return v if isinstance(v, str) else None
+
+        page = page if isinstance(page, int) else 1
+
+        per_page = per_page if isinstance(per_page, int) else 20
+
+        cedula = _solo_str_lp(cedula)
+
+        estado = _solo_str_lp(estado)
+
+        fecha_desde = _solo_str_lp(fecha_desde)
+
+        fecha_hasta = _solo_str_lp(fecha_hasta)
+
+        analista = _solo_str_lp(analista)
+
+        conciliado = _solo_str_lp(conciliado)
+
+        sin_prestamo = _solo_str_lp(sin_prestamo)
+
+        prestamo_cartera = _solo_str_lp(prestamo_cartera) or "activa"
 
         q = select(Pago)
 

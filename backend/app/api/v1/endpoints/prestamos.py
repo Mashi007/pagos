@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta, time
 
 from decimal import Decimal
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 
 
@@ -554,6 +554,38 @@ def listar_prestamos(
 ):
 
     """Listado paginado de préstamos desde BD con nombres y cédula del cliente (join)."""
+
+    # Invocación directa (p. ej. desde finiquito): los defaults siguen siendo Query(), no None/str.
+
+    def _solo_str(v: Any) -> Optional[str]:
+
+        return v if isinstance(v, str) else None
+
+    page = page if isinstance(page, int) else 1
+
+    per_page = per_page if isinstance(per_page, int) else 20
+
+    cliente_id = cliente_id if isinstance(cliente_id, int) else None
+
+    estado = _solo_str(estado)
+
+    analista = _solo_str(analista)
+
+    concesionario = _solo_str(concesionario)
+
+    cedula = _solo_str(cedula)
+
+    fecha_inicio = _solo_str(fecha_inicio)
+
+    fecha_fin = _solo_str(fecha_fin)
+
+    requiere_revision = requiere_revision if isinstance(requiere_revision, bool) else None
+
+    modelo = _solo_str(modelo)
+
+    search = _solo_str(search)
+
+    revision_manual_estado = _solo_str(revision_manual_estado)
 
     q = select(Prestamo, Cliente.nombres, Cliente.cedula).select_from(Prestamo).join(
 

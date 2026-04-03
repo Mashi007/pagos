@@ -92,8 +92,17 @@ function filaRequiereAdvertenciaMontoAlto(row: PagoExcelRow): boolean {
 /**
  * Si el monto es alto y la fila sigue en USD, se envía como BS para que el backend
  * convierta con tasa de la fecha (evita dejar montos enormes como dólares por error).
+ * Alinear con backend: `PAGOS_BS_MONTO_EXENTO_LISTA_CEDULA` (.env del API).
+ * Opcional: `VITE_PAGOS_MONTO_AUTO_BS` en build del frontend.
  */
-const MONTO_AUTO_APLICAR_TASA_BS = 10000
+const _envMontoAutoBs = import.meta.env.VITE_PAGOS_MONTO_AUTO_BS
+const MONTO_AUTO_APLICAR_TASA_BS =
+  _envMontoAutoBs !== undefined &&
+  _envMontoAutoBs !== '' &&
+  Number.isFinite(Number(_envMontoAutoBs)) &&
+  Number(_envMontoAutoBs) > 0
+    ? Math.floor(Number(_envMontoAutoBs))
+    : 10000
 
 function registroMonedaEfectivoCargaMasiva(row: PagoExcelRow): {
   moneda_registro: 'USD' | 'BS'
@@ -272,7 +281,8 @@ export function useExcelUploadPagos({
 
       setToasts(prev => [...prev, { id, type, message }])
 
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
+      const ms = type === 'info' ? 6500 : 3500
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ms)
     },
     []
   )
