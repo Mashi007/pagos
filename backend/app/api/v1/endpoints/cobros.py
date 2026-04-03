@@ -479,14 +479,14 @@ def _pago_reportado_list_items_from_rows(
     return items
 
 
-def _query_aprobados_pendientes_exportar(
+def _query_reportados_falla_validadores_pendientes_exportar(
     db: Session,
     cedula: Optional[str],
     institucion: Optional[str],
 ) -> List[PagoReportado]:
-    """Aprobados aún no marcados como exportados; sin filtro por fechas (igual que export en frontend)."""
+    """Pendiente o en revisión, aún no exportados a Excel; sin fechas (mismos filtros opcionales que el front)."""
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
-    q = select(PagoReportado).where(PagoReportado.estado == "aprobado")
+    q = select(PagoReportado).where(PagoReportado.estado.in_(("pendiente", "en_revision")))
     q = q.where(~PagoReportado.id.in_(exportados_subq))
     if cedula:
         ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
@@ -521,10 +521,20 @@ def _estado_label_excel(estado: str) -> str:
     return m.get((estado or "").strip(), estado or "")
 
 
+def _item_falla_validadores_cobros_excel(it: PagoReportadoListItem) -> bool:
+    """
+    True si el reporte debe ir al Excel de corrección / carga masiva:
+    verificación Gemini NO o error, u observación de reglas (NO CLIENTES, duplicado, Bs., discrepancias).
+    """
+    gem = (it.gemini_coincide_exacto or "").strip().lower()
+    if gem in ("false", "error"):
+        return True
+    return bool((it.observacion or "").strip())
+
+
 def _persist_marcar_exportados_y_cola(db: Session, ids: List[int]) -> dict:
     """
     Inserta exportados + quita de pagos_pendiente_descargar y hace commit.
-    El llamador debe validar que los ids existen y están en estado aprobado.
     """
     ya_exportados = set(
         db.execute(
@@ -611,6 +621,7 @@ def _list_pagos_reportados_payload(
     institucion: Optional[str],
     page: int,
     per_page: int,
+    incluir_exportados: bool = False,
 ) -> dict:
     """Misma lógica que GET /pagos-reportados (reutilizada por listado-y-kpis)."""
     q = select(PagoReportado)
@@ -619,13 +630,16 @@ def _list_pagos_reportados_payload(
     if estado:
         q = q.where(PagoReportado.estado == estado)
         count_q = count_q.where(PagoReportado.estado == estado)
+        if estado in ("aprobado", "pendiente", "en_revision") and not incluir_exportados:
+            q = q.where(~PagoReportado.id.in_(exportados_subq))
+            count_q = count_q.where(~PagoReportado.id.in_(exportados_subq))
     else:
-        # Por defecto: cola operativa (sin cerrados). Rechazados solo con filtro estado=rechazado o KPI Rechazado.
+        # Por defecto: cola operativa (sin cerrados). Sin filas ya exportadas salvo incluir_exportados.
         q = q.where(~PagoReportado.estado.in_(("aprobado", "importado", "rechazado")))
         count_q = count_q.where(~PagoReportado.estado.in_(("aprobado", "importado", "rechazado")))
-
-    q = q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
-    count_q = count_q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
+        if not incluir_exportados:
+            q = q.where(~PagoReportado.id.in_(exportados_subq))
+            count_q = count_q.where(~PagoReportado.id.in_(exportados_subq))
     for w in _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
@@ -652,9 +666,25 @@ def _kpis_pagos_reportados_payload(
     fecha_hasta: Optional[date],
     cedula: Optional[str],
     institucion: Optional[str],
+    incluir_exportados: bool = False,
 ) -> dict:
-    """Misma lógica que GET /pagos-reportados/kpis."""
-    base = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(True)
+    """
+    Conteos por estado con mismos filtros fecha/cédula/institución que el listado.
+    Con incluir_exportados=False, pendiente / en revisión / aprobado excluyen filas ya volcadas al Excel.
+    """
+    if incluir_exportados:
+        base = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(True)
+    else:
+        exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
+        base = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(
+            or_(
+                PagoReportado.estado.in_(("importado", "rechazado")),
+                and_(
+                    PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")),
+                    ~PagoReportado.id.in_(exportados_subq),
+                ),
+            )
+        )
     for w in _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
@@ -682,9 +712,17 @@ def list_pagos_reportados(
     institucion: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=300),
+    incluir_exportados: bool = Query(
+        False,
+        description="Si true, incluye filas ya exportadas al Excel de corrección (siguen gestionables en Cobranzas).",
+    ),
 ):
     """
-    Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados, importados y rechazados (cola operativa).
+    Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados, importados y rechazados
+    y los ya exportados al Excel de corrección (cola operativa).
+
+    `incluir_exportados=true`: vuelven a listarse pendiente/en revisión/aprobado ya exportados, para seguir
+    gestionándolos desde Cobranzas (aprobar, editar, rechazar) sin depender del Excel.
 
     Incluye sin distincion reportes de Infopagos (`canal_ingreso=infopagos`) y del formulario publico del deudor
     (`cobros_publico`); mismas reglas de edicion, aprobacion, rechazo e import a `pagos`.
@@ -698,6 +736,7 @@ def list_pagos_reportados(
         institucion=institucion,
         page=page,
         per_page=per_page,
+        incluir_exportados=incluir_exportados,
     )
 
 
@@ -708,6 +747,10 @@ def kpis_pagos_reportados(
     fecha_hasta: Optional[date] = Query(None),
     cedula: Optional[str] = Query(None),
     institucion: Optional[str] = Query(None),
+    incluir_exportados: bool = Query(
+        False,
+        description="Alinear conteos con listado cuando se incluyen exportados al Excel.",
+    ),
 ):
     """Conteos por estado; filtros fecha/cédula/institución compartidos con el listado (sin filtro de estado del listado)."""
     return _kpis_pagos_reportados_payload(
@@ -716,6 +759,7 @@ def kpis_pagos_reportados(
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
+        incluir_exportados=incluir_exportados,
     )
 
 
@@ -729,12 +773,15 @@ def list_pagos_reportados_y_kpis(
     institucion: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=300),
+    incluir_exportados: bool = Query(
+        False,
+        description="Igual que GET /pagos-reportados: muestra filas ya exportadas al Excel para seguir gestionándolas.",
+    ),
 ):
     """
     Listado paginado + KPIs en una sola petición (mismos query params que GET /pagos-reportados).
 
-    Nota: los KPIs siguen la semántica de GET /kpis (conteos por estado con filtros fecha/cédula/institución
-    únicamente; sin las exclusiones de estado/exportados del listado por defecto). Eso es intencional en la UI.
+    KPIs alineados con el listado (con o sin filas ya exportadas al Excel, según incluir_exportados).
 
     En BD son dos consultas secuenciales en un solo request HTTP (menos latencia de red que dos peticiones).
     """
@@ -747,6 +794,7 @@ def list_pagos_reportados_y_kpis(
         institucion=institucion,
         page=page,
         per_page=per_page,
+        incluir_exportados=incluir_exportados,
     )
     kpis = _kpis_pagos_reportados_payload(
         db,
@@ -754,6 +802,7 @@ def list_pagos_reportados_y_kpis(
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
+        incluir_exportados=incluir_exportados,
     )
     return {**lista, "kpis": kpis}
 
@@ -840,14 +889,15 @@ def exportar_pagos_aprobados_excel(
     institucion: Optional[str] = Query(None),
 ):
     """
-    Genera Excel de aprobados pendientes de exportar y en la misma transacción marca exportados y limpia cola.
-    Mismos filtros opcionales que el listado (cédula, institución); sin fechas.
+    Solo filas que no cumplen validadores (Gemini NO/error u observación de reglas), pendiente o en revisión,
+    aún no exportadas: pasan al Excel y se marcan exportadas; dejan de listarse en Cobros (cola operativa y
+    filtros pendiente/en revisión). Mismos filtros opcionales (cédula, institución); sin fechas.
     """
     from io import BytesIO
     from openpyxl import Workbook
     from datetime import datetime
 
-    rows = _query_aprobados_pendientes_exportar(
+    rows = _query_reportados_falla_validadores_pendientes_exportar(
         db,
         cedula=(cedula or "").strip() or None,
         institucion=(institucion or "").strip() or None,
@@ -855,14 +905,21 @@ def exportar_pagos_aprobados_excel(
     if not rows:
         raise HTTPException(
             status_code=400,
-            detail="No hay pagos aprobados pendientes de exportar (o ya fueron marcados como exportados).",
+            detail="No hay pagos reportados pendientes o en revisión sin exportar (con los filtros indicados).",
         )
 
     items = _pago_reportado_list_items_from_rows(db, rows)
+    items = [it for it in items if _item_falla_validadores_cobros_excel(it)]
+    if not items:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay filas que fallen validadores entre los candidatos (Gemini NO/error u observación). "
+            "Revise filtros o corrija datos en pantalla.",
+        )
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "Pagos Aprobados"
+    ws.title = "No validan carga masiva"
 
     headers = [
         "Referencia",
@@ -912,7 +969,7 @@ def exportar_pagos_aprobados_excel(
     stats = _persist_marcar_exportados_y_cola(db, ids)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"pagos_reportados_aprobados_{ts}.xlsx"
+    filename = f"pagos_reportados_falla_validadores_{ts}.xlsx"
 
     return Response(
         content=excel_bytes,
@@ -1817,7 +1874,7 @@ def marcar_pagos_reportados_exportados(
 ):
     ids = sorted({int(x) for x in (body.pago_reportado_ids or []) if int(x) > 0})
     if not ids:
-        raise HTTPException(status_code=400, detail="Debe indicar al menos un pago reportado aprobado para marcar exportado.")
+        raise HTTPException(status_code=400, detail="Debe indicar al menos un pago reportado para marcar exportado.")
 
     rows = db.execute(
         select(PagoReportado.id, PagoReportado.estado).where(PagoReportado.id.in_(ids))
@@ -1828,11 +1885,12 @@ def marcar_pagos_reportados_exportados(
     if faltantes:
         raise HTTPException(status_code=404, detail=f"Pagos reportados no encontrados: {faltantes}")
 
-    no_aprobados = [pid for pid in ids if estado_por_id[pid] != "aprobado"]
-    if no_aprobados:
+    permitidos = {"pendiente", "en_revision", "aprobado"}
+    no_ok = [pid for pid in ids if estado_por_id[pid] not in permitidos]
+    if no_ok:
         raise HTTPException(
             status_code=400,
-            detail=f"Solo se pueden marcar exportados pagos en estado aprobado. IDs inválidos: {no_aprobados}",
+            detail=f"Solo pendiente, en revisión o aprobado. IDs inválidos: {no_ok}",
         )
 
     return _persist_marcar_exportados_y_cola(db, ids)
@@ -1842,7 +1900,7 @@ def marcar_pagos_reportados_exportados(
 def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
     """
     [Deprecado] Descarga desde cola temporal y vacía toda la tabla.
-    Preferir GET /pagos-reportados/exportar-aprobados-excel (un solo flujo de aprobados).
+    Preferir GET /pagos-reportados/exportar-aprobados-excel (Excel de fallas de validación / carga masiva).
     """
     from io import BytesIO
     from openpyxl import Workbook
@@ -1921,7 +1979,7 @@ def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(excel_bytes)),
             "Deprecation": "true",
-            "Warning": '299 - "Use GET /pagos-reportados/exportar-aprobados-excel"',
+            "Warning": '299 - "Use GET /pagos-reportados/exportar-aprobados-excel (no validan)"',
         },
     )
 

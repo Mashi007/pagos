@@ -1,0 +1,145 @@
+-- =============================================================================
+-- Control 15: orden sugerido para corregir "uno a uno"
+-- =============================================================================
+-- Regla: primero arreglar pagos.monto_pagado / moneda (USD real en cartera),
+--        despues reaplicar cascada POR PRESTAMO (no pago a pago).
+--
+-- A) Pagos con BS coherente pero sin cuota_pagos (ej. 59818, 59819):
+--    No tocar montos. Asegurar conciliado=true o verificado_concordancia='SI'
+--    y ejecutar reaplicacion del prestamo:
+--      POST /api/v1/prestamos/<prestamo_id>/reaplicar-cascada-aplicacion  (admin)
+--    o:  cd backend && python scripts/rearticular_prestamo_fifo.py <prestamo_id>
+--    Nota: reaplicar-cascada solo aplica pagos conciliados/verificados;
+--    rearticular_prestamo_fifo aplica todos los pagos con monto>0 (usar con criterio).
+--
+-- B) Pagos "USD" con monto enorme y sin monto_bs_original (BS mal guardado):
+--    1) Obtener monto en Bs del comprobante bancario.
+--    2) Verificar que exista fila en tasas_cambio_diaria para date(fecha_pago).
+--    3) Ejecutar (dry-run primero sin --apply):
+--       python scripts/corregir_pago_bs_y_usd_desde_tasa.py --pago-id ID --monto-bs MONTO_BS
+--       python scripts/corregir_pago_bs_y_usd_desde_tasa.py --pago-id ID --monto-bs MONTO_BS --apply
+--    4) Al terminar TODOS los pagos mal de ese prestamo: reaplicar cascada (mismo que A).
+--
+-- C) Pagos PENDIENTE sin aplicacion: decision operativa (aplicar, anular duplicado, etc.)
+--    antes de tocar cuota_pagos.
+--
+-- Prestamos afectados (de tu listado), sugerencia de bloque:
+--   1514  (varios: corregir 59822, 50403, 50790 si aplica BS; luego cascada)
+--   164, 201, 255, 274, 280, 321, 442, 1322, 1324, 1513, 2164, 3613
+-- =============================================================================
+
+-- Vista rapida: pagos del prestamo 1514 antes de intervenir
+-- SELECT id, fecha_pago, moneda_registro, monto_pagado, monto_bs_original, tasa_cambio_bs_usd, estado, conciliado, verificado_concordancia, numero_documento
+-- FROM pagos WHERE prestamo_id = 1514 ORDER BY fecha_pago, id;
+
+
+-- ############################################################################
+-- GUIA SIN PROGRAMAR (copiar y pegar en el cliente SQL o en PowerShell)
+-- Orden: 1) tasa del dia  2) corregir cada pago  3) marcar conciliado si hace falta
+--         4) reaplicar UNA VEZ por prestamo
+-- ############################################################################
+--
+-- === PASO 0 — Ver que pagos estan mal en un prestamo (cambie 1514 por su prestamo_id) ===
+--
+-- SELECT
+--   p.id AS pago_id,
+--   CAST(p.fecha_pago AS date) AS dia,
+--   p.moneda_registro,
+--   p.monto_pagado,
+--   p.monto_bs_original,
+--   p.tasa_cambio_bs_usd,
+--   COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.pago_id = p.id), 0) AS aplicado,
+--   p.conciliado,
+--   p.verificado_concordancia,
+--   p.numero_documento
+-- FROM pagos p
+-- WHERE p.prestamo_id = 1514
+-- ORDER BY p.fecha_pago, p.id;
+--
+--
+-- === PASO 1 — Comprobar si falta la tasa del dia (cambie la fecha) ===
+--
+-- SELECT fecha, tasa_oficial FROM tasas_cambio_diaria WHERE fecha = DATE '2026-01-12';
+--
+-- Si no devuelve filas, inserte la tasa oficial BCV de ESE dia (Bs por 1 USD):
+--
+-- INSERT INTO tasas_cambio_diaria (fecha, tasa_oficial, usuario_email)
+-- VALUES ('2026-01-12', 364.15, 'mi-correccion-manual')
+-- ON CONFLICT (fecha) DO UPDATE SET
+--   tasa_oficial = EXCLUDED.tasa_oficial,
+--   usuario_email = EXCLUDED.usuario_email,
+--   updated_at = NOW();
+--
+-- (Cambie fecha, tasa_oficial y usuario_email. El numero de tasa debe ser el oficial del dia.)
+--
+--
+-- === PASO 2 — Corregir UN pago que esta en bolivares pero guardado mal como USD ===
+--
+-- Primero mire la fecha del pago y la tasa del mismo dia:
+--
+-- SELECT id, CAST(fecha_pago AS date) AS dia, monto_pagado, numero_documento
+-- FROM pagos WHERE id = 59822;
+--
+-- SELECT tasa_oficial FROM tasas_cambio_diaria
+-- WHERE fecha = (SELECT CAST(fecha_pago AS date) FROM pagos WHERE id = 59822);
+--
+-- Anote: MONTO_BS = monto en bolivares del comprobante (solo numeros).
+-- Anote: TASA = tasa_oficial de la consulta anterior.
+-- USD = MONTO_BS / TASA redondeado a 2 decimales (hagalo en calculadora si quiere).
+--
+-- Opcion A — SOLO SQL (reemplace 59822, el monto BS, y la tasa):
+--
+-- UPDATE pagos SET
+--   moneda_registro = 'BS',
+--   monto_bs_original = 17200000.00,
+--   tasa_cambio_bs_usd = 364.15,
+--   monto_pagado = ROUND((17200000.00 / 364.15)::numeric, 2)
+-- WHERE id = 59822;
+--
+-- Opcion B — Script (si tiene Python instalado y carpeta backend con .env):
+-- Abra PowerShell, vaya a la carpeta del proyecto, entre en backend, ejecute:
+--
+--   cd ruta\donde\esta\pagos\backend
+--   python scripts\corregir_pago_bs_y_usd_desde_tasa.py --pago-id 59822 --monto-bs 17200000.00
+--
+-- Si el texto mostrado le cuadra, repita con --apply al final para guardar.
+--
+--
+-- === PASO 3 — Si el pago no se aplica solo: marcar como conciliado (solo si en su negocio aplica) ===
+--
+-- La reaplicacion automatica del sistema suele mirar pagos con conciliado = true
+-- o verificado_concordancia = 'SI'. Si su pago ya esta verificado en operacion:
+--
+-- UPDATE pagos SET conciliado = true WHERE id = 59818;
+-- -- o:
+-- UPDATE pagos SET verificado_concordancia = 'SI' WHERE id = 59818;
+--
+-- No marque nada si no esta seguro; consulte a quien registra pagos.
+--
+--
+-- === PASO 4 — Reaplicar al prestamo (UNA VEZ por prestamo, despues de arreglar todos los pagos de ese prestamo) ===
+--
+-- Opcion A — Desde la aplicacion web (usuario administrador):
+-- Busque en la API o pantalla de administracion la accion "reaplicar cascada" del prestamo.
+-- URL tipo: POST .../prestamos/1514/reaplicar-cascada-aplicacion
+--
+-- Opcion B — PowerShell + Python (carpeta backend, mismo .env que la app):
+--
+--   cd ruta\donde\esta\pagos\backend
+--   python scripts\rearticular_prestamo_fifo.py 1514
+--
+-- Ese script redistribuye los pagos a las cuotas en orden. Haga copia/respaldo de BD si la politica lo exige.
+--
+--
+-- === PASO 5 — Comprobar que el control 15 ya no marque ese pago ===
+--
+-- SELECT
+--   p.id,
+--   p.monto_pagado,
+--   COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.pago_id = p.id), 0) AS aplicado
+-- FROM pagos p
+-- WHERE p.id = 59822;
+--
+-- Debe cumplirse: aplicado >= monto_pagado - 0.02 (salvo que el pago sea a proposito parcial).
+--
+-- ############################################################################

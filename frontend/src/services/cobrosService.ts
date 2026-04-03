@@ -555,6 +555,8 @@ export async function getPagosReportadosKpis(
     cedula?: string
 
     institucion?: string
+
+    incluir_exportados?: boolean
   } = {}
 ): Promise<PagosReportadosKpis> {
   const q = new URLSearchParams()
@@ -566,6 +568,8 @@ export async function getPagosReportadosKpis(
   if (params.cedula) q.set('cedula', params.cedula)
 
   if (params.institucion) q.set('institucion', params.institucion)
+
+  if (params.incluir_exportados) q.set('incluir_exportados', 'true')
 
   const data = await apiClient.get<PagosReportadosKpis>(
     `${BASE_COBROS}/pagos-reportados/kpis?${q}`
@@ -626,6 +630,8 @@ export async function listPagosReportados(params: {
   page?: number
 
   per_page?: number
+
+  incluir_exportados?: boolean
 }): Promise<ListPagosReportadosResponse> {
   const q = new URLSearchParams()
 
@@ -642,6 +648,8 @@ export async function listPagosReportados(params: {
   if (params.page != null) q.set('page', String(params.page))
 
   if (params.per_page != null) q.set('per_page', String(params.per_page))
+
+  if (params.incluir_exportados) q.set('incluir_exportados', 'true')
 
   const data = await apiClient.get<ListPagosReportadosResponse>(
     `${BASE_COBROS}/pagos-reportados?${q}`
@@ -664,6 +672,8 @@ export async function listPagosReportadosConKpis(params: {
   page?: number
 
   per_page?: number
+
+  incluir_exportados?: boolean
 }): Promise<ListPagosReportadosConKpisResponse> {
   const q = new URLSearchParams()
 
@@ -681,6 +691,8 @@ export async function listPagosReportadosConKpis(params: {
 
   if (params.per_page != null) q.set('per_page', String(params.per_page))
 
+  if (params.incluir_exportados) q.set('incluir_exportados', 'true')
+
   const url = `${BASE_COBROS}/pagos-reportados/listado-y-kpis?${q}`
 
   try {
@@ -696,6 +708,8 @@ export async function listPagosReportadosConKpis(params: {
         cedula: params.cedula,
 
         institucion: params.institucion,
+
+        incluir_exportados: params.incluir_exportados,
       }
 
       const [lista, kpis] = await Promise.all([
@@ -978,8 +992,8 @@ export async function markPagosReportadosExportados(
 }
 
 /**
- * Excel de aprobados pendientes de exportar: genera archivo en servidor y en la misma
- * transacción marca exportados y limpia cola temporal (atómico).
+ * Excel de reportes que no cumplen validadores (pendiente/en revisión con observación o Gemini NO/error),
+ * aún no exportados. Misma transacción: marca exportados y limpia cola temporal (atómico).
  */
 export async function exportarPagosReportadosAprobadosExcel(opts: {
   cedula?: string
@@ -1043,7 +1057,7 @@ export async function exportarPagosReportadosAprobadosExcel(opts: {
     })
 
     const cd = hm['content-disposition']
-    let name = 'pagos_reportados_aprobados.xlsx'
+    let name = 'pagos_reportados_falla_validadores.xlsx'
 
     if (cd) {
       const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(cd)

@@ -1,5 +1,5 @@
 """
-Registro persistente de pagos reportados aprobados ya exportados.
+Registro persistente de pagos reportados ya volcados a Excel (cola corrección / carga masiva).
 """
 from sqlalchemy import Column, Integer, DateTime, ForeignKey
 from sqlalchemy.sql import func

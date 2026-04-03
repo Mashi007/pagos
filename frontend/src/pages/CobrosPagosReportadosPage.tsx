@@ -9,7 +9,7 @@
 
 
  * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
- * Vista por defecto (sin filtro de estado): el API no devuelve aprobados, importados ni rechazados; los rechazados solo con filtro o tarjeta Rechazado. Al aprobar, la fila desaparece y el Excel agrupa aprobados pendientes de exportar.
+ * Vista por defecto: sin aprobados/importados/rechazados ni exportados al Excel; con checkbox se incluyen exportados para seguir gestionando en Cobranzas. El Excel solo vuelca fallas de validación.
 
 
 
@@ -238,6 +238,8 @@ export default function CobrosPagosReportadosPage() {
 
   const [institucion, setInstitucion] = useState('')
 
+  const [incluirExportados, setIncluirExportados] = useState(false)
+
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
 
   const [viewingComprobanteId, setViewingComprobanteId] = useState<
@@ -297,6 +299,8 @@ export default function CobrosPagosReportadosPage() {
 
         estado: effectiveEstado || undefined,
 
+        incluir_exportados: incluirExportados,
+
         ...filterParams,
       })
 
@@ -312,7 +316,7 @@ export default function CobrosPagosReportadosPage() {
 
   useEffect(() => {
     load()
-  }, [page])
+  }, [page, incluirExportados])
 
   useEffect(() => {
     let cancelled = false
@@ -461,7 +465,7 @@ export default function CobrosPagosReportadosPage() {
   }
 
   const handleDescargarExcelAprobados = async () => {
-    // Servidor: solo aprobados no exportados; mismo criterio de cédula/institución; sin fechas.
+    // Servidor: pendiente/en revisión que no validan, no exportados; cédula/institución; sin fechas.
     // El Excel y el marcado en BD son atómicos (un solo request).
     setDescargandoExcelAprobados(true)
 
@@ -474,7 +478,7 @@ export default function CobrosPagosReportadosPage() {
       toast.success(
         'Excel con ' +
           String(stats.totalFilas) +
-          ' aprobado(s). Nuevos exportados: ' +
+          ' fila(s) sin validar. Nuevos exportados: ' +
           String(stats.marcados) +
           (stats.yaExportados > 0
             ? ' (ya constaban ' + String(stats.yaExportados) + ')'
@@ -486,7 +490,7 @@ export default function CobrosPagosReportadosPage() {
 
       await load({ page: 1 })
     } catch (e: any) {
-      toast.error(e?.message || 'No se pudo exportar el Excel de aprobados.')
+      toast.error(e?.message || 'No se pudo exportar el Excel de corrección.')
     } finally {
       setDescargandoExcelAprobados(false)
     }
@@ -549,12 +553,11 @@ export default function CobrosPagosReportadosPage() {
             </select>
 
             <p className="text-xs text-muted-foreground">
-              La opción por defecto coincide con el listado: al aprobar, la fila
-              deja de mostrarse aquí y pasa al Excel &quot;Descargar Excel
-              Aprobados&quot;. Los rechazados no se listan aquí: use la tarjeta
-              o el filtro &quot;Rechazado&quot;. Si elige &quot;Aprobado&quot;
-              en el filtro, las filas aprobadas siguen visibles hasta
-              exportarlas.
+              Vista por defecto: cola sin filas ya exportadas al Excel de
+              corrección; puede marcar &quot;Incluir ya exportados&quot; para
+              seguir resolviendo desde esta pantalla (aprobar, editar,
+              rechazar). &quot;Excel no validan&quot; solo vuelca quienes
+              fallan validadores. Los rechazados no se listan aquí salvo filtro.
             </p>
           </div>
 
@@ -588,18 +591,38 @@ export default function CobrosPagosReportadosPage() {
             className="w-48"
           />
 
+          <label
+            htmlFor="cobros-incluir-exportados"
+            className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
+          >
+            <input
+              id="cobros-incluir-exportados"
+              type="checkbox"
+              className="mt-0.5 shrink-0 rounded border-input"
+              checked={incluirExportados}
+              onChange={e => {
+                setIncluirExportados(e.target.checked)
+                setPage(1)
+              }}
+            />
+            <span>
+              Incluir ya exportados a Excel: sigue viendo esas filas para
+              aprobar, editar o rechazar desde Cobranzas con normalidad.
+            </span>
+          </label>
+
           <Button onClick={() => load()}>Buscar</Button>
 
           <Button
             variant="outline"
             onClick={handleDescargarExcelAprobados}
             disabled={descargandoExcelAprobados}
-            title="Aprobados pendientes de exportar. No usa fechas del filtro; sí cédula/institución si las llenaste."
+            title="Solo filas con falla de validadores. Al descargar van al Excel y salen de la cola por defecto; marque Incluir ya exportados para seguir gestionándolas aquí. Sin fechas; sí cédula/institución si las llenaste."
           >
             {descargandoExcelAprobados ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : null}
-            Descargar Excel Aprobados
+            Excel no validan (carga masiva)
           </Button>
         </CardContent>
       </Card>
@@ -609,7 +632,7 @@ export default function CobrosPagosReportadosPage() {
           <button
             type="button"
             onClick={() => handleKpiClick('')}
-            title="Cola operativa: pendiente y en revisión (sin aprobados, importados ni rechazados). Ver rechazados con la tarjeta Rechazado o el filtro."
+            title="Cola operativa: pendiente y en revisión no exportados al Excel de corrección (sin aprobados, importados ni rechazados en la vista por defecto)."
             className={
               'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
               (estado === ''
