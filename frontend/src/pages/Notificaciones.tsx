@@ -52,12 +52,7 @@ import {
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
-type TabId =
-  | 'dias_1_atraso'
-  | 'dias_5_atraso'
-  | 'dias_30_atraso'
-  | 'masivos'
-  | 'configuracion'
+type TabId = 'dias_1_atraso' | 'configuracion'
 
 const TABS: { id: TabId; label: string; icon: typeof Clock }[] = [
   {
@@ -65,12 +60,6 @@ const TABS: { id: TabId; label: string; icon: typeof Clock }[] = [
     label: 'Día después del venc.',
     icon: Clock,
   },
-
-  { id: 'dias_5_atraso', label: '5 días atrasado', icon: Clock },
-
-  { id: 'dias_30_atraso', label: '30 días atrasado', icon: Clock },
-
-  { id: 'masivos', label: 'Masivos', icon: Mail },
 
   { id: 'configuracion', label: 'Configuración', icon: Settings },
 ]
@@ -83,15 +72,6 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
   switch (tab) {
     case 'dias_1_atraso':
       return 'dias_1_retraso'
-
-    case 'dias_5_atraso':
-      return 'dias_5_retraso'
-
-    case 'dias_30_atraso':
-      return 'dias_30_retraso'
-
-    case 'masivos':
-      return 'masivos'
 
     default:
       return null
@@ -110,40 +90,21 @@ type ConfigEnvioSeccionId =
 function cfgSlugParaPestanaListado(tab: TabId): ConfigEnvioSeccionId | null {
   switch (tab) {
     case 'dias_1_atraso':
-    case 'dias_5_atraso':
-    case 'dias_30_atraso':
       return 'retrasada'
-
-    case 'masivos':
-      return 'comunicaciones'
 
     default:
       return null
   }
 }
 
-/** Tipo de fila en GET/PUT notificaciones/envios que corresponde a cada pestaña de listado. */
+/** Tipo de fila en GET/PUT notificaciones/envios para el listado principal (día siguiente al venc.). */
 
 function tipoConfigPlantillaParaPestana(
   tab: TabId
-):
-  | 'PAGO_1_DIA_ATRASADO'
-  | 'PAGO_5_DIAS_ATRASADO'
-  | 'PAGO_30_DIAS_ATRASADO'
-  | 'MASIVOS'
-  | null {
+): 'PAGO_1_DIA_ATRASADO' | null {
   switch (tab) {
     case 'dias_1_atraso':
       return 'PAGO_1_DIA_ATRASADO'
-
-    case 'dias_5_atraso':
-      return 'PAGO_5_DIAS_ATRASADO'
-
-    case 'dias_30_atraso':
-      return 'PAGO_30_DIAS_ATRASADO'
-
-    case 'masivos':
-      return 'MASIVOS'
 
     default:
       return null
@@ -217,10 +178,12 @@ const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
 export function Notificaciones() {
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const tabParam = searchParams.get('tab') as TabId | null
+  const tabParam = searchParams.get('tab')
 
   const [activeTab, setActiveTab] = useState<TabId>(() =>
-    tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'dias_1_atraso'
+    tabParam && TABS.some(t => t.id === tabParam)
+      ? (tabParam as TabId)
+      : 'dias_1_atraso'
   )
 
   useEffect(() => {
@@ -229,12 +192,18 @@ export function Notificaciones() {
       TABS.some(t => t.id === tabParam) &&
       activeTab !== tabParam
     ) {
-      setActiveTab(tabParam)
+      setActiveTab(tabParam as TabId)
     }
-  }, [tabParam])
+  }, [tabParam, activeTab])
 
   useEffect(() => {
-    if (searchParams.get('tab') === 'liquidados') {
+    const t = searchParams.get('tab')
+    if (
+      t === 'liquidados' ||
+      t === 'masivos' ||
+      t === 'dias_5_atraso' ||
+      t === 'dias_30_atraso'
+    ) {
       setSearchParams(
         p => {
           const next = new URLSearchParams(p)
@@ -277,7 +246,7 @@ export function Notificaciones() {
 
     /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
 
-    enabled: activeTab !== 'configuracion' && activeTab !== 'masivos',
+    enabled: activeTab !== 'configuracion',
   })
 
   const { data: estadisticasPorTab } = useQuery({
@@ -312,18 +281,6 @@ export function Notificaciones() {
 
       liquidados: { enviados: 0, rebotados: 0 },
     } as EstadisticasPorTab,
-  })
-
-  const { data: masivosData } = useQuery({
-    queryKey: ['notificaciones-masivos-lista'],
-
-    queryFn: () => notificacionService.listarNotificacionesMasivos(),
-
-    staleTime: 0,
-
-    enabled: activeTab === 'masivos',
-
-    placeholderData: { items: [], total: 0 },
   })
 
   const listadoPideResumenEnvios =
@@ -447,9 +404,6 @@ export function Notificaciones() {
         skipCrossTabBroadcast: true,
       })
       await queryClient.invalidateQueries({
-        queryKey: ['notificaciones-masivos-lista'],
-      })
-      await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
       })
       await Promise.all([
@@ -458,9 +412,6 @@ export function Notificaciones() {
         }),
         queryClient.refetchQueries({
           queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
-        }),
-        queryClient.refetchQueries({
-          queryKey: ['notificaciones-masivos-lista'],
         }),
       ])
       toast.success(
@@ -529,15 +480,6 @@ export function Notificaciones() {
       case 'dias_1_atraso':
         return data.dias_1_atraso ?? []
 
-      case 'dias_5_atraso':
-        return data.dias_5_atraso ?? []
-
-      case 'dias_30_atraso':
-        return data.dias_30_atraso ?? []
-
-      case 'masivos':
-        return masivosData?.items ?? []
-
       default:
         return []
     }
@@ -557,8 +499,6 @@ export function Notificaciones() {
   )
 
   const mostrarTablaCuotas = hasColumnasCuota
-
-  const esTabMasivos = activeTab === 'masivos'
 
   if (activeTab === 'configuracion') {
     return (
@@ -634,14 +574,7 @@ export function Notificaciones() {
       <div className="border-b border-gray-200">
         <nav className="flex flex-wrap gap-1">
           {TABS.filter(t => t.id !== 'configuracion').map(tab => {
-            const count =
-              tab.id === 'dias_1_atraso'
-                ? (data?.dias_1_atraso?.length ?? 0)
-                : tab.id === 'dias_5_atraso'
-                  ? (data?.dias_5_atraso?.length ?? 0)
-                  : tab.id === 'dias_30_atraso'
-                    ? (data?.dias_30_atraso?.length ?? 0)
-                    : 0
+            const count = data?.dias_1_atraso?.length ?? 0
 
             return (
               <button
@@ -693,8 +626,8 @@ export function Notificaciones() {
               Ir a configuración del caso
             </Link>
             <span className="mt-1 block text-xs text-slate-500">
-              Cada pestaña usa solo su fila en el servidor; aquí solo se muestra
-              un resumen. Los cambios requieren Guardar en Configuración.
+              Este listado usa su fila en el servidor; aquí solo se muestra un
+              resumen. Los cambios requieren Guardar en Configuración.
             </span>
           </div>
         )}
@@ -708,22 +641,14 @@ export function Notificaciones() {
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
 
-              {activeTab === 'dias_1_atraso'
-                ? 'Día siguiente al vencimiento (1 día de atraso calendario)'
-                : activeTab === 'dias_5_atraso'
-                  ? 'Cuotas con 5 días de atraso'
-                  : activeTab === 'dias_30_atraso'
-                    ? 'Cuotas con 30 días de atraso'
-                    : ''}
+              Día siguiente al vencimiento (1 día de atraso calendario)
             </CardTitle>
 
             <CardDescription>
-              {activeTab === 'dias_1_atraso'
-                ? 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'
-                : activeTab === 'dias_5_atraso' ||
-                    activeTab === 'dias_30_atraso'
-                  ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso calendario sobre la cuota de referencia. Cuotas atrasadas = total alineado con estado de cuenta / amortización.'
-                  : 'Nombre y cédula de clientes a notificar.'}
+              Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día
+              después del vencimiento). La columna Cuotas atrasadas cuenta las
+              cuotas en mora del préstamo con la misma regla que el estado de
+              cuenta (Vencido, Mora, etc.).
             </CardDescription>
           </CardHeader>
 
@@ -741,8 +666,7 @@ export function Notificaciones() {
                 Actualizacion manual
               </Button>
               <p className="max-w-xl text-xs text-gray-600">
-                Vuelve a pedir al servidor las listas de mora, los KPI y masivos
-                (POST{' '}
+                Vuelve a pedir al servidor las listas de mora y los KPI (POST{' '}
                 <code className="rounded bg-white px-1">
                   /notificaciones/actualizar
                 </code>{' '}
@@ -788,30 +712,13 @@ export function Notificaciones() {
               </div>
             )}
 
-            {activeTab === 'dias_30_atraso' && (
-              <p className="mb-4 text-xs text-gray-500">
-                Listado y envíos usan la cuota cuya{' '}
-                <span className="font-medium">fecha de vencimiento</span> fue
-                hace 30 días calendario (misma regla que el servidor). KPI y
-                Excel de rebotados: tipo_tab{' '}
-                <code className="rounded bg-gray-100 px-1">
-                  dias_30_retraso
-                </code>
-                . El caso{' '}
-                <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code>{' '}
-                (3+ cuotas morosas) se configura y envía aparte en
-                Configuración.
-              </p>
-            )}
-
-            {esTabMasivos && (
-              <p className="mb-4 text-xs text-gray-500">
-                Comunicaciones masivas generales: no dependen de cuotas ni de
-                préstamos. Se envían a clientes con correo registrado, usando la
-                configuración del caso
-                <code className="mx-1 rounded bg-gray-100 px-1">MASIVOS</code>.
-              </p>
-            )}
+            <p className="mb-4 text-xs text-gray-500">
+              KPI y Excel de rebotados de esta vista usan tipo_tab{' '}
+              <code className="rounded bg-gray-100 px-1">dias_1_retraso</code>.
+              Los envíos de 5 y 30 días de atraso y el caso{' '}
+              <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code> se
+              configuran y envían desde Configuración.
+            </p>
 
             {/* Botón descargar informe Excel de no entregados (rebotados) */}
 
@@ -864,21 +771,20 @@ export function Notificaciones() {
 
             {mostrarTablaCuotas ? (
               <div className="overflow-x-auto">
-                {(activeTab === 'dias_1_atraso' ||
-                  activeTab === 'dias_5_atraso' ||
-                  activeTab === 'dias_30_atraso') &&
-                  list.length > 0 && (
-                    <p className="mb-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
-                      <span className="font-semibold">
-                        Por que la fecha de vencimiento se repite:{' '}
-                      </span>
-                      {activeTab === 'dias_1_atraso'
-                        ? 'Esta pestaña solo incluye cuotas cuya fecha de vencimiento fue ayer (primer dia despues del vencimiento). Por definicion, todas comparten esa misma fecha; al pasar el dia en el calendario de negocio, la fecha mostrada avanza un dia para todo el listado (ayer 31 mar, hoy 1 abr, etc.). Los numeros de cuota (9, 11, 12...) son distintos prestamos o cuotas distintas que casualmente vencieron ese mismo dia.'
-                        : activeTab === 'dias_5_atraso'
-                          ? 'Solo cuotas con vencimiento hace exactamente 5 dias calendario; la columna Fecha venc. es la misma para todas las filas de esta lista.'
-                          : 'Solo cuotas con vencimiento hace exactamente 30 dias calendario; la columna Fecha venc. es la misma para todas las filas de esta lista.'}
-                    </p>
-                  )}
+                {list.length > 0 && (
+                  <p className="mb-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+                    <span className="font-semibold">
+                      Por que la fecha de vencimiento se repite:{' '}
+                    </span>
+                    Esta lista solo incluye cuotas cuya fecha de vencimiento fue
+                    ayer (primer dia despues del vencimiento). Por definicion,
+                    todas comparten esa misma fecha; al pasar el dia en el
+                    calendario de negocio, la fecha mostrada avanza un dia para
+                    todo el listado (ayer 31 mar, hoy 1 abr, etc.). Los numeros
+                    de cuota (9, 11, 12...) son distintos prestamos o cuotas
+                    distintas que casualmente vencieron ese mismo dia.
+                  </p>
+                )}
 
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
@@ -959,19 +865,9 @@ export function Notificaciones() {
                               : '-'}
                           </td>
 
-                          {esTabMasivos ? (
-                            <>
-                              <td className="px-3 py-2">{row.correo || '-'}</td>
-
-                              <td className="px-3 py-2">
-                                {row.telefono || '-'}
-                              </td>
-                            </>
-                          ) : (
-                            <td className="px-3 py-2">
-                              {estadoCuentaPdfCell(row.prestamo_id)}
-                            </td>
-                          )}
+                          <td className="px-3 py-2">
+                            {estadoCuentaPdfCell(row.prestamo_id)}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -993,21 +889,9 @@ export function Notificaciones() {
                         Cédula
                       </th>
 
-                      {esTabMasivos ? (
-                        <>
-                          <th className="px-3 py-2 text-left font-semibold">
-                            Correo
-                          </th>
-
-                          <th className="px-3 py-2 text-left font-semibold">
-                            Teléfono
-                          </th>
-                        </>
-                      ) : (
-                        <th className="px-3 py-2 text-left font-semibold">
-                          Estado de cuenta
-                        </th>
-                      )}
+                      <th className="px-3 py-2 text-left font-semibold">
+                        Estado de cuenta
+                      </th>
                     </tr>
                   </thead>
 
@@ -1015,7 +899,7 @@ export function Notificaciones() {
                     {list.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={esTabMasivos ? 5 : 4}
+                          colSpan={4}
                           className="py-8 text-center text-gray-500"
                         >
                           Ningún cliente en este criterio.
@@ -1035,19 +919,9 @@ export function Notificaciones() {
 
                           <td className="px-3 py-2">{row.cedula}</td>
 
-                          {esTabMasivos ? (
-                            <>
-                              <td className="px-3 py-2">{row.correo || '-'}</td>
-
-                              <td className="px-3 py-2">
-                                {row.telefono || '-'}
-                              </td>
-                            </>
-                          ) : (
-                            <td className="px-3 py-2">
-                              {estadoCuentaPdfCell(row.prestamo_id)}
-                            </td>
-                          )}
+                          <td className="px-3 py-2">
+                            {estadoCuentaPdfCell(row.prestamo_id)}
+                          </td>
                         </tr>
                       ))
                     )}

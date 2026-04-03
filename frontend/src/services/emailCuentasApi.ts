@@ -175,10 +175,10 @@ export const SERVICIO_POR_CUENTA: Record<number, string> = {
 
   3: 'Notificaciones (pestañas asignadas a esta cuenta)',
 
-  4: 'Notificaciones (pestañas asignadas a esta cuenta)',
+  4: 'Notificaciones (casos de envío asignados a esta cuenta)',
 }
 
-/** Pestañas de notificaciones que pueden usar cuenta 3 o 4. */
+/** Casos de envío de notificaciones que pueden usar cuenta 3 o 4. */
 
 export const NOTIF_TABS = [
   { id: 'dias_1_retraso', label: 'Día siguiente al venc.' },

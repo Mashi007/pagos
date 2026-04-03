@@ -25,7 +25,7 @@ export const TIPOS_CASO_DOCS: { value: string; label: string }[] = [
 
   { value: 'prejudicial', label: 'Prejudicial' },
 
-  { value: 'masivos', label: 'Masivos' },
+  { value: 'masivos', label: 'Comunicaciones masivas' },
 ]
 
 type AdjuntoItem = { id: string; nombre_archivo: string; ruta: string }
@@ -35,7 +35,7 @@ interface DocumentosAlmacenadosPorPestanaProps {
 
   permitirEliminar?: boolean
 
-  /** Título de la sección. Por defecto "Documentos almacenados por pestaña". */
+  /** Título de la sección. Por defecto "Documentos almacenados por caso". */
 
   titulo?: string
 
@@ -51,7 +51,7 @@ interface DocumentosAlmacenadosPorPestanaProps {
 export function DocumentosAlmacenadosPorPestana({
   permitirEliminar = true,
 
-  titulo = 'Documentos almacenados por pestaña',
+  titulo = 'Documentos almacenados por caso',
 
   className = '',
 
@@ -110,8 +110,8 @@ export function DocumentosAlmacenadosPorPestana({
         <h4 className="mb-1 text-sm font-medium text-gray-700">{titulo}</h4>
 
         <p className="mb-3 text-xs text-muted-foreground">
-          Cada documento se adjunta solo a la notificación de la pestaña
-          indicada (ej. los de «1 día retraso» van con ese tipo de aviso).
+          Cada documento se adjunta solo al caso de envío indicado (ej. los de
+          «Día siguiente al venc.» van con ese tipo de aviso).
         </p>
 
         <div className="space-y-3">
@@ -166,9 +166,9 @@ export function DocumentosAlmacenadosPorPestana({
 
           {!tieneAlguno && (
             <p className="text-sm text-gray-500">
-              No hay documentos vinculados a pestañas. Sube un PDF en la pestaña
-              «Documentos PDF anexos», elige la pestaña de notificación y pulsa
-              Subir; se guardarán y aparecerán aquí.
+              No hay documentos vinculados a casos. Sube un PDF en «Documentos
+              PDF anexos», elige el caso de envío y pulsa Subir; se guardarán y
+              aparecerán aquí.
             </p>
           )}
         </div>

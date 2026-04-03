@@ -677,12 +677,12 @@ export function EmailCuentasConfig() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <AlertCircle className="h-4 w-4" />
-            Asignación Notificaciones: qué cuenta usa cada pestaña
+            Asignación Notificaciones: qué cuenta usa cada caso de envío
           </CardTitle>
 
           <CardDescription>
-            Elija para cada pestaña de Notificaciones si usa{' '}
-            <strong>Cuenta 3</strong> o <strong>Cuenta 4</strong>.
+            Elija para cada tipo de notificación (mora, prejudicial, etc.) si
+            usa <strong>Cuenta 3</strong> o <strong>Cuenta 4</strong>.
           </CardDescription>
         </CardHeader>
 

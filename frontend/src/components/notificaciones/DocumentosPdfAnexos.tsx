@@ -38,7 +38,7 @@ const TIPOS_CASO: { value: string; label: string }[] = [
   { value: 'dias_30_retraso', label: '30 días retraso' },
 
   { value: 'prejudicial', label: 'Prejudicial' },
-  { value: 'masivos', label: 'Masivos' },
+  { value: 'masivos', label: 'Comunicaciones masivas' },
 ]
 
 type AdjuntoItem = { id: string; nombre_archivo: string; ruta: string }
@@ -86,7 +86,7 @@ export function DocumentosPdfAnexos() {
     }
 
     if (selectedTipos.length === 0) {
-      toast.error('Elige al menos un caso (pestaña).')
+      toast.error('Elige al menos un caso de envío.')
       return
     }
 
@@ -163,9 +163,9 @@ export function DocumentosPdfAnexos() {
           </CardTitle>
 
           <CardDescription>
-            Sube documentos PDF y asígnalos a una, varias o todas las pestañas
-            (Faltan 5, Hoy vence, Retrasadas, Prejudicial). Marca los casos que
-            quieras o «Todos los casos». Solo PDF.
+            Sube documentos PDF y asígnalos a uno o varios casos de envío (día
+            siguiente al venc., 3/5/30 días retraso, prejudicial, comunicaciones
+            masivas). Marca los que quieras o «Todos los casos». Solo PDF.
           </CardDescription>
         </CardHeader>
 
@@ -173,7 +173,7 @@ export function DocumentosPdfAnexos() {
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <label className="block text-sm font-medium text-gray-700">
-                Aplicar a la pestaña(s)
+                Casos de destino
               </label>
 
               <div className="mt-1 flex flex-wrap gap-2">
@@ -239,12 +239,12 @@ export function DocumentosPdfAnexos() {
 
           <div className="border-t pt-4">
             <h4 className="mb-1 text-sm font-medium text-gray-700">
-              Documentos almacenados por pestaña
+              Documentos almacenados por caso
             </h4>
 
             <p className="mb-2 text-xs text-muted-foreground">
-              Cada documento se adjunta solo a la notificación de la pestaña
-              indicada (ej. los de «1 día retraso» van con ese tipo de aviso).
+              Cada documento se adjunta solo al caso de envío indicado (ej. los
+              de «Día siguiente al venc.» van con ese tipo de aviso).
             </p>
 
             <div className="space-y-3">
@@ -299,7 +299,7 @@ export function DocumentosPdfAnexos() {
 
               {TIPOS_CASO.every(t => (porCaso[t.value]?.length ?? 0) === 0) && (
                 <p className="text-sm text-gray-500">
-                  Aún no hay documentos. Sube un PDF y elige la pestaña.
+                  Aún no hay documentos. Sube un PDF y elige el caso de envío.
                 </p>
               )}
             </div>

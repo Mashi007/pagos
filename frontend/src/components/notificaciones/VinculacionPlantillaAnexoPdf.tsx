@@ -30,7 +30,7 @@ const CLAVES_GLOBALES = [
 
 
 
- * Muestra la plantilla "Plantilla anexo PDF" y a qué pestañas de notificación está vinculada
+ * Muestra la plantilla "Plantilla anexo PDF" y a qué casos de envío está vinculada
 
 
 
@@ -105,8 +105,8 @@ export function VinculacionPlantillaAnexoPdf() {
 
         <p className="mt-1 text-sm text-gray-600">
           Esta plantilla genera el archivo <strong>Carta_Cobranza.pdf</strong>{' '}
-          que se adjunta al correo. Se usa en las pestañas de notificación que
-          tengan la opción &quot;PDF&quot; activa.
+          que se adjunta al correo. Se usa en los casos de envío que tengan la
+          opción &quot;PDF&quot; activa en Notificaciones &gt; Configuración.
         </p>
       </CardHeader>
 
@@ -115,7 +115,7 @@ export function VinculacionPlantillaAnexoPdf() {
           <LinkIcon className="h-4 w-4 shrink-0 text-blue-600" />
 
           <span className="font-medium">
-            Vinculada a las siguientes pestañas:
+            Vinculada a los siguientes casos:
           </span>
         </div>
 
@@ -126,8 +126,8 @@ export function VinculacionPlantillaAnexoPdf() {
           </div>
         ) : pestanasConPdf.length === 0 ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            Ninguna pestaña tiene el PDF activo. Activa la opción
-            &quot;PDF&quot; en{' '}
+            Ningún caso tiene el PDF activo. Activa la opción &quot;PDF&quot;
+            en{' '}
             <Link
               to="/notificaciones?tab=configuracion"
               className="font-medium text-blue-600 hover:underline"

@@ -984,7 +984,7 @@ export function ConfiguracionNotificaciones() {
           (omitidos_config ?? 0) > 0
         ) {
           toast.warning(
-            `Ningún envío: ${omitidos_config} omitidos (activa Envío en al menos una pestaña y vuelve a intentar).`
+            `Ningún envío: ${omitidos_config} omitidos (activa Envío en al menos un caso y vuelve a intentar).`
           )
         } else {
           toast.success(
@@ -1026,12 +1026,12 @@ export function ConfiguracionNotificaciones() {
             Cada correo al cliente (modo estricto) combina tres piezas: (1)
             plantilla de correo HTML con variables; (2) PDF de carta con
             variables (Carta_Cobranza.pdf); (3) PDFs fijos de anexos, siempre
-            junto al PDF variable. Solo aparecen casos con envio por pestaña
-            (retrasadas, prejudicial y masivos). Las plantillas tipo carta de
-            cobranza (COBRANZA) se crean en Plantillas y se eligen aqui por
-            caso. El backend exige plantilla activa, PDF variable valido y al
-            menos un PDF fijo adicional (pestaña Documentos PDF anexos / adjunto
-            global).
+            junto al PDF variable. Aquí se configuran los casos de envío
+            (por vencer, día de pago, retrasadas, prejudicial, comunicaciones
+            masivas). Las plantillas tipo carta de cobranza (COBRANZA) se crean
+            en Plantillas y se eligen aqui por caso. El backend exige plantilla
+            activa, PDF variable valido y al menos un PDF fijo adicional
+            (sección Documentos PDF anexos / adjunto global).
           </CardDescription>
         </CardHeader>
       </Card>
@@ -1062,7 +1062,7 @@ export function ConfiguracionNotificaciones() {
 
           <CardDescription>
             {enModoPrueba
-              ? 'Todos los envíos van al correo de pruebas. Puedes activar o desactivar cada caso (Envío) para elegir a qué pestañas enviar.'
+              ? 'Todos los envíos van al correo de pruebas. Puedes activar o desactivar cada caso (Envío) para elegir a qué tipos de notificación aplicar la prueba.'
               : 'Los emails se envían al correo de cada cliente según la opción Envío de cada caso.'}
           </CardDescription>
         </CardHeader>
@@ -1290,11 +1290,11 @@ export function ConfiguracionNotificaciones() {
                 </Button>
 
                 <p className="mt-2 text-sm text-gray-600">
-                  Envíos masivos: un correo por contacto en lista Masivos; en
-                  modo prueba todos van al correo de pruebas. Usa la plantilla
-                  de la primera campaña activa; si esa campaña no tiene
-                  plantilla, la de la fila «Comunicaciones masivas» (guarde
-                  antes).
+                  Envíos masivos: un correo por contacto del caso MASIVOS
+                  (campañas en Comunicaciones); en modo prueba todos van al
+                  correo de pruebas. Usa la plantilla de la primera campaña
+                  activa; si esa campaña no tiene plantilla, la de la fila
+                  «Comunicaciones masivas» (guarde antes).
                 </p>
               </div>
             )}
@@ -1418,11 +1418,12 @@ export function ConfiguracionNotificaciones() {
               Campanas masivas
             </CardTitle>
             <CardDescription>
-              Solo para la pestana Masivos: varias campanas con plantilla y CCO.
-              El envio es manual (boton Enviar o pestana Masivos). Si una
-              campana deja la plantilla en «Texto por defecto», se usa la
-              plantilla de la fila «Comunicaciones masivas» de la tabla de
-              arriba (guardada en el servidor).
+              Varias campañas con plantilla y CCO para comunicaciones masivas
+              (caso MASIVOS). El envío es manual desde aquí (Enviar campañas
+              activas ahora o botones por campaña). Si una campaña deja la
+              plantilla en «Texto por defecto», se usa la plantilla de la fila
+              «Comunicaciones masivas» de la tabla de arriba (guardada en el
+              servidor).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1450,8 +1451,8 @@ export function ConfiguracionNotificaciones() {
 
             {campanasMasivos.length === 0 ? (
               <p className="text-sm text-gray-500">
-                No hay campanas configuradas. Agrega al menos una para usar
-                envio recurrente semanal en Masivos.
+                No hay campanas configuradas. Agrega al menos una para campañas
+                de comunicaciones masivas.
               </p>
             ) : (
               <div className="space-y-3">
@@ -1583,8 +1584,8 @@ export function ConfiguracionNotificaciones() {
 
               <th
                 className="w-20 px-4 py-3 text-center font-semibold text-gray-700"
-                title="Pestaña 3: PDFs fijos por caso + global. Obligatorio para enviar (junto con plantilla y carta PDF)."
-                aria-label="Incluir documentos PDF fijos de esta pestaña"
+                title="Sección Documentos PDF anexos: PDFs fijos por caso + global. Obligatorio para enviar (junto con plantilla y carta PDF)."
+                aria-label="Incluir documentos PDF fijos de este caso"
               >
                 Adj.
               </th>

@@ -193,7 +193,9 @@ export function PlantillasNotificaciones({
 
     prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
 
-    masivos: [{ valor: 'MASIVOS', label: 'Comunicaciones masivas (Masivos)' }],
+    masivos: [
+      { valor: 'MASIVOS', label: 'Comunicaciones masivas (caso MASIVOS)' },
+    ],
 
     cobranza: [{ valor: 'COBRANZA', label: 'Carta de cobranza' }],
   }
@@ -1606,7 +1608,7 @@ export function PlantillasNotificaciones({
 
     MASIVOS: {
       categoria: 'Comunicaciones masivas',
-      caso: 'Masivos',
+      caso: 'Comunicaciones masivas',
     },
 
     COBRANZA: { categoria: 'Cobranza', caso: 'Carta de cobranza' },
@@ -1647,7 +1649,7 @@ export function PlantillasNotificaciones({
 
     {
       tipo: 'MASIVOS',
-      label: 'Masivos',
+      label: 'Comunicaciones masivas',
       borderColor: 'border-teal-500',
     },
 
@@ -1995,11 +1997,11 @@ export function PlantillasNotificaciones({
                 </div>
               </div>
 
-              {/* Masivos: correos masivos (pestaña Masivos); sin cuota/préstamo */}
+              {/* Comunicaciones masivas (caso MASIVOS); sin cuota/préstamo */}
 
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-teal-700">
-                  Masivos
+                  Comunicaciones masivas
                 </h4>
 
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2022,8 +2024,9 @@ export function PlantillasNotificaciones({
 
                 <p className="mt-1 text-xs text-gray-500">
                   Asigna la plantilla al caso MASIVOS en Notificaciones &gt;
-                  Configuración. Los PDF fijos para este caso se suben en la
-                  pestaña Documentos PDF anexos (carpeta Masivos).
+                  Configuración &gt; Comunicaciones. Los PDF fijos para este caso
+                  se suben en Documentos PDF anexos (caso comunicaciones
+                  masivas).
                 </p>
               </div>
             </div>

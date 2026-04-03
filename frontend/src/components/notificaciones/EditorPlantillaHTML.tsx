@@ -102,7 +102,9 @@ export function EditorPlantillaHTML({
 
     prejudicial: [{ valor: 'PREJUDICIAL', label: 'Prejudicial' }],
 
-    masivos: [{ valor: 'MASIVOS', label: 'Comunicaciones masivas' }],
+    masivos: [
+      { valor: 'MASIVOS', label: 'Comunicaciones masivas (caso MASIVOS)' },
+    ],
 
     cobranza: [{ valor: 'COBRANZA', label: 'Carta de cobranza' }],
   }
