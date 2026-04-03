@@ -1442,7 +1442,7 @@ export function ClientesList() {
         )}
       </AnimatePresence>
 
-      {/* ? NOTIFICACIN Ã¯Â¿Â½NICA */}
+      {/* Notificación toast única (éxito / error) */}
 
       {notification && (
         <motion.div
@@ -1465,10 +1465,12 @@ export function ClientesList() {
             <span className="font-medium">{notification.message}</span>
 
             <button
+              type="button"
               onClick={() => setNotification(null)}
-              className="ml-2 text-gray-500 hover:text-gray-700"
+              className="ml-2 rounded p-1 text-gray-500 hover:bg-black/5 hover:text-gray-700"
+              aria-label="Cerrar notificación"
             >
-              Ã¯Â¿Â½
+              <X className="h-4 w-4" aria-hidden />
             </button>
           </div>
         </motion.div>

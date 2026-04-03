@@ -79,6 +79,8 @@ export interface ClienteRetrasadoItem {
   monto?: number
 
   dias_atraso?: number
+  /** Misma regla que estado de cuenta / amortización (cuotas vencidas sin cubrir al 100%). */
+  cuotas_atrasadas?: number
   correo?: string
   telefono?: string
   estado?: string

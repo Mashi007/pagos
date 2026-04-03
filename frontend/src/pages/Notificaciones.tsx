@@ -552,6 +552,7 @@ export function Notificaciones() {
       row.numero_cuota != null ||
       row.fecha_vencimiento != null ||
       row.dias_atraso != null ||
+      row.cuotas_atrasadas != null ||
       row.monto != null
   )
 
@@ -718,10 +719,10 @@ export function Notificaciones() {
 
             <CardDescription>
               {activeTab === 'dias_1_atraso'
-                ? 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Ej.: vence 22 → entra el 23. Columna Estado de cuenta: mismo PDF que en amortización del préstamo.'
+                ? 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'
                 : activeTab === 'dias_5_atraso' ||
                     activeTab === 'dias_30_atraso'
-                  ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso. Columna Estado de cuenta: mismo PDF que en amortización del préstamo.'
+                  ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso calendario sobre la cuota de referencia. Cuotas atrasadas = total alineado con estado de cuenta / amortización.'
                   : 'Nombre y cédula de clientes a notificar.'}
             </CardDescription>
           </CardHeader>
@@ -903,7 +904,7 @@ export function Notificaciones() {
                       </th>
 
                       <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
-                        Días atraso
+                        Cuotas atrasadas
                       </th>
 
                       <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
@@ -949,7 +950,7 @@ export function Notificaciones() {
                           </td>
 
                           <td className="px-3 py-2 text-right font-medium text-red-600">
-                            {row.dias_atraso ?? '-'}
+                            {row.cuotas_atrasadas ?? '-'}
                           </td>
 
                           <td className="px-3 py-2 text-right">

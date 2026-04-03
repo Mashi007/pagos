@@ -156,15 +156,23 @@ export function PlantillasNotificaciones({
   const VARIABLES_NOTIFICACION = [
     { key: 'nombre', label: 'Nombre' },
 
-    { key: 'cedula', label: 'C?dula' },
+    { key: 'cedula', label: 'Cedula' },
 
     { key: 'fecha_vencimiento', label: 'Fecha venc.' },
 
-    { key: 'numero_cuota', label: 'N? cuota' },
+    { key: 'numero_cuota', label: 'Nº cuota' },
 
     { key: 'monto', label: 'Monto' },
 
-    { key: 'dias_atraso', label: 'D?as atraso' },
+    {
+      key: 'dias_atraso',
+      label: 'Dias desde venc. cuota ref. (1/3/5/30)',
+    },
+
+    {
+      key: 'cuotas_atrasadas',
+      label: 'Cuotas atrasadas (estado de cuenta)',
+    },
   ]
 
   // Tipos organizados por categor?as
@@ -1750,7 +1758,7 @@ export function PlantillasNotificaciones({
 
   const handleVistaPreviaHtml = () => {
     const ejemplo: Record<string, string> = {
-      nombre: 'Juan P?rez',
+      nombre: 'Juan Perez',
 
       cedula: 'V-12345678',
 
@@ -1762,9 +1770,11 @@ export function PlantillasNotificaciones({
 
       dias_atraso: '2',
 
+      cuotas_atrasadas: '2',
+
       'CLIENTES.TRATAMIENTO': 'Sr.',
 
-      'CLIENTES.NOMBRE_COMPLETO': 'Juan P?rez',
+      'CLIENTES.NOMBRE_COMPLETO': 'Juan Perez',
 
       'PRESTAMOS.ID': 'CR-2024-001',
 

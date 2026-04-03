@@ -107,6 +107,8 @@ export function LoginForm() {
 
   const from = location.state?.from?.pathname || '/dashboard/menu'
 
+  const footerYear = new Date().getFullYear()
+
   const {
     register,
 
@@ -355,6 +357,15 @@ export function LoginForm() {
                 </button>
               </div>
 
+              {errors.root?.message && (
+                <p
+                  className="text-center text-sm font-medium text-red-600"
+                  role="alert"
+                >
+                  {errors.root.message}
+                </p>
+              )}
+
               <Button
                 type="submit"
                 className="h-12 w-full text-base font-semibold"
@@ -464,7 +475,9 @@ export function LoginForm() {
             <div className="text-center text-sm text-muted-foreground">
               <p className="font-semibold text-blue-600">RAPICREDIT v1.0</p>
 
-              <p className="mt-1">Â© 2024 - Todos los derechos reservados</p>
+              <p className="mt-1">
+                {`\u00A9 ${footerYear} - Todos los derechos reservados`}
+              </p>
 
               <p className="mt-1 text-xs text-gray-400">
                 Sistema de préstamos y cobranza

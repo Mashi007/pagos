@@ -28,8 +28,9 @@ from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
-    get_cuotas_pendientes_por_vencimientos,
+    contar_cuotas_atraso_por_prestamos,
     format_cuota_item,
+    get_cuotas_pendientes_por_vencimientos,
     _item,
     _item_tab,
 )
@@ -115,7 +116,7 @@ def plantilla_usa_variables_cobranza(plantilla) -> bool:
 def _sustituir_variables(texto: str, item: dict) -> str:
     """
     Reemplaza variables {{variable}} en texto.
-    Fijas: nombre, cedula, fecha_vencimiento, numero_cuota, monto (desde monto_cuota), dias_atraso.
+    Fijas: nombre, cedula, fecha_vencimiento, numero_cuota, monto (desde monto_cuota), dias_atraso, cuotas_atrasadas.
     Cualquier otra clave presente en item (ej. telefono, correo) se sustituye tambiÃƒÂ©n para variables personalizadas.
     """
     if not texto:
@@ -129,6 +130,7 @@ def _sustituir_variables(texto: str, item: dict) -> str:
     if monto is None and item.get("monto") is not None:
         monto = item.get("monto")
     dias_atraso = item.get("dias_atraso")
+    cuotas_atrasadas = item.get("cuotas_atrasadas")
     replacements = {
         "{{nombre}}": str(nombre),
         "{{cedula}}": str(cedula),
@@ -136,13 +138,24 @@ def _sustituir_variables(texto: str, item: dict) -> str:
         "{{numero_cuota}}": str(numero_cuota) if numero_cuota is not None else "",
         "{{monto}}": str(monto) if monto is not None else "",
         "{{dias_atraso}}": str(dias_atraso) if dias_atraso is not None else "",
+        "{{cuotas_atrasadas}}": str(cuotas_atrasadas)
+        if cuotas_atrasadas is not None
+        else "",
     }
     result = texto
     for key, val in replacements.items():
         result = result.replace(key, val)
     # Variables personalizadas: cualquier clave del item (telefono, correo, etc.)
     for k, v in item.items():
-        if k in ("nombre", "cedula", "fecha_vencimiento", "numero_cuota", "monto_cuota", "dias_atraso"):
+        if k in (
+            "nombre",
+            "cedula",
+            "fecha_vencimiento",
+            "numero_cuota",
+            "monto_cuota",
+            "dias_atraso",
+            "cuotas_atrasadas",
+        ):
             continue
         token = "{{" + str(k) + "}}"
         if token in result:
@@ -160,6 +173,7 @@ def _item_placeholder_pruebas() -> dict:
         "numero_cuota": "{{numero_cuota}}",
         "monto_cuota": "{{monto}}",
         "dias_atraso": "{{dias_atraso}}",
+        "cuotas_atrasadas": "{{cuotas_atrasadas}}",
     }
 
 
@@ -327,6 +341,8 @@ def build_contexto_cobranza_para_item(
         ctx["monto"] = m_item
     if item.get("dias_atraso") is not None:
         ctx["dias_atraso"] = item.get("dias_atraso")
+    if item.get("cuotas_atrasadas") is not None:
+        ctx["cuotas_atrasadas"] = item.get("cuotas_atrasadas")
     return ctx, next_correlativo
 
 @router.get("/plantillas")
@@ -1021,7 +1037,18 @@ VARIABLES_PRECARGADAS = [
     {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "NÃƒÂºmero de cuota"},
     {"nombre_variable": "fecha_vencimiento", "tabla": "cuotas", "campo_bd": "fecha_vencimiento", "descripcion": "Fecha de vencimiento"},
     {"nombre_variable": "monto_cuota", "tabla": "cuotas", "campo_bd": "monto", "descripcion": "Monto de la cuota"},
-    {"nombre_variable": "dias_atraso", "tabla": "cuotas", "campo_bd": "dias_mora", "descripcion": "DÃƒÂ­as de atraso"},
+    {
+        "nombre_variable": "dias_atraso",
+        "tabla": "cuotas",
+        "campo_bd": "dias_mora",
+        "descripcion": "Dias desde vencimiento de la cuota de referencia (1/3/5/30; tipo de envio)",
+    },
+    {
+        "nombre_variable": "cuotas_atrasadas",
+        "tabla": "prestamos",
+        "campo_bd": "conteo",
+        "descripcion": "Cantidad de cuotas en atraso del prestamo (misma regla que estado de cuenta)",
+    },
 ]
 
 
@@ -1705,6 +1732,9 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     dias_5_atraso: List[dict] = []   # 5 dÃƒÂ­as atrasado (cuota vencida hace 5 dÃƒÂ­as)
     dias_30_atraso: List[dict] = []  # 30 dÃƒÂ­as atrasado (cuota vencida hace 30 dÃƒÂ­as)
 
+    pids_retraso = [c.prestamo_id for c, _ in rows]
+    counts_retraso = contar_cuotas_atraso_por_prestamos(db, pids_retraso)
+
     for (cuota, cliente) in rows:
         fv = cuota.fecha_vencimiento
         if not fv:
@@ -1714,12 +1744,19 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
         # No notificar antes ni el dia del vencimiento; solo desde el dia siguiente.
         if delta < 0:
             dias_atraso = -delta
+            ca = counts_retraso.get(cuota.prestamo_id, 0)
             if dias_atraso == 1:
-                dias_1_atraso.append(_item(cliente, cuota, dias_atraso=1))
+                dias_1_atraso.append(
+                    _item(cliente, cuota, dias_atraso=1, cuotas_atrasadas=ca)
+                )
             elif dias_atraso == 5:
-                dias_5_atraso.append(_item(cliente, cuota, dias_atraso=5))
+                dias_5_atraso.append(
+                    _item(cliente, cuota, dias_atraso=5, cuotas_atrasadas=ca)
+                )
             elif dias_atraso == 30:
-                dias_30_atraso.append(_item(cliente, cuota, dias_atraso=30))
+                dias_30_atraso.append(
+                    _item(cliente, cuota, dias_atraso=30, cuotas_atrasadas=ca)
+                )
 
     # Crédito pagado: préstamos en estado LIQUIDADO (alineado con prestamos.estado).
     subq = (
@@ -1825,6 +1862,8 @@ def get_notificaciones_tabs_data(db: Session):
         hoy - timedelta(days=30),
     )
     rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
+    pids_tabs = [c.prestamo_id for c, _ in rows]
+    counts_tabs = contar_cuotas_atraso_por_prestamos(db, pids_tabs)
 
     dias_5: List[dict] = []
     dias_3: List[dict] = []
@@ -1843,14 +1882,23 @@ def get_notificaciones_tabs_data(db: Session):
 
         if delta < 0:
             dias_atraso = -delta
+            ca = counts_tabs.get(cuota.prestamo_id, 0)
             if dias_atraso == 1:
-                dias_1_retraso.append(_item_tab(cliente, cuota, dias_atraso=1))
+                dias_1_retraso.append(
+                    _item_tab(cliente, cuota, dias_atraso=1, cuotas_atrasadas=ca)
+                )
             elif dias_atraso == 3:
-                dias_3_retraso.append(_item_tab(cliente, cuota, dias_atraso=3))
+                dias_3_retraso.append(
+                    _item_tab(cliente, cuota, dias_atraso=3, cuotas_atrasadas=ca)
+                )
             elif dias_atraso == 5:
-                dias_5_retraso.append(_item_tab(cliente, cuota, dias_atraso=5))
+                dias_5_retraso.append(
+                    _item_tab(cliente, cuota, dias_atraso=5, cuotas_atrasadas=ca)
+                )
             elif dias_atraso == 30:
-                dias_30_retraso.append(_item_tab(cliente, cuota, dias_atraso=30))
+                dias_30_retraso.append(
+                    _item_tab(cliente, cuota, dias_atraso=30, cuotas_atrasadas=ca)
+                )
 
     # Prejudicial: clientes con 3 o mÃƒÂ¡s cuotas atrasadas (fecha_vencimiento < hoy, no pagado)
     # Solo cuotas con cliente_id no nulo para poder resolver Cliente

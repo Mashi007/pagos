@@ -260,42 +260,76 @@ function FiniquitoGestionPageInner() {
     setPageBandeja(0)
   }, [cedulaBusqueda])
 
-  const cargarListas = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [rTrabajo, rRech, rBandeja] = await Promise.all([
-        finiquitoAdminListar(
-          undefined,
-          undefined,
-          'ACEPTADO,EN_PROCESO,TERMINADO',
-          { limit: PAGE_SIZE, offset: pageTrabajo * PAGE_SIZE }
-        ),
-        finiquitoAdminListar('RECHAZADO', undefined, undefined, {
-          limit: PAGE_SIZE,
-          offset: pageRechazados * PAGE_SIZE,
-        }),
-        finiquitoAdminListar(
-          'REVISION',
-          cedulaBusqueda || undefined,
-          undefined,
-          {
+  const cargarListas = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true
+      if (!silent) {
+        setLoading(true)
+      }
+      try {
+        const [rTrabajo, rRech, rBandeja] = await Promise.all([
+          finiquitoAdminListar(
+            undefined,
+            undefined,
+            'ACEPTADO,EN_PROCESO,TERMINADO',
+            { limit: PAGE_SIZE, offset: pageTrabajo * PAGE_SIZE }
+          ),
+          finiquitoAdminListar('RECHAZADO', undefined, undefined, {
             limit: PAGE_SIZE,
-            offset: pageBandeja * PAGE_SIZE,
-          }
-        ),
-      ])
-      setItemsAreaTrabajo(rTrabajo.items || [])
-      setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
-      setItemsRechazados(rRech.items || [])
-      setTotalRechazados(rRech.total ?? (rRech.items || []).length)
-      setItemsBandeja(rBandeja.items || [])
-      setTotalBandeja(rBandeja.total ?? (rBandeja.items || []).length)
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error al cargar')
-    } finally {
-      setLoading(false)
-    }
-  }, [pageTrabajo, pageRechazados, pageBandeja, cedulaBusqueda])
+            offset: pageRechazados * PAGE_SIZE,
+          }),
+          finiquitoAdminListar(
+            'REVISION',
+            cedulaBusqueda || undefined,
+            undefined,
+            {
+              limit: PAGE_SIZE,
+              offset: pageBandeja * PAGE_SIZE,
+            }
+          ),
+        ])
+        setItemsAreaTrabajo(rTrabajo.items || [])
+        setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
+        setItemsRechazados(rRech.items || [])
+        setTotalRechazados(rRech.total ?? (rRech.items || []).length)
+        setItemsBandeja(rBandeja.items || [])
+        setTotalBandeja(rBandeja.total ?? (rBandeja.items || []).length)
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'Error al cargar')
+      } finally {
+        if (!silent) {
+          setLoading(false)
+        }
+      }
+    },
+    [pageTrabajo, pageRechazados, pageBandeja, cedulaBusqueda]
+  )
+
+  /** Actualiza filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
+  const incorporarCasoActualizado = useCallback((caso: FiniquitoCasoItem) => {
+    const enAreaTrabajo = ['ACEPTADO', 'EN_PROCESO', 'TERMINADO'].includes(
+      caso.estado
+    )
+    setItemsAreaTrabajo(prev => {
+      if (!prev.some(r => r.id === caso.id)) return prev
+      if (!enAreaTrabajo) {
+        return prev.filter(r => r.id !== caso.id)
+      }
+      return prev.map(r => (r.id === caso.id ? { ...r, ...caso } : r))
+    })
+    setItemsBandeja(prev => {
+      if (!prev.some(r => r.id === caso.id)) return prev
+      if (caso.estado !== 'REVISION') {
+        return prev.filter(r => r.id !== caso.id)
+      }
+      return prev.map(r => (r.id === caso.id ? { ...r, ...caso } : r))
+    })
+    setItemsRechazados(prev =>
+      prev.some(r => r.id === caso.id)
+        ? prev.map(r => (r.id === caso.id ? { ...r, ...caso } : r))
+        : prev
+    )
+  }, [])
 
   useEffect(() => {
     void cargarListas()
@@ -307,7 +341,7 @@ function FiniquitoGestionPageInner() {
       const r = await finiquitoAdminRefreshMaterializado()
       const { titulo, descripcion } = textoToastRefresco(r)
       toast.success(titulo, { description: descripcion })
-      await cargarListas()
+      await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al refrescar')
     } finally {
@@ -336,6 +370,9 @@ function FiniquitoGestionPageInner() {
         toast.error(r.error || 'No se pudo actualizar')
         return
       }
+      if (r.caso) {
+        incorporarCasoActualizado(r.caso)
+      }
       if (estado === 'EN_PROCESO') {
         toast.success('En proceso', {
           description:
@@ -344,7 +381,7 @@ function FiniquitoGestionPageInner() {
       } else {
         toast.success('Estado actualizado')
       }
-      await cargarListas()
+      await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
     }
@@ -390,7 +427,10 @@ function FiniquitoGestionPageInner() {
       setDialogAntiguoRow(null)
       setAntiguoNota('')
       toast.success('Caso marcado como Antiguo')
-      await cargarListas()
+      if (r.caso) {
+        incorporarCasoActualizado(r.caso)
+      }
+      await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
     } finally {
@@ -423,7 +463,10 @@ function FiniquitoGestionPageInner() {
       }
       setDialogTerminado(null)
       toast.success('Caso marcado como terminado')
-      await cargarListas()
+      if (r.caso) {
+        incorporarCasoActualizado(r.caso)
+      }
+      await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
     }
