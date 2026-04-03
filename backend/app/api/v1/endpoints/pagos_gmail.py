@@ -23,7 +23,7 @@ from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
-from app.services.pagos_gmail.helpers import formatear_cedula
+from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
 from app.services.pagos_gmail.pipeline import run_pipeline
 
 logger = logging.getLogger(__name__)
@@ -345,17 +345,17 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
             link_url = (it.drive_link or "").strip()
             if link_url and not link_url.startswith("http"):
                 link_url = "https://drive.google.com/file/d/" + link_url + "/view"
-            link_text = "Ver imagen" if link_url else ""
+            link_text = link_url or ""
             email_url = (it.drive_email_link or "").strip()
             if email_url and not email_url.startswith("http"):
                 email_url = "https://drive.google.com/file/d/" + email_url + "/view"
-            email_text = "Ver email" if email_url else ("—" if link_url else "")
+            email_text = email_url or ("—" if link_url else "")
             ws.append(
                 [
                     it.banco or "",
                     formatear_cedula(it.cedula or ""),
                     it.fecha_pago or "",
-                    it.monto or "",
+                    format_monto_excel_pagos_gmail(it.monto) or (it.monto or ""),
                     it.numero_referencia or "",
                     it.correo_origen or "",
                     link_text,
@@ -365,12 +365,12 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
             if link_url:
                 c_link = ws.cell(row=row_idx, column=7)
                 c_link.hyperlink = link_url
-                c_link.value = "Ver imagen"
+                c_link.value = link_url
                 c_link.font = link_font
             if email_url:
                 c_eml = ws.cell(row=row_idx, column=8)
                 c_eml.hyperlink = email_url
-                c_eml.value = "Ver email"
+                c_eml.value = email_url
                 c_eml.font = link_font
         buf = io.BytesIO()
         wb.save(buf)
@@ -432,17 +432,17 @@ def download_excel_temporal(db: Session = Depends(get_db)):
             link_url = (it.drive_link or "").strip()
             if link_url and not link_url.startswith("http"):
                 link_url = "https://drive.google.com/file/d/" + link_url + "/view"
-            link_text = "Ver imagen" if link_url else ""
+            link_text = link_url or ""
             email_url = (it.drive_email_link or "").strip()
             if email_url and not email_url.startswith("http"):
                 email_url = "https://drive.google.com/file/d/" + email_url + "/view"
-            email_text = "Ver email" if email_url else ("—" if link_url else "")
+            email_text = email_url or ("—" if link_url else "")
             ws.append(
                 [
                     it.banco or "",
                     formatear_cedula(it.cedula or ""),
                     it.fecha_pago or "",
-                    it.monto or "",
+                    format_monto_excel_pagos_gmail(it.monto) or (it.monto or ""),
                     it.numero_referencia or "",
                     it.correo_origen or "",
                     link_text,
@@ -452,12 +452,12 @@ def download_excel_temporal(db: Session = Depends(get_db)):
             if link_url:
                 c_link = ws.cell(row=row_idx, column=7)
                 c_link.hyperlink = link_url
-                c_link.value = "Ver imagen"
+                c_link.value = link_url
                 c_link.font = link_font
             if email_url:
                 c_eml = ws.cell(row=row_idx, column=8)
                 c_eml.hyperlink = email_url
-                c_eml.value = "Ver email"
+                c_eml.value = email_url
                 c_eml.font = link_font
         buf = io.BytesIO()
         wb.save(buf)
@@ -590,7 +590,10 @@ def diagnostico(db: Session = Depends(get_db)):
     if attachments:
         fname, content, mime = attachments[0]
         try:
-            fmt, data = classify_and_extract_pagos_gmail_attachment(content, fname)
+            from_hdr = (msg.get("headers") or {}).get("from") or ""
+            fmt, data = classify_and_extract_pagos_gmail_attachment(
+                content, fname, remitente_correo_header=from_hdr
+            )
             result["paso_6_gemini_extraccion"] = {
                 "ok": True,
                 "archivo": fname,

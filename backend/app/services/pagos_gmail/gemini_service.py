@@ -21,7 +21,7 @@ GEMINI_SERVER_ERROR_RETRY_DELAY = 15  # Para 503 Server Unavailable
 GEMINI_SERVER_ERROR_MAX_RETRIES = 4  # Máximo 4 reintentos para 503
 
 from app.core.config import settings
-from app.services.pagos_gmail.helpers import get_mime_type
+from app.services.pagos_gmail.helpers import extract_sender_email, get_mime_type
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,8 @@ PagosGmailFormato = Literal["A", "B", "C", "ninguno"]
 
 GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = """
 Eres un clasificador estricto. Entrada: una sola imagen o PDF extraida del mensaje (incrustada en cuerpo, adjunto con nombre,
-o comprobante dentro de un correo reenviado .eml). No uses asunto del correo, texto del cuerpo ni metadatos para clasificar ni rellenar campos.
+o comprobante dentro de un correo reenviado .eml). No uses asunto del correo ni texto del cuerpo para clasificar ni rellenar,
+salvo un bloque literal "CONTEXTO_REMITE:" que SOLO puedes usar en formato C para el campo email_cliente cuando en la captura Binance no se lea el email del destinatario.
 Si hay duda -> formato "ninguno" y los cuatro campos "NA". No inventes datos.
 
 ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
@@ -46,6 +47,12 @@ ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
   Si el binario es solo firma, logo, banner, avatar o recorte sin los datos de operacion, o el comprobante esta tan cortado que no puedes los cuatro campos con certeza -> ninguno.
   Las imagenes embebidas suelen tener mas compresion o menos dpi: tolera OCR sucio (guiones rotos, letras pegadas) pero si un campo sigue ilegible -> ninguno, no rellenes por contexto del correo.
 
+CORREO CON MAS DE UNA IMAGEN O MAS DE UN PDF:
+  El backend procesa cada binario por separado (una peticion = un solo archivo). Aunque el correo tenga 2, 3 o mas capturas adjuntas o embebidas, tu SOLO ves el de esta peticion.
+  REGLA: 1 imagen (o 1 PDF de una pagina relevante) = como maximo 1 clasificacion y 1 JSON = 1 pago en Excel. No agrupes varias capturas en un solo resultado; no rellenes campos con datos que "imaginas" de otras imagenes del mismo mensaje.
+  Cada binario se evalua con las MISMAS reglas de plantilla: A (imagen 1), B (imagen 2), C (imagen 3 / Binance) o ninguno. Una pieza puede ser A, otra del mismo correo B y otra ninguno: es correcto e independiente.
+  Si esta pieza es basura (firma, icono, segunda copia ilegible) -> ninguno; no intentes completar un pago usando otra captura que no esta en pantalla.
+
 OBLIGATORIO — campo "formato" en el JSON: SOLO uno de estos cuatro valores exactos: A, B, C, ninguno.
   A = plantilla imagen 1: ticket RAPI-CREDIT / RECAUDACION / terminal (abajo) O papeleleta Mercantil DEPOSITO DIVISAS a RAPI-CREDIT con RECAUDACION (VARIANTE MERCANTIL).
   B = unicamente plantilla imagen 2 (recibo BNC a favor de RAPI-CREDIT descrita abajo).
@@ -57,17 +64,17 @@ REGLA SISTEMA A/B: Devuelve "A" o "B" solo si el comprobante coincide con imagen
 (fecha_pago, cedula, monto, numero_referencia). Si la plantilla parece A o B pero algun campo no es legible, formato "ninguno" y NA.
 
 REGLA SISTEMA C (imagen 3 / Binance Pay): Devuelve "C" solo si ves el nucleo C (PASO 2b) y puedes extraer con certeza:
-  monto (USDT/USD), numero_referencia (Id. de la orden / Order ID), y email_cliente (correo completo visible del destinatario en pantalla).
+  monto (USDT/USD), numero_referencia (Id. de la orden / Order ID), y email_cliente (visible en pantalla; si no se lee, solo formato C puede usar el bloque literal CONTEXTO_REMITE descrito arriba).
   Para formato C en el JSON pon siempre fecha_pago="NA" y cedula="NA" (no inventes; el sistema asigna fecha desde el correo y cedula desde tabla clientes por email).
   Si falta monto, id de orden o email legible -> formato "ninguno" y todos los campos relevantes NA.
 
 COLUMNAS OBLIGATORIAS Y GMAIL (estrella / etiquetas — las aplica el backend):
   A y B: las cuatro columnas fecha_pago, cedula, monto, numero_referencia deben ser reales en tu respuesta; si falta una -> ninguno.
   C: monto, numero_referencia, email_cliente obligatorios; fecha_pago y cedula deben ser "NA" en JSON.
-  El pipeline solo estrella y etiqueta IMAGEN 1 / 2 / 3 cuando cada adjunto valido queda procesado al 100%; en C, si el email no existe en clientes, el backend no incorpora fila ni etiqueta (no es tu tarea verificar la base de datos).
+  El pipeline evalua cada imagen/PDF por separado: varias piezas validas en un correo generan varias filas (una por pieza que cumpla A, B o C). Solo estrella y etiqueta cuando TODAS las piezas del correo alcanzan estado final (ver logica del backend); en C, si el email no existe en clientes, el backend no incorpora fila ni etiqueta para esa pieza (no es tu tarea verificar la base de datos).
 
 === CLASIFICACION EN ORDEN (sigue el orden; no inviertas B y A) ===
-Objetivo: decidir formato en pocas comprobaciones. Usa la imagen solamente.
+Objetivo: decidir formato en pocas comprobaciones. Cada peticion es UNA sola pieza: clasifica solo lo visible ahi; mismas reglas imagen 1 (A), imagen 2 (B) e imagen 3 (C) que si el correo tuviera un unico archivo. No cruces datos entre capturas.
 
 PASO 1 - DESCARTE (ninguno al instante):
   No aparece RAPI-CREDIT (ni RAPI CREDIT / RAPICREDIT / RAPH-CREDIT / RAPICREDI razonable) y tampoco BNC reconocible
@@ -94,11 +101,13 @@ PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A ni C:
 PASO 2b - C (imagen 3 / Binance Pay) si PASO 2 no aplico (no es recibo BNC):
   Nucleo C = interfaz Binance (tema oscuro frecuente) + titulo "Pago completado" o "Payment completed"
     + distintivo superior: circulo VERDE con marca de verificado / visto (check) centrado (icono de exito de la app)
-    + importe principal en USDT o USD (ej. "122 USDT", "50.5 USDT")
-    + seccion destinatario con correo electronico completo visible (usuario@dominio) junto a Apodo/Alias o etiqueta tipo Email
-    + linea "Id. de la orden" / "Order ID" / "ID de orden" con numero largo (solo digitos, ej. 423594224765779968).
-  NO es C: login, historial sin pantalla de completado, otra exchange, Binance sin visto verde + Pago completado, sin email visible, sin id de orden legible.
-  Si nucleo C: formato C (no A ni B). Extraccion: monto, numero_referencia=id orden, email_cliente=email visible; fecha_pago=NA; cedula=NA.
+    + importe principal en USDT o USD (ej. "122 USDT", "50.5 USDT", "135 USDT")
+    + ideal: seccion destinatario con correo visible (usuario@dominio) y linea "Id. de la orden" / "Order ID" / "ID de orden" con numero largo (solo digitos).
+  Si la captura esta recortada o comprimida: con visto verde + "Pago completado" + importe USDT/USD claro, sigue siendo C.
+    - numero_referencia: usa el Id. de orden completo si lo ves; si no, cualquier bloque de 15+ digitos que parezca identificador de orden/transaccion Binance en la misma pantalla.
+    - email_cliente: si el email del destinatario NO se lee en la imagen pero recibes CONTEXTO_REMITE: con una direccion, copia esa direccion en email_cliente (minusculas).
+  NO es C: login, historial sin pantalla de completado, otra exchange, sin visto verde + sin titulo de completado, captura ilegible.
+  Si nucleo C: formato C (no A ni B). Extraccion: monto, numero_referencia, email_cliente (visible o desde CONTEXTO_REMITE); fecha_pago=NA; cedula=NA.
 
 PASO 3 - A (imagen 1) solo si PASO 2 y 2b no aplicaron:
   Nucleo A (terminal / ticket clasico) = RAPI-CREDIT + RECAUDACION (con o sin tilde en OCR) + USD + ticket de recaudacion (vertical/monoespaciado tipico) + grupos FORMATO A (1-5).
@@ -453,7 +462,10 @@ def _pagos_gmail_format_c_complete(fields: Dict[str, str]) -> bool:
     return True
 
 
-def _parse_formato_y_pagos_json(text: str) -> Tuple[PagosGmailFormato, Dict[str, str]]:
+def _parse_formato_y_pagos_json(
+    text: str,
+    remitente_from_header: Optional[str] = None,
+) -> Tuple[PagosGmailFormato, Dict[str, str]]:
     empty = _empty_result()
     try:
         json_str = _find_json_object(text)
@@ -493,6 +505,11 @@ def _parse_formato_y_pagos_json(text: str) -> Tuple[PagosGmailFormato, Dict[str,
         if fmt == "ninguno":
             return fmt, na_fields.copy()
         if fmt == "C":
+            em0 = (fields.get("email_cliente") or "").strip()
+            if not _email_cliente_gemini_valido(em0) and (remitente_from_header or "").strip():
+                cand = extract_sender_email(remitente_from_header) or remitente_from_header.strip()
+                if _email_cliente_gemini_valido(cand):
+                    fields["email_cliente"] = _normalize_email_cliente_pagos_gmail(cand)
             if not _pagos_gmail_format_c_complete(fields):
                 return "ninguno", na_fields.copy()
             fields["banco"] = PAGOS_NA
@@ -509,11 +526,12 @@ def classify_and_extract_pagos_gmail_attachment(
     file_content: bytes,
     filename: str,
     api_key: Optional[str] = None,
+    remitente_correo_header: Optional[str] = None,
 ) -> Tuple[PagosGmailFormato, Dict[str, str]]:
     """
     Clasifica el comprobante en formato A (RAPI-CREDIT terminal), B (BNC), C (Binance Pay) o ninguno,
-    y extrae campos solo desde el archivo (sin asunto/cuerpo).
-    El mismo flujo aplica a adjuntos y a imagenes/PDF extraidos del cuerpo (embebidos).
+    y extrae campos desde el archivo. Formato C puede usar remitente_correo_header (cabecera From)
+    si el email del destinatario no aparece en la captura Binance.
     """
     key = api_key or getattr(settings, "GEMINI_API_KEY", None)
     if not key:
@@ -522,7 +540,16 @@ def classify_and_extract_pagos_gmail_attachment(
     mime = get_mime_type(filename)
     image_part = _build_image_part(file_content, filename, mime)
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
-    contents = [GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION, image_part]
+    contents: list = [GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION]
+    rf = (remitente_correo_header or "").strip()
+    if rf:
+        contents.append(
+            "CONTEXTO_REMITE: "
+            + rf
+            + "\n(Solo formato C / Binance Pay: si no lees el email del destinatario en la captura, "
+            "usa la direccion de correo de esta linea como email_cliente en el JSON.)\n"
+        )
+    contents.append(image_part)
     try:
         from google.genai import types
         client = _gemini_client(key)
@@ -543,7 +570,9 @@ def classify_and_extract_pagos_gmail_attachment(
                         text_err,
                     )
                     return "ninguno", _empty_result(f"blocked: {text_err}")
-                fmt, fields = _parse_formato_y_pagos_json(text)
+                fmt, fields = _parse_formato_y_pagos_json(
+                    text, remitente_from_header=remitente_correo_header
+                )
                 if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
                     fmt = "ninguno"
                     fields = {

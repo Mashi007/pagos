@@ -188,6 +188,54 @@ def normalizar_referencia(ref: Optional[str]) -> str:
     return v
 
 
+def format_monto_excel_pagos_gmail(monto: Optional[str]) -> str:
+    """
+    Columna Excel «Monto» (export Gmail): entero o decimal con punto y exactamente dos cifras decimales, sin unidad.
+    Ej.: '96.00 USD' -> '96.00', '122 USDT' -> '122.00', '96,00' -> '96.00'.
+    """
+    if monto is None:
+        return ""
+    s = str(monto).strip()
+    if not s or s.upper() == "NA":
+        return ""
+    t = re.sub(
+        r"\s*(USD|USDT|U\$S|US\$|Bs\.?|BSS|BOLIVAR(?:ES)?|VES)\s*$",
+        "",
+        s,
+        flags=re.IGNORECASE,
+    ).strip()
+    t = re.sub(
+        r"^\s*(USD|USDT|U\$S|US\$|Bs\.?|BSS)\s+",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    ).strip()
+    t = t.replace("$", "").replace(" ", "")
+    if not t:
+        return ""
+    if "," in t and "." in t:
+        if t.rfind(",") > t.rfind("."):
+            t = t.replace(".", "").replace(",", ".")
+        else:
+            t = t.replace(",", "")
+    elif "," in t:
+        parts = t.split(",")
+        if len(parts) == 2 and len(parts[1]) <= 2 and parts[1].isdigit():
+            t = parts[0].replace(".", "") + "." + parts[1]
+        else:
+            t = t.replace(",", ".")
+    m = re.search(r"[-+]?\d+(?:\.\d+)?", t)
+    if not m:
+        return ""
+    try:
+        v = float(m.group(0))
+        if v != v:  # NaN
+            return ""
+        return f"{v:.2f}"
+    except ValueError:
+        return ""
+
+
 def formatear_cedula(cedula: Optional[str]) -> str:
     """
     Aplica formato venezolano a la cédula extraída por Gemini (sin guion entre letra y números):

@@ -28,7 +28,13 @@ from app.api.v1.endpoints.pagos_gmail import (
 )
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
 from app.services.pagos_gmail.gemini_service import _parse_formato_y_pagos_json
-from app.services.pagos_gmail.helpers import resolve_banco_para_excel_pagos_gmail
+from app.services.pagos.comprobante_link_desde_gmail import (
+    comprobante_url_para_enlace_publico,
+)
+from app.services.pagos_gmail.helpers import (
+    format_monto_excel_pagos_gmail,
+    resolve_banco_para_excel_pagos_gmail,
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -247,6 +253,13 @@ def test_download_excel_logs_etapa_when_has_data(db: Session, caplog_gmail):
     assert any("download-excel" in m for m in etapas), "Debería haber log [ETAPA] download-excel"
 
 
+def test_format_monto_excel_sin_unidad():
+    assert format_monto_excel_pagos_gmail("96.00 USD") == "96.00"
+    assert format_monto_excel_pagos_gmail("122 USDT") == "122.00"
+    assert format_monto_excel_pagos_gmail("142.00 USD") == "142.00"
+    assert format_monto_excel_pagos_gmail("96,00") == "96.00"
+
+
 def test_resolve_banco_excel_desde_texto_gemini():
     """Normaliza nombre de banco del comprobante hacia rotulos cortos."""
     d_a, d_b, d_c = "Mercantil", "BNC", "BINANCE"
@@ -308,5 +321,52 @@ def test_parse_formato_c_rechazado_si_fecha_no_na():
     )
     fmt, _ = _parse_formato_y_pagos_json(j)
     assert fmt == "ninguno"
+
+
+def test_comprobante_url_para_enlace_publico_http_passthrough():
+    u = "https://drive.google.com/file/d/abc123/view"
+    assert comprobante_url_para_enlace_publico(u) == u
+
+
+def test_comprobante_url_para_enlace_publico_drive_id():
+    fid = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs"
+    out = comprobante_url_para_enlace_publico(fid)
+    assert out.startswith("https://drive.google.com/file/d/")
+    assert fid in out
+
+
+def test_comprobante_url_para_enlace_publico_no_trata_serial_numerico_como_drive():
+    """Serial de pago solo digitos no debe convertirse a URL Drive."""
+    assert comprobante_url_para_enlace_publico("740087407343435") == "740087407343435"
+
+
+def test_comprobante_url_para_enlace_publico_ruta_relativa_con_base():
+    assert (
+        comprobante_url_para_enlace_publico("/api/v1/x", base_url="https://app.example.com")
+        == "https://app.example.com/api/v1/x"
+    )
+
+
+def test_parse_formato_c_rellena_email_desde_remitente():
+    """Binance sin email en imagen: cabecera From completa el email_cliente."""
+    j = (
+        '{"formato":"C","fecha_pago":"NA","cedula":"NA",'
+        '"monto":"135.00 USDT","numero_referencia":"423594224765779968",'
+        '"email_cliente":"NA","banco":"NA"}'
+    )
+    fmt, fields = _parse_formato_y_pagos_json(
+        j,
+        remitente_from_header="Jesus Acosta <jacostamolleda@gmail.com>",
+    )
+    assert fmt == "C"
+    assert "jacostamolleda@gmail.com" in (fields.get("email_cliente") or "").lower()
+
+
+def test_pagos_gmail_list_q_media_parts_incluye_filename():
+    from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
+
+    q = pagos_gmail_list_q_media_parts()
+    assert "has:attachment" in q
+    assert "filename:png" in q
 
 

@@ -5113,6 +5113,43 @@ def crear_pagos_batch(
 
             db.commit()
 
+            # Persistir link_comprobante desde pagos_gmail_sync_item si el Excel no trajo URL
+            try:
+                ok_ids = [
+                    int(r["pago"]["id"])
+                    for r in results
+                    if r.get("success") and r.get("pago", {}).get("id") is not None
+                ]
+                if ok_ids:
+                    rows_lc = db.execute(select(Pago).where(Pago.id.in_(ok_ids))).scalars().all()
+                    to_persist = False
+                    for row_lc in rows_lc:
+                        if (getattr(row_lc, "link_comprobante", None) or "").strip():
+                            continue
+                        out_lc = _pago_to_response(row_lc)
+                        enriquecer_items_link_comprobante_desde_gmail(db, [out_lc])
+                        url_lc = (out_lc.get("link_comprobante") or "").strip()
+                        if url_lc:
+                            row_lc.link_comprobante = url_lc
+                            to_persist = True
+                    if to_persist:
+                        db.commit()
+                        for r in results:
+                            if not r.get("success"):
+                                continue
+                            pid = r.get("pago", {}).get("id")
+                            if pid is None:
+                                continue
+                            row_u = db.get(Pago, int(pid))
+                            if row_u:
+                                r["pago"] = _pago_to_response(row_u)
+            except Exception as ex_lc:
+                logger.warning(
+                    "Batch: no se pudo persistir link_comprobante desde Gmail sync: %s",
+                    ex_lc,
+                )
+                db.rollback()
+
             results.sort(key=lambda r: r["index"])
 
             ok_count = sum(1 for r in results if r.get("success"))

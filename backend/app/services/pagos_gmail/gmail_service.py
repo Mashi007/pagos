@@ -1,5 +1,5 @@
 """
-Gmail: listar correos (no leidos / leidos / todos) que tienen adjuntos (has:attachment).
+Gmail: listar correos con adjunto o parte con nombre de imagen/PDF (has:attachment OR filename:png|jpg|...).
 Pipeline Pagos: toda imagen/PDF util (archivo adjunto o incrustada en cuerpo/related/HTML/mixed), mas .eml rfc822;
 deduplicado por contenido. La plantilla imagen 1/2/3 la decide solo Gemini al escanear cada binario.
 """
@@ -26,13 +26,24 @@ PAGOS_GMAIL_LABEL_IMAGEN_2 = "IMAGEN 2"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "IMAGEN 3"
 
 
+def pagos_gmail_list_q_media_parts() -> str:
+    """
+    Criterio Gmail: adjunto declarado O parte con nombre de imagen/PDF (capturas en cuerpo / inline).
+    Evita perder Binance y similares que no disparan has:attachment en algunos clientes.
+    """
+    return (
+        "(has:attachment OR filename:png OR filename:jpg OR filename:jpeg OR "
+        "filename:pdf OR filename:webp OR filename:heic OR filename:gif)"
+    )
+
+
 def pagos_gmail_pending_identification_query() -> str:
     """
-    Consulta Gmail (parametro q): inbox, con adjunto, sin estrella, sin etiquetas de plantilla digitalizada.
+    Consulta Gmail (parametro q): inbox, con adjunto o imagen en cuerpo, sin estrella, sin etiquetas plantilla.
     Asi el escaneo periodico no reprocesa correos ya marcados con IMAGEN 1 / 2 / 3 o destacados.
     """
     return (
-        "in:inbox has:attachment -is:starred "
+        f"in:inbox -is:starred {pagos_gmail_list_q_media_parts()} "
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}"'
@@ -104,7 +115,7 @@ def _parse_gmail_retry_after_seconds(exc: Exception) -> Optional[int]:
 
 def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[dict]:
     """
-    Lista mensajes segun el filtro; solo correos con adjuntos (has:attachment).
+    Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
     filter_type: "unread" | "read" | "all" | "pending_identification".
     pending_identification: sin estrella y sin etiquetas IMAGEN 1 / 2 / 3 (reintento sin reescanear todo).
     Misma forma que antes: id, payload, headers.
@@ -115,15 +126,16 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
         all_msg_refs: List[dict] = []
         page_token: Optional[str] = None
         params_base: dict = {"userId": "me", "maxResults": 500}
+        media_q = pagos_gmail_list_q_media_parts()
         if filter_type == "unread":
             params_base["labelIds"] = ["UNREAD"]
-            params_base["q"] = "has:attachment"
+            params_base["q"] = media_q
         elif filter_type == "read":
-            params_base["q"] = "is:read in:inbox has:attachment"
+            params_base["q"] = f"is:read in:inbox {media_q}"
         elif filter_type == "pending_identification":
             params_base["q"] = pagos_gmail_pending_identification_query()
         else:
-            params_base["q"] = "in:inbox has:attachment"
+            params_base["q"] = f"in:inbox {media_q}"
 
         while True:
             params = dict(params_base)
@@ -181,15 +193,16 @@ def count_messages_by_filter(service: Any, filter_type: str = "unread") -> int:
         total = 0
         page_token: Optional[str] = None
         params_base: dict = {"userId": "me", "maxResults": 500}
+        media_q = pagos_gmail_list_q_media_parts()
         if filter_type == "unread":
             params_base["labelIds"] = ["UNREAD"]
-            params_base["q"] = "has:attachment"
+            params_base["q"] = media_q
         elif filter_type == "read":
-            params_base["q"] = "is:read in:inbox has:attachment"
+            params_base["q"] = f"is:read in:inbox {media_q}"
         elif filter_type == "pending_identification":
             params_base["q"] = pagos_gmail_pending_identification_query()
         else:
-            params_base["q"] = "in:inbox has:attachment"
+            params_base["q"] = f"in:inbox {media_q}"
         while True:
             params = dict(params_base)
             if page_token:

@@ -14,6 +14,9 @@ from pathlib import Path
 from typing import List, Optional
 
 from app.services.cuota_estado import etiqueta_estado_cuota
+from app.services.pagos.comprobante_link_desde_gmail import (
+    comprobante_url_para_enlace_publico,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +283,10 @@ def generar_pdf_estado_cuenta(
                 )
             else:
                 rec_cell = Paragraph('<font color="#94a3b8">-</font>', styles["EC_Link"])
-            link_foto = (str(pr.get("link_comprobante") or "")).strip()
+            link_foto = comprobante_url_para_enlace_publico(
+                str(pr.get("link_comprobante") or ""),
+                base_url=base_url or "",
+            ).strip()
             low = link_foto.lower()
             if low.startswith(("http://", "https://")):
                 url_f = link_foto.replace("&", "&amp;")

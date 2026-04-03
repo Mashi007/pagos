@@ -22,6 +22,7 @@ from app.models.prestamo import Prestamo
 from app.services.cobros.pago_reportado_documento import claves_documento_pago_para_reportado
 from app.services.cuota_estado import etiqueta_estado_cuota, estado_cuota_para_mostrar, hoy_negocio
 from app.services.pagos.comprobante_link_desde_gmail import (
+    comprobante_url_para_enlace_publico,
     enriquecer_items_link_comprobante_desde_gmail,
 )
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
@@ -229,6 +230,11 @@ def desglose_aplicacion_cuotas_por_pago(db: Session, pago_id: int) -> List[dict]
 
 
 
+def _link_comprobante_es_url_http(val: Any) -> bool:
+    s = (str(val or "")).strip()
+    return bool(s and s.lower().startswith(("http://", "https://")))
+
+
 def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) -> List[dict]:
     """Pagos PAGADO en tabla pagos; subtotal_usd = monto_pagado (USD cartera)."""
     if not prestamo_ids:
@@ -281,7 +287,10 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
         aplicacion_cuotas = desglose_aplicacion_cuotas_por_pago(db, pago_id)
         lc = (getattr(pg, "link_comprobante", None) or "").strip()
         doc_ruta = (getattr(pg, "documento_ruta", None) or "").strip()
-        link_foto = lc or doc_ruta or None
+        raw_link = lc or doc_ruta
+        link_foto = (
+            comprobante_url_para_enlace_publico(raw_link) if raw_link else None
+        )
         resultado.append(
             {
                 "pago_id": pago_id,
@@ -300,10 +309,10 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
                 "referencia_pago": refp or None,
                 "cedula_comprobante": cedula_comprobante,
                 "aplicacion_cuotas": aplicacion_cuotas,
-                "link_comprobante": link_foto,
+                "link_comprobante": (link_foto or None),
             }
         )
-    pend = [r for r in resultado if not (r.get("link_comprobante") or "").strip()]
+    pend = [r for r in resultado if not _link_comprobante_es_url_http(r.get("link_comprobante"))]
     if pend:
         pseudo = [
             {
@@ -315,8 +324,9 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
         ]
         enriquecer_items_link_comprobante_desde_gmail(db, pseudo)
         for r, p in zip(pend, pseudo):
-            if (p.get("link_comprobante") or "").strip():
-                r["link_comprobante"] = p["link_comprobante"]
+            u = (p.get("link_comprobante") or "").strip()
+            if u:
+                r["link_comprobante"] = comprobante_url_para_enlace_publico(u)
     return resultado
 
 

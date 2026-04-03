@@ -339,7 +339,9 @@ def run_pipeline(
                 for filename, content, mime_type in attachments:
                     try:
                         fmt, data = classify_and_extract_pagos_gmail_attachment(
-                            content, filename
+                            content,
+                            filename,
+                            remitente_correo_header=from_h,
                         )
 
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
@@ -357,6 +359,8 @@ def run_pipeline(
                             email_img = (data.get("email_cliente") or "").strip()
                             if email_img.upper() == PAGOS_NA:
                                 email_img = ""
+                            if not email_img and sender:
+                                email_img = sender.strip()
                             c_raw = (
                                 _cedula_por_email_cliente(db, email_img) if email_img else None
                             )
