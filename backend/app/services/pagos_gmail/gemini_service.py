@@ -56,7 +56,7 @@ CORREO CON MAS DE UNA IMAGEN O MAS DE UN PDF:
 OBLIGATORIO — campo "formato" en el JSON: SOLO uno de estos cuatro valores exactos: A, B, C, ninguno.
   A = plantilla imagen 1: ticket RAPI-CREDIT / RECAUDACION / terminal (abajo) O papeleleta Mercantil DEPOSITO DIVISAS a RAPI-CREDIT con RECAUDACION (VARIANTE MERCANTIL).
   B = unicamente plantilla imagen 2 (recibo BNC a favor de RAPI-CREDIT descrita abajo).
-  C = plantilla imagen 3: pantalla Binance / Binance Pay de pago exitoso (PASO 2b): no exijas titulo o icono identicos a un solo disenio; basta nucleo C descrito alli.
+  C = plantilla imagen 3: pantalla Binance / Binance Pay de pago exitoso (PASO 2b). **Logo o marca Binance visible en la imagen = confirmacion de Binance** (imagen 3), ademas del nucleo de pago completado.
   ninguno = cualquier otra cosa, duda, borroso, selfie, documento que no sea esas tres plantillas.
 Prohibido usar otro valor en "formato" (ni numeros, ni texto libre).
 
@@ -99,17 +99,28 @@ PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A ni C:
     El recibo BNC tipico usa cuenta destino con otro codigo de entidad en el patron cajero (ej. **0191**/... con slashes), no confundir con 0105 Mercantil.
 
 PASO 2b - C (imagen 3 / Binance Pay) si PASO 2 no aplico (no es recibo BNC):
-  Nucleo C = evidencia de app o web Binance / Binance Pay (logo, texto "Binance", layout tipico de la app, colores marca)
+  Nucleo C = evidencia de app o web Binance / Binance Pay. **Logo o marca Binance visible = indicio confirmado** de que la plataforma es Binance (formato C), no otra wallet:
+    - Isotipo rombo/diamante amarillo-dorado, logo amarillo sobre fondo oscuro, texto **Binance** o **Binance Pay** en cabecera o pie, iconografia oficial de la app.
+    - Si ves ese logo/marca con claridad en la captura, trata la pieza como Binance Pay aunque el resto del disenio varie; no la clasifiques A ni B.
+    - Un circulo verde con check **solo**, sin logo ni texto Binance ni layout tipico, **no** basta para afirmar Binance (puede ser otra app); ahi necesitas USDT/USD + contexto Pay o ristra de orden.
+    + Ademas: layout tipico de la app, colores de marca, o texto "Binance" en cualquier zona legible.
     + pantalla de transaccion completada o exitosa (no login, no listado vacio). Titulos equivalentes (uno basta; tolera OCR sucio):
       "Pago completado", "Payment completed", "Pago exitoso", "Pago realizado", "Payment successful", "Completed", "Successful", "Enviado" (solo si es claro que es confirmacion de pago).
     + indicio de exito: circulo o boton verde con check, check verde grande, tilde de confirmacion, banner de exito, o animacion/icono de hecho; tema oscuro o claro.
-    + importe principal en USDT o USD legible (ej. "122 USDT", "50.5 USDT").
-    + identificador: etiqueta "Id. de la orden", "Order ID", "ID de orden", "Order No." o bloque de 12-22 digitos contiguos claramente asociado al pago en esa pantalla.
-  Si la captura esta recortada: basta Binance reconocible + monto USDT/USD + id de orden (o ristra numerica larga coherente) + alguna senal de pantalla de exito.
-    - numero_referencia: copia el Id. completo; si hay varios numeros largos, el que acompane a "orden" / "Order" / "ID"; si no hay etiqueta, el bloque de 12+ digitos mas probable como id de transaccion Binance.
+    + importe principal en USDT o USD legible (ej. "122 USDT", "50.5 USDT"). Prioriza **USDT** en grande como senal fuerte de app crypto (Binance Pay), distinta de comprobante bancario USD en papel o tira.
+    + identificador: etiqueta "Id. de la orden", "Order ID", "ID de orden", "Order No." o bloque de **10-22** digitos contiguos en la pantalla de confirmacion (Binance suele 15-19 digitos; si la captura corta el final, copia los digitos visibles consecutivos que veas).
+  Si la captura esta recortada: basta senal clara de app (barra de estado movil, flecha atras, tema oscuro/claro tipo wallet) + monto **USDT** o USD + check/exitoso + **cualquier** ristra numerica larga visible (>=10 digitos) como numero_referencia; no devuelvas "ninguno" solo porque falte la etiqueta literal "Order ID".
+    - numero_referencia: copia el Id. completo; si hay varios numeros largos, el que acompane a "orden" / "Order" / "ID"; si no hay etiqueta, el bloque de **10+** digitos mas largo o mas centrado en la zona de detalle del pago (no numeros de hora/fecha sueltos de 6-8 digitos si hay otro bloque mas largo).
     - email_cliente: debe ser el correo del PAGADOR (cliente persona) si aparece en pantalla. Si solo ves correo corporativo del BENEFICIARIO (ej. operaciones@..., pagos@..., cuenta de la empresa receptora), NO lo uses como email_cliente: pon "NA" o usa CONTEXTO_REMITE (From del correo), que es quien envia el comprobante.
-  NO es C: otra exchange (Bybit, OKX, ...), solo historial sin confirmacion, transferencia bancaria tradicional, captura sin monto ni id.
+  NO es C: otra exchange (Bybit, OKX, ...) con marca clara distinta, solo historial sin confirmacion, transferencia bancaria tradicional en PDF de banco, captura **sin** monto **y sin** ningun bloque numerico largo de orden.
   Si nucleo C: formato C (no A ni B). Extraccion: monto, numero_referencia, email_cliente; fecha_pago=NA; cedula=NA.
+
+REGLA ANTI-CONFUSION — imagen 3 (C / Binance Pay) vs imagen 1 (A / Mercantil tira):
+  Muchos falsos negativos: pantalla movil "Payment Successful" / "Pago exitoso" + **USDT** + check verde se clasifican mal como A por ristras numericas que recuerdan serial Mercantil (7400...).
+  **Nunca** elijas formato A si la pieza es claramente **pantalla de app** (barra superior hora/bateria, flecha atras, tipografia app) con **USDT** y mensaje de pago exitoso, **aunque** aparezcan digitos largos: eso es **C**, no comprobante Mercantil.
+  Formato A requiere **papel o tira termica de banco**: texto RAPI-CREDIT + RECAUDACION en contexto de deposito, o papeleta DEPOSITO DIVISAS, o ticket vertical monoespaciado; no basta un numero largo sin ese contexto bancario.
+  Si ves USDT + exito en app y **no** ves RAPI+RECAUDACION en tira/papel legible -> **PASO 2b gana: C**.
+  Si ves **logo/marca Binance** en la captura -> **siempre C** (imagen 3) si hay pantalla de pago o confirmacion; no fuerces A por digitos tipo serial bancario.
 
 PASO 3 - A (imagen 1) solo si PASO 2 y 2b no aplicaron:
   Nucleo A (terminal / ticket clasico) = RAPI-CREDIT + RECAUDACION (con o sin tilde en OCR) + USD + ticket de recaudacion (vertical/monoespaciado tipico) + grupos FORMATO A (1-5).
@@ -155,18 +166,21 @@ DISCRIMINADOR CEDULA / MONTO — imagen 1 (A) vs imagen 2 (B):
     del valor numerico con decimales, ej. **********122.00 o *****96.00 (cantidad de asteriscos variable). Es señal fuerte de plantilla B.
     En A el importe puede mostrarse con USD sin esa cortina de asteriscos tipica de cajero BNC; si ves BNC + linea Debito/Us$ + asteriscos+monto -> B.
 
-FORMATO A — palabras clave y grupos (deben cumplirse TODOS los grupos 1-5):
+FORMATO A — palabras clave y grupos (ticket vertical / terminal: deben cumplirse TODOS los grupos 1-5 de esta lista):
   Grupo 1 (empresa): RAPI-CREDIT | RAPI CREDIT | RAPI-CREDIT, C.A. | RAPICREDIT | RAPICREDI | RAPH-CREDIT (OCR sucio: H por I, falta guion)
   Grupo 2 (concepto): RECAUDACION | RECAUDACIÓN (tolerar sin tilde: RECAUDACION)
   Grupo 3 (moneda): USD en linea de monto o junto al importe
   Grupo 4 (depositante): CEDULA DEP | Cédula Dep | DP:V-... y en la MISMA linea el NOMBRE del depositante tras guion (patron fuerte imagen 1)
   Grupo 5 (operacion): linea de monto con USD (sin exigir asteriscos como en B) y serial con bloques separados por guiones;
     numero_referencia conserva guiones y 2do bloque YYYYMMDD cuando sea visible.
+  EXCEPCION IMPORTANTE — papeleta **VARIANTE MERCANTIL (A1) DEPOSITO DIVISAS** (formulario papel + tira validador): NO exijas Grupo 4 de ticket (DP+nombre misma linea).
+    Para A1 aplican solo los "Grupos equivalentes" definidos en VARIANTE A — MERCANTIL abajo (cedula en casilla manuscrita o Cédula Dep en tira cuenta; nombre en casilla Depositante aunque este en otra linea).
 Palabras secundarias A (refuerzo, no bastan solas): FONDOS, CANT BILLETES, COMISION, TASA, CTA. COM,
   DCME, SPDP, COPIA (vertical), lineas alfanumericas tipo XXXX-YYYYMMDD-hhmmss-...
 
 VARIANTE A — MERCANTIL (dos caras tipicas; ambas son formato A / imagen 1, banco Mercantil):
   (A1) **Formulario papel DEPOSITO DIVISAS**: logo o nombre **Mercantil**; titulo "DEPOSITO DIVISAS" o "DEPÓSITO DIVISAS"; casillas manuscritas (depositante, cedula, monto); tira del validador pegada o impresa con Refer, Monto USD, Fondo RECAUDACION, RAPI-CREDIT/RAPICREDI, Cédula Dep.
+    Foto movil / borrosa: si reconoces claramente Mercantil + DEPOSITO DIVISAS + RAPI + RECAUDACION en la tira o formulario, intenta A (no "ninguno" por calidad si los cuatro campos son razonablemente legibles). Cedula puede estar solo en casilla "Nro. de Cédula" manuscrita sin ir en la misma linea que DP.
   (A2) **Solo tira termica / comprobante de cajero Mercantil**: texto monoespaciado o vertical; lineas **Cedula Dep.**, **Cant. Billetes**, **Comision**, **Tasa**; cuenta tipo **0105-....-..-..........**; destino RAPI/RAPH-CREDIT + **RECAUDACION**; serial largo solo digitos (ej. 7403...) y/o cadena con guiones con bloque **YYYYMMDD**.
   Reconocimiento visual comun: cabecera o marca Banco Mercantil / MERCANTIL / "Mercantil, C.A." cuando aparece en (A1); en (A2) basta **0105** + RAPI + RECAUDACION en la tira.
   Beneficiario / empresa destino en la tira impresa: RAPI-CREDIT, C.A. o RAPI-CREDIT (misma familia que Grupo 1).
@@ -210,10 +224,11 @@ DESCARTE (refuerzo PASO 1): sin RAPI-CREDIT ni BNC ni nucleo Binance C -> ningun
   Pantalla Binance Pay nucleo C -> C aunque no haya RAPI-CREDIT en la captura.
 
 === DETALLE FORMATO A ===
-Ticket vertical, fuente monoespaciada. Los 5 grupos de palabras clave arriba deben verse; el margen
+**Ticket vertical** (terminal): fuente monoespaciada; los 5 grupos clasicos deben verse; el margen
 "Copia"/SPDP ayuda pero no sustituye empresa+recaudacion+USD+cedula+monto/serial.
-cedula: extraela de la linea DP:... donde vaya seguida de guion y nombre del depositante en la misma linea (imagen 1).
-  En VARIANTE MERCANTIL: prioriza Cédula Dep impresa; si solo hay digitos, antepone V salvo que el comprobante indique E/J.
+**Papeleta Mercantil DEPOSITO DIVISAS (A1)**: no apliques la regla de "DP y nombre en la misma linea" del ticket; usa casillas y tira del validador segun VARIANTE MERCANTIL.
+cedula: en ticket vertical, de la linea DP:... con nombre en la misma linea (imagen 1).
+  En VARIANTE MERCANTIL: prioriza Cédula Dep en tira o casilla manuscrita; si solo hay digitos, antepone V salvo que el comprobante indique E/J.
 numero_referencia: la cadena completa del serial con guiones tal como en el comprobante; verifica que el segundo
   bloque separado por guiones sea 8 digitos fecha (YYYYMMDD). Si OCR pierde guiones, reconstruye la estructura
   minima para que el 2do segmento sea la fecha legible.

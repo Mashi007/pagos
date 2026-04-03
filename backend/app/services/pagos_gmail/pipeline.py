@@ -9,6 +9,8 @@ Si el email de C no existe en clientes: no Drive, no fila, no etiqueta IMAGEN 3 
 Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas, no leido
 (en filtro unread se fuerza sin estrella + no leido para reintento). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
+Regla remitente: el campo De (From) debe existir en tabla clientes (email) para digitalizar, Drive/BD y etiquetas IMAGEN 1/2/3.
+El destinatario Para (To) no se filtra. Sin fila cliente para el De: se lista el correo pero no se llama Gemini ni se etiqueta.
 """
 import logging
 from datetime import datetime, timezone
@@ -113,7 +115,7 @@ def run_pipeline(
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD solo si plantilla 1/2/3 y datos completos; C exige cliente por email).
-    Por adjunto OK: etiqueta IMAGEN 1 (A), IMAGEN 2 (B) o IMAGEN 3 (C) + estrella; cierre: leido si hubo algun OK.
+    Por adjunto OK (y remitente en clientes): etiqueta IMAGEN 1 (A), IMAGEN 2 (B) o IMAGEN 3 (C) + estrella; cierre: leido si hubo algun OK.
     scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = toda la bandeja).
       pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2/3.
     Los mensajes de cada lote se ordenan por fecha (mas actual primero) antes de procesar.
@@ -201,6 +203,20 @@ def run_pipeline(
                 headers = msg_info["headers"]
                 from_h = headers.get("from") or headers.get("From") or ""
                 sender = extract_sender_email(from_h)
+                sender_lc = (sender or "").strip().lower()
+                if (
+                    not sender_lc
+                    or sender_lc == "desconocido"
+                    or "@" not in sender_lc
+                    or _cedula_por_email_cliente(db, sender_lc) is None
+                ):
+                    logger.info(
+                        "[PAGOS_GMAIL]   Omitido: remitente (De) sin email en tabla clientes (%s) msg=%s "
+                        "- no Gemini/Drive/BD ni etiquetas (Para no filtra)",
+                        sender_lc[:72] if sender_lc else "(vacio)",
+                        msg_id,
+                    )
+                    continue
                 subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
                 msg_date = get_message_date(headers)
                 sheet_name = get_sheet_name_for_date(msg_date)

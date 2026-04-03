@@ -285,7 +285,6 @@ class Settings(BaseSettings):
             "antiguo y procesa todos los no leidos devueltos por Gmail; se repite hasta que no queden o se alcance este tope."
         ),
     )
-
     # Tasa USD/Bs Venezuela (reporte contable)
     # ============================================
     TASA_USD_BS_DEFAULT: Optional[float] = Field(
