@@ -1280,7 +1280,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                   ? 'border-red-500 bg-red-50 text-red-800'
                   : t.type === 'warning'
                     ? 'border-yellow-500 bg-yellow-50 text-yellow-800'
-                    : 'border-green-500 bg-green-50 text-green-800'
+                    : t.type === 'info'
+                      ? 'border-sky-500 bg-sky-50 text-sky-900'
+                      : 'border-green-500 bg-green-50 text-green-800'
               }`}
             >
               <span className="flex-1">{t.message}</span>

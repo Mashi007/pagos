@@ -48,7 +48,7 @@ CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
 # Identificador estable de la definicion de controles en este modulo (17 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "20cedula-prestamo-cliente-api-2026-03-29"
+AUDITORIA_CARTERA_REGLAS_VERSION = "21c7-total-pagos-vs-aplicado-solo-LIQUIDADO-2026-04-02"
 
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
@@ -650,18 +650,28 @@ def ejecutar_auditoria_cartera(
 
         sp, sa, sc = tot_map.get(pid, (Decimal("0"), Decimal("0"), Decimal("0")))
         diff_ap = abs(sp - sa)
-        alert_ap = "SI" if diff_ap > _TOL else "NO"
-        add_control(
-            "total_pagado_vs_aplicado_cuotas",
-            "Total pagos vs total aplicado a cuotas (cuota_pagos)",
-            alert_ap,
-            (
+        estado_upper = (estado_p or "").strip().upper()
+        es_liquidado = estado_upper == "LIQUIDADO"
+        # Alerta SI solo en LIQUIDADO: en APROBADO el descuadre total es referencial (cartera viva).
+        alert_ap = "SI" if es_liquidado and diff_ap > _TOL else "NO"
+        if es_liquidado:
+            detalle_ap = (
                 f"Suma pagos(operativos)={sp} aplicado(desde pagos operativos)={sa} diff={diff_ap}. "
                 f"Es total del prestamo; si diff es grande, revisar pagos donde monto_pagado <> sum(cuota_pagos) "
                 f"por pago_id (el control 15 marca saldo sin aplicar por pago)."
                 if alert_ap == "SI"
                 else f"Cuadrado USD tol={_TOL} (diff={diff_ap}); excluye anulados/reversados/duplicado en sumas"
-            ),
+            )
+        else:
+            detalle_ap = (
+                f"Solo LIQUIDADO marca SI: este credito esta en {estado_upper or '(sin estado)'}; "
+                f"diff referencial={diff_ap} (pagos op={sp}, aplicado={sa})."
+            )
+        add_control(
+            "total_pagado_vs_aplicado_cuotas",
+            "Total pagos vs total aplicado a cuotas (cuota_pagos); alerta solo si LIQUIDADO",
+            alert_ap,
+            detalle_ap,
         )
 
         if (estado_p or "").strip().upper() == "LIQUIDADO":

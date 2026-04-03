@@ -95,7 +95,9 @@ export function EstadoRevisionIcon({
       }
     } else if (estadoNorm === 'revisado') {
       if (!isAdmin) {
-        toast.error('Solo un administrador puede reabrir una revisión cerrada (Visto).')
+        toast.error(
+          'Solo un administrador puede reabrir una revisión cerrada (Visto).'
+        )
         return
       }
       const confirmar = window.confirm(

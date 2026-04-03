@@ -1,5 +1,6 @@
 """
-Finiquito: casos materializados (job 02:00), portal publico OTP, bandejas, admin.
+Finiquito: casos materializados solo para prestamos LIQUIDADO con cuotas = financiamiento
+(job 02:00), portal publico OTP, bandejas, admin.
 """
 from __future__ import annotations
 
@@ -325,6 +326,8 @@ def _build_revision_datos_payload(db: Session, caso: FiniquitoCaso) -> dict[str,
     from app.api.v1.endpoints.prestamos import listar_prestamos
 
     cedula = (caso.cedula or "").strip()
+    # Pasar valores reales (None/str), no omitir parametros: sus defaults son
+    # objetos Query(...) y listar_* hacen .strip() → AttributeError → 500.
     prestamos_payload = listar_prestamos(
         page=1,
         per_page=100,
@@ -338,6 +341,7 @@ def _build_revision_datos_payload(db: Session, caso: FiniquitoCaso) -> dict[str,
         requiere_revision=None,
         modelo=None,
         search=None,
+        revision_manual_estado=None,
         db=db,
     )
     pagos_payload = listar_pagos(
@@ -350,6 +354,7 @@ def _build_revision_datos_payload(db: Session, caso: FiniquitoCaso) -> dict[str,
         analista=None,
         conciliado=None,
         sin_prestamo=None,
+        prestamo_cartera="todos",
         db=db,
     )
 
@@ -631,7 +636,7 @@ def finiquito_public_listar_casos(
         None,
         description=(
             "entrada = solo REVISION; desk = ACEPTADO, EN_PROCESO o TERMINADO; "
-            "todos o omitir = todos los casos (prestamos con suma abonos = financiamiento)"
+            "todos o omitir = todos los casos (solo prestamos LIQUIDADO materializados por el job)"
         ),
     ),
     db: Session = Depends(get_db),

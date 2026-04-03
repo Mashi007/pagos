@@ -47,7 +47,7 @@ def _job_emails_liquidado_diferidos() -> None:
 
 
 def _job_finiquito_refresh() -> None:
-    """Job 02:00. Rellena/actualiza finiquito_casos (prestamos con suma total_pagado = total_financiamiento)."""
+    """Job 02:00. Rellena/actualiza finiquito_casos (solo LIQUIDADO con suma cuotas = total_financiamiento)."""
     db = SessionLocal()
     try:
         from app.services.finiquito_refresh import ejecutar_refresh_finiquito_casos

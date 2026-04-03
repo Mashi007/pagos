@@ -1,6 +1,7 @@
 """
-Refresco de finiquito_casos: prestamos donde sum(cuotas.total_pagado) = total_financiamiento
-(comparacion exacta en SQL). Invocado por scheduler 02:00 America/Caracas.
+Refresco de finiquito_casos: solo prestamos en estado LIQUIDADO donde
+sum(cuotas.total_pagado) = total_financiamiento (comparacion exacta en SQL).
+Invocado por scheduler 02:00 America/Caracas.
 """
 import logging
 from datetime import datetime
@@ -17,9 +18,9 @@ logger = logging.getLogger(__name__)
 
 def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
     """
-    - Inserta nuevos casos en REVISION.
+    - Inserta nuevos casos en REVISION (solo prestamos LIQUIDADO que cumplen la regla).
     - Actualiza sum_total_pagado / totales en casos existentes (mantiene estado).
-    - Elimina casos cuyo prestamo ya no cumple la regla.
+    - Elimina casos cuyo prestamo ya no cumple la regla (p. ej. dejo de ser LIQUIDADO).
     """
     sql = text(
         """
@@ -30,6 +31,7 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
                COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0) AS sum_tp
         FROM prestamos p
         INNER JOIN cuotas c ON c.prestamo_id = p.id
+        WHERE UPPER(TRIM(COALESCE(p.estado, ''))) = 'LIQUIDADO'
         GROUP BY p.id, p.cliente_id, p.cedula, p.total_financiamiento
         HAVING COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0) = p.total_financiamiento
         """

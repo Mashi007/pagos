@@ -640,7 +640,7 @@ function FiniquitoGestionPageInner() {
 
   return (
     <FiniquitoWorkspaceShell
-      description="Área de trabajo: flujo post-aprobación (en proceso, terminado). Bandeja central por cédula. Abajo: rechazados."
+      description="Solo entran créditos LIQUIDADO con cuotas cubiertas (= financiamiento). Área de trabajo: en proceso y terminado. Bandeja central por cédula. Abajo: rechazados."
       actions={
         <Button
           size="sm"
@@ -799,7 +799,7 @@ function FiniquitoGestionPageInner() {
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
                 {cedulaBusqueda
                   ? 'Ningún caso en revisión coincide con esa cédula. Pruebe otra subcadena o limpie el filtro.'
-                  : 'No hay casos en revisión. Use «Refrescar materializado» si acaba de cargar datos o revise préstamos saldados.'}
+                  : 'No hay casos en revisión. Use «Refrescar materializado» tras marcar préstamos como LIQUIDADO y cuadrar cuotas.'}
               </p>
             ) : (
               renderTabla(itemsBandeja)

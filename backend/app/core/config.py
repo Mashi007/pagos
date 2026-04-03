@@ -203,6 +203,17 @@ class Settings(BaseSettings):
             "cuota_pagos cuadren (0.02 USD). Por defecto False: basta cobertura de cuotas."
         ),
     )
+    # Pagos BS: si monto_pagado (en Bs.) >= este valor, no se exige cedula en cedulas_reportar_bs.
+    # Alinear operativamente con la heuristica de carga masiva (monto alto en Excel tratado como Bs.).
+    PAGOS_BS_MONTO_EXENTO_LISTA_CEDULA: int = Field(
+        default=10000,
+        ge=1,
+        le=999_999_999,
+        description=(
+            "Umbral en bolivares: pagos en BS con monto >= este valor omiten validacion de lista "
+            "cedulas_reportar_bs (sigue exigiendo cliente en BD y tasa)."
+        ),
+    )
 
     # ============================================
     # AI / OpenRouter (clave solo en backend, nunca en frontend)

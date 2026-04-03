@@ -1709,9 +1709,9 @@ export function EditarRevisionManual() {
             role="status"
           >
             <strong>Modo administrador.</strong> La revisión figura como cerrada
-            (Visto); puede editar y guardar. Para volver a pendiente / en revisión
-            / otros estados use el icono de revisión manual en la lista de
-            préstamos.
+            (Visto); puede editar y guardar. Para volver a pendiente / en
+            revisión / otros estados use el icono de revisión manual en la lista
+            de préstamos.
             {detalleData?.revision?.fecha_revision ? (
               <span className="ml-2 text-sky-900">
                 Cierre:{' '}

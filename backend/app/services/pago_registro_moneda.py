@@ -2,7 +2,8 @@
 Resolucion de monto USD vs BS para altas de pago (todas las vias que usan PagoCreate o equivalente).
 
 - USD: monto_pagado se interpreta en dolares; sin conversion ni lista Bs.
-- BS: exige cliente en BD + cedula en lista autorizada (cedulas_reportar_bs);
+- BS: exige cliente en BD; cedula en lista autorizada (cedulas_reportar_bs) salvo montos en Bs.
+  >= settings.PAGOS_BS_MONTO_EXENTO_LISTA_CEDULA.
   monto_pagado se interpreta en bolivares; tasa desde BD por fecha de pago o tasa_cambio_manual si no hay en BD.
 """
 from __future__ import annotations
@@ -15,6 +16,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.cliente import Cliente
 from app.services.cobros.cedula_reportar_bs_service import (
     cedula_autorizada_para_bs,
@@ -23,7 +25,6 @@ from app.services.cobros.cedula_reportar_bs_service import (
     normalize_cedula_lookup_key,
 )
 from app.services.tasa_cambio_service import convertir_bs_a_usd, obtener_tasa_por_fecha
-
 
 def normalizar_moneda_registro(raw: Optional[str]) -> str:
     u = (raw or "USD").strip().upper()
@@ -77,7 +78,7 @@ def resolver_monto_registro_pago(
     else:
         norm = normalize_cedula_lookup_key(raw_key)
         ok = cedula_coincide_autorizados_bs(norm, autorizados_bs)
-    if not ok:
+    if not ok and float(monto_pagado) < settings.PAGOS_BS_MONTO_EXENTO_LISTA_CEDULA:
         raise HTTPException(
             status_code=400,
             detail="La cedula no esta autorizada para pagos en bolivares.",

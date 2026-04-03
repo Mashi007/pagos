@@ -76,6 +76,54 @@ const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
 
 const PRESTAMO_ID_MAX = 2147483647
 
+/** Si el monto visible antes de guardar es >= este valor, se avisa verificar USD vs Bs. */
+const MONTO_MIN_ADVERTENCIA_MONEDA = 2000
+
+function montoFilaParaAdvertenciaMoneda(row: PagoExcelRow): number {
+  const n = Number(row.monto_pagado)
+  if (!Number.isFinite(n) || n < 0) return 0
+  return n
+}
+
+function filaRequiereAdvertenciaMontoAlto(row: PagoExcelRow): boolean {
+  return montoFilaParaAdvertenciaMoneda(row) >= MONTO_MIN_ADVERTENCIA_MONEDA
+}
+
+/**
+ * Si el monto es alto y la fila sigue en USD, se envía como BS para que el backend
+ * convierta con tasa de la fecha (evita dejar montos enormes como dólares por error).
+ */
+const MONTO_AUTO_APLICAR_TASA_BS = 10000
+
+function registroMonedaEfectivoCargaMasiva(row: PagoExcelRow): {
+  moneda_registro: 'USD' | 'BS'
+  tasa_cambio_manual?: number
+  aplicoAutoBs: boolean
+} {
+  const m = Number(row.monto_pagado) || 0
+  const raw = String(row.moneda_registro || 'USD').toUpperCase()
+  const esUsd = raw === 'USD' || raw === 'USDT'
+  const tm = row.tasa_cambio_manual
+  const tasaOk =
+    tm != null && Number.isFinite(Number(tm)) && Number(tm) > 0
+      ? Number(tm)
+      : undefined
+
+  if (Number.isFinite(m) && m >= MONTO_AUTO_APLICAR_TASA_BS && esUsd) {
+    return {
+      moneda_registro: 'BS',
+      ...(tasaOk != null ? { tasa_cambio_manual: tasaOk } : {}),
+      aplicoAutoBs: true,
+    }
+  }
+
+  return {
+    moneda_registro: raw === 'BS' ? 'BS' : 'USD',
+    ...(tasaOk != null ? { tasa_cambio_manual: tasaOk } : {}),
+    aplicoAutoBs: false,
+  }
+}
+
 function observacionesDesdeCampos(campos: string[]): string {
   if (campos.length === 0) return 'Revisar'
 
@@ -195,7 +243,7 @@ export function useExcelUploadPagos({
   const [toasts, setToasts] = useState<
     Array<{
       id: string
-      type: 'error' | 'warning' | 'success'
+      type: 'error' | 'warning' | 'success' | 'info'
       message: string
     }>
   >([])
@@ -219,7 +267,7 @@ export function useExcelUploadPagos({
   const [registrosConError, setRegistrosConError] = useState(0)
 
   const addToast = useCallback(
-    (type: 'error' | 'warning' | 'success', message: string) => {
+    (type: 'error' | 'warning' | 'success' | 'info', message: string) => {
       const id = Date.now().toString() + Math.random().toString(36).slice(2)
 
       setToasts(prev => [...prev, { id, type, message }])
@@ -685,6 +733,21 @@ export function useExcelUploadPagos({
 
         const fechaDDMMYYYY = fechaFormato.split('-').reverse().join('-')
 
+        const regMonFila = registroMonedaEfectivoCargaMasiva(currentRow)
+        if (regMonFila.aplicoAutoBs) {
+          addToast(
+            'info',
+            `Fila ${row._rowIndex}: monto ≥ ${MONTO_AUTO_APLICAR_TASA_BS.toLocaleString('es-VE')}: se aplicará tasa BCV (bolívares) y se guardará el equivalente en USD.`
+          )
+        } else if (filaRequiereAdvertenciaMontoAlto(currentRow)) {
+          const m = montoFilaParaAdvertenciaMoneda(currentRow)
+          const mon = String(currentRow.moneda_registro || 'USD').toUpperCase()
+          addToast(
+            'warning',
+            `Fila ${row._rowIndex}: monto ${m.toLocaleString('es-VE')} (${mon}). Verifique que la moneda sea la correcta (USD o Bs.): si no coincide con el comprobante, el importe quedará mal y puede quedar muy alto.`
+          )
+        }
+
         await pagoService.guardarFilaEditable({
           cedula: cedulaLookup,
 
@@ -695,6 +758,12 @@ export function useExcelUploadPagos({
           fecha_pago: fechaDDMMYYYY,
 
           numero_documento: numeroDoc || null,
+
+          moneda_registro: regMonFila.moneda_registro,
+
+          ...(regMonFila.tasa_cambio_manual != null
+            ? { tasa_cambio_manual: regMonFila.tasa_cambio_manual }
+            : {}),
         })
 
         setSavedRows(prev => new Set([...prev, row._rowIndex]))
@@ -797,6 +866,8 @@ export function useExcelUploadPagos({
           return { ok: false }
         }
 
+        const regMon = registroMonedaEfectivoCargaMasiva(row)
+
         const pagoData = {
           cedula_cliente: cedulaLookup,
 
@@ -818,10 +889,10 @@ export function useExcelUploadPagos({
 
           conciliado: !!row.conciliado,
 
-          moneda_registro: row.moneda_registro || 'USD',
+          moneda_registro: regMon.moneda_registro,
 
-          ...(row.tasa_cambio_manual
-            ? { tasa_cambio_manual: row.tasa_cambio_manual }
+          ...(regMon.tasa_cambio_manual != null
+            ? { tasa_cambio_manual: regMon.tasa_cambio_manual }
             : {}),
 
           ...(() => {
@@ -830,6 +901,22 @@ export function useExcelUploadPagos({
             )
             return lc ? { link_comprobante: lc } : {}
           })(),
+        }
+
+        const montoGuardar = Number(row.monto_pagado) || 0
+        if (!opts?.skipToast) {
+          if (regMon.aplicoAutoBs) {
+            addToast(
+              'info',
+              `Fila ${row._rowIndex}: monto ≥ ${MONTO_AUTO_APLICAR_TASA_BS.toLocaleString('es-VE')}: se aplicará tasa Bs.→USD según la fecha de pago.`
+            )
+          } else if (montoGuardar >= MONTO_MIN_ADVERTENCIA_MONEDA) {
+            const mon = String(row.moneda_registro || 'USD').toUpperCase()
+            addToast(
+              'warning',
+              `Fila ${row._rowIndex}: monto ${montoGuardar.toLocaleString('es-VE')} (${mon}). Verifique que la moneda sea la correcta (USD o Bs.): si no coincide con el comprobante, el importe quedará mal y puede quedar muy alto.`
+            )
+          }
         }
 
         await pagoService.createPago(pagoData as any)
@@ -1494,6 +1581,28 @@ export function useExcelUploadPagos({
 
     // En progreso (no usar success: 200 en batch puede traer ok_count=0 por rechazos por fila)
 
+    const filasAutoBs = toSave.filter(
+      r => registroMonedaEfectivoCargaMasiva(r).aplicoAutoBs
+    )
+    if (filasAutoBs.length > 0) {
+      addToast(
+        'info',
+        `${filasAutoBs.length} pago(s) con monto ≥ ${MONTO_AUTO_APLICAR_TASA_BS.toLocaleString('es-VE')}: se interpretarán en bolívares y se convertirán a USD con la tasa de la fecha de cada pago (o tasa manual de la fila).`
+      )
+    }
+
+    const filasMontoAlto = toSave.filter(
+      r =>
+        filaRequiereAdvertenciaMontoAlto(r) &&
+        !registroMonedaEfectivoCargaMasiva(r).aplicoAutoBs
+    )
+    if (filasMontoAlto.length > 0) {
+      addToast(
+        'warning',
+        `${filasMontoAlto.length} pago(s) tienen monto ≥ ${MONTO_MIN_ADVERTENCIA_MONEDA.toLocaleString('es-VE')}. Revise que la moneda (USD o Bs.) coincida con cada comprobante: si no, el importe guardado será incorrecto y puede quedar muy alto.`
+      )
+    }
+
     addToast('warning', `Guardando ${toSave.length} pago(s)...`)
 
     setIsSavingIndividual(true)
@@ -1534,6 +1643,8 @@ export function useExcelUploadPagos({
         prestamoId =
           prestamosActivos.length === 1 ? prestamosActivos[0].id : null
 
+      const regMonBatch = registroMonedaEfectivoCargaMasiva(row)
+
       return {
         cedula_cliente: cedulaLookup,
 
@@ -1555,10 +1666,10 @@ export function useExcelUploadPagos({
 
         conciliado: !!row.conciliado,
 
-        moneda_registro: row.moneda_registro || 'USD',
+        moneda_registro: regMonBatch.moneda_registro,
 
-        ...(row.tasa_cambio_manual
-          ? { tasa_cambio_manual: row.tasa_cambio_manual }
+        ...(regMonBatch.tasa_cambio_manual != null
+          ? { tasa_cambio_manual: regMonBatch.tasa_cambio_manual }
           : {}),
 
         ...(() => {
