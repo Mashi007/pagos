@@ -62,6 +62,7 @@ import {
 } from '../../components/ui/table'
 import { formatDate, formatLastSyncDate, cn } from '../../utils'
 import { pagoService, type Pago } from '../../services/pagoService'
+import { openComprobanteInNewTab } from '../../services/cobrosService'
 import {
   pagoConErrorService,
   type PagoConError,
@@ -112,6 +113,9 @@ export function PagosList() {
     null
   )
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
+  const [abriendoComprobanteFilaId, setAbriendoComprobanteFilaId] = useState<
+    number | null
+  >(null)
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
   const [lastImportCobrosResult, setLastImportCobrosResult] = useState<{
@@ -1704,18 +1708,55 @@ export function PagosList() {
                                   const u =
                                     (pago.link_comprobante || '').trim() ||
                                     (pago.documento_ruta || '').trim()
-                                  return u ? (
-                                    <a
-                                      href={u}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1.5 font-medium text-blue-600 hover:text-blue-800"
-                                      title="Abrir comprobante (foto o PDF)"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                      Ver comprobante
-                                    </a>
-                                  ) : (
+                                  if (u) {
+                                    return (
+                                      <a
+                                        href={u}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 font-medium text-blue-600 hover:text-blue-800"
+                                        title="Abrir comprobante (foto o PDF)"
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                        Ver comprobante
+                                      </a>
+                                    )
+                                  }
+                                  const prId = pago.pago_reportado_id
+                                  if (prId != null && prId > 0) {
+                                    return (
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1.5 font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                                        title="Abrir comprobante adjunto en Cobros (requiere sesión)"
+                                        disabled={
+                                          abriendoComprobanteFilaId === pago.id
+                                        }
+                                        onClick={async () => {
+                                          setAbriendoComprobanteFilaId(pago.id)
+                                          try {
+                                            await openComprobanteInNewTab(prId)
+                                          } catch (e) {
+                                            toast.error(
+                                              getErrorMessage(e) ||
+                                                'No se pudo abrir el comprobante'
+                                            )
+                                          } finally {
+                                            setAbriendoComprobanteFilaId(null)
+                                          }
+                                        }}
+                                      >
+                                        {abriendoComprobanteFilaId ===
+                                        pago.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Eye className="h-4 w-4" />
+                                        )}
+                                        Ver comprobante
+                                      </button>
+                                    )
+                                  }
+                                  return (
                                     <span className="text-sm text-gray-500">
                                       -
                                     </span>

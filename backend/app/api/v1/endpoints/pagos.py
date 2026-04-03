@@ -92,6 +92,7 @@ from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 from app.schemas.auth import UserResponse
 
 from app.services.cobros.pago_reportado_documento import (
+    claves_documento_pago_desde_campos,
     claves_documento_pago_para_reportado,
     claves_documento_para_lote_reportados,
     documento_numero_desde_pago_reportado,
@@ -637,25 +638,40 @@ def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict
 
 def _enriquecer_pagos_pago_reportado_id(db: Session, items: list) -> None:
     """
-    Si el Nº documento del pago coincide (normalizado) con referencia_interna de
-    pagos_reportados (import desde Cobros), expone pago_reportado_id para enlazar al detalle/imagen.
+    Si el Nº documento del pago coincide (normalizado) con alguna clave del reporte en Cobros
+    (numero_operacion, referencia_interna, formatos legacy COB-+RPC), expone pago_reportado_id
+    para enlazar al detalle / comprobante / recibo.
     """
     if not items:
         return
     rows = db.execute(
-        select(PagoReportado.id, PagoReportado.referencia_interna).where(
-            PagoReportado.referencia_interna.isnot(None),
-            PagoReportado.referencia_interna != "",
-        )
+        select(
+            PagoReportado.id,
+            PagoReportado.referencia_interna,
+            PagoReportado.numero_operacion,
+        ).order_by(PagoReportado.id.asc())
     ).all()
     by_nd: dict[str, int] = {}
-    for rid, ref in rows:
-        nd = normalize_documento(ref)
-        if nd and nd not in by_nd:
-            by_nd[nd] = int(rid)
+    for rid, ref_int, num_op in rows:
+        for k in claves_documento_pago_desde_campos(ref_int, num_op):
+            nd = normalize_documento(k)
+            if nd and nd not in by_nd:
+                by_nd[nd] = int(rid)
     for it in items:
         nd = normalize_documento(it.get("numero_documento"))
         it["pago_reportado_id"] = by_nd.get(nd) if nd else None
+
+
+def _pago_response_enriquecido(
+    db: Session,
+    row: Pago,
+    cuotas_atrasadas: Optional[int] = None,
+) -> dict:
+    """Dict listo para API: base + enlace Cobros + link Gmail/Drive si aplica."""
+    out = _pago_to_response(row, cuotas_atrasadas)
+    _enriquecer_pagos_pago_reportado_id(db, [out])
+    enriquecer_items_link_comprobante_desde_gmail(db, [out])
+    return out
 
 
 @router.get("", response_model=dict)
@@ -5210,11 +5226,7 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 
         raise HTTPException(status_code=404, detail="Pago no encontrado")
 
-    out = _pago_to_response(row)
-
-    enriquecer_items_link_comprobante_desde_gmail(db, [out])
-
-    return out
+    return _pago_response_enriquecido(db, row)
 
 
 
@@ -5422,7 +5434,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         db.refresh(row)
 
-        return _pago_to_response(row)
+        return _pago_response_enriquecido(db, row)
 
     except HTTPException:
 
@@ -5673,7 +5685,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
                         pago_id,
                     )
 
-    return _pago_to_response(row)
+    return _pago_response_enriquecido(db, row)
 
 
 

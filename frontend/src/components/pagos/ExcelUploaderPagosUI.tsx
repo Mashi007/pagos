@@ -651,7 +651,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                       <div className="overflow-x-auto">
                         <table className="w-full min-w-[980px] border-collapse">
                           <thead>
-                            <tr className="bg-gray-50">
+                            <tr className="border-b-2 border-gray-300 bg-gray-50">
                               <th className="w-12 border p-2 text-left text-xs font-medium">
                                 Fila
                               </th>
@@ -782,8 +782,8 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                     key={row._rowIndex}
                                     className={
                                       row._hasErrors
-                                        ? 'bg-red-50'
-                                        : 'bg-green-50'
+                                        ? 'border-b border-gray-300 bg-red-50'
+                                        : 'border-b border-gray-300 bg-green-50'
                                     }
                                   >
                                     <td className="border p-2 text-xs">

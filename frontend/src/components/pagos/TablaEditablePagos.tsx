@@ -660,8 +660,8 @@ export function TablaEditablePagos({
       {/* Tabla */}
 
       <div className="overflow-x-auto rounded border">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-gray-100">
+        <table className="w-full border-collapse text-sm">
+          <thead className="border-b-2 border-gray-300 bg-gray-100">
             <tr>
               <th className="w-12 border-r p-2 text-center font-semibold">#</th>
 
@@ -713,8 +713,8 @@ export function TablaEditablePagos({
                 key={row._rowIndex}
                 className={
                   row._hasErrors
-                    ? 'border-l-4 border-l-red-400 bg-red-50'
-                    : 'bg-white hover:bg-gray-50'
+                    ? 'border-b border-gray-300 border-l-4 border-l-red-400 bg-red-50'
+                    : 'border-b border-gray-300 bg-white hover:bg-gray-50'
                 }
               >
                 <td className="border-r p-2 text-center text-gray-500">

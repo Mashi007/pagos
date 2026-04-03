@@ -37,14 +37,20 @@ def documento_numero_desde_pago_reportado(pr: PagoReportado) -> tuple[str, str]:
     return raw, norm
 
 
-def claves_documento_pago_para_reportado(pr: PagoReportado) -> list[str]:
+def claves_documento_pago_desde_campos(
+    referencia_interna: Optional[str],
+    numero_operacion: Optional[str],
+) -> list[str]:
     """
-    Posibles valores de `pagos.numero_documento` que enlazan este reporte (idempotencia / estado de cuenta).
-
-    Incluye documento efectivo actual y formatos legacy (COB-RPC, RPC solo) por datos historicos.
+    Misma lista que `claves_documento_pago_para_reportado` sin instancia ORM (para mapas en caliente).
     """
-    _raw, doc_eff = documento_numero_desde_pago_reportado(pr)
-    ref = (pr.referencia_interna or "").strip()
+    ref = (referencia_interna or "").strip()
+    op = (numero_operacion or "").strip()[:100]
+    raw = op if op else ref
+    norm = normalize_documento(raw) if raw else ""
+    if raw and not norm:
+        norm = raw[:100]
+    doc_eff = norm or ""
     legacy_cob = ("COB-" + ref)[:100] if ref else ""
     ref_cut = ref[:100] if ref else ""
     out: list[str] = []
@@ -52,6 +58,18 @@ def claves_documento_pago_para_reportado(pr: PagoReportado) -> list[str]:
         if k and k not in out:
             out.append(k)
     return out
+
+
+def claves_documento_pago_para_reportado(pr: PagoReportado) -> list[str]:
+    """
+    Posibles valores de `pagos.numero_documento` que enlazan este reporte (idempotencia / estado de cuenta).
+
+    Incluye documento efectivo actual y formatos legacy (COB-RPC, RPC solo) por datos historicos.
+    """
+    return claves_documento_pago_desde_campos(
+        getattr(pr, "referencia_interna", None),
+        getattr(pr, "numero_operacion", None),
+    )
 
 
 def claves_documento_para_lote_reportados(reportados: Iterable[PagoReportado]) -> set[str]:
