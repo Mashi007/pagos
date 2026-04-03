@@ -966,6 +966,29 @@ class PrestamoService {
     )
     return response.data as Record<string, unknown>
   }
+
+  /**
+   * Admin. Reset cuota_pagos del prestamo y reaplica pagos conciliados en cascada.
+   * POST /api/v1/prestamos/{id}/reaplicar-cascada-aplicacion
+   */
+  async reaplicarCascadaAplicacion(
+    prestamoId: number
+  ): Promise<Record<string, unknown>> {
+    return apiClient.post<Record<string, unknown>>(
+      `${this.baseUrl}/${prestamoId}/reaplicar-cascada-aplicacion`,
+      undefined
+    )
+  }
+
+  /** Admin. Igual que reaplicarCascadaAplicacion pero varios prestamos (max 500). */
+  async reaplicarCascadaMasiva(
+    prestamoIds: number[]
+  ): Promise<Record<string, unknown>> {
+    return apiClient.post<Record<string, unknown>>(
+      `${this.baseUrl}/reaplicar-cascada-aplicacion-masiva`,
+      { prestamo_ids: prestamoIds }
+    )
+  }
 }
 
 export const prestamoService = new PrestamoService()

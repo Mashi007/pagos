@@ -46,7 +46,9 @@ from app.services.pago_control5_visto_service import (
 from app.services.prestamo_cartera_auditoria import (
     ejecutar_auditoria_cartera,
     leer_meta_ejecucion,
+    listar_pagos_sin_aplicacion_cuotas_por_prestamo,
     persistir_meta_ejecucion,
+    prestamos_ids_alerta_pagos_sin_aplicacion_cuotas,
     prestamos_ids_alerta_total_pagos_vs_aplicado,
 )
 
@@ -325,7 +327,14 @@ class CarteraCorregirBody(BaseModel):
     """Correcciones de datos orientadas por la auditoria de cartera (solo administrador)."""
 
     sincronizar_estados: bool = True
-    reaplicar_cascada_desajuste_pagos: bool = False
+    reaplicar_cascada_desajuste_pagos: bool = Field(
+        False,
+        description="Prestamos con control total_pagado_vs_aplicado_cuotas en SI (típ. LIQUIDADO descuadrado).",
+    )
+    reaplicar_cascada_pagos_sin_aplicacion_cuotas: bool = Field(
+        False,
+        description="Prestamos con control pagos_sin_aplicacion_a_cuotas en SI (sin cuota_pagos o saldo > 0.02 USD).",
+    )
     max_reaplicaciones: int = Field(50, ge=1, le=500)
 
 
@@ -606,7 +615,9 @@ def corregir_auditoria_cartera(
 ):
     """
     Opciones de correccion acotadas: sincronizar estados de cuota en cartera y/o reaplicar cascada
-    en prestamos que la auditoria marca con desajuste suma pagos vs aplicado a cuotas.
+    en prestamos que la auditoria marca con desajuste suma pagos vs aplicado a cuotas y/o con
+    pagos operativos sin aplicacion a cuotas (control 15). Si ambos flags estan activos, se unen
+    los prestamos afectados y se respeta max_reaplicaciones en total.
     Solo administrador. Tras las acciones vuelve a ejecutar auditoria y persiste meta.
     """
     if canonical_rol(current_user.rol) != "admin":
@@ -618,7 +629,8 @@ def corregir_auditoria_cartera(
     from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
 
     reaplicar_resultados: list[dict[str, Any]] = []
-    if body.reaplicar_cascada_desajuste_pagos:
+    need_reap = body.reaplicar_cascada_desajuste_pagos or body.reaplicar_cascada_pagos_sin_aplicacion_cuotas
+    if need_reap:
         rows_pre, _ = ejecutar_auditoria_cartera(
             db,
             solo_con_alerta=False,
@@ -627,7 +639,12 @@ def corregir_auditoria_cartera(
             excluir_marcar_ok=False,
             codigo_control=None,
         )
-        pids = prestamos_ids_alerta_total_pagos_vs_aplicado(rows_pre)[: int(body.max_reaplicaciones)]
+        pids_set: set[int] = set()
+        if body.reaplicar_cascada_desajuste_pagos:
+            pids_set.update(prestamos_ids_alerta_total_pagos_vs_aplicado(rows_pre))
+        if body.reaplicar_cascada_pagos_sin_aplicacion_cuotas:
+            pids_set.update(prestamos_ids_alerta_pagos_sin_aplicacion_cuotas(rows_pre))
+        pids = sorted(pids_set)[: int(body.max_reaplicaciones)]
         for pid in pids:
             try:
                 r = reset_y_reaplicar_cascada_prestamo(db, pid)
@@ -902,6 +919,20 @@ class Control5VistoAplicarResponse(BaseModel):
     auditoria_id: int
 
 
+class Control15PagoSinAplicacionItem(BaseModel):
+    pago_id: int
+    prestamo_id: int
+    fecha_pago: Optional[str] = None
+    monto_pagado: float
+    sum_monto_aplicado_cuotas: float
+    saldo_sin_aplicar_usd: float
+    motivo: str
+
+
+class Control15PagosSinAplicacionListaResponse(BaseModel):
+    items: List[Control15PagoSinAplicacionItem]
+
+
 @router.get(
     "/prestamos/cartera/control-5-pagos-duplicados-fecha-monto/{prestamo_id}",
     response_model=Control5DuplicadosListaResponse,
@@ -952,6 +983,27 @@ def aplicar_control5_visto_duplicado_fecha_monto(
         db.rollback()
         raise
     return Control5VistoAplicarResponse(**out)
+
+
+@router.get(
+    "/prestamos/cartera/control-15-pagos-sin-aplicacion-cuotas/{prestamo_id}",
+    response_model=Control15PagosSinAplicacionListaResponse,
+)
+def listar_control15_pagos_sin_aplicacion_cuotas_por_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+):
+    """
+    Control 15: pagos operativos del prestamo sin articulacion completa en cuota_pagos.
+    Solo administrador. Misma regla que el motor `pagos_sin_aplicacion_a_cuotas`.
+    """
+    if not db.get(Prestamo, prestamo_id):
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+    raw = listar_pagos_sin_aplicacion_cuotas_por_prestamo(db, prestamo_id)
+    return Control15PagosSinAplicacionListaResponse(
+        items=[Control15PagoSinAplicacionItem(**x) for x in raw]
+    )
 
 
 @router.get("/{auditoria_id}", response_model=AuditoriaItem)

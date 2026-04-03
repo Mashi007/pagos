@@ -57,7 +57,10 @@ import {
   PrestamoCarteraChequeo,
   type CarteraRevisionItem,
   type Control5DuplicadoFechaMontoItem,
+  type Control15PagoSinAplicacionItem,
 } from '../../services/auditoriaService'
+
+import { prestamoService } from '../../services/prestamoService'
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { isAdminRole } from '../../utils/rol'
@@ -80,6 +83,8 @@ function controlDismissKey(prestamoId: number, codigo: string) {
 const COD_DESAJUSTE_PAGOS = 'total_pagado_vs_aplicado_cuotas'
 
 const COD_CTRL_PAGOS_MISMO_DIA_MONTO = 'pagos_mismo_dia_monto'
+
+const COD_PAGOS_SIN_APLICACION = 'pagos_sin_aplicacion_a_cuotas'
 
 const PAGE_SIZE_DEFAULT = 25
 
@@ -322,6 +327,22 @@ export function AuditoriaCarteraTab() {
     number | null
   >(null)
 
+  const [ctrl15DialogOpen, setCtrl15DialogOpen] = useState(false)
+
+  const [ctrl15PrestamoId, setCtrl15PrestamoId] = useState<number | null>(null)
+
+  const [ctrl15Filas, setCtrl15Filas] = useState<Control15PagoSinAplicacionItem[]>(
+    []
+  )
+
+  const [ctrl15Cargando, setCtrl15Cargando] = useState(false)
+
+  const [reaplicandoCascadaPid, setReaplicandoCascadaPid] = useState<
+    number | null
+  >(null)
+
+  const [corrigiendoCtrl15, setCorrigiendoCtrl15] = useState(false)
+
   useEffect(() => {
     if (!puedeAuditoriaCartera) return
     let cancel = false
@@ -484,6 +505,57 @@ export function AuditoriaCarteraTab() {
       }
     },
     [fetchLista]
+  )
+
+  const abrirDialogControl15 = useCallback(async (prestamoId: number) => {
+    setCtrl15PrestamoId(prestamoId)
+    setCtrl15DialogOpen(true)
+    setCtrl15Cargando(true)
+    setCtrl15Filas([])
+    try {
+      const r =
+        await auditoriaService.listarControl15PagosSinAplicacionCuotas(
+          prestamoId
+        )
+      setCtrl15Filas(Array.isArray(r.items) ? r.items : [])
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'No se pudo cargar el detalle (solo administrador)'
+      toast.error(msg)
+      setCtrl15DialogOpen(false)
+      setCtrl15PrestamoId(null)
+    } finally {
+      setCtrl15Cargando(false)
+    }
+  }, [])
+
+  const reaplicarCascadaUnPrestamo = useCallback(
+    async (prestamoId: number) => {
+      setReaplicandoCascadaPid(prestamoId)
+      try {
+        await prestamoService.reaplicarCascadaAplicacion(prestamoId)
+        toast.success(`Cascada reaplicada en prestamo ${prestamoId}.`)
+        void fetchLista({ silent: true })
+        if (ctrl15DialogOpen && ctrl15PrestamoId === prestamoId) {
+          const r =
+            await auditoriaService.listarControl15PagosSinAplicacionCuotas(
+              prestamoId
+            )
+          setCtrl15Filas(Array.isArray(r.items) ? r.items : [])
+        }
+      } catch (e: unknown) {
+        const msg =
+          e && typeof e === 'object' && 'message' in e
+            ? String((e as { message?: string }).message)
+            : 'Error al reaplicar cascada'
+        toast.error(msg)
+      } finally {
+        setReaplicandoCascadaPid(null)
+      }
+    },
+    [fetchLista, ctrl15DialogOpen, ctrl15PrestamoId]
   )
 
   /** Mientras la BD responde lento (p. ej. script masivo), no ocultar resumen ni tabla en cache. */
@@ -852,6 +924,10 @@ export function AuditoriaCarteraTab() {
     return (conteosPorControlCodigo[COD_DESAJUSTE_PAGOS] ?? 0) > 0
   }, [conteosPorControlCodigo])
 
+  const hayPagosSinAplicacion = useMemo(() => {
+    return (conteosPorControlCodigo[COD_PAGOS_SIN_APLICACION] ?? 0) > 0
+  }, [conteosPorControlCodigo])
+
   const corregirDesajustePagos = async () => {
     try {
       setCorrigiendo(true)
@@ -880,6 +956,37 @@ export function AuditoriaCarteraTab() {
       toast.error(msg)
     } finally {
       setCorrigiendo(false)
+    }
+  }
+
+  const corregirSinAplicacionCuotas = async () => {
+    try {
+      setCorrigiendoCtrl15(true)
+      const res = await auditoriaService.corregirCartera({
+        sincronizar_estados: true,
+        reaplicar_cascada_pagos_sin_aplicacion_cuotas: true,
+        max_reaplicaciones: 100,
+      })
+      resetFiltrosUiYSesion()
+      const ok = (res.reaplicar_cascada || []).filter(
+        (x: Record<string, unknown>) => x.ok === true
+      ).length
+      const fail = (res.reaplicar_cascada || []).length - ok
+      const sync = res.sincronizar_estado_cuotas
+      toast.success(
+        `Control 15: cascada ${ok} prestamo(s) OK${fail ? `, ${fail} con error` : ''}.` +
+          (sync && typeof sync.estados_actualizados === 'number'
+            ? ` Estados sincronizados: ${sync.estados_actualizados}.`
+            : '')
+      )
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al reaplicar cascada (control 15)'
+      toast.error(msg)
+    } finally {
+      setCorrigiendoCtrl15(false)
     }
   }
 
@@ -1016,7 +1123,13 @@ export function AuditoriaCarteraTab() {
                 variant="secondary"
                 size="sm"
                 onClick={() => void corregirDesajustePagos()}
-                disabled={corrigiendo || running || syncingEstados || loading}
+                disabled={
+                  corrigiendo ||
+                  corrigiendoCtrl15 ||
+                  running ||
+                  syncingEstados ||
+                  loading
+                }
                 title="Reaplica pagos en cascada en prestamos con alerta de suma pagos vs cuota_pagos, luego sincroniza estados de cuota."
               >
                 {corrigiendo ? (
@@ -1025,6 +1138,29 @@ export function AuditoriaCarteraTab() {
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
                 Corregir desajuste pagos (cascada)
+              </Button>
+            ) : null}
+
+            {esAdmin && hayPagosSinAplicacion && !bloqueoListaCompleta ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void corregirSinAplicacionCuotas()}
+                disabled={
+                  corrigiendoCtrl15 ||
+                  corrigiendo ||
+                  running ||
+                  syncingEstados ||
+                  loading
+                }
+                title="Reaplica cascada en prestamos con control 15 en SI (sin cuota_pagos o saldo sin aplicar). Hasta 100 por ejecucion."
+              >
+                {corrigiendoCtrl15 ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Reaplicar cascada (control 15)
               </Button>
             ) : null}
 
@@ -1355,6 +1491,49 @@ export function AuditoriaCarteraTab() {
                                       <CircleCheck className="h-4 w-4 text-emerald-700" />
                                     </Button>
                                   ) : null}
+                                  {esAdmin &&
+                                  c.codigo === COD_PAGOS_SIN_APLICACION ? (
+                                    <>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 gap-1"
+                                        title="Listar pagos operativos sin aplicacion completa a cuotas"
+                                        onClick={() =>
+                                          void abrirDialogControl15(
+                                            row.prestamo_id
+                                          )
+                                        }
+                                      >
+                                        Ver pagos
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        className="h-8 gap-1"
+                                        title="Reaplicar cascada solo en este prestamo"
+                                        disabled={
+                                          reaplicandoCascadaPid ===
+                                          row.prestamo_id
+                                        }
+                                        onClick={() =>
+                                          void reaplicarCascadaUnPrestamo(
+                                            row.prestamo_id
+                                          )
+                                        }
+                                      >
+                                        {reaplicandoCascadaPid ===
+                                        row.prestamo_id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : (
+                                          <RefreshCw className="h-3.5 w-3.5" />
+                                        )}
+                                        Cascada
+                                      </Button>
+                                    </>
+                                  ) : null}
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -1537,6 +1716,118 @@ export function AuditoriaCarteraTab() {
               type="button"
               variant="outline"
               onClick={() => setVistoDialogOpen(false)}
+            >
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={ctrl15DialogOpen}
+        onOpenChange={open => {
+          setCtrl15DialogOpen(open)
+          if (!open) {
+            setCtrl15PrestamoId(null)
+            setCtrl15Filas([])
+            setCtrl15Cargando(false)
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              Control 15 — Pagos sin aplicacion a cuotas
+              {ctrl15PrestamoId != null ? ` · Prestamo #${ctrl15PrestamoId}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-sm text-slate-600">
+            Pagos operativos sin filas en <code className="text-xs">cuota_pagos</code>{' '}
+            o con suma aplicada menor que el monto (tol. 0,02 USD). Tras reaplicar cascada,
+            vuelva a abrir esta lista o recargue la auditoria.
+          </p>
+
+          {ctrl15Cargando ? (
+            <div className="flex items-center gap-2 py-8 text-slate-600">
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+              Cargando pagos...
+            </div>
+          ) : ctrl15Filas.length === 0 ? (
+            <p className="py-6 text-sm text-slate-600">
+              No hay pagos en esta condicion para este prestamo (o ya se corrigio).
+            </p>
+          ) : (
+            <div className="max-h-[55vh] overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[90px]">Pago ID</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right">Aplicado</TableHead>
+                    <TableHead className="text-right">Saldo</TableHead>
+                    <TableHead>Motivo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ctrl15Filas.map(f => (
+                    <TableRow key={f.pago_id}>
+                      <TableCell className="font-mono text-sm">
+                        <Link
+                          className="text-blue-600 underline"
+                          to={`/prestamos?prestamo_id=${f.prestamo_id}`}
+                          title={`Pago ${f.pago_id}: abrir prestamo`}
+                        >
+                          {f.pago_id}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {f.fecha_pago ?? '-'}
+                      </TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">
+                        {f.monto_pagado.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">
+                        {f.sum_monto_aplicado_cuotas.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">
+                        {f.saldo_sin_aplicar_usd.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="max-w-[220px] text-xs text-slate-700">
+                        {f.motivo}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          <DialogFooter className="flex flex-wrap gap-2 sm:gap-0">
+            {ctrl15PrestamoId != null ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={
+                  ctrl15Cargando || reaplicandoCascadaPid === ctrl15PrestamoId
+                }
+                onClick={() =>
+                  void reaplicarCascadaUnPrestamo(ctrl15PrestamoId)
+                }
+              >
+                {reaplicandoCascadaPid === ctrl15PrestamoId ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Reaplicar cascada en este prestamo
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCtrl15DialogOpen(false)}
             >
               Cerrar
             </Button>

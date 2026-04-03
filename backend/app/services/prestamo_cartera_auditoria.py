@@ -908,3 +908,77 @@ def prestamos_ids_alerta_total_pagos_vs_aplicado(rows: list[dict[str, Any]]) -> 
                 out.append(pid)
                 break
     return sorted(set(out))
+
+
+def prestamos_ids_alerta_pagos_sin_aplicacion_cuotas(rows: list[dict[str, Any]]) -> list[int]:
+    """IDs de prestamos con control SI `pagos_sin_aplicacion_a_cuotas`."""
+    out: list[int] = []
+    for r in rows:
+        pid = int(r["prestamo_id"])
+        for c in r.get("controles", []):
+            if c.get("codigo") == "pagos_sin_aplicacion_a_cuotas":
+                out.append(pid)
+                break
+    return sorted(set(out))
+
+
+def listar_pagos_sin_aplicacion_cuotas_por_prestamo(db: Session, prestamo_id: int) -> list[dict[str, Any]]:
+    """
+    Detalle del control `pagos_sin_aplicacion_a_cuotas` para un prestamo: pagos operativos
+    sin filas en cuota_pagos o con sum(monto_aplicado) < monto_pagado - 0.02 USD.
+    """
+    excl = _sql_fragment_pago_excluido_cartera("p")
+    sql = text(
+        f"""
+        SELECT
+          p.id AS pago_id,
+          p.prestamo_id,
+          p.fecha_pago,
+          p.monto_pagado,
+          COALESCE(SUM(cp.monto_aplicado), 0) AS sum_monto_aplicado,
+          CASE
+            WHEN NOT EXISTS (SELECT 1 FROM cuota_pagos cp0 WHERE cp0.pago_id = p.id)
+            THEN 'sin_filas_cuota_pagos'
+            ELSE 'sum_aplicado_menor_que_monto_menos_tol'
+          END AS motivo
+        FROM pagos p
+        LEFT JOIN cuota_pagos cp ON cp.pago_id = p.id
+        WHERE p.prestamo_id = :pid
+          AND p.prestamo_id IS NOT NULL
+          AND p.monto_pagado > 0
+          AND NOT ({excl})
+        GROUP BY p.id, p.prestamo_id, p.fecha_pago, p.monto_pagado
+        HAVING
+          NOT EXISTS (SELECT 1 FROM cuota_pagos cp1 WHERE cp1.pago_id = p.id)
+          OR COALESCE(SUM(cp.monto_aplicado), 0) < (p.monto_pagado::numeric - 0.02)
+        ORDER BY p.fecha_pago NULLS LAST, p.id
+        """
+    )
+    rows = db.execute(sql, {"pid": prestamo_id}).fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        pago_id = int(row[0])
+        prid = int(row[1]) if row[1] is not None else prestamo_id
+        fp = row[2]
+        mp = _dec(row[3])
+        sma = _dec(row[4])
+        motivo = str(row[5] or "")
+        saldo = mp - sma
+        fp_s: Optional[str] = None
+        if fp is not None:
+            if hasattr(fp, "isoformat"):
+                fp_s = fp.isoformat()
+            else:
+                fp_s = str(fp)
+        out.append(
+            {
+                "pago_id": pago_id,
+                "prestamo_id": prid,
+                "fecha_pago": fp_s,
+                "monto_pagado": float(mp),
+                "sum_monto_aplicado_cuotas": float(sma),
+                "saldo_sin_aplicar_usd": float(saldo),
+                "motivo": motivo,
+            }
+        )
+    return out

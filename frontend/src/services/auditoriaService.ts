@@ -216,6 +216,23 @@ export interface Control5VistoResponse {
   auditoria_id: number
 }
 
+/** Control 15: detalle por pago (misma regla que motor pagos_sin_aplicacion_a_cuotas). */
+export interface Control15PagoSinAplicacionItem {
+  pago_id: number
+
+  prestamo_id: number
+
+  fecha_pago?: string | null
+
+  monto_pagado: number
+
+  sum_monto_aplicado_cuotas: number
+
+  saldo_sin_aplicar_usd: number
+
+  motivo: string
+}
+
 class AuditoriaService {
   private baseUrl = '/api/v1/auditoria'
 
@@ -417,6 +434,7 @@ class AuditoriaService {
   async corregirCartera(body: {
     sincronizar_estados?: boolean
     reaplicar_cascada_desajuste_pagos?: boolean
+    reaplicar_cascada_pagos_sin_aplicacion_cuotas?: boolean
     max_reaplicaciones?: number
   }): Promise<CarteraCorreccionResponse> {
     return apiClient.post<CarteraCorreccionResponse>(
@@ -425,6 +443,8 @@ class AuditoriaService {
         sincronizar_estados: body.sincronizar_estados ?? true,
         reaplicar_cascada_desajuste_pagos:
           body.reaplicar_cascada_desajuste_pagos ?? false,
+        reaplicar_cascada_pagos_sin_aplicacion_cuotas:
+          body.reaplicar_cascada_pagos_sin_aplicacion_cuotas ?? false,
         max_reaplicaciones: body.max_reaplicaciones ?? 50,
       }
     )
@@ -491,6 +511,15 @@ class AuditoriaService {
     return apiClient.post<Control5VistoResponse>(
       `${this.baseUrl}/prestamos/cartera/control-5-pagos-duplicados-fecha-monto/${pagoId}/visto`,
       undefined
+    )
+  }
+
+  /** Solo admin. Lista pagos del prestamo que disparan control 15. */
+  async listarControl15PagosSinAplicacionCuotas(
+    prestamoId: number
+  ): Promise<{ items: Control15PagoSinAplicacionItem[] }> {
+    return apiClient.get<{ items: Control15PagoSinAplicacionItem[] }>(
+      `${this.baseUrl}/prestamos/cartera/control-15-pagos-sin-aplicacion-cuotas/${prestamoId}`
     )
   }
 }
