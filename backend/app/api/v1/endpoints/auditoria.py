@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -941,6 +942,12 @@ def aplicar_control5_visto_duplicado_fecha_monto(
     except HTTPException:
         db.rollback()
         raise
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Conflicto de unicidad en numero_documento. Reintente; se generara otro sufijo.",
+        )
     except Exception:
         db.rollback()
         raise

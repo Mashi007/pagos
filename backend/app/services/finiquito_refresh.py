@@ -109,7 +109,7 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
         db.query(FiniquitoCaso)
         .filter(
             ~FiniquitoCaso.prestamo_id.in_(qualifying_ids),
-            ~FiniquitoCaso.estado.in_(["ACEPTADO", "EN_PROCESO", "TERMINADO"]),
+            ~FiniquitoCaso.estado.in_(["ACEPTADO", "EN_PROCESO", "TERMINADO", "ANTIGUO"]),
         )
         .delete(synchronize_session=False)
     )

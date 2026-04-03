@@ -56,6 +56,7 @@ from app.schemas.auth import UserResponse
 from app.schemas.finiquito import (
     FiniquitoCasoListaResponse,
     FiniquitoCasoOut,
+    FiniquitoContactarClienteResponse,
     FiniquitoDetalleResponse,
     FiniquitoPatchEstadoRequest,
     FiniquitoPatchEstadoResponse,
@@ -65,6 +66,10 @@ from app.schemas.finiquito import (
     FiniquitoSolicitarCodigoResponse,
     FiniquitoVerificarCodigoRequest,
     FiniquitoVerificarCodigoResponse,
+)
+from app.services.finiquito_area_trabajo_emails import (
+    enviar_correo_contactar_cliente_finiquito,
+    enviar_correo_en_proceso_operaciones,
 )
 from app.services.finiquito_db_schema import (
     finiquito_casos_has_contacto_para_siguientes,
@@ -116,8 +121,12 @@ _ADMIN_CASOS_DEFAULT_LIMIT = 500
 _ADMIN_CASOS_MAX_LIMIT = 2000
 
 ESTADOS_VALIDOS = frozenset(
-    {"REVISION", "ACEPTADO", "RECHAZADO", "EN_PROCESO", "TERMINADO"}
+    {"REVISION", "ACEPTADO", "RECHAZADO", "EN_PROCESO", "TERMINADO", "ANTIGUO"}
 )
+
+# Ultima fecha de pago <= esta fecha: Antiguo sin nota obligatoria (operacion previa a la migracion).
+FECHA_CORTE_ANTIGUO = date(2026, 1, 1)
+MIN_NOTA_ANTIGUO = 15
 CODIGO_EXPIRA_MINUTES = 120
 
 
@@ -134,6 +143,22 @@ def _mask_smtp_user_for_log(user: str) -> str:
 
 def _generar_codigo_6() -> str:
     return "".join(random.choices(string.digits, k=6))
+
+
+def _ultima_fecha_pago_date_prestamo(db: Session, prestamo_id: int) -> Optional[date]:
+    """Fecha calendario de MAX(pagos.fecha_pago) para el prestamo, o None."""
+    mx = (
+        db.query(func.max(Pago.fecha_pago))
+        .filter(Pago.prestamo_id == int(prestamo_id))
+        .scalar()
+    )
+    if mx is None:
+        return None
+    if hasattr(mx, "date"):
+        return mx.date()
+    if isinstance(mx, date):
+        return mx
+    return None
 
 
 def _map_ultima_fecha_pago_por_prestamo(db: Session, prestamo_ids: List[int]) -> dict[int, Any]:
@@ -238,7 +263,9 @@ def _registrar_historial(
     actor_tipo: str,
     user_id: Optional[int] = None,
     finiquito_usuario_id: Optional[int] = None,
+    nota: Optional[str] = None,
 ) -> None:
+    nota_val = (nota or "").strip() or None
     db.add(
         FiniquitoEstadoHistorial(
             caso_id=caso.id,
@@ -247,6 +274,7 @@ def _registrar_historial(
             user_id=user_id,
             finiquito_usuario_id=finiquito_usuario_id,
             actor_tipo=actor_tipo,
+            nota=nota_val,
         )
     )
 
@@ -806,7 +834,8 @@ def finiquito_public_patch_estado(
 @router.get("/admin/casos", response_model=FiniquitoCasoListaResponse)
 def finiquito_admin_listar(
     estado: Optional[str] = Query(
-        None, description="Un solo estado (REVISION, ACEPTADO, RECHAZADO, EN_PROCESO, TERMINADO)"
+        None,
+        description="Un solo estado (REVISION, ACEPTADO, RECHAZADO, EN_PROCESO, TERMINADO, ANTIGUO)",
     ),
     estado_in: Optional[str] = Query(
         None,
@@ -896,6 +925,40 @@ def finiquito_admin_patch_estado(
         raise HTTPException(status_code=404, detail="Caso no encontrado")
     anterior = caso.estado
 
+    if nuevo == "ANTIGUO":
+        if anterior != "REVISION":
+            return FiniquitoPatchEstadoResponse(
+                ok=False,
+                error="Antiguo solo desde la bandeja principal (estado Revisión).",
+            )
+        ufp_d = _ultima_fecha_pago_date_prestamo(db, caso.prestamo_id)
+        nota = (body.nota_antiguo or "").strip()
+        requiere_nota = ufp_d is None or ufp_d > FECHA_CORTE_ANTIGUO
+        if requiere_nota and len(nota) < MIN_NOTA_ANTIGUO:
+            return FiniquitoPatchEstadoResponse(
+                ok=False,
+                error=(
+                    "Nota justificativa obligatoria (minimo 15 caracteres) si la ultima fecha de pago "
+                    "es posterior al 01/01/2026 o no consta."
+                ),
+            )
+        caso.estado = nuevo
+        if finiquito_casos_has_contacto_para_siguientes(db):
+            caso.contacto_para_siguientes = None
+        _registrar_historial(
+            db,
+            caso=caso,
+            estado_anterior=anterior,
+            estado_nuevo=nuevo,
+            actor_tipo="admin",
+            user_id=admin.id,
+            nota=nota or None,
+        )
+        db.commit()
+        db.refresh(caso)
+        caso_out = _admin_casos_to_items(db, [caso])[0]
+        return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
+
     if nuevo in ("EN_PROCESO", "TERMINADO") and not finiquito_casos_has_contacto_para_siguientes(db):
         return FiniquitoPatchEstadoResponse(
             ok=False,
@@ -906,12 +969,12 @@ def finiquito_admin_patch_estado(
         )
 
     if nuevo == "TERMINADO":
-        if anterior != "EN_PROCESO":
+        if anterior not in ("EN_PROCESO", "ACEPTADO"):
             return FiniquitoPatchEstadoResponse(
                 ok=False,
-                error="Solo puede marcar Terminado si el caso esta En proceso.",
+                error="Terminado solo desde Aceptado o En proceso.",
             )
-        if body.contacto_para_siguientes is None:
+        if anterior == "EN_PROCESO" and body.contacto_para_siguientes is None:
             return FiniquitoPatchEstadoResponse(
                 ok=False,
                 error="Debe indicar si contacto al cliente para pasos siguientes (Si o No).",
@@ -926,7 +989,10 @@ def finiquito_admin_patch_estado(
     caso.estado = nuevo
     if finiquito_casos_has_contacto_para_siguientes(db):
         if nuevo == "TERMINADO":
-            caso.contacto_para_siguientes = body.contacto_para_siguientes
+            cps = body.contacto_para_siguientes
+            if cps is None and anterior == "ACEPTADO":
+                cps = False
+            caso.contacto_para_siguientes = cps
         else:
             caso.contacto_para_siguientes = None
 
@@ -950,20 +1016,72 @@ def finiquito_admin_patch_estado(
                 user_id=admin.id,
             )
         elif nuevo == "TERMINADO":
+            _cps_aud = body.contacto_para_siguientes
+            if _cps_aud is None and anterior == "ACEPTADO":
+                _cps_aud = False
             _registrar_auditoria_area_trabajo(
                 db,
                 caso_id=caso.id,
                 accion="TERMINADO",
                 estado_anterior=anterior,
                 estado_nuevo=nuevo,
-                contacto_para_siguientes=body.contacto_para_siguientes,
+                contacto_para_siguientes=_cps_aud,
                 user_id=admin.id,
             )
 
     db.commit()
     db.refresh(caso)
+    if nuevo == "EN_PROCESO":
+        enviar_correo_en_proceso_operaciones(
+            db,
+            caso,
+            admin_email=admin.email or "",
+            admin_nombre=f"{(admin.nombre or '').strip()} {(admin.apellido or '').strip()}".strip(),
+        )
     caso_out = _admin_casos_to_items(db, [caso])[0]
     return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
+
+
+@router.post(
+    "/admin/casos/{caso_id}/contactar-cliente",
+    response_model=FiniquitoContactarClienteResponse,
+)
+def finiquito_admin_contactar_cliente(
+    caso_id: int,
+    db: Session = Depends(get_db),
+    admin: UserResponse = Depends(require_admin),
+):
+    """Envia al cliente un correo sobre el finiquito y la linea de WhatsApp."""
+    caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
+    if not caso:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+    est = (caso.estado or "").strip().upper()
+    if est not in ("ACEPTADO", "EN_PROCESO"):
+        return FiniquitoContactarClienteResponse(
+            ok=False,
+            error="Solo puede usar Contactar con el caso en Aceptado o En proceso.",
+        )
+    ok, err = enviar_correo_contactar_cliente_finiquito(db, caso)
+    if not ok:
+        return FiniquitoContactarClienteResponse(
+            ok=False,
+            error=err or "No se pudo enviar el correo.",
+        )
+    if finiquito_has_area_trabajo_auditoria_table(db):
+        _registrar_auditoria_area_trabajo(
+            db,
+            caso_id=caso.id,
+            accion="CONTACTAR_CLIENTE",
+            estado_anterior=caso.estado,
+            estado_nuevo=caso.estado,
+            contacto_para_siguientes=None,
+            user_id=admin.id,
+        )
+        db.commit()
+    return FiniquitoContactarClienteResponse(
+        ok=True,
+        message="Correo enviado al cliente.",
+    )
 
 
 @router.post("/admin/refresh-materializado")

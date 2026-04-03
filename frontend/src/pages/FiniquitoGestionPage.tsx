@@ -19,6 +19,7 @@ import { Button } from '../components/ui/button'
 import { FiniquitoWorkspaceShell } from '../components/finiquito/FiniquitoWorkspaceShell'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
+import { Textarea } from '../components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -48,6 +49,7 @@ import { FiniquitoRevisionDialog } from '../components/finiquito/FiniquitoRevisi
 
 import {
   type FiniquitoCasoItem,
+  finiquitoAdminContactarCliente,
   finiquitoAdminListar,
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
@@ -68,6 +70,33 @@ function textoUltimoPago(iso: string | null | undefined): string {
   }
 }
 
+/** YYYY-MM-DD desde ISO o fecha parseable (comparar con corte migracion). */
+function parseIsoDateOnly(iso: string | null | undefined): string | null {
+  if (iso == null || String(iso).trim() === '') return null
+  const s = String(iso).trim()
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return null
+  const y = d.getFullYear()
+  const mo = String(d.getMonth() + 1).padStart(2, '0')
+  const da = String(d.getDate()).padStart(2, '0')
+  return `${y}-${mo}-${da}`
+}
+
+const FECHA_CORTE_ANTIGUO = '2026-01-01'
+
+const MIN_NOTA_ANTIGUO = 15
+
+/** True si hace falta nota: sin fecha, o ultimo pago estrictamente despues del 01/01/2026. */
+function requiereNotaJustificativaAntiguo(
+  ultimaFechaPagoIso: string | null | undefined
+): boolean {
+  const day = parseIsoDateOnly(ultimaFechaPagoIso)
+  if (day == null) return true
+  return day > FECHA_CORTE_ANTIGUO
+}
+
 function estadoEtiquetaVisible(estado: string): string {
   const map: Record<string, string> = {
     REVISION: 'Revisión',
@@ -75,6 +104,7 @@ function estadoEtiquetaVisible(estado: string): string {
     RECHAZADO: 'Rechazado',
     EN_PROCESO: 'En proceso',
     TERMINADO: 'Terminado',
+    ANTIGUO: 'Antiguo',
   }
   return map[estado] ?? estado.replace(/_/g, ' ')
 }
@@ -91,6 +121,8 @@ function estadoBadgeClassName(estado: string): string {
       return 'bg-amber-100 text-amber-950'
     case 'TERMINADO':
       return 'bg-emerald-100 text-emerald-950'
+    case 'ANTIGUO':
+      return 'bg-violet-100 text-violet-950'
     default:
       return 'bg-slate-100 text-slate-800'
   }
@@ -184,7 +216,12 @@ function FiniquitoGestionPageInner() {
   )
   const [totalAreaTrabajo, setTotalAreaTrabajo] = useState(0)
   const [pageTrabajo, setPageTrabajo] = useState(0)
-  const [dialogTerminadoCasoId, setDialogTerminadoCasoId] = useState<
+  const [dialogTerminado, setDialogTerminado] = useState<{
+    casoId: number
+    /** Si true, exige Si/No (contacto para pasos siguientes); si false, Terminado directo desde Aceptado. */
+    preguntarContactoCliente: boolean
+  } | null>(null)
+  const [contactandoClienteCasoId, setContactandoClienteCasoId] = useState<
     number | null
   >(null)
   const [itemsRechazados, setItemsRechazados] = useState<FiniquitoCasoItem[]>(
@@ -206,6 +243,10 @@ function FiniquitoGestionPageInner() {
   const [pendingRechazoCasoId, setPendingRechazoCasoId] = useState<
     number | null
   >(null)
+  const [dialogAntiguoRow, setDialogAntiguoRow] =
+    useState<FiniquitoCasoItem | null>(null)
+  const [antiguoNota, setAntiguoNota] = useState('')
+  const [antiguoSubmitting, setAntiguoSubmitting] = useState(false)
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -295,19 +336,66 @@ function FiniquitoGestionPageInner() {
         toast.error(r.error || 'No se pudo actualizar')
         return
       }
-      toast.success('Estado actualizado')
+      if (estado === 'EN_PROCESO') {
+        toast.success('En proceso', {
+          description:
+            'Se envió aviso a operaciones y cobranza (si el correo del servidor está configurado).',
+        })
+      } else {
+        toast.success('Estado actualizado')
+      }
       await cargarListas()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
     }
   }
 
-  const onSeleccionarEstadoBandeja = (casoId: number, v: string) => {
+  const onSeleccionarEstadoBandeja = (row: FiniquitoCasoItem, v: string) => {
     if (v === 'RECHAZADO') {
-      setPendingRechazoCasoId(casoId)
+      setPendingRechazoCasoId(row.id)
       return
     }
-    void cambiarEstado(casoId, v)
+    if (v === 'ANTIGUO') {
+      setDialogAntiguoRow(row)
+      setAntiguoNota('')
+      return
+    }
+    void cambiarEstado(row.id, v)
+  }
+
+  const confirmarAntiguo = async () => {
+    if (dialogAntiguoRow == null) return
+    const req = requiereNotaJustificativaAntiguo(
+      dialogAntiguoRow.ultima_fecha_pago
+    )
+    const nota = antiguoNota.trim()
+    if (req && nota.length < MIN_NOTA_ANTIGUO) {
+      toast.error(
+        `Nota justificativa obligatoria (minimo ${MIN_NOTA_ANTIGUO} caracteres) si la ultima fecha de pago es posterior al 01/01/2026 o no consta.`
+      )
+      return
+    }
+    setAntiguoSubmitting(true)
+    try {
+      const r = await finiquitoAdminPatchEstado(
+        dialogAntiguoRow.id,
+        'ANTIGUO',
+        undefined,
+        nota.length > 0 ? nota : undefined
+      )
+      if (!r.ok) {
+        toast.error(r.error || 'No se pudo actualizar')
+        return
+      }
+      setDialogAntiguoRow(null)
+      setAntiguoNota('')
+      toast.success('Caso marcado como Antiguo')
+      await cargarListas()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setAntiguoSubmitting(false)
+    }
   }
 
   const confirmarRechazo = async () => {
@@ -317,23 +405,43 @@ function FiniquitoGestionPageInner() {
     await cambiarEstado(id, 'RECHAZADO')
   }
 
-  const confirmarTerminado = async (contactoParaSiguientes: boolean) => {
-    if (dialogTerminadoCasoId == null) return
+  const confirmarTerminado = async (contactoParaSiguientes?: boolean) => {
+    if (dialogTerminado == null) return
+    const { casoId, preguntarContactoCliente } = dialogTerminado
+    if (preguntarContactoCliente && contactoParaSiguientes === undefined) {
+      return
+    }
     try {
       const r = await finiquitoAdminPatchEstado(
-        dialogTerminadoCasoId,
+        casoId,
         'TERMINADO',
-        contactoParaSiguientes
+        preguntarContactoCliente ? contactoParaSiguientes : undefined
       )
       if (!r.ok) {
         toast.error(r.error || 'No se pudo actualizar')
         return
       }
-      setDialogTerminadoCasoId(null)
+      setDialogTerminado(null)
       toast.success('Caso marcado como terminado')
       await cargarListas()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
+    }
+  }
+
+  const enviarContactarCliente = async (casoId: number) => {
+    setContactandoClienteCasoId(casoId)
+    try {
+      const r = await finiquitoAdminContactarCliente(casoId)
+      if (!r.ok) {
+        toast.error(r.error || 'No se pudo enviar el correo')
+        return
+      }
+      toast.success(r.message || 'Correo enviado al cliente')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setContactandoClienteCasoId(null)
     }
   }
 
@@ -376,10 +484,10 @@ function FiniquitoGestionPageInner() {
       </Button>
       <Select
         key={`estado-sel-${row.id}-${row.estado}`}
-        onValueChange={v => onSeleccionarEstadoBandeja(row.id, v)}
+        onValueChange={v => onSeleccionarEstadoBandeja(row, v)}
       >
         <SelectTrigger
-          className="h-8 w-[150px] text-xs"
+          className="h-8 min-w-[158px] max-w-[200px] text-xs"
           aria-label={`Cambiar estado del caso ${row.id}`}
         >
           <SelectValue placeholder="Estado..." />
@@ -388,6 +496,7 @@ function FiniquitoGestionPageInner() {
           <SelectItem value="REVISION">Revisión</SelectItem>
           <SelectItem value="ACEPTADO">Aceptado</SelectItem>
           <SelectItem value="RECHAZADO">Rechazado</SelectItem>
+          <SelectItem value="ANTIGUO">Antiguo</SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -426,15 +535,46 @@ function FiniquitoGestionPageInner() {
         )}
       </Button>
       {row.estado === 'ACEPTADO' ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="h-8 text-xs"
-          onClick={() => cambiarEstado(row.id, 'EN_PROCESO')}
-        >
-          En proceso
-        </Button>
+        <>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-8 text-xs"
+            onClick={() => cambiarEstado(row.id, 'EN_PROCESO')}
+          >
+            En proceso
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="inline-flex h-8 items-center gap-1.5 border-slate-300 text-xs"
+            disabled={contactandoClienteCasoId === row.id}
+            onClick={() => void enviarContactarCliente(row.id)}
+          >
+            {contactandoClienteCasoId === row.id ? (
+              <Loader2
+                className="h-3.5 w-3.5 shrink-0 animate-spin"
+                aria-hidden
+              />
+            ) : null}
+            Contactar
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+            onClick={() =>
+              setDialogTerminado({
+                casoId: row.id,
+                preguntarContactoCliente: false,
+              })
+            }
+          >
+            Terminado
+          </Button>
+        </>
       ) : null}
       {row.estado === 'EN_PROCESO' ? (
         <>
@@ -450,8 +590,29 @@ function FiniquitoGestionPageInner() {
           <Button
             type="button"
             size="sm"
+            variant="outline"
+            className="inline-flex h-8 items-center gap-1.5 border-slate-300 text-xs"
+            disabled={contactandoClienteCasoId === row.id}
+            onClick={() => void enviarContactarCliente(row.id)}
+          >
+            {contactandoClienteCasoId === row.id ? (
+              <Loader2
+                className="h-3.5 w-3.5 shrink-0 animate-spin"
+                aria-hidden
+              />
+            ) : null}
+            Contactar
+          </Button>
+          <Button
+            type="button"
+            size="sm"
             className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
-            onClick={() => setDialogTerminadoCasoId(row.id)}
+            onClick={() =>
+              setDialogTerminado({
+                casoId: row.id,
+                preguntarContactoCliente: true,
+              })
+            }
           >
             Terminado
           </Button>
@@ -692,8 +853,10 @@ function FiniquitoGestionPageInner() {
               </div>
             ) : itemsAreaTrabajo.length === 0 ? (
               <p className="rounded-lg border border-dashed border-emerald-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
-                No hay casos en esta bandeja. Los aceptados aparecen aquí; use
-                «En proceso» y luego «Terminado» para cerrar el flujo.
+                No hay casos en esta bandeja. Los aceptados aparecen aquí; puede
+                usar «En proceso» (aviso a operaciones/cobranza), «Contactar»
+                (correo al cliente con WhatsApp) o «Terminado» para dejar el
+                caso en pasivo.
               </p>
             ) : (
               renderTablaAreaTrabajo(itemsAreaTrabajo)
@@ -877,39 +1040,143 @@ function FiniquitoGestionPageInner() {
       />
 
       <Dialog
-        open={dialogTerminadoCasoId != null}
+        open={dialogTerminado != null}
         onOpenChange={open => {
-          if (!open) setDialogTerminadoCasoId(null)
+          if (!open) setDialogTerminado(null)
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Marcar como terminado</DialogTitle>
-            <DialogDescription className="text-base text-slate-800">
-              ¿Usted ha contactado al cliente para pasos siguientes?
-            </DialogDescription>
+            {dialogTerminado?.preguntarContactoCliente ? (
+              <DialogDescription className="text-base text-slate-800">
+                ¿Usted ha contactado al cliente para pasos siguientes?
+              </DialogDescription>
+            ) : (
+              <DialogDescription className="text-base text-slate-800">
+                El caso pasará a <strong>Terminado</strong> (pasivo). Solo un
+                administrador puede cambiar el estado después.
+              </DialogDescription>
+            )}
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setDialogTerminadoCasoId(null)}
+              onClick={() => setDialogTerminado(null)}
+            >
+              Cancelar
+            </Button>
+            {dialogTerminado?.preguntarContactoCliente ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void confirmarTerminado(false)}
+                >
+                  No
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-emerald-700 hover:bg-emerald-800"
+                  onClick={() => void confirmarTerminado(true)}
+                >
+                  Sí
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                className="bg-emerald-700 hover:bg-emerald-800"
+                onClick={() => void confirmarTerminado()}
+              >
+                Confirmar
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={dialogAntiguoRow != null}
+        onOpenChange={open => {
+          if (!open) {
+            setDialogAntiguoRow(null)
+            setAntiguoNota('')
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Marcar como Antiguo</DialogTitle>
+            <DialogDescription className="space-y-2 text-left text-sm text-slate-700">
+              <span className="block">
+                Indica que el finiquito ya se gestionó antes de migrar a este
+                sistema. Queda registrado en el historial de estados.
+              </span>
+              {dialogAntiguoRow ? (
+                <>
+                  <span className="block">
+                    Última fecha de pago (referencia):{' '}
+                    <strong>
+                      {textoUltimoPago(dialogAntiguoRow.ultima_fecha_pago)}
+                    </strong>
+                  </span>
+                  {requiereNotaJustificativaAntiguo(
+                    dialogAntiguoRow.ultima_fecha_pago
+                  ) ? (
+                    <span className="block font-medium text-amber-900">
+                      Obligatorio: nota justificativa (mín. {MIN_NOTA_ANTIGUO}{' '}
+                      caracteres) porque la fecha es posterior al 01/01/2026 o
+                      no consta.
+                    </span>
+                  ) : (
+                    <span className="block text-slate-600">
+                      No exige nota (último pago en o antes del 01/01/2026).
+                      Puede añadir una nota opcional para auditoría.
+                    </span>
+                  )}
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="finiquito-antiguo-nota">Nota</Label>
+            <Textarea
+              id="finiquito-antiguo-nota"
+              value={antiguoNota}
+              onChange={e => setAntiguoNota(e.target.value)}
+              rows={4}
+              placeholder="Referencia interna, acuerdo, expediente..."
+              className="resize-y"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={antiguoSubmitting}
+              onClick={() => {
+                setDialogAntiguoRow(null)
+                setAntiguoNota('')
+              }}
             >
               Cancelar
             </Button>
             <Button
               type="button"
-              variant="secondary"
-              onClick={() => confirmarTerminado(false)}
+              className="bg-violet-700 hover:bg-violet-800"
+              disabled={antiguoSubmitting}
+              onClick={() => void confirmarAntiguo()}
             >
-              No
-            </Button>
-            <Button
-              type="button"
-              className="bg-emerald-700 hover:bg-emerald-800"
-              onClick={() => confirmarTerminado(true)}
-            >
-              Sí
+              {antiguoSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Confirmar Antiguo'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -80,12 +80,29 @@ class FiniquitoCasoListaResponse(BaseModel):
 class FiniquitoPatchEstadoRequest(BaseModel):
     estado: str = Field(
         ...,
-        description="REVISION | ACEPTADO | RECHAZADO | EN_PROCESO | TERMINADO",
+        description="REVISION | ACEPTADO | RECHAZADO | EN_PROCESO | TERMINADO | ANTIGUO",
     )
     contacto_para_siguientes: Optional[bool] = Field(
         None,
-        description="Obligatorio al pasar a TERMINADO (solo desde EN_PROCESO).",
+        description=(
+            "Al pasar a TERMINADO: obligatorio si venia de EN_PROCESO; "
+            "opcional si venia de ACEPTADO (por defecto false)."
+        ),
     )
+    nota_antiguo: Optional[str] = Field(
+        None,
+        max_length=4000,
+        description=(
+            "Si estado=ANTIGUO y la ultima fecha de pago es posterior a 2026-01-01 (o no hay fecha), "
+            "obligatoria (min. 15 caracteres). Opcional si ultima fecha <= 2026-01-01."
+        ),
+    )
+
+
+class FiniquitoContactarClienteResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+    message: Optional[str] = None
 
 
 class FiniquitoPatchEstadoResponse(BaseModel):

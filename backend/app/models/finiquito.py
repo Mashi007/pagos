@@ -8,6 +8,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     text,
 )
 from sqlalchemy.orm import deferred
@@ -103,6 +104,7 @@ class FiniquitoEstadoHistorial(Base):
     )
     actor_tipo = Column(String(20), nullable=False)
     creado_en = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
+    nota = Column(Text, nullable=True)
 
 
 class FiniquitoAreaTrabajoAuditoria(Base):

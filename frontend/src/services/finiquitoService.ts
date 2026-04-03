@@ -290,19 +290,41 @@ export async function finiquitoAdminListar(
 export async function finiquitoAdminPatchEstado(
   casoId: number,
   estado: string,
-  contactoParaSiguientes?: boolean
+  contactoParaSiguientes?: boolean,
+  notaAntiguo?: string
 ) {
-  const body: { estado: string; contacto_para_siguientes?: boolean } = {
+  const body: {
+    estado: string
+    contacto_para_siguientes?: boolean
+    nota_antiguo?: string
+  } = {
     estado,
   }
   if (contactoParaSiguientes !== undefined) {
     body.contacto_para_siguientes = contactoParaSiguientes
+  }
+  if (notaAntiguo !== undefined && String(notaAntiguo).trim() !== '') {
+    body.nota_antiguo = String(notaAntiguo).trim()
   }
   return apiClient.patch<{
     ok: boolean
     caso?: FiniquitoCasoItem
     error?: string
   }>(`${BASE}/admin/casos/${casoId}/estado`, body)
+}
+
+export type FiniquitoContactarClienteResult = {
+  ok: boolean
+  error?: string
+  message?: string
+}
+
+/** Correo al cliente: finiquito en gestion y WhatsApp de contacto. */
+export async function finiquitoAdminContactarCliente(casoId: number) {
+  return apiClient.post<FiniquitoContactarClienteResult>(
+    `${BASE}/admin/casos/${casoId}/contactar-cliente`,
+    {}
+  )
 }
 
 export type FiniquitoRefreshStats = {

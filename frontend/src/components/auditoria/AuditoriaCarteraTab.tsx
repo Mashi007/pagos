@@ -312,15 +312,15 @@ export function AuditoriaCarteraTab() {
 
   const [vistoPrestamoId, setVistoPrestamoId] = useState<number | null>(null)
 
-  const [vistoFilas, setVistoFilas] = useState<Control5DuplicadoFechaMontoItem[]>(
-    []
-  )
+  const [vistoFilas, setVistoFilas] = useState<
+    Control5DuplicadoFechaMontoItem[]
+  >([])
 
   const [vistoCargando, setVistoCargando] = useState(false)
 
-  const [vistoAplicandoPagoId, setVistoAplicandoPagoId] = useState<number | null>(
-    null
-  )
+  const [vistoAplicandoPagoId, setVistoAplicandoPagoId] = useState<
+    number | null
+  >(null)
 
   useEffect(() => {
     if (!puedeAuditoriaCartera) return
@@ -445,9 +445,8 @@ export function AuditoriaCarteraTab() {
     setVistoCargando(true)
     setVistoFilas([])
     try {
-      const r = await auditoriaService.listarControl5DuplicadosPorPrestamo(
-        prestamoId
-      )
+      const r =
+        await auditoriaService.listarControl5DuplicadosPorPrestamo(prestamoId)
       setVistoFilas(Array.isArray(r.items) ? r.items : [])
     } catch (e: unknown) {
       const msg =
@@ -470,9 +469,8 @@ export function AuditoriaCarteraTab() {
         toast.success(
           `Visto aplicado. Nuevo documento: ${out.numero_documento_nuevo} (sufijo ${out.sufijo_cuatro_digitos})`
         )
-        const r = await auditoriaService.listarControl5DuplicadosPorPrestamo(
-          prestamoId
-        )
+        const r =
+          await auditoriaService.listarControl5DuplicadosPorPrestamo(prestamoId)
         setVistoFilas(Array.isArray(r.items) ? r.items : [])
         void fetchLista({ silent: true })
       } catch (e: unknown) {
@@ -1339,14 +1337,15 @@ export function AuditoriaCarteraTab() {
                               <TableCell className="text-right align-top">
                                 <div className="flex flex-col items-end gap-1.5">
                                   {esAdmin &&
-                                  c.codigo === COD_CTRL_PAGOS_MISMO_DIA_MONTO ? (
+                                  c.codigo ===
+                                    COD_CTRL_PAGOS_MISMO_DIA_MONTO ? (
                                     <Button
                                       type="button"
                                       variant="outline"
                                       size="sm"
                                       className="h-8 w-8 shrink-0 p-0"
                                       title="Visto (admin): autorizar duplicado legitimo; anexa 4 digitos al documento y registra auditoria."
-                                      aria-label={`Visto control 5 — prestamo ${row.prestamo_id}`}
+                                      aria-label={`Visto control 5 - prestamo ${row.prestamo_id}`}
                                       onClick={() =>
                                         void abrirDialogoVistoControl5(
                                           row.prestamo_id
@@ -1408,6 +1407,142 @@ export function AuditoriaCarteraTab() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={vistoDialogOpen}
+        onOpenChange={open => {
+          setVistoDialogOpen(open)
+          if (!open) {
+            setVistoPrestamoId(null)
+            setVistoFilas([])
+            setVistoCargando(false)
+            setVistoAplicandoPagoId(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              Control 5 - Visto (duplicado fecha y monto)
+            </DialogTitle>
+          </DialogHeader>
+
+          {vistoPrestamoId != null ? (
+            <p className="text-sm text-slate-600">
+              Prestamo <strong>#{vistoPrestamoId}</strong>. Aplique Visto al
+              pago correcto: se anexa{' '}
+              <code className="rounded bg-slate-100 px-1 text-xs">-XXXX</code>{' '}
+              (4 digitos aleatorios) al numero de documento, queda registro en{' '}
+              <span className="font-mono text-xs">
+                auditoria_pago_control5_visto
+              </span>{' '}
+              y el pago deja de contar en este control.
+            </p>
+          ) : null}
+
+          {vistoCargando ? (
+            <div className="flex items-center gap-2 py-8 text-slate-600">
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+              Cargando pagos en duplicado...
+            </div>
+          ) : vistoFilas.length === 0 ? (
+            <p className="py-6 text-sm text-slate-600">
+              No hay pagos pendientes en duplicado para este prestamo.
+            </p>
+          ) : (
+            <div className="max-h-[min(420px,70vh)] overflow-auto rounded border border-slate-200">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[72px]">ID</TableHead>
+
+                    <TableHead>Fecha</TableHead>
+
+                    <TableHead>Monto (USD)</TableHead>
+
+                    <TableHead>Banco</TableHead>
+
+                    <TableHead>Documento / ref.</TableHead>
+
+                    <TableHead className="w-[100px] text-right">
+                      Accion
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+
+                <TableBody>
+                  {vistoFilas.map(f => (
+                    <TableRow key={f.pago_id}>
+                      <TableCell className="font-mono text-xs">
+                        {f.pago_id}
+                      </TableCell>
+
+                      <TableCell className="text-sm">
+                        {f.fecha_pago ?? '-'}
+                      </TableCell>
+
+                      <TableCell className="text-sm tabular-nums">
+                        {f.monto_pagado != null
+                          ? f.monto_pagado.toFixed(2)
+                          : '-'}
+                      </TableCell>
+
+                      <TableCell
+                        className="max-w-[140px] truncate text-sm"
+                        title={f.institucion_bancaria}
+                      >
+                        {f.institucion_bancaria || '-'}
+                      </TableCell>
+
+                      <TableCell
+                        className="max-w-[220px] truncate font-mono text-xs"
+                        title={
+                          f.numero_documento || f.referencia_pago || undefined
+                        }
+                      >
+                        {f.numero_documento || f.referencia_pago || '-'}
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={vistoAplicandoPagoId != null}
+                          onClick={() =>
+                            vistoPrestamoId != null
+                              ? void aplicarVistoControl5EnPago(
+                                  f.pago_id,
+                                  vistoPrestamoId
+                                )
+                              : undefined
+                          }
+                        >
+                          {vistoAplicandoPagoId === f.pago_id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Visto'
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setVistoDialogOpen(false)}
+            >
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={okDialogOpen}

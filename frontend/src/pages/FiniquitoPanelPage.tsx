@@ -62,6 +62,8 @@ function etiquetaEstadoFiniquito(estado: string) {
     return { label: 'En proceso', className: 'bg-sky-100 text-sky-950' }
   if (e === 'TERMINADO')
     return { label: 'Terminado', className: 'bg-emerald-200 text-emerald-950' }
+  if (e === 'ANTIGUO')
+    return { label: 'Antiguo', className: 'bg-violet-100 text-violet-950' }
   return { label: estado || '-', className: 'bg-slate-100 text-slate-800' }
 }
 

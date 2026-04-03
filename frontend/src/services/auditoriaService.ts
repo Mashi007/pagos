@@ -485,7 +485,9 @@ class AuditoriaService {
   }
 
   /** Solo admin. Visto: sufijo -XXXX al documento, exclusion del control, bitacora. */
-  async aplicarControl5VistoPago(pagoId: number): Promise<Control5VistoResponse> {
+  async aplicarControl5VistoPago(
+    pagoId: number
+  ): Promise<Control5VistoResponse> {
     return apiClient.post<Control5VistoResponse>(
       `${this.baseUrl}/prestamos/cartera/control-5-pagos-duplicados-fecha-monto/${pagoId}/visto`,
       undefined
