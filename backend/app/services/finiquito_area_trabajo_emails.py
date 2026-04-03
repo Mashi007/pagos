@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 FINIQUITO_EMAIL_OPERACIONES = "operaciones@rapicreditca.com"
 FINIQUITO_EMAIL_COBRANZA = "cobranza@rapicreditca.com"
+FINIQUITO_EMAIL_ITMASTER = "itmaster@rapicreditca.com"
 FINIQUITO_WHATSAPP_LINEA = "424-4579934"
 
 
@@ -41,6 +42,20 @@ def enviar_correo_en_proceso_operaciones(
     if not ok:
         logger.warning(
             "finiquito en_proceso: fallo envio ops/cobranza caso_id=%s err=%s",
+            caso.id,
+            err,
+        )
+    return ok, err
+
+
+def enviar_correo_rechazo_itmaster(caso: FiniquitoCaso) -> Tuple[bool, Optional[str]]:
+    """Aviso generico a IT al marcar Rechazado desde la bandeja principal (admin)."""
+    subj = "[RapiCredit Finiquito] revisar caso"
+    body = "revisar caso"
+    ok, err = send_email([FINIQUITO_EMAIL_ITMASTER], subj, body, servicio=None)
+    if not ok:
+        logger.warning(
+            "finiquito rechazo itmaster: fallo envio caso_id=%s err=%s",
             caso.id,
             err,
         )

@@ -351,15 +351,19 @@ def on_startup():
         logger.exception("Startup BD fallo tras reintentos: %s", e)
         raise
 
-    # Scheduler: solo un worker (leader) inicia los jobs para evitar duplicados con --workers 2
+    # Scheduler: un proceso lider ejecuta APScheduler (evita duplicados con --workers 2).
+    # Watcher en todos los workers: si el lider muere, otro reclama tras heartbeat obsoleto en BD.
     try:
         from app.core.database import SessionLocal
-        from app.core.scheduler_leader import try_claim_scheduler_leader, start_scheduler_leader_heartbeat
+        from app.core.scheduler_leader import (
+            start_scheduler_leader_heartbeat_if_needed,
+            try_claim_scheduler_leader,
+        )
         db = SessionLocal()
         try:
             if try_claim_scheduler_leader(db):
                 start_scheduler()
-                start_scheduler_leader_heartbeat()
+                start_scheduler_leader_heartbeat_if_needed()
                 app.state._scheduler_leader = True
             else:
                 app.state._scheduler_leader = False
@@ -367,6 +371,12 @@ def on_startup():
             db.close()
     except Exception as e:
         logger.exception("No se pudo iniciar el scheduler de reportes cobranzas: %s", e)
+    try:
+        from app.core.scheduler_leader import start_scheduler_leader_watcher
+
+        start_scheduler_leader_watcher()
+    except Exception as e:
+        logger.exception("No se pudo iniciar scheduler leader watcher: %s", e)
 
     # Cache dashboard: actualizacion a las 1:00 y 13:00 (hora local) para cargas rapidas
     try:
@@ -422,10 +432,14 @@ def on_shutdown():
         logger.warning('Error al detener scheduler de LIQUIDADO: %s', e)
     
     try:
-        if getattr(app.state, "_scheduler_leader", False):
-            from app.core.scheduler_leader import stop_scheduler_leader_heartbeat
-            stop_scheduler_leader_heartbeat()
+        from app.core.scheduler_leader import (
+            stop_scheduler_leader_heartbeat,
+            stop_scheduler_leader_watcher,
+        )
         from app.core.scheduler import stop_scheduler
+
+        stop_scheduler_leader_watcher()
+        stop_scheduler_leader_heartbeat()
         stop_scheduler()
     except Exception as e:
         logger.warning("Al detener scheduler: %s", e)

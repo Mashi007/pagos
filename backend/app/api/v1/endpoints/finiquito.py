@@ -70,6 +70,7 @@ from app.schemas.finiquito import (
 from app.services.finiquito_area_trabajo_emails import (
     enviar_correo_contactar_cliente_finiquito,
     enviar_correo_en_proceso_operaciones,
+    enviar_correo_rechazo_itmaster,
 )
 from app.services.finiquito_db_schema import (
     finiquito_casos_has_contacto_para_siguientes,
@@ -1038,6 +1039,8 @@ def finiquito_admin_patch_estado(
             admin_email=admin.email or "",
             admin_nombre=f"{(admin.nombre or '').strip()} {(admin.apellido or '').strip()}".strip(),
         )
+    elif nuevo == "RECHAZADO":
+        enviar_correo_rechazo_itmaster(caso)
     caso_out = _admin_casos_to_items(db, [caso])[0]
     return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
 

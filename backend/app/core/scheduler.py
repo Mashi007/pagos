@@ -26,6 +26,11 @@ SCHEDULER_TZ = "America/Caracas"
 _scheduler: Optional[BackgroundScheduler] = None
 
 
+def scheduler_is_running() -> bool:
+    """True si este proceso ya tiene BackgroundScheduler iniciado (lider con jobs registrados)."""
+    return _scheduler is not None
+
+
 def _job_emails_liquidado_diferidos() -> None:
     """Job 01:10. Correos con PDF estado de cuenta para prestamos LIQUIDADO (N dias despues de fecha_liquidado)."""
     db = SessionLocal()
