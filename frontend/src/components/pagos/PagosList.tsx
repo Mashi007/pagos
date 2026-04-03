@@ -141,7 +141,7 @@ export function PagosList() {
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [gmailScanFilter, setGmailScanFilter] = useState<
     'unread' | 'read' | 'all' | 'pending_identification'
-  >('unread')
+  >('all')
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
   const [cedulasReportarBsTotal, setCedulasReportarBsTotal] = useState<
     number | null
@@ -1088,7 +1088,7 @@ export function PagosList() {
                         <span className="text-emerald-800">
                           {gmailStatus.last_correos_marcados_revision} correo(s)
                           leidos con al menos un comprobante (etiqueta IMAGEN 1
-                          / IMAGEN 2 + estrella).
+                          / 2 / 3 + estrella).
                         </span>
                       </>
                     ) : null}
@@ -1148,9 +1148,13 @@ export function PagosList() {
                 {submenuGmailOpen && (
                   <div className="ml-2 mt-2 space-y-2 rounded-r-md border-l-2 border-gray-200 bg-gray-50/80 py-2 pl-3 pr-2">
                     <div>
-                      <label className="mb-1 block text-xs text-gray-600">
-                        Correos a escanear (Gmail)
+                      <label className="mb-1 block text-xs font-medium text-gray-700">
+                        Modo de escaneo (Gmail)
                       </label>
+                      <p className="mb-2 text-xs text-gray-500">
+                        Estándar: toda la bandeja con adjunto, del más antiguo
+                        al más reciente (leídos o no leídos).
+                      </p>
                       <Select
                         value={gmailScanFilter}
                         onValueChange={(
@@ -1165,27 +1169,39 @@ export function PagosList() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="unread">No leídos</SelectItem>
-                          <SelectItem value="read">Leídos</SelectItem>
                           <SelectItem value="all">
-                            Todos (leídos y no leídos)
+                            Todos los correos (estándar)
                           </SelectItem>
                           <SelectItem value="pending_identification">
-                            Solo sin identificar (sin estrella ni etiqueta
-                            IMAGEN 1/2)
+                            Solo sin identificar (sin estrella ni IMAGEN 1 / 2 /
+                            3)
                           </SelectItem>
+                          <SelectItem value="unread">Solo no leídos</SelectItem>
+                          <SelectItem value="read">Solo leídos</SelectItem>
                         </SelectContent>
                       </Select>
                       {gmailScanFilter === 'all' && (
                         <p className="mt-1.5 text-xs text-gray-600">
-                          Se descargarán todos los correos (leídos y no leídos)
-                          del buzón principal.
+                          Recorre todos los mensajes del buzón principal con
+                          adjunto, en orden cronológico, sin saltar al medio.
                         </p>
                       )}
                       {gmailScanFilter === 'pending_identification' && (
                         <p className="mt-1.5 text-xs text-gray-600">
-                          Inbox con adjunto, sin destacar y sin etiquetas de
-                          plantilla; no reescanea comprobantes ya marcados.
+                          Solo inbox con adjunto, sin estrella y sin etiquetas
+                          IMAGEN 1, 2 o 3; no vuelve a procesar comprobantes ya
+                          marcados.
+                        </p>
+                      )}
+                      {gmailScanFilter === 'unread' && (
+                        <p className="mt-1.5 text-xs text-gray-600">
+                          Únicamente hilos no leídos; el servidor puede repetir
+                          pasadas hasta vaciar esa cola.
+                        </p>
+                      )}
+                      {gmailScanFilter === 'read' && (
+                        <p className="mt-1.5 text-xs text-gray-600">
+                          Únicamente correos ya leídos en el buzón principal.
                         </p>
                       )}
                     </div>
@@ -1226,7 +1242,7 @@ export function PagosList() {
                         try {
                           await pagoService.downloadGmailExcelTemporal()
                           toast.success(
-                            'Excel descargado (todas las filas guardadas).'
+                            'Excel descargado. Los datos siguen en el servidor; nuevas filas se añaden al procesar más correos. Para borrar todo use «Vaciar tabla».'
                           )
                           pagoService.getGmailStatus().then(setGmailStatus)
                         } catch (e) {
@@ -1281,7 +1297,9 @@ export function PagosList() {
                       await pagoService.downloadGmailExcel(
                         gmailStatus?.latest_data_date ?? undefined
                       )
-                      toast.success('Excel descargado.')
+                      toast.success(
+                        'Excel descargado (solo copia). Los datos no se borran en el servidor.'
+                      )
                       pagoService.getGmailStatus().then(setGmailStatus)
                     } catch (e) {
                       toast.error(getErrorMessage(e))
@@ -2257,9 +2275,14 @@ export function PagosList() {
             <DialogTitle>Vaciar tabla (Generar Excel desde Gmail)</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-600">
-            Se borrarán todos los datos de la tabla usada por «Generar Excel
-            desde Gmail» (pagos_gmail_sync_item). Esta acción no se puede
-            deshacer. ¿Continuar?
+            Se borrarán en el servidor todas las filas acumuladas por «Generar
+            Excel desde Gmail»:{' '}
+            <span className="font-medium">
+              pagos_gmail_sync_item
+            </span> y{' '}
+            <span className="font-medium">gmail_temporal</span>. Descargar
+            Excel no borra nada; solo este paso vacía las tablas. Acción
+            irreversible. ¿Continuar?
           </p>
           <DialogFooter>
             <Button

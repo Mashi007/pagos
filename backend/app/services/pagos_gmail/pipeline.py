@@ -1,10 +1,12 @@
 """
-Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/mixed + rfc822) -> plantilla A/B
-  -> Drive + BD; si no cumple plantillas 1/2 o faltan columnas -> no fila ni archivo en Drive para ese adjunto.
+Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/mixed + rfc822) -> plantilla A/B/C
+  -> Drive + BD; si no cumple plantillas 1/2/3 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
-Estrella Gmail + etiquetas IMAGEN 1 / IMAGEN 2 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
-plantilla A o B y tener las CUATRO columnas requeridas (fecha_pago, cedula, monto, numero_referencia) sin NA ni vacias.
-Si en cualquier archivo falta una columna o no es plantilla valida: no estrella, no etiquetas, no leido
+Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
+plantilla A o B con las cuatro columnas (fecha_pago, cedula, monto, numero_referencia), o plantilla C (Binance Pay)
+con monto + referencia + email en imagen; fecha de C = fecha del correo; cedula = lookup en tabla clientes por ese email.
+Si el email de C no existe en clientes: no Drive, no fila, no etiqueta IMAGEN 3 para ese adjunto.
+Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas, no leido
 (en filtro unread se fuerza sin estrella + no leido para reintento). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
 """
@@ -12,8 +14,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.cliente import Cliente
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
 from app.services.pagos_gmail.drive_service import (
@@ -34,12 +38,14 @@ from app.services.pagos_gmail.gmail_service import (
     mark_unread_clear_star,
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
+    PAGOS_GMAIL_LABEL_IMAGEN_3,
 )
 from app.services.pagos_gmail.gemini_service import (
     classify_and_extract_pagos_gmail_attachment,
     PAGOS_GMAIL_FORMATOS_PLANTILLA,
     PAGOS_NA,
 )
+from app.core.config import settings
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
     formatear_cedula,
@@ -47,25 +53,71 @@ from app.services.pagos_gmail.helpers import (
     get_sheet_name_for_date,
     normalizar_fecha_pago,
     normalizar_referencia,
+    resolve_banco_para_excel_pagos_gmail,
 )
 
 logger = logging.getLogger(__name__)
 
-# Columna Excel "Banco" al digitalizar: imagen 1 (plantilla A) / imagen 2 (plantilla B).
+
+def _dedupe_messages_pagos_gmail(raw_messages: list[dict]) -> list[dict]:
+    seen_ids: set[str] = set()
+    out: list[dict] = []
+    for m in raw_messages:
+        mid = m["id"]
+        if mid in seen_ids:
+            continue
+        seen_ids.add(mid)
+        out.append(m)
+    return out
+
+
+def _sort_messages_by_date_asc(messages: list[dict]) -> list[dict]:
+    """
+    Orden estable para procesar siempre en serie: primero el mas antiguo, ultimo el mas reciente
+    (cabecera Date; empate por id de mensaje). Gmail no garantiza orden en messages.list.
+    """
+
+    def _key(m: dict) -> tuple:
+        h = m.get("headers") or {}
+        dt = get_message_date(h)
+        return (dt, m.get("id") or "")
+
+    return sorted(messages, key=_key)
+
+
+# Columna Excel "Banco" al digitalizar: imagen 1 (A) / imagen 2 (B) / imagen 3 Binance (C).
 PAGOS_GMAIL_BANCO_IMAGEN_1 = "Mercantil"
 PAGOS_GMAIL_BANCO_IMAGEN_2 = "BNC"
+PAGOS_GMAIL_BANCO_IMAGEN_3 = "BINANCE"
+
+
+def _cedula_por_email_cliente(db: Session, email_raw: str) -> Optional[str]:
+    em = (email_raw or "").strip().lower()
+    if not em:
+        return None
+    try:
+        return db.execute(
+            select(Cliente.cedula)
+            .where(func.lower(func.trim(Cliente.email)) == em)
+            .limit(1)
+        ).scalar_one_or_none()
+    except Exception as ex:
+        logger.warning("[PAGOS_GMAIL] Lookup cedula por email clientes: %s", ex)
+        return None
 
 
 def run_pipeline(
     db: Session,
     existing_sync_id: Optional[int] = None,
-    scan_filter: str = "unread",
+    scan_filter: str = "all",
 ) -> tuple[Optional[int], str]:
     """
-    Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD solo si plantilla 1/2 y columnas completas).
-    Por adjunto OK: etiqueta IMAGEN 1 (A) o IMAGEN 2 (B) + estrella; cierre: leido si hubo algun OK.
-    scan_filter: "unread" | "read" | "all" | "pending_identification".
-      pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2.
+    Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD solo si plantilla 1/2/3 y datos completos; C exige cliente por email).
+    Por adjunto OK: etiqueta IMAGEN 1 (A), IMAGEN 2 (B) o IMAGEN 3 (C) + estrella; cierre: leido si hubo algun OK.
+    scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = toda la bandeja).
+      pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2/3.
+    Los mensajes de cada lote se ordenan por fecha (antiguo -> reciente) antes de procesar.
+    Con "unread", se repite listar+procesar hasta que no queden no leidos o hasta PAGOS_GMAIL_UNREAD_MAX_PASSES.
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
     logger.info("[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s)", existing_sync_id, scan_filter)
@@ -110,39 +162,36 @@ def run_pipeline(
     drive_errors = 0
     # Correos que quedaron con estrella tras digitalizacion completa (cuatro columnas).
     correos_marcados_revision = 0
-    processed_msg_ids: set[str] = set()
     plantilla_label_cache: Dict[str, Optional[str]] = {}
 
     try:
-        logger.info("[PAGOS_GMAIL] Listando correos (filtro=%s)...", scan_filter)
-        raw_messages = list_messages_by_filter(gmail_svc, scan_filter)
-        seen_ids: set[str] = set()
-        messages: list[dict] = []
-        for m in raw_messages:
-            mid = m["id"]
-            if mid in seen_ids:
-                continue
-            seen_ids.add(mid)
-            messages.append(m)
-        if len(messages) < len(raw_messages):
-            logger.info(
-                "[PAGOS_GMAIL] Duplicados eliminados: %d -> %d mensajes",
-                len(raw_messages),
-                len(messages),
-            )
-        logger.info(
-            "[PAGOS_GMAIL] Correos (filtro=%s): %d",
-            scan_filter,
-            len(messages),
+        max_unread_passes = int(
+            getattr(settings, "PAGOS_GMAIL_UNREAD_MAX_PASSES", 30) or 30
         )
-        if not messages:
-            logger.info("[PAGOS_GMAIL] No hay correos con filtro %s", scan_filter)
+        max_unread_passes = max(1, min(100, max_unread_passes))
+
+        def fetch_sorted_batch() -> list[dict]:
+            raw_messages = list_messages_by_filter(gmail_svc, scan_filter)
+            messages = _dedupe_messages_pagos_gmail(raw_messages)
+            if len(messages) < len(raw_messages):
+                logger.info(
+                    "[PAGOS_GMAIL] Duplicados eliminados: %d -> %d mensajes",
+                    len(raw_messages),
+                    len(messages),
+                )
+            ordered = _sort_messages_by_date_asc(messages)
+            logger.info(
+                "[PAGOS_GMAIL] Correos (filtro=%s): %d (orden antiguo -> reciente)",
+                scan_filter,
+                len(ordered),
+            )
+            return ordered
 
         def process_message_batch(batch: list[dict], label: str) -> None:
             nonlocal emails_ok, files_ok, drive_errors, correos_marcados_revision
             if batch:
                 logger.info(
-                    "[PAGOS_GMAIL] Procesando lote %s: %d correos (imagen/PDF pipeline, formatos A/B)",
+                    "[PAGOS_GMAIL] Procesando lote %s: %d correos (imagen/PDF pipeline, formatos A/B/C)",
                     label,
                     len(batch),
                 )
@@ -175,8 +224,6 @@ def run_pipeline(
                         msg_id,
                     )
                     continue
-
-                processed_msg_ids.add(msg_id)
 
                 logger.info("[PAGOS_GMAIL]   folder_id=%s", folder_id)
 
@@ -215,7 +262,7 @@ def run_pipeline(
                 )
 
                 logger.info(
-                    "[PAGOS_GMAIL]   candidatos imagen/PDF: %d - %s",
+                    "[PAGOS_GMAIL]   candidatos imagen/PDF (adjunto + embebido + reenvio, dedup): %d - %s",
                     len(attachments),
                     ", ".join(f"{f}({len(c)}B)" for f, c, _ in attachments)
                     if attachments
@@ -298,15 +345,35 @@ def run_pipeline(
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
                             any_incomplete_or_skipped = True
                             logger.warning(
-                                "[PAGOS_GMAIL]   No es plantilla imagen 1 (A) ni 2 (B) - no Drive/BD: %s",
+                                "[PAGOS_GMAIL]   No es plantilla A/B/C - no Drive/BD: %s",
                                 filename,
                             )
                             continue
 
-                        f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
-                        c = formatear_cedula(_v(data.get("cedula")))
-                        m = _v(data.get("monto"))
-                        r = normalizar_referencia(_v(data.get("numero_referencia")))
+                        if fmt == "C":
+                            f = normalizar_fecha_pago(msg_date.strftime("%d/%m/%Y"))
+                            m = _v(data.get("monto"))
+                            r = normalizar_referencia(_v(data.get("numero_referencia")))
+                            email_img = (data.get("email_cliente") or "").strip()
+                            if email_img.upper() == PAGOS_NA:
+                                email_img = ""
+                            c_raw = (
+                                _cedula_por_email_cliente(db, email_img) if email_img else None
+                            )
+                            c = formatear_cedula(c_raw) if c_raw else ""
+                            if not c_raw:
+                                any_incomplete_or_skipped = True
+                                logger.warning(
+                                    "[PAGOS_GMAIL]   Formato C sin fila en clientes para email=%s - no Drive/BD: %s",
+                                    (email_img[:80] if email_img else "(vacio)"),
+                                    filename,
+                                )
+                                continue
+                        else:
+                            f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
+                            c = formatear_cedula(_v(data.get("cedula")))
+                            m = _v(data.get("monto"))
+                            r = normalizar_referencia(_v(data.get("numero_referencia")))
                         if not _campos_completos(f, c, m, r):
                             any_incomplete_or_skipped = True
                             logger.warning(
@@ -341,10 +408,12 @@ def run_pipeline(
                             any_incomplete_or_skipped = True
                             continue
 
-                        banco_excel = (
-                            PAGOS_GMAIL_BANCO_IMAGEN_1
-                            if fmt == "A"
-                            else PAGOS_GMAIL_BANCO_IMAGEN_2
+                        banco_excel = resolve_banco_para_excel_pagos_gmail(
+                            fmt,
+                            (data.get("banco") or "").strip(),
+                            default_a=PAGOS_GMAIL_BANCO_IMAGEN_1,
+                            default_b=PAGOS_GMAIL_BANCO_IMAGEN_2,
+                            default_c=PAGOS_GMAIL_BANCO_IMAGEN_3,
                         )
                         ok_db = _guardar_en_bd(
                             sender,
@@ -359,15 +428,18 @@ def run_pipeline(
                         )
                         if ok_db:
                             had_complete_digitalization = True
-                            id_a, id_b = get_or_create_pagos_gmail_plantilla_label_ids(
+                            id_a, id_b, id_c = get_or_create_pagos_gmail_plantilla_label_ids(
                                 gmail_svc, plantilla_label_cache
                             )
                             if fmt == "A":
                                 label_id = id_a
                                 etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_1
-                            else:
+                            elif fmt == "B":
                                 label_id = id_b
                                 etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_2
+                            else:
+                                label_id = id_c
+                                etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
                             if label_id:
                                 label_ids_for_message.append(label_id)
                             logger.info(
@@ -380,6 +452,19 @@ def run_pipeline(
                     except Exception as e:
                         logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
                         any_incomplete_or_skipped = True
+
+                n_att = len(attachments)
+                if (
+                    n_att > 1
+                    and any_incomplete_or_skipped
+                    and had_complete_digitalization
+                ):
+                    logger.warning(
+                        "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C valida "
+                        "o fallaron -> no estrella ni leido (se exige 100%% OK en todos). "
+                        "Si alguno se digitalizo, fila Excel/Drive puede existir para ese archivo.",
+                        n_att,
+                    )
 
                 fully_digitized_email = (
                     len(attachments) > 0
@@ -404,6 +489,12 @@ def run_pipeline(
                     logger.info(
                         "[PAGOS_GMAIL]   Gmail: sin estrella + no leido (no 100%% digitalizacion o sin adjuntos validos)"
                     )
+                elif attachments:
+                    logger.info(
+                        "[PAGOS_GMAIL]   Gmail: filtro=%s — correo no marcado estrella/leido automatico "
+                        "(digitalizacion parcial o sin adjuntos validos).",
+                        scan_filter,
+                    )
 
                 emails_ok += 1
 
@@ -411,25 +502,39 @@ def run_pipeline(
                 sync.files_processed = files_ok
                 db.commit()
 
-        process_message_batch(messages, "run")
-
-        if scan_filter == "unread" and messages:
-            raw_b = list_messages_by_filter(gmail_svc, "unread")
-            seen_b: set[str] = set()
-            messages_b: list[dict] = []
-            for m in raw_b:
-                mid = m["id"]
-                if mid in seen_b:
-                    continue
-                seen_b.add(mid)
-                if mid not in processed_msg_ids:
-                    messages_b.append(m)
-            if messages_b:
+        if scan_filter == "unread":
+            for pass_n in range(1, max_unread_passes + 1):
                 logger.info(
-                    "[PAGOS_GMAIL] Segunda pasada (no leidos no vistos en 1a): %d",
-                    len(messages_b),
+                    "[PAGOS_GMAIL] Pasada no leidos %d/%d (lista ordenada antiguo->reciente, primero al ultimo)",
+                    pass_n,
+                    max_unread_passes,
                 )
-                process_message_batch(messages_b, "repaso")
+                messages = fetch_sorted_batch()
+                if not messages:
+                    if pass_n == 1:
+                        logger.info("[PAGOS_GMAIL] No hay correos con filtro unread")
+                    else:
+                        logger.info(
+                            "[PAGOS_GMAIL] Fin: no quedan no leidos tras pasada %d",
+                            pass_n - 1,
+                        )
+                    break
+                process_message_batch(messages, f"vuelta_{pass_n}")
+            else:
+                remaining = fetch_sorted_batch()
+                if remaining:
+                    logger.warning(
+                        "[PAGOS_GMAIL] Tras %d pasada(s) siguen %d no leido(s). "
+                        "Aumente PAGOS_GMAIL_UNREAD_MAX_PASSES o ejecute de nuevo.",
+                        max_unread_passes,
+                        len(remaining),
+                    )
+        else:
+            messages = fetch_sorted_batch()
+            if not messages:
+                logger.info("[PAGOS_GMAIL] No hay correos con filtro %s", scan_filter)
+            else:
+                process_message_batch(messages, "run")
 
         sync.finished_at = datetime.now(timezone.utc)
         sync.emails_processed = emails_ok

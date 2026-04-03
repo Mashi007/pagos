@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 PAGOS_NA = "NA"
 
-PagosGmailFormato = Literal["A", "B", "ninguno"]
+PagosGmailFormato = Literal["A", "B", "C", "ninguno"]
 
 GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = """
 Eres un clasificador estricto. Entrada: una sola imagen o PDF extraida del mensaje (incrustada en cuerpo, adjunto con nombre,
@@ -40,56 +40,80 @@ ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
     (b) imagen incrustada en el HTML del cuerpo (inline / CID / multipart related),
     (c) imagen detectada dentro del cuerpo sin filename util,
     (d) PDF adjunto o pagina de PDF, o trozo extraido de un .eml reenviado.
-  No importa el origen: si el contenido visual es plantilla A o B, clasifica igual. No descartes por "parece pegado en el correo" o "no es adjunto".
+  No importa el origen: si el contenido visual es plantilla A, B o C (Binance Pay), clasifica igual. No descartes por "parece pegado en el correo" o "no es adjunto".
   Nombres genericos del sistema (inline-0.jpg, image.png, unnamed, parte sin titulo) NO son evidencia de ninguno; solo cuenta lo que se ve en los pixeles.
   Si ves chrome de cliente de correo (cabeceras, botones, fondo gris) alrededor pero el ticket o recibo BNC/RAPI es legible en el centro, ignora el marco y lee el comprobante.
   Si el binario es solo firma, logo, banner, avatar o recorte sin los datos de operacion, o el comprobante esta tan cortado que no puedes los cuatro campos con certeza -> ninguno.
   Las imagenes embebidas suelen tener mas compresion o menos dpi: tolera OCR sucio (guiones rotos, letras pegadas) pero si un campo sigue ilegible -> ninguno, no rellenes por contexto del correo.
 
-OBLIGATORIO — campo "formato" en el JSON: SOLO uno de estos tres valores exactos: A, B, ninguno.
+OBLIGATORIO — campo "formato" en el JSON: SOLO uno de estos cuatro valores exactos: A, B, C, ninguno.
   A = plantilla imagen 1: ticket RAPI-CREDIT / RECAUDACION / terminal (abajo) O papeleleta Mercantil DEPOSITO DIVISAS a RAPI-CREDIT con RECAUDACION (VARIANTE MERCANTIL).
   B = unicamente plantilla imagen 2 (recibo BNC a favor de RAPI-CREDIT descrita abajo).
-  ninguno = cualquier otra cosa, otra app, otro banco, duda, borroso, selfie, documento que no sea esas dos plantillas.
-Prohibido usar otro valor en "formato" (ni numeros, ni texto libre). Si no es exactamente imagen 1 o imagen 2, formato = ninguno.
+  C = plantilla imagen 3: pantalla Binance Pay "Pago completado" con visto verde (circulo + check) descrita en PASO 2b y FORMATO C.
+  ninguno = cualquier otra cosa, duda, borroso, selfie, documento que no sea esas tres plantillas.
+Prohibido usar otro valor en "formato" (ni numeros, ni texto libre).
 
-REGLA SISTEMA: Devuelve "A" o "B" solo si el comprobante coincide exactamente con la plantilla imagen 1 (A) o imagen 2 (B)
-del prompt y puedes extraer los CUATRO campos con valor real
-(fecha_pago, cedula, monto, numero_referencia). Si la plantilla parece A o B pero algun campo no es legible
-con certeza, devuelve formato "ninguno" y los cuatro "NA".
+REGLA SISTEMA A/B: Devuelve "A" o "B" solo si el comprobante coincide con imagen 1 o 2 y puedes extraer los CUATRO campos con valor real
+(fecha_pago, cedula, monto, numero_referencia). Si la plantilla parece A o B pero algun campo no es legible, formato "ninguno" y NA.
 
-COLUMNAS OBLIGATORIAS Y GMAIL (estrella / etiquetas):
-  Las cuatro columnas deben estar completas y reales en la misma respuesta. Si falta una sola, o hay duda en una sola,
-  NO uses A ni B: formato "ninguno" y los cuatro campos "NA". Prohibido devolver A o B con algun campo "NA" o vacio.
-  El pipeline del correo solo pone estrella y etiqueta IMAGEN 1 o IMAGEN 2 cuando, en ese mensaje, todos los binarios
-  imagen/PDF procesados quedan digitalizados al 100% (plantilla correcta + las cuatro columnas). Columnas incompletas = sin estrella y sin etiquetar.
+REGLA SISTEMA C (imagen 3 / Binance Pay): Devuelve "C" solo si ves el nucleo C (PASO 2b) y puedes extraer con certeza:
+  monto (USDT/USD), numero_referencia (Id. de la orden / Order ID), y email_cliente (correo completo visible del destinatario en pantalla).
+  Para formato C en el JSON pon siempre fecha_pago="NA" y cedula="NA" (no inventes; el sistema asigna fecha desde el correo y cedula desde tabla clientes por email).
+  Si falta monto, id de orden o email legible -> formato "ninguno" y todos los campos relevantes NA.
+
+COLUMNAS OBLIGATORIAS Y GMAIL (estrella / etiquetas — las aplica el backend):
+  A y B: las cuatro columnas fecha_pago, cedula, monto, numero_referencia deben ser reales en tu respuesta; si falta una -> ninguno.
+  C: monto, numero_referencia, email_cliente obligatorios; fecha_pago y cedula deben ser "NA" en JSON.
+  El pipeline solo estrella y etiqueta IMAGEN 1 / 2 / 3 cuando cada adjunto valido queda procesado al 100%; en C, si el email no existe en clientes, el backend no incorpora fila ni etiqueta (no es tu tarea verificar la base de datos).
 
 === CLASIFICACION EN ORDEN (sigue el orden; no inviertas B y A) ===
 Objetivo: decidir formato en pocas comprobaciones. Usa la imagen solamente.
 
 PASO 1 - DESCARTE (ninguno al instante):
-  No aparece RAPI-CREDIT (ni RAPI CREDIT / RAPICREDIT razonable) y tampoco BNC reconocible
-    y tampoco es la variante Mercantil DEPOSITO DIVISAS descrita en "VARIANTE A — MERCANTIL" abajo -> ninguno.
-  Es captura de app, Pago Movil, Binance, Zelle, otro banco distinto (salvo Mercantil con RAPI+RECAUDACION), selfie, publicidad, borroso sin datos -> ninguno.
+  No aparece RAPI-CREDIT (ni RAPI CREDIT / RAPICREDIT / RAPH-CREDIT / RAPICREDI razonable) y tampoco BNC reconocible
+    y tampoco es la variante Mercantil DEPOSITO DIVISAS descrita en "VARIANTE A — MERCANTIL" abajo
+    y tampoco es pantalla Binance Pay imagen 3 (PASO 2b) -> ninguno.
+  Es captura de app generica, Pago Movil no Binance Pay, Zelle, otro banco distinto (salvo Mercantil con RAPI+RECAUDACION), selfie, publicidad, borroso sin datos -> ninguno.
+  Excepcion: NO descartes como "solo app" si cumple nucleo C (Binance + Pago completado + visto verde + USDT + orden + email).
 
-PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A:
+PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A ni C:
   Nucleo B = (BNC logo o texto) + cuenta con barras ####/####/##/######## (ej. 0191/0127/...) + RAPI-CREDIT como titular o beneficiario de esa cuenta
     + monto en dolares visible (Us$, US$, USD, o patron *...*NN.mm con decimales).
   Si el nucleo B se cumple, elige B aunque tambien aparezca "RAPI-CREDIT" en otro contexto: aqui es recibo de cajero BNC, no ticket RECAUDACION.
   Refuerzos utiles de B (opcionales si el nucleo ya es claro): asteriscos antes del monto; Agencia / Terminal / Cajero; "Serial:"; ristra solo digitos >12 que empiece en 7.
+  REGLA FIJA — linea DP + recibo BNC: Si el papel es claramente **recibo de cajero BNC** (sello o texto legible "Banco Nacional de Credito" / "Banco Nacional de Crédito" / marca BNC,
+    fondo con lineas azules o patron de matriz de cajero, cuenta ####/####/##/######## con RAPI como titular, tipico comprobante horizontal BNC)
+    **y** en la misma pieza aparece la linea del depositante **DP:** seguida de **V-** o **E-** o **J-** y digitos de cedula **con el nombre en la misma linea**
+    (ej. `DP: V-015185092` y a continuacion `MIRAIDA JIMENEZ`, con o sin guion entre cedula y nombre) -> **formato B (imagen 2) SIEMPRE**, **nunca A (imagen 1)**,
+    aunque el OCR tambien capte "RAPI" o "RAPI CREDIT" (en BNC es titular de cuenta, no ticket RECAUDACION vertical). Esta regla prevalece sobre "DP:...-NOMBRE refuerza A".
+  REGLA FIJA — **Banco Mercantil = imagen 1 (A)**, no B: Si la cuenta cliente o el comprobante muestra codigo **0105** al inicio del numero de cuenta
+    (formato `0105-0120-22-5120135978`, `0105 0120 22 5120135978`, `0105 0121 21 ...` u OCR sucio parecido), eso es **Banco Mercantil** en Venezuela -> **formato A** (variante Mercantil o ticket RECAUDACION), **nunca B (BNC)**.
+    Aplica a: (1) **tira termica/validador** vertical u orientada (SPD/DCME/HOME, Cedula Dep., Fondo RECAUDACION, RAPI-CREDIT o OCR "RAPH-CREDIT"); (2) **formulario papel "DEPOSITO DIVISAS" / "DEPÓSITO DIVISAS"** con logo **Mercantil** y tira impresa con Refer/Serial/Monto USD/RECAUDACION.
+    El recibo BNC tipico usa cuenta destino con otro codigo de entidad en el patron cajero (ej. **0191**/... con slashes), no confundir con 0105 Mercantil.
 
-PASO 3 - A (imagen 1) solo si PASO 2 no aplico:
+PASO 2b - C (imagen 3 / Binance Pay) si PASO 2 no aplico (no es recibo BNC):
+  Nucleo C = interfaz Binance (tema oscuro frecuente) + titulo "Pago completado" o "Payment completed"
+    + distintivo superior: circulo VERDE con marca de verificado / visto (check) centrado (icono de exito de la app)
+    + importe principal en USDT o USD (ej. "122 USDT", "50.5 USDT")
+    + seccion destinatario con correo electronico completo visible (usuario@dominio) junto a Apodo/Alias o etiqueta tipo Email
+    + linea "Id. de la orden" / "Order ID" / "ID de orden" con numero largo (solo digitos, ej. 423594224765779968).
+  NO es C: login, historial sin pantalla de completado, otra exchange, Binance sin visto verde + Pago completado, sin email visible, sin id de orden legible.
+  Si nucleo C: formato C (no A ni B). Extraccion: monto, numero_referencia=id orden, email_cliente=email visible; fecha_pago=NA; cedula=NA.
+
+PASO 3 - A (imagen 1) solo si PASO 2 y 2b no aplicaron:
   Nucleo A (terminal / ticket clasico) = RAPI-CREDIT + RECAUDACION (con o sin tilde en OCR) + USD + ticket de recaudacion (vertical/monoespaciado tipico) + grupos FORMATO A (1-5).
   Serial operacion: bloques separados por guiones con 2do bloque = fecha 8 digitos YYYYMMDD.
   Patron fuerte A: misma linea DP:...-NOMBRE APELLIDO (cedula y nombre juntos).
   Nucleo A (Mercantil papel): ver VARIANTE A — MERCANTIL; si se cumple, es formato A aunque el banco sea Mercantil y no BNC.
 
-PASO 4 - Desempate si queda duda entre A y B:
+PASO 4 - Desempate si queda duda entre A y B (si ya clasificaste C en 2b, no uses este paso):
   Cuenta 0191/... + BNC + RAPI titular + cajero/agencia -> B gana.
   Asteriscos + decimales + Debito/Us$ en contexto BNC -> B.
   RECAUDACION + serial con 2do bloque YYYYMMDD + sin recibo BNC de cuenta con slashes -> A.
-  Cedula+nombre misma linea (DP:...-NOMBRE) + RECAUDACION + serial YYYYMMDD -> A.
+  Cedula+nombre misma linea (DP:... + V-/E-/J- + nombre) + ticket **vertical** RECAUDACION + serial YYYYMMDD **sin** evidencia de recibo BNC cajero -> A.
+  Si aplica la REGLA FIJA del PASO 2 (DP + contexto BNC) -> B; no uses esta linea para forzar A.
 
-PASO 5 - Extraccion: solo devuelve formato A o B si los cuatro campos son legibles; si no, ninguno y NA.
+PASO 5 - Extraccion: A o B solo si los cuatro campos son legibles; C solo si monto + numero_referencia + email_cliente son legibles y pones fecha y cedula en NA; si no, ninguno y NA.
 
 DISCRIMINADOR SERIAL — imagen 1 (A) vs imagen 2 (B) (aplica ademas de RAPI-CREDIT/BNC):
   IMAGEN 1 / A — serial de operacion compuesto por BLOQUES separados por guiones (-) u ocasionalmente /:
@@ -107,9 +131,11 @@ DISCRIMINADOR SERIAL — imagen 1 (A) vs imagen 2 (B) (aplica ademas de RAPI-CRE
   Si cumple BNC (no Mercantil DEPOSITO DIVISAS) y aparece la ristra larga que empieza en 7 (>12 digitos) -> priorizar B y usar esa ristra en numero_referencia si es el id principal.
 
 DISCRIMINADOR CEDULA / MONTO — imagen 1 (A) vs imagen 2 (B):
-  IMAGEN 1 / A (ticket recaudacion RAPI-CREDIT): En la linea del depositante la CEDULA va JUNTO AL NOMBRE en la MISMA linea,
+  IMAGEN 1 / A (ticket recaudacion RAPI-CREDIT **vertical**): En la linea del depositante la CEDULA va JUNTO AL NOMBRE en la MISMA linea,
     casi siempre separados por un guion: ej. DP:V-015185092-MIRAIDA JIMENEZ o DP: V-... seguido de guion y nombre en mayusculas.
-    Ese patron (identificacion + nombre compartidos en una sola linea) refuerza A. No confundir con solo etiqueta "Cedula Dep" sin nombre en la misma linea.
+    Ese patron refuerza **A solo** en ticket de **terminal/recaudacion** (monoespaciado vertical, RECAUDACION, serial con YYYYMMDD en 2do bloque).
+    Si el mismo patron DP: V-... + nombre aparece en **recibo BNC horizontal** con sello/agua Banco Nacional de Credito -> es **B (imagen 2)**, ver REGLA FIJA PASO 2.
+  No confundir con solo etiqueta "Cedula Dep" sin nombre en la misma linea.
   VARIANTE MERCANTIL (A): La cedula puede estar en varias zonas: (1) impreso "Cedula Dep." / "Cédula Dep" con solo digitos (ej. 0028424570) — normaliza a V/E/J + digitos sin ceros a la izquierda tras letra;
     (2) manuscrito en casillas "Nro. de Cédula" con puntos miles (ej. 28.424.570) — quita puntos y prefijo V si aplica;
     (3) nombre del depositante puede ir manuscrito en "Depositante" e impreso en mayusculas abreviada en la tira del cajero — usa la cedula mas clara y consistente.
@@ -119,7 +145,7 @@ DISCRIMINADOR CEDULA / MONTO — imagen 1 (A) vs imagen 2 (B):
     En A el importe puede mostrarse con USD sin esa cortina de asteriscos tipica de cajero BNC; si ves BNC + linea Debito/Us$ + asteriscos+monto -> B.
 
 FORMATO A — palabras clave y grupos (deben cumplirse TODOS los grupos 1-5):
-  Grupo 1 (empresa): RAPI-CREDIT | RAPI CREDIT | RAPI-CREDIT, C.A. | RAPICREDIT (OCR sucio)
+  Grupo 1 (empresa): RAPI-CREDIT | RAPI CREDIT | RAPI-CREDIT, C.A. | RAPICREDIT | RAPICREDI | RAPH-CREDIT (OCR sucio: H por I, falta guion)
   Grupo 2 (concepto): RECAUDACION | RECAUDACIÓN (tolerar sin tilde: RECAUDACION)
   Grupo 3 (moneda): USD en linea de monto o junto al importe
   Grupo 4 (depositante): CEDULA DEP | Cédula Dep | DP:V-... y en la MISMA linea el NOMBRE del depositante tras guion (patron fuerte imagen 1)
@@ -128,13 +154,15 @@ FORMATO A — palabras clave y grupos (deben cumplirse TODOS los grupos 1-5):
 Palabras secundarias A (refuerzo, no bastan solas): FONDOS, CANT BILLETES, COMISION, TASA, CTA. COM,
   DCME, SPDP, COPIA (vertical), lineas alfanumericas tipo XXXX-YYYYMMDD-hhmmss-...
 
-VARIANTE A — MERCANTIL (DEPOSITO DIVISAS / papeleleta papel, sigue siendo formato A / imagen 1):
-  Reconocimiento visual: cabecera o marca Banco Mercantil / MERCANTIL / "Mercantil, C.A."; titulo "DEPOSITO DIVISAS" o "DEPÓSITO DIVISAS" (Copia Cliente en margen es frecuente).
+VARIANTE A — MERCANTIL (dos caras tipicas; ambas son formato A / imagen 1, banco Mercantil):
+  (A1) **Formulario papel DEPOSITO DIVISAS**: logo o nombre **Mercantil**; titulo "DEPOSITO DIVISAS" o "DEPÓSITO DIVISAS"; casillas manuscritas (depositante, cedula, monto); tira del validador pegada o impresa con Refer, Monto USD, Fondo RECAUDACION, RAPI-CREDIT/RAPICREDI, Cédula Dep.
+  (A2) **Solo tira termica / comprobante de cajero Mercantil**: texto monoespaciado o vertical; lineas **Cedula Dep.**, **Cant. Billetes**, **Comision**, **Tasa**; cuenta tipo **0105-....-..-..........**; destino RAPI/RAPH-CREDIT + **RECAUDACION**; serial largo solo digitos (ej. 7403...) y/o cadena con guiones con bloque **YYYYMMDD**.
+  Reconocimiento visual comun: cabecera o marca Banco Mercantil / MERCANTIL / "Mercantil, C.A." cuando aparece en (A1); en (A2) basta **0105** + RAPI + RECAUDACION en la tira.
   Beneficiario / empresa destino en la tira impresa: RAPI-CREDIT, C.A. o RAPI-CREDIT (misma familia que Grupo 1).
   Fondos / concepto impreso: RECAUDACION (u OCR sucio RECAUDACION).
-  Moneda: checkbox o texto USD / dolares en el formulario; monto en USD en tira (asteriscos + NN,dd USD) o casilla manuscrita.
+  Moneda: checkbox o texto USD / dolares en el formulario; monto en USD en tira (asteriscos + NN,dd USD con coma decimal) o casilla manuscrita.
   Grupos equivalentes para esta variante: (1) RAPI-CREDIT como destino, (2) RECAUDACION en fondos, (3) USD, (4) cedula legible (impresa y/o manuscrita), (5) referencia: linea Serial larga digitos y/o codigo operacion con guiones YYYYMMDD en 2do bloque.
-  Cuenta cliente en casillas (ej. 0105 0120 22 5120135978) NO es numero_referencia; no confundir con serial de operacion.
+  Cuenta cliente en casillas o en tira (ej. 0105 0120 22 5120135978 o 0105-0120-22-5120135978) NO es numero_referencia; no confundir con serial de operacion. **0105** confirma institucion Mercantil para campo banco en JSON (ej. "Mercantil" o "Banco Mercantil").
   fecha_pago: usar fecha de la operacion en tira (2do bloque YYYYMMDD si aparece en el codigo guionado) o fecha manuscrita "31/3/2026" en el formulario si la tira es ilegible — una sola fecha coherente DD/MM/YYYY.
   Si cumple esta variante Mercantil, clasifica A (no "ninguno" por ser banco Mercantil; no B salvo que cumpla nucleo BNC completo de PASO 2).
 
@@ -161,12 +189,14 @@ FORMATO B — comprobante BNC de deposito a favor de RAPI-CREDIT (segunda planti
     Ya decidiste con PASO 2-4 arriba; aqui el detalle de plantilla.
 
 Resumen discriminadores (cruce con PASO 4): serial 2do bloque YYYYMMDD -> A; ristra >12 digitos empezando en 7 + BNC + cuenta slashes -> fuerte B;
+  cuenta que empieza en **0105** + RAPI + RECAUDACION (tira o formulario) -> **A Mercantil**, no B;
   misma ristra larga 7400... pero Mercantil + DEPOSITO DIVISAS + RAPI + RECAUDACION -> A (variante Mercantil).
   Cedula+nombre misma linea DP:...-NOMBRE -> A; monto *...*122.00 con BNC -> fuerte B.
 
-DESCARTE (refuerzo PASO 1): sin RAPI-CREDIT ni BNC -> ninguno.
+DESCARTE (refuerzo PASO 1): sin RAPI-CREDIT ni BNC ni nucleo Binance C -> ninguno.
   Ticket A completo pero sin recibo BNC -> A si grupos 1-5 OK; si falta grupo obligatorio de A -> ninguno.
   Recibo BNC + RAPI titular + dolares -> B aunque no diga literal "Deposito Us$".
+  Pantalla Binance Pay nucleo C -> C aunque no haya RAPI-CREDIT en la captura.
 
 === DETALLE FORMATO A ===
 Ticket vertical, fuente monoespaciada. Los 5 grupos de palabras clave arriba deben verse; el margen
@@ -186,18 +216,30 @@ Prioriza la plantilla horizontal BNC anterior. numero_referencia: si hay ristra 
   monto: patron tipico imagen 2 = asteriscos seguidos de NN.mm; extrae NN.mm y devuelve ej. 122.00 USD (sin asteriscos en JSON).
   fecha_pago: fecha/hora impresa de la operacion.
 
-=== EXTRACCION (solo si formato A o B) ===
-fecha_pago, cedula (normaliza V/E/J + digitos sin ceros a la izquierda tras la letra; en A prioriza linea DP:...-NOMBRE),
-monto con moneda (B: cifra tras asteriscos + USD; A: USD segun comprobante sin forzar asteriscos),
-numero_referencia: A = serial con bloques y 2do bloque YYYYMMDD; B = preferir cadena >12 digitos empezando en 7 si aplica;
-  sin etiquetas en el JSON, solo el valor.
+=== DETALLE FORMATO C (imagen 3 / Binance Pay) ===
+  Banco en Excel lo fija el sistema como BINANCE; no hace falta devolver campo banco en JSON.
+  monto: lee cifra con USDT o USD (ej. 122 USDT -> "122.00 USDT" o "122 USDT" consistente).
+  numero_referencia: copia entera el Id. de la orden (digitos; no omitas digitos por OCR).
+  email_cliente: un solo email, minusculas opcional; debe coincidir con texto visible en pantalla (destinatario del pago).
+  fecha_pago: "NA". cedula: "NA".
 
-Salida: solo JSON, sin markdown (ejemplo de claves; sustituye valores reales o NA):
-{"formato":"A"|"B"|"ninguno","fecha_pago":"...","cedula":"...","monto":"...","numero_referencia":"..."}
+=== EXTRACCION ===
+A/B: fecha_pago, cedula (normaliza V/E/J + digitos; en A prioriza linea DP:...-NOMBRE),
+  monto con moneda (B: cifra tras asteriscos + USD; A: USD segun comprobante),
+  numero_referencia segun plantilla A o B. email_cliente puede ser "NA".
+  banco: nombre de la INSTITUCION del comprobante (como aparece: logo, cabecera, pie de pagina).
+    Ejemplos: formato B con logo BNC -> "BNC" o "Banco Nacional de Credito"; variante Mercantil (DEPOSITO DIVISAS) -> "Mercantil" o "Banco Mercantil";
+    ticket RECAUDACION RAPI si ves nombre de banco en el ticket usalo; si solo dice RAPI sin banco legible -> "NA".
+C: monto, numero_referencia, email_cliente obligatorios; fecha_pago="NA"; cedula="NA".
+
+Salida: solo JSON, sin markdown.
+  A/B: {"formato":"A"|"B","fecha_pago":"...","cedula":"...","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"Mercantil"|"BNC"|"..."}
+  C: {"formato":"C","fecha_pago":"NA","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"usuario@dominio.com","banco":"NA"}
+  ninguno: {"formato":"ninguno","fecha_pago":"NA","cedula":"NA","monto":"NA","numero_referencia":"NA","email_cliente":"NA","banco":"NA"}
 """.strip()
 
-# Solo estas respuestas de formato pasan a Drive/BD/etiquetas IMAGEN 1 / IMAGEN 2.
-PAGOS_GMAIL_FORMATOS_PLANTILLA: frozenset[str] = frozenset({"A", "B"})
+# Estos formatos pasan a Drive/BD/etiquetas IMAGEN 1 / 2 / 3 (C requiere ademas cedula por email en clientes).
+PAGOS_GMAIL_FORMATOS_PLANTILLA: frozenset[str] = frozenset({"A", "B", "C"})
 
 
 GEMINI_PROMPT = (
@@ -384,6 +426,33 @@ def _pagos_gmail_four_fields_complete(fields: Dict[str, str]) -> bool:
     return True
 
 
+def _email_cliente_gemini_valido(s: str) -> bool:
+    t = (s or "").strip()
+    if not t or t.upper() == PAGOS_NA:
+        return False
+    if "@" not in t:
+        return False
+    local, _, domain = t.partition("@")
+    if not local.strip() or not domain.strip() or "." not in domain:
+        return False
+    return True
+
+
+def _pagos_gmail_format_c_complete(fields: Dict[str, str]) -> bool:
+    """Formato C: monto, referencia, email_cliente reales; fecha y cedula deben NA."""
+    fp = (fields.get("fecha_pago") or "").strip().upper()
+    ce = (fields.get("cedula") or "").strip().upper()
+    if fp != PAGOS_NA or ce != PAGOS_NA:
+        return False
+    for k in ("monto", "numero_referencia"):
+        s = (fields.get(k) or "").strip()
+        if not s or s.upper() == PAGOS_NA:
+            return False
+    if not _email_cliente_gemini_valido((fields.get("email_cliente") or "").strip()):
+        return False
+    return True
+
+
 def _parse_formato_y_pagos_json(text: str) -> Tuple[PagosGmailFormato, Dict[str, str]]:
     empty = _empty_result()
     try:
@@ -399,6 +468,8 @@ def _parse_formato_y_pagos_json(text: str) -> Tuple[PagosGmailFormato, Dict[str,
             fmt: PagosGmailFormato = "A"
         elif fmt_raw == "B":
             fmt = "B"
+        elif fmt_raw == "C":
+            fmt = "C"
         else:
             fmt = "ninguno"
         fields = {
@@ -406,17 +477,29 @@ def _parse_formato_y_pagos_json(text: str) -> Tuple[PagosGmailFormato, Dict[str,
             "cedula": _normalize_to_na(data.get("cedula", PAGOS_NA)),
             "monto": _normalize_to_na(data.get("monto", PAGOS_NA)),
             "numero_referencia": _normalize_to_na(data.get("numero_referencia", PAGOS_NA)),
+            "email_cliente": _normalize_email_cliente_pagos_gmail(
+                data.get("email_cliente", PAGOS_NA)
+            ),
+            "banco": _normalize_banco_gemini_field(data.get("banco", PAGOS_NA)),
         }
         na_fields = {
             "fecha_pago": PAGOS_NA,
             "cedula": PAGOS_NA,
             "monto": PAGOS_NA,
             "numero_referencia": PAGOS_NA,
+            "email_cliente": PAGOS_NA,
+            "banco": PAGOS_NA,
         }
         if fmt == "ninguno":
             return fmt, na_fields.copy()
+        if fmt == "C":
+            if not _pagos_gmail_format_c_complete(fields):
+                return "ninguno", na_fields.copy()
+            fields["banco"] = PAGOS_NA
+            return fmt, fields
         if not _pagos_gmail_four_fields_complete(fields):
             return "ninguno", na_fields.copy()
+        fields["email_cliente"] = PAGOS_NA
         return fmt, fields
     except (json.JSONDecodeError, TypeError):
         return "ninguno", empty.copy()
@@ -428,7 +511,7 @@ def classify_and_extract_pagos_gmail_attachment(
     api_key: Optional[str] = None,
 ) -> Tuple[PagosGmailFormato, Dict[str, str]]:
     """
-    Clasifica el comprobante en formato A (RAPI-CREDIT terminal), B (BNC) o ninguno,
+    Clasifica el comprobante en formato A (RAPI-CREDIT terminal), B (BNC), C (Binance Pay) o ninguno,
     y extrae campos solo desde el archivo (sin asunto/cuerpo).
     El mismo flujo aplica a adjuntos y a imagenes/PDF extraidos del cuerpo (embebidos).
     """
@@ -468,14 +551,18 @@ def classify_and_extract_pagos_gmail_attachment(
                         "cedula": PAGOS_NA,
                         "monto": PAGOS_NA,
                         "numero_referencia": PAGOS_NA,
+                        "email_cliente": PAGOS_NA,
+                        "banco": PAGOS_NA,
                     }
                 logger.info(
-                    "[PAGOS_GMAIL] Gemini formato=%s fecha=%s cedula=%s monto=%s ref=%s",
+                    "[PAGOS_GMAIL] Gemini formato=%s fecha=%s cedula=%s monto=%s ref=%s email=%s banco=%s",
                     fmt,
                     fields.get("fecha_pago"),
                     fields.get("cedula"),
                     fields.get("monto"),
                     fields.get("numero_referencia"),
+                    fields.get("email_cliente"),
+                    fields.get("banco"),
                 )
                 return fmt, fields
             except Exception as e:
@@ -659,6 +746,28 @@ def _find_json_object(text: str) -> Optional[str]:
     return None
 
 
+def _normalize_banco_gemini_field(val: Any) -> str:
+    """Campo banco en JSON Gemini (A/B); sin prefijos de _normalize_to_na."""
+    if val is None:
+        return PAGOS_NA
+    s = str(val).strip()
+    if not s or s.lower() in ("no encontrado", "n/a", "n.a.", "-", "—", "na"):
+        return PAGOS_NA
+    return s[:200]
+
+
+def _normalize_email_cliente_pagos_gmail(val: Any) -> str:
+    """
+    Normaliza email_cliente sin el prefijo-ref de _normalize_to_na (evita cortar 'operaciones@...' -> 'es@...').
+    """
+    if val is None:
+        return PAGOS_NA
+    s = str(val).strip()
+    if not s or s.lower() in ("no encontrado", "n/a", "n.a.", "-", "—", "na"):
+        return PAGOS_NA
+    return s
+
+
 def _normalize_to_na(val: Any) -> str:
     if val is None:
         return PAGOS_NA
@@ -699,7 +808,14 @@ def _parse_gemini_json(text: str) -> Dict[str, str]:
 def _empty_result(reason: str = "") -> Dict[str, str]:
     if reason:
         logger.debug("[PAGOS_GMAIL] Gemini sin datos: %s", reason)
-    return {"fecha_pago": PAGOS_NA, "cedula": PAGOS_NA, "monto": PAGOS_NA, "numero_referencia": PAGOS_NA}
+    return {
+        "fecha_pago": PAGOS_NA,
+        "cedula": PAGOS_NA,
+        "monto": PAGOS_NA,
+        "numero_referencia": PAGOS_NA,
+        "email_cliente": PAGOS_NA,
+        "banco": PAGOS_NA,
+    }
 
 
 def _parse_cobranza_json(text: str) -> Dict[str, Any]:

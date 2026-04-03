@@ -123,7 +123,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
                       <br />
                       <span className="text-emerald-800">
                         {gmailStatus.last_correos_marcados_revision} correo(s)
-                        con comprobante OK (IMAGEN 1 / IMAGEN 2 + estrella).
+                        con comprobante OK (IMAGEN 1 / 2 / 3 + estrella).
                       </span>
                     </>
                   ) : null}

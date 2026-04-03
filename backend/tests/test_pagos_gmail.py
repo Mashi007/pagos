@@ -27,6 +27,8 @@ from app.api.v1.endpoints.pagos_gmail import (
     status,
 )
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
+from app.services.pagos_gmail.gemini_service import _parse_formato_y_pagos_json
+from app.services.pagos_gmail.helpers import resolve_banco_para_excel_pagos_gmail
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -243,5 +245,68 @@ def test_download_excel_logs_etapa_when_has_data(db: Session, caplog_gmail):
     assert resp is not None
     etapas = [r.message for r in caplog_gmail.records if "[ETAPA]" in (r.message or "")]
     assert any("download-excel" in m for m in etapas), "Debería haber log [ETAPA] download-excel"
+
+
+def test_resolve_banco_excel_desde_texto_gemini():
+    """Normaliza nombre de banco del comprobante hacia rotulos cortos."""
+    d_a, d_b, d_c = "Mercantil", "BNC", "BINANCE"
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "B", "Banco Nacional de Credito, C.A.", default_a=d_a, default_b=d_b, default_c=d_c
+        )
+        == "BNC"
+    )
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "A", "Banco Mercantil", default_a=d_a, default_b=d_b, default_c=d_c
+        )
+        == "Mercantil"
+    )
+    assert (
+        resolve_banco_para_excel_pagos_gmail("A", "", default_a=d_a, default_b=d_b, default_c=d_c)
+        == "Mercantil"
+    )
+    assert (
+        resolve_banco_para_excel_pagos_gmail("B", "NA", default_a=d_a, default_b=d_b, default_c=d_c)
+        == "BNC"
+    )
+    assert (
+        resolve_banco_para_excel_pagos_gmail("C", "cualquier", default_a=d_a, default_b=d_b, default_c=d_c)
+        == "BINANCE"
+    )
+
+
+def test_parse_formato_c_binance_ok():
+    """JSON C valido: monto, referencia, email; fecha y cedula NA."""
+    j = (
+        '{"formato":"C","fecha_pago":"NA","cedula":"NA",'
+        '"monto":"122 USDT","numero_referencia":"423594224765779968",'
+        '"email_cliente":"operaciones@rapicreditca.com","banco":"NA"}'
+    )
+    fmt, fields = _parse_formato_y_pagos_json(j)
+    assert fmt == "C"
+    assert fields["email_cliente"] == "operaciones@rapicreditca.com"
+    assert fields["monto"] == "122 USDT"
+
+
+def test_parse_formato_b_incluye_banco():
+    """A/B pueden traer banco leido del comprobante."""
+    j = (
+        '{"formato":"B","fecha_pago":"01/01/2026","cedula":"V1","monto":"1 USD",'
+        '"numero_referencia":"9","email_cliente":"NA","banco":"Banco Nacional de Credito"}'
+    )
+    fmt, fields = _parse_formato_y_pagos_json(j)
+    assert fmt == "B"
+    assert fields.get("banco") == "Banco Nacional de Credito"
+
+
+def test_parse_formato_c_rechazado_si_fecha_no_na():
+    """C con fecha en imagen invalida el parse (backend asigna fecha del correo)."""
+    j = (
+        '{"formato":"C","fecha_pago":"01/01/2026","cedula":"NA",'
+        '"monto":"1","numero_referencia":"9","email_cliente":"a@b.com"}'
+    )
+    fmt, _ = _parse_formato_y_pagos_json(j)
+    assert fmt == "ninguno"
 
 

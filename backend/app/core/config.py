@@ -267,7 +267,7 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True, el scheduler ejecuta periodicamente el pipeline con filtro pending_identification "
-            "(inbox, adjunto, sin estrella, sin etiquetas IMAGEN 1/2)."
+            "(inbox, adjunto, sin estrella, sin etiquetas IMAGEN 1/2/3)."
         ),
     )
     PAGOS_GMAIL_SCHEDULED_SCAN_INTERVAL_HOURS: int = Field(
@@ -275,6 +275,15 @@ class Settings(BaseSettings):
         ge=1,
         le=48,
         description="Intervalo en horas entre escaneos automaticos Gmail (solo pendientes de identificar).",
+    )
+    PAGOS_GMAIL_UNREAD_MAX_PASSES: int = Field(
+        default=30,
+        ge=1,
+        le=100,
+        description=(
+            "Con filtro unread: maximo de listados+procesados por ejecucion. Cada pasada ordena del mas antiguo al mas "
+            "reciente y procesa todos los no leidos devueltos por Gmail; se repite hasta que no queden o se alcance este tope."
+        ),
     )
 
     # Tasa USD/Bs Venezuela (reporte contable)

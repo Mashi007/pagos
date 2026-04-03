@@ -166,7 +166,7 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
 
 
 def _job_pagos_gmail_pending_scan() -> None:
-    """Cada N horas: pipeline Gmail solo correos sin estrella y sin etiquetas IMAGEN 1/2 (no reescanea ya marcados)."""
+    """Cada N horas: pipeline Gmail solo correos sin estrella y sin etiquetas IMAGEN 1/2/3 (no reescanea ya marcados)."""
     from datetime import datetime, timedelta
 
     from sqlalchemy import and_, select

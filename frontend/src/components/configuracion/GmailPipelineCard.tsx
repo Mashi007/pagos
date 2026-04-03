@@ -223,7 +223,7 @@ export function GmailPipelineCard() {
               status.last_correos_marcados_revision > 0 && (
                 <p className="text-xs text-emerald-800 dark:text-emerald-200">
                   Última ejecución: {status.last_correos_marcados_revision}{' '}
-                  correo(s) con al menos un OK (etiquetas IMAGEN 1 / IMAGEN 2 +
+                  correo(s) con al menos un OK (etiquetas IMAGEN 1 / 2 / 3 +
                   estrella).
                 </p>
               )}

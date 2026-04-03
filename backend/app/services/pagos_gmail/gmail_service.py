@@ -1,7 +1,7 @@
 """
 Gmail: listar correos (no leidos / leidos / todos) que tienen adjuntos (has:attachment).
 Pipeline Pagos: toda imagen/PDF util (archivo adjunto o incrustada en cuerpo/related/HTML/mixed), mas .eml rfc822;
-deduplicado por contenido. La plantilla imagen 1/2 la decide solo Gemini al escanear cada binario.
+deduplicado por contenido. La plantilla imagen 1/2/3 la decide solo Gemini al escanear cada binario.
 """
 import base64
 import hashlib
@@ -20,20 +20,22 @@ from app.services.pagos_gmail.helpers import (
 
 logger = logging.getLogger(__name__)
 
-# Etiquetas de usuario (plantilla prompt A = imagen 1, B = imagen 2). Se crean si no existen.
+# Etiquetas de usuario (plantilla prompt A = imagen 1, B = imagen 2, C = imagen 3 Binance). Se crean si no existen.
 PAGOS_GMAIL_LABEL_IMAGEN_1 = "IMAGEN 1"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "IMAGEN 2"
+PAGOS_GMAIL_LABEL_IMAGEN_3 = "IMAGEN 3"
 
 
 def pagos_gmail_pending_identification_query() -> str:
     """
     Consulta Gmail (parametro q): inbox, con adjunto, sin estrella, sin etiquetas de plantilla digitalizada.
-    Asi el escaneo periodico no reprocesa correos ya marcados con IMAGEN 1 / IMAGEN 2 o destacados.
+    Asi el escaneo periodico no reprocesa correos ya marcados con IMAGEN 1 / 2 / 3 o destacados.
     """
     return (
         "in:inbox has:attachment -is:starred "
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}"'
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}"'
     )
 
 
@@ -104,7 +106,7 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
     """
     Lista mensajes segun el filtro; solo correos con adjuntos (has:attachment).
     filter_type: "unread" | "read" | "all" | "pending_identification".
-    pending_identification: sin estrella y sin etiquetas IMAGEN 1 / IMAGEN 2 (reintento sin reescanear todo).
+    pending_identification: sin estrella y sin etiquetas IMAGEN 1 / 2 / 3 (reintento sin reescanear todo).
     Misma forma que antes: id, payload, headers.
     """
     from googleapiclient.errors import HttpError
@@ -683,23 +685,52 @@ def get_pagos_gmail_image_pdf_files_for_pipeline(
     service: Any, message_id: str, payload: dict
 ) -> List[Tuple[str, bytes, str]]:
     """
-    Candidatos a escanear con Gemini (misma imagen adjunta o en cuerpo se deduplica por hash):
+    Candidatos a escanear con Gemini (misma imagen adjunta o en cuerpo se deduplica por hash SHA-256):
     1) Incrustado en cuerpo: inline, multipart/related (cid), data: en HTML, hijos image/PDF en multipart/mixed
        que no sean Content-Disposition: attachment.
     2) Archivo adjunto: cualquier parte image/PDF con attachmentId (con o sin filename en Gmail).
     3) Reenvios: binarios image/PDF dentro de message/rfc822 (.eml anidado).
-    Solo pasan a BD/Drive si el modelo devuelve plantilla A o B y columnas completas.
+    4) Recorrido MIME completo: todas las partes image/PDF con body.data o attachmentId (cubre p. ej. hijos de
+       multipart/alternative que 1) no marcaria solo como \"cuerpo\"). Duplicados respecto a 1–3 se eliminan al deduplicar.
+    Solo pasan a BD/Drive si el modelo devuelve plantilla A/B/C y datos completos.
     """
-    merged: List[Tuple[str, bytes, str]] = []
-    merged.extend(get_body_embedded_image_pdf_files_for_message(service, message_id, payload))
-    merged.extend(get_attachment_image_pdf_files_for_message(service, message_id, payload))
+    embedded = get_body_embedded_image_pdf_files_for_message(service, message_id, payload)
+    attached = get_attachment_image_pdf_files_for_message(service, message_id, payload)
+    rfc822_parts: List[Tuple[str, bytes, str]] = []
     try:
-        merged.extend(
-            _get_images_from_rfc822_parts(service, message_id, payload.get("parts", []))
+        rfc822_parts = _get_images_from_rfc822_parts(
+            service, message_id, payload.get("parts", [])
         )
     except Exception as e:
         logger.warning("[PAGOS_GMAIL] rfc822 en pipeline: %s", e)
-    return _dedupe_image_pdf_by_content(merged)
+
+    part_roots: List[dict] = list(payload.get("parts") or [])
+    if not part_roots:
+        mime_root = (payload.get("mimeType") or "").strip().lower()
+        if mime_root in MIME_IMAGE_OR_PDF:
+            part_roots = [payload]
+    mime_walk = (
+        _get_inline_images_from_parts(service, message_id, part_roots)
+        if part_roots
+        else []
+    )
+
+    merged: List[Tuple[str, bytes, str]] = []
+    merged.extend(embedded)
+    merged.extend(attached)
+    merged.extend(rfc822_parts)
+    merged.extend(mime_walk)
+    unique = _dedupe_image_pdf_by_content(merged)
+    logger.debug(
+        "[PAGOS_GMAIL] msg %s candidatos (pre-dedupe): incrustados=%d adjuntos=%d rfc822=%d mime_completo=%d -> unicos=%d",
+        message_id,
+        len(embedded),
+        len(attached),
+        len(rfc822_parts),
+        len(mime_walk),
+        len(unique),
+    )
+    return unique
 
 
 def _min_payment_image_bytes() -> int:
@@ -838,17 +869,23 @@ def ensure_user_label_id(service: Any, label_name: str) -> Optional[str]:
 
 def get_or_create_pagos_gmail_plantilla_label_ids(
     service: Any, cache: Optional[Dict[str, Optional[str]]] = None
-) -> Tuple[Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
-    Resuelve ids para PAGOS_GMAIL_LABEL_IMAGEN_1 / _2 con cache opcional por nombre.
+    Resuelve ids para PAGOS_GMAIL_LABEL_IMAGEN_1 / _2 / _3 con cache opcional por nombre.
     """
     c = cache if cache is not None else {}
-    k1, k2 = PAGOS_GMAIL_LABEL_IMAGEN_1, PAGOS_GMAIL_LABEL_IMAGEN_2
+    k1, k2, k3 = (
+        PAGOS_GMAIL_LABEL_IMAGEN_1,
+        PAGOS_GMAIL_LABEL_IMAGEN_2,
+        PAGOS_GMAIL_LABEL_IMAGEN_3,
+    )
     if k1 not in c:
         c[k1] = ensure_user_label_id(service, k1)
     if k2 not in c:
         c[k2] = ensure_user_label_id(service, k2)
-    return c[k1], c[k2]
+    if k3 not in c:
+        c[k3] = ensure_user_label_id(service, k3)
+    return c[k1], c[k2], c[k3]
 
 
 def add_message_star_and_user_labels(
@@ -899,7 +936,7 @@ def mark_starred_and_unread(service: Any, message_id: str) -> None:
 
 
 def mark_starred_and_read(service: Any, message_id: str) -> None:
-    """Estrella el mensaje y quita no leido: digitalizacion completa (formato A/B y las cuatro columnas)."""
+    """Estrella el mensaje y quita no leido: digitalizacion completa (A/B o C con fila en BD)."""
     try:
         service.users().messages().modify(
             userId="me",

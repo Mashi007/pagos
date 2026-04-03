@@ -776,7 +776,7 @@ class PagoService {
     return response.data as Blob
   }
 
-  /** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> BD). scan_filter incluye pending_identification (sin estrella/etiquetas plantilla). */
+  /** Pagos Gmail: pipeline Gmail -> Drive -> Gemini -> BD. Por defecto el backend usa scan_filter=all (toda la bandeja en orden). */
 
   async runGmailNow(
     force = true,
@@ -842,7 +842,7 @@ class PagoService {
     return res
   }
 
-  /** Pagos Gmail: descargar Excel del día (datos del Sheet). Solo descarga si status 200; si no, lanza error (evita guardar HTML/JSON como .xlsx). */
+  /** Pagos Gmail: descargar Excel (solo lectura en servidor). No borra datos; las filas se siguen acumulando. */
 
   async downloadGmailExcel(fecha?: string): Promise<void> {
     const axiosInstance = apiClient.getAxiosInstance()
@@ -914,7 +914,7 @@ class PagoService {
     window.URL.revokeObjectURL(blobUrl)
   }
 
-  /** Pagos Gmail: descargar Excel desde la tabla temporal (lo ya procesado). Puede usarse mientras el pipeline sigue. */
+  /** Pagos Gmail: Excel desde gmail_temporal (orden cronológico). No vacía la tabla; solo POST confirmar-dia vacía. */
 
   async downloadGmailExcelTemporal(): Promise<void> {
     const axiosInstance = apiClient.getAxiosInstance()

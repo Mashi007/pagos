@@ -1,10 +1,10 @@
 """
 Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
 Solo correos con adjuntos (has:attachment); imagen/PDF desde cuerpo incrustado, adjuntos o .eml rfc822 (deduplicado).
-Comprobantes plantilla 1 (A) o 2 (B) con cuatro columnas -> BD/Drive; por cada OK: etiqueta Gmail IMAGEN 1 o IMAGEN 2 + estrella.
+Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD/Drive; por cada OK: etiqueta IMAGEN 1/2/3 + estrella.
 Si ningun adjunto OK: sin estrella + no leido (solo con filtro unread).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
-- GET /pagos/gmail/download-excel: descargar Excel desde BD
+- GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD)
 - GET /pagos/gmail/status: ultima ejecucion; escaneo automatico cada N h (solo pending_identification) si esta habilitado en settings
 - POST /pagos/gmail/confirmar-dia: confirmacion si/no; si si, borrado de datos acumulados
 """
@@ -47,7 +47,7 @@ def _is_pipeline_running(db: Session) -> bool:
     return row is not None
 
 
-def _run_pipeline_background(sync_id: int, scan_filter: str = "unread") -> None:
+def _run_pipeline_background(sync_id: int, scan_filter: str = "all") -> None:
     """Ejecuta el pipeline en background con su propia sesion de BD. ón de BD (evita el timeout de 30s de Render/Axios)."""
     db = SessionLocal()
     logger.info("[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s", sync_id, scan_filter)
@@ -71,21 +71,21 @@ def _run_pipeline_background(sync_id: int, scan_filter: str = "unread") -> None:
 
 @router.get("/count-pending")
 def count_pending(
-    scan_filter: str = "unread",
+    scan_filter: str = "all",
     db: Session = Depends(get_db),
 ):
     """
     Cuenta cuantos correos se procesarian sin iniciar el pipeline.
     El frontend puede mostrar "Se procesaran N correos. Iniciar? Si / No" y solo llamar
     POST /run-now si el usuario confirma (Si = inicia, No = no hace nada).
-    scan_filter: "unread" | "read" | "all" | "pending_identification" (mismo que run-now).
+    scan_filter: "unread" | "read" | "all" | "pending_identification" (mismo que run-now; por defecto all).
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
         return {"count": 0, "scan_filter": scan_filter, "error": "no_credentials"}
     from app.services.pagos_gmail.gmail_service import build_gmail_service, count_messages_by_filter
     if scan_filter not in ("unread", "read", "all", "pending_identification"):
-        scan_filter = "unread"
+        scan_filter = "all"
     try:
         gmail_svc = build_gmail_service(creds)
         count = count_messages_by_filter(gmail_svc, scan_filter)
@@ -99,14 +99,14 @@ def count_pending(
 def run_now(
     background_tasks: BackgroundTasks,
     force: bool = True,
-    scan_filter: str = "unread",
+    scan_filter: str = "all",
     db: Session = Depends(get_db),
 ):
     """
     Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
-    scan_filter: "unread" | "read" | "all" | "pending_identification".
-    pending_identification: inbox, adjunto, sin estrella, sin etiquetas IMAGEN 1/2 (reprocesar solo no identificados).
+    scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto all: toda la bandeja en orden cronologico).
+    pending_identification: inbox, adjunto, sin estrella, sin etiquetas IMAGEN 1/2/3 (reprocesar solo no identificados).
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """
@@ -136,7 +136,7 @@ def run_now(
     sync_id = sync.id
     # Validar scan_filter
     if scan_filter not in ("unread", "read", "all", "pending_identification"):
-        scan_filter = "unread"
+        scan_filter = "all"
     # Lanzar pipeline en segundo plano; el cliente hace polling a /status
     background_tasks.add_task(_run_pipeline_background, sync_id, scan_filter)
     return {
@@ -286,12 +286,14 @@ def _get_latest_date_with_data(db: Session) -> Optional[str]:
 @router.get("/download-excel")
 def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     """
-    Genera y devuelve un Excel con los ítems procesados.
+    Genera y devuelve un Excel con los ítems procesados (solo lectura en BD).
+    No borra ni modifica filas: el acumulado sigue en el servidor para siguientes descargas y nuevos procesamientos.
     - Sin ?fecha: descarga el lote más reciente en BD, sin importar la fecha del correo
       (cubre backlog de cualquier antigüedad; los correos se procesan mientras estén no leídos).
     - Con ?fecha=YYYY-MM-DD: descarga exactamente esa fecha.
     Si no hay datos devuelve 404 (no se genera Excel vacío).
     Columnas A-E: Banco, Cedula, Fecha, Monto, Serial documento; luego Correo Pagador, Link, Ver email.
+    Para vaciar tablas usar POST /pagos/gmail/confirmar-dia con confirmado=true.
     """
     from openpyxl import Workbook
     items: list = []
