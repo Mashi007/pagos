@@ -50,6 +50,8 @@ import { prestamoService } from '../services/prestamoService'
 
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 
+import { usePermissions } from '../hooks/usePermissions'
+
 import { useConcesionariosActivos } from '../hooks/useConcesionarios'
 
 import { useAnalistasActivos } from '../hooks/useAnalistas'
@@ -511,7 +513,9 @@ export function EditarRevisionManual() {
     .toString()
     .toLowerCase()
 
-  const soloLectura = estadoRevision === 'revisado'
+  const { isAdmin } = usePermissions()
+
+  const soloLectura = estadoRevision === 'revisado' && !isAdmin
 
   useEffect(() => {
     if (!detalleData) return
@@ -1629,7 +1633,9 @@ export function EditarRevisionManual() {
               <p className="text-sm text-gray-600">
                 {soloLectura
                   ? 'Solo lectura: la revisión de este préstamo ya fue cerrada.'
-                  : 'Edita los detalles del préstamo (cambios parciales permitidos)'}
+                  : estadoRevision === 'revisado' && isAdmin
+                    ? 'Administrador: revisión cerrada (Visto); puede editar, guardar y cambiar el estado desde la lista (icono de revisión manual).'
+                    : 'Edita los detalles del préstamo (cambios parciales permitidos)'}
               </p>
             </div>
           </div>
@@ -1685,6 +1691,29 @@ export function EditarRevisionManual() {
             cerrada; no se pueden guardar cambios ni eliminar cuotas.
             {detalleData?.revision?.fecha_revision ? (
               <span className="ml-2 text-amber-900">
+                Cierre:{' '}
+                {new Date(detalleData.revision.fecha_revision).toLocaleString()}
+              </span>
+            ) : null}
+            {detalleData?.revision?.usuario_revision_email ? (
+              <span className="ml-2">
+                Usuario: {detalleData.revision.usuario_revision_email}
+              </span>
+            ) : null}
+          </div>
+        )}
+
+        {estadoRevision === 'revisado' && isAdmin && !soloLectura && (
+          <div
+            className="-mx-6 border-y border-sky-200 bg-sky-50 px-6 py-3 text-sm text-sky-950"
+            role="status"
+          >
+            <strong>Modo administrador.</strong> La revisión figura como cerrada
+            (Visto); puede editar y guardar. Para volver a pendiente / en revisión
+            / otros estados use el icono de revisión manual en la lista de
+            préstamos.
+            {detalleData?.revision?.fecha_revision ? (
+              <span className="ml-2 text-sky-900">
                 Cierre:{' '}
                 {new Date(detalleData.revision.fecha_revision).toLocaleString()}
               </span>

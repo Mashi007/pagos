@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.rol_normalization import canonical_rol
 from app.constants.prestamo_estados import prestamo_estado_exige_fecha_aprobacion
 from app.services.prestamos.fechas_prestamo_coherencia import (
     alinear_fecha_aprobacion_y_base_calculo,
@@ -37,6 +38,16 @@ from app.services.registro_cambios_service import registrar_cambio
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _usuario_es_admin_revision(current_user: Any) -> bool:
+    """True si el usuario tiene rol admin (incluye alias administrador / finiquitador vía canonical_rol)."""
+    if isinstance(current_user, dict):
+        rol_raw = current_user.get("rol")
+    else:
+        rol_raw = getattr(current_user, "rol", None)
+    rol = rol_raw if isinstance(rol_raw, str) else None
+    return canonical_rol(rol) == "admin"
 
 
 def _actor_revision_manual(current_user: Any) -> str:
@@ -121,7 +132,7 @@ def _validar_permiso_edicion(
     Valida permisos de edición según el estado y rol del usuario.
     
     Reglas:
-    - ✓ REVISADO: Nadie puede editar (solo admin desde BD)
+    - ✓ REVISADO: Solo administradores pueden editar (reapertura operativa)
     - ❓ REVISANDO: Solo admin
     - ⚠️ PENDIENTE, ❌ EN ESPERA: Todos
     """
@@ -134,11 +145,12 @@ def _validar_permiso_edicion(
         return
     
     estado = (rev.estado_revision or "").strip().lower()
-    rol_user = (getattr(current_user, "rol", "") or "").strip().lower()
-    es_admin = rol_user == "admin"
+    es_admin = _usuario_es_admin_revision(current_user)
     
-    # ✓ REVISADO: Nadie puede editar
+    # ✓ REVISADO: solo admin
     if estado == "revisado":
+        if es_admin:
+            return
         logger.warning(
             "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisado_cerrado actor=%s",
             prestamo_id,
@@ -482,7 +494,7 @@ def iniciar_revision_prestamo(
         db.add(rev_manual)
     else:
         prev = (rev_manual.estado_revision or "").strip().lower()
-        if prev == "revisado":
+        if prev == "revisado" and not _usuario_es_admin_revision(current_user):
             logger.warning(
                 "revision_manual iniciar_revision rechazado prestamo_id=%s ya_revisado",
                 prestamo_id,
@@ -1198,8 +1210,7 @@ def cambiar_estado_revision(
     - rechazado (✕)  → revisando (?) : reabrir para corregir
     """
     actor = _actor_revision_manual(current_user)
-    rol_user = (getattr(current_user, "rol", "") or "").strip().lower()
-    es_admin = rol_user == "admin"
+    es_admin = _usuario_es_admin_revision(current_user)
 
     ESTADOS_VALIDOS = {"revisando", "en_espera", "rechazado", "revisado"}
     if payload.nuevo_estado not in ESTADOS_VALIDOS:
@@ -1221,6 +1232,13 @@ def cambiar_estado_revision(
     estado_actual = (rev_manual.estado_revision or "pendiente").strip().lower() if rev_manual else "pendiente"
     usuario_id = getattr(current_user, "id", None)
     usuario_email = getattr(current_user, "email", None)
+
+    if estado_actual == "revisado" and payload.nuevo_estado != "revisado":
+        if not es_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="Solo administradores pueden reabrir o modificar el estado de una revisión cerrada (Visto).",
+            )
 
     if not rev_manual:
         rev_manual = RevisionManualPrestamo(

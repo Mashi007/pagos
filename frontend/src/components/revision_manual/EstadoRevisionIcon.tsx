@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { revisionManualService } from '../../services/revisionManualService'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { usePermissions } from '../../hooks/usePermissions'
 
 interface EstadoRevisionIconProps {
   prestamoId: number
@@ -26,7 +27,7 @@ interface EstadoRevisionIconProps {
  * - ⚠️ Pendiente: Clickeable, inicia revisión → pasa a ❓
  * - ❓ Revisando: Clickeable, abre diálogo para cambiar a ❌ o ✓
  * - ❌ En espera: Clickeable, regresa a ❓ o marca ✓
- * - ✓ Revisado: No clickeable, finalizado (solo admin puede hacer esto)
+ * - ✓ Revisado: solo administradores pueden reabrir (→ revisando) desde el icono
  */
 export function EstadoRevisionIcon({
   prestamoId,
@@ -36,6 +37,7 @@ export function EstadoRevisionIcon({
 }: EstadoRevisionIconProps) {
   const queryClient = useQueryClient()
   const [isLoading, setIsLoading] = useState(false)
+  const { isAdmin } = usePermissions()
 
   const estadoNorm = (estadoActual || 'pendiente').toLowerCase().trim()
 
@@ -92,9 +94,12 @@ export function EstadoRevisionIcon({
         handleChangeState('revisando')
       }
     } else if (estadoNorm === 'revisado') {
-      // Desde revisado (visto) se puede reabrir → vuelve a revisando (? es el nuevo inicio)
+      if (!isAdmin) {
+        toast.error('Solo un administrador puede reabrir una revisión cerrada (Visto).')
+        return
+      }
       const confirmar = window.confirm(
-        `Este préstamo está REVISADO ✓.\n\n¿Deseas reabrirlo para continuar revisando?`
+        `Este préstamo está REVISADO ✓.\n\n¿Reabrir como "En revisión" para continuar?`
       )
       if (confirmar) {
         handleChangeState('revisando')
@@ -166,8 +171,29 @@ export function EstadoRevisionIcon({
         )
 
       case 'revisado':
+        if (isAdmin) {
+          return (
+            <div
+              className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-green-100 px-2 py-1 transition-all hover:bg-green-200"
+              onClick={handleShowDialog}
+              title="Revisado (Visto): click para reabrir (solo administrador)"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+              ) : (
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              )}
+              <span className="text-xs font-semibold text-green-700">
+                Revisado
+              </span>
+            </div>
+          )
+        }
         return (
-          <div className="flex items-center justify-center gap-1 rounded-lg bg-green-100 px-2 py-1">
+          <div
+            className="flex items-center justify-center gap-1 rounded-lg bg-green-100 px-2 py-1"
+            title="Revisado (Visto); solo un administrador puede reabrir"
+          >
             <CheckCircle className="h-4 w-4 text-green-600" />
             <span className="text-xs font-semibold text-green-700">
               Revisado
