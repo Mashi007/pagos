@@ -281,8 +281,8 @@ class Settings(BaseSettings):
         ge=1,
         le=100,
         description=(
-            "Con filtro unread: maximo de listados+procesados por ejecucion. Cada pasada ordena del mas antiguo al mas "
-            "reciente y procesa todos los no leidos devueltos por Gmail; se repite hasta que no queden o se alcance este tope."
+            "Con filtro unread: maximo de listados+procesados por ejecucion. Cada pasada ordena del mas actual al mas "
+            "antiguo y procesa todos los no leidos devueltos por Gmail; se repite hasta que no queden o se alcance este tope."
         ),
     )
 

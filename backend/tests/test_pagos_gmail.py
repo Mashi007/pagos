@@ -370,3 +370,15 @@ def test_pagos_gmail_list_q_media_parts_incluye_filename():
     assert "filename:png" in q
 
 
+def test_sort_messages_by_date_desc_mas_actual_primero():
+    from app.services.pagos_gmail.pipeline import _sort_messages_by_date_desc
+
+    msgs = [
+        {"id": "old", "headers": {"date": "Mon, 1 Jan 2024 12:00:00 +0000"}},
+        {"id": "new", "headers": {"date": "Mon, 15 Mar 2024 12:00:00 +0000"}},
+        {"id": "mid", "headers": {"date": "Mon, 1 Feb 2024 12:00:00 +0000"}},
+    ]
+    out = _sort_messages_by_date_desc(msgs)
+    assert [m["id"] for m in out] == ["new", "mid", "old"]
+
+

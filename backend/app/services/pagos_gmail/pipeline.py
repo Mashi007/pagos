@@ -71,10 +71,10 @@ def _dedupe_messages_pagos_gmail(raw_messages: list[dict]) -> list[dict]:
     return out
 
 
-def _sort_messages_by_date_asc(messages: list[dict]) -> list[dict]:
+def _sort_messages_by_date_desc(messages: list[dict]) -> list[dict]:
     """
-    Orden estable para procesar siempre en serie: primero el mas antiguo, ultimo el mas reciente
-    (cabecera Date; empate por id de mensaje). Gmail no garantiza orden en messages.list.
+    Orden estable: primero el correo mas actual, luego hacia el mas antiguo
+    (cabecera Date descendente; empate por id de mensaje). Gmail no garantiza orden en messages.list.
     """
 
     def _key(m: dict) -> tuple:
@@ -82,7 +82,7 @@ def _sort_messages_by_date_asc(messages: list[dict]) -> list[dict]:
         dt = get_message_date(h)
         return (dt, m.get("id") or "")
 
-    return sorted(messages, key=_key)
+    return sorted(messages, key=_key, reverse=True)
 
 
 # Columna Excel "Banco" al digitalizar: imagen 1 (A) / imagen 2 (B) / imagen 3 Binance (C).
@@ -116,7 +116,7 @@ def run_pipeline(
     Por adjunto OK: etiqueta IMAGEN 1 (A), IMAGEN 2 (B) o IMAGEN 3 (C) + estrella; cierre: leido si hubo algun OK.
     scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = toda la bandeja).
       pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2/3.
-    Los mensajes de cada lote se ordenan por fecha (antiguo -> reciente) antes de procesar.
+    Los mensajes de cada lote se ordenan por fecha (mas actual primero) antes de procesar.
     Con "unread", se repite listar+procesar hasta que no queden no leidos o hasta PAGOS_GMAIL_UNREAD_MAX_PASSES.
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
@@ -179,9 +179,9 @@ def run_pipeline(
                     len(raw_messages),
                     len(messages),
                 )
-            ordered = _sort_messages_by_date_asc(messages)
+            ordered = _sort_messages_by_date_desc(messages)
             logger.info(
-                "[PAGOS_GMAIL] Correos (filtro=%s): %d (orden antiguo -> reciente)",
+                "[PAGOS_GMAIL] Correos (filtro=%s): %d (orden mas actual primero)",
                 scan_filter,
                 len(ordered),
             )
@@ -364,12 +364,29 @@ def run_pipeline(
                             c_raw = (
                                 _cedula_por_email_cliente(db, email_img) if email_img else None
                             )
+                            sender_em = (sender or "").strip()
+                            if (
+                                not c_raw
+                                and sender_em
+                                and sender_em.lower() != (email_img or "").strip().lower()
+                            ):
+                                c_raw = _cedula_por_email_cliente(db, sender_em)
+                                if c_raw:
+                                    logger.info(
+                                        "[PAGOS_GMAIL]   Formato C: cedula por remitente del correo "
+                                        "(email en captura no en clientes: %s -> uso From: %s)",
+                                        (email_img[:72] if email_img else "(vacio)"),
+                                        sender_em[:72],
+                                    )
                             c = formatear_cedula(c_raw) if c_raw else ""
                             if not c_raw:
                                 any_incomplete_or_skipped = True
                                 logger.warning(
-                                    "[PAGOS_GMAIL]   Formato C sin fila en clientes para email=%s - no Drive/BD: %s",
-                                    (email_img[:80] if email_img else "(vacio)"),
+                                    "[PAGOS_GMAIL]   Imagen 3 (C) reconocida pero sin cedula en BD: "
+                                    "no hay cliente con email captura=%s ni remitente=%s — sin fila Excel/Drive/etiqueta IMAGEN 3. "
+                                    "Archivo: %s",
+                                    (email_img[:72] if email_img else "(vacio)"),
+                                    (sender_em[:72] if sender_em else "(vacio)"),
                                     filename,
                                 )
                                 continue
@@ -509,7 +526,7 @@ def run_pipeline(
         if scan_filter == "unread":
             for pass_n in range(1, max_unread_passes + 1):
                 logger.info(
-                    "[PAGOS_GMAIL] Pasada no leidos %d/%d (lista ordenada antiguo->reciente, primero al ultimo)",
+                    "[PAGOS_GMAIL] Pasada no leidos %d/%d (lista ordenada mas actual primero)",
                     pass_n,
                     max_unread_passes,
                 )

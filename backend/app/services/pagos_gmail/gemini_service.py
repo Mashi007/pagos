@@ -56,17 +56,17 @@ CORREO CON MAS DE UNA IMAGEN O MAS DE UN PDF:
 OBLIGATORIO — campo "formato" en el JSON: SOLO uno de estos cuatro valores exactos: A, B, C, ninguno.
   A = plantilla imagen 1: ticket RAPI-CREDIT / RECAUDACION / terminal (abajo) O papeleleta Mercantil DEPOSITO DIVISAS a RAPI-CREDIT con RECAUDACION (VARIANTE MERCANTIL).
   B = unicamente plantilla imagen 2 (recibo BNC a favor de RAPI-CREDIT descrita abajo).
-  C = plantilla imagen 3: pantalla Binance Pay "Pago completado" con visto verde (circulo + check) descrita en PASO 2b y FORMATO C.
+  C = plantilla imagen 3: pantalla Binance / Binance Pay de pago exitoso (PASO 2b): no exijas titulo o icono identicos a un solo disenio; basta nucleo C descrito alli.
   ninguno = cualquier otra cosa, duda, borroso, selfie, documento que no sea esas tres plantillas.
 Prohibido usar otro valor en "formato" (ni numeros, ni texto libre).
 
 REGLA SISTEMA A/B: Devuelve "A" o "B" solo si el comprobante coincide con imagen 1 o 2 y puedes extraer los CUATRO campos con valor real
 (fecha_pago, cedula, monto, numero_referencia). Si la plantilla parece A o B pero algun campo no es legible, formato "ninguno" y NA.
 
-REGLA SISTEMA C (imagen 3 / Binance Pay): Devuelve "C" solo si ves el nucleo C (PASO 2b) y puedes extraer con certeza:
-  monto (USDT/USD), numero_referencia (Id. de la orden / Order ID), y email_cliente (visible en pantalla; si no se lee, solo formato C puede usar el bloque literal CONTEXTO_REMITE descrito arriba).
-  Para formato C en el JSON pon siempre fecha_pago="NA" y cedula="NA" (no inventes; el sistema asigna fecha desde el correo y cedula desde tabla clientes por email).
-  Si falta monto, id de orden o email legible -> formato "ninguno" y todos los campos relevantes NA.
+REGLA SISTEMA C (imagen 3 / Binance Pay): Devuelve "C" si ves el nucleo C (PASO 2b) y con certeza: monto (USDT/USD) y numero_referencia (Id. de orden u otro id largo de la pantalla).
+  email_cliente: si se lee en la captura, copialo; si NO se lee pero en el mensaje del sistema viene CONTEXTO_REMITE con un correo, igualmente devuelve formato "C" (pon email_cliente con ese correo en minusculas, o "NA" y el backend lo completara desde CONTEXTO_REMITE).
+  Para formato C en el JSON pon siempre fecha_pago="NA" y cedula="NA" (no inventes; el sistema asigna fecha desde el correo y cedula desde tabla clientes por email del pagador).
+  Si falta monto o id de orden con certeza -> "ninguno". No uses "ninguno" solo porque el email no se lea en la imagen si hay CONTEXTO_REMITE.
 
 COLUMNAS OBLIGATORIAS Y GMAIL (estrella / etiquetas — las aplica el backend):
   A y B: las cuatro columnas fecha_pago, cedula, monto, numero_referencia deben ser reales en tu respuesta; si falta una -> ninguno.
@@ -81,7 +81,7 @@ PASO 1 - DESCARTE (ninguno al instante):
     y tampoco es la variante Mercantil DEPOSITO DIVISAS descrita en "VARIANTE A — MERCANTIL" abajo
     y tampoco es pantalla Binance Pay imagen 3 (PASO 2b) -> ninguno.
   Es captura de app generica, Pago Movil no Binance Pay, Zelle, otro banco distinto (salvo Mercantil con RAPI+RECAUDACION), selfie, publicidad, borroso sin datos -> ninguno.
-  Excepcion: NO descartes como "solo app" si cumple nucleo C (Binance + Pago completado + visto verde + USDT + orden + email).
+  Excepcion: NO descartes como "solo app" si cumple nucleo C (PASO 2b): Binance/Binance Pay + pago exitoso + USDT o USD + identificador de orden; el email en pantalla no es obligatorio si hay CONTEXTO_REMITE en el mensaje del sistema.
 
 PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A ni C:
   Nucleo B = (BNC logo o texto) + cuenta con barras ####/####/##/######## (ej. 0191/0127/...) + RAPI-CREDIT como titular o beneficiario de esa cuenta
@@ -99,15 +99,17 @@ PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A ni C:
     El recibo BNC tipico usa cuenta destino con otro codigo de entidad en el patron cajero (ej. **0191**/... con slashes), no confundir con 0105 Mercantil.
 
 PASO 2b - C (imagen 3 / Binance Pay) si PASO 2 no aplico (no es recibo BNC):
-  Nucleo C = interfaz Binance (tema oscuro frecuente) + titulo "Pago completado" o "Payment completed"
-    + distintivo superior: circulo VERDE con marca de verificado / visto (check) centrado (icono de exito de la app)
-    + importe principal en USDT o USD (ej. "122 USDT", "50.5 USDT", "135 USDT")
-    + ideal: seccion destinatario con correo visible (usuario@dominio) y linea "Id. de la orden" / "Order ID" / "ID de orden" con numero largo (solo digitos).
-  Si la captura esta recortada o comprimida: con visto verde + "Pago completado" + importe USDT/USD claro, sigue siendo C.
-    - numero_referencia: usa el Id. de orden completo si lo ves; si no, cualquier bloque de 15+ digitos que parezca identificador de orden/transaccion Binance en la misma pantalla.
-    - email_cliente: si el email del destinatario NO se lee en la imagen pero recibes CONTEXTO_REMITE: con una direccion, copia esa direccion en email_cliente (minusculas).
-  NO es C: login, historial sin pantalla de completado, otra exchange, sin visto verde + sin titulo de completado, captura ilegible.
-  Si nucleo C: formato C (no A ni B). Extraccion: monto, numero_referencia, email_cliente (visible o desde CONTEXTO_REMITE); fecha_pago=NA; cedula=NA.
+  Nucleo C = evidencia de app o web Binance / Binance Pay (logo, texto "Binance", layout tipico de la app, colores marca)
+    + pantalla de transaccion completada o exitosa (no login, no listado vacio). Titulos equivalentes (uno basta; tolera OCR sucio):
+      "Pago completado", "Payment completed", "Pago exitoso", "Pago realizado", "Payment successful", "Completed", "Successful", "Enviado" (solo si es claro que es confirmacion de pago).
+    + indicio de exito: circulo o boton verde con check, check verde grande, tilde de confirmacion, banner de exito, o animacion/icono de hecho; tema oscuro o claro.
+    + importe principal en USDT o USD legible (ej. "122 USDT", "50.5 USDT").
+    + identificador: etiqueta "Id. de la orden", "Order ID", "ID de orden", "Order No." o bloque de 12-22 digitos contiguos claramente asociado al pago en esa pantalla.
+  Si la captura esta recortada: basta Binance reconocible + monto USDT/USD + id de orden (o ristra numerica larga coherente) + alguna senal de pantalla de exito.
+    - numero_referencia: copia el Id. completo; si hay varios numeros largos, el que acompane a "orden" / "Order" / "ID"; si no hay etiqueta, el bloque de 12+ digitos mas probable como id de transaccion Binance.
+    - email_cliente: debe ser el correo del PAGADOR (cliente persona) si aparece en pantalla. Si solo ves correo corporativo del BENEFICIARIO (ej. operaciones@..., pagos@..., cuenta de la empresa receptora), NO lo uses como email_cliente: pon "NA" o usa CONTEXTO_REMITE (From del correo), que es quien envia el comprobante.
+  NO es C: otra exchange (Bybit, OKX, ...), solo historial sin confirmacion, transferencia bancaria tradicional, captura sin monto ni id.
+  Si nucleo C: formato C (no A ni B). Extraccion: monto, numero_referencia, email_cliente; fecha_pago=NA; cedula=NA.
 
 PASO 3 - A (imagen 1) solo si PASO 2 y 2b no aplicaron:
   Nucleo A (terminal / ticket clasico) = RAPI-CREDIT + RECAUDACION (con o sin tilde en OCR) + USD + ticket de recaudacion (vertical/monoespaciado tipico) + grupos FORMATO A (1-5).
@@ -122,7 +124,7 @@ PASO 4 - Desempate si queda duda entre A y B (si ya clasificaste C en 2b, no use
   Cedula+nombre misma linea (DP:... + V-/E-/J- + nombre) + ticket **vertical** RECAUDACION + serial YYYYMMDD **sin** evidencia de recibo BNC cajero -> A.
   Si aplica la REGLA FIJA del PASO 2 (DP + contexto BNC) -> B; no uses esta linea para forzar A.
 
-PASO 5 - Extraccion: A o B solo si los cuatro campos son legibles; C solo si monto + numero_referencia + email_cliente son legibles y pones fecha y cedula en NA; si no, ninguno y NA.
+PASO 5 - Extraccion: A o B solo si los cuatro campos son legibles; C si monto + numero_referencia son legibles, fecha y cedula en NA, y email_cliente visible o desde CONTEXTO_REMITE o "NA" si el sistema lo completara; si falta monto o referencia -> ninguno y NA.
 
 DISCRIMINADOR SERIAL — imagen 1 (A) vs imagen 2 (B) (aplica ademas de RAPI-CREDIT/BNC):
   IMAGEN 1 / A — serial de operacion compuesto por BLOQUES separados por guiones (-) u ocasionalmente /:
@@ -229,7 +231,7 @@ Prioriza la plantilla horizontal BNC anterior. numero_referencia: si hay ristra 
   Banco en Excel lo fija el sistema como BINANCE; no hace falta devolver campo banco en JSON.
   monto: lee cifra con USDT o USD (ej. 122 USDT -> "122.00 USDT" o "122 USDT" consistente).
   numero_referencia: copia entera el Id. de la orden (digitos; no omitas digitos por OCR).
-  email_cliente: un solo email, minusculas opcional; debe coincidir con texto visible en pantalla (destinatario del pago).
+  email_cliente: pagador/cliente si se ve en pantalla; no uses solo el correo corporativo del beneficiario (operaciones@empresa). Si no hay email del pagador, CONTEXTO_REMITE o "NA".
   fecha_pago: "NA". cedula: "NA".
 
 === EXTRACCION ===
