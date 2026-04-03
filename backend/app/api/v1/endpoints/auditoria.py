@@ -2,7 +2,8 @@
 Endpoints de auditoria.
 
 - Tabla `auditoria`: GET listado, GET stats, GET exportar, GET /{id}, POST /registrar.
-- Cartera (prestamos/cartera/*): chequeos paginados, resumen sin items, meta persistida, ejecutar/corregir.
+- Cartera (prestamos/cartera/*): chequeos paginados, resumen sin items, meta persistida, ejecutar/corregir,
+  POST sincronizar-estados-cuotas (solo alinea cuotas.estado, sin meta ni controles).
   Ver `docs/auditoria-api-cartera.md` para contrato y parametros (`solo_alertas` es historico y no filtra).
 """
 import io
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_auditoria_cartera_access
+from app.core.rol_normalization import canonical_rol
 from app.models.auditoria import Auditoria
 from app.models.auditoria_cartera_revision import AuditoriaCarteraRevision
 from app.models.prestamo import Prestamo
@@ -378,6 +380,11 @@ class AuditoriaCarteraResumenResponse(BaseModel):
     meta_ultima_corrida: dict
 
 
+class SincronizarEstadosCuotasResponse(BaseModel):
+    cuotas_escaneadas: int = Field(..., description="Cuotas en prestamos APROBADO/LIQUIDADO recorridas.")
+    estados_actualizados: int = Field(..., description="Filas cuyo estado en BD se actualizo al valor calculado.")
+
+
 def _persistir_meta_desde_resumen_cartera(db: Session, resumen: dict[str, Any]) -> None:
     if resumen.get("excluye_marcar_ok") is True:
         raise HTTPException(
@@ -421,6 +428,27 @@ def meta_auditoria_cartera(
 ):
     """Ultima corrida automatica (03:00) y totales guardados en `configuracion` (JSON en clave auditoria_cartera_ultima_resumen)."""
     return leer_meta_ejecucion(db)
+
+
+@router.post(
+    "/prestamos/cartera/sincronizar-estados-cuotas",
+    response_model=SincronizarEstadosCuotasResponse,
+)
+def sincronizar_estados_cuotas_cartera_endpoint(
+    db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
+):
+    """
+    Alinea `cuotas.estado` con la regla de negocio (vencimiento y total_pagado vs monto), misma que el control
+    estado_cuota_vs_calculo y que el paso inicial de POST ejecutar. No recalcula controles ni persiste meta de cartera.
+    """
+    from app.services.cuota_estado import sincronizar_estado_cuotas_cartera
+
+    stats = sincronizar_estado_cuotas_cartera(db, commit=True)
+    return SincronizarEstadosCuotasResponse(
+        cuotas_escaneadas=int(stats.get("cuotas_escaneadas") or 0),
+        estados_actualizados=int(stats.get("estados_actualizados") or 0),
+    )
 
 
 @router.get("/prestamos/cartera/resumen", response_model=AuditoriaCarteraResumenResponse)
@@ -576,7 +604,7 @@ def corregir_auditoria_cartera(
     en prestamos que la auditoria marca con desajuste suma pagos vs aplicado a cuotas.
     Solo administrador. Tras las acciones vuelve a ejecutar auditoria y persiste meta.
     """
-    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+    if canonical_rol(current_user.rol) != "admin":
         raise HTTPException(
             status_code=403,
             detail="Solo administracion puede ejecutar correcciones de cartera.",

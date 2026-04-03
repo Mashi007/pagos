@@ -326,6 +326,7 @@ export function TablaAmortizacionCompleta() {
       try {
         return await pagoService.getAllPagos(1, 1000, {
           cedula: cedulaSeleccionada!,
+          prestamo_cartera: 'todos',
         })
       } catch (error) {
         console.error('Error obteniendo pagos:', error)

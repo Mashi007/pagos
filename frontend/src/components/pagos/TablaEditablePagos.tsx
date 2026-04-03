@@ -713,7 +713,7 @@ export function TablaEditablePagos({
                 key={row._rowIndex}
                 className={
                   row._hasErrors
-                    ? 'border-b border-gray-300 border-l-4 border-l-red-400 bg-red-50'
+                    ? 'border-b border-l-4 border-gray-300 border-l-red-400 bg-red-50'
                     : 'border-b border-gray-300 bg-white hover:bg-gray-50'
                 }
               >

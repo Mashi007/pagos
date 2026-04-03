@@ -696,17 +696,31 @@ def listar_pagos(
 
     sin_prestamo: Optional[str] = Query(None, description="si=solo pagos sin crédito asignado (prestamo_id NULL)"),
 
+    prestamo_cartera: str = Query(
+        "activa",
+        description="activa=solo pagos sin crédito o con préstamo APROBADO (oculta LIQUIDADO y otros). todos=sin filtrar por estado del préstamo.",
+    ),
+
     db: Session = Depends(get_db),
 
 ):
 
-    """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista, conciliado, sin_prestamo."""
+    """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista, conciliado, sin_prestamo, prestamo_cartera."""
 
     try:
 
         q = select(Pago)
 
         count_q = select(func.count()).select_from(Pago)
+
+        _pc = (prestamo_cartera or "activa").strip().lower()
+
+        _solo_prestamos_aprobados = _pc not in ("todos", "all", "t")
+
+        def _estado_prestamo_aprobado_sql():
+            return func.upper(
+                func.trim(func.coalesce(Prestamo.estado, ""))
+            ) == "APROBADO"
 
         if sin_prestamo and sin_prestamo.strip().lower() == "si":
 
@@ -779,6 +793,26 @@ def listar_pagos(
             q = q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
 
             count_q = count_q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
+
+            if _solo_prestamos_aprobados:
+
+                q = q.where(_estado_prestamo_aprobado_sql())
+
+                count_q = count_q.where(_estado_prestamo_aprobado_sql())
+
+        elif _solo_prestamos_aprobados:
+
+            q = q.outerjoin(Prestamo, Pago.prestamo_id == Prestamo.id).where(
+
+                or_(Pago.prestamo_id.is_(None), _estado_prestamo_aprobado_sql()),
+
+            )
+
+            count_q = count_q.outerjoin(Prestamo, Pago.prestamo_id == Prestamo.id).where(
+
+                or_(Pago.prestamo_id.is_(None), _estado_prestamo_aprobado_sql()),
+
+            )
 
         total = db.scalar(count_q) or 0
 

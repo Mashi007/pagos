@@ -104,6 +104,9 @@ class PagoService {
       conciliado?: string
 
       sin_prestamo?: string
+
+      /** activa (defecto en API): solo préstamo APROBADO o sin crédito. todos: incluye LIQUIDADO etc. */
+      prestamo_cartera?: 'activa' | 'todos'
     }
   ): Promise<{
     pagos: Pago[]
@@ -131,6 +134,10 @@ class PagoService {
         filters.conciliado !== 'all' && { conciliado: filters.conciliado }),
 
       ...(filters?.sin_prestamo === 'si' && { sin_prestamo: 'si' }),
+
+      ...(filters?.prestamo_cartera === 'todos' && {
+        prestamo_cartera: 'todos',
+      }),
     })
 
     const url = `${this.baseUrl}?${params.toString()}`

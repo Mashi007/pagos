@@ -213,6 +213,8 @@ export function AuditoriaCarteraTab() {
 
   const [running, setRunning] = useState(false)
 
+  const [syncingEstados, setSyncingEstados] = useState(false)
+
   const [corrigiendo, setCorrigiendo] = useState(false)
 
   const [exportando, setExportando] = useState(false)
@@ -491,6 +493,25 @@ export function AuditoriaCarteraTab() {
       toast.error(msg)
     } finally {
       setRunning(false)
+    }
+  }
+
+  const alinearEstadosCuotas = async () => {
+    try {
+      setSyncingEstados(true)
+      const r = await auditoriaService.sincronizarEstadosCuotasCartera()
+      const n = r.estados_actualizados
+      const s = r.cuotas_escaneadas
+      toast.success(`Cuotas revisadas: ${s}. Estados actualizados en BD: ${n}.`)
+      void fetchLista({ silent: true })
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al alinear estados de cuotas'
+      toast.error(msg)
+    } finally {
+      setSyncingEstados(false)
     }
   }
 
@@ -908,12 +929,27 @@ export function AuditoriaCarteraTab() {
               Ejecutar ahora y guardar meta
             </Button>
 
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void alinearEstadosCuotas()}
+              disabled={syncingEstados || running || loading}
+              title="Actualiza solo la columna cuotas.estado (vencimiento y pagos). Corrige el control estado_cuota_vs_calculo sin recorrer todo el motor ni guardar meta."
+            >
+              {syncingEstados ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Alinear estados de cuotas
+            </Button>
+
             {esAdmin && hayDesajustePagosVsAplicado && !bloqueoListaCompleta ? (
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => void corregirDesajustePagos()}
-                disabled={corrigiendo || running || loading}
+                disabled={corrigiendo || running || syncingEstados || loading}
                 title="Reaplica pagos en cascada en prestamos con alerta de suma pagos vs cuota_pagos, luego sincroniza estados de cuota."
               >
                 {corrigiendo ? (

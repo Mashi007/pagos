@@ -119,6 +119,13 @@ export interface CarteraCorreccionResponse extends PrestamoCarteraChequeoRespons
   reaplicar_cascada?: Array<Record<string, unknown>>
 }
 
+/** POST solo sincroniza columna cuotas.estado (sin ejecutar motor de controles ni meta). */
+export interface SincronizarEstadosCuotasResponse {
+  cuotas_escaneadas: number
+
+  estados_actualizados: number
+}
+
 /** Query GET /auditoria/prestamos/cartera/chequeos (paginacion y filtros en servidor). */
 export interface CarteraChequeosQuery {
   skip?: number
@@ -355,6 +362,14 @@ class AuditoriaService {
   async ejecutarCartera(): Promise<PrestamoCarteraChequeoResponse> {
     return apiClient.post<PrestamoCarteraChequeoResponse>(
       `${this.baseUrl}/prestamos/cartera/ejecutar`,
+      undefined
+    )
+  }
+
+  /** Alinea cuotas.estado con vencimiento y pagos (misma regla que control estado_cuota_vs_calculo). */
+  async sincronizarEstadosCuotasCartera(): Promise<SincronizarEstadosCuotasResponse> {
+    return apiClient.post<SincronizarEstadosCuotasResponse>(
+      `${this.baseUrl}/prestamos/cartera/sincronizar-estados-cuotas`,
       undefined
     )
   }

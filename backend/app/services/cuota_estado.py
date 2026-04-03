@@ -142,6 +142,11 @@ def etiqueta_estado_cuota(codigo: str) -> str:
     return labels.get(c, codigo.strip() if codigo else "-")
 
 
+def normalizar_estado_cuota_columna_auditoria(estado: str | None) -> str:
+    """Igual que prestamo_cartera_auditoria al comparar columna vs calculo (PAGADA -> PAGADO)."""
+    return (estado or "").strip().upper().replace("PAGADA", "PAGADO")
+
+
 def calcular_estado_cuota_desde_fila(c: object, fecha_referencia: date | None = None) -> str:
     """Codigo alineado con GET /prestamos/{id}/cuotas (misma regla que `estado_cuota_para_mostrar`)."""
     ref = fecha_referencia or hoy_negocio()
@@ -178,8 +183,9 @@ def sincronizar_columna_estado_cuotas(db: object, cuotas: list, *, commit: bool 
     changed = 0
     for c in cuotas:
         nuevo = calcular_estado_cuota_desde_fila(c)
-        cur = (getattr(c, "estado", None) or "").strip().upper()
-        if cur != nuevo:
+        cur_norm = normalizar_estado_cuota_columna_auditoria(getattr(c, "estado", None))
+        nuevo_u = (nuevo or "").strip().upper()
+        if cur_norm != nuevo_u:
             setattr(c, "estado", nuevo)
             changed += 1
     if changed and commit:
@@ -225,8 +231,9 @@ def sincronizar_estado_cuotas_cartera(db: Any, *, commit: bool = True) -> dict[s
         for c in rows:
             scanned += 1
             nuevo = calcular_estado_cuota_desde_fila(c, hoy)
-            cur = (getattr(c, "estado", None) or "").strip().upper()
-            if cur != nuevo:
+            cur_norm = normalizar_estado_cuota_columna_auditoria(getattr(c, "estado", None))
+            nuevo_u = (nuevo or "").strip().upper()
+            if cur_norm != nuevo_u:
                 setattr(c, "estado", nuevo)
                 changed += 1
         db.flush()

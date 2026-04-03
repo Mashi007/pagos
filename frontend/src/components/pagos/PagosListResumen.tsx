@@ -106,6 +106,7 @@ export function PagosListResumen() {
     queryFn: () =>
       pagoService.getAllPagos(pageDetalle, perPageDetalle, {
         cedula: cedulaDetalle || '',
+        prestamo_cartera: 'todos',
       }),
 
     enabled: !!cedulaDetalle,
