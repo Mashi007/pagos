@@ -48,6 +48,8 @@ import { revisionManualService } from '../services/revisionManualService'
 
 import { prestamoService } from '../services/prestamoService'
 
+import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
+
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 
 import { usePermissions } from '../hooks/usePermissions'
@@ -501,6 +503,7 @@ export function EditarRevisionManual() {
       if (estRev === 'pendiente') {
         await revisionManualService.iniciarRevision(pid)
         data = await revisionManualService.getDetallePrestamoRevision(pid)
+        void invalidateListasNotificacionesMora(queryClient)
       }
 
       if (!formDirtyRef.current) {
@@ -704,6 +707,7 @@ export function EditarRevisionManual() {
       queryClient.invalidateQueries({
         queryKey: ['revision-editar', prestamoId],
       })
+      void invalidateListasNotificacionesMora(queryClient)
     } catch (err: any) {
       const msg =
         err?.response?.data?.detail ||
@@ -1116,6 +1120,8 @@ export function EditarRevisionManual() {
           exact: false,
         })
 
+        void invalidateListasNotificacionesMora(queryClient)
+
         setTimeout(() => irAListaPrestamos(), 400)
       } else if (errorOccurred) {
         toast.warning(
@@ -1469,6 +1475,8 @@ export function EditarRevisionManual() {
           exact: false,
         })
 
+        void invalidateListasNotificacionesMora(queryClient)
+
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
         setTimeout(() => irAListaPrestamos(), 1500)
       } catch (err: any) {
@@ -1522,6 +1530,7 @@ export function EditarRevisionManual() {
       setMotivoRechazo('')
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+      void invalidateListasNotificacionesMora(queryClient)
       irAListaPrestamos()
     } catch (err: any) {
       const msg = err?.response?.data?.detail || 'Error al rechazar'
@@ -1553,6 +1562,8 @@ export function EditarRevisionManual() {
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
 
     queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+
+    void invalidateListasNotificacionesMora(queryClient)
 
     navigate('/revision-manual')
   }

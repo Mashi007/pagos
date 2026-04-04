@@ -8,6 +8,7 @@ import {
 import { Button } from '../ui/button'
 import { toast } from 'sonner'
 import { revisionManualService } from '../../services/revisionManualService'
+import { invalidateListasNotificacionesMora } from '../../constants/queryKeys'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { usePermissions } from '../../hooks/usePermissions'
@@ -63,6 +64,7 @@ export function EstadoRevisionIcon({
       toast.success(`✅ Estado actualizado a: ${nuevoEstado}`)
 
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+      void invalidateListasNotificacionesMora(queryClient)
       onStateChange?.()
     } catch (err: any) {
       const errorMsg = err?.response?.data?.detail || 'Error al cambiar estado'

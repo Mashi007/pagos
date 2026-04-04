@@ -33,6 +33,8 @@ import { revisionManualService } from '../services/revisionManualService'
 
 import { EstadoRevisionIcon } from '../components/revision_manual/EstadoRevisionIcon'
 
+import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
+
 interface PrestamoRevision {
   prestamo_id: number
 
@@ -242,6 +244,7 @@ export function RevisionManual() {
       toast.success(`✅ ${res.mensaje}`)
 
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+      void invalidateListasNotificacionesMora(queryClient)
 
       programarOcultarEn30s(prestamoId)
     } catch (err: any) {
@@ -283,6 +286,7 @@ export function RevisionManual() {
         queryClient.invalidateQueries({
           queryKey: ['revision-manual-prestamos'],
         })
+        void invalidateListasNotificacionesMora(queryClient)
 
         // Navega a página de edición
 
@@ -336,6 +340,8 @@ export function RevisionManual() {
         queryKey: ['dashboard-menu'],
         exact: false,
       })
+
+      void invalidateListasNotificacionesMora(queryClient)
     } catch (err: any) {
       const errorMsg = err?.response?.data?.detail || 'Error al eliminar'
 
