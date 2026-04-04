@@ -578,6 +578,23 @@ export function PagosList() {
     refetchOnWindowFocus: false, // Desactivado para no interrumpir batch con GETs innecesarios
   })
 
+  /** Solo lista normal + filtro cédula: API devuelve suma de montos de todos los pagos que coinciden. */
+  const resumenTotalCedula = useMemo(() => {
+    if (esRevisarPagos || !filters.cedula.trim()) return null
+    const sum = data?.sum_monto_pagado_cedula
+    if (typeof sum !== 'number' || Number.isNaN(sum)) return null
+    return {
+      sum,
+      cantidad: data?.total ?? 0,
+      cedula: filters.cedula.trim(),
+    }
+  }, [
+    esRevisarPagos,
+    filters.cedula,
+    data?.sum_monto_pagado_cedula,
+    data?.total,
+  ])
+
   /** Claves normalizadas de nº documento que aparecen más de una vez en la página actual (advertencia visual). */
   const documentosDuplicadosEnPagina = useMemo(() => {
     const pagos = data?.pagos
@@ -1906,6 +1923,15 @@ export function PagosList() {
                       Limpiar Filtros
                     </Button>
                   )}
+                  {resumenTotalCedula && (
+                    <p className="mt-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+                      <span className="font-semibold">
+                        Total monto (cédula + filtros):
+                      </span>{' '}
+                      ${resumenTotalCedula.sum.toFixed(2)} —{' '}
+                      {resumenTotalCedula.cantidad} pago(s)
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>
@@ -2371,6 +2397,25 @@ export function PagosList() {
                       </TableBody>
                     </Table>
                   </div>
+                  {resumenTotalCedula && (
+                    <div
+                      className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950"
+                      role="status"
+                    >
+                      <span>
+                        <span className="font-semibold">
+                          Total para cédula filtrada:
+                        </span>{' '}
+                        {resumenTotalCedula.cedula}
+                      </span>
+                      <span>
+                        <span className="font-semibold">Suma de montos:</span>{' '}
+                        ${resumenTotalCedula.sum.toFixed(2)} —{' '}
+                        {resumenTotalCedula.cantidad} pago(s) con los filtros
+                        actuales (incluye todas las páginas)
+                      </span>
+                    </div>
+                  )}
                   {/* Paginación (mismo formato que Préstamos) */}
                   {data.total_pages > 1 && (
                     <div className="mt-4 flex items-center justify-between">

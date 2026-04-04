@@ -1042,8 +1042,20 @@ export function TablaEditablePagos({
                         !archivoDupJustificado &&
                         !!onJustificarDocumentoRepetidoArchivo
 
+                      /** Duplicado en BD (pagos o cola errores): aunque no haya pago_id para control 5, debe poder añadirse sufijo. */
+                      const mensajeIndicaDupDocumentoBd =
+                        /ya existe en la base de datos/i.test(msgDoc)
+
+                      const puedeVistoSufijoPorDupBd =
+                        !!docNormAccion &&
+                        !!onJustificarDocumentoRepetidoArchivo &&
+                        !row._validation?.numero_documento?.isValid &&
+                        mensajeIndicaDupDocumentoBd
+
                       const mostrarBotonVisto =
-                        puedeVistoControl5Bd || puedeVistoJustificarArchivo
+                        puedeVistoJustificarArchivo ||
+                        puedeVistoControl5Bd ||
+                        puedeVistoSufijoPorDupBd
 
                       return (
                         <div className="flex flex-col gap-1">
@@ -1110,13 +1122,18 @@ export function TablaEditablePagos({
                                   setVistoArchivoDialogOpen(true)
                                   return
                                 }
-                                // Duplicado en BD: decisión humana — control 5 o añadir código (sufijo) en la carga.
+                                // Duplicado en BD: siempre ofrecer sufijo; control 5 solo si hay pago_id operativo.
                                 if (
-                                  puedeVistoControl5Bd &&
-                                  pagoIdParaVisto != null
+                                  docNormAccion &&
+                                  onJustificarDocumentoRepetidoArchivo &&
+                                  puedeVistoSufijoPorDupBd
                                 ) {
-                                  setVistoBdPagoId(pagoIdParaVisto)
-                                  setVistoBdDocNorm(docNormAccion || null)
+                                  setVistoBdPagoId(
+                                    puedeVistoControl5Bd && pagoIdParaVisto != null
+                                      ? pagoIdParaVisto
+                                      : null
+                                  )
+                                  setVistoBdDocNorm(docNormAccion)
                                   setVistoBdDialogOpen(true)
                                 }
                               }}
@@ -1130,8 +1147,8 @@ export function TablaEditablePagos({
                                 isAdmin
                                   ? puedeVistoJustificarArchivo
                                     ? 'Visto: elige si añadir sufijos o autorizar sin cambiar el documento.'
-                                    : puedeVistoControl5Bd
-                                      ? 'Visto: elige control 5 en BD o añadir sufijo _A####/_P#### en esta carga.'
+                                    : puedeVistoSufijoPorDupBd
+                                      ? 'Visto: documento ya en BD — añadir código (sufijo) o, si aplica, control 5.'
                                       : 'Visto: solo administradores.'
                                   : 'Visto: solo administradores.'
                               }
@@ -1327,60 +1344,26 @@ export function TablaEditablePagos({
             <DialogTitle>Documento ya existente en la base de datos</DialogTitle>
             <div className="space-y-2 text-sm text-gray-600">
               <p>
-                Elija una acción. Puede aplicar el Visto de auditoría (control
-                5) sobre el pago que ya está en BD, o{' '}
+                Lo habitual con el mismo comprobante en otra cuota es{' '}
                 <strong>añadir el código</strong> (
                 <code className="rounded bg-gray-100 px-1">_A####</code> /{' '}
                 <code className="rounded bg-gray-100 px-1">_P####</code>) al
-                documento en esta carga para registrar sin duplicar el mismo
-                texto.
+                documento en esta carga. El control 5 solo aplica en casos
+                concretos de auditoría (misma fecha y monto entre pagos en BD).
               </p>
               <ul className="list-inside list-disc space-y-1 text-xs">
                 <li>
-                  <strong>Control 5</strong>: solo procede si ese pago entra en
-                  duplicado misma fecha y monto con otro operativo; si no aplica,
-                  use la opción de sufijo.
+                  <strong>Añadir código</strong>: nuevo Nº documento único en
+                  las filas de este archivo con el mismo valor.
                 </li>
                 <li>
-                  <strong>Añadir código</strong>: modifica el Nº documento solo
-                  en las filas de este archivo que comparten este valor.
+                  <strong>Control 5</strong>: solo si el pago en BD cumple
+                  duplicado fecha+monto; si el servidor rechaza, use sufijo.
                 </li>
               </ul>
             </div>
           </DialogHeader>
           <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
-            <button
-              type="button"
-              className="w-full rounded-md border border-violet-500 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-950 hover:bg-violet-100 disabled:opacity-50"
-              disabled={
-                vistoBdPagoId == null ||
-                vistoPagoIdCargando != null ||
-                serviceStatus === 'offline'
-              }
-              onClick={async () => {
-                const pid = vistoBdPagoId
-                if (pid == null) return
-                setVistoPagoIdCargando(pid)
-                try {
-                  await auditoriaService.aplicarControl5VistoPago(pid)
-                  toast.success(
-                    'Visto control 5 aplicado al pago en BD. Revalidando filas…'
-                  )
-                  await onRefrescarValidacionDocumentosBd?.()
-                  setVistoBdDialogOpen(false)
-                  setVistoBdPagoId(null)
-                  setVistoBdDocNorm(null)
-                } catch (e) {
-                  toast.error(getErrorMessage(e))
-                } finally {
-                  setVistoPagoIdCargando(null)
-                }
-              }}
-            >
-              {vistoPagoIdCargando != null && vistoBdPagoId === vistoPagoIdCargando
-                ? 'Aplicando…'
-                : 'Visto control 5 (pago en BD)'}
-            </button>
             <button
               type="button"
               className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1409,6 +1392,41 @@ export function TablaEditablePagos({
             >
               Añadir código (sufijo) en esta carga
             </button>
+            {vistoBdPagoId != null ? (
+              <button
+                type="button"
+                className="w-full rounded-md border border-violet-500 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-950 hover:bg-violet-100 disabled:opacity-50"
+                disabled={
+                  vistoPagoIdCargando != null || serviceStatus === 'offline'
+                }
+                onClick={async () => {
+                  const pid = vistoBdPagoId
+                  if (pid == null) return
+                  setVistoPagoIdCargando(pid)
+                  try {
+                    await auditoriaService.aplicarControl5VistoPago(pid)
+                    toast.success(
+                      'Visto control 5 aplicado al pago en BD. Revalidando filas…'
+                    )
+                    await onRefrescarValidacionDocumentosBd?.()
+                    setVistoBdDialogOpen(false)
+                    setVistoBdPagoId(null)
+                    setVistoBdDocNorm(null)
+                  } catch (e) {
+                    toast.error(
+                      `${getErrorMessage(e)} Si no aplica control 5, use «Añadir código (sufijo)».`
+                    )
+                  } finally {
+                    setVistoPagoIdCargando(null)
+                  }
+                }}
+              >
+                {vistoPagoIdCargando != null &&
+                vistoBdPagoId === vistoPagoIdCargando
+                  ? 'Aplicando…'
+                  : 'Visto control 5 (pago en BD)'}
+              </button>
+            ) : null}
             <button
               type="button"
               className="w-full rounded-md px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"

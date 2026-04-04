@@ -114,6 +114,8 @@ class PagoService {
     page: number
     per_page: number
     total_pages: number
+    /** Presente solo si el listado se filtró por cédula: suma de monto_pagado de todos los registros que coinciden (no solo la página). */
+    sum_monto_pagado_cedula?: number
   }> {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -148,6 +150,7 @@ class PagoService {
       page: number
       per_page: number
       total_pages: number
+      sum_monto_pagado_cedula?: number
     }>(url)
   }
 

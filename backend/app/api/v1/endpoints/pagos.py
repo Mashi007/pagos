@@ -792,6 +792,8 @@ def listar_pagos(
 
         count_q = select(func.count()).select_from(Pago)
 
+        sum_q = select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago)
+
         _pc = (prestamo_cartera or "activa").strip().lower()
 
         _solo_prestamos_aprobados = _pc not in ("todos", "all", "t")
@@ -807,6 +809,8 @@ def listar_pagos(
 
             count_q = count_q.where(Pago.prestamo_id.is_(None))
 
+            sum_q = sum_q.where(Pago.prestamo_id.is_(None))
+
             # Excluir pagos ya movidos a revisar_pagos (tabla temporal de validación)
 
             revisar_subq = select(RevisarPago.pago_id)
@@ -815,11 +819,15 @@ def listar_pagos(
 
             count_q = count_q.where(~Pago.id.in_(revisar_subq))
 
+            sum_q = sum_q.where(~Pago.id.in_(revisar_subq))
+
         if conciliado and conciliado.strip().lower() == "si":
 
             q = q.where(Pago.conciliado == True)
 
             count_q = count_q.where(Pago.conciliado == True)
+
+            sum_q = sum_q.where(Pago.conciliado == True)
 
         elif conciliado and conciliado.strip().lower() == "no":
 
@@ -827,17 +835,23 @@ def listar_pagos(
 
             count_q = count_q.where(or_(Pago.conciliado == False, Pago.conciliado.is_(None)))
 
+            sum_q = sum_q.where(or_(Pago.conciliado == False, Pago.conciliado.is_(None)))
+
         if cedula and cedula.strip():
 
             q = q.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
 
             count_q = count_q.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
 
+            sum_q = sum_q.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
+
         if estado and estado.strip():
 
             q = q.where(Pago.estado == estado.strip().upper())
 
             count_q = count_q.where(Pago.estado == estado.strip().upper())
+
+            sum_q = sum_q.where(Pago.estado == estado.strip().upper())
 
         if fecha_desde:
 
@@ -848,6 +862,8 @@ def listar_pagos(
                 q = q.where(Pago.fecha_pago >= datetime.combine(fd, dt_time.min))
 
                 count_q = count_q.where(Pago.fecha_pago >= datetime.combine(fd, dt_time.min))
+
+                sum_q = sum_q.where(Pago.fecha_pago >= datetime.combine(fd, dt_time.min))
 
             except ValueError:
 
@@ -863,6 +879,8 @@ def listar_pagos(
 
                 count_q = count_q.where(Pago.fecha_pago <= datetime.combine(fh, dt_time.max))
 
+                sum_q = sum_q.where(Pago.fecha_pago <= datetime.combine(fh, dt_time.max))
+
             except ValueError:
 
                 pass
@@ -873,11 +891,15 @@ def listar_pagos(
 
             count_q = count_q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
 
+            sum_q = sum_q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
+
             if _solo_prestamos_aprobados:
 
                 q = q.where(_estado_prestamo_aprobado_sql())
 
                 count_q = count_q.where(_estado_prestamo_aprobado_sql())
+
+                sum_q = sum_q.where(_estado_prestamo_aprobado_sql())
 
         elif _solo_prestamos_aprobados:
 
@@ -888,6 +910,12 @@ def listar_pagos(
             )
 
             count_q = count_q.outerjoin(Prestamo, Pago.prestamo_id == Prestamo.id).where(
+
+                or_(Pago.prestamo_id.is_(None), _estado_prestamo_aprobado_sql()),
+
+            )
+
+            sum_q = sum_q.outerjoin(Prestamo, Pago.prestamo_id == Prestamo.id).where(
 
                 or_(Pago.prestamo_id.is_(None), _estado_prestamo_aprobado_sql()),
 
@@ -909,7 +937,7 @@ def listar_pagos(
 
         total_pages = (total + per_page - 1) // per_page if total else 0
 
-        return {
+        out: dict = {
 
             "pagos": items,
 
@@ -922,6 +950,15 @@ def listar_pagos(
             "total_pages": total_pages,
 
         }
+
+        # Solo con filtro cédula: total de monto_pagado de todos los pagos que coinciden (no solo la página).
+        if cedula and cedula.strip():
+
+            raw_sum = db.scalar(sum_q)
+
+            out["sum_monto_pagado_cedula"] = float(raw_sum or 0)
+
+        return out
 
     except Exception as e:
 
