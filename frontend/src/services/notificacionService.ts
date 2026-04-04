@@ -87,6 +87,8 @@ export interface ClienteRetrasadoItem {
 
   /** Prejudicial: total de cuotas en mora del cliente (backend get_notificaciones_tabs_data). */
   total_cuotas_atrasadas?: number
+  /** Misma tabla que GET /prestamos: pendiente | revisando | en_espera | rechazado | revisado */
+  revision_manual_estado?: string | null
   correo?: string
   telefono?: string
   estado?: string

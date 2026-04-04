@@ -30,6 +30,7 @@ from app.services.notificacion_service import (
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
     contar_cuotas_atraso_por_prestamos,
+    enriquecer_items_notificacion_revision_manual,
     format_cuota_item,
     get_cuotas_pendientes_por_vencimientos,
     sum_saldo_pendiente_total_por_prestamos,
@@ -1786,6 +1787,10 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
                     )
                 )
 
+    enriquecer_items_notificacion_revision_manual(
+        db, dias_1_atraso + dias_5_atraso + dias_30_atraso
+    )
+
     # Crédito pagado: préstamos en estado LIQUIDADO (alineado con prestamos.estado).
     subq = (
         select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.total_pagado), 0).label("total_abonos"))
@@ -1962,6 +1967,7 @@ def build_prejudicial_items(db: Session) -> List[dict]:
         item = _item_tab(cliente, cuota_ref, total_pendiente_pagar=tp)
         item["total_cuotas_atrasadas"] = total_cuotas
         prejudicial.append(item)
+    enriquecer_items_notificacion_revision_manual(db, prejudicial)
     return prejudicial
 
 
@@ -2052,6 +2058,10 @@ def get_notificaciones_tabs_data(db: Session):
                 )
 
     prejudicial = build_prejudicial_items(db)
+    enriquecer_items_notificacion_revision_manual(
+        db,
+        dias_1_retraso + dias_3_retraso + dias_5_retraso + dias_30_retraso,
+    )
 
     return {
         "dias_5": dias_5,

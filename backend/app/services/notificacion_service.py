@@ -3,11 +3,13 @@ Servicios para notificaciones de cuotas vencidas y en mora.
 Centraliza la lógica de serialización y filtrado de cuotas.
 Listados por pestaña: get_cuotas_pendientes_por_vencimientos (filtra en SQL por fechas).
 """
+import logging
 from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
@@ -18,6 +20,8 @@ from app.services.cuota_estado import (
     dias_retraso_desde_vencimiento,
     hoy_negocio,
 )
+
+logger = logging.getLogger(__name__)
 
 # Misma tolerancia que clasificación de cuota pagada (cuota_estado): evita notificar si ya está cubierta al 100%.
 TOL_SALDO_CUOTA_NOTIFICACION = 0.01
@@ -311,6 +315,53 @@ def format_cuota_item(
             base_item["dias_antes_vencimiento"] = dias_antes_vencimiento
     
     return base_item
+
+
+def revision_manual_estado_por_prestamo_ids(
+    db: Session, prestamo_ids: Sequence[int]
+) -> Dict[int, Optional[str]]:
+    """
+    estado_revision desde revision_manual_prestamos (misma fuente que GET /prestamos).
+    Claves normalizadas a minúsculas para alinear con PrestamosList / frontend.
+    """
+    ids = sorted({int(x) for x in prestamo_ids if x is not None})
+    if not ids:
+        return {}
+    try:
+        from app.models.revision_manual_prestamo import RevisionManualPrestamo
+
+        q = select(
+            RevisionManualPrestamo.prestamo_id,
+            RevisionManualPrestamo.estado_revision,
+        ).where(RevisionManualPrestamo.prestamo_id.in_(ids))
+        out: Dict[int, Optional[str]] = {}
+        for pid, est in db.execute(q).all():
+            s = (est or "").strip().lower() if est else None
+            out[int(pid)] = s if s else None
+        return out
+    except (ProgrammingError, OperationalError) as e:
+        logger.warning(
+            "revision_manual_prestamos no disponible al enriquecer notificaciones: %s",
+            e,
+        )
+        return {}
+
+
+def enriquecer_items_notificacion_revision_manual(
+    db: Session, items: Sequence[dict]
+) -> None:
+    """Añade revision_manual_estado a cada ítem con prestamo_id (in-place)."""
+    lst = [x for x in items if x]
+    if not lst:
+        return
+    pids = [x.get("prestamo_id") for x in lst if x.get("prestamo_id") is not None]
+    m = revision_manual_estado_por_prestamo_ids(db, pids)
+    for it in lst:
+        pid = it.get("prestamo_id")
+        if pid is None:
+            it["revision_manual_estado"] = None
+        else:
+            it["revision_manual_estado"] = m.get(int(pid))
 
 
 # Funciones de compatibilidad (deprecated pero mantienen la API anterior)

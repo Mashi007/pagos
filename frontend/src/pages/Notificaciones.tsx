@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type ReactNode } from 'react'
 
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -14,6 +14,9 @@ import {
   Bell,
   ChevronUp,
   ChevronDown,
+  CheckCircle2,
+  HelpCircle,
+  X,
 } from 'lucide-react'
 
 import {
@@ -168,6 +171,61 @@ function SortArrowsCuotas({
         <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.5} />
       </button>
     </span>
+  )
+}
+
+/**
+ * Mismo criterio visual que PrestamosList (columna revisión manual).
+ * Sin fila en revision_manual_prestamos el backend envía null → se trata como pendiente.
+ */
+function revisionManualNotifLink(row: ClienteRetrasadoItem): ReactNode {
+  const pid = row.prestamo_id
+  if (pid == null) return null
+
+  const rev = (row.revision_manual_estado || 'pendiente').toLowerCase().trim()
+
+  const ICONO_REV: Record<
+    string,
+    { icon: ReactNode; title: string; cls: string }
+  > = {
+    pendiente: {
+      icon: <AlertTriangle className="h-4 w-4" />,
+      title: 'Revisión manual: No iniciada — abrir formulario',
+      cls: 'text-amber-500 hover:bg-amber-50',
+    },
+    revisando: {
+      icon: <HelpCircle className="h-4 w-4 text-orange-600" />,
+      title: 'Revisión manual: En revisión — continuar',
+      cls: 'text-orange-600 hover:bg-orange-50',
+    },
+    en_espera: {
+      icon: <X className="h-4 w-4" />,
+      title: 'Revisión manual: En espera',
+      cls: 'text-orange-500 hover:bg-orange-50',
+    },
+    rechazado: {
+      icon: <X className="h-4 w-4" />,
+      title: 'Revisión manual: Rechazado',
+      cls: 'text-red-600 hover:bg-red-50',
+    },
+    revisado: {
+      icon: <CheckCircle2 className="h-4 w-4" />,
+      title: 'Revisión manual: Revisado — reabrir si aplica',
+      cls: 'text-green-600 hover:bg-green-50',
+    },
+  }
+
+  const cfg = ICONO_REV[rev] ?? ICONO_REV.pendiente
+
+  return (
+    <Link
+      to={`/revision-manual/editar/${pid}`}
+      className={`inline-flex rounded p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${cfg.cls}`}
+      title={cfg.title}
+      aria-label={cfg.title}
+    >
+      {cfg.icon}
+    </Link>
   )
 }
 
@@ -999,16 +1057,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           </td>
 
                           <td className="px-1 py-2 text-center align-middle">
-                            {row.prestamo_id != null ? (
-                              <Link
-                                to={`/revision-manual/editar/${row.prestamo_id}`}
-                                className="inline-flex rounded p-1 text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                                title="Revisión manual"
-                                aria-label="Abrir revisión manual del préstamo"
-                              >
-                                <AlertTriangle className="h-4 w-4" />
-                              </Link>
-                            ) : null}
+                            {revisionManualNotifLink(row)}
                           </td>
 
                           <td className="px-3 py-2">
@@ -1083,16 +1132,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           <td className="px-3 py-2">{row.cedula}</td>
 
                           <td className="px-1 py-2 text-center align-middle">
-                            {row.prestamo_id != null ? (
-                              <Link
-                                to={`/revision-manual/editar/${row.prestamo_id}`}
-                                className="inline-flex rounded p-1 text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                                title="Revisión manual"
-                                aria-label="Abrir revisión manual del préstamo"
-                              >
-                                <AlertTriangle className="h-4 w-4" />
-                              </Link>
-                            ) : null}
+                            {revisionManualNotifLink(row)}
                           </td>
 
                           <td className="px-3 py-2">
