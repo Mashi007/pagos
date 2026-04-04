@@ -1911,7 +1911,24 @@ export function useExcelUploadPagos({
             )
           )
 
-          for (const raw of resultado.documentos_duplicados || []) {
+          const dupList = resultado.documentos_duplicados || []
+
+          // 1) Siempre tomar pago_id de filas origen "pagos" (no depender del orden mezclado con pagos_con_errores).
+          for (const raw of dupList) {
+            const d = raw as {
+              numero_documento?: string
+              origen?: string
+              pago_id?: number
+            }
+            if (d.origen !== 'pagos' || d.pago_id == null) continue
+            const key = normalizarNumeroDocumento(d.numero_documento)
+            if (!key) continue
+            const pid = Number(d.pago_id)
+            if (!Number.isFinite(pid) || pid <= 0) continue
+            if (!pagoPorDocDupBD.has(key)) pagoPorDocDupBD.set(key, pid)
+          }
+
+          for (const raw of dupList) {
             const d = raw as {
               numero_documento?: string
               origen?: string
@@ -1942,15 +1959,6 @@ export function useExcelUploadPagos({
               key,
               pid != null && Number.isFinite(Number(pid)) ? Number(pid) : null
             )
-
-            if (
-              d.origen === 'pagos' &&
-              d.pago_id != null &&
-              Number.isFinite(Number(d.pago_id)) &&
-              !pagoPorDocDupBD.has(key)
-            ) {
-              pagoPorDocDupBD.set(key, Number(d.pago_id))
-            }
           }
         } catch {
           // Igual que carga inicial: sin respuesta del API, validar sin listas de BD
@@ -1958,6 +1966,7 @@ export function useExcelUploadPagos({
           documentosDuplicadosBD = new Set()
           detalleDuplicadosBD = new Map()
           prestamoPorDocDupBD = new Map()
+          pagoPorDocDupBD = new Map()
         }
       }
 

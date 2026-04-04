@@ -945,12 +945,27 @@ export function TablaEditablePagos({
                               ? 'Bs requiere tasa de cambio'
                               : ''
 
-                      const pagoIdDupBd = row._pagoIdExistenteDuplicadoBD
+                      const pagoIdCampo = row._pagoIdExistenteDuplicadoBD
 
-                      const puedeVistoControl5 =
-                        isAdmin &&
-                        typeof pagoIdDupBd === 'number' &&
-                        pagoIdDupBd > 0
+                      const msgDoc = row._validation?.numero_documento?.message ?? ''
+
+                      const matchPagoId = msgDoc.match(/\(pago id (\d+)\)/i)
+
+                      const pagoIdDesdeMensaje = matchPagoId
+                        ? Number(matchPagoId[1])
+                        : NaN
+
+                      const pagoIdParaVisto =
+                        typeof pagoIdCampo === 'number' &&
+                        pagoIdCampo > 0 &&
+                        Number.isFinite(pagoIdCampo)
+                          ? pagoIdCampo
+                          : Number.isFinite(pagoIdDesdeMensaje) &&
+                              pagoIdDesdeMensaje > 0
+                            ? pagoIdDesdeMensaje
+                            : null
+
+                      const puedeMostrarVistoControl5 = pagoIdParaVisto != null
 
                       return (
                         <div className="flex flex-col gap-1">
@@ -1001,16 +1016,22 @@ export function TablaEditablePagos({
                             )}
                           </button>
 
-                          {puedeVistoControl5 && (
+                          {puedeMostrarVistoControl5 && (
                             <button
                               type="button"
                               onClick={async () => {
-                                if (pagoIdDupBd == null || pagoIdDupBd <= 0)
+                                if (pagoIdParaVisto == null || pagoIdParaVisto <= 0)
                                   return
-                                setVistoPagoIdCargando(pagoIdDupBd)
+                                if (!isAdmin) {
+                                  toast.error(
+                                    'Solo un usuario administrador puede aplicar Visto (control 5).'
+                                  )
+                                  return
+                                }
+                                setVistoPagoIdCargando(pagoIdParaVisto)
                                 try {
                                   await auditoriaService.aplicarControl5VistoPago(
-                                    pagoIdDupBd
+                                    pagoIdParaVisto
                                   )
                                   toast.success(
                                     'Visto aplicado al pago en BD. Se actualizó el Nº documento; revalidando filas…'
@@ -1023,14 +1044,23 @@ export function TablaEditablePagos({
                                 }
                               }}
                               disabled={
+                                !isAdmin ||
                                 vistoPagoIdCargando != null ||
                                 isSaving(row._rowIndex) ||
                                 serviceStatus === 'offline'
                               }
-                              title="Control 5 (auditoría): Visto sobre el pago existente que bloquea por documento duplicado. Requiere que ese pago esté en grupo duplicado misma fecha y monto."
-                              className="inline-flex items-center justify-center gap-0.5 rounded border border-violet-300 bg-violet-50 p-1.5 text-[10px] font-semibold text-violet-900 hover:bg-violet-100 disabled:opacity-70"
+                              title={
+                                isAdmin
+                                  ? 'Control 5 (auditoría): Visto sobre el pago en BD que coincide por documento. El servidor solo lo aplica si ese pago está en duplicado misma fecha y monto.'
+                                  : 'Visto: solo administradores. Inicie sesión con rol admin o pida a un administrador que aplique Visto desde aquí o desde Auditoría cartera.'
+                              }
+                              className={`inline-flex items-center justify-center gap-0.5 rounded border p-1.5 text-[10px] font-semibold disabled:opacity-60 ${
+                                isAdmin
+                                  ? 'border-violet-400 bg-violet-100 text-violet-950 hover:bg-violet-200'
+                                  : 'cursor-not-allowed border-gray-300 bg-gray-100 text-gray-500'
+                              }`}
                             >
-                              {vistoPagoIdCargando === pagoIdDupBd ? (
+                              {vistoPagoIdCargando === pagoIdParaVisto ? (
                                 <Loader2
                                   className="h-3.5 w-3.5 animate-spin"
                                   aria-hidden
