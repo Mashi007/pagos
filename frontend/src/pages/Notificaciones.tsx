@@ -12,6 +12,8 @@ import {
   Mail,
   Download,
   Bell,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react'
 
 import {
@@ -91,6 +93,84 @@ function textoTotalPendientePagar(row: ClienteRetrasadoItem): string {
         ? Number(row.monto)
         : null
   return v != null && Number.isFinite(v) ? v.toLocaleString('es') : '-'
+}
+
+/** Valor numérico para ordenar (misma prioridad que el texto mostrado). */
+function numericTotalPendienteSort(row: ClienteRetrasadoItem): number | null {
+  if (row.total_pendiente_pagar != null) {
+    const n = Number(row.total_pendiente_pagar)
+    return Number.isFinite(n) ? n : null
+  }
+  if (row.monto != null) {
+    const n = Number(row.monto)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
+/** Timestamp para ordenar fechas de vencimiento; vacío al final en orden ascendente. */
+function fechaVencSortValue(s: string | undefined): number {
+  if (s == null || String(s).trim() === '') return Number.POSITIVE_INFINITY
+  const t = Date.parse(s)
+  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
+}
+
+function cuotasAtrasadasSortValue(row: ClienteRetrasadoItem): number {
+  const n = row.cuotas_atrasadas ?? row.total_cuotas_atrasadas
+  if (n == null || Number.isNaN(Number(n))) return Number.POSITIVE_INFINITY
+  return Number(n)
+}
+
+type NotificacionesCuotasSortCol =
+  | 'numero_cuota'
+  | 'fecha_vencimiento'
+  | 'cuotas_atrasadas'
+  | 'total_pendiente'
+
+function SortArrowsCuotas({
+  column,
+  labelAsc,
+  labelDesc,
+  sortCol,
+  sortDir,
+  onAsc,
+  onDesc,
+}: {
+  column: NotificacionesCuotasSortCol
+  labelAsc: string
+  labelDesc: string
+  sortCol: NotificacionesCuotasSortCol | null
+  sortDir: 'asc' | 'desc'
+  onAsc: (c: NotificacionesCuotasSortCol) => void
+  onDesc: (c: NotificacionesCuotasSortCol) => void
+}) {
+  const upActive = sortCol === column && sortDir === 'asc'
+  const downActive = sortCol === column && sortDir === 'desc'
+  const baseBtn =
+    'rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
+  return (
+    <span
+      className="inline-flex shrink-0 flex-col gap-0 leading-none"
+      role="group"
+    >
+      <button
+        type="button"
+        className={`${baseBtn} ${upActive ? 'text-blue-600' : ''}`}
+        aria-label={labelAsc}
+        onClick={() => onAsc(column)}
+      >
+        <ChevronUp className="h-3.5 w-3.5" strokeWidth={2.5} />
+      </button>
+      <button
+        type="button"
+        className={`${baseBtn} ${downActive ? 'text-blue-600' : ''}`}
+        aria-label={labelDesc}
+        onClick={() => onDesc(column)}
+      >
+        <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.5} />
+      </button>
+    </span>
+  )
 }
 
 function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
@@ -540,6 +620,82 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const list = getListForTab()
 
+  const [sortCol, setSortCol] = useState<NotificacionesCuotasSortCol | null>(
+    null
+  )
+
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  useEffect(() => {
+    setSortCol(null)
+
+    setSortDir('asc')
+  }, [activeTab, modulo])
+
+  const sortedList = useMemo(() => {
+    if (!sortCol || list.length === 0) return list
+
+    const cmp = (a: ClienteRetrasadoItem, b: ClienteRetrasadoItem): number => {
+      switch (sortCol) {
+        case 'numero_cuota': {
+          const na = a.numero_cuota
+          const nb = b.numero_cuota
+          const va =
+            na == null || Number.isNaN(Number(na))
+              ? Number.POSITIVE_INFINITY
+              : Number(na)
+          const vb =
+            nb == null || Number.isNaN(Number(nb))
+              ? Number.POSITIVE_INFINITY
+              : Number(nb)
+          return va - vb
+        }
+
+        case 'fecha_vencimiento':
+          return (
+            fechaVencSortValue(a.fecha_vencimiento) -
+            fechaVencSortValue(b.fecha_vencimiento)
+          )
+
+        case 'cuotas_atrasadas':
+          return cuotasAtrasadasSortValue(a) - cuotasAtrasadasSortValue(b)
+
+        case 'total_pendiente': {
+          const va = numericTotalPendienteSort(a)
+          const vb = numericTotalPendienteSort(b)
+          const na = va == null ? Number.POSITIVE_INFINITY : va
+          const nb = vb == null ? Number.POSITIVE_INFINITY : vb
+          return na - nb
+        }
+
+        default:
+          return 0
+      }
+    }
+
+    const out = [...list]
+
+    out.sort((a, b) => {
+      const p = sortDir === 'asc' ? cmp(a, b) : -cmp(a, b)
+
+      if (p !== 0) return p
+
+      return String(a.cliente_id).localeCompare(String(b.cliente_id))
+    })
+
+    return out
+  }, [list, sortCol, sortDir])
+
+  const aplicarOrdenAsc = (c: NotificacionesCuotasSortCol) => {
+    setSortCol(c)
+    setSortDir('asc')
+  }
+
+  const aplicarOrdenDesc = (c: NotificacionesCuotasSortCol) => {
+    setSortCol(c)
+    setSortDir('desc')
+  }
+
   const isLoadingLista = modulo === 'a1dia' ? isPending : isPendingPrej
 
   const isErrorLista = modulo === 'a1dia' ? isError : isErrorPrej
@@ -936,19 +1092,81 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       </th>
 
                       <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        Nº cuota
+                        <div className="inline-flex items-center gap-1">
+                          <span>Nº cuota</span>
+
+                          <SortArrowsCuotas
+                            column="numero_cuota"
+                            labelAsc="Orden ascendente: Nº cuota"
+                            labelDesc="Orden descendente: Nº cuota"
+                            sortCol={sortCol}
+                            sortDir={sortDir}
+                            onAsc={aplicarOrdenAsc}
+                            onDesc={aplicarOrdenDesc}
+                          />
+                        </div>
                       </th>
 
                       <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        Fecha venc.
+                        <div className="inline-flex items-center gap-1">
+                          <span>Fecha venc.</span>
+
+                          <SortArrowsCuotas
+                            column="fecha_vencimiento"
+                            labelAsc="Orden ascendente: fecha de vencimiento"
+                            labelDesc="Orden descendente: fecha de vencimiento"
+                            sortCol={sortCol}
+                            sortDir={sortDir}
+                            onAsc={aplicarOrdenAsc}
+                            onDesc={aplicarOrdenDesc}
+                          />
+                        </div>
                       </th>
 
                       <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
-                        Cuotas atrasadas
+                        <div className="inline-flex w-full items-center justify-end gap-1">
+                          <span>Cuotas atrasadas</span>
+
+                          <SortArrowsCuotas
+                            column="cuotas_atrasadas"
+                            labelAsc="Orden ascendente: cuotas atrasadas"
+                            labelDesc="Orden descendente: cuotas atrasadas"
+                            sortCol={sortCol}
+                            sortDir={sortDir}
+                            onAsc={aplicarOrdenAsc}
+                            onDesc={aplicarOrdenDesc}
+                          />
+                        </div>
                       </th>
 
                       <th className="max-w-[12rem] whitespace-normal px-3 py-2 text-right font-semibold leading-tight">
-                        TOTAL PENDIENTE A PAGAR
+                        <div className="inline-flex items-start justify-end gap-1">
+                          <span className="inline-flex items-start gap-1.5 text-left">
+                            <span
+                              className="inline-flex shrink-0 pt-0.5"
+                              title="Mismo icono que revisión manual en Préstamos (pendiente de revisar)."
+                            >
+                              <AlertTriangle
+                                className="h-4 w-4 text-amber-500"
+                                aria-hidden
+                              />
+                            </span>
+                            <span>
+                              TOTAL PENDIENTE
+                              <br />A PAGAR
+                            </span>
+                          </span>
+
+                          <SortArrowsCuotas
+                            column="total_pendiente"
+                            labelAsc="Orden ascendente: total pendiente"
+                            labelDesc="Orden descendente: total pendiente"
+                            sortCol={sortCol}
+                            sortDir={sortDir}
+                            onAsc={aplicarOrdenAsc}
+                            onDesc={aplicarOrdenDesc}
+                          />
+                        </div>
                       </th>
 
                       <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
@@ -977,9 +1195,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         </td>
                       </tr>
                     ) : (
-                      list.map((row, idx) => (
+                      sortedList.map((row, idx) => (
                         <tr
-                          key={`${row.cliente_id}-${row.numero_cuota ?? idx}`}
+                          key={`${row.cliente_id}-${row.prestamo_id ?? 'np'}-${row.numero_cuota ?? 'nc'}`}
                           className="border-b hover:bg-gray-50"
                         >
                           <td className="px-3 py-2">{idx + 1}</td>
