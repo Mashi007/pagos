@@ -361,7 +361,7 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
     Obtiene datos formateados para PDF/JSON de estado de cuenta de UN prestamo.
 
     Consumidores: GET /prestamos/{id}/estado-cuenta, GET /prestamos/{id}/estado-cuenta/pdf,
-    obtener_datos_estado_cuenta_cliente, liquidado_notificacion_service.
+    obtener_datos_estado_cuenta_cliente.
 
     Tabla de amortizacion completa si el prestamo esta en ESTADOS_PRESTAMO_TABLA_AMORTIZACION.
 

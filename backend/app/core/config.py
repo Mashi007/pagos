@@ -189,20 +189,6 @@ class Settings(BaseSettings):
             'Los envios masivos reales siguen sujetos a NOTIFICACIONES_PAQUETE_ESTRICTO.'
         ),
     )
-    # Correo automatico al liquidar: desactivado por defecto (opt-in con NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED=true).
-    NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED: bool = Field(
-        default=False,
-        description=(
-            "Si True: el scheduler registra el job 01:10 y se envian correos con PDF estado de cuenta "
-            "segun NOTIFICACIONES_LIQUIDADO_DIAS_ENVIO. Si False: no se envian ni se programa ese job."
-        ),
-    )
-    # Dias calendario (Caracas) despues de prestamos.fecha_liquidado para enviar correo con PDF estado de cuenta.
-    # Ej. "1,2" = primer correo al dia siguiente de la fecha_liquidado, segundo al segundo dia. Un correo por cliente por oleada.
-    NOTIFICACIONES_LIQUIDADO_DIAS_ENVIO: str = Field(
-        default="1,2",
-        description="CSV de enteros >=1: dias despues de fecha_liquidado para enviar emails liquidado+PDF",
-    )
     # Cartera / liquidacion: si True, no marcar LIQUIDADO hasta cuadrar suma pagos operativos vs cuota_pagos (tol 0.02 USD, mismo criterio que auditoria).
     LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS: bool = Field(
         default=False,
