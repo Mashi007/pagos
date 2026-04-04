@@ -62,6 +62,32 @@ import { prestamoKeys } from '../hooks/usePrestamos'
 
 import { codigoEstadoCuotaParaUi } from '../utils/cuotaEstadoDisplay'
 
+/** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
+const OPCIONES_ESTADO_PRESTAMO_REVISION: { value: string; label: string }[] = [
+  { value: 'DRAFT', label: 'Borrador' },
+  { value: 'EN_REVISION', label: 'En revisión' },
+  { value: 'EVALUADO', label: 'Evaluado' },
+  { value: 'APROBADO', label: 'Aprobado' },
+  { value: 'DESEMBOLSADO', label: 'Desembolsado' },
+  { value: 'LIQUIDADO', label: 'Liquidado' },
+  { value: 'DESISTIMIENTO', label: 'Desistimiento' },
+  { value: 'RECHAZADO', label: 'Rechazado' },
+]
+
+function opcionesSelectEstadoPrestamoRevision(estadoRaw: string | undefined) {
+  const codigo = (estadoRaw ?? '').trim().toUpperCase()
+  if (
+    codigo &&
+    !OPCIONES_ESTADO_PRESTAMO_REVISION.some(o => o.value === codigo)
+  ) {
+    return [
+      { value: codigo, label: `${codigo} (legacy)` },
+      ...OPCIONES_ESTADO_PRESTAMO_REVISION,
+    ]
+  }
+  return OPCIONES_ESTADO_PRESTAMO_REVISION
+}
+
 /** Códigos que acepta PUT /revision-manual/cuotas/{id} (mayúsculas). */
 const OPCIONES_ESTADO_CUOTA_REVISION: { value: string; label: string }[] = [
   { value: 'PENDIENTE', label: 'Pendiente' },
@@ -211,7 +237,9 @@ function firmaSoloPrestamo(p: Partial<PrestamoData>): string {
     mod: String(p.modalidad_pago ?? '').trim(),
     cp: Number(p.cuota_periodo) || 0,
     fa: normDateCmp(p.fecha_aprobacion as string | null | undefined),
-    estado: String(p.estado ?? '').trim(),
+    estado: String(p.estado ?? '')
+      .trim()
+      .toUpperCase(),
     conc: String(p.concesionario ?? '').trim(),
     analista: String(p.analista ?? '').trim(),
     mv: String(p.modelo_vehiculo ?? '').trim(),
@@ -713,6 +741,7 @@ export function EditarRevisionManual() {
         ]
       : opcionesBase
 
+  /** Botón "Guardar Cambios": PUT a BD (cliente, préstamo incl. estado, cuotas, bajas de cuotas). */
   const handleGuardarParciales = async () => {
     if (!prestamoId) return
 
@@ -872,8 +901,12 @@ export function EditarRevisionManual() {
 
         applyFechaAprobacionAlPayload(prestamoUpdate)
 
-        if (prestamoData.estado !== undefined)
-          prestamoUpdate.estado = prestamoData.estado
+        const estadoPrestamoNormParcial = (prestamoData.estado ?? '')
+          .toString()
+          .trim()
+          .toUpperCase()
+        if (estadoPrestamoNormParcial)
+          prestamoUpdate.estado = estadoPrestamoNormParcial
 
         if (prestamoData.concesionario !== undefined)
           prestamoUpdate.concesionario = prestamoData.concesionario
@@ -1063,6 +1096,10 @@ export function EditarRevisionManual() {
           queryKey: ['revision-manual-prestamos'],
         })
 
+        queryClient.invalidateQueries({
+          queryKey: ['revision-editar', prestamoId],
+        })
+
         queryClient.invalidateQueries({ queryKey: ['prestamos'] })
 
         queryClient.invalidateQueries({ queryKey: ['clientes'] })
@@ -1096,6 +1133,7 @@ export function EditarRevisionManual() {
     }
   }
 
+  /** Botón "Guardar y Cerrar": mismo guardado a BD + finalizar revisión manual (estado revisado). */
   const handleGuardarYCerrar = async () => {
     if (!prestamoId) return
 
@@ -1255,8 +1293,12 @@ export function EditarRevisionManual() {
 
         applyFechaAprobacionAlPayload(prestamoUpdate)
 
-        if (prestamoData.estado !== undefined)
-          prestamoUpdate.estado = prestamoData.estado
+        const estadoPrestamoNormCierre = (prestamoData.estado ?? '')
+          .toString()
+          .trim()
+          .toUpperCase()
+        if (estadoPrestamoNormCierre)
+          prestamoUpdate.estado = estadoPrestamoNormCierre
 
         if (prestamoData.concesionario !== undefined)
           prestamoUpdate.concesionario = prestamoData.concesionario
@@ -1405,6 +1447,10 @@ export function EditarRevisionManual() {
 
         queryClient.invalidateQueries({
           queryKey: ['revision-manual-prestamos'],
+        })
+
+        queryClient.invalidateQueries({
+          queryKey: ['revision-editar', prestamoId],
         })
 
         queryClient.invalidateQueries({ queryKey: ['prestamos'] })
@@ -2161,15 +2207,13 @@ export function EditarRevisionManual() {
                       <SelectValue placeholder="Seleccionar estado" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="DRAFT">Borrador</SelectItem>
-                      <SelectItem value="EN_REVISION">En revisión</SelectItem>
-                      <SelectItem value="EVALUADO">Evaluado</SelectItem>
-                      <SelectItem value="APROBADO">Aprobado</SelectItem>
-                      <SelectItem value="LIQUIDADO">Liquidado</SelectItem>
-                      <SelectItem value="DESISTIMIENTO">
-                        Desistimiento
-                      </SelectItem>
-                      <SelectItem value="RECHAZADO">Rechazado</SelectItem>
+                      {opcionesSelectEstadoPrestamoRevision(
+                        prestamoData.estado
+                      ).map(o => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
