@@ -76,6 +76,32 @@ const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
 
 const PRESTAMO_ID_MAX = 2147483647
 
+/** Alineado con backend `pagos.numero_documento` String(100). */
+const NUMERO_DOCUMENTO_MAX_LEN = 100
+
+/**
+ * Sufijo admin carga masiva: _ + A|P + 4 digitos (mismo archivo vs otro prestamo en BD).
+ */
+const SUFIJO_VISTO_ARCHIVO_RE = /_[AP]\d{4}$/i
+
+/** Genera token A#### o P#### unicos dentro de `usados`. */
+function allocarTokenSufijoVistoArchivo(
+  letter: 'A' | 'P',
+  usados: Set<string>
+): string {
+  for (let t = 0; t < 80; t++) {
+    const n = Math.floor(Math.random() * 10000)
+    const tok = `${letter}${String(n).padStart(4, '0')}`
+    if (!usados.has(tok)) {
+      usados.add(tok)
+      return tok
+    }
+  }
+  const tok = `${letter}${String(Date.now() % 10000).padStart(4, '0')}`
+  usados.add(tok)
+  return tok
+}
+
 /** Si el monto visible antes de guardar es >= este valor, se avisa verificar USD vs Bs. */
 const MONTO_MIN_ADVERTENCIA_MONEDA = 2000
 
@@ -87,6 +113,118 @@ function montoFilaParaAdvertenciaMoneda(row: PagoExcelRow): number {
 
 function filaRequiereAdvertenciaMontoAlto(row: PagoExcelRow): boolean {
   return montoFilaParaAdvertenciaMoneda(row) >= MONTO_MIN_ADVERTENCIA_MONEDA
+}
+
+/** Mapas de BD tras validar-filas-batch (también en refs para edición en vivo). */
+export type MapsValidacionBatchPagos = {
+  cedulasExistentesBD: Set<string>
+  documentosDuplicadosBD: Set<string>
+  detalleDuplicadosBD: Map<string, string>
+  prestamoPorDocDupBD: Map<string, number | null>
+  pagoPorDocDupBD: Map<string, number>
+}
+
+/**
+ * Validación de cédula y documento alineada con el batch (sin API).
+ * Duplicado en archivo: mismo texto de regla; si el documento está en
+ * `documentosRepetidosArchivoJustificados`, el documento pasa (un comprobante, varias filas/cuotas).
+ */
+export function applyRowValidationsSync(
+  processed: PagoExcelRow[],
+  maps: MapsValidacionBatchPagos,
+  documentosRepetidosArchivoJustificados: Set<string>
+): PagoExcelRow[] {
+  const docFreq = new Map<string, number>()
+  processed.forEach(r => {
+    const docNorm = normalizarNumeroDocumento(r.numero_documento)
+    if (docNorm) docFreq.set(docNorm, (docFreq.get(docNorm) || 0) + 1)
+  })
+  const documentosDuplicadosEnArchivo = new Set(
+    Array.from(docFreq.entries())
+      .filter(([, count]) => count > 1)
+      .map(([doc]) => doc)
+  )
+  const todasCedulas = [
+    ...new Set(
+      processed
+        .map(r => r.cedula.replace(/-/g, '').toUpperCase())
+        .filter(c => /^[VEJZ]\d{6,11}$/i.test(c))
+    ),
+  ]
+
+  return processed.map(r => {
+    const docNorm = normalizarNumeroDocumento(r.numero_documento)
+    const {
+      _prestamoIdExistenteDuplicadoBD: _omitDup,
+      _pagoIdExistenteDuplicadoBD: _omitPagoDup,
+      ...restRow
+    } = r
+
+    const vCedula = validatePagoField('cedula', r.cedula, {
+      cedulasInvalidas: new Set(
+        todasCedulas.filter(c => !maps.cedulasExistentesBD.has(c))
+      ),
+    })
+
+    const esDuplicadoEnArchivo =
+      !!docNorm && documentosDuplicadosEnArchivo.has(docNorm)
+    const esDuplicadoEnBD =
+      !!docNorm && maps.documentosDuplicadosBD.has(docNorm)
+
+    let vDoc: { isValid: boolean; message?: string }
+    if (esDuplicadoEnArchivo) {
+      const justificado =
+        !!docNorm && documentosRepetidosArchivoJustificados.has(docNorm)
+      vDoc = {
+        isValid: justificado,
+        message: 'Documento repetido en este archivo',
+      }
+    } else if (esDuplicadoEnBD) {
+      vDoc = {
+        isValid: false,
+        message: `Documento ya existe en la base de datos${maps.detalleDuplicadosBD.get(docNorm) || ''}`,
+      }
+    } else {
+      vDoc = validatePagoField('numero_documento', r.numero_documento, {
+        documentosEnArchivo: documentosDuplicadosEnArchivo,
+      })
+    }
+
+    const newValidation: Record<
+      string,
+      { isValid: boolean; message?: string }
+    > = {
+      ...r._validation,
+      cedula: vCedula,
+      numero_documento: vDoc,
+    }
+
+    const hasErrors =
+      !newValidation['cedula']?.isValid ||
+      !newValidation['fecha_pago']?.isValid ||
+      !newValidation['monto_pagado']?.isValid ||
+      !newValidation['numero_documento']?.isValid
+
+    const prestamoDupBd =
+      esDuplicadoEnBD && docNorm
+        ? (maps.prestamoPorDocDupBD.get(docNorm) ?? null)
+        : undefined
+
+    const pagoDupBd =
+      esDuplicadoEnBD && docNorm ? maps.pagoPorDocDupBD.get(docNorm) : undefined
+
+    return {
+      ...restRow,
+      _validation: newValidation,
+      _hasErrors: hasErrors,
+      ...(prestamoDupBd !== undefined
+        ? { _prestamoIdExistenteDuplicadoBD: prestamoDupBd }
+        : {}),
+      ...(pagoDupBd !== undefined
+        ? { _pagoIdExistenteDuplicadoBD: pagoDupBd }
+        : {}),
+    }
+  })
 }
 
 /**
@@ -192,6 +330,8 @@ export function useExcelUploadPagos({
 
   const [excelData, setExcelData] = useState<PagoExcelRow[]>([])
 
+  const excelDataRef = useRef<PagoExcelRow[]>([])
+
   useEffect(() => {
     excelDataRef.current = excelData
   }, [excelData])
@@ -218,8 +358,45 @@ export function useExcelUploadPagos({
 
   const documentosDuplicadosBDRef = useRef<Set<string>>(new Set())
 
-  /** Ultimo grid; permite revalidar contra BD tras editar celdas sin resubir el Excel */
-  const excelDataRef = useRef<PagoExcelRow[]>([])
+  const detalleDuplicadosBDRef = useRef<Map<string, string>>(new Map())
+
+  const prestamoPorDocDupBDRef = useRef<Map<string, number | null>>(new Map())
+
+  const pagoPorDocDupBDRef = useRef<Map<string, number>>(new Map())
+
+  const [
+    documentosRepetidosArchivoJustificados,
+    setDocumentosRepetidosArchivoJustificados,
+  ] = useState<string[]>([])
+
+  const documentosRepetidosArchivoJustificadosRef = useRef<Set<string>>(
+    new Set()
+  )
+
+  useEffect(() => {
+    documentosRepetidosArchivoJustificadosRef.current = new Set(
+      documentosRepetidosArchivoJustificados
+    )
+  }, [documentosRepetidosArchivoJustificados])
+
+  useEffect(() => {
+    const filas = excelDataRef.current
+    if (!filas.length) return
+    const maps: MapsValidacionBatchPagos = {
+      cedulasExistentesBD: cedulasExistentesBDRef.current,
+      documentosDuplicadosBD: documentosDuplicadosBDRef.current,
+      detalleDuplicadosBD: detalleDuplicadosBDRef.current,
+      prestamoPorDocDupBD: prestamoPorDocDupBDRef.current,
+      pagoPorDocDupBD: pagoPorDocDupBDRef.current,
+    }
+    setExcelData(
+      applyRowValidationsSync(
+        filas,
+        maps,
+        new Set(documentosRepetidosArchivoJustificados)
+      )
+    )
+  }, [documentosRepetidosArchivoJustificados])
 
   const debounceRevalidarBatchBdRef = useRef<ReturnType<
     typeof setTimeout
@@ -1967,6 +2144,9 @@ export function useExcelUploadPagos({
           detalleDuplicadosBD = new Map()
           prestamoPorDocDupBD = new Map()
           pagoPorDocDupBD = new Map()
+          detalleDuplicadosBDRef.current = new Map()
+          prestamoPorDocDupBDRef.current = new Map()
+          pagoPorDocDupBDRef.current = new Map()
         }
       }
 
@@ -1974,81 +2154,25 @@ export function useExcelUploadPagos({
 
       documentosDuplicadosBDRef.current = documentosDuplicadosBD
 
-      return processed.map(r => {
-        const docNorm = normalizarNumeroDocumento(r.numero_documento)
+      detalleDuplicadosBDRef.current = detalleDuplicadosBD
 
-        const {
-          _prestamoIdExistenteDuplicadoBD: _omitDup,
-          _pagoIdExistenteDuplicadoBD: _omitPagoDup,
-          ...restRow
-        } = r
+      prestamoPorDocDupBDRef.current = prestamoPorDocDupBD
 
-        const vCedula = validatePagoField('cedula', r.cedula, {
-          cedulasInvalidas: new Set(
-            todasCedulas.filter(c => !cedulasExistentesBD.has(c))
-          ),
-        })
+      pagoPorDocDupBDRef.current = pagoPorDocDupBD
 
-        let vDoc = r._validation.numero_documento
+      const maps: MapsValidacionBatchPagos = {
+        cedulasExistentesBD,
+        documentosDuplicadosBD,
+        detalleDuplicadosBD,
+        prestamoPorDocDupBD,
+        pagoPorDocDupBD,
+      }
 
-        const esDuplicadoEnArchivo =
-          docNorm && documentosDuplicadosEnArchivo.has(docNorm)
-
-        const esDuplicadoEnBD = docNorm && documentosDuplicadosBD.has(docNorm)
-
-        if (esDuplicadoEnArchivo) {
-          vDoc = {
-            isValid: false,
-            message: 'Documento repetido en este archivo',
-          }
-        } else if (esDuplicadoEnBD) {
-          vDoc = {
-            isValid: false,
-            message: `Documento ya existe en la base de datos${detalleDuplicadosBD.get(docNorm) || ''}`,
-          }
-        } else {
-          vDoc = validatePagoField('numero_documento', r.numero_documento, {
-            documentosEnArchivo: documentosDuplicadosEnArchivo,
-          })
-        }
-
-        const newValidation: Record<
-          string,
-          { isValid: boolean; message?: string }
-        > = {
-          ...r._validation,
-
-          cedula: vCedula,
-
-          numero_documento: vDoc,
-        }
-
-        const hasErrors =
-          !newValidation['cedula']?.isValid ||
-          !newValidation['fecha_pago']?.isValid ||
-          !newValidation['monto_pagado']?.isValid ||
-          !newValidation['numero_documento']?.isValid
-
-        const prestamoDupBd =
-          esDuplicadoEnBD && docNorm
-            ? (prestamoPorDocDupBD.get(docNorm) ?? null)
-            : undefined
-
-        const pagoDupBd =
-          esDuplicadoEnBD && docNorm ? pagoPorDocDupBD.get(docNorm) : undefined
-
-        return {
-          ...restRow,
-          _validation: newValidation,
-          _hasErrors: hasErrors,
-          ...(prestamoDupBd !== undefined
-            ? { _prestamoIdExistenteDuplicadoBD: prestamoDupBd }
-            : {}),
-          ...(pagoDupBd !== undefined
-            ? { _pagoIdExistenteDuplicadoBD: pagoDupBd }
-            : {}),
-        }
-      })
+      return applyRowValidationsSync(
+        processed,
+        maps,
+        documentosRepetidosArchivoJustificadosRef.current
+      )
     },
     [isMounted]
   )
@@ -2732,21 +2856,81 @@ export function useExcelUploadPagos({
           })
 
           if (field === 'numero_documento') {
-            const validation = validatePagoField(
-              'numero_documento',
-              (updated as any).numero_documento,
-              {
-                documentosEnArchivo,
-                documentosDuplicadosBD: documentosDuplicadosBDRef.current,
-              }
+            const docFreq = new Map<string, number>()
+            prev.forEach(o => {
+              const rowData =
+                o._rowIndex === row._rowIndex
+                  ? {
+                      ...o,
+                      numero_documento: (updated as any).numero_documento,
+                    }
+                  : o
+              const d = normalizarNumeroDocumento(rowData.numero_documento)
+              if (d) docFreq.set(d, (docFreq.get(d) || 0) + 1)
+            })
+            const documentosDuplicadosEnArchivo = new Set(
+              Array.from(docFreq.entries())
+                .filter(([, c]) => c > 1)
+                .map(([d]) => d)
             )
+            const docNorm = normalizarNumeroDocumento(
+              (updated as any).numero_documento
+            )
+            const dupArchivo =
+              !!docNorm && documentosDuplicadosEnArchivo.has(docNorm)
+            const dupBD =
+              !!docNorm && documentosDuplicadosBDRef.current.has(docNorm)
+
+            let vDoc: { isValid: boolean; message?: string }
+            if (
+              dupArchivo &&
+              docNorm &&
+              documentosRepetidosArchivoJustificadosRef.current.has(docNorm)
+            ) {
+              vDoc = {
+                isValid: true,
+                message: 'Documento repetido en este archivo',
+              }
+            } else if (dupArchivo) {
+              vDoc = {
+                isValid: false,
+                message: 'Documento repetido en este archivo',
+              }
+            } else if (dupBD) {
+              vDoc = {
+                isValid: false,
+                message: `Documento ya existe en la base de datos${detalleDuplicadosBDRef.current.get(docNorm) || ''}`,
+              }
+            } else {
+              vDoc = validatePagoField(
+                'numero_documento',
+                (updated as any).numero_documento,
+                { documentosEnArchivo: documentosDuplicadosEnArchivo }
+              )
+            }
 
             updated._validation = {
               ...r._validation,
-              numero_documento: validation,
+              numero_documento: vDoc,
             }
 
-            updated._hasErrors = !validation.isValid
+            updated._hasErrors =
+              !updated._validation.cedula?.isValid ||
+              !updated._validation.fecha_pago?.isValid ||
+              !updated._validation.monto_pagado?.isValid ||
+              !vDoc.isValid
+
+            if (dupBD && docNorm) {
+              const pr = prestamoPorDocDupBDRef.current.get(docNorm)
+              const pg = pagoPorDocDupBDRef.current.get(docNorm)
+              if (pr !== undefined)
+                (updated as any)._prestamoIdExistenteDuplicadoBD = pr
+              if (pg !== undefined)
+                (updated as any)._pagoIdExistenteDuplicadoBD = pg
+            } else {
+              delete (updated as any)._prestamoIdExistenteDuplicadoBD
+              delete (updated as any)._pagoIdExistenteDuplicadoBD
+            }
           } else if (field === 'cedula') {
             updated.prestamo_id = null
 
@@ -2925,10 +3109,66 @@ export function useExcelUploadPagos({
 
     setDuplicadosPendientesRevisar(new Set())
 
+    setDocumentosRepetidosArchivoJustificados([])
+
     setUploadedFile(null)
 
     setShowPreview(false)
   }, [])
+
+  const justificarDocumentoRepetidoEnArchivo = useCallback(
+    (docNormRaw: string) => {
+      const key = normalizarNumeroDocumento(docNormRaw)
+      if (!key) return
+
+      const maps: MapsValidacionBatchPagos = {
+        cedulasExistentesBD: cedulasExistentesBDRef.current,
+        documentosDuplicadosBD: documentosDuplicadosBDRef.current,
+        detalleDuplicadosBD: detalleDuplicadosBDRef.current,
+        prestamoPorDocDupBD: prestamoPorDocDupBDRef.current,
+        pagoPorDocDupBD: pagoPorDocDupBDRef.current,
+      }
+
+      const dupPrestamoBd = prestamoPorDocDupBDRef.current.get(key) ?? null
+
+      setExcelData(prev => {
+        const usados = new Set<string>()
+        const mapped = prev.map(r => {
+          const dn = normalizarNumeroDocumento(r.numero_documento)
+          if (dn !== key) return r
+
+          const raw = String(r.numero_documento ?? '').trim()
+          if (SUFIJO_VISTO_ARCHIVO_RE.test(raw)) return r
+
+          const rowPid = r.prestamo_id ?? null
+          const letter: 'A' | 'P' =
+            dupPrestamoBd != null &&
+            rowPid != null &&
+            Number(dupPrestamoBd) !== Number(rowPid)
+              ? 'P'
+              : 'A'
+
+          const token = allocarTokenSufijoVistoArchivo(letter, usados)
+          const maxBase = NUMERO_DOCUMENTO_MAX_LEN - 1 - token.length
+          let base = raw
+          if (base.length > maxBase) {
+            base = base.slice(0, Math.max(0, maxBase))
+          }
+
+          return { ...r, numero_documento: `${base}_${token}` }
+        })
+
+        return applyRowValidationsSync(
+          mapped,
+          maps,
+          new Set(documentosRepetidosArchivoJustificadosRef.current)
+        )
+      })
+
+      scheduleRevalidarBatchBd()
+    },
+    [scheduleRevalidarBatchBd]
+  )
 
   return {
     isDragging,
@@ -3018,5 +3258,9 @@ export function useExcelUploadPagos({
     batchProgress,
 
     refrescarValidacionFilasBd,
+
+    documentosRepetidosArchivoJustificados,
+
+    justificarDocumentoRepetidoEnArchivo,
   }
 }

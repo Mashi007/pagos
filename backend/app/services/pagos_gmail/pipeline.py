@@ -1,6 +1,8 @@
 """
 Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/mixed + rfc822) -> plantilla A/B/C
-  -> Drive + BD; si no cumple plantillas 1/2/3 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
+  -> commit BD (fila sin enlaces Drive) -> subida Drive -> commit enlaces en BD.
+  Asi no quedan archivos en Drive sin fila; los enlaces existen en BD justo despues del segundo commit.
+  Si no cumple plantillas 1/2/3 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
 Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con las cuatro columnas (fecha_pago, cedula, monto, numero_referencia), o plantilla C (Binance Pay)
@@ -118,6 +120,7 @@ def run_pipeline(
     Por adjunto OK (y remitente en clientes): etiqueta IMAGEN 1 (A), IMAGEN 2 (B) o IMAGEN 3 (C) + estrella; cierre: leido si hubo algun OK.
     scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = toda la bandeja).
       pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2/3.
+    Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
     Los mensajes de cada lote se ordenan por fecha (mas actual primero) antes de procesar.
     Con "unread", se repite listar+procesar hasta que no queden no leidos o hasta PAGOS_GMAIL_UNREAD_MAX_PASSES.
     Returns (sync_id, "success"|"error"|"no_credentials").
@@ -254,24 +257,7 @@ def run_pipeline(
                         "[PAGOS_GMAIL]   Email .eml no obtenido (msg_id=%s) - columna Ver email vacia",
                         msg_id,
                     )
-                else:
-                    eml_name = f"email_{msg_id}.eml"
-                    up_eml = upload_file(
-                        drive_svc,
-                        MediaIoBaseUpload,
-                        folder_id,
-                        eml_name,
-                        raw_eml,
-                        "message/rfc822",
-                    )
-                    if up_eml:
-                        _, drive_email_link = up_eml
-                        logger.info("[PAGOS_GMAIL]   Email guardado en Drive: %s", eml_name)
-                    else:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Email .eml no subido (msg_id=%s)",
-                            msg_id,
-                        )
+                # .eml a Drive solo despues del primer commit de filas de comprobante (misma carpeta).
 
                 attachments = get_pagos_gmail_image_pdf_files_for_pipeline(
                     gmail_svc, msg_id, full_payload or {}
@@ -298,60 +284,54 @@ def run_pipeline(
 
                     return ok(fecha) and ok(cedula) and ok(monto) and ok(ref)
 
-                def _guardar_en_bd(
+                def _insert_rows_sin_drive(
                     correo: str,
                     fecha: str,
                     cedula: str,
                     monto: str,
                     referencia: str,
                     banco: str,
-                    drive_file_id=None,
-                    drive_lnk="",
-                    email_lnk: Optional[str] = None,
-                ) -> bool:
-                    nonlocal files_ok
+                ) -> Optional[tuple[PagosGmailSyncItem, GmailTemporal]]:
                     try:
-                        db.add(
-                            PagosGmailSyncItem(
-                                sync_id=sync_id,
-                                correo_origen=correo,
-                                asunto=subject,
-                                banco=banco,
-                                fecha_pago=fecha,
-                                cedula=cedula,
-                                monto=monto,
-                                numero_referencia=referencia,
-                                drive_file_id=drive_file_id,
-                                drive_link=drive_lnk or None,
-                                drive_email_link=email_lnk or None,
-                                sheet_name=sheet_name,
-                            )
+                        si = PagosGmailSyncItem(
+                            sync_id=sync_id,
+                            correo_origen=correo,
+                            asunto=subject,
+                            banco=banco,
+                            fecha_pago=fecha,
+                            cedula=cedula,
+                            monto=monto,
+                            numero_referencia=referencia,
+                            drive_file_id=None,
+                            drive_link=None,
+                            drive_email_link=None,
+                            sheet_name=sheet_name,
                         )
-                        db.add(
-                            GmailTemporal(
-                                correo_origen=correo,
-                                asunto=subject,
-                                banco=banco,
-                                fecha_pago=fecha,
-                                cedula=cedula,
-                                monto=monto,
-                                numero_referencia=referencia,
-                                drive_file_id=drive_file_id,
-                                drive_link=drive_lnk or None,
-                                drive_email_link=email_lnk or None,
-                                sheet_name=sheet_name,
-                            )
+                        gt = GmailTemporal(
+                            correo_origen=correo,
+                            asunto=subject,
+                            banco=banco,
+                            fecha_pago=fecha,
+                            cedula=cedula,
+                            monto=monto,
+                            numero_referencia=referencia,
+                            drive_file_id=None,
+                            drive_link=None,
+                            drive_email_link=None,
+                            sheet_name=sheet_name,
                         )
-                        files_ok += 1
-                        return True
+                        db.add(si)
+                        db.add(gt)
+                        return (si, gt)
                     except Exception as db_err:
-                        logger.warning("[PAGOS_GMAIL] Error guardando en BD: %s", db_err)
-                        return False
+                        logger.warning("[PAGOS_GMAIL] Error preparando filas BD: %s", db_err)
+                        return None
 
                 def _v(x: Optional[str]) -> str:
                     v = (x or "").strip()
                     return v if v and v.upper() != "NA" else ""
 
+                pending: list[dict] = []
                 for filename, content, mime_type in attachments:
                     try:
                         fmt, data = classify_and_extract_pagos_gmail_attachment(
@@ -420,31 +400,6 @@ def run_pipeline(
                             )
                             continue
 
-                        up = upload_file(
-                            drive_svc,
-                            MediaIoBaseUpload,
-                            folder_id,
-                            filename,
-                            content,
-                            mime_type,
-                        )
-                        file_id = None
-                        drive_link = ""
-                        if up:
-                            file_id, drive_link = up
-                            logger.info(
-                                "[PAGOS_GMAIL]   Drive OK: %s -> %s",
-                                filename,
-                                drive_link[:60],
-                            )
-                        else:
-                            logger.warning(
-                                "[PAGOS_GMAIL]   Drive fallo subida - no fila BD: %s",
-                                filename,
-                            )
-                            any_incomplete_or_skipped = True
-                            continue
-
                         banco_excel = resolve_banco_para_excel_pagos_gmail(
                             fmt,
                             (data.get("banco") or "").strip(),
@@ -452,43 +407,139 @@ def run_pipeline(
                             default_b=PAGOS_GMAIL_BANCO_IMAGEN_2,
                             default_c=PAGOS_GMAIL_BANCO_IMAGEN_3,
                         )
-                        ok_db = _guardar_en_bd(
-                            sender,
-                            f,
-                            c,
-                            m,
-                            r,
-                            banco_excel,
-                            drive_file_id=file_id,
-                            drive_lnk=drive_link or "",
-                            email_lnk=drive_email_link,
+                        pending.append(
+                            {
+                                "fmt": fmt,
+                                "f": f,
+                                "c": c,
+                                "m": m,
+                                "r": r,
+                                "banco_excel": banco_excel,
+                                "filename": filename,
+                                "content": content,
+                                "mime_type": mime_type,
+                            }
                         )
-                        if ok_db:
-                            had_complete_digitalization = True
-                            id_a, id_b, id_c = get_or_create_pagos_gmail_plantilla_label_ids(
-                                gmail_svc, plantilla_label_cache
-                            )
-                            if fmt == "A":
-                                label_id = id_a
-                                etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_1
-                            elif fmt == "B":
-                                label_id = id_b
-                                etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_2
-                            else:
-                                label_id = id_c
-                                etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
-                            if label_id:
-                                label_ids_for_message.append(label_id)
-                            logger.info(
-                                "[PAGOS_GMAIL]   Digitalizado OK (%s); estrella/etiqueta solo si 100%% adjuntos: %s",
-                                etiqueta_nombre,
-                                filename,
-                            )
-                        else:
-                            any_incomplete_or_skipped = True
                     except Exception as e:
                         logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
                         any_incomplete_or_skipped = True
+
+                rows_pairs: list[tuple[PagosGmailSyncItem, GmailTemporal, dict]] = []
+                if pending:
+                    for p in pending:
+                        inserted = _insert_rows_sin_drive(
+                            sender,
+                            p["f"],
+                            p["c"],
+                            p["m"],
+                            p["r"],
+                            p["banco_excel"],
+                        )
+                        if inserted is None:
+                            db.rollback()
+                            any_incomplete_or_skipped = True
+                            rows_pairs = []
+                            break
+                        rows_pairs.append((inserted[0], inserted[1], p))
+
+                    if rows_pairs:
+                        try:
+                            db.commit()
+                            logger.info(
+                                "[PAGOS_GMAIL]   Commit BD inicial: %d fila(s) comprobante sin enlaces Drive aun",
+                                len(rows_pairs),
+                            )
+                        except Exception as commit_err:
+                            logger.warning(
+                                "[PAGOS_GMAIL] Error commit filas BD (antes de Drive): %s",
+                                commit_err,
+                            )
+                            db.rollback()
+                            any_incomplete_or_skipped = True
+                            rows_pairs = []
+                        else:
+                            if raw_eml:
+                                eml_name = f"email_{msg_id}.eml"
+                                up_eml = upload_file(
+                                    drive_svc,
+                                    MediaIoBaseUpload,
+                                    folder_id,
+                                    eml_name,
+                                    raw_eml,
+                                    "message/rfc822",
+                                )
+                                if up_eml:
+                                    _, drive_email_link = up_eml
+                                    logger.info(
+                                        "[PAGOS_GMAIL]   Email guardado en Drive: %s",
+                                        eml_name,
+                                    )
+                                else:
+                                    logger.warning(
+                                        "[PAGOS_GMAIL]   Email .eml no subido (msg_id=%s)",
+                                        msg_id,
+                                    )
+
+                            for si, gt, p in rows_pairs:
+                                up = upload_file(
+                                    drive_svc,
+                                    MediaIoBaseUpload,
+                                    folder_id,
+                                    p["filename"],
+                                    p["content"],
+                                    p["mime_type"],
+                                )
+                                if not up:
+                                    any_incomplete_or_skipped = True
+                                    logger.warning(
+                                        "[PAGOS_GMAIL]   Drive fallo subida tras commit BD - fila sin link: %s",
+                                        p["filename"],
+                                    )
+                                    continue
+                                file_id, drive_link = up
+                                logger.info(
+                                    "[PAGOS_GMAIL]   Drive OK: %s -> %s",
+                                    p["filename"],
+                                    (drive_link or "")[:60],
+                                )
+                                si.drive_file_id = file_id
+                                si.drive_link = drive_link or None
+                                si.drive_email_link = drive_email_link
+                                gt.drive_file_id = file_id
+                                gt.drive_link = drive_link or None
+                                gt.drive_email_link = drive_email_link
+                                files_ok += 1
+                                had_complete_digitalization = True
+                                fmt = p["fmt"]
+                                id_a, id_b, id_c = get_or_create_pagos_gmail_plantilla_label_ids(
+                                    gmail_svc, plantilla_label_cache
+                                )
+                                if fmt == "A":
+                                    label_id = id_a
+                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_1
+                                elif fmt == "B":
+                                    label_id = id_b
+                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_2
+                                else:
+                                    label_id = id_c
+                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
+                                if label_id:
+                                    label_ids_for_message.append(label_id)
+                                logger.info(
+                                    "[PAGOS_GMAIL]   Digitalizado OK (%s); estrella/etiqueta solo si 100%% adjuntos: %s",
+                                    etiqueta_nombre,
+                                    p["filename"],
+                                )
+
+                            try:
+                                db.commit()
+                            except Exception as upd_err:
+                                logger.warning(
+                                    "[PAGOS_GMAIL] Error commit enlaces Drive en BD: %s",
+                                    upd_err,
+                                )
+                                db.rollback()
+                                any_incomplete_or_skipped = True
 
                 n_att = len(attachments)
                 if (
@@ -499,7 +550,7 @@ def run_pipeline(
                     logger.warning(
                         "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C valida "
                         "o fallaron -> no estrella ni leido (se exige 100%% OK en todos). "
-                        "Si alguno se digitalizo, fila Excel/Drive puede existir para ese archivo.",
+                        "Puede haber filas BD sin link Drive si fallo la subida tras el primer commit.",
                         n_att,
                     )
 

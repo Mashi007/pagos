@@ -511,7 +511,7 @@ class AuditoriaService {
     )
   }
 
-  /** Solo admin. Visto: sufijo -XXXX al documento, exclusion del control, bitacora. */
+  /** Solo admin. Visto: sufijo _A#### o _P#### al documento (A mismo préstamo/cuotas; P otro préstamo). */
   async aplicarControl5VistoPago(
     pagoId: number
   ): Promise<Control5VistoResponse> {

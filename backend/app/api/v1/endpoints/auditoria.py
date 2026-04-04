@@ -965,8 +965,9 @@ def aplicar_control5_visto_duplicado_fecha_monto(
     admin: UserResponse = Depends(require_admin),
 ):
     """
-    Solo administrador. Anexa `-XXXX` (4 digitos aleatorios) a `numero_documento`, marca exclusion
-    del motor control 5 y registra fila en `auditoria_pago_control5_visto`.
+    Solo administrador. Anexa `_A####` o `_P####` (4 digitos aleatorios) a `numero_documento`:
+    A = mismo prestamo / contexto varias cuotas; P = documento duplicado respecto a otro prestamo.
+    Marca exclusion del motor control 5 y registra fila en `auditoria_pago_control5_visto`.
     """
     try:
         out = aplicar_visto_control5_duplicado_fecha_monto(db, pago_id, admin.id)

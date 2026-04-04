@@ -1,6 +1,6 @@
 """
 Bitacora: autorizacion administrativa control 5 (pagos misma fecha y monto).
-Tabla: auditoria_pago_control5_visto.
+Tabla: auditoria_pago_control5_visto. Campo sufijo_cuatro_digitos almacena token A#### o P#### (documento completo: base_TOKEN).
 """
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.sql import func
@@ -18,5 +18,6 @@ class AuditoriaPagoControl5Visto(Base):
     creado_en = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     numero_documento_anterior = Column(String(100), nullable=True)
     numero_documento_nuevo = Column(String(100), nullable=False)
-    sufijo_cuatro_digitos = Column(String(4), nullable=False)
+    # Letra A (mismo prestamo / contexto archivo-cuotas) o P (documento ya en otro prestamo) + 4 digitos
+    sufijo_cuatro_digitos = Column(String(8), nullable=False)
     codigo_control = Column(String(80), nullable=False, server_default="pagos_mismo_dia_monto")

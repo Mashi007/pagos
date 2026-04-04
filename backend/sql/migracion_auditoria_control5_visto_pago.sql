@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS auditoria_pago_control5_visto (
   creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   numero_documento_anterior VARCHAR(100),
   numero_documento_nuevo VARCHAR(100) NOT NULL,
-  sufijo_cuatro_digitos CHAR(4) NOT NULL,
+  sufijo_cuatro_digitos VARCHAR(8) NOT NULL,
   codigo_control VARCHAR(80) NOT NULL DEFAULT 'pagos_mismo_dia_monto'
 );
 
@@ -27,5 +27,10 @@ CREATE INDEX IF NOT EXISTS ix_aud_p5v_pago ON auditoria_pago_control5_visto (pag
 CREATE INDEX IF NOT EXISTS ix_aud_p5v_prestamo ON auditoria_pago_control5_visto (prestamo_id);
 CREATE INDEX IF NOT EXISTS ix_aud_p5v_creado ON auditoria_pago_control5_visto (creado_en DESC);
 
+-- Si la tabla ya existia con sufijo_cuatro_digitos CHAR(4), ampliar para guardar A#### / P#### (5 caracteres).
+-- Idempotente: en instalaciones nuevas la columna ya es VARCHAR(8); este ALTER no rompe.
+ALTER TABLE auditoria_pago_control5_visto
+  ALTER COLUMN sufijo_cuatro_digitos TYPE VARCHAR(8);
+
 COMMENT ON TABLE auditoria_pago_control5_visto IS
-  'Auditoria: admin aplico Visto control 5 (sufijo aleatorio 4 digitos al numero_documento; excluye de duplicado fecha+monto).';
+  'Auditoria: admin aplico Visto control 5 (sufijo _A#### o _P#### al numero_documento; excluye de duplicado fecha+monto).';

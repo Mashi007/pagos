@@ -198,6 +198,10 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     batchProgress,
 
     refrescarValidacionFilasBd,
+
+    documentosRepetidosArchivoJustificados,
+
+    justificarDocumentoRepetidoEnArchivo,
   } = useExcelUploadPagos(props)
 
   const totalCargadas = excelData.length
@@ -475,6 +479,12 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 }
                 isSendingRevisar={isSendingAllRevisar}
                 onRefrescarValidacionDocumentosBd={refrescarValidacionFilasBd}
+                documentosRepetidosArchivoJustificados={
+                  documentosRepetidosArchivoJustificados
+                }
+                onJustificarDocumentoRepetidoArchivo={
+                  justificarDocumentoRepetidoEnArchivo
+                }
               />
               {batchProgress && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">

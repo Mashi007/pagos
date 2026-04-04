@@ -1,6 +1,8 @@
 """
 Control 5 (pagos_mismo_dia_monto): listar candidatos y aplicar Visto (admin).
-Anexa sufijo aleatorio de 4 digitos a numero_documento, marca exclusion en motor, registra auditoria.
+Anexa sufijo _A#### o _P#### (4 digitos aleatorios) a numero_documento:
+- P: el mismo documento ya figura en pagos (u otro registro relevante) de otro prestamo.
+- A: solo repeticion en el mismo prestamo / contexto de varias cuotas o mismo archivo de carga.
 """
 from __future__ import annotations
 
@@ -20,6 +22,8 @@ from app.services.prestamo_cartera_auditoria import _sql_fragment_pago_excluido_
 CODIGO_CONTROL = "pagos_mismo_dia_monto"
 _MAX_DOC_LEN = 100
 _MAX_TRIES_SUFFIX = 40
+_PREFIJO_MISMO_CONTEXTO = "A"
+_PREFIJO_OTRO_PRESTAMO = "P"
 
 
 def _fragment_excluido_control5(alias: str) -> str:
@@ -107,19 +111,58 @@ def _numero_documento_en_uso(db: Session, doc: str, exclude_pago_id: int) -> boo
     return q2 is not None
 
 
+def _prefijo_sufijo_visto_por_contexto(db: Session, pago: Pago) -> str:
+    """
+    P si el texto de numero_documento (no vacio) coincide con otro registro ligado a otro prestamo.
+    A en caso contrario (mismo prestamo, solo cuotas/archivo, o documento vacio).
+    """
+    doc = (pago.numero_documento or "").strip()
+    if not doc or pago.prestamo_id is None:
+        return _PREFIJO_MISMO_CONTEXTO
+    my_pid = int(pago.prestamo_id)
+    hit_p = db.execute(
+        select(1).where(
+            Pago.id != int(pago.id),
+            or_(
+                Pago.numero_documento == doc,
+                func.trim(Pago.numero_documento) == doc,
+            ),
+            Pago.prestamo_id.isnot(None),
+            Pago.prestamo_id != my_pid,
+        ).limit(1)
+    ).first()
+    if hit_p is not None:
+        return _PREFIJO_OTRO_PRESTAMO
+    hit_e = db.execute(
+        select(1).where(
+            or_(
+                PagoConError.numero_documento == doc,
+                func.trim(PagoConError.numero_documento) == doc,
+            ),
+            PagoConError.prestamo_id.isnot(None),
+            PagoConError.prestamo_id != my_pid,
+        ).limit(1)
+    ).first()
+    if hit_e is not None:
+        return _PREFIJO_OTRO_PRESTAMO
+    return _PREFIJO_MISMO_CONTEXTO
+
+
 def _elegir_nuevo_numero_documento(db: Session, pago: Pago) -> tuple[str, str]:
-    """Devuelve (nuevo_numero_completo, sufijo_4)."""
+    """Devuelve (nuevo_numero_completo, token_sufijo ej. A7392 o P0451)."""
+    prefijo = _prefijo_sufijo_visto_por_contexto(db, pago)
     prev_raw = (pago.numero_documento or "").strip()
     if not prev_raw:
         base = (pago.referencia_pago or "").strip() or f"PAGO-{pago.id}"
     else:
         base = prev_raw
-    max_base = _MAX_DOC_LEN - 5
+    # guion bajo + letra + 4 digitos
+    max_base = _MAX_DOC_LEN - 6
     if len(base) > max_base:
         base = base[:max_base]
     for _ in range(_MAX_TRIES_SUFFIX):
-        suf = f"{secrets.randbelow(10000):04d}"
-        nuevo = f"{base}-{suf}"
+        suf = f"{prefijo}{secrets.randbelow(10000):04d}"
+        nuevo = f"{base}_{suf}"
         if len(nuevo) > _MAX_DOC_LEN:
             continue
         if not _numero_documento_en_uso(db, nuevo, int(pago.id)):

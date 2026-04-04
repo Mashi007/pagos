@@ -36,7 +36,7 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     codigo: 'pagos_mismo_dia_monto',
     titulo: 'Pagos duplicados (misma fecha y monto)',
     notaOperativa:
-      'El conteo es por prestamo afectado. Banco Mercantil u otros sin serie de documento: admin puede usar Visto (icono) para anexar 4 digitos aleatorios al Nº documento, registrar auditoria y excluir ese pago del control. SQL: backend/sql/control_5_pagos_duplicados_misma_fecha_monto.sql. Si es duplicado real, anular/unificar y reaplicar cascada.',
+      'El conteo es por prestamo afectado. Banco Mercantil u otros sin serie de documento: admin puede usar Visto (icono) para anexar sufijo _A#### o _P#### (A mismo credito/cuotas, P si el documento choca con otro prestamo) al Nº documento, registrar auditoria y excluir ese pago del control. SQL: backend/sql/control_5_pagos_duplicados_misma_fecha_monto.sql. Si es duplicado real, anular/unificar y reaplicar cascada.',
   },
   {
     n: 6,

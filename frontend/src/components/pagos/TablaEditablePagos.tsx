@@ -26,7 +26,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { Save, Loader2, Search, Eye } from 'lucide-react'
+import { Save, Loader2, Search, Check } from 'lucide-react'
 
 import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
 
@@ -34,6 +34,7 @@ import {
   cedulaLookupParaFila,
   convertirFechaParaBackendPago,
   buscarEnMapaPrestamos,
+  normalizarNumeroDocumento,
 } from '../../utils/pagoExcelValidation'
 
 import { pagoService } from '../../services/pagoService'
@@ -86,6 +87,14 @@ export interface FilaEditableProps {
   /** Tras aplicar Visto (control 5) al pago que bloqueaba por documento duplicado, revalidar contra BD. */
 
   onRefrescarValidacionDocumentosBd?: () => Promise<void>
+
+  /** Claves de documento (normalizadas) marcadas por admin: duplicado en archivo permitido (mismo comprobante, varias filas). */
+
+  documentosRepetidosArchivoJustificados?: string[]
+
+  /** Marca el documento como justificado para todas las filas que lo repiten en el archivo. */
+
+  onJustificarDocumentoRepetidoArchivo?: (docNorm: string) => void
 }
 
 function CeldaEditable({
@@ -131,6 +140,12 @@ function CeldaEditable({
 
       {hasError && errorMsg && (
         <p className="mt-0.5 text-xs leading-tight text-red-600">{errorMsg}</p>
+      )}
+
+      {!hasError && errorMsg && (
+        <p className="mt-0.5 text-xs leading-tight text-amber-800">
+          {errorMsg}
+        </p>
       )}
     </div>
   )
@@ -458,6 +473,10 @@ export function TablaEditablePagos({
   isSendingRevisar = false,
 
   onRefrescarValidacionDocumentosBd,
+
+  documentosRepetidosArchivoJustificados = [],
+
+  onJustificarDocumentoRepetidoArchivo,
 }: FilaEditableProps) {
   const { isAdmin } = usePermissions()
 
@@ -648,6 +667,20 @@ export function TablaEditablePagos({
   const validos = rows.filter(r => !r._hasErrors).length
 
   const invalidas = total - validos
+
+  const docFreqEnArchivo = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of rows) {
+      const d = normalizarNumeroDocumento(r.numero_documento)
+      if (d) m.set(d, (m.get(d) || 0) + 1)
+    }
+    return m
+  }, [rows])
+
+  const justificadosArchivoSet = useMemo(
+    () => new Set(documentosRepetidosArchivoJustificados),
+    [documentosRepetidosArchivoJustificados]
+  )
 
   return (
     <div className="space-y-4">
@@ -947,7 +980,8 @@ export function TablaEditablePagos({
 
                       const pagoIdCampo = row._pagoIdExistenteDuplicadoBD
 
-                      const msgDoc = row._validation?.numero_documento?.message ?? ''
+                      const msgDoc =
+                        row._validation?.numero_documento?.message ?? ''
 
                       const matchPagoId = msgDoc.match(/\(pago id (\d+)\)/i)
 
@@ -965,7 +999,25 @@ export function TablaEditablePagos({
                             ? pagoIdDesdeMensaje
                             : null
 
-                      const puedeMostrarVistoControl5 = pagoIdParaVisto != null
+                      const docNormAccion = normalizarNumeroDocumento(
+                        row.numero_documento
+                      )
+                      const esDupArchivoFila =
+                        !!docNormAccion &&
+                        (docFreqEnArchivo.get(docNormAccion) || 0) > 1
+                      const archivoDupJustificado =
+                        !!docNormAccion &&
+                        justificadosArchivoSet.has(docNormAccion)
+
+                      const puedeVistoControl5Bd = pagoIdParaVisto != null
+
+                      const puedeVistoJustificarArchivo =
+                        esDupArchivoFila &&
+                        !archivoDupJustificado &&
+                        !!onJustificarDocumentoRepetidoArchivo
+
+                      const mostrarBotonVisto =
+                        puedeVistoControl5Bd || puedeVistoJustificarArchivo
 
                       return (
                         <div className="flex flex-col gap-1">
@@ -1016,31 +1068,47 @@ export function TablaEditablePagos({
                             )}
                           </button>
 
-                          {puedeMostrarVistoControl5 && (
+                          {mostrarBotonVisto && (
                             <button
                               type="button"
                               onClick={async () => {
-                                if (pagoIdParaVisto == null || pagoIdParaVisto <= 0)
-                                  return
                                 if (!isAdmin) {
                                   toast.error(
-                                    'Solo un usuario administrador puede aplicar Visto (control 5).'
+                                    'Solo un usuario administrador puede aplicar Visto.'
                                   )
                                   return
                                 }
-                                setVistoPagoIdCargando(pagoIdParaVisto)
-                                try {
-                                  await auditoriaService.aplicarControl5VistoPago(
-                                    pagoIdParaVisto
+                                if (
+                                  puedeVistoControl5Bd &&
+                                  pagoIdParaVisto != null
+                                ) {
+                                  setVistoPagoIdCargando(pagoIdParaVisto)
+                                  try {
+                                    await auditoriaService.aplicarControl5VistoPago(
+                                      pagoIdParaVisto
+                                    )
+                                    toast.success(
+                                      'Visto aplicado al pago en BD. Se actualizó el Nº documento; revalidando filas…'
+                                    )
+                                    await onRefrescarValidacionDocumentosBd?.()
+                                  } catch (e) {
+                                    toast.error(getErrorMessage(e))
+                                  } finally {
+                                    setVistoPagoIdCargando(null)
+                                  }
+                                  return
+                                }
+                                if (
+                                  puedeVistoJustificarArchivo &&
+                                  docNormAccion &&
+                                  onJustificarDocumentoRepetidoArchivo
+                                ) {
+                                  onJustificarDocumentoRepetidoArchivo(
+                                    docNormAccion
                                   )
                                   toast.success(
-                                    'Visto aplicado al pago en BD. Se actualizó el Nº documento; revalidando filas…'
+                                    'Visto: se añadió _A#### o _P#### a cada fila con este documento (único en BD). Puede guardar cada fila.'
                                   )
-                                  await onRefrescarValidacionDocumentosBd?.()
-                                } catch (e) {
-                                  toast.error(getErrorMessage(e))
-                                } finally {
-                                  setVistoPagoIdCargando(null)
                                 }
                               }}
                               disabled={
@@ -1051,8 +1119,10 @@ export function TablaEditablePagos({
                               }
                               title={
                                 isAdmin
-                                  ? 'Control 5 (auditoría): Visto sobre el pago en BD que coincide por documento. El servidor solo lo aplica si ese pago está en duplicado misma fecha y monto.'
-                                  : 'Visto: solo administradores. Inicie sesión con rol admin o pida a un administrador que aplique Visto desde aquí o desde Auditoría cartera.'
+                                  ? puedeVistoControl5Bd
+                                    ? 'Control 5 (auditoría): Visto sobre el pago en BD. El servidor solo aplica si hay duplicado misma fecha y monto.'
+                                    : 'Visto: añade _A#### o _P#### al documento en cada fila (mismo archivo vs otro préstamo en BD).'
+                                  : 'Visto: solo administradores.'
                               }
                               className={`inline-flex items-center justify-center gap-0.5 rounded border p-1.5 text-[10px] font-semibold disabled:opacity-60 ${
                                 isAdmin
@@ -1060,13 +1130,14 @@ export function TablaEditablePagos({
                                   : 'cursor-not-allowed border-gray-300 bg-gray-100 text-gray-500'
                               }`}
                             >
-                              {vistoPagoIdCargando === pagoIdParaVisto ? (
+                              {puedeVistoControl5Bd &&
+                              vistoPagoIdCargando === pagoIdParaVisto ? (
                                 <Loader2
                                   className="h-3.5 w-3.5 animate-spin"
                                   aria-hidden
                                 />
                               ) : (
-                                <Eye className="h-3.5 w-3.5" aria-hidden />
+                                <Check className="h-3.5 w-3.5" aria-hidden />
                               )}
                               Visto
                             </button>

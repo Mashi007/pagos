@@ -488,7 +488,7 @@ export function AuditoriaCarteraTab() {
       try {
         const out = await auditoriaService.aplicarControl5VistoPago(pagoId)
         toast.success(
-          `Visto aplicado. Nuevo documento: ${out.numero_documento_nuevo} (sufijo ${out.sufijo_cuatro_digitos})`
+          `Visto aplicado. Nuevo documento: ${out.numero_documento_nuevo} (sufijo _${out.sufijo_cuatro_digitos}; A=mismo crédito/carga, P=otro préstamo)`
         )
         const r =
           await auditoriaService.listarControl5DuplicadosPorPrestamo(prestamoId)
@@ -1480,7 +1480,7 @@ export function AuditoriaCarteraTab() {
                                       variant="outline"
                                       size="sm"
                                       className="h-8 w-8 shrink-0 p-0"
-                                      title="Visto (admin): autorizar duplicado legitimo; anexa 4 digitos al documento y registra auditoria."
+                                      title="Visto (admin): autorizar duplicado legitimo; anexa _A#### o _P#### al documento y registra auditoria."
                                       aria-label={`Visto control 5 - prestamo ${row.prestamo_id}`}
                                       onClick={() =>
                                         void abrirDialogoVistoControl5(
@@ -1610,8 +1610,11 @@ export function AuditoriaCarteraTab() {
             <p className="text-sm text-slate-600">
               Prestamo <strong>#{vistoPrestamoId}</strong>. Aplique Visto al
               pago correcto: se anexa{' '}
-              <code className="rounded bg-slate-100 px-1 text-xs">-XXXX</code>{' '}
-              (4 digitos aleatorios) al numero de documento, queda registro en{' '}
+              <code className="rounded bg-slate-100 px-1 text-xs">_A####</code>{' '}
+              o{' '}
+              <code className="rounded bg-slate-100 px-1 text-xs">_P####</code>{' '}
+              (A mismo credito/carga, P otro prestamo; 4 digitos aleatorios) al
+              numero de documento, queda registro en{' '}
               <span className="font-mono text-xs">
                 auditoria_pago_control5_visto
               </span>{' '}
