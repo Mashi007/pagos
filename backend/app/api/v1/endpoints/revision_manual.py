@@ -11,6 +11,7 @@ from sqlalchemy import select, func, and_, case, literal_column, text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.rol_normalization import canonical_rol
@@ -92,10 +93,17 @@ def _commit_revision_seguro(
             id_principal,
             actor,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Error al persistir en la base de datos. Los cambios no se aplicaron.",
-        ) from exc
+        orig = getattr(exc, "orig", None)
+        if orig is not None:
+            logger.error(
+                "revision_manual COMMIT_FALLIDO orig tipo=%s mensaje=%s",
+                type(orig).__name__,
+                str(orig)[:800],
+            )
+        detail = "Error al persistir en la base de datos. Los cambios no se aplicaron."
+        if settings.DEBUG:
+            detail = f"{detail} [{type(exc).__name__}: {str(exc)[:400]}]"
+        raise HTTPException(status_code=500, detail=detail) from exc
     logger.info(
         "revision_manual BD_GUARDADO operacion=%s tabla=%s id=%s actor=%s campos=%s",
         operacion,
@@ -259,12 +267,26 @@ def _safe_float(val) -> float:
         return 0.0
 
 
+def _pago_no_conciliar_saldo_cero(pago: Pago) -> bool:
+    """Pagos excluidos de conciliación forzada (misma familia que reaplicación FIFO)."""
+    est = (pago.estado or "").strip().upper()
+    if est in ("ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO"):
+        return True
+    if "ANUL" in est or "REVERS" in est:
+        return True
+    el = (pago.estado or "").strip().lower()
+    if el in ("cancelado", "rechazado"):
+        return True
+    return False
+
+
 def _aplicar_saldo_cero_si_corresponde(db: Session, prestamo: Prestamo) -> None:
     """
     Si total_prestamo = total_abonos (saldo cero) para ESTE préstamo, aplicar:
     - préstamo.estado: se mantiene (APROBADO, no FINALIZADO, para no romper reportes/KPIs)
     - cliente.estado = FINALIZADO (solo para este caso)
-    - todos los pagos: conciliado=True, fecha_conciliacion=now
+    - pagos operativos: conciliado=True, fecha_conciliacion=now (estado PAGADO si era PENDIENTE;
+      evita chk_pagos_conciliado_pendiente_inconsistente en BD)
     - todas las cuotas: estado=pagado
     Cada préstamo se analiza por separado (no por cédula).
     Solo se ejecuta al confirmar en Revisión Manual.
@@ -281,6 +303,10 @@ def _aplicar_saldo_cero_si_corresponde(db: Session, prestamo: Prestamo) -> None:
     ahora = datetime.now()
     pagos = db.execute(select(Pago).where(Pago.prestamo_id == prestamo.id)).scalars().all()
     for pago in pagos:
+        if _pago_no_conciliar_saldo_cero(pago):
+            continue
+        if (pago.estado or "").strip().upper() == "PENDIENTE":
+            pago.estado = "PAGADO"
         pago.conciliado = True
         pago.fecha_conciliacion = ahora
     # Aplicar a cuotas cualquier pago conciliado que aún no tenga enlaces en cuota_pagos
