@@ -38,7 +38,9 @@ import {
   validateExcelFile,
   validateExcelData,
   sanitizeFileName,
-  mapaColumnasPrestamoDesdeFilaEncabezado,
+  densificarFilaExcel,
+  resolverEncabezadoYMapaPrestamo,
+  parseMontoPrestamoExcel,
 } from '../utils/prestamoExcelValidation'
 
 export interface ExcelUploaderPrestamosProps {
@@ -666,20 +668,27 @@ export function useExcelUploadPrestamos({
 
         const processed: PrestamoExcelRow[] = []
 
-        const headerRow = jsonData[0] as unknown[]
-        const colMap = mapaColumnasPrestamoDesdeFilaEncabezado(headerRow)
+        const { dataStartIndex, colMap } = resolverEncabezadoYMapaPrestamo(
+          jsonData as unknown[][]
+        )
 
-        const pick = (r: unknown[], key: string, legacyIdx: number): unknown => {
-          if (colMap && colMap[key] !== undefined) return r[colMap[key]!]
-          return r[legacyIdx]
+        const pick = (
+          denseRow: unknown[],
+          key: string,
+          legacyIdx: number
+        ): unknown => {
+          if (colMap && colMap[key] !== undefined) {
+            return denseRow[colMap[key]!]
+          }
+          return denseRow[legacyIdx]
         }
 
-        for (let i = 1; i < jsonData.length; i++) {
+        for (let i = dataStartIndex; i < jsonData.length; i++) {
           if (!isMounted()) return
 
-          const row = jsonData[i] as unknown[]
+          const row = densificarFilaExcel(jsonData[i] as unknown[])
 
-          if (!row || row.every(c => c == null || c === '')) continue
+          if (!row.length || row.every(c => c == null || c === '')) continue
 
           const rowData: PrestamoExcelRow = {
             _rowIndex: i + 1,
@@ -690,8 +699,9 @@ export function useExcelUploadPrestamos({
 
             cedula: (pick(row, 'cedula', 0)?.toString() || '').trim() || 'Z999999999',
 
-            total_financiamiento:
-              parseFloat(String(pick(row, 'total_financiamiento', 1) || 0)) || 0,
+            total_financiamiento: parseMontoPrestamoExcel(
+              pick(row, 'total_financiamiento', 1)
+            ),
 
             modalidad_pago: (pick(row, 'modalidad_pago', 2)?.toString() || 'MENSUAL')
               .trim()

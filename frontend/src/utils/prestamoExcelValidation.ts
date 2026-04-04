@@ -74,29 +74,67 @@ export function normalizarEncabezadoPrestamoExcel(raw: unknown): string {
 }
 
 /**
- * Si la primera fila parece encabezados de préstamo, devuelve índice por campo.
+ * ExcelJS puede dejar huecos en el array de celdas; sin densificar, cells[0] falla aunque la columna A exista.
+ */
+export function densificarFilaExcel(row: unknown[] | null | undefined): unknown[] {
+  if (!row) return []
+  let maxIdx = -1
+  for (const k of Object.keys(row)) {
+    const i = Number(k)
+    if (Number.isInteger(i) && i >= 0 && i > maxIdx) maxIdx = i
+  }
+  if (maxIdx < 0) {
+    maxIdx = Math.max(0, row.length - 1)
+  }
+  const out: unknown[] = []
+  for (let i = 0; i <= maxIdx; i++) {
+    out[i] = row[i] ?? ''
+  }
+  return out
+}
+
+/**
+ * Busca en las primeras filas una que tenga encabezados de plantilla de préstamo.
+ * dataStartIndex: índice en jsonData de la primera fila de datos (después del encabezado).
+ */
+export function resolverEncabezadoYMapaPrestamo(
+  jsonData: unknown[][]
+): { dataStartIndex: number; colMap: Record<string, number> | null } {
+  const maxScan = Math.min(6, jsonData.length)
+  for (let r = 0; r < maxScan; r++) {
+    const dense = densificarFilaExcel(jsonData[r] as unknown[])
+    const m = mapaColumnasPrestamoDesdeFilaEncabezado(dense)
+    if (m) {
+      return { dataStartIndex: r + 1, colMap: m }
+    }
+  }
+  return { dataStartIndex: 1, colMap: null }
+}
+
+/**
+ * Si la fila parece encabezados de préstamo, devuelve índice por campo.
  * Cubre plantillas con fecha_aprobacion en E y producto en F (10+ columnas).
  */
 export function mapaColumnasPrestamoDesdeFilaEncabezado(
   headerRow: unknown[]
 ): Record<string, number> | null {
-  if (!headerRow?.length) return null
-  const cells = headerRow.map(c => normalizarEncabezadoPrestamoExcel(c))
-  const h0 = cells[0]
-  if (
-    !h0 ||
-    (!h0.includes('cedula') && h0 !== 'ci' && h0 !== 'id_cliente')
-  ) {
-    return null
-  }
+  const dense = densificarFilaExcel(headerRow)
+  if (!dense.length) return null
+  const cells = dense.map(c => normalizarEncabezadoPrestamoExcel(c))
 
   const findFirst = (pred: (norm: string) => boolean): number | undefined => {
     const i = cells.findIndex(pred)
     return i >= 0 ? i : undefined
   }
 
+  const cedIdx = findFirst(
+    n =>
+      n.includes('cedula') || n === 'ci' || n === 'id_cliente' || n === 'documento'
+  )
+  if (cedIdx === undefined) return null
+
   const m: Record<string, number> = {}
-  m.cedula = 0
+  m.cedula = cedIdx
 
   const totalIdx = findFirst(
     n =>
@@ -182,6 +220,25 @@ export function mapaColumnasPrestamoDesdeFilaEncabezado(
   return m
 }
 
+/** Monto tipo 1.344,00 o 1344 (Excel numérico). */
+export function parseMontoPrestamoExcel(val: unknown): number {
+  if (val == null || val === '') return 0
+  if (typeof val === 'number' && !Number.isNaN(val)) return val
+  let s = String(val)
+    .trim()
+    .replace(/\s/g, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+  if (!s) return 0
+  // Miles con punto y decimal con coma (VE / ES)
+  if (/^\d{1,3}(\.\d{3})*(,\d+)?$/.test(s)) {
+    s = s.replace(/\./g, '').replace(',', '.')
+  } else if (/^\d{1,3}(,\d{3})*(\.\d+)?$/.test(s)) {
+    s = s.replace(/,/g, '')
+  }
+  const n = parseFloat(s)
+  return Number.isNaN(n) ? 0 : n
+}
+
 const MODALIDADES = ['MENSUAL', 'QUINCENAL', 'SEMANAL']
 
 export function convertirFechaExcelPrestamo(val: unknown): string {
@@ -196,6 +253,17 @@ export function convertirFechaExcelPrestamo(val: unknown): string {
   const s = String(val).trim()
 
   if (!s) return ''
+
+  // Plantilla: 4-12-2026 o 04-12-2026 (día-mes-año con guión)
+  const dmY = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+  if (dmY) {
+    const d = parseInt(dmY[1], 10)
+    const mo = parseInt(dmY[2], 10)
+    const y = parseInt(dmY[3], 10)
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31 && y >= 2000 && y <= 2100) {
+      return `${String(d).padStart(2, '0')}/${String(mo).padStart(2, '0')}/${y}`
+    }
+  }
 
   if (/^\d{4,}$/.test(s)) {
     try {
@@ -292,8 +360,8 @@ export function validatePrestamoField(
 
       if (mn < 1 || mn > 12) return { isValid: false, message: 'Mes 1-12' }
 
-      if (yn < 2020 || yn > 2030)
-        return { isValid: false, message: 'Año 2020-2030' }
+      if (yn < 2020 || yn > 2040)
+        return { isValid: false, message: 'Año 2020-2040' }
 
       return { isValid: true }
 
