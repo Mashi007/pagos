@@ -38,6 +38,7 @@ import {
   validateExcelFile,
   validateExcelData,
   sanitizeFileName,
+  mapaColumnasPrestamoDesdeFilaEncabezado,
 } from '../utils/prestamoExcelValidation'
 
 export interface ExcelUploaderPrestamosProps {
@@ -461,7 +462,7 @@ export function useExcelUploadPrestamos({
         if (!fechaAprobValida) {
           addToast(
             'error',
-            `Fila ${row._rowIndex}: fecha_aprobacion inválida o vacía (columna M)`
+            `Fila ${row._rowIndex}: fecha_aprobacion inválida o vacía (revise fechas y columnas del Excel)`
           )
 
           return false
@@ -665,6 +666,14 @@ export function useExcelUploadPrestamos({
 
         const processed: PrestamoExcelRow[] = []
 
+        const headerRow = jsonData[0] as unknown[]
+        const colMap = mapaColumnasPrestamoDesdeFilaEncabezado(headerRow)
+
+        const pick = (r: unknown[], key: string, legacyIdx: number): unknown => {
+          if (colMap && colMap[key] !== undefined) return r[colMap[key]!]
+          return r[legacyIdx]
+        }
+
         for (let i = 1; i < jsonData.length; i++) {
           if (!isMounted()) return
 
@@ -679,33 +688,42 @@ export function useExcelUploadPrestamos({
 
             _hasErrors: false,
 
-            cedula: (row[0]?.toString() || '').trim() || 'Z999999999',
+            cedula: (pick(row, 'cedula', 0)?.toString() || '').trim() || 'Z999999999',
 
-            total_financiamiento: parseFloat(String(row[1] || 0)) || 0,
+            total_financiamiento:
+              parseFloat(String(pick(row, 'total_financiamiento', 1) || 0)) || 0,
 
-            modalidad_pago: (row[2]?.toString() || 'MENSUAL')
+            modalidad_pago: (pick(row, 'modalidad_pago', 2)?.toString() || 'MENSUAL')
               .trim()
               .toUpperCase(),
 
-            fecha_requerimiento: convertirFechaExcelPrestamo(row[3]),
+            fecha_requerimiento: convertirFechaExcelPrestamo(
+              pick(row, 'fecha_requerimiento', 3)
+            ),
 
-            producto: (row[4]?.toString() || '').trim(),
+            fecha_aprobacion: convertirFechaExcelPrestamo(
+              pick(row, 'fecha_aprobacion', 12)
+            ),
 
-            concesionario: (row[5]?.toString() || '').trim(),
+            producto: (pick(row, 'producto', 4)?.toString() || '').trim(),
 
-            analista: (row[6]?.toString() || '').trim(),
+            concesionario: (pick(row, 'concesionario', 5)?.toString() || '').trim(),
 
-            modelo_vehiculo: (row[7]?.toString() || '').trim(),
+            analista: (pick(row, 'analista', 6)?.toString() || '').trim(),
 
-            numero_cuotas: Math.round(parseFloat(String(row[8] || 12)) || 12),
+            modelo_vehiculo: (pick(row, 'modelo_vehiculo', 7)?.toString() || '').trim(),
 
-            cuota_periodo: parseFloat(String(row[9] || 0)) || 0,
+            numero_cuotas: Math.round(
+              parseFloat(String(pick(row, 'numero_cuotas', 8) || 12)) || 12
+            ),
 
-            tasa_interes: parseFloat(String(row[10] || 0)) || 0,
+            cuota_periodo:
+              parseFloat(String(pick(row, 'cuota_periodo', 9) || 0)) || 0,
 
-            observaciones: (row[11]?.toString() || '').trim(),
+            tasa_interes:
+              parseFloat(String(pick(row, 'tasa_interes', 10) || 0)) || 0,
 
-            fecha_aprobacion: convertirFechaExcelPrestamo(row[12]),
+            observaciones: (pick(row, 'observaciones', 11)?.toString() || '').trim(),
           }
 
           let hasErrors = false
@@ -745,7 +763,8 @@ export function useExcelUploadPrestamos({
             rowData._validation.fecha_aprobacion = {
               isValid: false,
 
-              message: 'fecha_aprobacion inválida o vacía (columna M)',
+              message:
+                'fecha_aprobacion inválida o vacía (revise columna en Excel o encabezados)',
             }
 
             hasErrors = true

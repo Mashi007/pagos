@@ -14,15 +14,13 @@
 
 
 
- * Columnas: Cédula, Total financiamiento, Modalidad pago, Fecha requerimiento, Producto,
 
 
 
 
 
-
-
- * Concesionario, Analista, Modelo vehículo, Número cuotas, Cuota período, Tasa interés, Observaciones, Fecha aprobación / desembolso (columna M).
+ * Fila 1: encabezados (cedula, total_financiar, fecha_aprobacion, producto, ...).
+ * Sin encabezados reconocibles: layout fijo con fecha aprobación en columna M.
 
 
 
@@ -210,10 +208,9 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                   </h3>
 
                   <p className="mb-4 text-sm text-gray-600">
-                    Columnas: Cédula | Total financiamiento | Modalidad pago |
-                    Fecha requerimiento | Producto | Concesionario | Analista |
-                    Modelo | Nº cuotas | Cuota período | Tasa interés |
-                    Observaciones
+                    Use la fila 1 con encabezados (fecha_aprobacion antes o después de
+                    producto según su plantilla). Sin encabezados válidos se aplica el orden
+                    fijo antiguo (fecha aprobación en columna M).
                   </p>
 
                   <p className="mb-4 text-sm text-amber-900">
@@ -341,7 +338,7 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                           </th>
 
                           <th className="w-24 border p-2 text-left text-xs font-medium">
-                            Total $
+                            TOTAL PENDIENTE A PAGAR
                           </th>
 
                           <th className="w-24 border p-2 text-left text-xs font-medium">

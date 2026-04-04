@@ -10,19 +10,11 @@
 
 
 
- * Columnas: Cédula, Total financiamiento, Modalidad pago, Fecha requerimiento, Producto,
-
-
-
-
-
- * Concesionario, Analista, Modelo vehículo, Número cuotas, Cuota período, Tasa interés, Observaciones,
-
-
-
-
-
- * Fecha aprobación / desembolso (obligatoria; columna M / índice 12).
+ * Layout por posición (sin fila de encabezados reconocible): Producto en col. E (índice 4),
+ * fecha_aprobacion en col. M (índice 12), etc.
+ *
+ * Si la fila 1 tiene encabezados (cédula, total_financiar, fecha_aprobacion, producto, ...),
+ * se detectan columnas por nombre y admite la plantilla con fecha_aprobacion antes de producto.
 
 
 
@@ -68,6 +60,126 @@ export interface PrestamoExcelRow {
   observaciones: string
 
   fecha_aprobacion: string
+}
+
+export function normalizarEncabezadoPrestamoExcel(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+}
+
+/**
+ * Si la primera fila parece encabezados de préstamo, devuelve índice por campo.
+ * Cubre plantillas con fecha_aprobacion en E y producto en F (10+ columnas).
+ */
+export function mapaColumnasPrestamoDesdeFilaEncabezado(
+  headerRow: unknown[]
+): Record<string, number> | null {
+  if (!headerRow?.length) return null
+  const cells = headerRow.map(c => normalizarEncabezadoPrestamoExcel(c))
+  const h0 = cells[0]
+  if (
+    !h0 ||
+    (!h0.includes('cedula') && h0 !== 'ci' && h0 !== 'id_cliente')
+  ) {
+    return null
+  }
+
+  const findFirst = (pred: (norm: string) => boolean): number | undefined => {
+    const i = cells.findIndex(pred)
+    return i >= 0 ? i : undefined
+  }
+
+  const m: Record<string, number> = {}
+  m.cedula = 0
+
+  const totalIdx = findFirst(
+    n =>
+      (n.includes('total') && (n.includes('financ') || n.includes('finan'))) ||
+      n === 'monto'
+  )
+  if (totalIdx !== undefined) m.total_financiamiento = totalIdx
+
+  const modIdx = findFirst(n => n.includes('modalidad'))
+  if (modIdx !== undefined) m.modalidad_pago = modIdx
+
+  const reqIdx = findFirst(
+    n => n.includes('requerim') || n === 'fecha_req' || n.endsWith('_req')
+  )
+  if (reqIdx !== undefined) m.fecha_requerimiento = reqIdx
+
+  const aprobIdx = findFirst(
+    n =>
+      (n.includes('fecha') && n.includes('aprob')) ||
+      n.includes('desembols') ||
+      n === 'fecha_aprob'
+  )
+  if (aprobIdx !== undefined) m.fecha_aprobacion = aprobIdx
+
+  const prodIdx = findFirst(n => n === 'producto')
+  if (prodIdx !== undefined) m.producto = prodIdx
+
+  const concIdx = findFirst(n => n.includes('concesion'))
+  if (concIdx !== undefined) m.concesionario = concIdx
+
+  const analIdx = findFirst(n => n.includes('analista'))
+  if (analIdx !== undefined) m.analista = analIdx
+
+  let modVehIdx = findFirst(
+    n =>
+      (n.includes('modelo') && (n.includes('veh') || n.includes('vehic'))) ||
+      n === 'modelo_vehic'
+  )
+  if (modVehIdx === undefined)
+    modVehIdx = findFirst(n => n === 'modelo' && !n.includes('veh'))
+  if (modVehIdx !== undefined) m.modelo_vehiculo = modVehIdx
+
+  let ncuIdx = findFirst(
+    n =>
+      (n.includes('numero') || n.includes('nro')) &&
+      n.includes('cuota') &&
+      !n.includes('periodo')
+  )
+  if (ncuIdx === undefined)
+    ncuIdx = findFirst(
+      n =>
+        n === 'cuotas' ||
+        (n.includes('cuota') && !n.includes('periodo') && !n.includes('monto'))
+    )
+  if (ncuIdx !== undefined) m.numero_cuotas = ncuIdx
+
+  const cpIdx = findFirst(
+    n => n.includes('cuota') && n.includes('period') && !n.includes('numero')
+  )
+  if (cpIdx !== undefined) m.cuota_periodo = cpIdx
+
+  const tasaIdx = findFirst(
+    n => n.includes('tasa') || n === 'interes' || n.includes('interes')
+  )
+  if (tasaIdx !== undefined) m.tasa_interes = tasaIdx
+
+  const obsIdx = findFirst(n => n.includes('observ'))
+  if (obsIdx !== undefined) m.observaciones = obsIdx
+
+  const required = [
+    'cedula',
+    'total_financiamiento',
+    'modalidad_pago',
+    'fecha_requerimiento',
+    'fecha_aprobacion',
+    'producto',
+    'analista',
+    'numero_cuotas',
+  ] as const
+  if (required.some(k => m[k] === undefined)) return null
+  if (m.concesionario === undefined) return null
+
+  return m
 }
 
 const MODALIDADES = ['MENSUAL', 'QUINCENAL', 'SEMANAL']
