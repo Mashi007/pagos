@@ -504,6 +504,12 @@ export function TablaEditablePagos({
     null
   )
 
+  const [vistoBdDialogOpen, setVistoBdDialogOpen] = useState(false)
+
+  const [vistoBdPagoId, setVistoBdPagoId] = useState<number | null>(null)
+
+  const [vistoBdDocNorm, setVistoBdDocNorm] = useState<string | null>(null)
+
   const cedulaBsCacheRef = useRef<Map<string, boolean>>(new Map())
 
   const [localSaving, setLocalSaving] = useState<Set<number>>(new Set())
@@ -1104,24 +1110,14 @@ export function TablaEditablePagos({
                                   setVistoArchivoDialogOpen(true)
                                   return
                                 }
+                                // Duplicado en BD: decisión humana — control 5 o añadir código (sufijo) en la carga.
                                 if (
                                   puedeVistoControl5Bd &&
                                   pagoIdParaVisto != null
                                 ) {
-                                  setVistoPagoIdCargando(pagoIdParaVisto)
-                                  try {
-                                    await auditoriaService.aplicarControl5VistoPago(
-                                      pagoIdParaVisto
-                                    )
-                                    toast.success(
-                                      'Visto aplicado al pago en BD. Se actualizó el Nº documento; revalidando filas…'
-                                    )
-                                    await onRefrescarValidacionDocumentosBd?.()
-                                  } catch (e) {
-                                    toast.error(getErrorMessage(e))
-                                  } finally {
-                                    setVistoPagoIdCargando(null)
-                                  }
+                                  setVistoBdPagoId(pagoIdParaVisto)
+                                  setVistoBdDocNorm(docNormAccion || null)
+                                  setVistoBdDialogOpen(true)
                                 }
                               }}
                               disabled={
@@ -1135,7 +1131,7 @@ export function TablaEditablePagos({
                                   ? puedeVistoJustificarArchivo
                                     ? 'Visto: elige si añadir sufijos o autorizar sin cambiar el documento.'
                                     : puedeVistoControl5Bd
-                                      ? 'Control 5 (auditoría): Visto sobre el pago en BD. El servidor solo aplica si hay duplicado misma fecha y monto.'
+                                      ? 'Visto: elige control 5 en BD o añadir sufijo _A####/_P#### en esta carga.'
                                       : 'Visto: solo administradores.'
                                   : 'Visto: solo administradores.'
                               }
@@ -1308,6 +1304,118 @@ export function TablaEditablePagos({
               onClick={() => {
                 setVistoArchivoDialogOpen(false)
                 setVistoArchivoDocNorm(null)
+              }}
+            >
+              Cancelar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={vistoBdDialogOpen}
+        onOpenChange={open => {
+          setVistoBdDialogOpen(open)
+          if (!open) {
+            setVistoBdPagoId(null)
+            setVistoBdDocNorm(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Documento ya existente en la base de datos</DialogTitle>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>
+                Elija una acción. Puede aplicar el Visto de auditoría (control
+                5) sobre el pago que ya está en BD, o{' '}
+                <strong>añadir el código</strong> (
+                <code className="rounded bg-gray-100 px-1">_A####</code> /{' '}
+                <code className="rounded bg-gray-100 px-1">_P####</code>) al
+                documento en esta carga para registrar sin duplicar el mismo
+                texto.
+              </p>
+              <ul className="list-inside list-disc space-y-1 text-xs">
+                <li>
+                  <strong>Control 5</strong>: solo procede si ese pago entra en
+                  duplicado misma fecha y monto con otro operativo; si no aplica,
+                  use la opción de sufijo.
+                </li>
+                <li>
+                  <strong>Añadir código</strong>: modifica el Nº documento solo
+                  en las filas de este archivo que comparten este valor.
+                </li>
+              </ul>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
+            <button
+              type="button"
+              className="w-full rounded-md border border-violet-500 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-950 hover:bg-violet-100 disabled:opacity-50"
+              disabled={
+                vistoBdPagoId == null ||
+                vistoPagoIdCargando != null ||
+                serviceStatus === 'offline'
+              }
+              onClick={async () => {
+                const pid = vistoBdPagoId
+                if (pid == null) return
+                setVistoPagoIdCargando(pid)
+                try {
+                  await auditoriaService.aplicarControl5VistoPago(pid)
+                  toast.success(
+                    'Visto control 5 aplicado al pago en BD. Revalidando filas…'
+                  )
+                  await onRefrescarValidacionDocumentosBd?.()
+                  setVistoBdDialogOpen(false)
+                  setVistoBdPagoId(null)
+                  setVistoBdDocNorm(null)
+                } catch (e) {
+                  toast.error(getErrorMessage(e))
+                } finally {
+                  setVistoPagoIdCargando(null)
+                }
+              }}
+            >
+              {vistoPagoIdCargando != null && vistoBdPagoId === vistoPagoIdCargando
+                ? 'Aplicando…'
+                : 'Visto control 5 (pago en BD)'}
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={
+                !vistoBdDocNorm ||
+                !onJustificarDocumentoRepetidoArchivo ||
+                serviceStatus === 'offline'
+              }
+              title={
+                !onJustificarDocumentoRepetidoArchivo
+                  ? 'No disponible en este contexto'
+                  : undefined
+              }
+              onClick={() => {
+                const d = vistoBdDocNorm
+                if (d && onJustificarDocumentoRepetidoArchivo) {
+                  onJustificarDocumentoRepetidoArchivo(d)
+                  toast.success(
+                    'Se añadió _A#### o _P#### a cada fila con este documento en la carga.'
+                  )
+                }
+                setVistoBdDialogOpen(false)
+                setVistoBdPagoId(null)
+                setVistoBdDocNorm(null)
+              }}
+            >
+              Añadir código (sufijo) en esta carga
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-md px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+              onClick={() => {
+                setVistoBdDialogOpen(false)
+                setVistoBdPagoId(null)
+                setVistoBdDocNorm(null)
               }}
             >
               Cancelar
