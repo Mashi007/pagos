@@ -78,6 +78,9 @@ export interface ClienteRetrasadoItem {
 
   monto?: number
 
+  /** Suma del saldo pendiente de todas las cuotas del préstamo (mismo criterio que notificaciones). */
+  total_pendiente_pagar?: number
+
   dias_atraso?: number
   /** Misma regla que estado de cuenta / amortización (cuotas vencidas sin cubrir al 100%). */
   cuotas_atrasadas?: number

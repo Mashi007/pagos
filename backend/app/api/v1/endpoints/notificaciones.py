@@ -31,6 +31,7 @@ from app.services.notificacion_service import (
     contar_cuotas_atraso_por_prestamos,
     format_cuota_item,
     get_cuotas_pendientes_por_vencimientos,
+    sum_saldo_pendiente_total_por_prestamos,
     _item,
     _item_tab,
 )
@@ -1738,6 +1739,9 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
 
     pids_retraso = [c.prestamo_id for c, _ in rows]
     counts_retraso = contar_cuotas_atraso_por_prestamos(db, pids_retraso)
+    totales_pendiente_retraso = sum_saldo_pendiente_total_por_prestamos(
+        db, pids_retraso
+    )
 
     for (cuota, cliente) in rows:
         fv = cuota.fecha_vencimiento
@@ -1749,17 +1753,36 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
         if delta < 0:
             dias_atraso = -delta
             ca = counts_retraso.get(cuota.prestamo_id, 0)
+            tp = totales_pendiente_retraso.get(cuota.prestamo_id)
             if dias_atraso == 1:
                 dias_1_atraso.append(
-                    _item(cliente, cuota, dias_atraso=1, cuotas_atrasadas=ca)
+                    _item(
+                        cliente,
+                        cuota,
+                        dias_atraso=1,
+                        cuotas_atrasadas=ca,
+                        total_pendiente_pagar=tp,
+                    )
                 )
             elif dias_atraso == 5:
                 dias_5_atraso.append(
-                    _item(cliente, cuota, dias_atraso=5, cuotas_atrasadas=ca)
+                    _item(
+                        cliente,
+                        cuota,
+                        dias_atraso=5,
+                        cuotas_atrasadas=ca,
+                        total_pendiente_pagar=tp,
+                    )
                 )
             elif dias_atraso == 30:
                 dias_30_atraso.append(
-                    _item(cliente, cuota, dias_atraso=30, cuotas_atrasadas=ca)
+                    _item(
+                        cliente,
+                        cuota,
+                        dias_atraso=30,
+                        cuotas_atrasadas=ca,
+                        total_pendiente_pagar=tp,
+                    )
                 )
 
     # Crédito pagado: préstamos en estado LIQUIDADO (alineado con prestamos.estado).
@@ -1868,6 +1891,7 @@ def get_notificaciones_tabs_data(db: Session):
     rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
     pids_tabs = [c.prestamo_id for c, _ in rows]
     counts_tabs = contar_cuotas_atraso_por_prestamos(db, pids_tabs)
+    totales_pendiente_tabs = sum_saldo_pendiente_total_por_prestamos(db, pids_tabs)
 
     dias_5: List[dict] = []
     dias_3: List[dict] = []
@@ -1887,21 +1911,46 @@ def get_notificaciones_tabs_data(db: Session):
         if delta < 0:
             dias_atraso = -delta
             ca = counts_tabs.get(cuota.prestamo_id, 0)
+            tp = totales_pendiente_tabs.get(cuota.prestamo_id)
             if dias_atraso == 1:
                 dias_1_retraso.append(
-                    _item_tab(cliente, cuota, dias_atraso=1, cuotas_atrasadas=ca)
+                    _item_tab(
+                        cliente,
+                        cuota,
+                        dias_atraso=1,
+                        cuotas_atrasadas=ca,
+                        total_pendiente_pagar=tp,
+                    )
                 )
             elif dias_atraso == 3:
                 dias_3_retraso.append(
-                    _item_tab(cliente, cuota, dias_atraso=3, cuotas_atrasadas=ca)
+                    _item_tab(
+                        cliente,
+                        cuota,
+                        dias_atraso=3,
+                        cuotas_atrasadas=ca,
+                        total_pendiente_pagar=tp,
+                    )
                 )
             elif dias_atraso == 5:
                 dias_5_retraso.append(
-                    _item_tab(cliente, cuota, dias_atraso=5, cuotas_atrasadas=ca)
+                    _item_tab(
+                        cliente,
+                        cuota,
+                        dias_atraso=5,
+                        cuotas_atrasadas=ca,
+                        total_pendiente_pagar=tp,
+                    )
                 )
             elif dias_atraso == 30:
                 dias_30_retraso.append(
-                    _item_tab(cliente, cuota, dias_atraso=30, cuotas_atrasadas=ca)
+                    _item_tab(
+                        cliente,
+                        cuota,
+                        dias_atraso=30,
+                        cuotas_atrasadas=ca,
+                        total_pendiente_pagar=tp,
+                    )
                 )
 
     # Prejudicial: clientes con 3 o mÃƒÂ¡s cuotas atrasadas (fecha_vencimiento < hoy, no pagado)
@@ -1922,6 +1971,8 @@ def get_notificaciones_tabs_data(db: Session):
         .having(func.count(Cuota.id) >= 3)
     )
     clientes_prejudicial = db.execute(subq).all()
+    bloques_prej = []
+    pids_prej: List[int] = []
     for (cliente_id, total_cuotas) in clientes_prejudicial:
         cliente = db.get(Cliente, cliente_id)
         if not cliente:
@@ -1943,8 +1994,24 @@ def get_notificaciones_tabs_data(db: Session):
         ).scalars().first()
         cuota_ref = primera
         if not cuota_ref:
-            cuota_ref = type("DummyCuota", (), {"fecha_vencimiento": hoy, "numero_cuota": 0, "monto": 0})()
-        item = _item_tab(cliente, cuota_ref)
+            cuota_ref = type(
+                "DummyCuota",
+                (),
+                {
+                    "fecha_vencimiento": hoy,
+                    "numero_cuota": 0,
+                    "monto": 0,
+                    "prestamo_id": None,
+                },
+            )()
+        pid = getattr(cuota_ref, "prestamo_id", None)
+        if pid:
+            pids_prej.append(int(pid))
+        bloques_prej.append((cliente, cuota_ref, total_cuotas, pid))
+    totales_prej = sum_saldo_pendiente_total_por_prestamos(db, pids_prej)
+    for cliente, cuota_ref, total_cuotas, pid in bloques_prej:
+        tp = totales_prej.get(int(pid)) if pid is not None else None
+        item = _item_tab(cliente, cuota_ref, total_pendiente_pagar=tp)
         item["total_cuotas_atrasadas"] = total_cuotas
         prejudicial.append(item)
 

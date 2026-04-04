@@ -5,7 +5,7 @@ Listados por pestaña: get_cuotas_pendientes_por_vencimientos (filtra en SQL por
 """
 from collections import defaultdict
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -62,6 +62,38 @@ def get_cuotas_pendientes_por_vencimientos(
     q = _select_cuotas_pendientes_con_cliente().where(Cuota.fecha_vencimiento.in_(fechas))
     rows = db.execute(q).all()
     return [(row[0], row[1]) for row in rows]
+
+
+def sum_saldo_pendiente_total_por_prestamos(
+    db: Session, prestamo_ids: Sequence[int]
+) -> Dict[int, float]:
+    """
+    Por préstamo: suma del saldo pendiente (monto - total_pagado) de todas las cuotas
+    que siguen las mismas reglas que el listado de notificaciones (sin pagar, saldo > tol,
+    préstamo no liquidado/desistimiento). Incluye cuotas futuras y vencidas: es el total
+    que el cliente adeuda en ese crédito, no solo la cuota de la fila.
+    """
+    ids = sorted({int(x) for x in prestamo_ids if x is not None})
+    if not ids:
+        return {}
+    pendiente_expr = func.coalesce(Cuota.monto, 0) - func.coalesce(Cuota.total_pagado, 0)
+    q = (
+        select(Cuota.prestamo_id, func.sum(pendiente_expr).label("total_pendiente"))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .where(Cuota.prestamo_id.in_(ids))
+        .where(Cuota.fecha_pago.is_(None))
+        .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
+        .where(pendiente_expr > TOL_SALDO_CUOTA_NOTIFICACION)
+        .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
+        .group_by(Cuota.prestamo_id)
+    )
+    out: Dict[int, float] = {}
+    for row in db.execute(q).all():
+        pid = int(row[0])
+        total = row[1]
+        if total is not None:
+            out[pid] = float(total)
+    return out
 
 
 def contar_cuotas_atraso_por_prestamos(
@@ -146,8 +178,14 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         ca = contar_cuotas_atraso_por_prestamos(db, [cuota.prestamo_id]).get(
             cuota.prestamo_id, 0
         )
+        totales = sum_saldo_pendiente_total_por_prestamos(db, [cuota.prestamo_id])
         return format_cuota_item(
-            cliente, cuota, dias_atraso=dias, cuotas_atrasadas=ca, for_tab=True
+            cliente,
+            cuota,
+            dias_atraso=dias,
+            cuotas_atrasadas=ca,
+            for_tab=True,
+            total_pendiente_pagar=totales.get(cuota.prestamo_id),
         )
 
     if tipo == "PREJUDICIAL":
@@ -199,7 +237,16 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                     "prestamo_id": None,
                 },
             )()
-        item = format_cuota_item(cliente, cuota_ref, for_tab=True)
+        pid = getattr(cuota_ref, "prestamo_id", None)
+        totales_p = (
+            sum_saldo_pendiente_total_por_prestamos(db, [pid]) if pid else {}
+        )
+        item = format_cuota_item(
+            cliente,
+            cuota_ref,
+            for_tab=True,
+            total_pendiente_pagar=totales_p.get(pid) if pid else None,
+        )
         item["total_cuotas_atrasadas"] = total_cuotas
         return item
 
@@ -213,6 +260,7 @@ def format_cuota_item(
     cuotas_atrasadas: Optional[int] = None,
     dias_antes_vencimiento: Optional[int] = None,
     for_tab: bool = False,
+    total_pendiente_pagar: Optional[float] = None,
 ) -> dict:
     """
     Formatea un registro de cliente+cuota para la lista de notificaciones.
@@ -228,7 +276,7 @@ def format_cuota_item(
     Returns:
         Dict con datos formateados para el frontend
     """
-    base_item = {
+    base_item: Dict[str, Any] = {
         "cliente_id": cliente.id,
         "nombre": cliente.nombres or "",
         "cedula": cliente.cedula or "",
@@ -237,7 +285,9 @@ def format_cuota_item(
         "fecha_vencimiento": cuota.fecha_vencimiento.isoformat() if cuota.fecha_vencimiento else None,
         "monto": float(cuota.monto) if cuota.monto is not None else None,
     }
-    
+    if total_pendiente_pagar is not None:
+        base_item["total_pendiente_pagar"] = float(total_pendiente_pagar)
+
     if dias_atraso is not None:
         base_item["dias_atraso"] = dias_atraso
     if cuotas_atrasadas is not None:
@@ -265,6 +315,7 @@ def _item(
     cuota: Cuota,
     dias_atraso: Optional[int] = None,
     cuotas_atrasadas: Optional[int] = None,
+    total_pendiente_pagar: Optional[float] = None,
 ) -> dict:
     """
     Deprecated: usar format_cuota_item.
@@ -276,6 +327,7 @@ def _item(
         dias_atraso=dias_atraso,
         cuotas_atrasadas=cuotas_atrasadas,
         for_tab=False,
+        total_pendiente_pagar=total_pendiente_pagar,
     )
 
 
@@ -285,6 +337,7 @@ def _item_tab(
     dias_atraso: Optional[int] = None,
     dias_antes: Optional[int] = None,
     cuotas_atrasadas: Optional[int] = None,
+    total_pendiente_pagar: Optional[float] = None,
 ) -> dict:
     """
     Deprecated: usar format_cuota_item con for_tab=True.
@@ -297,4 +350,5 @@ def _item_tab(
         cuotas_atrasadas=cuotas_atrasadas,
         dias_antes_vencimiento=dias_antes,
         for_tab=True,
+        total_pendiente_pagar=total_pendiente_pagar,
     )

@@ -68,6 +68,16 @@ const TABS: { id: TabId; label: string; icon: typeof Clock }[] = [
 
 type EstadisticaTabKey = keyof EstadisticasPorTab
 
+function textoTotalPendientePagar(row: ClienteRetrasadoItem): string {
+  const v =
+    row.total_pendiente_pagar != null
+      ? Number(row.total_pendiente_pagar)
+      : row.monto != null
+        ? Number(row.monto)
+        : null
+  return v != null && Number.isFinite(v) ? v.toLocaleString('es') : '-'
+}
+
 function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
   switch (tab) {
     case 'dias_1_atraso':
@@ -495,7 +505,8 @@ export function Notificaciones() {
       row.fecha_vencimiento != null ||
       row.dias_atraso != null ||
       row.cuotas_atrasadas != null ||
-      row.monto != null
+      row.monto != null ||
+      row.total_pendiente_pagar != null
   )
 
   const mostrarTablaCuotas = hasColumnasCuota
@@ -859,9 +870,7 @@ export function Notificaciones() {
                           </td>
 
                           <td className="px-3 py-2 text-right">
-                            {row.monto != null
-                              ? Number(row.monto).toLocaleString('es')
-                              : '-'}
+                            {textoTotalPendientePagar(row)}
                           </td>
 
                           <td className="px-3 py-2">
