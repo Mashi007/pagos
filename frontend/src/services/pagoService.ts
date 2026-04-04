@@ -310,6 +310,19 @@ class PagoService {
     return await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
+  /** Elimina todos los pagos de un préstamo APROBADO (reemplazo antes de Excel). */
+
+  async deleteTodosPagosPorPrestamo(prestamoId: number): Promise<{
+    ok: boolean
+    prestamo_id: number
+    pagos_eliminados: number
+    cuota_pagos_eliminadas?: number
+  }> {
+    return await apiClient.delete(
+      `${this.baseUrl}/por-prestamo/${prestamoId}/todos`
+    )
+  }
+
   async aplicarPagoACuotas(pagoId: number): Promise<{
     success: boolean
     ya_aplicado?: boolean

@@ -26,7 +26,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { Save, Loader2, Search } from 'lucide-react'
+import { Save, Loader2, Search, Eye } from 'lucide-react'
 
 import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
 
@@ -37,6 +37,14 @@ import {
 } from '../../utils/pagoExcelValidation'
 
 import { pagoService } from '../../services/pagoService'
+
+import { auditoriaService } from '../../services/auditoriaService'
+
+import { usePermissions } from '../../hooks/usePermissions'
+
+import { toast } from 'sonner'
+
+import { getErrorMessage } from '../../types/errors'
 
 import { getTasaPorFecha } from '../../services/tasaCambioService'
 
@@ -74,6 +82,10 @@ export interface FilaEditableProps {
   onSendToRevisarPagos?: (row: PagoExcelRow) => void
 
   isSendingRevisar?: boolean
+
+  /** Tras aplicar Visto (control 5) al pago que bloqueaba por documento duplicado, revalidar contra BD. */
+
+  onRefrescarValidacionDocumentosBd?: () => Promise<void>
 }
 
 function CeldaEditable({
@@ -444,7 +456,15 @@ export function TablaEditablePagos({
   onSendToRevisarPagos,
 
   isSendingRevisar = false,
+
+  onRefrescarValidacionDocumentosBd,
 }: FilaEditableProps) {
+  const { isAdmin } = usePermissions()
+
+  const [vistoPagoIdCargando, setVistoPagoIdCargando] = useState<number | null>(
+    null
+  )
+
   const cedulaBsCacheRef = useRef<Map<string, boolean>>(new Map())
 
   const [localSaving, setLocalSaving] = useState<Set<number>>(new Set())
@@ -701,7 +721,7 @@ export function TablaEditablePagos({
                 Crédito
               </th>
 
-              <th className="w-14 min-w-[3.5rem] p-2 text-center font-semibold">
+              <th className="min-w-[4.5rem] p-2 text-center font-semibold">
                 Acción
               </th>
             </tr>
@@ -925,6 +945,13 @@ export function TablaEditablePagos({
                               ? 'Bs requiere tasa de cambio'
                               : ''
 
+                      const pagoIdDupBd = row._pagoIdExistenteDuplicadoBD
+
+                      const puedeVistoControl5 =
+                        isAdmin &&
+                        typeof pagoIdDupBd === 'number' &&
+                        pagoIdDupBd > 0
+
                       return (
                         <div className="flex flex-col gap-1">
                           <button
@@ -973,6 +1000,47 @@ export function TablaEditablePagos({
                               </>
                             )}
                           </button>
+
+                          {puedeVistoControl5 && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (pagoIdDupBd == null || pagoIdDupBd <= 0)
+                                  return
+                                setVistoPagoIdCargando(pagoIdDupBd)
+                                try {
+                                  await auditoriaService.aplicarControl5VistoPago(
+                                    pagoIdDupBd
+                                  )
+                                  toast.success(
+                                    'Visto aplicado al pago en BD. Se actualizó el Nº documento; revalidando filas…'
+                                  )
+                                  await onRefrescarValidacionDocumentosBd?.()
+                                } catch (e) {
+                                  toast.error(getErrorMessage(e))
+                                } finally {
+                                  setVistoPagoIdCargando(null)
+                                }
+                              }}
+                              disabled={
+                                vistoPagoIdCargando != null ||
+                                isSaving(row._rowIndex) ||
+                                serviceStatus === 'offline'
+                              }
+                              title="Control 5 (auditoría): Visto sobre el pago existente que bloquea por documento duplicado. Requiere que ese pago esté en grupo duplicado misma fecha y monto."
+                              className="inline-flex items-center justify-center gap-0.5 rounded border border-violet-300 bg-violet-50 p-1.5 text-[10px] font-semibold text-violet-900 hover:bg-violet-100 disabled:opacity-70"
+                            >
+                              {vistoPagoIdCargando === pagoIdDupBd ? (
+                                <Loader2
+                                  className="h-3.5 w-3.5 animate-spin"
+                                  aria-hidden
+                                />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" aria-hidden />
+                              )}
+                              Visto
+                            </button>
+                          )}
 
                           {noPuedeGuardar && onSendToRevisarPagos && (
                             <button

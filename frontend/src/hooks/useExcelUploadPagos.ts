@@ -1886,6 +1886,8 @@ export function useExcelUploadPagos({
 
       let prestamoPorDocDupBD = new Map<string, number | null>()
 
+      let pagoPorDocDupBD = new Map<string, number>()
+
       if (todasCedulas.length > 0 || todosDocumentos.length > 0) {
         try {
           const resultado = await pagoService.validarFilasBatch({
@@ -1940,6 +1942,15 @@ export function useExcelUploadPagos({
               key,
               pid != null && Number.isFinite(Number(pid)) ? Number(pid) : null
             )
+
+            if (
+              d.origen === 'pagos' &&
+              d.pago_id != null &&
+              Number.isFinite(Number(d.pago_id)) &&
+              !pagoPorDocDupBD.has(key)
+            ) {
+              pagoPorDocDupBD.set(key, Number(d.pago_id))
+            }
           }
         } catch {
           // Igual que carga inicial: sin respuesta del API, validar sin listas de BD
@@ -1957,7 +1968,11 @@ export function useExcelUploadPagos({
       return processed.map(r => {
         const docNorm = normalizarNumeroDocumento(r.numero_documento)
 
-        const { _prestamoIdExistenteDuplicadoBD: _omitDup, ...restRow } = r
+        const {
+          _prestamoIdExistenteDuplicadoBD: _omitDup,
+          _pagoIdExistenteDuplicadoBD: _omitPagoDup,
+          ...restRow
+        } = r
 
         const vCedula = validatePagoField('cedula', r.cedula, {
           cedulasInvalidas: new Set(
@@ -2010,12 +2025,18 @@ export function useExcelUploadPagos({
             ? (prestamoPorDocDupBD.get(docNorm) ?? null)
             : undefined
 
+        const pagoDupBd =
+          esDuplicadoEnBD && docNorm ? pagoPorDocDupBD.get(docNorm) : undefined
+
         return {
           ...restRow,
           _validation: newValidation,
           _hasErrors: hasErrors,
           ...(prestamoDupBd !== undefined
             ? { _prestamoIdExistenteDuplicadoBD: prestamoDupBd }
+            : {}),
+          ...(pagoDupBd !== undefined
+            ? { _pagoIdExistenteDuplicadoBD: pagoDupBd }
             : {}),
         }
       })
@@ -2045,6 +2066,20 @@ export function useExcelUploadPagos({
         console.error('revalidar batch BD:', e)
       }
     }, 450)
+  }, [applyBatchValidationToRows, isMounted])
+
+  const refrescarValidacionFilasBd = useCallback(async () => {
+    const filas = excelDataRef.current
+
+    if (!filas.length) return
+
+    try {
+      const validated = await applyBatchValidationToRows(filas)
+
+      if (isMounted()) setExcelData(validated)
+    } catch (e) {
+      console.error('refrescarValidacionFilasBd:', e)
+    }
   }, [applyBatchValidationToRows, isMounted])
 
   const processExcelFile = useCallback(
@@ -2972,5 +3007,7 @@ export function useExcelUploadPagos({
     dismissError,
 
     batchProgress,
+
+    refrescarValidacionFilasBd,
   }
 }

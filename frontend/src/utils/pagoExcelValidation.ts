@@ -71,6 +71,13 @@ export interface PagoExcelRow {
 
   _prestamoIdExistenteDuplicadoBD?: number | null
 
+  /**
+   * Si el documento ya existe en BD y el origen es tabla `pagos`: id del pago existente.
+   * Permite acción «Visto» (control 5) desde carga masiva. No definido si no aplica.
+   */
+
+  _pagoIdExistenteDuplicadoBD?: number | null
+
   /** URL del comprobante (columna Link / Ver imagen en Excel desde Gmail). */
   link_comprobante?: string | null
 }

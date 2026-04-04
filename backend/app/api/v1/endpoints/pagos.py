@@ -5804,6 +5804,64 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
 
 
+@router.delete("/por-prestamo/{prestamo_id:int}/todos", response_model=dict)
+
+def eliminar_todos_pagos_por_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+
+    """
+
+    Elimina todos los pagos asociados al préstamo, limpia dependencias y reinicia totales en cuotas.
+
+    Solo préstamos en estado APROBADO (flujo «reemplazar pagos» antes de carga masiva desde Excel).
+
+    """
+
+    from app.services.pagos_cuotas_reaplicacion import eliminar_todos_pagos_prestamo
+
+    try:
+
+        r = eliminar_todos_pagos_prestamo(db, prestamo_id)
+
+        if not r.get("ok"):
+
+            msg = str(r.get("error") or "No se pudo eliminar")
+
+            if "no encontrado" in msg.lower():
+
+                raise HTTPException(status_code=404, detail=msg)
+
+            raise HTTPException(status_code=400, detail=msg)
+
+        db.commit()
+
+    except HTTPException:
+
+        db.rollback()
+
+        raise
+
+    except Exception as e:
+
+        db.rollback()
+
+        logger.exception(
+
+            "eliminar_todos_pagos_por_prestamo prestamo_id=%s: %s",
+
+            prestamo_id,
+
+            e,
+
+        )
+
+        raise HTTPException(status_code=500, detail=str(e)[:300]) from e
+
+    return r
+
+
+
+
+
 @router.delete("/{pago_id:int}", status_code=204)
 
 def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):

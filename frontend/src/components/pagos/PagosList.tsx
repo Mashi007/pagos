@@ -62,6 +62,8 @@ import {
 } from '../../components/ui/table'
 import { formatDate, formatLastSyncDate, cn } from '../../utils'
 import { pagoService, type Pago } from '../../services/pagoService'
+import { prestamoService } from '../../services/prestamoService'
+import type { Prestamo } from '../../types'
 import { openComprobanteInNewTab } from '../../services/cobrosService'
 import {
   pagoConErrorService,
@@ -108,6 +110,16 @@ export function PagosList() {
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
+  const [reemplazarPagosOpen, setReemplazarPagosOpen] = useState(false)
+  const [reemplazarStep, setReemplazarStep] = useState<
+    'cedula' | 'elegir' | 'confirmar'
+  >('cedula')
+  const [cedulaReemplazo, setCedulaReemplazo] = useState('')
+  const [prestamosReemplazo, setPrestamosReemplazo] = useState<Prestamo[]>([])
+  const [prestamoIdReemplazo, setPrestamoIdReemplazo] = useState<number | null>(
+    null
+  )
+  const [loadingReemplazo, setLoadingReemplazo] = useState(false)
   const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | PagoConError | null>(
     null
@@ -627,6 +639,107 @@ export function PagosList() {
       toast.error('Error al actualizar los datos')
     }
   }
+
+  const cerrarReemplazarPagos = () => {
+    setReemplazarPagosOpen(false)
+    setReemplazarStep('cedula')
+    setCedulaReemplazo('')
+    setPrestamosReemplazo([])
+    setPrestamoIdReemplazo(null)
+    setLoadingReemplazo(false)
+  }
+
+  const abrirReemplazarPagos = () => {
+    setReemplazarStep('cedula')
+    setCedulaReemplazo('')
+    setPrestamosReemplazo([])
+    setPrestamoIdReemplazo(null)
+    setLoadingReemplazo(false)
+    setReemplazarPagosOpen(true)
+  }
+
+  const prestamoReemplazoSeleccionado = prestamosReemplazo.find(
+    p => p.id === prestamoIdReemplazo
+  )
+
+  const handleBuscarPrestamosReemplazo = async () => {
+    const ced = cedulaReemplazo.trim()
+    if (!ced) {
+      toast.error('Indique la cédula')
+      return
+    }
+    setLoadingReemplazo(true)
+    try {
+      const lista = await prestamoService.getPrestamosByCedula(ced)
+      const aprobados = lista.filter(
+        p => (p.estado || '').toUpperCase() === 'APROBADO'
+      )
+      if (aprobados.length === 0) {
+        toast.error('No hay préstamos aprobados para esa cédula')
+        setPrestamosReemplazo([])
+        setPrestamoIdReemplazo(null)
+        return
+      }
+      setPrestamosReemplazo(aprobados)
+      if (aprobados.length === 1) {
+        setPrestamoIdReemplazo(aprobados[0].id)
+        setReemplazarStep('confirmar')
+      } else {
+        setPrestamoIdReemplazo(null)
+        setReemplazarStep('elegir')
+      }
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setLoadingReemplazo(false)
+    }
+  }
+
+  const handleConfirmarReemplazarPagos = async () => {
+    if (prestamoIdReemplazo == null) return
+    setLoadingReemplazo(true)
+    try {
+      const r =
+        await pagoService.deleteTodosPagosPorPrestamo(prestamoIdReemplazo)
+      toast.success(
+        `Se eliminaron ${r.pagos_eliminados} pago(s). Cargue el Excel con los nuevos pagos.`
+      )
+      cerrarReemplazarPagos()
+      setShowCargaMasivaPagos(true)
+      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+      await queryClient.invalidateQueries({
+        queryKey: ['pagos-kpis'],
+        exact: false,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['pagos-ultimos'],
+        exact: false,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['cuotas-prestamo'],
+        exact: false,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['prestamos'],
+        exact: false,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['pagos-por-cedula'],
+        exact: false,
+      })
+      await invalidateListasNotificacionesMora(queryClient)
+      await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
+      await queryClient.refetchQueries({
+        queryKey: ['pagos-kpis'],
+        exact: false,
+      })
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setLoadingReemplazo(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos) - visible arriba */}
@@ -1260,7 +1373,170 @@ export function PagosList() {
             </div>
           </PopoverContent>
         </Popover>
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          className="px-6 py-6 text-base font-semibold"
+          onClick={abrirReemplazarPagos}
+        >
+          <RefreshCw className="mr-2 h-5 w-5" />
+          Reemplazar pagos
+        </Button>
       </div>
+      <Dialog
+        open={reemplazarPagosOpen}
+        onOpenChange={open => {
+          if (!open) cerrarReemplazarPagos()
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reemplazar pagos</DialogTitle>
+          </DialogHeader>
+          {reemplazarStep === 'cedula' && (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-gray-600">
+                Ingrese la cédula del cliente. Solo se consideran préstamos en
+                estado APROBADO.
+              </p>
+              <Input
+                placeholder="Cédula"
+                value={cedulaReemplazo}
+                onChange={e => setCedulaReemplazo(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void handleBuscarPrestamosReemplazo()
+                  }
+                }}
+                autoFocus
+              />
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={cerrarReemplazarPagos}
+                  disabled={loadingReemplazo}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleBuscarPrestamosReemplazo()}
+                  disabled={loadingReemplazo}
+                >
+                  {loadingReemplazo ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Buscando...
+                    </>
+                  ) : (
+                    'Continuar'
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+          {reemplazarStep === 'elegir' && (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-gray-600">
+                Hay {prestamosReemplazo.length} préstamos aprobados. Elija el
+                crédito cuyos pagos desea borrar y reemplazar.
+              </p>
+              <Select
+                value={
+                  prestamoIdReemplazo != null ? String(prestamoIdReemplazo) : ''
+                }
+                onValueChange={v => setPrestamoIdReemplazo(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione préstamo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {prestamosReemplazo.map(p => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      #{p.id} {p.modelo_vehiculo || p.producto || 'Préstamo'} -{' '}
+                      {p.nombres}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setReemplazarStep('cedula')
+                    setPrestamoIdReemplazo(null)
+                  }}
+                  disabled={loadingReemplazo}
+                >
+                  Atrás
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (prestamoIdReemplazo == null) {
+                      toast.error('Seleccione un préstamo')
+                      return
+                    }
+                    setReemplazarStep('confirmar')
+                  }}
+                  disabled={loadingReemplazo || prestamoIdReemplazo == null}
+                >
+                  Continuar
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+          {reemplazarStep === 'confirmar' &&
+            prestamoIdReemplazo != null &&
+            prestamoReemplazoSeleccionado && (
+              <div className="space-y-4 py-2">
+                <p className="text-sm text-gray-700">
+                  ¿Desea borrar <strong>todos los pagos</strong> de la cédula{' '}
+                  <strong>{prestamoReemplazoSeleccionado.cedula}</strong> en el
+                  préstamo <strong>#{prestamoIdReemplazo}</strong>
+                  {prestamoReemplazoSeleccionado.modelo_vehiculo
+                    ? ` (${prestamoReemplazoSeleccionado.modelo_vehiculo})`
+                    : ''}
+                  ? Luego podrá cargar los pagos desde Excel con el flujo
+                  habitual.
+                </p>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setReemplazarStep(
+                        prestamosReemplazo.length > 1 ? 'elegir' : 'cedula'
+                      )
+                    }
+                    disabled={loadingReemplazo}
+                  >
+                    Atrás
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => void handleConfirmarReemplazarPagos()}
+                    disabled={loadingReemplazo}
+                  >
+                    {loadingReemplazo ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Borrando...
+                      </>
+                    ) : (
+                      'Sí, borrar todos los pagos'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </div>
+            )}
+        </DialogContent>
+      </Dialog>
       {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel de esta importación (datos_importados_conerrores) */}
       {lastImportCobrosResult &&
         lastImportCobrosResult.registros_con_error > 0 && (
