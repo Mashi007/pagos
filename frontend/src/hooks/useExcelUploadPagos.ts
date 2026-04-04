@@ -3170,6 +3170,18 @@ export function useExcelUploadPagos({
     [scheduleRevalidarBatchBd]
   )
 
+  /** Admin: permite duplicado en archivo sin tocar el texto del documento (decisión humana distinta a añadir sufijos). */
+  const marcarJustificadoDocumentoRepetidoEnArchivo = useCallback(
+    (docNormRaw: string) => {
+      const key = normalizarNumeroDocumento(docNormRaw)
+      if (!key) return
+      setDocumentosRepetidosArchivoJustificados(prev =>
+        prev.includes(key) ? prev : [...prev, key]
+      )
+    },
+    []
+  )
+
   return {
     isDragging,
 
@@ -3262,5 +3274,7 @@ export function useExcelUploadPagos({
     documentosRepetidosArchivoJustificados,
 
     justificarDocumentoRepetidoEnArchivo,
+
+    marcarJustificadoDocumentoRepetidoEnArchivo,
   }
 }

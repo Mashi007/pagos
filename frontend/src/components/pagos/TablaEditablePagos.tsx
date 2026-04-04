@@ -57,6 +57,14 @@ import {
   SelectValue,
 } from '../ui/select'
 
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog'
+
 export interface FilaEditableProps {
   rows: PagoExcelRow[]
 
@@ -92,9 +100,13 @@ export interface FilaEditableProps {
 
   documentosRepetidosArchivoJustificados?: string[]
 
-  /** Marca el documento como justificado para todas las filas que lo repiten en el archivo. */
+  /** Añade sufijos _A#### / _P#### al documento en cada fila (tras confirmación en diálogo). */
 
   onJustificarDocumentoRepetidoArchivo?: (docNorm: string) => void
+
+  /** Marca el duplicado en archivo como revisado sin modificar el texto del documento. */
+
+  onMarcarDocumentoRepetidoArchivoJustificado?: (docNorm: string) => void
 }
 
 function CeldaEditable({
@@ -477,10 +489,18 @@ export function TablaEditablePagos({
   documentosRepetidosArchivoJustificados = [],
 
   onJustificarDocumentoRepetidoArchivo,
+
+  onMarcarDocumentoRepetidoArchivoJustificado,
 }: FilaEditableProps) {
   const { isAdmin } = usePermissions()
 
   const [vistoPagoIdCargando, setVistoPagoIdCargando] = useState<number | null>(
+    null
+  )
+
+  const [vistoArchivoDialogOpen, setVistoArchivoDialogOpen] = useState(false)
+
+  const [vistoArchivoDocNorm, setVistoArchivoDocNorm] = useState<string | null>(
     null
   )
 
@@ -1078,6 +1098,12 @@ export function TablaEditablePagos({
                                   )
                                   return
                                 }
+                                // Duplicado en Excel: la decisión (sufijos o solo autorizar) es humana → diálogo.
+                                if (puedeVistoJustificarArchivo && docNormAccion) {
+                                  setVistoArchivoDocNorm(docNormAccion)
+                                  setVistoArchivoDialogOpen(true)
+                                  return
+                                }
                                 if (
                                   puedeVistoControl5Bd &&
                                   pagoIdParaVisto != null
@@ -1096,19 +1122,6 @@ export function TablaEditablePagos({
                                   } finally {
                                     setVistoPagoIdCargando(null)
                                   }
-                                  return
-                                }
-                                if (
-                                  puedeVistoJustificarArchivo &&
-                                  docNormAccion &&
-                                  onJustificarDocumentoRepetidoArchivo
-                                ) {
-                                  onJustificarDocumentoRepetidoArchivo(
-                                    docNormAccion
-                                  )
-                                  toast.success(
-                                    'Visto: se añadió _A#### o _P#### a cada fila con este documento (único en BD). Puede guardar cada fila.'
-                                  )
                                 }
                               }}
                               disabled={
@@ -1119,9 +1132,11 @@ export function TablaEditablePagos({
                               }
                               title={
                                 isAdmin
-                                  ? puedeVistoControl5Bd
-                                    ? 'Control 5 (auditoría): Visto sobre el pago en BD. El servidor solo aplica si hay duplicado misma fecha y monto.'
-                                    : 'Visto: añade _A#### o _P#### al documento en cada fila (mismo archivo vs otro préstamo en BD).'
+                                  ? puedeVistoJustificarArchivo
+                                    ? 'Visto: elige si añadir sufijos o autorizar sin cambiar el documento.'
+                                    : puedeVistoControl5Bd
+                                      ? 'Control 5 (auditoría): Visto sobre el pago en BD. El servidor solo aplica si hay duplicado misma fecha y monto.'
+                                      : 'Visto: solo administradores.'
                                   : 'Visto: solo administradores.'
                               }
                               className={`inline-flex items-center justify-center gap-0.5 rounded border p-1.5 text-[10px] font-semibold disabled:opacity-60 ${
@@ -1219,6 +1234,87 @@ export function TablaEditablePagos({
           </ul>
         </div>
       )}
+
+      <Dialog
+        open={vistoArchivoDialogOpen}
+        onOpenChange={open => {
+          setVistoArchivoDialogOpen(open)
+          if (!open) setVistoArchivoDocNorm(null)
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Documento repetido en este archivo</DialogTitle>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>
+                Usted decide si se modifica el número de documento o solo se
+                marca como revisado.
+              </p>
+              <ul className="list-inside list-disc space-y-1 text-xs">
+                <li>
+                  <strong>Añadir sufijos</strong>: agrega{' '}
+                  <code className="rounded bg-gray-100 px-1">_A####</code> o{' '}
+                  <code className="rounded bg-gray-100 px-1">_P####</code> en
+                  cada fila afectada (únicos para la base de datos).
+                </li>
+                <li>
+                  <strong>Sin cambiar el texto</strong>: el documento queda
+                  igual; la fila pasa validación local, pero al guardar puede
+                  fallar si la regla de unicidad en BD no lo permite.
+                </li>
+              </ul>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
+            <button
+              type="button"
+              className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
+              onClick={() => {
+                const d = vistoArchivoDocNorm
+                if (d && onJustificarDocumentoRepetidoArchivo) {
+                  onJustificarDocumentoRepetidoArchivo(d)
+                  toast.success(
+                    'Se añadió _A#### o _P#### a cada fila con este documento. Puede guardar cada fila.'
+                  )
+                }
+                setVistoArchivoDialogOpen(false)
+                setVistoArchivoDocNorm(null)
+              }}
+            >
+              Añadir sufijos al documento
+            </button>
+            {onMarcarDocumentoRepetidoArchivoJustificado ? (
+              <button
+                type="button"
+                className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                onClick={() => {
+                  const d = vistoArchivoDocNorm
+                  if (d) {
+                    onMarcarDocumentoRepetidoArchivoJustificado(d)
+                    toast.success(
+                      'Autorizado sin modificar el documento (revisión humana).'
+                    )
+                  }
+                  setVistoArchivoDialogOpen(false)
+                  setVistoArchivoDocNorm(null)
+                }}
+              >
+                Autorizar sin cambiar el documento
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="w-full rounded-md px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+              onClick={() => {
+                setVistoArchivoDialogOpen(false)
+                setVistoArchivoDocNorm(null)
+              }}
+            >
+              Cancelar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

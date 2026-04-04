@@ -202,6 +202,8 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     documentosRepetidosArchivoJustificados,
 
     justificarDocumentoRepetidoEnArchivo,
+
+    marcarJustificadoDocumentoRepetidoEnArchivo,
   } = useExcelUploadPagos(props)
 
   const totalCargadas = excelData.length
@@ -484,6 +486,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 }
                 onJustificarDocumentoRepetidoArchivo={
                   justificarDocumentoRepetidoEnArchivo
+                }
+                onMarcarDocumentoRepetidoArchivoJustificado={
+                  marcarJustificadoDocumentoRepetidoEnArchivo
                 }
               />
               {batchProgress && (

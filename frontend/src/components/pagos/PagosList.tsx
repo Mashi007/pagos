@@ -1380,7 +1380,12 @@ export function PagosList() {
           className="px-6 py-6 text-base font-semibold"
           onClick={abrirReemplazarPagos}
         >
-          <RefreshCw className="mr-2 h-5 w-5" />
+          <span
+            className="mr-2 inline-flex h-5 w-5 shrink-0 items-center justify-center text-xl font-semibold leading-none"
+            aria-hidden
+          >
+            -
+          </span>
           Reemplazar pagos
         </Button>
       </div>
