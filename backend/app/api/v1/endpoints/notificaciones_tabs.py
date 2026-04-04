@@ -25,6 +25,7 @@ from app.core.email import cuerpo_parece_html, send_email
 from app.core.email_config_holder import sync_from_db as sync_email_config_from_db
 from app.core.whatsapp_send import send_whatsapp_text
 from app.api.v1.endpoints.notificaciones import (
+    build_prejudicial_items,
     get_notificaciones_tabs_data,
     get_notificaciones_envios_config,
     get_plantilla_asunto_cuerpo,
@@ -666,8 +667,7 @@ def enviar_notificaciones_retrasadas(db: Session = Depends(get_db)):
 @router_prejudicial.get("")
 def get_notificaciones_prejudicial(estado: str = None, db: Session = Depends(get_db)):
     """Lista de clientes con 4+ cuotas en estado VENCIDO o MORA (prejudicial). Email desde tabla clientes."""
-    data = get_notificaciones_tabs_data(db)
-    items = data["prejudicial"]
+    items = build_prejudicial_items(db)
     return {"items": items, "total": len(items)}
 
 
@@ -679,8 +679,7 @@ def _tipo_prejudicial(_item: dict) -> str:
 def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
     """Env�a correo a cada cliente en situaci�n prejudicial. Respeta config env�os (habilitado/CCO) desde BD."""
     config_envios = get_notificaciones_envios_config(db)
-    data = get_notificaciones_tabs_data(db)
-    items = data["prejudicial"]
+    items = build_prejudicial_items(db)
     asunto = "Aviso prejudicial - Rapicredit"
     cuerpo = (
         "Estimado/a {nombre} (c�dula {cedula}),\n\n"
@@ -988,7 +987,6 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
 
     config_raw = get_notificaciones_envios_config(db)
     config_envios = _config_envios_forzar_habilitado_caso(config_raw, tipo)
-    data = get_notificaciones_tabs_data(db)
 
     asunto_prev = "Recordatorio: cuota por vencer - Rapicredit"
     cuerpo_prev = (
@@ -1038,38 +1036,40 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
         "Saludos,\nRapicredit"
     )
 
-    if tipo == "PAGO_5_DIAS_ANTES":
-        items = data["dias_5"]
-        res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
-    elif tipo == "PAGO_3_DIAS_ANTES":
-        items = data["dias_3"]
-        res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
-    elif tipo == "PAGO_1_DIA_ANTES":
-        items = data["dias_1"]
-        res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
-    elif tipo == "PAGO_DIA_0":
-        items = data["hoy"]
-        res = _enviar_correos_items(items, asunto_hoy, cuerpo_hoy, config_envios, _tipo_dia_pago, db)
-    elif tipo == "PAGO_1_DIA_ATRASADO":
-        items = data["dias_1_retraso"]
-        res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
-    elif tipo == "PAGO_3_DIAS_ATRASADO":
-        items = data["dias_3_retraso"]
-        res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
-    elif tipo == "PAGO_5_DIAS_ATRASADO":
-        items = data["dias_5_retraso"]
-        res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
-    elif tipo == "PAGO_30_DIAS_ATRASADO":
-        items = data["dias_30_retraso"]
-        res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
-    elif tipo == "PREJUDICIAL":
-        items = data["prejudicial"]
+    if tipo == "PREJUDICIAL":
+        items = build_prejudicial_items(db)
         res = _enviar_correos_items(items, asunto_prej, cuerpo_prej, config_envios, _tipo_prejudicial, db)
     elif tipo == "MASIVOS":
         items = get_items_masivos(db)
         res = ejecutar_envio_masivos_por_campanas(db, config_envios, forzar_habilitado=True)
     else:
-        raise ValueError("tipo_caso_manual_invalido")
+        data = get_notificaciones_tabs_data(db)
+        if tipo == "PAGO_5_DIAS_ANTES":
+            items = data["dias_5"]
+            res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+        elif tipo == "PAGO_3_DIAS_ANTES":
+            items = data["dias_3"]
+            res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+        elif tipo == "PAGO_1_DIA_ANTES":
+            items = data["dias_1"]
+            res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+        elif tipo == "PAGO_DIA_0":
+            items = data["hoy"]
+            res = _enviar_correos_items(items, asunto_hoy, cuerpo_hoy, config_envios, _tipo_dia_pago, db)
+        elif tipo == "PAGO_1_DIA_ATRASADO":
+            items = data["dias_1_retraso"]
+            res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+        elif tipo == "PAGO_3_DIAS_ATRASADO":
+            items = data["dias_3_retraso"]
+            res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+        elif tipo == "PAGO_5_DIAS_ATRASADO":
+            items = data["dias_5_retraso"]
+            res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+        elif tipo == "PAGO_30_DIAS_ATRASADO":
+            items = data["dias_30_retraso"]
+            res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+        else:
+            raise ValueError("tipo_caso_manual_invalido")
 
     return {
         "mensaje": f"Envio manual del caso {tipo} finalizado.",

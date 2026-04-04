@@ -1869,6 +1869,102 @@ def actualizar_notificaciones(db: Session = Depends(get_db)):
     return ejecutar_actualizacion_notificaciones(db)
 
 
+def build_prejudicial_items(db: Session) -> List[dict]:
+    """
+    Solo la lista prejudicial (4+ cuotas con estado VENCIDO/MORA, vencidas, saldo pendiente).
+    No ejecuta la rama de retrasadas 1/3/5/30 ni contar_cuotas_atraso_por_prestamos masivo.
+
+    GET /notificaciones-prejudicial debe usar esto (no get_notificaciones_tabs_data entero) para
+    evitar timeouts en carteras grandes / cold start en Render.
+    """
+    hoy = hoy_negocio()
+    subq = (
+        select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .where(
+            Cuota.fecha_pago.is_(None),
+            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.cliente_id.isnot(None),
+            SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+        )
+        .group_by(Cuota.cliente_id)
+        .having(func.count(Cuota.id) >= 4)
+    )
+    rows = db.execute(subq).all()
+    if not rows:
+        return []
+
+    cliente_ids = [int(r[0]) for r in rows if r[0] is not None]
+    totals_by_cliente = {int(r[0]): int(r[1]) for r in rows if r[0] is not None}
+
+    clientes_map = {
+        c.id: c
+        for c in db.scalars(select(Cliente).where(Cliente.id.in_(cliente_ids))).all()
+    }
+
+    cuotas_candidatas = db.execute(
+        select(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .where(
+            Cuota.cliente_id.in_(cliente_ids),
+            Cuota.fecha_pago.is_(None),
+            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
+            Cuota.fecha_vencimiento < hoy,
+            SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+        )
+    ).scalars().all()
+
+    primera_por_cliente: dict[int, Cuota] = {}
+    for c in cuotas_candidatas:
+        cid = c.cliente_id
+        if cid is None:
+            continue
+        cur = primera_por_cliente.get(cid)
+        if cur is None:
+            primera_por_cliente[cid] = c
+            continue
+        cfv = c.fecha_vencimiento
+        pfv = cur.fecha_vencimiento
+        if pfv is None or (cfv is not None and cfv < pfv):
+            primera_por_cliente[cid] = c
+
+    bloques_prej: List[tuple] = []
+    pids_prej: List[int] = []
+    for cid in cliente_ids:
+        cliente = clientes_map.get(cid)
+        if not cliente:
+            continue
+        total_cuotas = totals_by_cliente.get(cid, 0)
+        cuota_ref = primera_por_cliente.get(cid)
+        if not cuota_ref:
+            cuota_ref = type(
+                "DummyCuota",
+                (),
+                {
+                    "fecha_vencimiento": hoy,
+                    "numero_cuota": 0,
+                    "monto": 0,
+                    "prestamo_id": None,
+                },
+            )()
+        pid = getattr(cuota_ref, "prestamo_id", None)
+        if pid:
+            pids_prej.append(int(pid))
+        bloques_prej.append((cliente, cuota_ref, total_cuotas, pid))
+
+    totales_prej = sum_saldo_pendiente_total_por_prestamos(db, pids_prej)
+    prejudicial: List[dict] = []
+    for cliente, cuota_ref, total_cuotas, pid in bloques_prej:
+        tp = totales_prej.get(int(pid)) if pid is not None else None
+        item = _item_tab(cliente, cuota_ref, total_pendiente_pagar=tp)
+        item["total_cuotas_atrasadas"] = total_cuotas
+        prejudicial.append(item)
+    return prejudicial
+
+
 def get_notificaciones_tabs_data(db: Session):
     """
     Datos para envio de notificaciones (retrasadas, prejudicial).
@@ -1883,8 +1979,6 @@ def get_notificaciones_tabs_data(db: Session):
     Prejudicial: por cliente_id, al menos 4 cuotas con cuotas.estado en (VENCIDO, MORA),
     fecha_vencimiento < hoy, sin fecha_pago y saldo pendiente; préstamo no liquidado/desistimiento.
     """
-    from sqlalchemy import func
-
     hoy = hoy_negocio()
     fechas_retraso = (
         hoy - timedelta(days=1),
@@ -1957,67 +2051,7 @@ def get_notificaciones_tabs_data(db: Session):
                     )
                 )
 
-    # Prejudicial (A: 3 cuotas en UI): clientes con 4+ cuotas en estado VENCIDO o MORA (cuotas.estado),
-    # fecha_vencimiento < hoy, sin fecha_pago y saldo pendiente. Excluye PENDIENTE/PARCIAL y pagadas.
-    prejudicial: List[dict] = []
-    subq = (
-        select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .where(
-            Cuota.fecha_pago.is_(None),
-            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
-            Cuota.fecha_vencimiento < hoy,
-            Cuota.cliente_id.isnot(None),
-            SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
-        )
-        .group_by(Cuota.cliente_id)
-        .having(func.count(Cuota.id) >= 4)
-    )
-    clientes_prejudicial = db.execute(subq).all()
-    bloques_prej = []
-    pids_prej: List[int] = []
-    for (cliente_id, total_cuotas) in clientes_prejudicial:
-        cliente = db.get(Cliente, cliente_id)
-        if not cliente:
-            continue
-        # Primera cuota atrasada para mostrar en la tarjeta
-        primera = db.execute(
-            select(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .where(
-                Cuota.cliente_id == cliente_id,
-                Cuota.fecha_pago.is_(None),
-                Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
-                Cuota.fecha_vencimiento < hoy,
-                SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-                ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
-            )
-            .order_by(Cuota.fecha_vencimiento.asc())
-            .limit(1)
-        ).scalars().first()
-        cuota_ref = primera
-        if not cuota_ref:
-            cuota_ref = type(
-                "DummyCuota",
-                (),
-                {
-                    "fecha_vencimiento": hoy,
-                    "numero_cuota": 0,
-                    "monto": 0,
-                    "prestamo_id": None,
-                },
-            )()
-        pid = getattr(cuota_ref, "prestamo_id", None)
-        if pid:
-            pids_prej.append(int(pid))
-        bloques_prej.append((cliente, cuota_ref, total_cuotas, pid))
-    totales_prej = sum_saldo_pendiente_total_por_prestamos(db, pids_prej)
-    for cliente, cuota_ref, total_cuotas, pid in bloques_prej:
-        tp = totales_prej.get(int(pid)) if pid is not None else None
-        item = _item_tab(cliente, cuota_ref, total_pendiente_pagar=tp)
-        item["total_cuotas_atrasadas"] = total_cuotas
-        prejudicial.append(item)
+    prejudicial = build_prejudicial_items(db)
 
     return {
         "dias_5": dias_5,

@@ -31,7 +31,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   notificacionService,
   emailConfigService,
-  type ClientesRetrasadosResponse,
   type ClienteRetrasadoItem,
   type EstadisticasPorTab,
   type NotificacionPlantilla,
@@ -190,26 +189,6 @@ function etiquetaPlantillaParaPestana(
   }
 }
 
-const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
-  actualizado_en: new Date().toISOString(),
-
-  dias_5: [],
-
-  dias_3: [],
-
-  dias_1: [],
-
-  hoy: [],
-
-  dias_1_atraso: [],
-
-  dias_5_atraso: [],
-
-  dias_30_atraso: [],
-
-  liquidados: [],
-}
-
 type NotificacionesProps = {
   modulo?: NotificacionesModulo
 }
@@ -277,26 +256,27 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     })
   }
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
+  const { data, isPending, isFetched, isError, error, refetch, isFetching } =
+    useQuery({
+      queryKey: NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
 
-    queryFn: () => notificacionService.getClientesRetrasados(),
+      queryFn: () => notificacionService.getClientesRetrasados(),
 
-    // Siempre considerar obsoleto: al volver a la pestaña o tras invalidar por pagos, se refetch al instante.
-    staleTime: 0,
+      // Siempre considerar obsoleto: al volver a la pestaña o tras invalidar por pagos, se refetch al instante.
+      staleTime: 0,
 
-    refetchOnWindowFocus: true,
+      refetchOnWindowFocus: true,
 
-    placeholderData: PLACEHOLDER_NOTIFICACIONES,
+      // Sin placeholderData: con v5, placeholder hace isPending=false y la tabla se ve vacía mientras carga (Render frío).
+      /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
 
-    /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
-
-    enabled: modulo === 'a1dia' && activeTab !== 'configuracion',
-  })
+      enabled: modulo === 'a1dia' && activeTab !== 'configuracion',
+    })
 
   const {
     data: dataPrejudicial,
-    isLoading: isLoadingPrej,
+    isPending: isPendingPrej,
+    isFetched: isFetchedPrej,
     isError: isErrorPrej,
     error: errorPrej,
     refetch: refetchPrej,
@@ -309,8 +289,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     staleTime: 0,
 
     refetchOnWindowFocus: true,
-
-    placeholderData: { items: [] as ClienteRetrasadoItem[], total: 0 },
 
     enabled: modulo === 'a3cuotas' && activeTab !== 'configuracion',
   })
@@ -418,6 +396,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     number | null
   >(null)
 
+  const [enviandoPrejudicial, setEnviandoPrejudicial] = useState(false)
+
   const handleDescargarEstadoCuentaPdf = async (prestamoId: number) => {
     setDescargandoEstadoCuentaId(prestamoId)
 
@@ -496,6 +476,53 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     }
   }
 
+  const handleEnviarPrejudicialManual = async () => {
+    if (modulo !== 'a3cuotas') return
+
+    const n = dataPrejudicial?.items?.length ?? 0
+
+    const confirmar =
+      n === 0
+        ? window.confirm(
+            'No hay filas en el listado en pantalla. El servidor procesará su lista prejudicial actual (puede estar vacía). ¿Ejecutar envío manual?'
+          )
+        : window.confirm(
+            `Envío manual a clientes del caso PREJUDICIAL (${n} filas visibles; el servidor usa la misma regla de lista). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
+          )
+
+    if (!confirmar) return
+
+    setEnviandoPrejudicial(true)
+
+    try {
+      const res = await notificacionService.enviarNotificacionesPrejudiciales()
+
+      toast.success(
+        `${res.mensaje} Enviados: ${res.enviados}. Sin email: ${res.sin_email}. Fallidos: ${res.fallidos}.`
+      )
+
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+      })
+
+      await invalidateListasNotificacionesMora(queryClient, {
+        skipCrossTabBroadcast: true,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+      })
+    } catch (e) {
+      console.error(e)
+
+      toast.error(
+        'No se pudo completar el envío. Revise PREJUDICIAL en Configuración, cuentas de correo y modo prueba.'
+      )
+    } finally {
+      setEnviandoPrejudicial(false)
+    }
+  }
+
   const handleDescargarInformeRebotados = async () => {
     const tipoApi = tipoParaKpiYRebotados(activeTab)
 
@@ -561,7 +588,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const list = getListForTab()
 
-  const isLoadingLista = modulo === 'a1dia' ? isLoading : isLoadingPrej
+  const isLoadingLista = modulo === 'a1dia' ? isPending : isPendingPrej
 
   const isErrorLista = modulo === 'a1dia' ? isError : isErrorPrej
 
@@ -571,6 +598,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const isFetchingLista = modulo === 'a1dia' ? isFetching : isFetchingPrej
 
+  const isFetchedLista = modulo === 'a1dia' ? isFetched : isFetchedPrej
+
+  const listaCargadaSinFilas =
+    !isErrorLista && !isLoadingLista && isFetchedLista && list.length === 0
+
   const statTabKey = tipoParaKpiYRebotados(activeTab)
 
   const hasColumnasCuota = list.some(
@@ -579,6 +611,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       row.fecha_vencimiento != null ||
       row.dias_atraso != null ||
       row.cuotas_atrasadas != null ||
+      row.total_cuotas_atrasadas != null ||
       row.monto != null ||
       row.total_pendiente_pagar != null
   )
@@ -626,11 +659,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           </nav>
         </div>
 
-        <ConfiguracionNotificaciones
-          alcance={
-            modulo === 'a3cuotas' ? 'solo_prejudicial' : 'solo_pago_1_dia'
-          }
-        />
+        {/* Misma configuración completa en A: 1 día y A: 3 cuotas (un solo lugar en BD por tipo). */}
+        <ConfiguracionNotificaciones />
       </div>
     )
   }
@@ -749,24 +779,64 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           </CardHeader>
 
           <CardContent>
-            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void handleRefresh()}
-                disabled={actualizandoListas}
-              >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
-                />
-                Actualizacion manual
-              </Button>
+            <div className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleRefresh()}
+                  disabled={actualizandoListas || enviandoPrejudicial}
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
+                  />
+                  Actualizacion manual
+                </Button>
+
+                {modulo === 'a3cuotas' && (
+                  <Button
+                    size="sm"
+                    onClick={() => void handleEnviarPrejudicialManual()}
+                    disabled={
+                      enviandoPrejudicial ||
+                      actualizandoListas ||
+                      isLoadingLista
+                    }
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Mail
+                      className={`mr-2 h-4 w-4 ${enviandoPrejudicial ? 'animate-pulse' : ''}`}
+                    />
+                    {enviandoPrejudicial
+                      ? 'Enviando...'
+                      : 'Enviar notificaciones (manual)'}
+                  </Button>
+                )}
+              </div>
+
               <p className="max-w-xl text-xs text-gray-600">
-                Vuelve a pedir al servidor las listas de mora y los KPI (POST{' '}
-                <code className="rounded bg-white px-1">
-                  /notificaciones/actualizar
-                </code>{' '}
-                y refetch de datos).
+                {modulo === 'a3cuotas' ? (
+                  <>
+                    Actualizar: POST{' '}
+                    <code className="rounded bg-white px-1">
+                      /notificaciones/actualizar
+                    </code>{' '}
+                    y refresco de lista/KPI. Los correos prejudiciales{' '}
+                    <strong>no se envían solos</strong>: use el botón «Enviar
+                    notificaciones (manual)» (también puede enviar desde la
+                    pestaña Configuración si tiene el botón del caso
+                    PREJUDICIAL).
+                  </>
+                ) : (
+                  <>
+                    Vuelve a pedir al servidor las listas de mora y los KPI
+                    (POST{' '}
+                    <code className="rounded bg-white px-1">
+                      /notificaciones/actualizar
+                    </code>{' '}
+                    y refetch de datos).
+                  </>
+                )}
               </p>
             </div>
 
@@ -811,12 +881,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             <p className="mb-4 text-xs text-gray-500">
               {modulo === 'a3cuotas' ? (
                 <>
-                  KPI y Excel de rebotados de esta vista usan tipo_tab{' '}
+                  KPI y Excel de rebotados usan tipo_tab{' '}
                   <code className="rounded bg-gray-100 px-1">prejudicial</code>.
-                  La plantilla y envíos del caso{' '}
+                  El envío masivo del caso{' '}
                   <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code>{' '}
-                  se ajustan solo en la Configuración de este menú (aislado del
-                  módulo A: 1 día).
+                  es <strong>siempre manual</strong> (botón arriba o acción en
+                  Configuración). La pestaña Configuración es la{' '}
+                  <strong>misma</strong> que en Notificaciones A: 1 día (todos
+                  los grupos y tipos; fila PREJUDICIAL en «Prejudicial»).
                 </>
               ) : (
                 <>
@@ -824,10 +896,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   <code className="rounded bg-gray-100 px-1">
                     dias_1_retraso
                   </code>
-                  . Los envíos de 5 y 30 días de atraso y el caso{' '}
+                  . El caso{' '}
                   <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code>{' '}
-                  se gestionan desde el submenú «A: 3 cuotas» o desde su propia
-                  configuración allí.
+                  se configura en la misma pestaña Configuración (grupo
+                  Prejudicial); el submenú «A: 3 cuotas» usa esa misma
+                  configuración y solo cambia el listado y el envío manual.
                 </>
               )}
             </p>
@@ -900,8 +973,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         </span>
                         Cada cliente aparece una vez si tiene al menos cuatro
                         cuotas en VENCIDO o MORA. La columna «Cuotas atrasadas»
-                        es ese conteo; Nº cuota y fecha venc. son de una cuota de
-                        referencia.
+                        es ese conteo; Nº cuota y fecha venc. son de una cuota
+                        de referencia.
                       </>
                     ) : (
                       <>
@@ -965,7 +1038,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           colSpan={8}
                           className="py-8 text-center text-gray-500"
                         >
-                          Ningún registro en este criterio.
+                          <span className="block font-medium text-gray-600">
+                            Ningún registro en este criterio.
+                          </span>
+                          {listaCargadaSinFilas ? (
+                            <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
+                              {modulo === 'a3cuotas'
+                                ? 'Lista ya cargada: se requieren 4+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
+                                : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
+                            </span>
+                          ) : null}
                         </td>
                       </tr>
                     ) : (
@@ -1037,7 +1119,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           colSpan={4}
                           className="py-8 text-center text-gray-500"
                         >
-                          Ningún cliente en este criterio.
+                          <span className="block font-medium text-gray-600">
+                            Ningún cliente en este criterio.
+                          </span>
+                          {listaCargadaSinFilas ? (
+                            <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
+                              {modulo === 'a3cuotas'
+                                ? 'Lista ya cargada: 4+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
+                                : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
+                            </span>
+                          ) : null}
                         </td>
                       </tr>
                     ) : (
