@@ -541,6 +541,12 @@ def listar_prestamos(
 
     search: Optional[str] = Query(None),
 
+    prestamo_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Filtra por ID exacto del préstamo (independiente de búsqueda por cédula/nombre).",
+    ),
+
     revision_manual_estado: Optional[str] = Query(
         None,
         description=(
@@ -566,6 +572,8 @@ def listar_prestamos(
     per_page = per_page if isinstance(per_page, int) else 20
 
     cliente_id = cliente_id if isinstance(cliente_id, int) else None
+
+    prestamo_id = prestamo_id if isinstance(prestamo_id, int) and prestamo_id >= 1 else None
 
     estado = _solo_str(estado)
 
@@ -641,31 +649,19 @@ def listar_prestamos(
 
         count_q = count_q.where(Cliente.cedula == ced_clean)
 
+    if prestamo_id is not None:
+
+        q = q.where(Prestamo.id == prestamo_id)
+
+        count_q = count_q.where(Prestamo.id == prestamo_id)
+
     if search and search.strip():
 
         search_clean = search.strip()
 
-        # Si el search es numérico, permitir buscar directamente por ID de préstamo
-
-        prestamo_id_search = None
-
-        try:
-
-            if search_clean.isdigit():
-
-                prestamo_id_search = int(search_clean)
-
-        except ValueError:
-
-            prestamo_id_search = None
-
         pat = f"%{_escape_ilike_pattern(search_clean)}%"
 
         condicion_search = Cliente.cedula.ilike(pat, escape="\\") | Cliente.nombres.ilike(pat, escape="\\")
-
-        if prestamo_id_search is not None:
-
-            condicion_search = condicion_search | (Prestamo.id == prestamo_id_search)
 
         q = q.where(condicion_search)
 

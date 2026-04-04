@@ -114,9 +114,7 @@ export function VinculacionPlantillaAnexoPdf() {
         <div className="mb-2 flex items-center gap-2 text-sm text-gray-700">
           <LinkIcon className="h-4 w-4 shrink-0 text-blue-600" />
 
-          <span className="font-medium">
-            Vinculada a los siguientes casos:
-          </span>
+          <span className="font-medium">Vinculada a los siguientes casos:</span>
         </div>
 
         {cargando ? (
@@ -126,8 +124,7 @@ export function VinculacionPlantillaAnexoPdf() {
           </div>
         ) : pestanasConPdf.length === 0 ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            Ningún caso tiene el PDF activo. Activa la opción &quot;PDF&quot;
-            en{' '}
+            Ningún caso tiene el PDF activo. Activa la opción &quot;PDF&quot; en{' '}
             <Link
               to="/notificaciones?tab=configuracion"
               className="font-medium text-blue-600 hover:underline"

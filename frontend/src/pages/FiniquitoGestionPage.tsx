@@ -165,8 +165,21 @@ function FiniquitoPaginationBar(props: {
   onPageChange: (p: number) => void
   loading: boolean
   className?: string
+  /**
+   * Si false, no muestra el total global (ej. "de 500"); solo rango de fila y página.
+   * Bandeja principal: true solo cuando hay filtro por cédula aplicado.
+   */
+  showTotalCount?: boolean
 }) {
-  const { page, pageSize, total, onPageChange, loading, className } = props
+  const {
+    page,
+    pageSize,
+    total,
+    onPageChange,
+    loading,
+    className,
+    showTotalCount = true,
+  } = props
   if (total === 0) return null
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   if (totalPages <= 1) return null
@@ -174,6 +187,9 @@ function FiniquitoPaginationBar(props: {
   const to = Math.min((page + 1) * pageSize, total)
   const canPrev = page > 0 && !loading
   const canNext = page + 1 < totalPages && !loading
+  const textoRango = showTotalCount
+    ? `Filas ${from}-${to} de ${total} · Página ${page + 1} de ${totalPages}`
+    : `Filas ${from}-${to} · Página ${page + 1} de ${totalPages}`
   return (
     <div
       className={cn(
@@ -181,9 +197,7 @@ function FiniquitoPaginationBar(props: {
         className
       )}
     >
-      <p className="text-xs text-slate-600">
-        Filas {from}-{to} de {total} · Página {page + 1} de {totalPages}
-      </p>
+      <p className="text-xs text-slate-600">{textoRango}</p>
       <div className="flex gap-2">
         <Button
           type="button"
@@ -1017,6 +1031,7 @@ function FiniquitoGestionPageInner() {
             total={totalBandeja}
             loading={loading}
             onPageChange={setPageBandeja}
+            showTotalCount={cedulaBusqueda.trim().length > 0}
           />
         </div>
       </section>

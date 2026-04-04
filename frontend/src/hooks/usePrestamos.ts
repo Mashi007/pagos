@@ -44,6 +44,9 @@ export const prestamoKeys = {
 export interface PrestamoFilters {
   search?: string
 
+  /** ID exacto del préstamo (query `prestamo_id`); no mezclar con búsqueda por cédula numérica */
+  prestamo_id?: number
+
   estado?: string
 
   cedula?: string

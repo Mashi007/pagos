@@ -331,9 +331,9 @@ export function AuditoriaCarteraTab() {
 
   const [ctrl15PrestamoId, setCtrl15PrestamoId] = useState<number | null>(null)
 
-  const [ctrl15Filas, setCtrl15Filas] = useState<Control15PagoSinAplicacionItem[]>(
-    []
-  )
+  const [ctrl15Filas, setCtrl15Filas] = useState<
+    Control15PagoSinAplicacionItem[]
+  >([])
 
   const [ctrl15Cargando, setCtrl15Cargando] = useState(false)
 
@@ -1737,15 +1737,18 @@ export function AuditoriaCarteraTab() {
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>
-              Control 15 — Pagos sin aplicacion a cuotas
-              {ctrl15PrestamoId != null ? ` · Prestamo #${ctrl15PrestamoId}` : ''}
+              Control 15 - Pagos sin aplicacion a cuotas
+              {ctrl15PrestamoId != null
+                ? ` · Prestamo #${ctrl15PrestamoId}`
+                : ''}
             </DialogTitle>
           </DialogHeader>
 
           <p className="text-sm text-slate-600">
-            Pagos operativos sin filas en <code className="text-xs">cuota_pagos</code>{' '}
-            o con suma aplicada menor que el monto (tol. 0,02 USD). Tras reaplicar cascada,
-            vuelva a abrir esta lista o recargue la auditoria.
+            Pagos operativos sin filas en{' '}
+            <code className="text-xs">cuota_pagos</code> o con suma aplicada
+            menor que el monto (tol. 0,02 USD). Tras reaplicar cascada, vuelva a
+            abrir esta lista o recargue la auditoria.
           </p>
 
           {ctrl15Cargando ? (
@@ -1755,7 +1758,8 @@ export function AuditoriaCarteraTab() {
             </div>
           ) : ctrl15Filas.length === 0 ? (
             <p className="py-6 text-sm text-slate-600">
-              No hay pagos en esta condicion para este prestamo (o ya se corrigio).
+              No hay pagos en esta condicion para este prestamo (o ya se
+              corrigio).
             </p>
           ) : (
             <div className="max-h-[55vh] overflow-auto rounded-md border">

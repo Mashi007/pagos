@@ -1026,8 +1026,8 @@ export function ConfiguracionNotificaciones() {
             Cada correo al cliente (modo estricto) combina tres piezas: (1)
             plantilla de correo HTML con variables; (2) PDF de carta con
             variables (Carta_Cobranza.pdf); (3) PDFs fijos de anexos, siempre
-            junto al PDF variable. Aquí se configuran los casos de envío
-            (por vencer, día de pago, retrasadas, prejudicial, comunicaciones
+            junto al PDF variable. Aquí se configuran los casos de envío (por
+            vencer, día de pago, retrasadas, prejudicial, comunicaciones
             masivas). Las plantillas tipo carta de cobranza (COBRANZA) se crean
             en Plantillas y se eligen aqui por caso. El backend exige plantilla
             activa, PDF variable valido y al menos un PDF fijo adicional

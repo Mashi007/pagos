@@ -640,7 +640,6 @@ export function Notificaciones() {
 
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
-
               Día siguiente al vencimiento (1 día de atraso calendario)
             </CardTitle>
 

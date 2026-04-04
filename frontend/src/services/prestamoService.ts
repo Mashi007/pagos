@@ -90,6 +90,8 @@ class PrestamoService {
     filters?: {
       search?: string
 
+      prestamo_id?: number
+
       estado?: string
 
       cedula?: string

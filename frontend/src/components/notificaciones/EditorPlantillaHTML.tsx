@@ -58,9 +58,7 @@ export function EditorPlantillaHTML({
 
   const [descripcion, setDescripcion] = useState(plantilla?.descripcion ?? '')
 
-  const [tipo, setTipo] = useState(
-    plantilla?.tipo ?? 'PAGO_1_DIA_ATRASADO'
-  )
+  const [tipo, setTipo] = useState(plantilla?.tipo ?? 'PAGO_1_DIA_ATRASADO')
 
   const [asunto, setAsunto] = useState(plantilla?.asunto ?? '')
 

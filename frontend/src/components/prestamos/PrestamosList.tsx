@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import React, {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react'
 
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 
@@ -171,6 +177,14 @@ export function PrestamosList() {
       ? revisionManualFromUrl
       : undefined
 
+  const filtroPrestamoIdUrlInit = (
+    searchParams.get('filtro_prestamo_id') ?? ''
+  ).trim()
+
+  const [prestamoIdInput, setPrestamoIdInput] = useState(
+    filtroPrestamoIdUrlInit
+  )
+
   const [filters, setFilters] = useState<PrestamoFilters>({
     search: searchFromUrl,
 
@@ -234,6 +248,12 @@ export function PrestamosList() {
         : undefined
 
     const searchParam = (searchParams.get('search') ?? '').trim()
+
+    const filtroPrestamoIdUrl = (
+      searchParams.get('filtro_prestamo_id') ?? ''
+    ).trim()
+
+    setPrestamoIdInput(filtroPrestamoIdUrl)
 
     const revManualParam = searchParams.get('revision_manual_estado')
 
@@ -334,7 +354,24 @@ export function PrestamosList() {
     }
   }, [searchParams, showDetalle, viewingPrestamo?.id])
 
-  const { data, isLoading, error } = usePrestamos(filters, page, perPage)
+  const prestamoIdFiltro = useMemo(() => {
+    const t = prestamoIdInput.trim()
+
+    if (!t || !/^\d+$/.test(t)) {
+      return undefined
+    }
+
+    const n = parseInt(t, 10)
+
+    return !Number.isNaN(n) && n >= 1 ? n : undefined
+  }, [prestamoIdInput])
+
+  const listFilters = useMemo(
+    () => ({ ...filters, prestamo_id: prestamoIdFiltro }),
+    [filters, prestamoIdFiltro]
+  )
+
+  const { data, isLoading, error } = usePrestamos(listFilters, page, perPage)
 
   const deletePrestamo = useDeletePrestamo()
 
@@ -459,6 +496,8 @@ export function PrestamosList() {
   // Función para limpiar filtros
 
   const handleClearFilters = () => {
+    setPrestamoIdInput('')
+
     setFilters({
       search: '',
 
@@ -495,6 +534,8 @@ export function PrestamosList() {
   const activeFiltersCount = [
     filters.search,
 
+    prestamoIdFiltro,
+
     filters.estado,
 
     filters.cedula,
@@ -520,6 +561,8 @@ export function PrestamosList() {
     setPage(1)
   }, [
     filters.search,
+
+    prestamoIdFiltro,
 
     filters.estado,
 
@@ -1190,7 +1233,7 @@ export function PrestamosList() {
 
                   <Input
                     ref={buscarGeneralRef}
-                    placeholder="Buscar por cédula, nombre o ID de préstamo..."
+                    placeholder="Cédula o nombre del cliente..."
                     value={filters.search || ''}
                     onChange={e =>
                       setFilters({ ...filters, search: e.target.value })
@@ -1198,6 +1241,36 @@ export function PrestamosList() {
                     className="pl-10"
                   />
                 </div>
+              </div>
+
+              <div className="w-full shrink-0 md:w-36">
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  ID préstamo
+                </label>
+
+                <Input
+                  inputMode="numeric"
+                  placeholder="Ej. 12345"
+                  title="Número entero del préstamo (no use para cédula)"
+                  value={prestamoIdInput}
+                  onChange={e => {
+                    const v = e.target.value
+
+                    setPrestamoIdInput(v)
+
+                    const t = v.trim()
+
+                    const params = new URLSearchParams(searchParams)
+
+                    if (t && /^\d+$/.test(t) && parseInt(t, 10) >= 1) {
+                      params.set('filtro_prestamo_id', t)
+                    } else {
+                      params.delete('filtro_prestamo_id')
+                    }
+
+                    setSearchParams(params, { replace: true })
+                  }}
+                />
               </div>
 
               <div className="w-full shrink-0 md:w-64">

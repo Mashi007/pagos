@@ -880,7 +880,9 @@ export function PlantillasNotificaciones({
 
       setActiveTab('armar')
 
-      toast.success('Plantilla importada. Al guardar se creará solo para el servicio activo (día siguiente al vencimiento).')
+      toast.success(
+        'Plantilla importada. Al guardar se creará solo para el servicio activo (día siguiente al vencimiento).'
+      )
     } catch (error: any) {
       toast.error(
         'Error al leer el archivo JSON: ' +
@@ -1267,7 +1269,9 @@ export function PlantillasNotificaciones({
               </p>
               <p className="text-xs text-gray-600">
                 Las plantillas nuevas se guardan solo para este caso (
-                <code className="rounded bg-white px-1">PAGO_1_DIA_ATRASADO</code>
+                <code className="rounded bg-white px-1">
+                  PAGO_1_DIA_ATRASADO
+                </code>
                 ).
               </p>
               {selected && selected.tipo !== TIPO_SERVICIO_PLANTILLA ? (
