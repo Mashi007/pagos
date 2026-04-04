@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Job diario: envia correos con PDF de estado de cuenta para prestamos LIQUIDADO.
+Job diario (opcional): envia correos con PDF de estado de cuenta para prestamos LIQUIDADO.
+
+Requiere NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED=true; si es false, no se registra el job
+y ejecutar_emails_liquidado_diferidos no envia nada.
 
 Regla: para cada entero N en NOTIFICACIONES_LIQUIDADO_DIAS_ENVIO (defecto 1,2),
 el dia D (Caracas) se consideran prestamos con fecha_liquidado = D - N dias
@@ -65,6 +68,19 @@ def ejecutar_emails_liquidado_diferidos(db: Session) -> dict:
     """
     Ejecutar una vez al dia (p. ej. 01:10 Caracas). Respeta modo_pruebas via send_email.
     """
+    if not getattr(settings, "NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED", False):
+        logger.info(
+            "[LIQUIDADO_DEFERIDO] Omitido: NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED es False."
+        )
+        return {
+            "fecha_job": hoy_negocio().isoformat(),
+            "omitido": True,
+            "motivo": "notificaciones_liquidado_email_deshabilitado",
+            "enviados_ok": 0,
+            "fallidos": 0,
+            "omitidos_duplicado": 0,
+            "dias_config": [],
+        }
     if not prestamos_tiene_columna_fecha_liquidado(db):
         logger.warning(
             "[LIQUIDADO_DEFERIDO] Omitido: falta columna prestamos.fecha_liquidado (migracion 023)."

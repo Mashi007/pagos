@@ -1,7 +1,7 @@
 """
 Scheduler para tareas programadas (zona America/Caracas).
 
-- 01:10  Emails credito liquidado: PDF estado de cuenta (dias 1 y 2 despues de fecha_liquidado).
+- 01:10  Emails credito liquidado + PDF: solo si NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED=true (por defecto desactivado).
 - 02:00  Finiquito: refrescar tabla finiquito_casos.
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 04:00  Limpieza codigos estado de cuenta.
@@ -162,18 +162,19 @@ def _job_pagos_gmail_pending_scan() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: liquidado 01:10; finiquito 02:00; auditoria 03:00; limpieza 04:00; Gmail 04/11/20 opcional."""
+    """Inicia el scheduler: liquidado 01:10 (opcional); finiquito 02:00; auditoria 03:00; limpieza 04:00; Gmail 04/11/20 opcional."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
         return
     _scheduler = BackgroundScheduler(timezone=SCHEDULER_TZ)
-    _scheduler.add_job(
-        _job_emails_liquidado_diferidos,
-        CronTrigger(hour=1, minute=10, timezone=SCHEDULER_TZ),
-        id="emails_liquidado_diferidos_0110",
-        name="Emails liquidado + PDF estado cuenta 01:10",
-    )
+    if getattr(settings, "NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED", False):
+        _scheduler.add_job(
+            _job_emails_liquidado_diferidos,
+            CronTrigger(hour=1, minute=10, timezone=SCHEDULER_TZ),
+            id="emails_liquidado_diferidos_0110",
+            name="Emails liquidado + PDF estado cuenta 01:10",
+        )
     _scheduler.add_job(
         _job_finiquito_refresh,
         CronTrigger(hour=2, minute=0, timezone=SCHEDULER_TZ),
@@ -209,8 +210,14 @@ def start_scheduler() -> None:
             )
         _gmail_log = "; Gmail pagos pendientes 4:00, 11:00 y 20:00"
     _scheduler.start()
+    _liq_log = (
+        "liquidado PDF 01:10; "
+        if getattr(settings, "NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED", False)
+        else "sin job liquidado email (NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED=false); "
+    )
     logger.info(
-        "Scheduler iniciado: liquidado PDF 01:10; finiquito 02:00; auditoria 03:00; limpieza estado_cuenta_codigos 4:00%s (%s).",
+        "Scheduler iniciado: %sfiniquito 02:00; auditoria 03:00; limpieza estado_cuenta_codigos 4:00%s (%s).",
+        _liq_log,
         _gmail_log,
         SCHEDULER_TZ,
     )

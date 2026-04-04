@@ -2,9 +2,9 @@
 """
 Scheduler: actualizacion de estado a LIQUIDADO a las 21:00 (Caracas).
 
-El correo con PDF de estado de cuenta NO se envia aqui: el job diario
-liquidado_email_deferido (01:10) lo envia 1 y 2 dias calendario despues
-segun prestamos.fecha_liquidado.
+El correo con PDF de estado de cuenta no se envia aqui. Si
+NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED=true, el job 01:10 (scheduler principal)
+puede enviarlo 1 y 2 dias calendario despues segun prestamos.fecha_liquidado.
 """
 import logging
 
@@ -57,7 +57,7 @@ class LiquidadoScheduler:
                 )
                 db.commit()
                 logger.info(
-                    "fecha_liquidado=%s asignada a %s prestamos (emails PDF dias siguientes via job 01:10)",
+                    "fecha_liquidado=%s asignada a %s prestamos (email PDF liquidado solo si NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED)",
                     fd,
                     len(ids_liquidados),
                 )
@@ -94,7 +94,7 @@ class LiquidadoScheduler:
             hour=21,
             minute=0,
             id='actualizar_liquidado_diario',
-            name='Actualizacion diaria de prestamos a LIQUIDADO (sin email; email 01:10)',
+            name='Actualizacion diaria de prestamos a LIQUIDADO (email PDF opcional via config)',
             misfire_grace_time=60
         )
         

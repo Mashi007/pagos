@@ -3,8 +3,9 @@
 Correos automaticos por prestamo LIQUIDADO con PDF de estado de cuenta.
 
 El envio NO es el mismo dia del cambio a LIQUIDADO: lo programa el job diario
-`liquidado_email_deferido` segun NOTIFICACIONES_LIQUIDADO_DIAS_ENVIO (por defecto
-1 y 2 dias calendario despues de prestamos.fecha_liquidado, zona Caracas).
+`liquidado_email_deferido` solo si NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED=true,
+segun NOTIFICACIONES_LIQUIDADO_DIAS_ENVIO (por defecto 1 y 2 dias calendario
+despues de prestamos.fecha_liquidado, zona Caracas).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from typing import List, Optional, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.email import mask_email_for_log, send_email
 from app.models.envio_notificacion import EnvioNotificacion
@@ -61,6 +63,12 @@ class LiquidadoNotificacionService:
         Genera PDF de estado de cuenta del cliente y envia un correo.
         recordatorio_seq: 1 = primer envio (dia +N segun job); 2 = segundo envio; correlativo en envios_notificacion.
         """
+        if not getattr(settings, "NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED", False):
+            logger.info(
+                "[LIQUIDADO_NOTIF] Omitido prestamo_id=%s: NOTIFICACIONES_LIQUIDADO_EMAIL_ENABLED=False",
+                prestamo_id,
+            )
+            return False
         try:
             result = db.execute(
                 text(
