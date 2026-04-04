@@ -1651,6 +1651,10 @@ export function PrestamosList() {
 
                         <TableHead>Estado</TableHead>
 
+                        <TableHead className="whitespace-normal uppercase leading-tight">
+                          Pendiente por pagar
+                        </TableHead>
+
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1702,6 +1706,18 @@ export function PrestamosList() {
                             <Badge className={getEstadoBadge(prestamo.estado)}>
                               {getEstadoLabel(prestamo.estado)}
                             </Badge>
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <DollarSign className="h-4 w-4 shrink-0 text-amber-600" />
+
+                              <span className="font-semibold text-amber-800">
+                                {formatCurrency(
+                                  Number(prestamo.saldo_pendiente ?? 0)
+                                )}
+                              </span>
+                            </div>
                           </TableCell>
 
                           <TableCell className="text-right">

@@ -513,6 +513,38 @@ class AprobarManualBody(BaseModel):
 
 
 
+def _saldo_pendiente_por_prestamo_cuotas(db: Session, prestamo_ids: List[int]) -> dict[int, Decimal]:
+
+    """Suma `monto` de cuotas con fecha_pago NULL por préstamo (alineado con resumen por cédula)."""
+
+    if not prestamo_ids:
+
+        return {}
+
+    saldo_q = (
+
+        select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.monto), 0))
+
+        .select_from(Cuota)
+
+        .where(Cuota.prestamo_id.in_(prestamo_ids), Cuota.fecha_pago.is_(None))
+
+        .group_by(Cuota.prestamo_id)
+
+    )
+
+    out: dict[int, Decimal] = {}
+
+    for pid, saldo in db.execute(saldo_q).all():
+
+        out[pid] = Decimal(str(saldo))
+
+    return out
+
+
+
+
+
 @router.get("", response_model=dict)
 
 def listar_prestamos(
@@ -787,6 +819,8 @@ def listar_prestamos(
 
             cuotas_por_prestamo[pid] = cnt
 
+    saldos_pendiente = _saldo_pendiente_por_prestamo_cuotas(db, prestamo_ids)
+
     
 
     # Estados de revisión manual
@@ -885,6 +919,8 @@ def listar_prestamos(
             revision_manual_estado=revision_manual_estados.get(p.id),  # None si no existe
 
             fecha_desistimiento=fd_desist_map.get(p.id),
+
+            saldo_pendiente=saldos_pendiente.get(p.id, Decimal("0")),
 
         )
 
@@ -1468,6 +1504,8 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
                 cuotas_por_prestamo[pid] = cnt
 
+        saldos_pendiente_ced = _saldo_pendiente_por_prestamo_cuotas(db, prestamo_ids)
+
         liquidacion_efectiva_ids = prestamo_ids_aprobados_todas_cuotas_cubiertas(
             db, prestamo_ids
         )
@@ -1521,6 +1559,8 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
                     modalidad_pago=p.modalidad_pago,
 
                     fecha_desistimiento=fd_desist_map_ced.get(p.id),
+
+                    saldo_pendiente=saldos_pendiente_ced.get(p.id, Decimal("0")),
 
                 )
 

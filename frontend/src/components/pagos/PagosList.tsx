@@ -1928,7 +1928,7 @@ export function PagosList() {
                       <span className="font-semibold">
                         Total monto (cédula + filtros):
                       </span>{' '}
-                      ${resumenTotalCedula.sum.toFixed(2)} —{' '}
+                      ${resumenTotalCedula.sum.toFixed(2)} -{' '}
                       {resumenTotalCedula.cantidad} pago(s)
                     </p>
                   )}
@@ -2409,8 +2409,8 @@ export function PagosList() {
                         {resumenTotalCedula.cedula}
                       </span>
                       <span>
-                        <span className="font-semibold">Suma de montos:</span>{' '}
-                        ${resumenTotalCedula.sum.toFixed(2)} —{' '}
+                        <span className="font-semibold">Suma de montos:</span> $
+                        {resumenTotalCedula.sum.toFixed(2)} -{' '}
                         {resumenTotalCedula.cantidad} pago(s) con los filtros
                         actuales (incluye todas las páginas)
                       </span>

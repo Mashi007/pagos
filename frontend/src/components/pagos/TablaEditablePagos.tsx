@@ -1117,7 +1117,10 @@ export function TablaEditablePagos({
                                   return
                                 }
                                 // Duplicado en Excel: la decisión (sufijos o solo autorizar) es humana → diálogo.
-                                if (puedeVistoJustificarArchivo && docNormAccion) {
+                                if (
+                                  puedeVistoJustificarArchivo &&
+                                  docNormAccion
+                                ) {
                                   setVistoArchivoDocNorm(docNormAccion)
                                   setVistoArchivoDialogOpen(true)
                                   return
@@ -1129,7 +1132,8 @@ export function TablaEditablePagos({
                                   puedeVistoSufijoPorDupBd
                                 ) {
                                   setVistoBdPagoId(
-                                    puedeVistoControl5Bd && pagoIdParaVisto != null
+                                    puedeVistoControl5Bd &&
+                                      pagoIdParaVisto != null
                                       ? pagoIdParaVisto
                                       : null
                                   )
@@ -1148,7 +1152,7 @@ export function TablaEditablePagos({
                                   ? puedeVistoJustificarArchivo
                                     ? 'Visto: elige si añadir sufijos o autorizar sin cambiar el documento.'
                                     : puedeVistoSufijoPorDupBd
-                                      ? 'Visto: documento ya en BD — añadir código (sufijo) o, si aplica, control 5.'
+                                      ? 'Visto: documento ya en BD - añadir código (sufijo) o, si aplica, control 5.'
                                       : 'Visto: solo administradores.'
                                   : 'Visto: solo administradores.'
                               }
@@ -1341,7 +1345,9 @@ export function TablaEditablePagos({
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Documento ya existente en la base de datos</DialogTitle>
+            <DialogTitle>
+              Documento ya existente en la base de datos
+            </DialogTitle>
             <div className="space-y-2 text-sm text-gray-600">
               <p>
                 Lo habitual con el mismo comprobante en otra cuota es{' '}

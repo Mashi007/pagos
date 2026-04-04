@@ -812,8 +812,8 @@ export function Notificaciones() {
                         Cuotas atrasadas
                       </th>
 
-                      <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
-                        Monto
+                      <th className="max-w-[12rem] whitespace-normal px-3 py-2 text-right font-semibold leading-tight">
+                        TOTAL PENDIENTE A PAGAR
                       </th>
 
                       <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">

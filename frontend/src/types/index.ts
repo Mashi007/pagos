@@ -157,6 +157,9 @@ export interface Prestamo {
 
   total_financiamiento: number
 
+  /** Suma monto de cuotas sin fecha_pago (listado / resumen). */
+  saldo_pendiente?: number
+
   fecha_requerimiento: string
 
   modalidad_pago: 'MENSUAL' | 'QUINCENAL' | 'SEMANAL'
