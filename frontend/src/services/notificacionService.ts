@@ -163,18 +163,6 @@ export interface EstadisticasPorTab {
   liquidados: EstadisticasTabItem
 }
 
-export interface RebotadoItem {
-  email?: string
-
-  nombre?: string
-
-  cedula?: string
-
-  fecha_envio?: string
-
-  error_mensaje?: string
-}
-
 /** Un registro del historial de envíos por cédula (para reportes/legales). */
 
 export interface HistorialEnvioItem {
@@ -443,33 +431,6 @@ class NotificacionService {
     return await apiClient.get<EstadisticasPorTab>(
       `${this.baseUrl}/estadisticas-por-tab`
     )
-  }
-
-  /** Lista de correos no entregados (rebotados) por tipo de pestaña. */
-
-  async getRebotadosPorTab(
-    tipo: string
-  ): Promise<{ items: RebotadoItem[]; total: number }> {
-    return await apiClient.get<{ items: RebotadoItem[]; total: number }>(
-      `${this.baseUrl}/rebotados-por-tab`,
-
-      { params: { tipo } }
-    )
-  }
-
-  /** Descarga Excel de correos no entregados para un tipo. Devuelve blob para guardar. */
-
-  async descargarExcelRebotados(tipo: string): Promise<Blob> {
-    const blob = await apiClient.get<Blob>(
-      `${this.baseUrl}/rebotados-por-tab/excel`,
-      {
-        params: { tipo },
-
-        responseType: 'blob',
-      }
-    )
-
-    return blob as Blob
   }
 
   /** Historial de notificaciones enviadas/fallidas por cédula (reportes y fines legales). */

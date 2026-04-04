@@ -390,8 +390,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [actualizandoListas, setActualizandoListas] = useState(false)
 
-  const [descargandoExcel, setDescargandoExcel] = useState(false)
-
   const [descargandoEstadoCuentaId, setDescargandoEstadoCuentaId] = useState<
     number | null
   >(null)
@@ -520,52 +518,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
     } finally {
       setEnviandoPrejudicial(false)
-    }
-  }
-
-  const handleDescargarInformeRebotados = async () => {
-    const tipoApi = tipoParaKpiYRebotados(activeTab)
-
-    if (!tipoApi) return
-
-    setDescargandoExcel(true)
-
-    try {
-      const { total } = await notificacionService.getRebotadosPorTab(tipoApi)
-
-      if (total === 0) {
-        toast.success('Todos los correos fueron enviados.')
-
-        setDescargandoExcel(false)
-
-        return
-      }
-
-      const blob = await notificacionService.descargarExcelRebotados(tipoApi)
-
-      const url = window.URL.createObjectURL(blob)
-
-      const a = document.createElement('a')
-
-      a.href = url
-
-      a.download = `correos_no_entregados_${tipoApi}.xlsx`
-
-      document.body.appendChild(a)
-
-      a.click()
-
-      window.URL.revokeObjectURL(url)
-
-      a.remove()
-
-      toast.success('Informe descargado.')
-    } catch (e) {
-      console.error(e)
-
-      toast.error('Error al descargar el informe.')
-    } finally {
-      setDescargandoExcel(false)
     }
   }
 
@@ -904,32 +856,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </>
               )}
             </p>
-
-            {/* Botón descargar informe Excel de no entregados (rebotados) */}
-
-            {statTabKey != null && (
-              <div className="mb-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDescargarInformeRebotados}
-                  disabled={descargandoExcel}
-                >
-                  <Download
-                    className={`mr-2 h-4 w-4 ${descargandoExcel ? 'animate-pulse' : ''}`}
-                  />
-
-                  {descargandoExcel
-                    ? 'Preparando...'
-                    : 'Descargar informe de correos no entregados (Excel)'}
-                </Button>
-
-                <p className="mt-1 text-xs text-gray-500">
-                  Si todos los correos se enviaron correctamente se mostrará una
-                  notificación.
-                </p>
-              </div>
-            )}
 
             {isErrorLista && (
               <div className="mb-4 flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
