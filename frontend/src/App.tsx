@@ -457,7 +457,16 @@ function App() {
               path="notificaciones"
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
-                  <Notificaciones />
+                  <Notificaciones modulo="a1dia" />
+                </SimpleProtectedRoute>
+              }
+            />
+
+            <Route
+              path="notificaciones/a-3-cuotas"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <Notificaciones modulo="a3cuotas" />
                 </SimpleProtectedRoute>
               }
             />

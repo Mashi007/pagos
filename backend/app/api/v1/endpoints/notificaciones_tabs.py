@@ -661,11 +661,11 @@ def enviar_notificaciones_retrasadas(db: Session = Depends(get_db)):
     return {"mensaje": "Env�o de notificaciones retrasadas finalizado.", **res}
 
 
-# --- Notificaciones prejudiciales (3+ cuotas atrasadas) ---
+# --- Notificaciones prejudiciales (4+ cuotas en VENCIDO o MORA) ---
 
 @router_prejudicial.get("")
 def get_notificaciones_prejudicial(estado: str = None, db: Session = Depends(get_db)):
-    """Lista de clientes con 3 o m�s cuotas atrasadas (prejudicial). Email desde tabla clientes."""
+    """Lista de clientes con 4+ cuotas en estado VENCIDO o MORA (prejudicial). Email desde tabla clientes."""
     data = get_notificaciones_tabs_data(db)
     items = data["prejudicial"]
     return {"items": items, "total": len(items)}

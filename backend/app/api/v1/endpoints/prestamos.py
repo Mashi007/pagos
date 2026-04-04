@@ -93,6 +93,7 @@ from app.services.analistas_catalogo_sync import (
     sincronizar_analistas_desde_prestamos_si_catalogo_vacio,
 )
 
+from app.services.notificacion_service import sum_saldo_pendiente_total_por_prestamos
 from app.services.cuota_estado import (
     estado_cuota_para_mostrar,
     etiqueta_estado_cuota,
@@ -515,31 +516,19 @@ class AprobarManualBody(BaseModel):
 
 def _saldo_pendiente_por_prestamo_cuotas(db: Session, prestamo_ids: List[int]) -> dict[int, Decimal]:
 
-    """Suma `monto` de cuotas con fecha_pago NULL por préstamo (alineado con resumen por cédula)."""
+    """
+    Saldo pendiente real por préstamo: suma (monto_cuota - total_pagado) de cuotas sin pagar,
+    misma regla que notificaciones y estado de cuenta (abonos parciales restan; estados PAGADO
+    excluidos; préstamos LIQUIDADO/DESISTIMIENTO sin saldo en este agregado).
+    """
 
     if not prestamo_ids:
 
         return {}
 
-    saldo_q = (
+    raw = sum_saldo_pendiente_total_por_prestamos(db, prestamo_ids)
 
-        select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.monto), 0))
-
-        .select_from(Cuota)
-
-        .where(Cuota.prestamo_id.in_(prestamo_ids), Cuota.fecha_pago.is_(None))
-
-        .group_by(Cuota.prestamo_id)
-
-    )
-
-    out: dict[int, Decimal] = {}
-
-    for pid, saldo in db.execute(saldo_q).all():
-
-        out[pid] = Decimal(str(saldo))
-
-    return out
+    return {pid: Decimal(str(v)) for pid, v in raw.items()}
 
 
 
@@ -1642,21 +1631,11 @@ def resumen_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
     prestamo_ids = [p.id for p in prestamos]
 
-    # Saldo pendiente y cuotas en mora por préstamo (solo cuotas sin fecha_pago)
+    # Saldo pendiente: misma regla que lista de préstamos / notificaciones (monto - abonos)
 
-    saldo_q = (
+    saldos_dec = _saldo_pendiente_por_prestamo_cuotas(db, prestamo_ids)
 
-        select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.monto), 0))
-
-        .select_from(Cuota)
-
-        .where(Cuota.prestamo_id.in_(prestamo_ids), Cuota.fecha_pago.is_(None))
-
-        .group_by(Cuota.prestamo_id)
-
-    )
-
-    saldos = {r[0]: float(r[1]) for r in db.execute(saldo_q).all()}
+    saldos = {pid: float(v) for pid, v in saldos_dec.items()}
 
     mora_q = (
 

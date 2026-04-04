@@ -21,6 +21,11 @@ export const NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY = [
   'notificaciones-estadisticas-por-tab',
 ] as const
 
+/** Lista prejudicial (GET /notificaciones-prejudicial); módulo A: 3 cuotas. */
+export const NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY = [
+  'notificaciones-prejudicial-lista',
+] as const
+
 /** Mismo nombre en todas las pestañas del origen (sync listas de mora). */
 export const NOTIFICACIONES_MORA_BROADCAST_CHANNEL =
   'pagos-notificaciones-mora-v1' as const
@@ -56,6 +61,9 @@ export async function invalidateListasNotificacionesMora(
   await Promise.all([
     queryClient.invalidateQueries({
       queryKey: NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
     }),
     queryClient.invalidateQueries({
       queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,

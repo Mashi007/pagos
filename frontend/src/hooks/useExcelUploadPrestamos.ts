@@ -697,13 +697,16 @@ export function useExcelUploadPrestamos({
 
             _hasErrors: false,
 
-            cedula: (pick(row, 'cedula', 0)?.toString() || '').trim() || 'Z999999999',
+            cedula:
+              (pick(row, 'cedula', 0)?.toString() || '').trim() || 'Z999999999',
 
             total_financiamiento: parseMontoPrestamoExcel(
               pick(row, 'total_financiamiento', 1)
             ),
 
-            modalidad_pago: (pick(row, 'modalidad_pago', 2)?.toString() || 'MENSUAL')
+            modalidad_pago: (
+              pick(row, 'modalidad_pago', 2)?.toString() || 'MENSUAL'
+            )
               .trim()
               .toUpperCase(),
 
@@ -717,11 +720,15 @@ export function useExcelUploadPrestamos({
 
             producto: (pick(row, 'producto', 4)?.toString() || '').trim(),
 
-            concesionario: (pick(row, 'concesionario', 5)?.toString() || '').trim(),
+            concesionario: (
+              pick(row, 'concesionario', 5)?.toString() || ''
+            ).trim(),
 
             analista: (pick(row, 'analista', 6)?.toString() || '').trim(),
 
-            modelo_vehiculo: (pick(row, 'modelo_vehiculo', 7)?.toString() || '').trim(),
+            modelo_vehiculo: (
+              pick(row, 'modelo_vehiculo', 7)?.toString() || ''
+            ).trim(),
 
             numero_cuotas: Math.round(
               parseFloat(String(pick(row, 'numero_cuotas', 8) || 12)) || 12
@@ -733,7 +740,9 @@ export function useExcelUploadPrestamos({
             tasa_interes:
               parseFloat(String(pick(row, 'tasa_interes', 10) || 0)) || 0,
 
-            observaciones: (pick(row, 'observaciones', 11)?.toString() || '').trim(),
+            observaciones: (
+              pick(row, 'observaciones', 11)?.toString() || ''
+            ).trim(),
           }
 
           let hasErrors = false

@@ -47,22 +47,38 @@ import {
   NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
   NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
   NOTIFICACIONES_MORA_BROADCAST_CHANNEL,
+  NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
   invalidateListasNotificacionesMora,
 } from '../constants/queryKeys'
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
-type TabId = 'dias_1_atraso' | 'configuracion'
+export type NotificacionesModulo = 'a1dia' | 'a3cuotas'
 
-const TABS: { id: TabId; label: string; icon: typeof Clock }[] = [
-  {
-    id: 'dias_1_atraso',
-    label: 'Día después del venc.',
-    icon: Clock,
-  },
+type TabId = 'dias_1_atraso' | 'prejudicial' | 'configuracion'
 
-  { id: 'configuracion', label: 'Configuración', icon: Settings },
-]
+function tabsParaModulo(
+  modulo: NotificacionesModulo
+): { id: TabId; label: string; icon: typeof Clock }[] {
+  if (modulo === 'a3cuotas') {
+    return [
+      { id: 'prejudicial', label: 'A: 3 cuotas', icon: Clock },
+      { id: 'configuracion', label: 'Configuración', icon: Settings },
+    ]
+  }
+  return [
+    {
+      id: 'dias_1_atraso',
+      label: 'Día después del venc.',
+      icon: Clock,
+    },
+    { id: 'configuracion', label: 'Configuración', icon: Settings },
+  ]
+}
+
+function tabListadoDefault(modulo: NotificacionesModulo): TabId {
+  return modulo === 'a3cuotas' ? 'prejudicial' : 'dias_1_atraso'
+}
 
 /** Clave de GET estadisticas-por-tab / rebotados (coincide con tipo_tab en envíos). */
 
@@ -83,6 +99,9 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
     case 'dias_1_atraso':
       return 'dias_1_retraso'
 
+    case 'prejudicial':
+      return 'prejudicial'
+
     default:
       return null
   }
@@ -102,6 +121,9 @@ function cfgSlugParaPestanaListado(tab: TabId): ConfigEnvioSeccionId | null {
     case 'dias_1_atraso':
       return 'retrasada'
 
+    case 'prejudicial':
+      return 'prejudicial'
+
     default:
       return null
   }
@@ -111,10 +133,13 @@ function cfgSlugParaPestanaListado(tab: TabId): ConfigEnvioSeccionId | null {
 
 function tipoConfigPlantillaParaPestana(
   tab: TabId
-): 'PAGO_1_DIA_ATRASADO' | null {
+): 'PAGO_1_DIA_ATRASADO' | 'PREJUDICIAL' | null {
   switch (tab) {
     case 'dias_1_atraso':
       return 'PAGO_1_DIA_ATRASADO'
+
+    case 'prejudicial':
+      return 'PREJUDICIAL'
 
     default:
       return null
@@ -185,7 +210,15 @@ const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
   liquidados: [],
 }
 
-export function Notificaciones() {
+type NotificacionesProps = {
+  modulo?: NotificacionesModulo
+}
+
+export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
+  const TABS = tabsParaModulo(modulo)
+
+  const listadoDefault = tabListadoDefault(modulo)
+
   const [searchParams, setSearchParams] = useSearchParams()
 
   const tabParam = searchParams.get('tab')
@@ -193,7 +226,7 @@ export function Notificaciones() {
   const [activeTab, setActiveTab] = useState<TabId>(() =>
     tabParam && TABS.some(t => t.id === tabParam)
       ? (tabParam as TabId)
-      : 'dias_1_atraso'
+      : listadoDefault
   )
 
   useEffect(() => {
@@ -204,7 +237,7 @@ export function Notificaciones() {
     ) {
       setActiveTab(tabParam as TabId)
     }
-  }, [tabParam, activeTab])
+  }, [tabParam, activeTab, TABS])
 
   useEffect(() => {
     const t = searchParams.get('tab')
@@ -212,7 +245,9 @@ export function Notificaciones() {
       t === 'liquidados' ||
       t === 'masivos' ||
       t === 'dias_5_atraso' ||
-      t === 'dias_30_atraso'
+      t === 'dias_30_atraso' ||
+      (modulo === 'a3cuotas' && t === 'dias_1_atraso') ||
+      (modulo === 'a1dia' && t === 'prejudicial')
     ) {
       setSearchParams(
         p => {
@@ -225,7 +260,7 @@ export function Notificaciones() {
         { replace: true }
       )
     }
-  }, [searchParams, setSearchParams])
+  }, [searchParams, setSearchParams, modulo])
 
   const setActiveTabAndUrl = (tab: TabId) => {
     setActiveTab(tab)
@@ -233,7 +268,7 @@ export function Notificaciones() {
     setSearchParams(p => {
       const next = new URLSearchParams(p)
 
-      if (tab === 'dias_1_atraso') next.delete('tab')
+      if (tab === listadoDefault) next.delete('tab')
       else next.set('tab', tab)
 
       if (tab !== 'configuracion') next.delete('cfg')
@@ -256,7 +291,28 @@ export function Notificaciones() {
 
     /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
 
-    enabled: activeTab !== 'configuracion',
+    enabled: modulo === 'a1dia' && activeTab !== 'configuracion',
+  })
+
+  const {
+    data: dataPrejudicial,
+    isLoading: isLoadingPrej,
+    isError: isErrorPrej,
+    error: errorPrej,
+    refetch: refetchPrej,
+    isFetching: isFetchingPrej,
+  } = useQuery({
+    queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+
+    queryFn: () => notificacionService.listarNotificacionesPrejudiciales(),
+
+    staleTime: 0,
+
+    refetchOnWindowFocus: true,
+
+    placeholderData: { items: [] as ClienteRetrasadoItem[], total: 0 },
+
+    enabled: modulo === 'a3cuotas' && activeTab !== 'configuracion',
   })
 
   const { data: estadisticasPorTab } = useQuery({
@@ -421,6 +477,9 @@ export function Notificaciones() {
           queryKey: NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
         }),
         queryClient.refetchQueries({
+          queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+        }),
+        queryClient.refetchQueries({
           queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
         }),
       ])
@@ -484,6 +543,11 @@ export function Notificaciones() {
   }
 
   const getListForTab = (): ClienteRetrasadoItem[] => {
+    if (modulo === 'a3cuotas') {
+      if (activeTab !== 'prejudicial') return []
+      return dataPrejudicial?.items ?? []
+    }
+
     if (!data) return []
 
     switch (activeTab) {
@@ -496,6 +560,16 @@ export function Notificaciones() {
   }
 
   const list = getListForTab()
+
+  const isLoadingLista = modulo === 'a1dia' ? isLoading : isLoadingPrej
+
+  const isErrorLista = modulo === 'a1dia' ? isError : isErrorPrej
+
+  const errorLista = modulo === 'a1dia' ? error : errorPrej
+
+  const refetchLista = modulo === 'a1dia' ? refetch : refetchPrej
+
+  const isFetchingLista = modulo === 'a1dia' ? isFetching : isFetchingPrej
 
   const statTabKey = tipoParaKpiYRebotados(activeTab)
 
@@ -552,7 +626,11 @@ export function Notificaciones() {
           </nav>
         </div>
 
-        <ConfiguracionNotificaciones />
+        <ConfiguracionNotificaciones
+          alcance={
+            modulo === 'a3cuotas' ? 'solo_prejudicial' : 'solo_pago_1_dia'
+          }
+        />
       </div>
     )
   }
@@ -566,7 +644,11 @@ export function Notificaciones() {
         <ModulePageHeader
           icon={Bell}
           title="Notificaciones"
-          description="Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos."
+          description={
+            modulo === 'a3cuotas'
+              ? 'Clientes con al menos cuatro cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+              : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+          }
           actions={
             <Button
               variant="outline"
@@ -585,7 +667,10 @@ export function Notificaciones() {
       <div className="border-b border-gray-200">
         <nav className="flex flex-wrap gap-1">
           {TABS.filter(t => t.id !== 'configuracion').map(tab => {
-            const count = data?.dias_1_atraso?.length ?? 0
+            const count =
+              tab.id === 'prejudicial'
+                ? (dataPrejudicial?.items?.length ?? 0)
+                : (data?.dias_1_atraso?.length ?? 0)
 
             return (
               <button
@@ -651,14 +736,15 @@ export function Notificaciones() {
 
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
-              Día siguiente al vencimiento (1 día de atraso calendario)
+              {modulo === 'a3cuotas'
+                ? 'Cuatro o más cuotas VENCIDO o MORA (prejudicial)'
+                : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
             </CardTitle>
 
             <CardDescription>
-              Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día
-              después del vencimiento). La columna Cuotas atrasadas cuenta las
-              cuotas en mora del préstamo con la misma regla que el estado de
-              cuenta (Vencido, Mora, etc.).
+              {modulo === 'a3cuotas'
+                ? 'Una fila por cliente con al menos cuatro cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
+                : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
             </CardDescription>
           </CardHeader>
 
@@ -723,11 +809,27 @@ export function Notificaciones() {
             )}
 
             <p className="mb-4 text-xs text-gray-500">
-              KPI y Excel de rebotados de esta vista usan tipo_tab{' '}
-              <code className="rounded bg-gray-100 px-1">dias_1_retraso</code>.
-              Los envíos de 5 y 30 días de atraso y el caso{' '}
-              <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code> se
-              configuran y envían desde Configuración.
+              {modulo === 'a3cuotas' ? (
+                <>
+                  KPI y Excel de rebotados de esta vista usan tipo_tab{' '}
+                  <code className="rounded bg-gray-100 px-1">prejudicial</code>.
+                  La plantilla y envíos del caso{' '}
+                  <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code>{' '}
+                  se ajustan solo en la Configuración de este menú (aislado del
+                  módulo A: 1 día).
+                </>
+              ) : (
+                <>
+                  KPI y Excel de rebotados de esta vista usan tipo_tab{' '}
+                  <code className="rounded bg-gray-100 px-1">
+                    dias_1_retraso
+                  </code>
+                  . Los envíos de 5 y 30 días de atraso y el caso{' '}
+                  <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code>{' '}
+                  se gestionan desde el submenú «A: 3 cuotas» o desde su propia
+                  configuración allí.
+                </>
+              )}
             </p>
 
             {/* Botón descargar informe Excel de no entregados (rebotados) */}
@@ -756,24 +858,32 @@ export function Notificaciones() {
               </div>
             )}
 
-            {isError && (
+            {isErrorLista && (
               <div className="mb-4 flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
                 <span>
                   Error al cargar.
-                  {error?.message ? ` ${String(error.message)}` : ''} Comprueba
-                  que exista la tabla{' '}
+                  {errorLista?.message
+                    ? ` ${String(errorLista.message)}`
+                    : ''}{' '}
+                  Comprueba que exista la tabla{' '}
                   <code className="bg-gray-100 px-1">cuotas</code>.
                 </span>
 
-                <Button variant="outline" size="sm" onClick={() => refetch()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchLista()}
+                >
                   Reintentar
                 </Button>
               </div>
             )}
 
-            {isLoading && (
+            {isLoadingLista && (
               <div className="mb-4 flex items-center gap-2 rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">
-                <RefreshCw className="h-4 w-4 animate-spin" />
+                <RefreshCw
+                  className={`h-4 w-4 ${isFetchingLista ? 'animate-spin' : ''}`}
+                />
 
                 <span>Cargando datos...</span>
               </div>
@@ -783,16 +893,31 @@ export function Notificaciones() {
               <div className="overflow-x-auto">
                 {list.length > 0 && (
                   <p className="mb-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
-                    <span className="font-semibold">
-                      Por que la fecha de vencimiento se repite:{' '}
-                    </span>
-                    Esta lista solo incluye cuotas cuya fecha de vencimiento fue
-                    ayer (primer dia despues del vencimiento). Por definicion,
-                    todas comparten esa misma fecha; al pasar el dia en el
-                    calendario de negocio, la fecha mostrada avanza un dia para
-                    todo el listado (ayer 31 mar, hoy 1 abr, etc.). Los numeros
-                    de cuota (9, 11, 12...) son distintos prestamos o cuotas
-                    distintas que casualmente vencieron ese mismo dia.
+                    {modulo === 'a3cuotas' ? (
+                      <>
+                        <span className="font-semibold">
+                          Sobre esta lista:{' '}
+                        </span>
+                        Cada cliente aparece una vez si tiene al menos cuatro
+                        cuotas en VENCIDO o MORA. La columna «Cuotas atrasadas»
+                        es ese conteo; Nº cuota y fecha venc. son de una cuota de
+                        referencia.
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-semibold">
+                          Por que la fecha de vencimiento se repite:{' '}
+                        </span>
+                        Esta lista solo incluye cuotas cuya fecha de vencimiento
+                        fue ayer (primer dia despues del vencimiento). Por
+                        definicion, todas comparten esa misma fecha; al pasar el
+                        dia en el calendario de negocio, la fecha mostrada
+                        avanza un dia para todo el listado (ayer 31 mar, hoy 1
+                        abr, etc.). Los numeros de cuota (9, 11, 12...) son
+                        distintos prestamos o cuotas distintas que casualmente
+                        vencieron ese mismo dia.
+                      </>
+                    )}
                   </p>
                 )}
 
@@ -866,7 +991,9 @@ export function Notificaciones() {
                           </td>
 
                           <td className="px-3 py-2 text-right font-medium text-red-600">
-                            {row.cuotas_atrasadas ?? '-'}
+                            {row.cuotas_atrasadas ??
+                              row.total_cuotas_atrasadas ??
+                              '-'}
                           </td>
 
                           <td className="px-3 py-2 text-right">

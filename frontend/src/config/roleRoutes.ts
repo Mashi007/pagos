@@ -18,6 +18,7 @@ const MANAGER_PREFIXES = [
   '/revision-manual',
   '/auditoria',
   '/comunicaciones',
+  '/notificaciones',
   '/conversaciones-whatsapp',
   '/crm',
   '/chat-ai',

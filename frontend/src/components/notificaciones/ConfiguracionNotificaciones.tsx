@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -397,7 +397,19 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
   }
 }
 
-export function ConfiguracionNotificaciones() {
+/** Vista completa (grupos por sección) o solo la fila de un módulo de notificaciones. */
+export type ConfiguracionNotificacionesAlcance =
+  | 'completo'
+  | 'solo_pago_1_dia'
+  | 'solo_prejudicial'
+
+type ConfiguracionNotificacionesProps = {
+  alcance?: ConfiguracionNotificacionesAlcance
+}
+
+export function ConfiguracionNotificaciones({
+  alcance = 'completo',
+}: ConfiguracionNotificacionesProps) {
   const [configEnvios, setConfigEnvios] = useState<
     Record<string, ConfigEnvioItem>
   >({})
@@ -418,9 +430,26 @@ export function ConfiguracionNotificaciones() {
 
   const [enviandoMasivo, setEnviandoMasivo] = useState(false)
 
+  const criteriosPanelFiltrados = useMemo(() => {
+    if (alcance === 'solo_pago_1_dia') {
+      return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'PAGO_1_DIA_ATRASADO')
+    }
+    if (alcance === 'solo_prejudicial') {
+      return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'PREJUDICIAL')
+    }
+    return CRITERIOS_ENVIO_PANEL
+  }, [alcance])
+
   const [tipoPruebaPaquete, setTipoPruebaPaquete] = useState<string>(
-    CRITERIOS_ENVIO_PANEL[0].tipo
+    () => criteriosPanelFiltrados[0]?.tipo ?? CRITERIOS_ENVIO_PANEL[0].tipo
   )
+
+  useEffect(() => {
+    const allowed = new Set(criteriosPanelFiltrados.map(c => c.tipo))
+    if (!allowed.has(tipoPruebaPaquete) && criteriosPanelFiltrados[0]) {
+      setTipoPruebaPaquete(criteriosPanelFiltrados[0].tipo)
+    }
+  }, [criteriosPanelFiltrados, tipoPruebaPaquete])
 
   const [diagnosticoPaquete, setDiagnosticoPaquete] =
     useState<DiagnosticoPaquetePruebaResponse | null>(null)
@@ -481,13 +510,21 @@ export function ConfiguracionNotificaciones() {
     )
   }
 
-  const categoriasSeccionActiva = new Set(
-    CONFIG_ENVIO_SECCIONES.find(s => s.id === seccionConfigId)?.categorias ?? []
-  )
+  const filasEnvioPorSeccion = useMemo(() => {
+    if (alcance === 'solo_pago_1_dia') {
+      return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'PAGO_1_DIA_ATRASADO')
+    }
+    if (alcance === 'solo_prejudicial') {
+      return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'PREJUDICIAL')
+    }
+    const cats = new Set(
+      CONFIG_ENVIO_SECCIONES.find(s => s.id === seccionConfigId)?.categorias ??
+        []
+    )
+    return CRITERIOS_ENVIO_TABLA.filter(row => cats.has(row.categoria))
+  }, [alcance, seccionConfigId])
 
-  const filasEnvioPorSeccion = CRITERIOS_ENVIO_TABLA.filter(row =>
-    categoriasSeccionActiva.has(row.categoria)
-  )
+  const alcanceReducido = alcance !== 'completo'
 
   const {
     data: dataEnvios,
@@ -1220,7 +1257,7 @@ export function ConfiguracionNotificaciones() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {CRITERIOS_ENVIO_PANEL.map(({ tipo, label }) => (
+                      {criteriosPanelFiltrados.map(({ tipo, label }) => (
                         <SelectItem key={tipo} value={tipo}>
                           {label}
                         </SelectItem>
@@ -1387,30 +1424,32 @@ export function ConfiguracionNotificaciones() {
         </CardContent>
       </Card>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-        <p className="mb-2 text-xs font-medium text-slate-600">
-          Grupo de configuración: solo se listan filas y acciones de este
-          bloque. Campañas masivas aparecen únicamente en «Comunicaciones».
-        </p>
-        <nav className="flex flex-wrap gap-1" aria-label="Grupos de envío">
-          {CONFIG_ENVIO_SECCIONES.map(sec => (
-            <button
-              key={sec.id}
-              type="button"
-              onClick={() => setSeccionConfig(sec.id)}
-              className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                seccionConfigId === sec.id
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {sec.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+      {!alcanceReducido && (
+        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <p className="mb-2 text-xs font-medium text-slate-600">
+            Grupo de configuración: solo se listan filas y acciones de este
+            bloque. Campañas masivas aparecen únicamente en «Comunicaciones».
+          </p>
+          <nav className="flex flex-wrap gap-1" aria-label="Grupos de envío">
+            {CONFIG_ENVIO_SECCIONES.map(sec => (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => setSeccionConfig(sec.id)}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  seccionConfigId === sec.id
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {sec.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      )}
 
-      {seccionConfigId === 'comunicaciones' ? (
+      {seccionConfigId === 'comunicaciones' && !alcanceReducido ? (
         <Card className="border-slate-200 bg-slate-50/40">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">

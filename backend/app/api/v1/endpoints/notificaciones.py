@@ -26,6 +26,7 @@ from app.core.database import get_db
 from app.services.cuota_estado import hoy_negocio
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+    ESTADOS_CUOTA_VENCIDO_Y_MORA,
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
     contar_cuotas_atraso_por_prestamos,
@@ -1878,6 +1879,9 @@ def get_notificaciones_tabs_data(db: Session):
 
     Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
     calendario después de la fecha de vencimiento), sin fecha_pago y con saldo pendiente.
+
+    Prejudicial: por cliente_id, al menos 4 cuotas con cuotas.estado en (VENCIDO, MORA),
+    fecha_vencimiento < hoy, sin fecha_pago y saldo pendiente; préstamo no liquidado/desistimiento.
     """
     from sqlalchemy import func
 
@@ -1953,22 +1957,22 @@ def get_notificaciones_tabs_data(db: Session):
                     )
                 )
 
-    # Prejudicial: clientes con 3 o mÃƒÂ¡s cuotas atrasadas (fecha_vencimiento < hoy, no pagado)
-    # Solo cuotas con cliente_id no nulo para poder resolver Cliente
+    # Prejudicial (A: 3 cuotas en UI): clientes con 4+ cuotas en estado VENCIDO o MORA (cuotas.estado),
+    # fecha_vencimiento < hoy, sin fecha_pago y saldo pendiente. Excluye PENDIENTE/PARCIAL y pagadas.
     prejudicial: List[dict] = []
     subq = (
         select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(
             Cuota.fecha_pago.is_(None),
-            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
             Cuota.fecha_vencimiento < hoy,
             Cuota.cliente_id.isnot(None),
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
             ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
         )
         .group_by(Cuota.cliente_id)
-        .having(func.count(Cuota.id) >= 3)
+        .having(func.count(Cuota.id) >= 4)
     )
     clientes_prejudicial = db.execute(subq).all()
     bloques_prej = []
@@ -1984,7 +1988,7 @@ def get_notificaciones_tabs_data(db: Session):
             .where(
                 Cuota.cliente_id == cliente_id,
                 Cuota.fecha_pago.is_(None),
-                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+                Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
                 Cuota.fecha_vencimiento < hoy,
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
                 ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),

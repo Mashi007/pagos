@@ -76,7 +76,9 @@ export function normalizarEncabezadoPrestamoExcel(raw: unknown): string {
 /**
  * ExcelJS puede dejar huecos en el array de celdas; sin densificar, cells[0] falla aunque la columna A exista.
  */
-export function densificarFilaExcel(row: unknown[] | null | undefined): unknown[] {
+export function densificarFilaExcel(
+  row: unknown[] | null | undefined
+): unknown[] {
   if (!row) return []
   let maxIdx = -1
   for (const k of Object.keys(row)) {
@@ -97,9 +99,10 @@ export function densificarFilaExcel(row: unknown[] | null | undefined): unknown[
  * Busca en las primeras filas una que tenga encabezados de plantilla de préstamo.
  * dataStartIndex: índice en jsonData de la primera fila de datos (después del encabezado).
  */
-export function resolverEncabezadoYMapaPrestamo(
-  jsonData: unknown[][]
-): { dataStartIndex: number; colMap: Record<string, number> | null } {
+export function resolverEncabezadoYMapaPrestamo(jsonData: unknown[][]): {
+  dataStartIndex: number
+  colMap: Record<string, number> | null
+} {
   const maxScan = Math.min(6, jsonData.length)
   for (let r = 0; r < maxScan; r++) {
     const dense = densificarFilaExcel(jsonData[r] as unknown[])
@@ -129,7 +132,10 @@ export function mapaColumnasPrestamoDesdeFilaEncabezado(
 
   const cedIdx = findFirst(
     n =>
-      n.includes('cedula') || n === 'ci' || n === 'id_cliente' || n === 'documento'
+      n.includes('cedula') ||
+      n === 'ci' ||
+      n === 'id_cliente' ||
+      n === 'documento'
   )
   if (cedIdx === undefined) return null
 

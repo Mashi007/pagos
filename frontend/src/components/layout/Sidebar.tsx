@@ -77,6 +77,9 @@ interface MenuItem {
 
   /** Si true, el href es una URL externa que abre en nueva pestaña. */
   external?: boolean
+
+  /** Si true, la ruta solo coincide por igualdad exacta (no startsWith). */
+  exactHref?: boolean
 }
 
 export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
@@ -170,6 +173,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         return `${location.pathname}${location.search}` === child.href
       }
 
+      const pathOnly = child.href.split('?')[0] || child.href
+      if (child.exactHref) {
+        return location.pathname === pathOnly
+      }
+
       return (
         location.pathname === child.href ||
         (location.pathname.startsWith(child.href) && child.href !== '/')
@@ -201,8 +209,28 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           href: '/comunicaciones',
           icon: MessageSquare,
         },
+      ],
+    },
 
-        { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
+    {
+      title: 'Notificaciones',
+
+      icon: Bell,
+
+      isSubmenu: true,
+
+      children: [
+        {
+          title: 'A: 1 día',
+          href: '/notificaciones',
+          icon: Clock,
+          exactHref: true,
+        },
+        {
+          title: 'A: 3 cuotas',
+          href: '/notificaciones/a-3-cuotas',
+          icon: Clock,
+        },
       ],
     },
 
@@ -408,6 +436,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
             return `${pathname}${location.search}` === child.href
           }
 
+          const pathOnly = child.href.split('?')[0] || child.href
+          if (child.exactHref) {
+            return pathname === pathOnly
+          }
+
           return (
             pathname === child.href ||
             (pathname.startsWith(child.href) && child.href !== '/')
@@ -446,7 +479,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [isOpen, onClose])
 
-  const isActiveRoute = (href: string) => {
+  const isActiveRoute = (href: string, exactHref?: boolean) => {
     if (href === '/dashboard') {
       return location.pathname === '/' || location.pathname === '/dashboard'
     }
@@ -455,6 +488,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       const currentUrl = `${location.pathname}${location.search}`
 
       return currentUrl === href
+    }
+
+    const pathOnly = href.split('?')[0] || href
+    if (exactHref) {
+      return location.pathname === pathOnly
     }
 
     if (location.search) {
@@ -854,7 +892,10 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
                                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2',
 
-                                        isActiveRoute(child.href!)
+                                        isActiveRoute(
+                                          child.href!,
+                                          child.exactHref
+                                        )
                                           ? 'border-l-white bg-blue-600 text-white shadow-md shadow-blue-500/30'
                                           : 'border-l-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm',
 

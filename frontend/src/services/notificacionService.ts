@@ -84,6 +84,9 @@ export interface ClienteRetrasadoItem {
   dias_atraso?: number
   /** Misma regla que estado de cuenta / amortización (cuotas vencidas sin cubrir al 100%). */
   cuotas_atrasadas?: number
+
+  /** Prejudicial: total de cuotas en mora del cliente (backend get_notificaciones_tabs_data). */
+  total_cuotas_atrasadas?: number
   correo?: string
   telefono?: string
   estado?: string
@@ -692,12 +695,15 @@ class NotificacionService {
 
   async listarNotificacionesPrejudiciales(
     estado?: string
-  ): Promise<{ items: any[]; total: number }> {
+  ): Promise<{ items: ClienteRetrasadoItem[]; total: number }> {
     const params = new URLSearchParams()
 
     if (estado) params.append('estado', estado)
 
-    return await apiClient.get<{ items: any[]; total: number }>(
+    return await apiClient.get<{
+      items: ClienteRetrasadoItem[]
+      total: number
+    }>(
       `${API_V1}/notificaciones-prejudicial/?${params}`,
 
       { timeout: 120000 }

@@ -31,6 +31,10 @@ CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
     ~Cuota.estado.in_(_ESTADOS_CUOTA_PAGADA),
 )
 
+# Prejudicial (submenu Notificaciones «A: 3 cuotas»): solo cuotas con columna estado VENCIDO o MORA
+# (clasificar_estado_cuota en cuota_estado.py; MORA = morosidad por calendario).
+ESTADOS_CUOTA_VENCIDO_Y_MORA = ("VENCIDO", "MORA")
+
 
 def _select_cuotas_pendientes_con_cliente():
     """Query base: cuota pendiente + cliente vía préstamo (sin filtro de fecha de vencimiento)."""
@@ -194,14 +198,14 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
                 Cuota.fecha_pago.is_(None),
-                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+                Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.cliente_id.isnot(None),
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
                 ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
             )
             .group_by(Cuota.cliente_id)
-            .having(func.count(Cuota.id) >= 3)
+            .having(func.count(Cuota.id) >= 4)
             .limit(1)
         )
         row = db.execute(subq).first()
@@ -217,7 +221,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .where(
                 Cuota.cliente_id == cliente_id,
                 Cuota.fecha_pago.is_(None),
-                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+                Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
                 Cuota.fecha_vencimiento < hoy,
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
                 ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
