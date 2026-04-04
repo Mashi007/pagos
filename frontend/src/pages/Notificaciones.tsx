@@ -32,10 +32,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   notificacionService,
-  emailConfigService,
   type ClienteRetrasadoItem,
   type EstadisticasPorTab,
-  type NotificacionPlantilla,
 } from '../services/notificacionService'
 
 import { prestamoService } from '../services/prestamoService'
@@ -186,89 +184,6 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
   }
 }
 
-/** Deep-link a Configuracion: ?tab=configuracion&cfg=... */
-
-type ConfigEnvioSeccionId =
-  | 'por-vencer'
-  | 'dia-pago'
-  | 'retrasada'
-  | 'prejudicial'
-  | 'comunicaciones'
-
-function cfgSlugParaPestanaListado(tab: TabId): ConfigEnvioSeccionId | null {
-  switch (tab) {
-    case 'dias_1_atraso':
-      return 'retrasada'
-
-    case 'prejudicial':
-      return 'prejudicial'
-
-    default:
-      return null
-  }
-}
-
-/** Tipo de fila en GET/PUT notificaciones/envios para el listado principal (día siguiente al venc.). */
-
-function tipoConfigPlantillaParaPestana(
-  tab: TabId
-): 'PAGO_1_DIA_ATRASADO' | 'PREJUDICIAL' | null {
-  switch (tab) {
-    case 'dias_1_atraso':
-      return 'PAGO_1_DIA_ATRASADO'
-
-    case 'prejudicial':
-      return 'PREJUDICIAL'
-
-    default:
-      return null
-  }
-}
-
-function parsePlantillaIdEnvio(raw: unknown): number | null {
-  if (raw == null || typeof raw !== 'object') return null
-  const pid = (raw as { plantilla_id?: unknown }).plantilla_id
-  if (pid == null || pid === '') return null
-  const n = Number(pid)
-  return Number.isFinite(n) ? n : null
-}
-
-function etiquetaPlantillaParaPestana(
-  tab: TabId,
-  enviosRaw: Record<string, unknown> | undefined,
-  plantillas: NotificacionPlantilla[] | undefined
-): { linea: string; cfgHref: string } {
-  const slug = cfgSlugParaPestanaListado(tab)
-  const tipo = tipoConfigPlantillaParaPestana(tab)
-  const baseSearch =
-    slug == null
-      ? '?tab=configuracion'
-      : slug === 'retrasada'
-        ? '?tab=configuracion'
-        : `?tab=configuracion&cfg=${slug}`
-
-  if (!tipo) {
-    return {
-      linea: 'Abra Configuracion para revisar envios.',
-      cfgHref: baseSearch,
-    }
-  }
-
-  const pid = parsePlantillaIdEnvio(enviosRaw?.[tipo])
-  if (pid == null) {
-    return {
-      linea: 'Texto por defecto (sin plantilla HTML elegida para este caso).',
-      cfgHref: baseSearch,
-    }
-  }
-
-  const nombre = plantillas?.find(p => p.id === pid)?.nombre?.trim()
-  return {
-    linea: nombre ? `Plantilla: ${nombre} (#${pid})` : `Plantilla ID ${pid}`,
-    cfgHref: baseSearch,
-  }
-}
-
 type NotificacionesProps = {
   modulo?: NotificacionesModulo
 }
@@ -406,45 +321,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       liquidados: { enviados: 0, rebotados: 0 },
     } as EstadisticasPorTab,
   })
-
-  const listadoPideResumenEnvios =
-    activeTab !== 'configuracion' &&
-    tipoConfigPlantillaParaPestana(activeTab) != null
-
-  const { data: enviosResumenRaw } = useQuery({
-    queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
-
-    queryFn: () =>
-      emailConfigService.obtenerConfiguracionEnvios() as Promise<
-        Record<string, unknown>
-      >,
-
-    staleTime: 60 * 1000,
-
-    enabled: listadoPideResumenEnvios,
-  })
-
-  const { data: plantillasCatalogo } = useQuery({
-    queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
-
-    queryFn: () => notificacionService.listarPlantillas(undefined, false),
-
-    staleTime: 60 * 1000,
-
-    enabled: listadoPideResumenEnvios,
-
-    placeholderData: [] as NotificacionPlantilla[],
-  })
-
-  const resumenPlantillaPestana = useMemo(
-    () =>
-      etiquetaPlantillaParaPestana(
-        activeTab,
-        enviosResumenRaw as Record<string, unknown> | undefined,
-        plantillasCatalogo
-      ),
-    [activeTab, enviosResumenRaw, plantillasCatalogo]
-  )
 
   const queryClient = useQueryClient()
 
@@ -849,23 +725,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2 }}
       >
-        {listadoPideResumenEnvios && (
-          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-            <span className="font-medium text-slate-800">Esta pestaña: </span>
-            <span>{resumenPlantillaPestana.linea}</span>
-            <Link
-              to={resumenPlantillaPestana.cfgHref}
-              className="ml-2 inline-flex items-center text-blue-600 underline-offset-2 hover:underline"
-            >
-              Ir a configuración del caso
-            </Link>
-            <span className="mt-1 block text-xs text-slate-500">
-              Este listado usa su fila en el servidor; aquí solo se muestra un
-              resumen. Los cambios requieren Guardar en Configuración.
-            </span>
-          </div>
-        )}
-
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -887,65 +746,38 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           </CardHeader>
 
           <CardContent>
-            <div className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center">
-              <div className="flex flex-wrap items-center gap-3">
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleRefresh()}
+                disabled={actualizandoListas || enviandoPrejudicial}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
+                />
+                Actualizacion manual
+              </Button>
+
+              {modulo === 'a3cuotas' && (
                 <Button
-                  variant="secondary"
                   size="sm"
-                  onClick={() => void handleRefresh()}
-                  disabled={actualizandoListas || enviandoPrejudicial}
+                  onClick={() => void handleEnviarPrejudicialManual()}
+                  disabled={
+                    enviandoPrejudicial ||
+                    actualizandoListas ||
+                    isLoadingLista
+                  }
+                  className="bg-blue-600 text-white hover:bg-blue-700"
                 >
-                  <RefreshCw
-                    className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
+                  <Mail
+                    className={`mr-2 h-4 w-4 ${enviandoPrejudicial ? 'animate-pulse' : ''}`}
                   />
-                  Actualizacion manual
+                  {enviandoPrejudicial
+                    ? 'Enviando...'
+                    : 'Enviar notificaciones (manual)'}
                 </Button>
-
-                {modulo === 'a3cuotas' && (
-                  <Button
-                    size="sm"
-                    onClick={() => void handleEnviarPrejudicialManual()}
-                    disabled={
-                      enviandoPrejudicial ||
-                      actualizandoListas ||
-                      isLoadingLista
-                    }
-                    className="bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    <Mail
-                      className={`mr-2 h-4 w-4 ${enviandoPrejudicial ? 'animate-pulse' : ''}`}
-                    />
-                    {enviandoPrejudicial
-                      ? 'Enviando...'
-                      : 'Enviar notificaciones (manual)'}
-                  </Button>
-                )}
-              </div>
-
-              <p className="max-w-xl text-xs text-gray-600">
-                {modulo === 'a3cuotas' ? (
-                  <>
-                    Actualizar: POST{' '}
-                    <code className="rounded bg-white px-1">
-                      /notificaciones/actualizar
-                    </code>{' '}
-                    y refresco de lista/KPI. Los correos prejudiciales{' '}
-                    <strong>no se envían solos</strong>: use el botón «Enviar
-                    notificaciones (manual)» (también puede enviar desde la
-                    pestaña Configuración si tiene el botón del caso
-                    PREJUDICIAL).
-                  </>
-                ) : (
-                  <>
-                    Vuelve a pedir al servidor las listas de mora y los KPI
-                    (POST{' '}
-                    <code className="rounded bg-white px-1">
-                      /notificaciones/actualizar
-                    </code>{' '}
-                    y refetch de datos).
-                  </>
-                )}
-              </p>
+              )}
             </div>
 
             {/* KPIs por pestaña: correos enviados y rebotados */}
@@ -986,33 +818,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               </div>
             )}
 
-            <p className="mb-4 text-xs text-gray-500">
-              {modulo === 'a3cuotas' ? (
-                <>
-                  KPI y Excel de rebotados usan tipo_tab{' '}
-                  <code className="rounded bg-gray-100 px-1">prejudicial</code>.
-                  El envío masivo del caso{' '}
-                  <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code>{' '}
-                  es <strong>siempre manual</strong> (botón arriba o acción en
-                  Configuración). La pestaña Configuración es la{' '}
-                  <strong>misma</strong> que en Notificaciones A: 1 día (todos
-                  los grupos y tipos; fila PREJUDICIAL en «Prejudicial»).
-                </>
-              ) : (
-                <>
-                  KPI y Excel de rebotados de esta vista usan tipo_tab{' '}
-                  <code className="rounded bg-gray-100 px-1">
-                    dias_1_retraso
-                  </code>
-                  . El caso{' '}
-                  <code className="rounded bg-gray-100 px-1">PREJUDICIAL</code>{' '}
-                  se configura en la misma pestaña Configuración (grupo
-                  Prejudicial); el submenú «A: 3 cuotas» usa esa misma
-                  configuración y solo cambia el listado y el envío manual.
-                </>
-              )}
-            </p>
-
             {isErrorLista && (
               <div className="mb-4 flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
                 <span>
@@ -1046,36 +851,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
             {mostrarTablaCuotas ? (
               <div className="overflow-x-auto">
-                {list.length > 0 && (
-                  <p className="mb-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
-                    {modulo === 'a3cuotas' ? (
-                      <>
-                        <span className="font-semibold">
-                          Sobre esta lista:{' '}
-                        </span>
-                        Cada cliente aparece una vez si tiene al menos cuatro
-                        cuotas en VENCIDO o MORA. La columna «Cuotas atrasadas»
-                        es ese conteo; Nº cuota y fecha venc. son de una cuota
-                        de referencia.
-                      </>
-                    ) : (
-                      <>
-                        <span className="font-semibold">
-                          Por que la fecha de vencimiento se repite:{' '}
-                        </span>
-                        Esta lista solo incluye cuotas cuya fecha de vencimiento
-                        fue ayer (primer dia despues del vencimiento). Por
-                        definicion, todas comparten esa misma fecha; al pasar el
-                        dia en el calendario de negocio, la fecha mostrada
-                        avanza un dia para todo el listado (ayer 31 mar, hoy 1
-                        abr, etc.). Los numeros de cuota (9, 11, 12...) son
-                        distintos prestamos o cuotas distintas que casualmente
-                        vencieron ese mismo dia.
-                      </>
-                    )}
-                  </p>
-                )}
-
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">
@@ -1141,20 +916,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                       <th className="max-w-[12rem] whitespace-normal px-3 py-2 text-right font-semibold leading-tight">
                         <div className="inline-flex items-start justify-end gap-1">
-                          <span className="inline-flex items-start gap-1.5 text-left">
-                            <span
-                              className="inline-flex shrink-0 pt-0.5"
-                              title="Mismo icono que revisión manual en Préstamos (pendiente de revisar)."
-                            >
-                              <AlertTriangle
-                                className="h-4 w-4 text-amber-500"
-                                aria-hidden
-                              />
-                            </span>
-                            <span>
-                              TOTAL PENDIENTE
-                              <br />A PAGAR
-                            </span>
+                          <span>
+                            TOTAL PENDIENTE
+                            <br />A PAGAR
                           </span>
 
                           <SortArrowsCuotas
@@ -1169,6 +933,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         </div>
                       </th>
 
+                      <th
+                        className="w-12 px-1 py-2 text-center font-semibold"
+                        scope="col"
+                        title="Revisión manual"
+                      >
+                        <span className="sr-only">Revisión manual</span>
+                      </th>
+
                       <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                         Estado de cuenta
                       </th>
@@ -1179,7 +951,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     {list.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={9}
                           className="py-8 text-center text-gray-500"
                         >
                           <span className="block font-medium text-gray-600">
@@ -1226,6 +998,19 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             {textoTotalPendientePagar(row)}
                           </td>
 
+                          <td className="px-1 py-2 text-center align-middle">
+                            {row.prestamo_id != null ? (
+                              <Link
+                                to={`/revision-manual/editar/${row.prestamo_id}`}
+                                className="inline-flex rounded p-1 text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                title="Revisión manual"
+                                aria-label="Abrir revisión manual del préstamo"
+                              >
+                                <AlertTriangle className="h-4 w-4" />
+                              </Link>
+                            ) : null}
+                          </td>
+
                           <td className="px-3 py-2">
                             {estadoCuentaPdfCell(row.prestamo_id)}
                           </td>
@@ -1250,6 +1035,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         Cédula
                       </th>
 
+                      <th
+                        className="w-12 px-1 py-2 text-center font-semibold"
+                        scope="col"
+                        title="Revisión manual"
+                      >
+                        <span className="sr-only">Revisión manual</span>
+                      </th>
+
                       <th className="px-3 py-2 text-left font-semibold">
                         Estado de cuenta
                       </th>
@@ -1260,7 +1053,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     {list.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={4}
+                          colSpan={5}
                           className="py-8 text-center text-gray-500"
                         >
                           <span className="block font-medium text-gray-600">
@@ -1288,6 +1081,19 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           </td>
 
                           <td className="px-3 py-2">{row.cedula}</td>
+
+                          <td className="px-1 py-2 text-center align-middle">
+                            {row.prestamo_id != null ? (
+                              <Link
+                                to={`/revision-manual/editar/${row.prestamo_id}`}
+                                className="inline-flex rounded p-1 text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                title="Revisión manual"
+                                aria-label="Abrir revisión manual del préstamo"
+                              >
+                                <AlertTriangle className="h-4 w-4" />
+                              </Link>
+                            ) : null}
+                          </td>
 
                           <td className="px-3 py-2">
                             {estadoCuentaPdfCell(row.prestamo_id)}
