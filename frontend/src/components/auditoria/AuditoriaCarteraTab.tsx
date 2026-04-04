@@ -17,7 +17,7 @@ import { Button } from '../ui/button'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 
-import { AlertWithIcon } from '../ui/alert'
+import { AlertDescription, AlertWithIcon } from '../ui/alert'
 
 import { Input } from '../ui/input'
 
@@ -1309,14 +1309,27 @@ export function AuditoriaCarteraTab() {
         const def = AUDITORIA_CARTERA_CONTROLES_CATALOGO.find(
           d => d.codigo === cod
         )
-        if (!def?.notaOperativa) return null
+        if (!def || (!def.notaOperativa && !def.excepcionesReglas)) return null
         return (
-          <AlertWithIcon
-            variant="info"
-            title={`Control ${def.n}: accion sugerida`}
-            description={def.notaOperativa}
-            className="mb-4"
-          />
+          <div className="mb-4 flex flex-col gap-3">
+            {def.notaOperativa ? (
+              <AlertWithIcon
+                variant="info"
+                title={`Control ${def.n}: accion sugerida`}
+                description={def.notaOperativa}
+              />
+            ) : null}
+            {def.excepcionesReglas ? (
+              <AlertWithIcon
+                variant="warning"
+                title={`Control ${def.n}: excepciones y alcance (Pagos / carga masiva)`}
+              >
+                <AlertDescription className="mt-1 whitespace-pre-line text-sm">
+                  {def.excepcionesReglas}
+                </AlertDescription>
+              </AlertWithIcon>
+            ) : null}
+          </div>
         )
       })()}
 

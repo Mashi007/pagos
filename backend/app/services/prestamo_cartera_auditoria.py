@@ -363,6 +363,8 @@ def ejecutar_auditoria_cartera(
 
     # Pagos duplicados mismo dia y monto (posible fraude / doble registro); excluye anulados/reversados
     # y filas con Visto control 5 (excluir_control_pagos_mismo_dia_monto).
+    # Alcance: mismo prestamo + fecha calendario + monto (no sustituye unicidad global de numero_documento
+    # ni el flujo Pagos > carga masiva Excel: ahi Visto/sufijos en tabla previa; ver auditoria UI control 5).
     dup_pagos_rows = db.execute(
         text(
             f"""
@@ -380,7 +382,9 @@ def ejecutar_auditoria_cartera(
     ).fetchall()
     prestamos_pagos_duplicados = {int(r[0]) for r in dup_pagos_rows if r[0] is not None}
 
-    # Misma huella funcional que el indice ux_pagos_fingerprint_activos (prestamo, dia, monto, ref_norm)
+    # Misma huella funcional que el indice ux_pagos_fingerprint_activos (prestamo, dia, monto, ref_norm).
+    # Complementario al control 5 (fecha+monto sin ref_norm en el agrupamiento); colisiones por ref copiado
+    # suelen corregirse en origen o con sufijos en carga masiva (ver auditoria UI control 16).
     dup_huella_rows = db.execute(
         text(
             f"""

@@ -8,6 +8,11 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
   titulo: string
   /** Texto corto de accion sugerida (solo UI). */
   notaOperativa?: string
+  /**
+   * Excepciones y alcance alineado a modulo Pagos / carga masiva (solo UI).
+   * Se muestra al filtrar por este control en Auditoria cartera.
+   */
+  excepcionesReglas?: string
 }> = [
   {
     n: 1,
@@ -37,6 +42,11 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     titulo: 'Pagos duplicados (misma fecha y monto)',
     notaOperativa:
       'El conteo es por prestamo afectado. Banco Mercantil u otros sin serie de documento: admin puede usar Visto (icono) para anexar sufijo _A#### o _P#### (A mismo credito/cuotas, P si el documento choca con otro prestamo) al Nº documento, registrar auditoria y excluir ese pago del control. SQL: backend/sql/control_5_pagos_duplicados_misma_fecha_monto.sql. Si es duplicado real, anular/unificar y reaplicar cascada.',
+    excepcionesReglas:
+      'Alcance de ESTE control (motor cartera): dos o mas pagos operativos del mismo prestamo con la misma fecha de pago (calendario) y el mismo monto. No es el control de unicidad global de numero_documento ni el de "mismo comprobante en varias filas" del Excel.\n\n' +
+      'Excepcion autorizada aqui: Visto admin (dialogo Control 5 en esta pestaña o POST control-5-pagos-duplicados-fecha-monto/{pago_id}/visto). El sistema elige A o P + 4 digitos; bitacora en auditoria_pago_control5_visto; columna pagos.excluir_control_pagos_mismo_dia_monto.\n\n' +
+      'Flujo distinto (Pagos > Carga masiva Excel): si el bloqueo es documento repetido en el archivo o "documento ya existe en BD" sin cumplir fecha+monto duplicado en cartera, NO use este Visto primero. En la tabla previa: Visto abre dialogo; la accion principal es anadir codigo (_A#### / _P####) en la carga; la decision de modificar o solo autorizar sin texto es humana. Control 5 de auditoria solo si ademas aplica el criterio fecha+monto entre pagos ya en BD.\n\n' +
+      'Referencia codigo: backend/app/services/pago_control5_visto_service.py, frontend TablaEditablePagos + AuditoriaCarteraTab.',
   },
   {
     n: 6,
@@ -100,6 +110,11 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     n: 16,
     codigo: 'pagos_huella_funcional_duplicada',
     titulo: 'Pagos con misma huella funcional (fecha, monto, ref_norm)',
+    notaOperativa:
+      'Indice operativo (prestamo, dia, monto, ref_norm). Colisiones por comprobante copiado o ref vacia mal normalizada: corregir numero_documento/ref en origen o usar sufijos en carga masiva para unicidad.',
+    excepcionesReglas:
+      'Alcance: dos o mas pagos activos con igual prestamo, fecha calendario, monto y ref_norm (indice ux_pagos_fingerprint_activos). Complementario al control 5 (misma fecha+monto) pero con ref_norm en el agrupamiento.\n\n' +
+      'Si el caso es legitimo (mismo cliente, comprobantes distintos mal tipados), separar ref_norm o documento. Si es el mismo comprobante en varias cuotas desde Excel, las reglas de sufijo _A####/_P#### en carga masiva reducen colisiones antes de que el pago entre al motor; una vez en BD, este control sigue aplicando si la huella coincide.',
   },
   {
     n: 17,
