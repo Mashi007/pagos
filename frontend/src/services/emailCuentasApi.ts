@@ -181,6 +181,11 @@ export const SERVICIO_POR_CUENTA: Record<number, string> = {
 /** Casos de envío de notificaciones que pueden usar cuenta 3 o 4. */
 
 export const NOTIF_TABS = [
+  {
+    id: 'd_2_antes_vencimiento',
+    label: '2 días antes (cuota pendiente)',
+  },
+
   { id: 'dias_1_retraso', label: 'Día siguiente al venc.' },
 
   { id: 'dias_3_retraso', label: '3 días retraso' },
