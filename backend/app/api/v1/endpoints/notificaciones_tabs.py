@@ -10,6 +10,10 @@ Paquete de correo al cliente (NOTIFICACIONES_PAQUETE_ESTRICTO=True por defecto):
 2) PDF variable Carta_Cobranza.pdf: generado con variables de cobranza (plantilla PDF / contexto).
 3) Al menos un PDF fijo adicional: documentos de pestaña "Documentos PDF anexos" y/o adjunto global;
    siempre se envia junto al PDF variable cuando el paquete es estricto.
+
+Excepcion PAGO_2_DIAS_ANTES_PENDIENTE («2 dias antes»): no se exige plantilla guardada en BD
+(textos por defecto del modulo si falta plantilla_id) ni Carta_Cobranza / adjuntos obligatorios;
+los PDFs de pestañas 2 y 3 son opcionales segun la fila de configuracion.
 """
 import logging
 from typing import Callable, Dict, List, Optional, Tuple
@@ -101,6 +105,11 @@ def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
 
 
 NOMBRE_PDF_CARTA_VARIABLE = "Carta_Cobranza.pdf"
+
+
+def _tipo_dos_dias_antes_solo_correo(tipo: str) -> bool:
+    """True para «2 dias antes»: envio de correo sin paquete cobranza obligatorio (plantilla opcional en BD)."""
+    return tipo == "PAGO_2_DIAS_ANTES_PENDIENTE"
 
 
 def _cfg_incluir_pdf_anexo(tipo_cfg: dict) -> bool:
@@ -198,7 +207,7 @@ def _enviar_correos_items(
     Modo producción: envío al correo de cada cliente; plantillas y PDF con datos reales.
 
     Con NOTIFICACIONES_PAQUETE_ESTRICTO=True (defecto): no se envia correo ni WhatsApp sin
-    plantilla email activa y PDF Carta_Cobranza valido.
+    plantilla email activa y PDF Carta_Cobranza valido (salvo PAGO_2_DIAS_ANTES_PENDIENTE: solo correo).
     Desactivar solo en emergencia vía .env (NOTIFICACIONES_PAQUETE_ESTRICTO=false).
     """
     if forzar_destinos_prueba is not None:
@@ -259,12 +268,13 @@ def _enviar_correos_items(
         plantilla_id = _parse_plantilla_id_desde_config(tipo_cfg.get("plantilla_id"))
 
         if paquete_estricto and db:
-            ok_plant, mot_plant = _validar_plantilla_email_estricta(db, plantilla_id)
-            if not ok_plant:
-                log_envio_paquete_incompleto(item_id_log, mot_plant, tipo)
-                omitidos_paquete_incompleto += 1
-                continue
-            requiere_pdf_cobranza = tipo != "MASIVOS"
+            if not _tipo_dos_dias_antes_solo_correo(tipo):
+                ok_plant, mot_plant = _validar_plantilla_email_estricta(db, plantilla_id)
+                if not ok_plant:
+                    log_envio_paquete_incompleto(item_id_log, mot_plant, tipo)
+                    omitidos_paquete_incompleto += 1
+                    continue
+            requiere_pdf_cobranza = tipo != "MASIVOS" and not _tipo_dos_dias_antes_solo_correo(tipo)
             if requiere_pdf_cobranza and not _cfg_incluir_pdf_anexo(tipo_cfg):
                 log_envio_paquete_incompleto(
                     item_id_log, "incluir_pdf_anexo_desactivado_en_config", tipo
@@ -302,8 +312,10 @@ def _enviar_correos_items(
             and not item.get("contexto_cobranza")
         ):
             plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
-            need_ctx = paquete_estricto or (
-                (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
+            solo_correo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
+            need_ctx = (
+                (paquete_estricto and not solo_correo_2d)
+                or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
                 or _cfg_incluir_pdf_anexo(tipo_cfg)
                 or (plantilla and plantilla_usa_variables_cobranza(plantilla))
             )
@@ -334,11 +346,15 @@ def _enviar_correos_items(
         # - PDF (pestaña 2): Carta_Cobranza.pdf generada desde Plantilla anexo PDF. Se agrega OBLIGATORIAMENTE si incluir_pdf_anexo=True.
         # - Adj. (pestaña 3): Documentos PDF fijos subidos en Documentos PDF anexos. Se agregan OBLIGATORIAMENTE si incluir_adjuntos_fijos no es False.
         if paquete_estricto:
-            incluir_pdf_anexo = tipo != "MASIVOS"
-            # Masivos: sin Carta_Cobranza.pdf; adjuntos de pestaña 3 según config
+            # Masivos y «2 dias antes»: PDF carta y fijos no son obligatorios; se respetan flags de la fila.
             if tipo == "MASIVOS":
+                incluir_pdf_anexo = False
+                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
+            elif _tipo_dos_dias_antes_solo_correo(tipo):
+                incluir_pdf_anexo = _cfg_incluir_pdf_anexo(tipo_cfg)
                 incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
             else:
+                incluir_pdf_anexo = True
                 incluir_adjuntos_fijos = True
         else:
             # Masivos: nunca Carta_Cobranza.pdf aunque la fila tenga PDF marcado (checkbox mora).
@@ -386,7 +402,7 @@ def _enviar_correos_items(
                     attachments = None
         if paquete_estricto:
             ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(attachments)
-            if tipo == "MASIVOS":
+            if tipo == "MASIVOS" or _tipo_dos_dias_antes_solo_correo(tipo):
                 ok_pkg = True
             if not ok_pkg:
                 relax_prueba = bool(
@@ -520,7 +536,8 @@ def _enviar_correos_items(
             log.warning(
                 "[notif_envio_diagnostico] enviados=0: %s items omitidos por paquete incompleto "
                 "(NOTIFICACIONES_PAQUETE_ESTRICTO=true). Se exige plantilla activa y Carta_Cobranza.pdf "
-                "valida (%%PDF). Emergencia: NOTIFICACIONES_PAQUETE_ESTRICTO=false en .env.",
+                "valida (%%PDF), salvo PAGO_2_DIAS_ANTES_PENDIENTE (solo correo). "
+                "Emergencia: NOTIFICACIONES_PAQUETE_ESTRICTO=false en .env.",
                 omitidos_paquete_incompleto,
             )
         if omitidos_config > 0 and omitidos_paquete_incompleto == 0 and habilitados == 0:

@@ -70,7 +70,7 @@ const CLAVES_GLOBALES = [
 
 const CCO_MAX = 3
 
-/** Separa correos por coma, punto y coma o salto de linea (maximo CCO_MAX). */
+/** Separa correos por coma, punto y coma o salto de linea (Enter; maximo CCO_MAX). */
 function parsearCorreosCco(texto: string): string[] {
   return texto
     .split(/[\n,;]+/)
@@ -513,6 +513,18 @@ export function ConfiguracionNotificaciones({
     []
   )
 
+  /**
+   * Texto libre del textarea CCO (incluye saltos con Enter). Sin esto, al parsear se pierden
+   * lineas vacias y el valor controlado colapsa: Enter no permitia escribir el siguiente correo.
+   */
+  const [ccoDraftPorTipo, setCcoDraftPorTipo] = useState<
+    Record<string, string>
+  >({})
+
+  const [ccoDraftPorCampanaId, setCcoDraftPorCampanaId] = useState<
+    Record<string, string>
+  >({})
+
   const envioConfigAbortRef = useRef<AbortController | null>(null)
 
   const beginEnvioConfigAbortable = () => {
@@ -535,9 +547,7 @@ export function ConfiguracionNotificaciones({
   }
 
   const hayEnvioConfigEnCurso =
-    enviandoCasoTipo !== null ||
-    enviandoMasivo ||
-    enviandoPruebaIndice !== null
+    enviandoCasoTipo !== null || enviandoMasivo || enviandoPruebaIndice !== null
 
   const guardandoRef = useRef(false)
 
@@ -691,6 +701,8 @@ export function ConfiguracionNotificaciones({
 
     setConfigEnvios(ce)
     setCampanasMasivos(cm)
+    setCcoDraftPorTipo({})
+    setCcoDraftPorCampanaId({})
   }, [dataEnvios])
 
   useEffect(() => {
@@ -746,13 +758,21 @@ export function ConfiguracionNotificaciones({
   }
 
   const setCcoDesdeTexto = (tipo: string, texto: string) => {
+    setCcoDraftPorTipo(prev => ({ ...prev, [tipo]: texto }))
     setConfig(tipo, { cco: parsearCorreosCco(texto) })
+  }
+
+  const valorTextareaCcoTipo = (tipo: string) => {
+    const borrador = ccoDraftPorTipo[tipo]
+    if (borrador !== undefined) return borrador
+    return getConfig(tipo).cco.filter(Boolean).join('\n')
   }
 
   const eliminarCCO = (tipo: string, index: number) => {
     const c = getConfig(tipo)
-
-    setConfig(tipo, { cco: c.cco.filter((_, i) => i !== index) })
+    const next = c.cco.filter((_, i) => i !== index)
+    setCcoDraftPorTipo(prev => ({ ...prev, [tipo]: next.join('\n') }))
+    setConfig(tipo, { cco: next })
   }
 
   const agregarCampanaMasiva = () => {
@@ -784,6 +804,12 @@ export function ConfiguracionNotificaciones({
   const eliminarCampanaMasiva = (id: string) => {
     markEnviosLocalDirty()
     setCampanasMasivos(prev => prev.filter(c => c.id !== id))
+    setCcoDraftPorCampanaId(prev => {
+      if (!(id in prev)) return prev
+      const n = { ...prev }
+      delete n[id]
+      return n
+    })
   }
 
   const guardarConfiguracionEnvios = async () => {
@@ -1045,14 +1071,20 @@ export function ConfiguracionNotificaciones({
       const d =
         await notificacionService.diagnosticoPaquetePrueba(tipoPruebaPaquete)
       setDiagnosticoPaquete(d)
+      const esDosDiasAntes = tipoPruebaPaquete === 'PAGO_2_DIAS_ANTES_PENDIENTE'
       if (d.ok && d.paquete_completo) {
         toast.success(
-          'Diagnostico: paquete listo (plantilla + Carta PDF + PDFs fijos). Puede enviar la prueba con confianza.',
+          esDosDiasAntes
+            ? 'Diagnostico: listo para 2 dias antes (correo). PDFs en pestanas 2 y 3 son opcionales segun la fila de envio.'
+            : 'Diagnostico: paquete listo (plantilla + Carta PDF + PDFs fijos). Puede enviar la prueba con confianza.',
           { duration: 8000 }
         )
       } else {
+        const guiaFalla = esDosDiasAntes
+          ? ' Revise SMTP, destinos de prueba y que exista un item de ejemplo en BD. No se exige plantilla guardada ni Carta PDF para este criterio.'
+          : ' Revise PDFs en pestanas 2 y 3 y volumen en Render. Opcional: NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO=true solo para prueba forzada.'
         toast.warning(
-          `Diagnostico: no listo (${d.motivo || d.paquete_motivo || 'revisar'}). Revise PDFs en pestanas 2 y 3 y volumen en Render. Opcional: NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO=true solo para prueba forzada.`,
+          `Diagnostico: no listo (${d.motivo || d.paquete_motivo || 'revisar'}).${guiaFalla}`,
           { duration: 14000 }
         )
       }
@@ -1201,8 +1233,9 @@ export function ConfiguracionNotificaciones({
           <CardDescription>
             {alcance === 'solo_prejudicial' ? (
               <>
-                Configuración solo para el listado <strong>Atraso 5 cuotas</strong>{' '}
-                (caso <strong>PREJUDICIAL</strong>
+                Configuración solo para el listado{' '}
+                <strong>Atraso 5 cuotas</strong> (caso{' '}
+                <strong>PREJUDICIAL</strong>
                 ): plantilla, envío, PDF y adjuntos de ese criterio. Las
                 plantillas COBRANZA se crean en Plantillas. El backend exige
                 plantilla activa, PDF variable válido y al menos un PDF fijo
@@ -1788,15 +1821,24 @@ export function ConfiguracionNotificaciones({
 
                         <div>
                           <label className="mb-1 block text-xs font-medium text-gray-600">
-                            CCO (coma, ; o salto)
+                            CCO (coma, ;, Enter)
                           </label>
                           <Textarea
-                            value={(camp.cco || []).join('\n')}
-                            onChange={e =>
-                              actualizarCampanaMasiva(camp.id, {
-                                cco: parsearCorreosCco(e.target.value),
-                              })
+                            value={
+                              ccoDraftPorCampanaId[camp.id] !== undefined
+                                ? ccoDraftPorCampanaId[camp.id]
+                                : (camp.cco || []).join('\n')
                             }
+                            onChange={e => {
+                              const v = e.target.value
+                              setCcoDraftPorCampanaId(prev => ({
+                                ...prev,
+                                [camp.id]: v,
+                              }))
+                              actualizarCampanaMasiva(camp.id, {
+                                cco: parsearCorreosCco(v),
+                              })
+                            }}
                             rows={3}
                             className="bg-white"
                           />
@@ -1908,8 +1950,7 @@ export function ConfiguracionNotificaciones({
                           className="text-blue-600 hover:underline"
                         >
                           Configuración → Plantillas
-                        </Link>
-                        {' '}
+                        </Link>{' '}
                         (caso {tipo}).
                       </p>
                     )}
@@ -2030,8 +2071,9 @@ export function ConfiguracionNotificaciones({
 
                           <p className="mb-2 text-xs text-gray-500">
                             Pegue varios correos aquí:{' '}
-                            <strong>uno por línea</strong>, o separados por{' '}
-                            <strong>coma</strong> o{' '}
+                            <strong>uno por línea</strong> (pulse{' '}
+                            <strong>Enter</strong> para pasar al siguiente), o
+                            separados por <strong>coma</strong> o{' '}
                             <strong>punto y coma</strong>. Máximo {CCO_MAX}. El
                             servidor solo usa direcciones con formato completo (
                             <code className="rounded bg-white px-0.5">@</code> y
@@ -2040,7 +2082,7 @@ export function ConfiguracionNotificaciones({
                           </p>
 
                           <Textarea
-                            value={config.cco.filter(Boolean).join('\n')}
+                            value={valorTextareaCcoTipo(tipo)}
                             onChange={e =>
                               setCcoDesdeTexto(tipo, e.target.value)
                             }

@@ -500,6 +500,62 @@ def test_paquete_estricto_pdf_carta_sin_cabecera_pdf_no_envia_smtp(
 @patch("app.api.v1.endpoints.notificaciones_tabs.settings")
 @patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
 @patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
+@patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
+def test_pago_2_dias_antes_estricto_sin_plantilla_id_envia_correo_sin_pdf_obligatorio(
+    mock_sync,
+    mock_pdf,
+    mock_send_email,
+    mock_settings,
+    db: Session,
+):
+    """PAGO_2_DIAS_ANTES_PENDIENTE no exige plantilla en BD ni Carta_Cobranza.pdf bajo paquete estricto."""
+    from app.api.v1.endpoints.notificaciones_tabs import (
+        _enviar_correos_items,
+        _tipo_pago_2_dias_antes_pendiente,
+    )
+
+    mock_settings.NOTIFICACIONES_PAQUETE_ESTRICTO = True
+    mock_send_email.return_value = (True, None)
+
+    items = [
+        {
+            "correo": "cliente@test.com",
+            "nombre": "Test",
+            "cedula": "V123",
+        }
+    ]
+    config_envios = {
+        "modo_pruebas": False,
+        "PAGO_2_DIAS_ANTES_PENDIENTE": {
+            "habilitado": True,
+            "incluir_pdf_anexo": False,
+            "incluir_adjuntos_fijos": False,
+        },
+    }
+
+    with patch(
+        "app.api.v1.endpoints.notificaciones_tabs.get_plantilla_asunto_cuerpo",
+        return_value=("Asunto 2d", "Cuerpo 2d"),
+    ):
+        out = _enviar_correos_items(
+            items,
+            "Base asunto",
+            "Base cuerpo",
+            config_envios,
+            _tipo_pago_2_dias_antes_pendiente,
+            db,
+        )
+
+    assert out["enviados"] == 1
+    assert out["omitidos_paquete_incompleto"] == 0
+    mock_pdf.assert_not_called()
+    mock_send_email.assert_called_once()
+    assert mock_send_email.call_args[1].get("attachments") is None
+
+
+@patch("app.api.v1.endpoints.notificaciones_tabs.settings")
+@patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
+@patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
 @patch("app.api.v1.endpoints.notificaciones_tabs.get_adjunto_fijo_cobranza_bytes")
 @patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
 def test_envio_cobranza_respeta_incluir_adjuntos_fijos_false(
