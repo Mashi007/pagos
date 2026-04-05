@@ -47,6 +47,7 @@ import { ConfiguracionNotificaciones } from '../components/notificaciones/Config
 
 import {
   NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
+  NOTIFICACIONES_D2_ANTES_QUERY_KEY,
   NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
   NOTIFICACIONES_MORA_BROADCAST_CHANNEL,
   NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
@@ -55,23 +56,29 @@ import {
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
-export type NotificacionesModulo = 'a1dia' | 'a3cuotas'
+export type NotificacionesModulo = 'a1dia' | 'a3cuotas' | 'd2antes'
 
-type TabId = 'dias_1_atraso' | 'prejudicial' | 'configuracion'
+type TabId = 'dias_1_atraso' | 'prejudicial' | 'd2antes' | 'configuracion'
 
 function tabsParaModulo(
   modulo: NotificacionesModulo
 ): { id: TabId; label: string; icon: typeof Clock }[] {
   if (modulo === 'a3cuotas') {
     return [
-      { id: 'prejudicial', label: 'A: 3 cuotas', icon: Clock },
+      { id: 'prejudicial', label: 'A: 5 cuotas', icon: Clock },
+      { id: 'configuracion', label: 'Configuración', icon: Settings },
+    ]
+  }
+  if (modulo === 'd2antes') {
+    return [
+      { id: 'd2antes', label: 'D:2 días', icon: Clock },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
     ]
   }
   return [
     {
       id: 'dias_1_atraso',
-      label: 'Día después del venc.',
+      label: 'Día siguiente al vencimiento',
       icon: Clock,
     },
     { id: 'configuracion', label: 'Configuración', icon: Settings },
@@ -79,7 +86,9 @@ function tabsParaModulo(
 }
 
 function tabListadoDefault(modulo: NotificacionesModulo): TabId {
-  return modulo === 'a3cuotas' ? 'prejudicial' : 'dias_1_atraso'
+  if (modulo === 'a3cuotas') return 'prejudicial'
+  if (modulo === 'd2antes') return 'd2antes'
+  return 'dias_1_atraso'
 }
 
 /** Clave de GET estadisticas-por-tab / rebotados (coincide con tipo_tab en envíos). */
@@ -190,12 +199,12 @@ function revisionManualNotifLink(row: ClienteRetrasadoItem): ReactNode {
   > = {
     pendiente: {
       icon: <AlertTriangle className="h-4 w-4" />,
-      title: 'Revisión manual: No iniciada — abrir formulario',
+      title: 'Revisión manual: No iniciada - abrir formulario',
       cls: 'text-amber-500 hover:bg-amber-50',
     },
     revisando: {
       icon: <HelpCircle className="h-4 w-4 text-orange-600" />,
-      title: 'Revisión manual: En revisión — continuar',
+      title: 'Revisión manual: En revisión - continuar',
       cls: 'text-orange-600 hover:bg-orange-50',
     },
     en_espera: {
@@ -210,7 +219,7 @@ function revisionManualNotifLink(row: ClienteRetrasadoItem): ReactNode {
     },
     revisado: {
       icon: <CheckCircle2 className="h-4 w-4" />,
-      title: 'Revisión manual: Revisado — reabrir si aplica',
+      title: 'Revisión manual: Revisado - reabrir si aplica',
       cls: 'text-green-600 hover:bg-green-50',
     },
   }
@@ -236,6 +245,9 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
 
     case 'prejudicial':
       return 'prejudicial'
+
+    case 'd2antes':
+      return 'd_2_antes_vencimiento'
 
     default:
       return null
@@ -279,7 +291,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       t === 'dias_5_atraso' ||
       t === 'dias_30_atraso' ||
       (modulo === 'a3cuotas' && t === 'dias_1_atraso') ||
-      (modulo === 'a1dia' && t === 'prejudicial')
+      (modulo === 'a3cuotas' && t === 'd2antes') ||
+      (modulo === 'a1dia' && t === 'prejudicial') ||
+      (modulo === 'a1dia' && t === 'd2antes') ||
+      (modulo === 'd2antes' && (t === 'dias_1_atraso' || t === 'prejudicial'))
     ) {
       setSearchParams(
         p => {
@@ -325,6 +340,26 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
       enabled: modulo === 'a1dia' && activeTab !== 'configuracion',
     })
+
+  const {
+    data: dataD2Antes,
+    isPending: isPendingD2,
+    isFetched: isFetchedD2,
+    isError: isErrorD2,
+    error: errorD2,
+    refetch: refetchD2,
+    isFetching: isFetchingD2,
+  } = useQuery({
+    queryKey: NOTIFICACIONES_D2_ANTES_QUERY_KEY,
+
+    queryFn: () => notificacionService.getCuotasPendiente2DiasAntes(),
+
+    staleTime: 0,
+
+    refetchOnWindowFocus: true,
+
+    enabled: modulo === 'd2antes' && activeTab !== 'configuracion',
+  })
 
   const {
     data: dataPrejudicial,
@@ -377,6 +412,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       masivos: { enviados: 0, rebotados: 0 },
 
       liquidados: { enviados: 0, rebotados: 0 },
+
+      d_2_antes_vencimiento: { enviados: 0, rebotados: 0 },
     } as EstadisticasPorTab,
   })
 
@@ -409,6 +446,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   >(null)
 
   const [enviandoPrejudicial, setEnviandoPrejudicial] = useState(false)
+
+  const [enviandoD2Antes, setEnviandoD2Antes] = useState(false)
 
   const handleDescargarEstadoCuentaPdf = async (prestamoId: number) => {
     setDescargandoEstadoCuentaId(prestamoId)
@@ -470,6 +509,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         }),
         queryClient.refetchQueries({
           queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+        }),
+        queryClient.refetchQueries({
+          queryKey: NOTIFICACIONES_D2_ANTES_QUERY_KEY,
         }),
         queryClient.refetchQueries({
           queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
@@ -535,10 +577,64 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     }
   }
 
+  const handleEnviarD2AntesManual = async () => {
+    if (modulo !== 'd2antes') return
+
+    const n = dataD2Antes?.items?.length ?? 0
+
+    const confirmar =
+      n === 0
+        ? window.confirm(
+            'No hay filas en el listado. El servidor procesará la lista actual del criterio PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía). ¿Ejecutar envío manual?'
+          )
+        : window.confirm(
+            `Envío manual para D:2 días (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
+          )
+
+    if (!confirmar) return
+
+    setEnviandoD2Antes(true)
+
+    try {
+      const res = await notificacionService.enviarCasoManual(
+        'PAGO_2_DIAS_ANTES_PENDIENTE'
+      )
+
+      toast.success(
+        `${res.mensaje} Enviados: ${res.enviados}. Sin email: ${res.sin_email}. Fallidos: ${res.fallidos}.`
+      )
+
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+      })
+
+      await invalidateListasNotificacionesMora(queryClient, {
+        skipCrossTabBroadcast: true,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+      })
+    } catch (e) {
+      console.error(e)
+
+      toast.error(
+        'No se pudo completar el envío. Revise PAGO_2_DIAS_ANTES_PENDIENTE en Configuración, cuentas de correo y modo prueba.'
+      )
+    } finally {
+      setEnviandoD2Antes(false)
+    }
+  }
+
   const getListForTab = (): ClienteRetrasadoItem[] => {
     if (modulo === 'a3cuotas') {
       if (activeTab !== 'prejudicial') return []
       return dataPrejudicial?.items ?? []
+    }
+
+    if (modulo === 'd2antes') {
+      if (activeTab !== 'd2antes') return []
+      return dataD2Antes?.items ?? []
     }
 
     if (!data) return []
@@ -630,17 +726,43 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setSortDir('desc')
   }
 
-  const isLoadingLista = modulo === 'a1dia' ? isPending : isPendingPrej
+  const isLoadingLista =
+    modulo === 'a1dia'
+      ? isPending
+      : modulo === 'a3cuotas'
+        ? isPendingPrej
+        : isPendingD2
 
-  const isErrorLista = modulo === 'a1dia' ? isError : isErrorPrej
+  const isErrorLista =
+    modulo === 'a1dia'
+      ? isError
+      : modulo === 'a3cuotas'
+        ? isErrorPrej
+        : isErrorD2
 
-  const errorLista = modulo === 'a1dia' ? error : errorPrej
+  const errorLista =
+    modulo === 'a1dia' ? error : modulo === 'a3cuotas' ? errorPrej : errorD2
 
-  const refetchLista = modulo === 'a1dia' ? refetch : refetchPrej
+  const refetchLista =
+    modulo === 'a1dia'
+      ? refetch
+      : modulo === 'a3cuotas'
+        ? refetchPrej
+        : refetchD2
 
-  const isFetchingLista = modulo === 'a1dia' ? isFetching : isFetchingPrej
+  const isFetchingLista =
+    modulo === 'a1dia'
+      ? isFetching
+      : modulo === 'a3cuotas'
+        ? isFetchingPrej
+        : isFetchingD2
 
-  const isFetchedLista = modulo === 'a1dia' ? isFetched : isFetchedPrej
+  const isFetchedLista =
+    modulo === 'a1dia'
+      ? isFetched
+      : modulo === 'a3cuotas'
+        ? isFetchedPrej
+        : isFetchedD2
 
   const listaCargadaSinFilas =
     !isErrorLista && !isLoadingLista && isFetchedLista && list.length === 0
@@ -701,8 +823,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           </nav>
         </div>
 
-        {/* Misma configuración completa en A: 1 día y A: 3 cuotas (un solo lugar en BD por tipo). */}
-        <ConfiguracionNotificaciones />
+        {/* Cada submenú: una fila de envíos / adjuntos por tipo en BD. */}
+        <ConfiguracionNotificaciones
+          alcance={
+            modulo === 'a1dia'
+              ? 'solo_pago_1_dia'
+              : modulo === 'd2antes'
+                ? 'solo_pago_2_dias_antes_pendiente'
+                : 'solo_prejudicial'
+          }
+        />
       </div>
     )
   }
@@ -718,8 +848,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           title="Notificaciones"
           description={
             modulo === 'a3cuotas'
-              ? 'Clientes con al menos cuatro cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
-              : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+              ? 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+              : modulo === 'd2antes'
+                ? 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 2 días (hoy + 2, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
+                : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
           }
           actions={
             <Button
@@ -742,7 +874,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             const count =
               tab.id === 'prejudicial'
                 ? (dataPrejudicial?.items?.length ?? 0)
-                : (data?.dias_1_atraso?.length ?? 0)
+                : tab.id === 'd2antes'
+                  ? (dataD2Antes?.items?.length ?? 0)
+                  : (data?.dias_1_atraso?.length ?? 0)
 
             return (
               <button
@@ -792,14 +926,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
               {modulo === 'a3cuotas'
-                ? 'Cuatro o más cuotas VENCIDO o MORA (prejudicial)'
-                : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
+                ? 'Cinco o más cuotas VENCIDO o MORA (prejudicial)'
+                : modulo === 'd2antes'
+                  ? 'D:2 días - PENDIENTE, vence en 2 días'
+                  : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
             </CardTitle>
 
             <CardDescription>
               {modulo === 'a3cuotas'
-                ? 'Una fila por cliente con al menos cuatro cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
-                : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
+                ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
+                : modulo === 'd2antes'
+                  ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
+                  : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
             </CardDescription>
           </CardHeader>
 
@@ -809,7 +947,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 variant="secondary"
                 size="sm"
                 onClick={() => void handleRefresh()}
-                disabled={actualizandoListas || enviandoPrejudicial}
+                disabled={
+                  actualizandoListas || enviandoPrejudicial || enviandoD2Antes
+                }
               >
                 <RefreshCw
                   className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
@@ -822,9 +962,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   size="sm"
                   onClick={() => void handleEnviarPrejudicialManual()}
                   disabled={
-                    enviandoPrejudicial ||
-                    actualizandoListas ||
-                    isLoadingLista
+                    enviandoPrejudicial || actualizandoListas || isLoadingLista
                   }
                   className="bg-blue-600 text-white hover:bg-blue-700"
                 >
@@ -832,6 +970,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     className={`mr-2 h-4 w-4 ${enviandoPrejudicial ? 'animate-pulse' : ''}`}
                   />
                   {enviandoPrejudicial
+                    ? 'Enviando...'
+                    : 'Enviar notificaciones (manual)'}
+                </Button>
+              )}
+
+              {modulo === 'd2antes' && (
+                <Button
+                  size="sm"
+                  onClick={() => void handleEnviarD2AntesManual()}
+                  disabled={
+                    enviandoD2Antes || actualizandoListas || isLoadingLista
+                  }
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  <Mail
+                    className={`mr-2 h-4 w-4 ${enviandoD2Antes ? 'animate-pulse' : ''}`}
+                  />
+                  {enviandoD2Antes
                     ? 'Enviando...'
                     : 'Enviar notificaciones (manual)'}
                 </Button>
@@ -1018,8 +1174,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           {listaCargadaSinFilas ? (
                             <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
                               {modulo === 'a3cuotas'
-                                ? 'Lista ya cargada: se requieren 4+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
-                                : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
+                                ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
+                                : modulo === 'd2antes'
+                                  ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
+                                  : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
                             </span>
                           ) : null}
                         </td>
@@ -1111,8 +1269,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           {listaCargadaSinFilas ? (
                             <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
                               {modulo === 'a3cuotas'
-                                ? 'Lista ya cargada: 4+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
-                                : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
+                                ? 'Lista ya cargada: 5+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
+                                : modulo === 'd2antes'
+                                  ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
+                                  : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
                             </span>
                           ) : null}
                         </td>

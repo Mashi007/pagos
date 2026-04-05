@@ -17,6 +17,11 @@ import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 export const TIPOS_CASO_DOCS: { value: string; label: string }[] = [
   { value: 'dias_1_retraso', label: 'Día siguiente al venc.' },
 
+  {
+    value: 'd_2_antes_vencimiento',
+    label: 'D:2 días (pendiente, vence en 2 días)',
+  },
+
   { value: 'dias_3_retraso', label: '3 días retraso' },
 
   { value: 'dias_5_retraso', label: '5 días retraso' },

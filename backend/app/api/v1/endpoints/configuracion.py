@@ -29,6 +29,7 @@ from app.api.v1.endpoints.email_config_validacion import validar_notificaciones_
 from app.core.email_config_holder import invalidate_email_config_cache
 from app.services.notificaciones_envios_store import (
     get_notificaciones_envios_dict,
+    merge_notificaciones_envios,
     put_notificaciones_envios_dict,
 )
 from app.services.notificaciones_programador import normalizar_payload_envios_programadores
@@ -317,22 +318,29 @@ def put_notificaciones_envios(
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_admin),
 ):
-    """Actualizar configuración de envíos. Payload: por tipo {habilitado, cco[], plantilla_id?, programador?, incluir_pdf_anexo?, incluir_adjuntos_fijos?}. Globales: modo_pruebas, email_pruebas, emails_pruebas."""
+    """Actualizar configuración de envíos. Se fusiona con la BD: un PUT parcial no borra otros tipos de caso ni otras filas."""
     if not isinstance(payload, dict):
         raise HTTPException(status_code=422, detail="El cuerpo debe ser un objeto JSON")
-    ok, errs = validar_notificaciones_envios_payload(payload)
-    if not ok:
-        raise HTTPException(status_code=422, detail="; ".join(errs) if errs else "Validacion fallida")
     try:
-        normalizar_payload_envios_programadores(payload)
-        put_notificaciones_envios_dict(db, payload)
+        existing = get_notificaciones_envios_dict(db)
+        merged = merge_notificaciones_envios(existing, payload)
+        ok, errs = validar_notificaciones_envios_payload(merged)
+        if not ok:
+            raise HTTPException(
+                status_code=422,
+                detail="; ".join(errs) if errs else "Validacion fallida",
+            )
+        normalizar_payload_envios_programadores(merged)
+        put_notificaciones_envios_dict(db, merged)
         db.commit()
         invalidate_email_config_cache()
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.exception("put_notificaciones_envios: %s", e)
         raise HTTPException(status_code=500, detail="Error al guardar la configuración de envíos")
-    return {"message": "Configuración de envíos actualizada", "configuracion": payload}
+    return {"message": "Configuración de envíos actualizada", "configuracion": merged}
 
 
 

@@ -16,6 +16,45 @@ logger = logging.getLogger(__name__)
 
 CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 
+# Claves globales del JSON (no son filas por tipo de caso).
+_GLOBAL_KEYS_ENVIOS = frozenset({"modo_pruebas", "email_pruebas", "emails_pruebas"})
+
+
+def merge_notificaciones_envios(existing: Any, incoming: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Fusiona el cuerpo del PUT sobre la config ya persistida.
+
+    Los tipos de caso (PAGO_*, PREJUDICIAL, MASIVOS, etc.) se fusionan por clave:
+    solo se actualizan campos enviados; no se borra un caso completo si el cliente
+    omite su clave. Así un guardado parcial (p. ej. solo modo_pruebas desde Email)
+    no elimina el resto de submódulos.
+
+    modo_pruebas / emails_pruebas: si vienen en incoming, sustituyen el valor en raíz.
+    masivos_campanas: si viene en incoming, sustituye el array completo.
+    """
+    base: Dict[str, Any] = {}
+    if isinstance(existing, dict):
+        base = dict(existing)
+    if not isinstance(incoming, dict):
+        return base
+    out: Dict[str, Any] = dict(base)
+    for key, value in incoming.items():
+        if key in _GLOBAL_KEYS_ENVIOS:
+            out[key] = value
+        elif key == "masivos_campanas":
+            out[key] = value
+        elif isinstance(value, dict):
+            prev = out.get(key)
+            if isinstance(prev, dict):
+                merged_row = dict(prev)
+                merged_row.update(value)
+                out[key] = merged_row
+            else:
+                out[key] = dict(value)
+        else:
+            out[key] = value
+    return out
+
 
 def get_notificaciones_envios_dict(db: Session) -> Dict[str, Any]:
     """Devuelve el dict guardado en BD o {} si ausente o invalido."""

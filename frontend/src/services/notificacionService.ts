@@ -163,6 +163,10 @@ export interface EstadisticasPorTab {
   masivos: EstadisticasTabItem
 
   liquidados: EstadisticasTabItem
+
+  /** Submenú D:2 días (PAGO_2_DIAS_ANTES_PENDIENTE). */
+
+  d_2_antes_vencimiento: EstadisticasTabItem
 }
 
 /** Un registro del historial de envíos por cédula (para reportes/legales). */
@@ -425,6 +429,20 @@ class NotificacionService {
         timeout: 60000,
       }
     )
+  }
+
+  /** Cuotas PENDIENTE con vencimiento = hoy + 2 (Caracas). Submenú D:2 días. */
+
+  async getCuotasPendiente2DiasAntes(): Promise<{
+    actualizado_en: string
+    items: ClienteRetrasadoItem[]
+    total: number
+  }> {
+    return await apiClient.get<{
+      actualizado_en: string
+      items: ClienteRetrasadoItem[]
+      total: number
+    }>(`${this.baseUrl}/cuotas-pendiente-2-dias-antes`, { timeout: 60000 })
   }
 
   /** KPIs por pestaña: enviados y rebotados (dias_5, dias_3, dias_1, hoy, dias_1_retraso). */

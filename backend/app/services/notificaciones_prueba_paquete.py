@@ -16,6 +16,7 @@ TIPOS_PRUEBA_PAQUETE = frozenset(
         "PAGO_3_DIAS_ATRASADO",
         "PAGO_5_DIAS_ATRASADO",
         "PAGO_30_DIAS_ATRASADO",
+        "PAGO_2_DIAS_ANTES_PENDIENTE",
         "PREJUDICIAL",
     }
 )
@@ -75,6 +76,18 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
             "Numero de cuota: {numero_cuota}\n"
             "Monto: {monto}\n\n"
             "Por favor regularice su pago lo antes posible.\n\n"
+            "Saludos,\nRapicredit"
+        )
+    elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
+        get_tipo = nt._tipo_pago_2_dias_antes_pendiente
+        asunto = "Recordatorio: cuota por vencer - Rapicredit"
+        cuerpo = (
+            "Estimado/a {nombre} (cedula {cedula}),\n\n"
+            "Le recordamos que tiene una cuota por vencer.\n"
+            "Fecha de vencimiento: {fecha_vencimiento}\n"
+            "Numero de cuota: {numero_cuota}\n"
+            "Monto: {monto}\n\n"
+            "Por favor realice el pago a tiempo.\n\n"
             "Saludos,\nRapicredit"
         )
     else:
@@ -193,6 +206,10 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     ):
         get_tipo = nt._tipo_retrasadas
         asunto_base = "Cuenta con cuota atrasada - Rapicredit"
+        cuerpo_base = "Prueba diagnostico"
+    elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
+        get_tipo = nt._tipo_pago_2_dias_antes_pendiente
+        asunto_base = "Recordatorio: cuota por vencer - Rapicredit"
         cuerpo_base = "Prueba diagnostico"
     else:
         get_tipo = nt._tipo_prejudicial

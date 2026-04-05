@@ -50,6 +50,74 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
 
+/** Logo marca (misma ruta que rapicredit-cobros; ver public/logos/README.md). */
+const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
+
+/** Enlace de atención al cliente (mismo número que cobros público). */
+const WHATSAPP_ATENCION_HREF = 'https://wa.me/584244579934'
+
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.883 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  )
+}
+
+function AtencionClienteWhatsAppLink({
+  className,
+  compact,
+}: {
+  className?: string
+  compact?: boolean
+}) {
+  return (
+    <a
+      href={WHATSAPP_ATENCION_HREF}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Atención al cliente por WhatsApp"
+      className={
+        compact
+          ? `inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-[#20bd5a] focus:outline-none focus:ring-2 focus:ring-[#25D366]/50 ${className ?? ''}`
+          : `flex w-full items-center justify-center gap-3 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white px-4 py-3.5 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-400/40 sm:py-4 ${className ?? ''}`
+      }
+    >
+      <span
+        className={
+          compact
+            ? 'flex h-8 w-8 items-center justify-center rounded-full bg-white/20'
+            : 'flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white shadow-inner'
+        }
+        aria-hidden
+      >
+        <WhatsAppIcon className={compact ? 'h-5 w-5' : 'h-7 w-7'} />
+      </span>
+      <span className={compact ? '' : 'min-w-0 flex-1'}>
+        <span
+          className={
+            compact
+              ? 'block text-sm font-bold text-white'
+              : 'block font-bold text-emerald-900'
+          }
+        >
+          Atención al cliente (WhatsApp)
+        </span>
+        {!compact && (
+          <span className="mt-0.5 block text-sm font-normal text-slate-600">
+            ¿Dudas? Escríbenos y te ayudamos.
+          </span>
+        )}
+      </span>
+    </a>
+  )
+}
+
 /** Normaliza para validar: quita espacios, guiones y puntos. Si solo 6-11 dígitos, al procesar se antepone V. No acepta puntos ni signos intermedios. */
 
 function normalizarCedulaParaProcesar(val: string): {
@@ -482,13 +550,20 @@ function EstadoCuentaPublicoPage() {
             {/* Sección izquierda: Branding */}
             <div className="flex flex-col justify-center space-y-6 px-2 sm:px-0">
               <div className="space-y-3">
-                <div>
-                  <p className="text-2xl font-bold text-white sm:text-3xl">
-                    RapiCredit
-                  </p>
-                  <p className="text-xs text-slate-400 sm:text-sm">
-                    Estado de cuenta
-                  </p>
+                <div className="flex items-center gap-3">
+                  <img
+                    src={LOGO_PUBLIC_SRC}
+                    alt="RapiCredit"
+                    className="h-12 w-auto max-w-[200px] object-contain sm:h-14"
+                  />
+                  <div>
+                    <p className="text-2xl font-bold text-white sm:text-3xl">
+                      RapiCredit
+                    </p>
+                    <p className="text-xs text-slate-400 sm:text-sm">
+                      Estado de cuenta
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -547,6 +622,14 @@ function EstadoCuentaPublicoPage() {
             <Card className="mx-1 border-0 bg-white shadow-2xl sm:mx-0">
               <CardContent className="space-y-4 p-5 sm:space-y-5 sm:p-6">
                 <div className="border-b border-slate-100 pb-4">
+                  <div className="mb-3 flex justify-center sm:mb-4">
+                    <img
+                      src={LOGO_PUBLIC_SRC}
+                      alt=""
+                      aria-hidden
+                      className="h-10 w-auto max-w-[180px] object-contain opacity-90"
+                    />
+                  </div>
                   <h2 className="text-xl font-semibold text-slate-900">
                     Acceso rápido
                   </h2>
@@ -618,19 +701,8 @@ function EstadoCuentaPublicoPage() {
             </Card>
           </div>
 
-          {/* Footer mínimo */}
-          <div className="mt-6 text-center text-xs text-slate-400">
-            <p>
-              ¿Preguntas? Contacta a soporte por
-              <a
-                href="https://wa.me/584244579934"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-1 text-emerald-400 underline hover:text-emerald-300"
-              >
-                WhatsApp
-              </a>
-            </p>
+          <div className="mt-6 flex justify-center px-2">
+            <AtencionClienteWhatsAppLink compact className="max-w-sm" />
           </div>
         </div>
       </div>
@@ -655,6 +727,12 @@ function EstadoCuentaPublicoPage() {
           <NotificationBanner
             notification={notification}
             onDismiss={dismissNotification}
+          />
+
+          <img
+            src={LOGO_PUBLIC_SRC}
+            alt="RapiCredit"
+            className="h-10 w-auto max-w-[200px] object-contain sm:h-11"
           />
 
           <Card className="w-full min-w-0 max-w-md overflow-hidden rounded-2xl border border-slate-200/80 shadow-xl">
@@ -721,6 +799,12 @@ function EstadoCuentaPublicoPage() {
           <NotificationBanner
             notification={notification}
             onDismiss={dismissNotification}
+          />
+
+          <img
+            src={LOGO_PUBLIC_SRC}
+            alt="RapiCredit"
+            className="h-10 w-auto max-w-[200px] object-contain sm:h-11"
           />
 
           <Card className="w-full min-w-0 max-w-md overflow-hidden rounded-2xl border border-slate-200/80 shadow-xl">
@@ -822,33 +906,35 @@ function EstadoCuentaPublicoPage() {
           onDismiss={dismissNotification}
         />
 
+        <img
+          src={LOGO_PUBLIC_SRC}
+          alt="RapiCredit"
+          className="h-10 w-auto max-w-[220px] object-contain sm:h-12"
+        />
+
         <Card className="w-full min-w-0 max-w-3xl overflow-hidden rounded-2xl border border-slate-200/80 shadow-xl ring-2 ring-emerald-500/20">
-          <CardHeader className="px-5 pb-2 sm:px-6">
+          <CardHeader className="space-y-4 px-5 pb-2 sm:px-6">
             <CardTitle className="text-xl font-bold text-[#1e3a5f] sm:text-2xl">
               Estado de cuenta
             </CardTitle>
 
-            <p className="mt-2 break-words text-sm font-medium text-slate-600">
-              Agradecemos que revises tu estado de cuenta. Si encuentras algún
-              problema, repórtalo por{' '}
-              <a
-                href="https://wa.me/584244579934"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-emerald-600 underline decoration-2 underline-offset-2 transition-colors hover:text-emerald-700"
-              >
-                WhatsApp
-              </a>{' '}
-              o ingresa a{' '}
+            <AtencionClienteWhatsAppLink />
+
+            <p className="break-words text-sm text-slate-600">
+              Gracias por consultar tu estado de cuenta. Si{' '}
+              <strong className="font-semibold text-slate-700">
+                reportaste un pago
+              </strong>
+              , puedes hacerlo también en{' '}
               <a
                 href="https://rapicredit.onrender.com/pagos/rapicredit-cobros"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold text-[#1e3a5f] underline decoration-2 underline-offset-2 transition-colors hover:text-[#152a47]"
               >
-                rapicredit-cobros
-              </a>{' '}
-              para actualizar tu estado de cuenta en 1 hora.
+                RapiCredit Cobros
+              </a>
+              ; allí verás reflejados los pagos aprobados en poco tiempo.
             </p>
           </CardHeader>
 
@@ -866,15 +952,8 @@ function EstadoCuentaPublicoPage() {
                 </p>
 
                 <p className="-mt-2 pb-2 text-center text-sm text-slate-500">
-                  Los datos reflejan el estado al momento de esta consulta. Cada
-                  nueva consulta muestra los pagos más recientes.
-                </p>
-                <p className="pb-2 text-center text-xs text-slate-500">
-                  Los pagos a cuotas se muestran según{' '}
-                  <span className="font-semibold text-slate-600">
-                    asignación en cascada
-                  </span>
-                  : se aplican en orden por número de cuota.
+                  La información corresponde al momento de esta consulta. Si
+                  vuelves a consultar, verás los datos más recientes.
                 </p>
 
                 {/* Visor PDF solo en desktop/tablet - usa <object> para mayor compatibilidad con blob URLs */}

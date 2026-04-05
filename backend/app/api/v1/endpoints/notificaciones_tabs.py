@@ -43,6 +43,7 @@ from app.services.notificaciones_exclusion_desistimiento import (
 )
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
+from app.services.notificacion_service import build_cuotas_pendiente_2_dias_antes_items
 from app.services.notificacion_logging import (
     log_envio_inicio,
     log_envio_config,
@@ -60,6 +61,7 @@ _CONFIG_TIPO_TO_TAB = {
     "PAGO_5_DIAS_ANTES": "dias_5",
     "PAGO_3_DIAS_ANTES": "dias_3",
     "PAGO_1_DIA_ANTES": "dias_1",
+    "PAGO_2_DIAS_ANTES_PENDIENTE": "d_2_antes_vencimiento",
     "PAGO_DIA_0": "hoy",
     "PAGO_1_DIA_ATRASADO": "dias_1_retraso",
     "PAGO_3_DIAS_ATRASADO": "dias_3_retraso",
@@ -585,6 +587,10 @@ def _tipo_dia_pago(_item: dict) -> str:
     return "PAGO_DIA_0"
 
 
+def _tipo_pago_2_dias_antes_pendiente(_item: dict) -> str:
+    return "PAGO_2_DIAS_ANTES_PENDIENTE"
+
+
 @router_dia_pago.post("/enviar")
 def enviar_notificaciones_dia_pago(db: Session = Depends(get_db)):
     """Env�a correo a cada cliente con cuota que vence hoy. Respeta config env�os (habilitado/CCO) desde BD."""
@@ -662,11 +668,11 @@ def enviar_notificaciones_retrasadas(db: Session = Depends(get_db)):
     return {"mensaje": "Env�o de notificaciones retrasadas finalizado.", **res}
 
 
-# --- Notificaciones prejudiciales (4+ cuotas en VENCIDO o MORA) ---
+# --- Notificaciones prejudiciales (5+ cuotas en VENCIDO o MORA) ---
 
 @router_prejudicial.get("")
 def get_notificaciones_prejudicial(estado: str = None, db: Session = Depends(get_db)):
-    """Lista de clientes con 4+ cuotas en estado VENCIDO o MORA (prejudicial). Email desde tabla clientes."""
+    """Lista de clientes con 5+ cuotas en estado VENCIDO o MORA (prejudicial). Email desde tabla clientes."""
     items = build_prejudicial_items(db)
     return {"items": items, "total": len(items)}
 
@@ -951,6 +957,7 @@ TIPOS_CASO_MANUAL = frozenset(
         "PAGO_5_DIAS_ANTES",
         "PAGO_3_DIAS_ANTES",
         "PAGO_1_DIA_ANTES",
+        "PAGO_2_DIAS_ANTES_PENDIENTE",
         "PAGO_DIA_0",
         "PAGO_1_DIA_ATRASADO",
         "PAGO_3_DIAS_ATRASADO",
@@ -1053,6 +1060,16 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
         elif tipo == "PAGO_1_DIA_ANTES":
             items = data["dias_1"]
             res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+        elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
+            items = build_cuotas_pendiente_2_dias_antes_items(db)
+            res = _enviar_correos_items(
+                items,
+                asunto_prev,
+                cuerpo_prev,
+                config_envios,
+                _tipo_pago_2_dias_antes_pendiente,
+                db,
+            )
         elif tipo == "PAGO_DIA_0":
             items = data["hoy"]
             res = _enviar_correos_items(items, asunto_hoy, cuerpo_hoy, config_envios, _tipo_dia_pago, db)
@@ -1081,9 +1098,13 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
 
 def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     """
-    Ejecuta el env�o de todas las notificaciones (previas, d�a pago, retrasadas, prejudicial).
+    Ejecuta en un solo batch varias familias de notificacion: previas, dia de pago, retrasadas,
+    prejudicial y masivos. Cada tipo usa su propia configuracion en notificaciones_envios (habilitado,
+    CCO, modo pruebas, etc.); no se mezclan entre si.
+
+    No incluye PAGO_2_DIAS_ANTES_PENDIENTE (D:2 dias antes del vencimiento), que tiene envio propio.
+
     Solo desde POST /notificaciones/enviar-todas (BackgroundTasks); sin envio automatico por hora.
-    Respeta configuraci�n de env�os (habilitado/CCO por tipo) desde BD.
     """
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)

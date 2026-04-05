@@ -143,6 +143,12 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
     color: 'blue',
   },
   {
+    tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
+    label: 'D:2 días (pendiente, vence en 2 días)',
+    categoria: 'Por vencer',
+    color: 'blue',
+  },
+  {
     tipo: 'PAGO_DIA_0',
     label: 'Vence hoy',
     categoria: 'Día de pago',
@@ -220,6 +226,12 @@ function esConfigEnvioSeccionId(v: string | null): v is ConfigEnvioSeccionId {
  * Subconjunto para prueba de paquete (cuotas en mora / prejudicial con datos típicos en BD).
  */
 export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
+  {
+    tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
+    label: 'D:2 días (pendiente, vence en 2 días)',
+    categoria: 'Por vencer',
+    color: 'blue',
+  },
   {
     tipo: 'PAGO_1_DIA_ATRASADO',
     label: 'Día siguiente al vencimiento',
@@ -401,6 +413,7 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
 export type ConfiguracionNotificacionesAlcance =
   | 'completo'
   | 'solo_pago_1_dia'
+  | 'solo_pago_2_dias_antes_pendiente'
   | 'solo_prejudicial'
 
 type ConfiguracionNotificacionesProps = {
@@ -433,6 +446,11 @@ export function ConfiguracionNotificaciones({
   const criteriosPanelFiltrados = useMemo(() => {
     if (alcance === 'solo_pago_1_dia') {
       return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'PAGO_1_DIA_ATRASADO')
+    }
+    if (alcance === 'solo_pago_2_dias_antes_pendiente') {
+      return CRITERIOS_ENVIO_PANEL.filter(
+        c => c.tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE'
+      )
     }
     if (alcance === 'solo_prejudicial') {
       return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'PREJUDICIAL')
@@ -513,6 +531,11 @@ export function ConfiguracionNotificaciones({
   const filasEnvioPorSeccion = useMemo(() => {
     if (alcance === 'solo_pago_1_dia') {
       return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'PAGO_1_DIA_ATRASADO')
+    }
+    if (alcance === 'solo_pago_2_dias_antes_pendiente') {
+      return CRITERIOS_ENVIO_TABLA.filter(
+        r => r.tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE'
+      )
     }
     if (alcance === 'solo_prejudicial') {
       return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'PREJUDICIAL')
@@ -995,6 +1018,18 @@ export function ConfiguracionNotificaciones({
         emails_pruebas: emailsPruebas.filter(e => e?.trim()),
 
         email_pruebas: emailsPruebas[0]?.trim() || '',
+
+        masivos_campanas: campanasMasivos.map(c => ({
+          id: c.id,
+          nombre: c.nombre,
+          habilitado: c.habilitado,
+          plantilla_id: c.plantilla_id ?? null,
+          programador: c.programador || HORA_DEFAULT_MASIVOS,
+          dias_semana: Array.from(new Set(c.dias_semana || [])).sort(
+            (a, b) => a - b
+          ),
+          cco: (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
+        })),
       }
 
       await emailConfigService.actualizarConfiguracionEnvios(payload)
@@ -1003,31 +1038,22 @@ export function ConfiguracionNotificaciones({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
       })
 
-      const res = await notificacionService.enviarTodasNotificaciones()
+      const res = await notificacionService.enviarNotificacionesMasivos()
 
-      if (res?.en_proceso && res?.mensaje) {
-        await queryClient.invalidateQueries({
-          queryKey: NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo,
-        })
-        toast.success(
-          `${res.mensaje} En unos segundos use Actualizar en Ultimo envio masivo para ver enviados y omitidos por paquete. Si enviados=0, revise PDFs en pestana 3 y disco persistente en Render.`,
-          { duration: 14000 }
+      const enviados = res?.enviados ?? 0
+      const fallidos = res?.fallidos ?? 0
+      const sinEmail = res?.sin_email ?? 0
+      const omitidos =
+        (res as { omitidos_config?: number })?.omitidos_config ?? 0
+
+      if (enviados + fallidos + sinEmail === 0 && omitidos > 0) {
+        toast.warning(
+          `Ningún envío masivo: ${omitidos} omitidos por configuración o paquete. Revise la fila MASIVOS y campañas.`
         )
       } else {
-        const { enviados, fallidos, sin_email, omitidos_config } = res ?? {}
-
-        if (
-          (enviados ?? 0) + (fallidos ?? 0) + (sin_email ?? 0) === 0 &&
-          (omitidos_config ?? 0) > 0
-        ) {
-          toast.warning(
-            `Ningún envío: ${omitidos_config} omitidos (activa Envío en al menos un caso y vuelve a intentar).`
-          )
-        } else {
-          toast.success(
-            `Envíos masivos prueba: ${enviados ?? 0} enviados, ${fallidos ?? 0} fallidos, ${sin_email ?? 0} sin email.`
-          )
-        }
+        toast.success(
+          `Prueba solo MASIVOS: ${enviados} enviados, ${fallidos} fallidos, ${sinEmail} sin email. No se ejecutaron mora/prejudicial ni otros casos.`
+        )
       }
     } catch (error: unknown) {
       const detalle = getErrorDetail(error)
@@ -1060,15 +1086,48 @@ export function ConfiguracionNotificaciones({
           </CardTitle>
 
           <CardDescription>
-            Cada correo al cliente (modo estricto) combina tres piezas: (1)
-            plantilla de correo HTML con variables; (2) PDF de carta con
-            variables (Carta_Cobranza.pdf); (3) PDFs fijos de anexos, siempre
-            junto al PDF variable. Aquí se configuran los casos de envío (por
-            vencer, día de pago, retrasadas, prejudicial, comunicaciones
-            masivas). Las plantillas tipo carta de cobranza (COBRANZA) se crean
-            en Plantillas y se eligen aqui por caso. El backend exige plantilla
-            activa, PDF variable valido y al menos un PDF fijo adicional
-            (sección Documentos PDF anexos / adjunto global).
+            {alcance === 'solo_prejudicial' ? (
+              <>
+                Configuración solo para el listado <strong>A: 5 cuotas</strong>{' '}
+                (caso <strong>PREJUDICIAL</strong>
+                ): plantilla, envío, PDF y adjuntos de ese criterio. Las
+                plantillas COBRANZA se crean en Plantillas. El backend exige
+                plantilla activa, PDF variable válido y al menos un PDF fijo
+                adicional.
+              </>
+            ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
+              <>
+                Configuración solo para <strong>D:2 días</strong> (caso{' '}
+                <strong>PAGO_2_DIAS_ANTES_PENDIENTE</strong>): cuotas en estado
+                PENDIENTE con vencimiento dentro de 2 días; plantilla, envío,
+                PDF y adjuntos del caso{' '}
+                <code className="rounded bg-gray-100 px-1">
+                  d_2_antes_vencimiento
+                </code>
+                .
+              </>
+            ) : alcance === 'solo_pago_1_dia' ? (
+              <>
+                Configuración solo para{' '}
+                <strong>día siguiente al vencimiento</strong> (caso{' '}
+                <strong>PAGO_1_DIA_ATRASADO</strong>): plantilla, envío, PDF y
+                adjuntos. Plantillas en Plantillas; PDFs fijos según adjuntos
+                del caso.
+              </>
+            ) : (
+              <>
+                Cada correo al cliente (modo estricto) combina tres piezas: (1)
+                plantilla de correo HTML con variables; (2) PDF de carta con
+                variables (Carta_Cobranza.pdf); (3) PDFs fijos de anexos,
+                siempre junto al PDF variable. Aquí se configuran los casos de
+                envío (por vencer, día de pago, retrasadas, prejudicial,
+                comunicaciones masivas). Las plantillas tipo carta de cobranza
+                (COBRANZA) se crean en Plantillas y se eligen aqui por caso. El
+                backend exige plantilla activa, PDF variable valido y al menos
+                un PDF fijo adicional (sección Documentos PDF anexos / adjunto
+                global).
+              </>
+            )}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -1222,13 +1281,47 @@ export function ConfiguracionNotificaciones({
 
             {modoPruebas && (
               <p className="text-xs text-gray-600">
-                Pestaña 1 = cuerpo HTML del correo; pestaña 2 = carta PDF;
-                pestaña 3 = PDF fijo por caso (ej. «Día siguiente al venc.» →{' '}
-                <code className="rounded bg-gray-100 px-1">dias_1_retraso</code>
-                ). El panel solo enlaza plantilla y flags: el archivo de la
-                pestaña 3 debe existir en el disco del servidor (si el hosting
-                borra archivos al desplegar, vuelva a subir el PDF o use volumen
-                persistente).
+                {alcance === 'solo_prejudicial' ? (
+                  <>
+                    Pestaña 1 = cuerpo HTML; pestaña 2 = carta PDF; pestaña 3 =
+                    PDF fijo del caso prejudicial (
+                    <code className="rounded bg-gray-100 px-1">
+                      prejudicial
+                    </code>
+                    ). El archivo de la pestaña 3 debe existir en el servidor.
+                  </>
+                ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
+                  <>
+                    Pestaña 1 = cuerpo HTML; pestaña 2 = carta PDF; pestaña 3 =
+                    PDF fijo (
+                    <code className="rounded bg-gray-100 px-1">
+                      d_2_antes_vencimiento
+                    </code>
+                    ).
+                  </>
+                ) : alcance === 'solo_pago_1_dia' ? (
+                  <>
+                    Pestaña 1 = cuerpo HTML; pestaña 2 = carta PDF; pestaña 3 =
+                    PDF fijo (
+                    <code className="rounded bg-gray-100 px-1">
+                      dias_1_retraso
+                    </code>
+                    ). El archivo debe existir en el servidor tras cada deploy.
+                  </>
+                ) : (
+                  <>
+                    Pestaña 1 = cuerpo HTML del correo; pestaña 2 = carta PDF;
+                    pestaña 3 = PDF fijo por caso (ej. «Día siguiente al venc.»
+                    →{' '}
+                    <code className="rounded bg-gray-100 px-1">
+                      dias_1_retraso
+                    </code>
+                    ). El panel solo enlaza plantilla y flags: el archivo de la
+                    pestaña 3 debe existir en el disco del servidor (si el
+                    hosting borra archivos al desplegar, vuelva a subir el PDF o
+                    use volumen persistente).
+                  </>
+                )}
               </p>
             )}
           </div>
@@ -1311,118 +1404,126 @@ export function ConfiguracionNotificaciones({
                   elegido (no recorre todos los clientes).
                 </p>
 
-                <Button
-                  onClick={handleEnviosMasivosPrueba}
-                  disabled={
-                    enviandoMasivo ||
-                    smtpConfigurado === false ||
-                    diagnosticoCargando
-                  }
-                  variant="outline"
-                  className="flex h-auto w-full items-center justify-center gap-2 rounded-lg border-amber-400 bg-amber-50 py-2 font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-                >
-                  <Mail className="h-5 w-5" />
+                {!alcanceReducido && (
+                  <>
+                    <Button
+                      onClick={handleEnviosMasivosPrueba}
+                      disabled={
+                        enviandoMasivo ||
+                        smtpConfigurado === false ||
+                        diagnosticoCargando
+                      }
+                      variant="outline"
+                      className="flex h-auto w-full items-center justify-center gap-2 rounded-lg border-amber-400 bg-amber-50 py-2 font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      <Mail className="h-5 w-5" />
 
-                  {enviandoMasivo ? 'Enviando...' : 'Envíos masivos prueba'}
-                </Button>
+                      {enviandoMasivo ? 'Enviando...' : 'Envíos masivos prueba'}
+                    </Button>
 
-                <p className="mt-2 text-sm text-gray-600">
-                  Envíos masivos: un correo por contacto del caso MASIVOS
-                  (campañas en Comunicaciones); en modo prueba todos van al
-                  correo de pruebas. Usa la plantilla de la primera campaña
-                  activa; si esa campaña no tiene plantilla, la de la fila
-                  «Comunicaciones masivas» (guarde antes).
-                </p>
+                    <p className="mt-2 text-sm text-gray-600">
+                      Solo caso MASIVOS: un correo por contacto de la lista
+                      masiva (campañas en Comunicaciones). No ejecuta día
+                      siguiente al vencimiento, prejudicial, D:2 días ni
+                      retrasadas. En modo prueba los destinos reales se
+                      redirigen al correo de pruebas. Guarde antes si cambió
+                      plantillas o campañas.
+                    </p>
+                  </>
+                )}
               </div>
             )}
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200">
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-base">Último envío masivo</CardTitle>
+      {!alcanceReducido && (
+        <Card className="border-slate-200">
+          <CardHeader className="pb-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-base">Último envío masivo</CardTitle>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1"
-              disabled={cargandoUltimoBatch}
-              onClick={() => void refetchUltimoBatch()}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${cargandoUltimoBatch ? 'animate-spin' : ''}`}
-              />
-              Actualizar
-            </Button>
-          </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                disabled={cargandoUltimoBatch}
+                onClick={() => void refetchUltimoBatch()}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${cargandoUltimoBatch ? 'animate-spin' : ''}`}
+                />
+                Actualizar
+              </Button>
+            </div>
 
-          <CardDescription className="text-xs">
-            Resultado del último «Enviar todas», del envío automático por hora
-            (Caracas) o del botón «Enviar este caso ahora» por fila. Útil cuando
-            la petición masiva responde 202 sin cuerpo.
-          </CardDescription>
-        </CardHeader>
+            <CardDescription className="text-xs">
+              Resultado del último lote grande (p. ej. «Enviar todas» en segundo
+              plano), del programador o de «Enviar este caso ahora» por fila. El
+              submódulo D:2 días no entra en «Enviar todas». Útil cuando una
+              petición responde 202 sin cuerpo.
+            </CardDescription>
+          </CardHeader>
 
-        <CardContent className="text-sm">
-          {(() => {
-            const u = ultimoBatchResp?.ultimo as
-              | Record<string, unknown>
-              | null
-              | undefined
+          <CardContent className="text-sm">
+            {(() => {
+              const u = ultimoBatchResp?.ultimo as
+                | Record<string, unknown>
+                | null
+                | undefined
 
-            if (u == null) {
+              if (u == null) {
+                return (
+                  <p className="text-gray-500">
+                    Aún no hay ningún resultado guardado en el servidor.
+                  </p>
+                )
+              }
+
+              if (u.omitido === true) {
+                return (
+                  <p className="text-amber-800">
+                    Omitido: {String(u.omitido_motivo ?? '-')} (
+                    {String(u.origen ?? '')})
+                  </p>
+                )
+              }
+
               return (
-                <p className="text-gray-500">
-                  Aún no hay ningún resultado guardado en el servidor.
-                </p>
+                <dl className="grid gap-1 sm:grid-cols-2">
+                  <dt className="text-gray-500">Origen</dt>
+                  <dd>{String(u.origen ?? '-')}</dd>
+                  <dt className="text-gray-500">Fin (UTC)</dt>
+                  <dd className="break-all">{String(u.fin_utc ?? '-')}</dd>
+                  <dt className="text-gray-500">Enviados</dt>
+                  <dd>{String(u.enviados ?? 0)}</dd>
+                  <dt className="text-gray-500">Fallidos</dt>
+                  <dd>{String(u.fallidos ?? 0)}</dd>
+                  <dt className="text-gray-500">Sin email</dt>
+                  <dd>{String(u.sin_email ?? 0)}</dd>
+                  <dt className="text-gray-500">Omitidos config</dt>
+                  <dd>{String(u.omitidos_config ?? 0)}</dd>
+                  <dt className="text-gray-500">Omitidos paquete</dt>
+                  <dd>{String(u.omitidos_paquete_incompleto ?? 0)}</dd>
+                  <dt className="text-gray-500">WhatsApp OK / fallo</dt>
+                  <dd>
+                    {String(u.enviados_whatsapp ?? 0)} /{' '}
+                    {String(u.fallidos_whatsapp ?? 0)}
+                  </dd>
+                  {u.error ? (
+                    <>
+                      <dt className="text-gray-500">Error</dt>
+                      <dd className="col-span-2 break-words text-red-700">
+                        {String(u.error)}
+                      </dd>
+                    </>
+                  ) : null}
+                </dl>
               )
-            }
-
-            if (u.omitido === true) {
-              return (
-                <p className="text-amber-800">
-                  Omitido: {String(u.omitido_motivo ?? '-')} (
-                  {String(u.origen ?? '')})
-                </p>
-              )
-            }
-
-            return (
-              <dl className="grid gap-1 sm:grid-cols-2">
-                <dt className="text-gray-500">Origen</dt>
-                <dd>{String(u.origen ?? '-')}</dd>
-                <dt className="text-gray-500">Fin (UTC)</dt>
-                <dd className="break-all">{String(u.fin_utc ?? '-')}</dd>
-                <dt className="text-gray-500">Enviados</dt>
-                <dd>{String(u.enviados ?? 0)}</dd>
-                <dt className="text-gray-500">Fallidos</dt>
-                <dd>{String(u.fallidos ?? 0)}</dd>
-                <dt className="text-gray-500">Sin email</dt>
-                <dd>{String(u.sin_email ?? 0)}</dd>
-                <dt className="text-gray-500">Omitidos config</dt>
-                <dd>{String(u.omitidos_config ?? 0)}</dd>
-                <dt className="text-gray-500">Omitidos paquete</dt>
-                <dd>{String(u.omitidos_paquete_incompleto ?? 0)}</dd>
-                <dt className="text-gray-500">WhatsApp OK / fallo</dt>
-                <dd>
-                  {String(u.enviados_whatsapp ?? 0)} /{' '}
-                  {String(u.fallidos_whatsapp ?? 0)}
-                </dd>
-                {u.error ? (
-                  <>
-                    <dt className="text-gray-500">Error</dt>
-                    <dd className="col-span-2 break-words text-red-700">
-                      {String(u.error)}
-                    </dd>
-                  </>
-                ) : null}
-              </dl>
-            )
-          })()}
-        </CardContent>
-      </Card>
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       {!alcanceReducido && (
         <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">

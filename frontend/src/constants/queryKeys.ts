@@ -21,9 +21,14 @@ export const NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY = [
   'notificaciones-estadisticas-por-tab',
 ] as const
 
-/** Lista prejudicial (GET /notificaciones-prejudicial); módulo A: 3 cuotas. */
+/** Lista prejudicial (GET /notificaciones-prejudicial); módulo A: 5 cuotas. */
 export const NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY = [
   'notificaciones-prejudicial-lista',
+] as const
+
+/** Pendiente, vence en 2 días (GET /notificaciones/cuotas-pendiente-2-dias-antes); submenú D:2 días. */
+export const NOTIFICACIONES_D2_ANTES_QUERY_KEY = [
+  'notificaciones-d2-antes-vencimiento',
 ] as const
 
 /** Mismo nombre en todas las pestañas del origen (sync listas de mora). */
@@ -64,6 +69,9 @@ export async function invalidateListasNotificacionesMora(
     }),
     queryClient.invalidateQueries({
       queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: NOTIFICACIONES_D2_ANTES_QUERY_KEY,
     }),
     queryClient.invalidateQueries({
       queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,

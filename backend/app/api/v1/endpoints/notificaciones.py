@@ -27,8 +27,10 @@ from app.services.cuota_estado import hoy_negocio
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
     ESTADOS_CUOTA_VENCIDO_Y_MORA,
+    PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA,
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
+    build_cuotas_pendiente_2_dias_antes_items,
     contar_cuotas_atraso_por_prestamos,
     enriquecer_items_notificacion_revision_manual,
     format_cuota_item,
@@ -381,6 +383,7 @@ def get_plantilla(plantilla_id: int, db: Session = Depends(get_db)):
 
 TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_5_DIAS_ANTES", "PAGO_3_DIAS_ANTES", "PAGO_1_DIA_ANTES",
+    "PAGO_2_DIAS_ANTES_PENDIENTE",
     "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO",
     "PAGO_30_DIAS_ATRASADO",
@@ -751,7 +754,7 @@ def get_adjuntos_fijos_cobranza(db: Session = Depends(get_db)):
 def upload_adjunto_fijo_cobranza(
     tipo_caso: str = Query(
         ...,
-        description="Caso: dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, prejudicial, masivos",
+        description="Caso: dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, d_2_antes_vencimiento, prejudicial, masivos",
     ),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -765,7 +768,7 @@ def upload_adjunto_fijo_cobranza(
     if tipo_caso not in TIPOS_CASO_VALIDOS:
         raise HTTPException(
             status_code=400,
-            detail="tipo_caso debe ser uno de: dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, prejudicial, masivos",
+            detail="tipo_caso debe ser uno de: dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, d_2_antes_vencimiento, prejudicial, masivos",
         )
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se permiten documentos PDF")
@@ -1296,6 +1299,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "dias_3_retraso": {"enviados": 0, "rebotados": 0},
         "dias_5_retraso": {"enviados": 0, "rebotados": 0},
         "dias_30_retraso": {"enviados": 0, "rebotados": 0},
+        "d_2_antes_vencimiento": {"enviados": 0, "rebotados": 0},
         "prejudicial": {"enviados": 0, "rebotados": 0},
         "masivos": {"enviados": 0, "rebotados": 0},
         "liquidados": {"enviados": 0, "rebotados": 0},
@@ -1310,6 +1314,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
             "dias_3_retraso",
             "dias_5_retraso",
             "dias_30_retraso",
+            "d_2_antes_vencimiento",
             "prejudicial",
             "masivos",
             "liquidados",
@@ -1341,6 +1346,7 @@ TIPOS_TAB_NOTIFICACIONES = (
     "dias_3_retraso",
     "dias_5_retraso",
     "dias_30_retraso",
+    "d_2_antes_vencimiento",
     "prejudicial",
     "masivos",
     "liquidados",
@@ -1385,7 +1391,7 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 def get_rebotados_por_tab(
     tipo: str = Query(
         ...,
-        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, prejudicial, masivos, liquidados",
+        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, d_2_antes_vencimiento, prejudicial, masivos, liquidados",
     ),
     db: Session = Depends(get_db),
 ):
@@ -1852,6 +1858,28 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/cuotas-pendiente-2-dias-antes", response_model=dict)
+def get_cuotas_pendiente_2_dias_antes(db: Session = Depends(get_db)):
+    """
+    Listado ligero: solo cuotas en estado PENDIENTE con fecha_vencimiento = hoy + 2 (Caracas).
+    Submenú «D:2 días»; configuración de envíos independiente (PAGO_2_DIAS_ANTES_PENDIENTE).
+    """
+    hoy = hoy_negocio()
+    try:
+        items = build_cuotas_pendiente_2_dias_antes_items(db)
+    except Exception as e:
+        logger.exception("cuotas-pendiente-2-dias-antes: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo cargar el listado. Reintente en unos segundos.",
+        ) from e
+    return {
+        "actualizado_en": hoy.isoformat(),
+        "items": items,
+        "total": len(items),
+    }
+
+
 def ejecutar_actualizacion_notificaciones(db: Session) -> dict:
     """
     Logica de actualizacion de notificaciones (mora desde cuotas no pagadas).
@@ -1876,7 +1904,7 @@ def actualizar_notificaciones(db: Session = Depends(get_db)):
 
 def build_prejudicial_items(db: Session) -> List[dict]:
     """
-    Solo la lista prejudicial (4+ cuotas con estado VENCIDO/MORA, vencidas, saldo pendiente).
+    Solo la lista prejudicial (5+ cuotas con estado VENCIDO/MORA, vencidas, saldo pendiente).
     No ejecuta la rama de retrasadas 1/3/5/30 ni contar_cuotas_atraso_por_prestamos masivo.
 
     GET /notificaciones-prejudicial debe usar esto (no get_notificaciones_tabs_data entero) para
@@ -1895,7 +1923,7 @@ def build_prejudicial_items(db: Session) -> List[dict]:
             ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
         )
         .group_by(Cuota.cliente_id)
-        .having(func.count(Cuota.id) >= 4)
+        .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA)
     )
     rows = db.execute(subq).all()
     if not rows:

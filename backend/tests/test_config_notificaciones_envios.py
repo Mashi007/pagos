@@ -77,6 +77,80 @@ def test_get_notificaciones_envios_vacio_devuelve_dict(client: TestClient):
     assert isinstance(data, dict)
 
 
+def test_merge_notificaciones_envios_put_parcial_no_elimina_otros_tipos():
+    """Un cuerpo PUT parcial solo debe anadir o fusionar claves; no borrar casos omitidos."""
+    from app.services.notificaciones_envios_store import merge_notificaciones_envios
+
+    existing = {
+        "modo_pruebas": False,
+        "COBRANZA": {"habilitado": True, "plantilla_id": 1, "cco": ["a@test.local"]},
+        "PAGO_5_DIAS_ANTES": {"habilitado": False, "plantilla_id": None},
+    }
+    incoming = {"PREJUDICIAL": {"habilitado": True, "plantilla_id": None}}
+    out = merge_notificaciones_envios(existing, incoming)
+    assert out["COBRANZA"]["plantilla_id"] == 1
+    assert out["COBRANZA"]["cco"] == ["a@test.local"]
+    assert out["PAGO_5_DIAS_ANTES"]["habilitado"] is False
+    assert out["PREJUDICIAL"]["habilitado"] is True
+
+
+def test_merge_notificaciones_envios_fila_dict_fusiona_campos():
+    """Dentro de un mismo tipo, solo se actualizan las claves enviadas."""
+    from app.services.notificaciones_envios_store import merge_notificaciones_envios
+
+    existing = {"COBRANZA": {"habilitado": True, "plantilla_id": 1, "cco": ["x@test.local"]}}
+    incoming = {"COBRANZA": {"plantilla_id": 2}}
+    out = merge_notificaciones_envios(existing, incoming)
+    assert out["COBRANZA"]["habilitado"] is True
+    assert out["COBRANZA"]["plantilla_id"] == 2
+    assert out["COBRANZA"]["cco"] == ["x@test.local"]
+
+
+def test_put_notificaciones_envios_merge_parcial_conserva_tipos_previos(client: TestClient, db: Session):
+    """Tras PUT completo y luego PUT solo con otro tipo, GET conserva ambos."""
+    first = {
+        "modo_pruebas": False,
+        "COBRANZA": {
+            "habilitado": True,
+            "plantilla_id": 1,
+            "incluir_pdf_anexo": True,
+            "incluir_adjuntos_fijos": False,
+            "cco": [],
+        },
+        "PAGO_5_DIAS_ANTES": {
+            "habilitado": False,
+            "plantilla_id": None,
+            "incluir_pdf_anexo": None,
+            "incluir_adjuntos_fijos": None,
+        },
+    }
+    r1 = client.put("/api/v1/configuracion/notificaciones/envios", json=first)
+    assert r1.status_code == 200
+
+    second = {
+        "PREJUDICIAL": {
+            "habilitado": True,
+            "plantilla_id": None,
+            "incluir_pdf_anexo": None,
+            "incluir_adjuntos_fijos": None,
+            "cco": [],
+        },
+    }
+    r2 = client.put("/api/v1/configuracion/notificaciones/envios", json=second)
+    assert r2.status_code == 200
+    merged = r2.json().get("configuracion") or {}
+    assert merged.get("COBRANZA", {}).get("plantilla_id") == 1
+    assert merged.get("PAGO_5_DIAS_ANTES", {}).get("habilitado") is False
+    assert merged.get("PREJUDICIAL", {}).get("habilitado") is True
+
+    r3 = client.get("/api/v1/configuracion/notificaciones/envios")
+    assert r3.status_code == 200
+    data = r3.json()
+    assert data.get("COBRANZA", {}).get("plantilla_id") == 1
+    assert data.get("PAGO_5_DIAS_ANTES", {}).get("habilitado") is False
+    assert data.get("PREJUDICIAL", {}).get("habilitado") is True
+
+
 def test_put_notificaciones_envios_guarda_y_get_devuelve_igual(client: TestClient, db: Session):
     """PUT guarda la config en BD; GET devuelve lo guardado (con tipos y claves globales)."""
     payload = {

@@ -221,14 +221,19 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
-          title: 'A: 1 día',
+          title: 'Día siguiente al vencimiento',
           href: '/notificaciones',
           icon: Clock,
           exactHref: true,
         },
         {
-          title: 'A: 3 cuotas',
+          title: 'A: 5 cuotas',
           href: '/notificaciones/a-3-cuotas',
+          icon: Clock,
+        },
+        {
+          title: 'D:2 días',
+          href: '/notificaciones/d-1-dia',
           icon: Clock,
         },
       ],

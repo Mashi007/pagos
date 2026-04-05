@@ -471,6 +471,15 @@ function App() {
               }
             />
 
+            <Route
+              path="notificaciones/d-1-dia"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <Notificaciones modulo="d2antes" />
+                </SimpleProtectedRoute>
+              }
+            />
+
             {/* Redirecciones: plantillas viven en Configuracin */}
 
             <Route

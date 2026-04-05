@@ -21,6 +21,7 @@ CLAVE_ADJUNTOS_FIJOS_POR_CASO = "adjuntos_fijos_por_caso"
 # Casos de notificaciones: retrasadas (desde dia siguiente al venc.), prejudicial
 TIPOS_CASO_VALIDOS = frozenset([
     "dias_1_retraso", "dias_3_retraso", "dias_5_retraso", "dias_30_retraso",
+    "d_2_antes_vencimiento",
     "prejudicial",
     "masivos",
 ])

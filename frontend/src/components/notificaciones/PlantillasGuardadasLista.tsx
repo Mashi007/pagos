@@ -20,6 +20,8 @@ const TIPO_LABEL: Record<string, string> = {
 
   PAGO_1_DIA_ANTES: 'Falta 1',
 
+  PAGO_2_DIAS_ANTES_PENDIENTE: 'D:2 días (2 días al venc.)',
+
   PAGO_DIA_0: 'Hoy vence',
 
   PAGO_1_DIA_ATRASADO: 'Día siguiente al vencimiento',
