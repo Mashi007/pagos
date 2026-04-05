@@ -36,6 +36,8 @@ from sqlalchemy.types import Date
 
 
 
+from app.core.config import settings
+
 from app.core.database import get_db
 
 from app.core.deps import get_current_user
@@ -531,6 +533,22 @@ def _saldo_pendiente_por_prestamo_cuotas(db: Session, prestamo_ids: List[int]) -
     return {pid: Decimal(str(v)) for pid, v in raw.items()}
 
 
+def _numero_cuotas_listado_safe(cuotas_por_prestamo: dict, prestamo_id: int, fallback_column: Any) -> Optional[int]:
+    """COUNT de BD o columna prestamos.numero_cuotas como int (evita ValidationError en listado)."""
+    raw = cuotas_por_prestamo.get(prestamo_id)
+    if raw is not None:
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            pass
+    if fallback_column is None:
+        return None
+    try:
+        return int(fallback_column)
+    except (TypeError, ValueError):
+        return None
+
+
 
 
 
@@ -763,177 +781,222 @@ def listar_prestamos(
 
 
 
-    total = db.scalar(count_q) or 0
+    try:
 
-    # Orden alineado con la columna "Fecha" (fecha_aprobacion) en la UI: más reciente primero.
-    # Secundario: fecha_requerimiento e id (no fecha_registro).
+        total = db.scalar(count_q) or 0
 
-    q = (
+        # Orden alineado con la columna "Fecha" (fecha_aprobacion) en la UI: más reciente primero.
+        # Secundario: fecha_requerimiento e id (no fecha_registro).
 
-        q.order_by(
+        q = (
 
-            Prestamo.fecha_aprobacion.desc().nullslast(),
+            q.order_by(
 
-            Prestamo.fecha_requerimiento.desc(),
+                Prestamo.fecha_aprobacion.desc().nullslast(),
 
-            Prestamo.id.desc(),
+                Prestamo.fecha_requerimiento.desc(),
+
+                Prestamo.id.desc(),
+
+            )
+
+            .offset((page - 1) * per_page)
+
+            .limit(per_page)
 
         )
 
-        .offset((page - 1) * per_page)
+        rows = db.execute(q).all()
 
-        .limit(per_page)
+        prestamo_ids = [row[0].id for row in rows]
 
-    )
+        fd_desist_map = fetch_prestamos_fecha_desistimiento_map(db, prestamo_ids)
 
-    rows = db.execute(q).all()
+        # Conteo de cuotas por préstamo (para mostrar en columna Cuotas)
 
-    prestamo_ids = [row[0].id for row in rows]
+        cuotas_por_prestamo = {}
 
-    fd_desist_map = fetch_prestamos_fecha_desistimiento_map(db, prestamo_ids)
+        if prestamo_ids:
 
-    # Conteo de cuotas por préstamo (para mostrar en columna Cuotas)
+            cuenta = select(Cuota.prestamo_id, func.count()).select_from(Cuota).where(
 
-    cuotas_por_prestamo = {}
+                Cuota.prestamo_id.in_(prestamo_ids)
 
-    if prestamo_ids:
+            ).group_by(Cuota.prestamo_id)
 
-        cuenta = select(Cuota.prestamo_id, func.count()).select_from(Cuota).where(
+            for pid, cnt in db.execute(cuenta).all():
 
-            Cuota.prestamo_id.in_(prestamo_ids)
-
-        ).group_by(Cuota.prestamo_id)
-
-        for pid, cnt in db.execute(cuenta).all():
-
-            cuotas_por_prestamo[pid] = cnt
-
-    saldos_pendiente = _saldo_pendiente_por_prestamo_cuotas(db, prestamo_ids)
-
-    
-
-    # Estados de revisión manual
-
-    revision_manual_estados = {}
-
-    if prestamo_ids:
+                cuotas_por_prestamo[pid] = cnt
 
         try:
 
-            rev_q = select(RevisionManualPrestamo.prestamo_id, RevisionManualPrestamo.estado_revision).where(
+            saldos_pendiente = _saldo_pendiente_por_prestamo_cuotas(db, prestamo_ids)
 
-                RevisionManualPrestamo.prestamo_id.in_(prestamo_ids)
-
-            )
-
-            for pid, estado in db.execute(rev_q).all():
-
-                revision_manual_estados[pid] = estado
-
-        except (ProgrammingError, OperationalError) as e:
+        except Exception as e:
 
             logger.warning(
 
-                "revision_manual_prestamos no disponible o error de BD al listar prestamos: %s",
+                "saldo pendiente (sum_saldo) no disponible al listar prestamos: %s",
 
                 e,
 
+                exc_info=True,
+
             )
 
-    
+            saldos_pendiente = {}
 
-    try:
+        # Estados de revisión manual
 
-        liquidacion_efectiva_ids = prestamo_ids_aprobados_todas_cuotas_cubiertas(
-            db, prestamo_ids
+        revision_manual_estados = {}
+
+        if prestamo_ids:
+
+            try:
+
+                rev_q = select(RevisionManualPrestamo.prestamo_id, RevisionManualPrestamo.estado_revision).where(
+
+                    RevisionManualPrestamo.prestamo_id.in_(prestamo_ids)
+
+                )
+
+                for pid, estado in db.execute(rev_q).all():
+
+                    revision_manual_estados[pid] = estado
+
+            except (ProgrammingError, OperationalError) as e:
+
+                logger.warning(
+
+                    "revision_manual_prestamos no disponible o error de BD al listar prestamos: %s",
+
+                    e,
+
+                )
+
+        try:
+
+            liquidacion_efectiva_ids = prestamo_ids_aprobados_todas_cuotas_cubiertas(
+                db, prestamo_ids
+            )
+
+        except Exception as e:
+
+            logger.warning(
+
+                "liquidacion efectiva (cuotas/cuota_pagos) no disponible al listar prestamos: %s",
+
+                e,
+
+                exc_info=True,
+
+            )
+
+            liquidacion_efectiva_ids = set()
+
+        items = []
+
+        for row in rows:
+
+            p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
+
+            # Cuotas: preferir conteo desde tabla cuotas; si no hay, usar columna numero_cuotas
+
+            numero_cuotas = _numero_cuotas_listado_safe(
+                cuotas_por_prestamo, p.id, p.numero_cuotas
+            )
+
+            estado_resp = p.estado or "DRAFT"
+
+            if p.id in liquidacion_efectiva_ids:
+
+                estado_resp = "LIQUIDADO"
+
+            item = PrestamoListResponse(
+
+                id=p.id,
+
+                cliente_id=p.cliente_id,
+
+                total_financiamiento=(p.total_financiamiento if p.total_financiamiento is not None else Decimal("0")),
+
+                estado=estado_resp,
+
+                estado_gestion_finiquito=getattr(
+                    p, "estado_gestion_finiquito", None
+                ),
+
+                finiquito_tramite_fecha_limite=getattr(
+                    p, "finiquito_tramite_fecha_limite", None
+                ),
+
+                concesionario=p.concesionario,
+
+                modelo=p.modelo,
+
+                analista=p.analista or "",
+
+                fecha_creacion=p.fecha_creacion,
+
+                fecha_actualizacion=p.fecha_actualizacion,
+
+                fecha_registro=p.fecha_registro,
+
+                fecha_aprobacion=p.fecha_aprobacion,
+
+                nombres=nombres_cliente or p.nombres,
+
+                cedula=cedula_cliente or p.cedula,
+
+                numero_cuotas=numero_cuotas,
+
+                modalidad_pago=p.modalidad_pago,
+
+                revision_manual_estado=revision_manual_estados.get(p.id),  # None si no existe
+
+                fecha_desistimiento=fd_desist_map.get(p.id),
+
+                saldo_pendiente=saldos_pendiente.get(p.id, Decimal("0")),
+
+            )
+
+            items.append(item)
+
+        total_pages = (total + per_page - 1) // per_page if total else 0
+
+        return {
+
+            "prestamos": items,
+
+            "total": total,
+
+            "page": page,
+
+            "per_page": per_page,
+
+            "total_pages": total_pages,
+
+        }
+
+    except HTTPException:
+
+        raise
+
+    except Exception as e:
+
+        logger.exception("listar_prestamos: error no controlado")
+
+        det = (
+
+            "Error al listar préstamos. Revise los logs del servidor (Render) o la conexión a la base de datos."
+
         )
 
-    except (ProgrammingError, OperationalError) as e:
+        if settings.DEBUG:
 
-        logger.warning(
-            "liquidacion efectiva (cuotas/cuota_pagos) no disponible al listar prestamos: %s",
-            e,
-        )
+            det = f"{type(e).__name__}: {e}"
 
-        liquidacion_efectiva_ids = set()
-
-    items = []
-
-    for row in rows:
-
-        p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
-
-        # Cuotas: preferir conteo desde tabla cuotas; si no hay, usar columna numero_cuotas
-
-        numero_cuotas = cuotas_por_prestamo.get(p.id) if cuotas_por_prestamo.get(p.id) is not None else p.numero_cuotas
-
-        estado_resp = p.estado or "DRAFT"
-
-        if p.id in liquidacion_efectiva_ids:
-
-            estado_resp = "LIQUIDADO"
-
-        item = PrestamoListResponse(
-
-            id=p.id,
-
-            cliente_id=p.cliente_id,
-
-            total_financiamiento=(p.total_financiamiento if p.total_financiamiento is not None else Decimal("0")),
-
-            estado=estado_resp,
-
-            estado_gestion_finiquito=getattr(
-                p, "estado_gestion_finiquito", None
-            ),
-
-            concesionario=p.concesionario,
-
-            modelo=p.modelo,
-
-            analista=p.analista or "",
-
-            fecha_creacion=p.fecha_creacion,
-
-            fecha_actualizacion=p.fecha_actualizacion,
-
-            fecha_registro=p.fecha_registro,
-
-            fecha_aprobacion=p.fecha_aprobacion,
-
-            nombres=nombres_cliente or p.nombres,
-
-            cedula=cedula_cliente or p.cedula,
-
-            numero_cuotas=numero_cuotas,
-
-            modalidad_pago=p.modalidad_pago,
-
-            revision_manual_estado=revision_manual_estados.get(p.id),  # None si no existe
-
-            fecha_desistimiento=fd_desist_map.get(p.id),
-
-            saldo_pendiente=saldos_pendiente.get(p.id, Decimal("0")),
-
-        )
-
-        items.append(item)
-
-    total_pages = (total + per_page - 1) // per_page if total else 0
-
-    return {
-
-        "prestamos": items,
-
-        "total": total,
-
-        "page": page,
-
-        "per_page": per_page,
-
-        "total_pages": total_pages,
-
-    }
+        raise HTTPException(status_code=500, detail=det) from e
 
 
 
@@ -1531,6 +1594,10 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
                     estado_gestion_finiquito=getattr(
                         p, "estado_gestion_finiquito", None
+                    ),
+
+                    finiquito_tramite_fecha_limite=getattr(
+                        p, "finiquito_tramite_fecha_limite", None
                     ),
 
                     concesionario=p.concesionario,

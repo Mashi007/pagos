@@ -451,6 +451,25 @@ export function FiniquitoRevisionDialog({
                             </Badge>
                           </div>
                         )}
+                      {prestamoCaso &&
+                        String(prestamoCaso.estado_gestion_finiquito) ===
+                          'EN_PROCESO' &&
+                        prestamoCaso.finiquito_tramite_fecha_limite != null &&
+                        String(
+                          prestamoCaso.finiquito_tramite_fecha_limite
+                        ).trim() !== '' && (
+                          <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-snug text-sky-950">
+                            El trámite de finiquito debería terminar el{' '}
+                            <span className="font-semibold">
+                              {formatDate(
+                                String(
+                                  prestamoCaso.finiquito_tramite_fecha_limite
+                                )
+                              )}
+                            </span>
+                            .
+                          </p>
+                        )}
                       <div className="grid min-h-0 grid-cols-1 gap-3 lg:grid-cols-3">
                         {DESCRIPCION_GRUPOS.map(grupo => {
                           const IconGrupo = grupo.icon

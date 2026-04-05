@@ -175,6 +175,8 @@ class PrestamoResponse(BaseModel):
     total_financiamiento: Decimal
     estado: str = "DRAFT"
     estado_gestion_finiquito: Optional[str] = None
+    # Plazo visible cuando EN_PROCESO (15 dias laborales lun-vie desde el cambio, Caracas).
+    finiquito_tramite_fecha_limite: Optional[date] = None
     concesionario: Optional[str] = None
     modelo: Optional[str] = None
     analista: Optional[str] = None

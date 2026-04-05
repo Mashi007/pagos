@@ -356,6 +356,9 @@ def _prestamo_caso_completo(p: Prestamo) -> dict[str, Any]:
         "analista_id": p.analista_id,
         "modelo_vehiculo_id": p.modelo_vehiculo_id,
         "estado_gestion_finiquito": getattr(p, "estado_gestion_finiquito", None),
+        "finiquito_tramite_fecha_limite": _dt_iso(
+            getattr(p, "finiquito_tramite_fecha_limite", None)
+        ),
     }
 
 
@@ -960,7 +963,7 @@ def finiquito_admin_patch_estado(
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_admin),
 ):
-    """Administrador: bandejas y area de trabajo (EN_PROCESO / TERMINADO con Sí/No)."""
+    """Administrador: bandejas y area de trabajo (REVISION desde area, EN_PROCESO, TERMINADO)."""
     nuevo = (body.estado or "").upper().strip()
     if nuevo not in ESTADOS_VALIDOS:
         return FiniquitoPatchEstadoResponse(ok=False, error="Estado invalido")
@@ -998,6 +1001,42 @@ def finiquito_admin_patch_estado(
             user_id=admin.id,
             nota=nota or None,
         )
+        sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
+        db.commit()
+        db.refresh(caso)
+        caso_out = _admin_casos_to_items(db, [caso])[0]
+        return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
+
+    if nuevo == "REVISION":
+        if anterior not in ("ACEPTADO", "EN_PROCESO", "TERMINADO"):
+            return FiniquitoPatchEstadoResponse(
+                ok=False,
+                error=(
+                    "Solo puede devolver a Revision desde el area de trabajo "
+                    "(Aceptado, En proceso o Terminado)."
+                ),
+            )
+        caso.estado = nuevo
+        if finiquito_casos_has_contacto_para_siguientes(db):
+            caso.contacto_para_siguientes = None
+        _registrar_historial(
+            db,
+            caso=caso,
+            estado_anterior=anterior,
+            estado_nuevo=nuevo,
+            actor_tipo="admin",
+            user_id=admin.id,
+        )
+        if finiquito_has_area_trabajo_auditoria_table(db):
+            _registrar_auditoria_area_trabajo(
+                db,
+                caso_id=caso.id,
+                accion="REVISION",
+                estado_anterior=anterior,
+                estado_nuevo=nuevo,
+                contacto_para_siguientes=None,
+                user_id=admin.id,
+            )
         sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
         db.commit()
         db.refresh(caso)

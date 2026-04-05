@@ -305,6 +305,19 @@ export function PrestamoDetalleModal({
                       ) : null}
                     </CardTitle>
                   </CardHeader>
+
+                  {prestamoData.estado_gestion_finiquito === 'EN_PROCESO' &&
+                  prestamoData.finiquito_tramite_fecha_limite ? (
+                    <CardContent className="pt-0 text-sm text-slate-600">
+                      El trámite de finiquito debería terminar el{' '}
+                      <span className="font-medium text-slate-800">
+                        {formatDate(
+                          prestamoData.finiquito_tramite_fecha_limite
+                        )}
+                      </span>
+                      .
+                    </CardContent>
+                  ) : null}
                 </Card>
 
                 {/* Información del Cliente */}

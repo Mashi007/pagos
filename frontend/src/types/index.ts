@@ -194,6 +194,9 @@ export interface Prestamo {
   /** Fase finiquito (Antiguo / En proceso / Terminado), reflejada en el préstamo. */
   estado_gestion_finiquito?: 'ANTIGUO' | 'EN_PROCESO' | 'TERMINADO' | null
 
+  /** Fecha límite del trámite (15 días laborales al pasar a En proceso), ISO date. */
+  finiquito_tramite_fecha_limite?: string | null
+
   usuario_proponente: string
 
   usuario_aprobador?: string

@@ -388,6 +388,8 @@ function FiniquitoGestionPageInner() {
           description:
             'Se envió aviso a operaciones y cobranza (si el correo del servidor está configurado).',
         })
+      } else if (estado === 'REVISION') {
+        toast.success('Caso en bandeja principal (Revisión)')
       } else {
         toast.success('Estado actualizado')
       }
@@ -571,30 +573,48 @@ function FiniquitoGestionPageInner() {
           <Download className="h-4 w-4" aria-hidden />
         )}
       </Button>
-      {row.estado === 'ACEPTADO' ? (
+      {row.estado === 'ACEPTADO' || row.estado === 'EN_PROCESO' ? (
         <>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="h-8 text-xs"
-            onClick={() => cambiarEstado(row.id, 'EN_PROCESO')}
+          <Select
+            key={`proceso-revision-${row.id}-${row.estado}`}
+            value={row.estado === 'EN_PROCESO' ? 'EN_PROCESO' : undefined}
+            onValueChange={v => {
+              if (v === 'REVISION') {
+                void cambiarEstado(row.id, 'REVISION')
+                return
+              }
+              if (v === 'EN_PROCESO') {
+                if (row.estado === 'EN_PROCESO') return
+                void cambiarEstado(row.id, 'EN_PROCESO')
+              }
+            }}
           >
-            En proceso
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
-            onClick={() =>
-              setDialogTerminado({
-                casoId: row.id,
-                preguntarContactoCliente: false,
-              })
-            }
-          >
-            Terminado
-          </Button>
+            <SelectTrigger
+              className="h-8 min-w-[168px] max-w-[200px] text-xs"
+              aria-label={`En proceso o revisión, caso ${row.id}`}
+            >
+              <SelectValue placeholder="En proceso / Revisión" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EN_PROCESO">En proceso</SelectItem>
+              <SelectItem value="REVISION">Revisión</SelectItem>
+            </SelectContent>
+          </Select>
+          {row.estado === 'ACEPTADO' ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+              onClick={() =>
+                setDialogTerminado({
+                  casoId: row.id,
+                  preguntarContactoCliente: false,
+                })
+              }
+            >
+              Terminado
+            </Button>
+          ) : null}
         </>
       ) : null}
       {row.estado === 'EN_PROCESO' ? (
@@ -622,6 +642,24 @@ function FiniquitoGestionPageInner() {
             Terminado
           </Button>
         </>
+      ) : null}
+      {row.estado === 'TERMINADO' ? (
+        <Select
+          key={`solo-revision-${row.id}`}
+          onValueChange={v => {
+            if (v === 'REVISION') void cambiarEstado(row.id, 'REVISION')
+          }}
+        >
+          <SelectTrigger
+            className="h-8 min-w-[168px] max-w-[200px] text-xs"
+            aria-label={`Volver a bandeja principal, caso ${row.id}`}
+          >
+            <SelectValue placeholder="Volver a Revisión…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="REVISION">Revisión (bandeja principal)</SelectItem>
+          </SelectContent>
+        </Select>
       ) : null}
     </div>
   )

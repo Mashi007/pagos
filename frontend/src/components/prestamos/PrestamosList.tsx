@@ -1746,6 +1746,20 @@ export function PrestamosList() {
                                   )}
                                 </Badge>
                               ) : null}
+
+                              {prestamo.estado_gestion_finiquito ===
+                                'EN_PROCESO' &&
+                              prestamo.finiquito_tramite_fecha_limite ? (
+                                <p className="max-w-[14rem] text-left text-xs leading-snug text-slate-600">
+                                  El trámite de finiquito debería terminar el{' '}
+                                  <span className="font-medium text-slate-800">
+                                    {formatDate(
+                                      prestamo.finiquito_tramite_fecha_limite
+                                    )}
+                                  </span>
+                                  .
+                                </p>
+                              ) : null}
                             </div>
                           </TableCell>
 
