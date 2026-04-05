@@ -188,6 +188,9 @@ function SortArrowsCuotas({
   )
 }
 
+/** Texto fijo de probación / cierre rápido desde la tabla de notificaciones. */
+const TEXTO_NOTA_REVISION_DESDE_NOTIF = 'Revisión en módulo de notificación'
+
 function detalleErrorRevisionNotif(e: unknown): string {
   const d = (e as { response?: { data?: { detail?: string } } })?.response?.data
     ?.detail
@@ -197,8 +200,8 @@ function detalleErrorRevisionNotif(e: unknown): string {
 }
 
 /**
- * Triángulo: enlace a /revision-manual/editar/:id (misma pantalla que el flujo completo).
- * Visto (revisado): botón para reabrir a revisando (solo administrador, misma regla que el backend).
+ * Triángulo: un clic marca revisado (visto) y deja constancia en notas del cliente; si no hay
+ * permiso para notas, en observaciones de la revisión. Visto: solo admin puede reabrir a revisando.
  */
 function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
   const queryClient = useQueryClient()
@@ -212,6 +215,13 @@ function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
 
   if (pid == null) return null
 
+  const lineaAuditoria = () => {
+    const ts = new Date().toLocaleString('es-VE', {
+      timeZone: 'America/Caracas',
+    })
+    return `${ts} - ${TEXTO_NOTA_REVISION_DESDE_NOTIF}`
+  }
+
   const invalidarListas = async () => {
     await invalidateListasNotificacionesMora(queryClient, {
       skipCrossTabBroadcast: true,
@@ -219,6 +229,60 @@ function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
     await queryClient.invalidateQueries({
       queryKey: ['revision-manual-prestamos'],
     })
+  }
+
+  const marcarVisto = async () => {
+    setBusy(true)
+    try {
+      const detalle =
+        await revisionManualService.getDetallePrestamoRevision(pid)
+      const estadoSrv = (
+        detalle?.revision?.estado_revision || 'pendiente'
+      ).toLowerCase()
+
+      if (estadoSrv === 'revisado') {
+        await invalidarListas()
+        toast.message('Ya constaba como revisado.')
+        return
+      }
+
+      const clienteId = detalle?.cliente?.cliente_id as number | undefined
+      if (!clienteId) {
+        toast.error('No se pudo obtener el cliente del préstamo.')
+        return
+      }
+
+      const notasPrev = String(detalle?.cliente?.notas || '').trim()
+      const linea = lineaAuditoria()
+      const notasNuevas = notasPrev ? `${notasPrev}\n${linea}` : linea
+
+      let notasClienteOk = false
+      try {
+        await revisionManualService.editarCliente(
+          clienteId,
+          { notas: notasNuevas },
+          { prestamoId: pid }
+        )
+        notasClienteOk = true
+      } catch (e) {
+        const msg = detalleErrorRevisionNotif(e)
+        toast.message(
+          `Notas del cliente no actualizadas (${msg}). Se deja constancia en la revisión.`
+        )
+      }
+
+      await revisionManualService.cambiarEstadoRevision(pid, {
+        nuevo_estado: 'revisado',
+        ...(notasClienteOk ? {} : { observaciones: linea }),
+      })
+
+      await invalidarListas()
+      toast.success('Marcado como visto (revisión en módulo de notificación).')
+    } catch (e) {
+      toast.error(detalleErrorRevisionNotif(e))
+    } finally {
+      setBusy(false)
+    }
   }
 
   const quitarVisto = async () => {
@@ -242,19 +306,26 @@ function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
     }
   }
 
-  const triClass =
-    'inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 bg-amber-50 text-amber-600 hover:bg-amber-100'
+  const btnBase =
+    'inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50'
 
   if (!esVisto) {
     return (
-      <Link
-        to={`/revision-manual/editar/${pid}`}
-        className={triClass}
-        title="Abrir revisión manual (formulario del préstamo)"
-        aria-label="Abrir revisión manual del préstamo"
+      <button
+        type="button"
+        role="switch"
+        aria-checked={false}
+        disabled={busy}
+        title="Marcar visto: revisión cerrada y nota genérica en datos del cliente (o en observaciones si no hay permiso)"
+        aria-label="Marcar como revisado desde notificaciones con nota genérica"
+        onClick={() => {
+          if (busy) return
+          void marcarVisto()
+        }}
+        className={`${btnBase} bg-amber-50 text-amber-600 hover:bg-amber-100`}
       >
         <AlertTriangle className="h-4 w-4" aria-hidden />
-      </Link>
+      </button>
     )
   }
 
@@ -274,7 +345,7 @@ function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
         if (busy) return
         void quitarVisto()
       }}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent bg-emerald-50 text-green-600 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+      className={`${btnBase} bg-emerald-50 text-green-600 hover:bg-emerald-100`}
     >
       <CheckCircle2 className="h-4 w-4" aria-hidden />
     </button>
@@ -1290,7 +1361,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       <th
                         className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                         scope="col"
-                        title="Revisión manual: triángulo abre el formulario; visto (revisado) solo admin puede reabrir con otro clic."
+                        title="Revisión manual: triángulo marca visto con nota genérica; visto solo admin puede reabrir."
                       >
                         Revisión
                         <br />
@@ -1389,7 +1460,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       <th
                         className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                         scope="col"
-                        title="Revisión manual: triángulo abre el formulario; visto (revisado) solo admin puede reabrir con otro clic."
+                        title="Revisión manual: triángulo marca visto con nota genérica; visto solo admin puede reabrir."
                       >
                         Revisión
                         <br />
