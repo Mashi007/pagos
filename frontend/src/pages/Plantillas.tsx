@@ -19,6 +19,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Button } from '../components/ui/button'
 
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select'
+
+import {
   FileText,
   Link as LinkIcon,
   ChevronLeft,
@@ -32,6 +40,13 @@ import {
 
 import type { NotificacionPlantilla } from '../services/notificacionService'
 
+import {
+  NOTIF_PLANTILLA_TIPO_QUERY,
+  normalizarNotifTipoDesdeQuery,
+  OPCIONES_SELECT_NOTIF_TIPO_PLANTILLA,
+  rutaListadoNotificacionesPorTipoPlantilla,
+} from '../constants/notifPlantillaServicioContexto'
+
 const SUBTAB_CUERPO_EMAIL = 'cuerpo-email'
 
 const SUBTAB_ANEXO_PDF = 'anexo-pdf'
@@ -44,6 +59,10 @@ export function Plantillas() {
   const navigate = useNavigate()
 
   const subtabFromUrl = searchParams.get('subtab')
+
+  const tipoServicioPlantilla = normalizarNotifTipoDesdeQuery(
+    searchParams.get(NOTIF_PLANTILLA_TIPO_QUERY)
+  )
 
   const [plantillaAEditar, setPlantillaAEditar] =
     useState<NotificacionPlantilla | null>(null)
@@ -84,6 +103,13 @@ export function Plantillas() {
     navigate('/configuracion')
   }
 
+  const cambiarCasoPlantillaEmail = (v: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (v === 'PAGO_1_DIA_ATRASADO') next.delete(NOTIF_PLANTILLA_TIPO_QUERY)
+    else next.set(NOTIF_PLANTILLA_TIPO_QUERY, v)
+    setSearchParams(next, { replace: true })
+  }
+
   return (
     <div className="space-y-4 p-4">
       <div className="flex items-center justify-between">
@@ -96,6 +122,41 @@ export function Plantillas() {
             caso (pestaña 3). El servidor no envía si falta alguna (salvo
             emergencia con NOTIFICACIONES_PAQUETE_ESTRICTO=false).
           </p>
+
+          <div className="mt-3 max-w-xl space-y-1">
+            <label
+              htmlFor="notif-tipo-plantillas"
+              className="text-xs font-medium text-gray-600"
+            >
+              Caso de notificación (plantillas nuevas de email y editor HTML)
+            </label>
+
+            <Select
+              value={tipoServicioPlantilla}
+              onValueChange={cambiarCasoPlantillaEmail}
+            >
+              <SelectTrigger
+                id="notif-tipo-plantillas"
+                className="h-9 bg-white"
+              >
+                <SelectValue />
+              </SelectTrigger>
+
+              <SelectContent>
+                {OPCIONES_SELECT_NOTIF_TIPO_PLANTILLA.map(o => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <p className="text-xs text-gray-500">
+              Si entra desde el menú lateral sin contexto, elija aquí el mismo
+              caso que en Notificaciones para no guardar plantillas en el tipo
+              equivocado.
+            </p>
+          </div>
 
           <div className="mt-3 overflow-hidden rounded-lg border border-blue-100 bg-blue-50/50 text-sm text-gray-700">
             <button
@@ -157,8 +218,9 @@ export function Plantillas() {
             size="sm"
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
             onClick={() => {
-              // Módulo a1dia: listado «Día siguiente al vencimiento» (sin ?tab=configuracion).
-              navigate('/notificaciones')
+              navigate(
+                rutaListadoNotificacionesPorTipoPlantilla(tipoServicioPlantilla)
+              )
             }}
           >
             <Bell className="h-4 w-4" />
@@ -204,6 +266,7 @@ export function Plantillas() {
             plantillaInicial={plantillaAEditar}
             onPlantillaCargada={() => setPlantillaAEditar(null)}
             tabSeccionActiva={activeTab}
+            tipoServicioPlantilla={tipoServicioPlantilla}
           />
         </TabsContent>
 

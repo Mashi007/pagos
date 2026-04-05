@@ -254,6 +254,26 @@ class ApiClient {
           config.timeout = 180000 // 3 minutos
         }
 
+        // FormData: no fijar Content-Type aquí; axios/navegador añaden multipart + boundary.
+        // Si queda 'application/json' por defecto o 'multipart/form-data' sin boundary, el backend puede no leer el archivo.
+        if (
+          typeof FormData !== 'undefined' &&
+          config.data instanceof FormData
+        ) {
+          const h = config.headers as unknown as {
+            delete?: (name: string) => void
+            'Content-Type'?: string
+            'content-type'?: string
+          }
+          if (typeof h?.delete === 'function') {
+            h.delete('Content-Type')
+            h.delete('content-type')
+          } else if (h) {
+            delete h['Content-Type']
+            delete h['content-type']
+          }
+        }
+
         return config
       },
 
@@ -1157,10 +1177,6 @@ class ApiClient {
     formData.append('file', file)
 
     const response: AxiosResponse<T> = await this.client.post(url, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-
       onUploadProgress,
     })
 

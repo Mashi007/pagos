@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 import {
   notificacionService,
@@ -27,6 +27,8 @@ import { Save, Mail, Eye, FileText } from 'lucide-react'
 
 import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
 
+import { etiquetaServicioPlantilla } from '../../constants/notifPlantillaServicioContexto'
+
 /** Mapeo alineado con backend notificaciones_tabs._CONFIG_TIPO_TO_TAB (cuenta SMTP por pesta\u00f1a). */
 const PLANTILLA_TIPO_A_TIPO_TAB: Record<string, string> = {
   PAGO_5_DIAS_ANTES: 'dias_5',
@@ -47,11 +49,15 @@ interface EditorPlantillaHTMLProps {
   plantilla?: NotificacionPlantilla | null
 
   onGuardado?: (plantilla: NotificacionPlantilla) => void
+
+  /** Alineado con ?notif_tipo= / submenú Notificaciones para plantillas nuevas. */
+  tipoServicioPorDefecto?: string
 }
 
 export function EditorPlantillaHTML({
   plantilla,
   onGuardado,
+  tipoServicioPorDefecto = 'PAGO_1_DIA_ATRASADO',
 }: EditorPlantillaHTMLProps) {
   const [id, setId] = useState<number | null>(plantilla?.id ?? null)
 
@@ -59,7 +65,13 @@ export function EditorPlantillaHTML({
 
   const [descripcion, setDescripcion] = useState(plantilla?.descripcion ?? '')
 
-  const [tipo, setTipo] = useState(plantilla?.tipo ?? 'PAGO_1_DIA_ATRASADO')
+  const [tipo, setTipo] = useState(
+    () => plantilla?.tipo ?? tipoServicioPorDefecto
+  )
+
+  useEffect(() => {
+    if (id == null) setTipo(tipoServicioPorDefecto)
+  }, [tipoServicioPorDefecto, id])
 
   const [asunto, setAsunto] = useState(plantilla?.asunto ?? '')
 
@@ -74,8 +86,6 @@ export function EditorPlantillaHTML({
   const [emailPrueba, setEmailPrueba] = useState('')
 
   const [mostrarPreview, setMostrarPreview] = useState(true)
-
-  const TIPO_SERVICIO_EDITOR = 'PAGO_1_DIA_ATRASADO'
 
   const handleGuardar = async () => {
     if (!nombre.trim()) {
@@ -110,7 +120,7 @@ export function EditorPlantillaHTML({
 
         descripcion: descripcion.trim() || null,
 
-        tipo: id ? tipo : TIPO_SERVICIO_EDITOR,
+        tipo: id ? tipo : tipoServicioPorDefecto,
 
         asunto: asunto.trim(),
 
@@ -211,16 +221,16 @@ export function EditorPlantillaHTML({
               <label className="text-sm font-medium text-gray-700">Tipo</label>
 
               <div className="mt-1 rounded-md border border-gray-200 bg-slate-50 px-3 py-2 text-sm text-gray-800">
-                Día siguiente al vencimiento (1 día de atraso calendario)
+                {etiquetaServicioPlantilla(tipoServicioPorDefecto)}
               </div>
 
-              {id != null && tipo !== TIPO_SERVICIO_EDITOR ? (
+              {id != null && tipo !== tipoServicioPorDefecto ? (
                 <p className="mt-1 text-xs text-amber-800">
                   Esta fila en BD es tipo heredado{' '}
                   <code className="rounded bg-amber-100 px-1">{tipo}</code>; al
                   actualizar se conserva. Las plantillas nuevas usan solo{' '}
                   <code className="rounded bg-amber-100 px-1">
-                    {TIPO_SERVICIO_EDITOR}
+                    {tipoServicioPorDefecto}
                   </code>
                   .
                 </p>

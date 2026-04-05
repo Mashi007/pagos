@@ -600,8 +600,7 @@ class NotificacionService {
     form.append('file', file)
     return await apiClient.post(
       `${this.baseUrl}/adjuntos-fijos-cobranza/upload?tipo_caso=${encodeURIComponent(tipoCaso)}`,
-      form,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      form
     )
   }
 

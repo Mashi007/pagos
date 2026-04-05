@@ -1,9 +1,9 @@
 /**
  * Pestaña "Documentos PDF anexos": claves tipo_tab del backend (get_adjuntos_fijos_por_caso).
- * No se ofrece subida nueva a dias_1_retraso; si hay archivos legacy, siguen listándose.
+ * dias_1_retraso = envíos «día siguiente al vencimiento» (PAGO_1_DIA_ATRASADO en tabs).
  */
 export const ETIQUETA_CASO_TAB_ADJUNTO: Record<string, string> = {
-  dias_1_retraso: 'Día siguiente al venc. (histórico)',
+  dias_1_retraso: 'Día siguiente al vencimiento',
   d_2_antes_vencimiento: '2 días antes (pendiente, vence en 2 días)',
   dias_3_retraso: '3 días retraso',
   dias_5_retraso: '5 días retraso',
@@ -12,8 +12,12 @@ export const ETIQUETA_CASO_TAB_ADJUNTO: Record<string, string> = {
   masivos: 'Comunicaciones masivas',
 }
 
-/** Casos disponibles al subir un PDF (sin día siguiente al venc.). */
+/** Casos disponibles al subir un PDF (todos los tipo_caso del backend para anexos). */
 export const TIPOS_CASO_ADJUNTO_SUBIDA: { value: string; label: string }[] = [
+  {
+    value: 'dias_1_retraso',
+    label: ETIQUETA_CASO_TAB_ADJUNTO.dias_1_retraso,
+  },
   {
     value: 'd_2_antes_vencimiento',
     label: ETIQUETA_CASO_TAB_ADJUNTO.d_2_antes_vencimiento,

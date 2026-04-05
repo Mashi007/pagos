@@ -807,9 +807,7 @@ def upload_adjunto_fijo_cobranza(
         )
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se permiten documentos PDF")
-    content_type = file.content_type or ""
-    if "pdf" not in content_type.lower():
-        raise HTTPException(status_code=400, detail="El archivo debe ser PDF (content-type application/pdf)")
+    # Muchos navegadores envían application/octet-stream; la validez real es la cabecera %PDF- tras leer bytes.
     try:
         data = file.file.read()
     except Exception as e:

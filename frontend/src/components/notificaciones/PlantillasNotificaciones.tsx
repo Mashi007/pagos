@@ -62,10 +62,12 @@ import { EditorPlantillaHTML } from './EditorPlantillaHTML'
 
 import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
 
-type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
+import {
+  etiquetaServicioPlantilla,
+  bordeTarjetaServicioPlantilla,
+} from '../../constants/notifPlantillaServicioContexto'
 
-/** Unico servicio de plantilla de correo para el listado de notificaciones. */
-const TIPO_SERVICIO_PLANTILLA = 'PAGO_1_DIA_ATRASADO'
+type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 
 interface PlantillasNotificacionesProps {
   plantillaInicial?: NotificacionPlantilla | null
@@ -75,12 +77,19 @@ interface PlantillasNotificacionesProps {
   /** Cuando el padre esta en la pestana "plantillas", se recargan las variables para integrar las creadas en Variables Personalizadas. */
 
   tabSeccionActiva?: string
+
+  /**
+   * Tipo de notificación (backend) para el que se crean plantillas nuevas y el panel amarillo.
+   * Viene de ?notif_tipo= en Configuración → Plantillas o del submenú desde el que se abrió.
+   */
+  tipoServicioPlantilla?: string
 }
 
 export function PlantillasNotificaciones({
   plantillaInicial,
   onPlantillaCargada,
   tabSeccionActiva,
+  tipoServicioPlantilla = 'PAGO_1_DIA_ATRASADO',
 }: PlantillasNotificacionesProps = {}) {
   const queryClient = useQueryClient()
 
@@ -115,7 +124,7 @@ export function PlantillasNotificaciones({
   const [tipo, setTipo] = useState('') // Mantener para compatibilidad con edicion individual
 
   const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([
-    TIPO_SERVICIO_PLANTILLA,
+    tipoServicioPlantilla,
   ])
 
   const [activa, setActiva] = useState(true)
@@ -472,6 +481,11 @@ export function PlantillasNotificaciones({
     }
   }, [plantillaInicial, plantillas, onPlantillaCargada])
 
+  useEffect(() => {
+    if (selected) return
+    setTiposSeleccionados([tipoServicioPlantilla])
+  }, [tipoServicioPlantilla, selected])
+
   // Filtrar plantillas
 
   useEffect(() => {
@@ -504,7 +518,7 @@ export function PlantillasNotificaciones({
 
     setTipo('')
 
-    setTiposSeleccionados([TIPO_SERVICIO_PLANTILLA])
+    setTiposSeleccionados([tipoServicioPlantilla])
 
     setActiva(true)
 
@@ -759,7 +773,7 @@ export function PlantillasNotificaciones({
     }
 
     try {
-      const tipoNuevo = TIPO_SERVICIO_PLANTILLA
+      const tipoNuevo = tipoServicioPlantilla
 
       await notificacionService.crearPlantilla({
         nombre: nombre.trim(),
@@ -881,12 +895,12 @@ export function PlantillasNotificaciones({
 
       setSelected(null)
 
-      setTiposSeleccionados([TIPO_SERVICIO_PLANTILLA])
+      setTiposSeleccionados([tipoServicioPlantilla])
 
       setActiveTab('armar')
 
       toast.success(
-        'Plantilla importada. Al guardar se creará solo para el servicio activo (día siguiente al vencimiento).'
+        `Plantilla importada. Al guardar se creará solo para: ${etiquetaServicioPlantilla(tipoServicioPlantilla)}.`
       )
     } catch (error: any) {
       toast.error(
@@ -1014,23 +1028,26 @@ export function PlantillasNotificaciones({
     COBRANZA: { categoria: 'Cobranza', caso: 'Carta de cobranza' },
   }
 
-  /** Orden de casos para el banco por caso (cada uno con su lista de plantillas) */
+  /** Un solo bloque "servicio activo" según submenú / ?notif_tipo= */
 
-  const ordenCasos: { tipo: string; label: string; borderColor: string }[] = [
-    {
-      tipo: TIPO_SERVICIO_PLANTILLA,
-      label: 'Día siguiente al vencimiento (1 día de atraso calendario)',
-      borderColor: 'border-amber-400',
-    },
-  ]
+  const ordenCasos = useMemo(
+    () => [
+      {
+        tipo: tipoServicioPlantilla,
+        label: etiquetaServicioPlantilla(tipoServicioPlantilla),
+        borderColor: bordeTarjetaServicioPlantilla(tipoServicioPlantilla),
+      },
+    ],
+    [tipoServicioPlantilla]
+  )
 
   const tiposPlantillaHeredados = useMemo(() => {
     const u = new Set<string>()
     plantillas.forEach(p => {
-      if (p.tipo !== TIPO_SERVICIO_PLANTILLA) u.add(p.tipo)
+      if (p.tipo !== tipoServicioPlantilla) u.add(p.tipo)
     })
     return Array.from(u).sort()
-  }, [plantillas])
+  }, [plantillas, tipoServicioPlantilla])
 
   /** Banco por caso: plantillas agrupadas por tipo */
 
@@ -1050,7 +1067,7 @@ export function PlantillasNotificaciones({
     })
 
     return porTipo
-  }, [plantillasFiltradas])
+  }, [plantillasFiltradas, ordenCasos])
 
   const categoriasOrden = [
     {
@@ -1187,7 +1204,7 @@ export function PlantillasNotificaciones({
       '<p>Cuota N? 1 - Vencimiento: 10/01/2025 - Monto: 150.00</p><p>Cuota N? 2 - Vencimiento: 10/02/2025 - Monto: 150.00</p>'
     )
 
-    // Siempre renderizar como HTML (encabezado, cuerpo y firma pueden contener c?digo HTML)
+    // Siempre renderizar como HTML (encabezado, cuerpo y firma pueden contener código HTML)
 
     const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vista previa</title></head><body style="margin:0; padding:12px; font-family: sans-serif;">${html}</body></html>`
 
@@ -1277,16 +1294,16 @@ export function PlantillasNotificaciones({
                 Servicio de notificación
               </p>
               <p className="text-sm text-gray-800">
-                Día siguiente al vencimiento (1 día de atraso calendario)
+                {etiquetaServicioPlantilla(tipoServicioPlantilla)}
               </p>
               <p className="text-xs text-gray-600">
                 Las plantillas nuevas se guardan solo para este caso (
                 <code className="rounded bg-white px-1">
-                  PAGO_1_DIA_ATRASADO
+                  {tipoServicioPlantilla}
                 </code>
                 ).
               </p>
-              {selected && selected.tipo !== TIPO_SERVICIO_PLANTILLA ? (
+              {selected && selected.tipo !== tipoServicioPlantilla ? (
                 <p className="rounded border border-amber-300 bg-amber-100 px-2 py-1.5 text-xs text-amber-950">
                   Esta plantilla es de un tipo heredado ({selected.tipo}). Puede
                   editarla o eliminarla; no se ofrecen nuevos tipos desde esta
@@ -1348,13 +1365,13 @@ export function PlantillasNotificaciones({
 
             <div className="col-span-2">
               <p className="mb-1 text-xs text-gray-500">
-                Puede usar c?digo HTML en encabezado, cuerpo y firma. Use el
-                bot?n ?Vista previa (datos de ejemplo)? para ver c?mo queda el
+                Puede usar código HTML en encabezado, cuerpo y firma. Use el
+                botón «Vista previa (datos de ejemplo)» para ver cómo queda el
                 resultado.
               </p>
 
               <div className="mb-1 flex items-center gap-2 text-sm text-gray-600">
-                Formato r?pido (encabezado/cuerpo/firma):
+                Formato rápido (encabezado/cuerpo/firma):
                 <Button
                   size="sm"
                   variant="ghost"
@@ -1729,7 +1746,9 @@ export function PlantillasNotificaciones({
       </TabsContent>
 
       <TabsContent value="html-editor" className="space-y-4">
-        <EditorPlantillaHTML />
+        <EditorPlantillaHTML
+          tipoServicioPorDefecto={tipoServicioPlantilla}
+        />
       </TabsContent>
 
       <TabsContent value="resumen" className="space-y-4">
@@ -1741,9 +1760,10 @@ export function PlantillasNotificaciones({
             </CardTitle>
 
             <CardDescription>
-              Servicio activo: día siguiente al vencimiento (1 día de atraso
-              calendario). Las plantillas heredadas de otros tipos, si existen,
-              aparecen aparte para revisión o eliminación.
+              Servicio activo:{' '}
+              {etiquetaServicioPlantilla(tipoServicioPlantilla)}. Las
+              plantillas de otros tipos, si existen, aparecen como heredadas para
+              revisión o eliminación.
             </CardDescription>
           </CardHeader>
 

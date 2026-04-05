@@ -12,6 +12,14 @@ import {
 
 import { Button } from '../ui/button'
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select'
+
 import { notificacionService } from '../../services/notificacionService'
 
 import { toast } from 'sonner'
@@ -20,15 +28,31 @@ import { Link, Upload, Loader2, Trash2, FileText } from 'lucide-react'
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
-import {
-  TIPOS_CASO_ADJUNTO_SUBIDA,
-  listarCasosConAdjuntosGuardados,
-} from '../../constants/adjuntosFijosCasoTab'
+import { TIPOS_CASO_ADJUNTO_SUBIDA } from '../../constants/adjuntosFijosCasoTab'
 
 type AdjuntoItem = { id: string; nombre_archivo: string; ruta: string }
 
-export function DocumentosPdfAnexos() {
+function etiquetaCaso(value: string): string {
+  return TIPOS_CASO_ADJUNTO_SUBIDA.find(t => t.value === value)?.label ?? value
+}
+
+export type DocumentosPdfAnexosProps = {
+  /**
+   * Desde Notificaciones → Configuración por submenú: un solo caso (sin elegir destino).
+   */
+  casoDestinoFijo?: string
+}
+
+export function DocumentosPdfAnexos({
+  casoDestinoFijo,
+}: DocumentosPdfAnexosProps = {}) {
   const queryClient = useQueryClient()
+
+  const primerCaso = TIPOS_CASO_ADJUNTO_SUBIDA[0]?.value ?? 'dias_1_retraso'
+
+  const [casoSeleccionado, setCasoSeleccionado] = useState<string>(primerCaso)
+
+  const casoActivo = casoDestinoFijo ?? casoSeleccionado
 
   const { data: porCaso = {}, isLoading: loading } = useQuery({
     queryKey: NOTIFICACIONES_QUERY_KEYS.adjuntosFijos,
@@ -38,25 +62,14 @@ export function DocumentosPdfAnexos() {
     staleTime: 1 * 60 * 1000,
   })
 
-  const [selectedTipos, setSelectedTipos] = useState<string[]>([
-    TIPOS_CASO_ADJUNTO_SUBIDA[0].value,
-  ])
-
   const [archivo, setArchivo] = useState<File | null>(null)
 
   const [subiendo, setSubiendo] = useState(false)
 
   const [eliminandoId, setEliminandoId] = useState<string | null>(null)
 
-  const toggleTipo = (value: string) => {
-    setSelectedTipos(prev =>
-      prev.includes(value) ? prev.filter(t => t !== value) : [...prev, value]
-    )
-  }
-
-  const selectTodos = () => {
-    setSelectedTipos(TIPOS_CASO_ADJUNTO_SUBIDA.map(t => t.value))
-  }
+  const itemsCasoActivo: AdjuntoItem[] = (porCaso[casoActivo] ??
+    []) as AdjuntoItem[]
 
   const handleSubir = async () => {
     if (!archivo) {
@@ -69,22 +82,15 @@ export function DocumentosPdfAnexos() {
       return
     }
 
-    if (selectedTipos.length === 0) {
-      toast.error('Elige al menos un caso de envío.')
+    if (!casoActivo) {
+      toast.error('Elige un caso de envío.')
       return
     }
 
     setSubiendo(true)
 
     try {
-      const tiposToUpload: string[] =
-        selectedTipos.length === TIPOS_CASO_ADJUNTO_SUBIDA.length
-          ? TIPOS_CASO_ADJUNTO_SUBIDA.map(t => t.value)
-          : selectedTipos
-
-      for (const tipoCaso of tiposToUpload) {
-        await notificacionService.uploadAdjuntoFijoCobranza(archivo, tipoCaso)
-      }
+      await notificacionService.uploadAdjuntoFijoCobranza(archivo, casoActivo)
 
       toast.success('Documento guardado.')
 
@@ -134,6 +140,10 @@ export function DocumentosPdfAnexos() {
     )
   }
 
+  const inputId = casoDestinoFijo
+    ? `archivo-pdf-fijo-${casoDestinoFijo}`
+    : 'archivo-pdf-plantillas'
+
   return (
     <div className="space-y-6">
       <Card>
@@ -147,58 +157,73 @@ export function DocumentosPdfAnexos() {
           </CardTitle>
 
           <CardDescription>
-            Sube documentos PDF y asígnalos a uno o varios casos de envío (2
-            días antes, 3/5/30 días retraso, prejudicial, comunicaciones masivas).
-            Marca los que quieras o «Todos los casos». Solo PDF.
+            {casoDestinoFijo ? (
+              <>
+                PDFs fijos solo para{' '}
+                <strong>{etiquetaCaso(casoDestinoFijo)}</strong>. Se guardan en
+                la base de datos y se reutilizan en cada envío de este
+                submenú. Solo PDF.
+              </>
+            ) : (
+              <>
+                Elija el <strong>caso de envío</strong> y suba el PDF; el archivo
+                queda asociado solo a ese criterio (sin aplicar a varios a la
+                vez). Los datos persisten en la base de datos. Solo PDF.
+              </>
+            )}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-700">
-                Casos de destino
-              </label>
-
-              <div className="mt-1 flex flex-wrap gap-2">
-                {TIPOS_CASO_ADJUNTO_SUBIDA.map(t => (
-                  <label
-                    key={t.value}
-                    className="inline-flex cursor-pointer items-center gap-1.5 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedTipos.includes(t.value)}
-                      onChange={() => toggleTipo(t.value)}
-                      className="rounded border-gray-300 text-violet-600 focus:ring-violet-500"
-                    />
-
-                    <span>{t.label}</span>
-                  </label>
-                ))}
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={selectTodos}
-                  className="text-xs"
+            {!casoDestinoFijo && (
+              <div className="space-y-1">
+                <label
+                  htmlFor="caso-adjunto-pdf"
+                  className="block text-sm font-medium text-gray-700"
                 >
-                  Todos los casos
-                </Button>
+                  Caso de envío
+                </label>
+
+                <Select
+                  value={casoSeleccionado}
+                  onValueChange={setCasoSeleccionado}
+                >
+                  <SelectTrigger
+                    id="caso-adjunto-pdf"
+                    className="h-9 w-[min(100vw-2rem,22rem)] bg-white"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    {TIPOS_CASO_ADJUNTO_SUBIDA.map(t => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
+            )}
+
+            {casoDestinoFijo && (
+              <div className="rounded-md border border-violet-200 bg-violet-50/60 px-3 py-2 text-sm text-violet-900">
+                <span className="font-medium">Caso:</span>{' '}
+                {etiquetaCaso(casoDestinoFijo)}
+              </div>
+            )}
 
             <div className="space-y-1">
               <label
-                htmlFor="archivo-pdf"
+                htmlFor={inputId}
                 className="text-sm font-medium text-gray-700"
               >
                 Archivo PDF
               </label>
 
               <input
-                id="archivo-pdf"
+                id={inputId}
                 type="file"
                 accept=".pdf,application/pdf"
                 className="block w-full max-w-xs text-sm text-gray-700 file:mr-2 file:rounded file:border-0 file:bg-violet-100 file:px-3 file:py-1.5 file:text-violet-700"
@@ -207,7 +232,8 @@ export function DocumentosPdfAnexos() {
             </div>
 
             <Button
-              onClick={handleSubir}
+              type="button"
+              onClick={() => void handleSubir()}
               disabled={subiendo || !archivo}
               variant="default"
               aria-label="Subir documento PDF"
@@ -223,64 +249,48 @@ export function DocumentosPdfAnexos() {
 
           <div className="border-t pt-4">
             <h4 className="mb-1 text-sm font-medium text-gray-700">
-              Documentos almacenados por caso
+              Documentos guardados para este caso
             </h4>
 
             <p className="mb-2 text-xs text-muted-foreground">
-              Cada documento se adjunta solo al caso de envío indicado (según la
-              pestaña / criterio de notificación).
+              {etiquetaCaso(casoActivo)} - se anexan al correo si la opción Adj.
+              está activa en la fila correspondiente.
             </p>
 
-            <div className="space-y-3">
-              {listarCasosConAdjuntosGuardados(porCaso).map(
-                ({ value, label, items }) => (
-                  <div
-                    key={value}
-                    className="rounded-md border bg-gray-50/50 p-3"
-                  >
-                    <span
-                      className="text-sm font-medium text-gray-600"
-                      title={'Se envían con la notificación: ' + label}
-                    >
-                      {label}
-                    </span>
-
-                    <ul className="mt-2 space-y-1">
-                      {items.map(doc => (
-                        <li
-                          key={doc.id}
-                          className="flex items-center justify-between gap-2 text-sm"
-                        >
-                          <span className="flex items-center gap-2 truncate">
-                            <FileText className="h-4 w-4 shrink-0 text-gray-500" />
-                            {doc.nombre_archivo}
-                          </span>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEliminar(doc.id)}
-                            disabled={eliminandoId === doc.id}
-                            aria-label={'Eliminar ' + doc.nombre_archivo}
-                          >
-                            {eliminandoId === doc.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            )}
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
-              )}
-
-              {listarCasosConAdjuntosGuardados(porCaso).length === 0 && (
+            <div className="rounded-md border bg-gray-50/50 p-3">
+              {itemsCasoActivo.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Aún no hay documentos. Sube un PDF y elige el caso de envío.
+                  Aún no hay PDFs para este caso. Suba uno arriba.
                 </p>
+              ) : (
+                <ul className="space-y-1">
+                  {itemsCasoActivo.map(doc => (
+                    <li
+                      key={doc.id}
+                      className="flex items-center justify-between gap-2 text-sm"
+                    >
+                      <span className="flex min-w-0 items-center gap-2 truncate">
+                        <FileText className="h-4 w-4 shrink-0 text-gray-500" />
+                        {doc.nombre_archivo}
+                      </span>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void handleEliminar(doc.id)}
+                        disabled={eliminandoId === doc.id}
+                        aria-label={'Eliminar ' + doc.nombre_archivo}
+                      >
+                        {eliminandoId === doc.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        )}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>

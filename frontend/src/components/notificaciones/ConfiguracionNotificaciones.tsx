@@ -56,6 +56,10 @@ import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
 import { invalidateListasNotificacionesMora } from '../../constants/queryKeys'
 
+import { hrefPlantillasConContexto } from '../../constants/notifPlantillaServicioContexto'
+
+import { DocumentosPdfAnexos } from './DocumentosPdfAnexos'
+
 /** Claves reservadas en la config (no son tipos de caso) */
 
 const CLAVES_GLOBALES = [
@@ -458,6 +462,33 @@ export function ConfiguracionNotificaciones({
       return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'PREJUDICIAL')
     }
     return CRITERIOS_ENVIO_PANEL
+  }, [alcance])
+
+  const hrefPlantillasDesdeAlcance = useMemo(() => {
+    if (alcance === 'solo_pago_1_dia') {
+      return hrefPlantillasConContexto('PAGO_1_DIA_ATRASADO')
+    }
+    if (alcance === 'solo_pago_2_dias_antes_pendiente') {
+      return hrefPlantillasConContexto('PAGO_2_DIAS_ANTES_PENDIENTE')
+    }
+    if (alcance === 'solo_prejudicial') {
+      return hrefPlantillasConContexto('PREJUDICIAL')
+    }
+    return '/configuracion?tab=plantillas'
+  }, [alcance])
+
+  /** Clave tipo_caso de adjuntos fijos (pestaña 3) alineada con el submenú de Notificaciones. */
+  const casoAdjuntoPdfParaAlcance = useMemo((): string | null => {
+    switch (alcance) {
+      case 'solo_pago_1_dia':
+        return 'dias_1_retraso'
+      case 'solo_pago_2_dias_antes_pendiente':
+        return 'd_2_antes_vencimiento'
+      case 'solo_prejudicial':
+        return 'prejudicial'
+      default:
+        return null
+    }
   }, [alcance])
 
   const [tipoPruebaPaquete, setTipoPruebaPaquete] = useState<string>(
@@ -1370,7 +1401,7 @@ export function ConfiguracionNotificaciones({
                     <code className="rounded bg-gray-100 px-1">
                       prejudicial
                     </code>
-                    ). El archivo de la pestaña 3 debe existir en el servidor.
+                    ), subido abajo o en Plantillas; se guarda en base de datos.
                   </>
                 ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
                   <>
@@ -1388,7 +1419,7 @@ export function ConfiguracionNotificaciones({
                     <code className="rounded bg-gray-100 px-1">
                       dias_1_retraso
                     </code>
-                    ). El archivo debe existir en el servidor tras cada deploy.
+                    ), subido abajo o en Plantillas; se guarda en base de datos.
                   </>
                 ) : (
                   <>
@@ -1873,11 +1904,13 @@ export function ConfiguracionNotificaciones({
                       <p className="mt-1 text-xs text-gray-500">
                         Crea plantillas en{' '}
                         <Link
-                          to="/configuracion?tab=plantillas"
+                          to={hrefPlantillasConContexto(tipo)}
                           className="text-blue-600 hover:underline"
                         >
                           Configuración → Plantillas
                         </Link>
+                        {' '}
+                        (caso {tipo}).
                       </p>
                     )}
                   </td>
@@ -2087,6 +2120,10 @@ export function ConfiguracionNotificaciones({
         </table>
       </div>
 
+      {casoAdjuntoPdfParaAlcance && (
+        <DocumentosPdfAnexos casoDestinoFijo={casoAdjuntoPdfParaAlcance} />
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
         <div className="flex items-center gap-3 text-sm text-gray-600">
           <Link
@@ -2097,7 +2134,7 @@ export function ConfiguracionNotificaciones({
           </Link>
 
           <Link
-            to="/configuracion?tab=plantillas"
+            to={hrefPlantillasDesdeAlcance}
             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800"
           >
             <FileText className="h-4 w-4" /> Crear/editar plantillas
