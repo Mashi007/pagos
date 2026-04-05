@@ -501,19 +501,21 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     return (
       <Button
-        variant="link"
-        size="sm"
-        className="inline-flex h-auto items-center gap-1 p-0 text-blue-600"
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 shrink-0 text-blue-600 hover:bg-blue-50 hover:text-blue-800"
         disabled={descargandoEstadoCuentaId === prestamoId}
         onClick={() => handleDescargarEstadoCuentaPdf(prestamoId)}
-        title="Mismo PDF que en tabla de amortización (Exportar PDF)"
+        title="Exportar estado de cuenta en PDF (mismo que en tabla de amortización)"
+        aria-label="Exportar estado de cuenta en PDF"
       >
         <Download
-          className={`h-4 w-4 shrink-0 ${
+          className={`h-4 w-4 ${
             descargandoEstadoCuentaId === prestamoId ? 'animate-pulse' : ''
           }`}
+          aria-hidden
         />
-        Exportar PDF
       </Button>
     )
   }
@@ -1252,8 +1254,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         <span className="sr-only">Revisión manual</span>
                       </th>
 
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        Estado de cuenta
+                      <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
+                        <span title="Descargar PDF de estado de cuenta">
+                          Estado de cuenta
+                        </span>
                       </th>
                     </tr>
                   </thead>
@@ -1315,7 +1319,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             {revisionManualNotifLink(row)}
                           </td>
 
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-2 text-center align-middle">
                             {estadoCuentaPdfCell(row.prestamo_id)}
                           </td>
                         </tr>
@@ -1347,8 +1351,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         <span className="sr-only">Revisión manual</span>
                       </th>
 
-                      <th className="px-3 py-2 text-left font-semibold">
-                        Estado de cuenta
+                      <th className="w-14 px-2 py-2 text-center font-semibold">
+                        <span title="Descargar PDF de estado de cuenta">
+                          Estado de cuenta
+                        </span>
                       </th>
                     </tr>
                   </thead>
@@ -1392,7 +1398,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             {revisionManualNotifLink(row)}
                           </td>
 
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-2 text-center align-middle">
                             {estadoCuentaPdfCell(row.prestamo_id)}
                           </td>
                         </tr>
