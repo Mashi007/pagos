@@ -5903,7 +5903,12 @@ def eliminar_todos_pagos_por_prestamo(prestamo_id: int, db: Session = Depends(ge
 
 def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
 
-    """Elimina un pago de la tabla pagos y limpia dependencias."""
+    """Elimina un pago, limpia dependencias y, si tiene crédito, alinea cuotas vía cascada.
+
+    Con `prestamo_id`: tras borrar el pago se ejecuta `reset_y_reaplicar_cascada_prestamo`
+    (limpia `reporte_contable_cache`, recalcula `total_pagado` / estados y reaplica pagos restantes).
+    Sin crédito: basta el borrado del pago (CASCADE en `cuota_pagos` si hubiera filas huérfanas).
+    """
 
     row = db.get(Pago, pago_id)
 
@@ -5914,7 +5919,6 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
     prestamo_id_previo = row.prestamo_id
 
     try:
-        db.execute(text("DELETE FROM cuota_pagos WHERE pago_id = :pid"), {"pid": pago_id})
         db.execute(text("DELETE FROM auditoria_conciliacion_manual WHERE pago_id = :pid"), {"pid": pago_id})
         db.execute(text("UPDATE cuotas SET pago_id = NULL WHERE pago_id = :pid"), {"pid": pago_id})
         db.execute(text("DELETE FROM revisar_pagos WHERE pago_id = :pid"), {"pid": pago_id})
@@ -5923,9 +5927,19 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
         db.flush()
 
         if prestamo_id_previo:
-            _marcar_prestamo_liquidado_si_corresponde(prestamo_id_previo, db)
+            from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
+
+            r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id_previo)
+            if not r.get("ok"):
+                raise HTTPException(
+                    status_code=500,
+                    detail=(r.get("error") or "No se pudo alinear cuotas tras eliminar el pago")[:300],
+                )
 
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         import logging
@@ -5976,13 +5990,21 @@ def diagnostico_pago(pago_id: int, db: Session = Depends(get_db)):
 @router.post("/forzar-eliminar/{pago_id}", response_model=dict)
 @router.get("/forzar-eliminar/{pago_id}", response_model=dict)
 def forzar_eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
-    """Eliminacion forzada: limpia TODAS las dependencias y borra el pago con SQL directo."""
+    """Eliminacion forzada: limpia TODAS las dependencias y borra el pago con SQL directo.
+
+    Si el pago tenia `prestamo_id`, tras borrarlo se reaplica la cascada del credito
+    (misma logica que DELETE normal: cuotas alineadas y cache contable invalidada).
+    """
     import logging
     log = logging.getLogger(__name__)
 
-    existe = db.execute(text("SELECT id FROM pagos WHERE id = :pid"), {"pid": pago_id}).first()
-    if not existe:
+    row0 = db.execute(
+        text("SELECT id, prestamo_id FROM pagos WHERE id = :pid"),
+        {"pid": pago_id},
+    ).first()
+    if not row0:
         return {"ok": False, "detail": f"Pago {pago_id} no existe en tabla pagos"}
+    prestamo_id_previo = row0[1]
 
     try:
         r1 = db.execute(text("DELETE FROM cuota_pagos WHERE pago_id = :pid"), {"pid": pago_id})
@@ -6008,12 +6030,30 @@ def forzar_eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
             extra_cleaned.append(f"{tbl}.{col}")
 
         r5 = db.execute(text("DELETE FROM pagos WHERE id = :pid"), {"pid": pago_id})
+
+        reaplicado: Optional[dict] = None
+        if prestamo_id_previo:
+            from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
+
+            r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id_previo)
+            if not r.get("ok"):
+                db.rollback()
+                raise HTTPException(
+                    status_code=500,
+                    detail=(r.get("error") or "No se pudo alinear cuotas tras forzar eliminación")[:300],
+                )
+            reaplicado = {
+                "prestamo_id": prestamo_id_previo,
+                "pagos_reaplicados": r.get("pagos_reaplicados"),
+                "cache_contable_eliminadas": r.get("cache_contable_eliminadas"),
+            }
+
         db.commit()
 
         log.info("Pago %s eliminado forzadamente. cuota_pagos=%s acm=%s cuotas=%s revisar=%s pagos=%s extra=%s",
                  pago_id, r1.rowcount, r2.rowcount, r3.rowcount, r4.rowcount, r5.rowcount, extra_cleaned)
 
-        return {
+        out: dict = {
             "ok": True,
             "eliminado": {
                 "cuota_pagos": r1.rowcount, "auditoria_conciliacion_manual": r2.rowcount,
@@ -6021,6 +6061,9 @@ def forzar_eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
                 "pagos": r5.rowcount, "extra_fks": extra_cleaned,
             },
         }
+        if reaplicado is not None:
+            out["cascada_tras_eliminar"] = reaplicado
+        return out
     except Exception as e:
         db.rollback()
         log.error("Error forzar-eliminar pago %s: %s", pago_id, e)
