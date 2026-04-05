@@ -15,7 +15,6 @@ import {
   ChevronUp,
   ChevronDown,
   CheckCircle2,
-  HelpCircle,
   X,
 } from 'lucide-react'
 
@@ -40,6 +39,10 @@ import {
 } from '../services/notificacionService'
 
 import { prestamoService } from '../services/prestamoService'
+
+import { revisionManualService } from '../services/revisionManualService'
+
+import { useSimpleAuth } from '../store/simpleAuthStore'
 
 import { toast } from 'sonner'
 
@@ -185,58 +188,96 @@ function SortArrowsCuotas({
   )
 }
 
+function detalleErrorRevisionNotif(e: unknown): string {
+  const d = (e as { response?: { data?: { detail?: string } } })?.response?.data
+    ?.detail
+  return typeof d === 'string'
+    ? d
+    : (e as Error)?.message || 'Error desconocido'
+}
+
 /**
- * Mismo criterio visual que PrestamosList (columna revisión manual).
- * Sin fila en revision_manual_prestamos el backend envía null → se trata como pendiente.
+ * Triángulo: enlace a /revision-manual/editar/:id (misma pantalla que el flujo completo).
+ * Visto (revisado): botón para reabrir a revisando (solo administrador, misma regla que el backend).
  */
-function revisionManualNotifLink(row: ClienteRetrasadoItem): ReactNode {
+function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
+  const queryClient = useQueryClient()
+  const { user } = useSimpleAuth()
+  const esAdmin = (user?.rol || '').toLowerCase() === 'admin'
+
   const pid = row.prestamo_id
+  const rev = (row.revision_manual_estado || 'pendiente').toLowerCase().trim()
+  const esVisto = rev === 'revisado'
+  const [busy, setBusy] = useState(false)
+
   if (pid == null) return null
 
-  const rev = (row.revision_manual_estado || 'pendiente').toLowerCase().trim()
-
-  const ICONO_REV: Record<
-    string,
-    { icon: ReactNode; title: string; cls: string }
-  > = {
-    pendiente: {
-      icon: <AlertTriangle className="h-4 w-4" />,
-      title: 'Revisión manual: No iniciada - abrir formulario',
-      cls: 'text-amber-500 hover:bg-amber-50',
-    },
-    revisando: {
-      icon: <HelpCircle className="h-4 w-4 text-orange-600" />,
-      title: 'Revisión manual: En revisión - continuar',
-      cls: 'text-orange-600 hover:bg-orange-50',
-    },
-    en_espera: {
-      icon: <X className="h-4 w-4" />,
-      title: 'Revisión manual: En espera',
-      cls: 'text-orange-500 hover:bg-orange-50',
-    },
-    rechazado: {
-      icon: <X className="h-4 w-4" />,
-      title: 'Revisión manual: Rechazado',
-      cls: 'text-red-600 hover:bg-red-50',
-    },
-    revisado: {
-      icon: <CheckCircle2 className="h-4 w-4" />,
-      title: 'Revisión manual: Revisado - reabrir si aplica',
-      cls: 'text-green-600 hover:bg-green-50',
-    },
+  const invalidarListas = async () => {
+    await invalidateListasNotificacionesMora(queryClient, {
+      skipCrossTabBroadcast: true,
+    })
+    await queryClient.invalidateQueries({
+      queryKey: ['revision-manual-prestamos'],
+    })
   }
 
-  const cfg = ICONO_REV[rev] ?? ICONO_REV.pendiente
+  const quitarVisto = async () => {
+    if (!esAdmin) {
+      toast.error(
+        'Solo un administrador puede quitar el visto. Use Revisión manual en el menú.'
+      )
+      return
+    }
+    setBusy(true)
+    try {
+      await revisionManualService.cambiarEstadoRevision(pid, {
+        nuevo_estado: 'revisando',
+      })
+      await invalidarListas()
+      toast.success('Revisión reabierta (estado revisando).')
+    } catch (e) {
+      toast.error(detalleErrorRevisionNotif(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const triClass =
+    'inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 bg-amber-50 text-amber-600 hover:bg-amber-100'
+
+  if (!esVisto) {
+    return (
+      <Link
+        to={`/revision-manual/editar/${pid}`}
+        className={triClass}
+        title="Abrir revisión manual (formulario del préstamo)"
+        aria-label="Abrir revisión manual del préstamo"
+      >
+        <AlertTriangle className="h-4 w-4" aria-hidden />
+      </Link>
+    )
+  }
 
   return (
-    <Link
-      to={`/revision-manual/editar/${pid}`}
-      className={`inline-flex rounded p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${cfg.cls}`}
-      title={cfg.title}
-      aria-label={cfg.title}
+    <button
+      type="button"
+      role="switch"
+      aria-checked
+      disabled={busy}
+      title={
+        esAdmin
+          ? 'Visto: clic para reabrir revisión (solo admin)'
+          : 'Visto: solo un administrador puede reabrir'
+      }
+      aria-label="Revisión cerrada. Clic para reabrir si es administrador"
+      onClick={() => {
+        if (busy) return
+        void quitarVisto()
+      }}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent bg-emerald-50 text-green-600 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
     >
-      {cfg.icon}
-    </Link>
+      <CheckCircle2 className="h-4 w-4" aria-hidden />
+    </button>
   )
 }
 
@@ -1247,11 +1288,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       </th>
 
                       <th
-                        className="w-12 px-1 py-2 text-center font-semibold"
+                        className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                         scope="col"
-                        title="Revisión manual"
+                        title="Revisión manual: triángulo abre el formulario; visto (revisado) solo admin puede reabrir con otro clic."
                       >
-                        <span className="sr-only">Revisión manual</span>
+                        Revisión
+                        <br />
+                        manual
                       </th>
 
                       <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
@@ -1316,7 +1359,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           </td>
 
                           <td className="px-1 py-2 text-center align-middle">
-                            {revisionManualNotifLink(row)}
+                            <RevisionManualNotifCell row={row} />
                           </td>
 
                           <td className="px-2 py-2 text-center align-middle">
@@ -1344,11 +1387,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       </th>
 
                       <th
-                        className="w-12 px-1 py-2 text-center font-semibold"
+                        className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                         scope="col"
-                        title="Revisión manual"
+                        title="Revisión manual: triángulo abre el formulario; visto (revisado) solo admin puede reabrir con otro clic."
                       >
-                        <span className="sr-only">Revisión manual</span>
+                        Revisión
+                        <br />
+                        manual
                       </th>
 
                       <th className="w-14 px-2 py-2 text-center font-semibold">
@@ -1395,7 +1440,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           <td className="px-3 py-2">{row.cedula}</td>
 
                           <td className="px-1 py-2 text-center align-middle">
-                            {revisionManualNotifLink(row)}
+                            <RevisionManualNotifCell row={row} />
                           </td>
 
                           <td className="px-2 py-2 text-center align-middle">
