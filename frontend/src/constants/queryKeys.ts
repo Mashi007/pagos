@@ -21,12 +21,12 @@ export const NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY = [
   'notificaciones-estadisticas-por-tab',
 ] as const
 
-/** Lista prejudicial (GET /notificaciones-prejudicial); módulo A: 5 cuotas. */
+/** Lista prejudicial (GET /notificaciones-prejudicial); módulo Atraso 5 cuotas. */
 export const NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY = [
   'notificaciones-prejudicial-lista',
 ] as const
 
-/** Pendiente, vence en 2 días (GET /notificaciones/cuotas-pendiente-2-dias-antes); submenú D:2 días. */
+/** Pendiente, vence en 2 días (GET /notificaciones/cuotas-pendiente-2-dias-antes); submenú 2 días antes. */
 export const NOTIFICACIONES_D2_ANTES_QUERY_KEY = [
   'notificaciones-d2-antes-vencimiento',
 ] as const

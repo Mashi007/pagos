@@ -71,6 +71,29 @@ _CONFIG_TIPO_TO_TAB = {
     "MASIVOS": "masivos",
 }
 
+# Textos por defecto si no hay plantilla en BD (PAGO_2_DIAS_ANTES_PENDIENTE / 2 dias antes).
+# Variables: {nombre}, {fecha_vencimiento_display} (tambien {{nombre}}, {{fecha_vencimiento_display}} en plantillas guardadas).
+ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE = (
+    "Recordatorio: pr\u00f3ximo vencimiento de tu cuota - Rapicredit"
+)
+CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE = (
+    "Hola, {nombre}.\n\n"
+    "Esperamos que est\u00e9s muy bien. Te escribimos para recordarte que el pago de tu pr\u00f3xima cuota "
+    "vence el {fecha_vencimiento_display}.\n\n"
+    "Mantener tus pagos al d\u00eda te permite seguir disfrutando de nuestros beneficios. Si deseas "
+    "verificar el monto exacto a pagar, puedes revisarlo en el siguiente enlace:\n\n"
+    "\U0001f449 Consulta tu Estado de Cuenta aqu\u00ed: https://rapicredit.onrender.com/pagos/rapicredit-estadocuenta\n\n"
+    "\u00bfTienes alguna duda?\n"
+    "Si necesitas ayuda o quieres aclarar algo, estamos a tu disposici\u00f3n por WhatsApp:\n\n"
+    "N\u00famero: +58 424-4579934\n\n"
+    "Chat directo: https://wa.me/584244579934\n\n"
+    "Nota sobre la actualizaci\u00f3n de tu pago:\n"
+    "Recuerde que el tiempo de actualizaci\u00f3n de su estado de cuenta depende de:\n\n"
+    "\U0001f680 Portal de pagos (sistema autom\u00e1tico):\n"
+    "Su pago se reflejar\u00e1 en 24 horas.\n"
+    "Reporte aqu\u00ed: https://rapicredit.onrender.com/pagos/rapicredit-cobros\n"
+)
+
 
 def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
     """Devuelve tipo_tab (dias_5, hoy, etc.) si se debe persistir para estad�sticas/rebotados."""
@@ -1064,8 +1087,8 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
             items = build_cuotas_pendiente_2_dias_antes_items(db)
             res = _enviar_correos_items(
                 items,
-                asunto_prev,
-                cuerpo_prev,
+                ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE,
+                CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE,
                 config_envios,
                 _tipo_pago_2_dias_antes_pendiente,
                 db,
@@ -1102,7 +1125,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     prejudicial y masivos. Cada tipo usa su propia configuracion en notificaciones_envios (habilitado,
     CCO, modo pruebas, etc.); no se mezclan entre si.
 
-    No incluye PAGO_2_DIAS_ANTES_PENDIENTE (D:2 dias antes del vencimiento), que tiene envio propio.
+    No incluye PAGO_2_DIAS_ANTES_PENDIENTE (2 dias antes del vencimiento), que tiene envio propio.
 
     Solo desde POST /notificaciones/enviar-todas (BackgroundTasks); sin envio automatico por hora.
     """

@@ -258,6 +258,38 @@ def test_get_envio_batch_ultimo_tras_persist(client: TestClient, db: Session):
     assert u.get("origen") == "test_pytest"
 
 
+def test_fecha_cuota_a_texto_es():
+    from datetime import date
+
+    from app.services.notificacion_service import fecha_cuota_a_texto_es
+
+    t = fecha_cuota_a_texto_es(date(2026, 4, 5))
+    assert "abril" in t and "2026" in t
+
+
+def test_format_item_texto_plantilla_incluye_fecha_vencimiento_display():
+    from app.api.v1.endpoints.notificaciones import _format_item_texto_plantilla_por_defecto
+
+    s = "Hola {nombre}, vence el {fecha_vencimiento_display}."
+    item = {"nombre": "Ana", "fecha_vencimiento_display": "5 de abril de 2026"}
+    assert (
+        _format_item_texto_plantilla_por_defecto(s, item)
+        == "Hola Ana, vence el 5 de abril de 2026."
+    )
+
+
+def test_sustituir_variables_fecha_vencimiento_display():
+    from app.api.v1.endpoints.notificaciones import _sustituir_variables
+
+    t = "Vence {{fecha_vencimiento_display}}"
+    item = {
+        "nombre": "X",
+        "fecha_vencimiento": "2026-04-10",
+        "fecha_vencimiento_display": "10 de abril de 2026",
+    }
+    assert _sustituir_variables(t, item) == "Vence 10 de abril de 2026"
+
+
 def test_validar_notificaciones_envios_payload_modo_false_sin_emails_ok():
     from app.api.v1.endpoints.email_config_validacion import validar_notificaciones_envios_payload
 

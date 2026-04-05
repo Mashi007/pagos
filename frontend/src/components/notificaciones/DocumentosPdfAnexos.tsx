@@ -21,30 +21,9 @@ import { Link, Upload, Loader2, Trash2, FileText } from 'lucide-react'
 import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select'
-
-const TIPOS_CASO: { value: string; label: string }[] = [
-  { value: 'dias_1_retraso', label: 'Día siguiente al venc.' },
-
-  {
-    value: 'd_2_antes_vencimiento',
-    label: 'D:2 días (pendiente, vence en 2 días)',
-  },
-
-  { value: 'dias_3_retraso', label: '3 días retraso' },
-
-  { value: 'dias_5_retraso', label: '5 días retraso' },
-
-  { value: 'dias_30_retraso', label: '30 días retraso' },
-
-  { value: 'prejudicial', label: 'Prejudicial' },
-  { value: 'masivos', label: 'Comunicaciones masivas' },
-]
+  TIPOS_CASO_ADJUNTO_SUBIDA,
+  listarCasosConAdjuntosGuardados,
+} from '../../constants/adjuntosFijosCasoTab'
 
 type AdjuntoItem = { id: string; nombre_archivo: string; ruta: string }
 
@@ -60,7 +39,7 @@ export function DocumentosPdfAnexos() {
   })
 
   const [selectedTipos, setSelectedTipos] = useState<string[]>([
-    TIPOS_CASO[0].value,
+    TIPOS_CASO_ADJUNTO_SUBIDA[0].value,
   ])
 
   const [archivo, setArchivo] = useState<File | null>(null)
@@ -76,7 +55,7 @@ export function DocumentosPdfAnexos() {
   }
 
   const selectTodos = () => {
-    setSelectedTipos(TIPOS_CASO.map(t => t.value))
+    setSelectedTipos(TIPOS_CASO_ADJUNTO_SUBIDA.map(t => t.value))
   }
 
   const handleSubir = async () => {
@@ -99,8 +78,8 @@ export function DocumentosPdfAnexos() {
 
     try {
       const tiposToUpload: string[] =
-        selectedTipos.length === TIPOS_CASO.length
-          ? TIPOS_CASO.map(t => t.value)
+        selectedTipos.length === TIPOS_CASO_ADJUNTO_SUBIDA.length
+          ? TIPOS_CASO_ADJUNTO_SUBIDA.map(t => t.value)
           : selectedTipos
 
       for (const tipoCaso of tiposToUpload) {
@@ -168,9 +147,9 @@ export function DocumentosPdfAnexos() {
           </CardTitle>
 
           <CardDescription>
-            Sube documentos PDF y asígnalos a uno o varios casos de envío (día
-            siguiente al venc., 3/5/30 días retraso, prejudicial, comunicaciones
-            masivas). Marca los que quieras o «Todos los casos». Solo PDF.
+            Sube documentos PDF y asígnalos a uno o varios casos de envío (2
+            días antes, 3/5/30 días retraso, prejudicial, comunicaciones masivas).
+            Marca los que quieras o «Todos los casos». Solo PDF.
           </CardDescription>
         </CardHeader>
 
@@ -182,7 +161,7 @@ export function DocumentosPdfAnexos() {
               </label>
 
               <div className="mt-1 flex flex-wrap gap-2">
-                {TIPOS_CASO.map(t => (
+                {TIPOS_CASO_ADJUNTO_SUBIDA.map(t => (
                   <label
                     key={t.value}
                     className="inline-flex cursor-pointer items-center gap-1.5 text-sm"
@@ -248,24 +227,20 @@ export function DocumentosPdfAnexos() {
             </h4>
 
             <p className="mb-2 text-xs text-muted-foreground">
-              Cada documento se adjunta solo al caso de envío indicado (ej. los
-              de «Día siguiente al venc.» van con ese tipo de aviso).
+              Cada documento se adjunta solo al caso de envío indicado (según la
+              pestaña / criterio de notificación).
             </p>
 
             <div className="space-y-3">
-              {TIPOS_CASO.map(({ value, label }) => {
-                const items = porCaso[value] || []
-
-                if (items.length === 0) return null
-
-                return (
+              {listarCasosConAdjuntosGuardados(porCaso).map(
+                ({ value, label, items }) => (
                   <div
                     key={value}
                     className="rounded-md border bg-gray-50/50 p-3"
                   >
                     <span
                       className="text-sm font-medium text-gray-600"
-                      title={`Se envían con la notificación: ${label}`}
+                      title={'Se envían con la notificación: ' + label}
                     >
                       {label}
                     </span>
@@ -300,9 +275,9 @@ export function DocumentosPdfAnexos() {
                     </ul>
                   </div>
                 )
-              })}
+              )}
 
-              {TIPOS_CASO.every(t => (porCaso[t.value]?.length ?? 0) === 0) && (
+              {listarCasosConAdjuntosGuardados(porCaso).length === 0 && (
                 <p className="text-sm text-gray-500">
                   Aún no hay documentos. Sube un PDF y elige el caso de envío.
                 </p>

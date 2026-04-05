@@ -29,7 +29,6 @@ import {
   Bell,
 } from 'lucide-react'
 
-import { Link } from 'react-router-dom'
 
 import type { NotificacionPlantilla } from '../services/notificacionService'
 
@@ -153,15 +152,17 @@ export function Plantillas() {
 
         <div className="flex items-center gap-2">
           <Button
+            type="button"
             variant="default"
             size="sm"
-            asChild
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+            onClick={() => {
+              // Módulo a1dia: listado «Día siguiente al vencimiento» (sin ?tab=configuracion).
+              navigate('/notificaciones')
+            }}
           >
-            <Link to="/notificaciones">
-              <Bell className="h-4 w-4" />
-              Ir a Notificaciones
-            </Link>
+            <Bell className="h-4 w-4" />
+            Ir a Notificaciones
           </Button>
 
           <Button

@@ -80,16 +80,8 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
         )
     elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
         get_tipo = nt._tipo_pago_2_dias_antes_pendiente
-        asunto = "Recordatorio: cuota por vencer - Rapicredit"
-        cuerpo = (
-            "Estimado/a {nombre} (cedula {cedula}),\n\n"
-            "Le recordamos que tiene una cuota por vencer.\n"
-            "Fecha de vencimiento: {fecha_vencimiento}\n"
-            "Numero de cuota: {numero_cuota}\n"
-            "Monto: {monto}\n\n"
-            "Por favor realice el pago a tiempo.\n\n"
-            "Saludos,\nRapicredit"
-        )
+        asunto = nt.ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
+        cuerpo = nt.CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
     else:
         get_tipo = nt._tipo_prejudicial
         asunto = "Aviso prejudicial - Rapicredit"
@@ -209,7 +201,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
         cuerpo_base = "Prueba diagnostico"
     elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
         get_tipo = nt._tipo_pago_2_dias_antes_pendiente
-        asunto_base = "Recordatorio: cuota por vencer - Rapicredit"
+        asunto_base = nt.ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
         cuerpo_base = "Prueba diagnostico"
     else:
         get_tipo = nt._tipo_prejudicial

@@ -24,6 +24,40 @@ from app.services.cuota_estado import (
 
 logger = logging.getLogger(__name__)
 
+_MESES_ES = (
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+)
+
+
+def fecha_cuota_a_texto_es(fv: Optional[date]) -> str:
+    """
+    Fecha de cuota en español (sin depender de locale), p. ej. '5 de abril de 2026'.
+    Para plantillas: clave en el item `fecha_vencimiento_display` y {{fecha_vencimiento_display}} en BD.
+    """
+    if fv is None:
+        return ""
+    d = fv
+    if hasattr(d, "date") and not isinstance(d, date):
+        try:
+            d = d.date()
+        except Exception:
+            return str(fv)
+    if not isinstance(d, date):
+        return str(fv)
+    return f"{d.day} de {_MESES_ES[d.month - 1]} de {d.year}"
+
+
 # Misma tolerancia que clasificación de cuota pagada (cuota_estado): evita notificar si ya está cubierta al 100%.
 TOL_SALDO_CUOTA_NOTIFICACION = 0.01
 SALDO_PENDIENTE_CUOTA = func.coalesce(Cuota.monto, 0) - func.coalesce(Cuota.total_pagado, 0)
@@ -36,7 +70,7 @@ CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
     ~Cuota.estado.in_(_ESTADOS_CUOTA_PAGADA),
 )
 
-# Prejudicial (submenu Notificaciones «A: 5 cuotas»): solo cuotas con columna estado VENCIDO o MORA
+# Prejudicial (submenu Notificaciones «Atraso 5 cuotas»): solo cuotas con columna estado VENCIDO o MORA
 # (clasificar_estado_cuota en cuota_estado.py; MORA = morosidad por calendario).
 ESTADOS_CUOTA_VENCIDO_Y_MORA = ("VENCIDO", "MORA")
 # Clientes con al menos esta cantidad de cuotas VENCIDO/MORA vencidas (saldo > tol) entran al listado prejudicial.
@@ -385,10 +419,14 @@ def format_cuota_item(
             "monto_cuota": float(cuota.monto) if cuota.monto is not None else None,
             "estado": "PENDIENTE",
         })
-        
+        if cuota.fecha_vencimiento is not None:
+            base_item["fecha_vencimiento_display"] = fecha_cuota_a_texto_es(
+                cuota.fecha_vencimiento
+            )
+
         if dias_antes_vencimiento is not None:
             base_item["dias_antes_vencimiento"] = dias_antes_vencimiento
-    
+
     return base_item
 
 

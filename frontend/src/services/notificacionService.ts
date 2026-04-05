@@ -164,7 +164,7 @@ export interface EstadisticasPorTab {
 
   liquidados: EstadisticasTabItem
 
-  /** Submenú D:2 días (PAGO_2_DIAS_ANTES_PENDIENTE). */
+  /** Submenú 2 días antes (PAGO_2_DIAS_ANTES_PENDIENTE). */
 
   d_2_antes_vencimiento: EstadisticasTabItem
 }
@@ -431,7 +431,7 @@ class NotificacionService {
     )
   }
 
-  /** Cuotas PENDIENTE con vencimiento = hoy + 2 (Caracas). Submenú D:2 días. */
+  /** Cuotas PENDIENTE con vencimiento = hoy + 2 (Caracas). Submenú 2 días antes. */
 
   async getCuotasPendiente2DiasAntes(): Promise<{
     actualizado_en: string
@@ -522,14 +522,16 @@ class NotificacionService {
 
   /** Recalcular dias_mora en clientes (POST manual desde la UI «Actualizar» o API). */
 
-  async actualizarNotificaciones(): Promise<{
+  async actualizarNotificaciones(opts?: {
+    signal?: AbortSignal
+  }): Promise<{
     mensaje: string
     clientes_actualizados: number
   }> {
     return await apiClient.post<{
       mensaje: string
       clientes_actualizados: number
-    }>(`${this.baseUrl}/actualizar`)
+    }>(`${this.baseUrl}/actualizar`, {}, { signal: opts?.signal })
   }
 
   /** Plantilla editable del PDF de carta de cobranza (adjunto al email). */
@@ -774,7 +776,9 @@ class NotificacionService {
     )
   }
 
-  async enviarNotificacionesPrejudiciales(): Promise<{
+  async enviarNotificacionesPrejudiciales(opts?: {
+    signal?: AbortSignal
+  }): Promise<{
     mensaje: string
     enviados: number
     sin_email: number
@@ -790,11 +794,13 @@ class NotificacionService {
 
       {},
 
-      { timeout: 120000 }
+      { timeout: 120000, signal: opts?.signal }
     )
   }
 
-  async enviarNotificacionesMasivos(): Promise<{
+  async enviarNotificacionesMasivos(opts?: {
+    signal?: AbortSignal
+  }): Promise<{
     mensaje: string
     enviados: number
     sin_email: number
@@ -810,7 +816,7 @@ class NotificacionService {
 
       {},
 
-      { timeout: 120000 }
+      { timeout: 120000, signal: opts?.signal }
     )
   }
 
@@ -831,11 +837,13 @@ class NotificacionService {
   async enviarPruebaPaqueteCompleta(params: {
     tipo: string
     destinos: string[]
+    signal?: AbortSignal
   }): Promise<EnvioPruebaPaqueteResponse> {
+    const { signal, ...body } = params
     return await apiClient.post<EnvioPruebaPaqueteResponse>(
       `${this.baseUrl}/enviar-prueba-paquete`,
-      params,
-      { timeout: 120000 }
+      body,
+      { timeout: 120000, signal }
     )
   }
 
@@ -880,7 +888,10 @@ class NotificacionService {
   }
 
   /** Envio masivo sincrono solo para un criterio (configuracion por fila). */
-  async enviarCasoManual(tipo: string): Promise<{
+  async enviarCasoManual(
+    tipo: string,
+    opts?: { signal?: AbortSignal }
+  ): Promise<{
     mensaje: string
     tipo_caso: string
     total_en_lista: number
@@ -895,7 +906,7 @@ class NotificacionService {
     return await apiClient.post(
       `${this.baseUrl}/enviar-caso-manual`,
       { tipo },
-      { timeout: 180000 }
+      { timeout: 180000, signal: opts?.signal }
     )
   }
 
@@ -1027,9 +1038,14 @@ class EmailConfigService {
   }
 
   async actualizarConfiguracionEnvios(
-    config: Record<string, unknown>
+    config: Record<string, unknown>,
+    opts?: { signal?: AbortSignal }
   ): Promise<any> {
-    return await apiClient.put(`${this.baseUrl}/notificaciones/envios`, config)
+    return await apiClient.put(
+      `${this.baseUrl}/notificaciones/envios`,
+      config,
+      { signal: opts?.signal }
+    )
   }
 
   /** Diagnostico PDF fijos (global + pestaña 3 por caso). */

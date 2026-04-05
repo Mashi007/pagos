@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
 
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -56,6 +56,8 @@ import {
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
+import { isRequestCanceled } from '../utils/requestCanceled'
+
 export type NotificacionesModulo = 'a1dia' | 'a3cuotas' | 'd2antes'
 
 type TabId = 'dias_1_atraso' | 'prejudicial' | 'd2antes' | 'configuracion'
@@ -65,13 +67,13 @@ function tabsParaModulo(
 ): { id: TabId; label: string; icon: typeof Clock }[] {
   if (modulo === 'a3cuotas') {
     return [
-      { id: 'prejudicial', label: 'A: 5 cuotas', icon: Clock },
+      { id: 'prejudicial', label: 'Atraso 5 cuotas', icon: Clock },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
     ]
   }
   if (modulo === 'd2antes') {
     return [
-      { id: 'd2antes', label: 'D:2 días', icon: Clock },
+      { id: 'd2antes', label: '2 días antes', icon: Clock },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
     ]
   }
@@ -449,6 +451,29 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [enviandoD2Antes, setEnviandoD2Antes] = useState(false)
 
+  const operacionListaAbortRef = useRef<AbortController | null>(null)
+
+  const beginOperacionListaAbortable = () => {
+    operacionListaAbortRef.current?.abort()
+    const c = new AbortController()
+    operacionListaAbortRef.current = c
+    return c
+  }
+
+  const cancelarOperacionListaEmergencia = () => {
+    operacionListaAbortRef.current?.abort()
+    operacionListaAbortRef.current = null
+    setActualizandoListas(false)
+    setEnviandoPrejudicial(false)
+    setEnviandoD2Antes(false)
+    toast.warning(
+      'Cancelación: se cortó la petición en el navegador. El servidor puede seguir unos segundos.'
+    )
+  }
+
+  const hayOperacionListaEnCurso =
+    actualizandoListas || enviandoPrejudicial || enviandoD2Antes
+
   const handleDescargarEstadoCuentaPdf = async (prestamoId: number) => {
     setDescargandoEstadoCuentaId(prestamoId)
 
@@ -494,9 +519,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   }
 
   const handleRefresh = async () => {
+    const ac = beginOperacionListaAbortable()
     setActualizandoListas(true)
     try {
-      await notificacionService.actualizarNotificaciones()
+      await notificacionService.actualizarNotificaciones({
+        signal: ac.signal,
+      })
       await invalidateListasNotificacionesMora(queryClient, {
         skipCrossTabBroadcast: true,
       })
@@ -522,10 +550,17 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
     } catch (e) {
       console.error(e)
+      if (isRequestCanceled(e)) {
+        toast.info('Actualización cancelada.')
+        return
+      }
       toast.error(
         'No se pudo recalcular la mora en el servidor. Puede reintentar o revisar conexion y permisos.'
       )
     } finally {
+      if (operacionListaAbortRef.current === ac) {
+        operacionListaAbortRef.current = null
+      }
       setActualizandoListas(false)
     }
   }
@@ -546,10 +581,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     if (!confirmar) return
 
+    const ac = beginOperacionListaAbortable()
     setEnviandoPrejudicial(true)
 
     try {
-      const res = await notificacionService.enviarNotificacionesPrejudiciales()
+      const res = await notificacionService.enviarNotificacionesPrejudiciales({
+        signal: ac.signal,
+      })
 
       toast.success(
         `${res.mensaje} Enviados: ${res.enviados}. Sin email: ${res.sin_email}. Fallidos: ${res.fallidos}.`
@@ -568,11 +606,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       })
     } catch (e) {
       console.error(e)
+      if (isRequestCanceled(e)) {
+        toast.info('Envío cancelado en el navegador.')
+        return
+      }
 
       toast.error(
         'No se pudo completar el envío. Revise PREJUDICIAL en Configuración, cuentas de correo y modo prueba.'
       )
     } finally {
+      if (operacionListaAbortRef.current === ac) {
+        operacionListaAbortRef.current = null
+      }
       setEnviandoPrejudicial(false)
     }
   }
@@ -588,16 +633,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             'No hay filas en el listado. El servidor procesará la lista actual del criterio PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía). ¿Ejecutar envío manual?'
           )
         : window.confirm(
-            `Envío manual para D:2 días (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
+            `Envío manual para 2 días antes (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
           )
 
     if (!confirmar) return
 
+    const ac = beginOperacionListaAbortable()
     setEnviandoD2Antes(true)
 
     try {
       const res = await notificacionService.enviarCasoManual(
-        'PAGO_2_DIAS_ANTES_PENDIENTE'
+        'PAGO_2_DIAS_ANTES_PENDIENTE',
+        { signal: ac.signal }
       )
 
       toast.success(
@@ -617,11 +664,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       })
     } catch (e) {
       console.error(e)
+      if (isRequestCanceled(e)) {
+        toast.info('Envío cancelado en el navegador.')
+        return
+      }
 
       toast.error(
         'No se pudo completar el envío. Revise PAGO_2_DIAS_ANTES_PENDIENTE en Configuración, cuentas de correo y modo prueba.'
       )
     } finally {
+      if (operacionListaAbortRef.current === ac) {
+        operacionListaAbortRef.current = null
+      }
       setEnviandoD2Antes(false)
     }
   }
@@ -790,16 +844,31 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           title="Notificaciones"
           description="Clientes retrasados por fecha de vencimiento y mora"
           actions={
-            <Button
-              variant="outline"
-              onClick={() => void handleRefresh()}
-              disabled={actualizandoListas}
-            >
-              <RefreshCw
-                className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
-              />
-              Actualizacion manual
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => void handleRefresh()}
+                disabled={actualizandoListas}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
+                />
+                Actualizacion manual
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-red-400 text-red-800 hover:bg-red-50"
+                disabled={!hayOperacionListaEnCurso}
+                onClick={cancelarOperacionListaEmergencia}
+                title="Emergencia: corta la petición en curso (actualizar listas). El servidor puede seguir unos segundos."
+              >
+                <X className="mr-2 h-4 w-4" />
+                Cancelar
+              </Button>
+            </div>
           }
         />
 
@@ -854,16 +923,31 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
           }
           actions={
-            <Button
-              variant="outline"
-              onClick={() => void handleRefresh()}
-              disabled={actualizandoListas}
-            >
-              <RefreshCw
-                className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
-              />
-              Actualizacion manual
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => void handleRefresh()}
+                disabled={actualizandoListas}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
+                />
+                Actualizacion manual
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-red-400 text-red-800 hover:bg-red-50"
+                disabled={!hayOperacionListaEnCurso}
+                onClick={cancelarOperacionListaEmergencia}
+                title="Emergencia: corta actualización de listas o envío manual en curso. El servidor puede seguir unos segundos."
+              >
+                <X className="mr-2 h-4 w-4" />
+                Cancelar
+              </Button>
+            </div>
           }
         />
       </motion.div>
@@ -928,7 +1012,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               {modulo === 'a3cuotas'
                 ? 'Cinco o más cuotas VENCIDO o MORA (prejudicial)'
                 : modulo === 'd2antes'
-                  ? 'D:2 días - PENDIENTE, vence en 2 días'
+                  ? '2 días antes - PENDIENTE, vence en 2 días'
                   : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
             </CardTitle>
 
@@ -992,6 +1076,19 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : 'Enviar notificaciones (manual)'}
                 </Button>
               )}
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-red-400 text-red-800 hover:bg-red-50"
+                disabled={!hayOperacionListaEnCurso}
+                onClick={cancelarOperacionListaEmergencia}
+                title="Emergencia: interrumpe la petición en curso (actualizar listas o envío manual). El servidor puede seguir unos segundos."
+              >
+                <X className="mr-2 h-4 w-4" />
+                Cancelar
+              </Button>
             </div>
 
             {/* KPIs por pestaña: correos enviados y rebotados */}

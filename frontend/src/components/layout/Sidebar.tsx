@@ -227,12 +227,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           exactHref: true,
         },
         {
-          title: 'A: 5 cuotas',
+          title: 'Atraso 5 cuotas',
           href: '/notificaciones/a-3-cuotas',
           icon: Clock,
         },
         {
-          title: 'D:2 días',
+          title: '2 días antes',
           href: '/notificaciones/d-1-dia',
           icon: Clock,
         },

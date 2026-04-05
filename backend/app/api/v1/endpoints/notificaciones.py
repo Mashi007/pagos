@@ -119,11 +119,49 @@ def plantilla_usa_variables_cobranza(plantilla) -> bool:
     return any(v in texto for v in _VARS_COBRANZA)
 
 
+def _format_item_texto_plantilla_por_defecto(texto: str, item: dict) -> str:
+    """
+    Sustituye {nombre}, {fecha_vencimiento}, {fecha_vencimiento_display}, etc. en textos por defecto
+    (sin plantilla en BD). format_map con claves faltantes -> cadena vacia (no TypeError por kwargs extra).
+    """
+    if not texto:
+        return ""
+    nombre = item.get("nombre") or "Cliente"
+    cedula = item.get("cedula") or ""
+    fecha_v = item.get("fecha_vencimiento") or ""
+    fecha_disp = (item.get("fecha_vencimiento_display") or "").strip() or str(fecha_v)
+    numero_cuota = item.get("numero_cuota")
+    monto = item.get("monto_cuota")
+    if monto is None and item.get("monto") is not None:
+        monto = item.get("monto")
+
+    class _Map(dict):
+        def __missing__(self, key):
+            return ""
+
+    m = _Map(
+        nombre=nombre,
+        cedula=cedula,
+        fecha_vencimiento=str(fecha_v),
+        fecha_vencimiento_display=str(fecha_disp),
+        numero_cuota=str(numero_cuota) if numero_cuota is not None else "",
+        monto=str(monto) if monto is not None else "",
+        dias_atraso=str(item.get("dias_atraso"))
+        if item.get("dias_atraso") is not None
+        else "",
+        cuotas_atrasadas=str(item.get("cuotas_atrasadas"))
+        if item.get("cuotas_atrasadas") is not None
+        else "",
+    )
+    return texto.format_map(m)
+
+
 def _sustituir_variables(texto: str, item: dict) -> str:
     """
     Reemplaza variables {{variable}} en texto.
-    Fijas: nombre, cedula, fecha_vencimiento, numero_cuota, monto (desde monto_cuota), dias_atraso, cuotas_atrasadas.
-    Cualquier otra clave presente en item (ej. telefono, correo) se sustituye tambiÃƒÂ©n para variables personalizadas.
+    Fijas: nombre, cedula, fecha_vencimiento, fecha_vencimiento_display (texto legible),
+    numero_cuota, monto (desde monto_cuota), dias_atraso, cuotas_atrasadas.
+    Cualquier otra clave presente en item (ej. telefono, correo) se sustituye tambien para variables personalizadas.
     """
     if not texto:
         return ""
@@ -137,10 +175,12 @@ def _sustituir_variables(texto: str, item: dict) -> str:
         monto = item.get("monto")
     dias_atraso = item.get("dias_atraso")
     cuotas_atrasadas = item.get("cuotas_atrasadas")
+    fecha_disp = (item.get("fecha_vencimiento_display") or "").strip() or str(fecha_v)
     replacements = {
         "{{nombre}}": str(nombre),
         "{{cedula}}": str(cedula),
         "{{fecha_vencimiento}}": str(fecha_v),
+        "{{fecha_vencimiento_display}}": str(fecha_disp),
         "{{numero_cuota}}": str(numero_cuota) if numero_cuota is not None else "",
         "{{monto}}": str(monto) if monto is not None else "",
         "{{dias_atraso}}": str(dias_atraso) if dias_atraso is not None else "",
@@ -157,6 +197,7 @@ def _sustituir_variables(texto: str, item: dict) -> str:
             "nombre",
             "cedula",
             "fecha_vencimiento",
+            "fecha_vencimiento_display",
             "numero_cuota",
             "monto_cuota",
             "dias_atraso",
@@ -176,6 +217,7 @@ def _item_placeholder_pruebas() -> dict:
         "nombre": "{{nombre}}",
         "cedula": "{{cedula}}",
         "fecha_vencimiento": "{{fecha_vencimiento}}",
+        "fecha_vencimiento_display": "{{fecha_vencimiento_display}}",
         "numero_cuota": "{{numero_cuota}}",
         "monto_cuota": "{{monto}}",
         "dias_atraso": "{{dias_atraso}}",
@@ -246,15 +288,8 @@ def get_plantilla_asunto_cuerpo(db: Session, plantilla_id: Optional[int], item: 
             asunto = _sustituir_variables(plantilla.asunto, item)
             cuerpo = _sustituir_variables(plantilla.cuerpo, item)
             return (asunto, cuerpo)
-    nombre = item.get("nombre") or "Cliente"
-    cedula = item.get("cedula") or ""
-    fecha_v = item.get("fecha_vencimiento") or ""
-    numero_cuota = item.get("numero_cuota")
-    monto = item.get("monto_cuota")
-    if monto is None and item.get("monto") is not None:
-        monto = item.get("monto")
-    asunto = asunto_default.format(nombre=nombre, cedula=cedula, fecha_vencimiento=fecha_v, numero_cuota=numero_cuota or "", monto=monto if monto is not None else "")
-    cuerpo = cuerpo_default.format(nombre=nombre, cedula=cedula, fecha_vencimiento=fecha_v, numero_cuota=numero_cuota or "", monto=monto if monto is not None else "")
+    asunto = _format_item_texto_plantilla_por_defecto(asunto_default, item)
+    cuerpo = _format_item_texto_plantilla_por_defecto(cuerpo_default, item)
     return (asunto, cuerpo)
 
 
@@ -1862,7 +1897,7 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
 def get_cuotas_pendiente_2_dias_antes(db: Session = Depends(get_db)):
     """
     Listado ligero: solo cuotas en estado PENDIENTE con fecha_vencimiento = hoy + 2 (Caracas).
-    Submenú «D:2 días»; configuración de envíos independiente (PAGO_2_DIAS_ANTES_PENDIENTE).
+    Submenú «2 días antes»; configuración de envíos independiente (PAGO_2_DIAS_ANTES_PENDIENTE).
     """
     hoy = hoy_negocio()
     try:

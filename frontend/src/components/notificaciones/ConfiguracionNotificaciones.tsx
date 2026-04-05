@@ -34,6 +34,8 @@ import {
 
 import { getErrorDetail } from '../../types/errors'
 
+import { isRequestCanceled } from '../../utils/requestCanceled'
+
 import { Button } from '../../components/ui/button'
 
 import { Input } from '../../components/ui/input'
@@ -144,7 +146,7 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
   },
   {
     tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-    label: 'D:2 días (pendiente, vence en 2 días)',
+    label: '2 días antes (pendiente, vence en 2 días)',
     categoria: 'Por vencer',
     color: 'blue',
   },
@@ -228,7 +230,7 @@ function esConfigEnvioSeccionId(v: string | null): v is ConfigEnvioSeccionId {
 export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
   {
     tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-    label: 'D:2 días (pendiente, vence en 2 días)',
+    label: '2 días antes (pendiente, vence en 2 días)',
     categoria: 'Por vencer',
     color: 'blue',
   },
@@ -479,6 +481,32 @@ export function ConfiguracionNotificaciones({
   const [campanasMasivos, setCampanasMasivos] = useState<CampanaMasivaConfig[]>(
     []
   )
+
+  const envioConfigAbortRef = useRef<AbortController | null>(null)
+
+  const beginEnvioConfigAbortable = () => {
+    envioConfigAbortRef.current?.abort()
+    const c = new AbortController()
+    envioConfigAbortRef.current = c
+    return c
+  }
+
+  const cancelarEnvioConfigEmergencia = () => {
+    envioConfigAbortRef.current?.abort()
+    envioConfigAbortRef.current = null
+    setEnviandoCasoTipo(null)
+    setEnviandoPruebaIndice(null)
+    setEnviandoMasivo(false)
+    toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
+    toast.warning(
+      'Cancelación: petición cortada en el navegador. El servidor puede seguir unos segundos.'
+    )
+  }
+
+  const hayEnvioConfigEnCurso =
+    enviandoCasoTipo !== null ||
+    enviandoMasivo ||
+    enviandoPruebaIndice !== null
 
   const guardandoRef = useRef(false)
 
@@ -833,6 +861,7 @@ export function ConfiguracionNotificaciones({
       if (!ok) return
     }
 
+    const ac = beginEnvioConfigAbortable()
     try {
       setEnviandoCasoTipo(tipo)
       toast.loading(
@@ -841,7 +870,9 @@ export function ConfiguracionNotificaciones({
           'permanece pendiente hasta que termine todo el lote.',
         { id: TOAST_ID_ENVIO_CASO_MANUAL, duration: Infinity }
       )
-      const res = await notificacionService.enviarCasoManual(tipo)
+      const res = await notificacionService.enviarCasoManual(tipo, {
+        signal: ac.signal,
+      })
       toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo,
@@ -860,8 +891,15 @@ export function ConfiguracionNotificaciones({
       )
     } catch (error: unknown) {
       toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
+      if (isRequestCanceled(error)) {
+        toast.info('Envío cancelado en el navegador.')
+        return
+      }
       toast.error(getErrorDetail(error) || 'Error al enviar este caso.')
     } finally {
+      if (envioConfigAbortRef.current === ac) {
+        envioConfigAbortRef.current = null
+      }
       setEnviandoCasoTipo(null)
     }
   }
@@ -890,6 +928,7 @@ export function ConfiguracionNotificaciones({
       return
     }
 
+    const ac = beginEnvioConfigAbortable()
     try {
       setEnviandoPruebaIndice(0)
 
@@ -907,6 +946,9 @@ export function ConfiguracionNotificaciones({
           { duration: 6000 }
         )
 
+        if (envioConfigAbortRef.current === ac) {
+          envioConfigAbortRef.current = null
+        }
         setEnviandoPruebaIndice(null)
 
         return
@@ -916,6 +958,7 @@ export function ConfiguracionNotificaciones({
         await notificacionService.enviarPruebaPaqueteCompleta({
           tipo: tipoPruebaPaquete,
           destinos,
+          signal: ac.signal,
         })
 
       const enviados = resultado.enviados ?? 0
@@ -945,6 +988,10 @@ export function ConfiguracionNotificaciones({
         toast.error(msg, { duration: 10000 })
       }
     } catch (error: unknown) {
+      if (isRequestCanceled(error)) {
+        toast.info('Prueba cancelada en el navegador.')
+        return
+      }
       const detalle = getErrorDetail(error)
 
       const mensaje =
@@ -954,6 +1001,9 @@ export function ConfiguracionNotificaciones({
 
       toast.error(mensaje, { duration: 5000 })
     } finally {
+      if (envioConfigAbortRef.current === ac) {
+        envioConfigAbortRef.current = null
+      }
       setEnviandoPruebaIndice(null)
     }
   }
@@ -1007,6 +1057,7 @@ export function ConfiguracionNotificaciones({
       return
     }
 
+    const ac = beginEnvioConfigAbortable()
     try {
       setEnviandoMasivo(true)
 
@@ -1032,13 +1083,17 @@ export function ConfiguracionNotificaciones({
         })),
       }
 
-      await emailConfigService.actualizarConfiguracionEnvios(payload)
+      await emailConfigService.actualizarConfiguracionEnvios(payload, {
+        signal: ac.signal,
+      })
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
       })
 
-      const res = await notificacionService.enviarNotificacionesMasivos()
+      const res = await notificacionService.enviarNotificacionesMasivos({
+        signal: ac.signal,
+      })
 
       const enviados = res?.enviados ?? 0
       const fallidos = res?.fallidos ?? 0
@@ -1056,10 +1111,17 @@ export function ConfiguracionNotificaciones({
         )
       }
     } catch (error: unknown) {
+      if (isRequestCanceled(error)) {
+        toast.info('Envío masivos cancelado en el navegador.')
+        return
+      }
       const detalle = getErrorDetail(error)
 
       toast.error(detalle || 'Error al ejecutar envíos masivos.')
     } finally {
+      if (envioConfigAbortRef.current === ac) {
+        envioConfigAbortRef.current = null
+      }
       setEnviandoMasivo(false)
     }
   }
@@ -1078,6 +1140,26 @@ export function ConfiguracionNotificaciones({
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2">
+        <p className="max-w-xl text-sm text-red-900">
+          <strong>Emergencia:</strong> cancela la petición de envío o prueba en
+          curso en este navegador (el servidor puede seguir unos segundos).
+        </p>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 border-red-400 text-red-800 hover:bg-red-100"
+          disabled={!hayEnvioConfigEnCurso}
+          onClick={cancelarEnvioConfigEmergencia}
+          title="Interrumpe el POST en curso (enviar caso, prueba de paquete o masivos)."
+        >
+          <X className="mr-2 h-4 w-4" />
+          Cancelar
+        </Button>
+      </div>
+
       <Card className="border-slate-200 bg-slate-50/40">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-xl">
@@ -1088,7 +1170,7 @@ export function ConfiguracionNotificaciones({
           <CardDescription>
             {alcance === 'solo_prejudicial' ? (
               <>
-                Configuración solo para el listado <strong>A: 5 cuotas</strong>{' '}
+                Configuración solo para el listado <strong>Atraso 5 cuotas</strong>{' '}
                 (caso <strong>PREJUDICIAL</strong>
                 ): plantilla, envío, PDF y adjuntos de ese criterio. Las
                 plantillas COBRANZA se crean en Plantillas. El backend exige
@@ -1097,7 +1179,7 @@ export function ConfiguracionNotificaciones({
               </>
             ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
               <>
-                Configuración solo para <strong>D:2 días</strong> (caso{' '}
+                Configuración solo para <strong>2 días antes</strong> (caso{' '}
                 <strong>PAGO_2_DIAS_ANTES_PENDIENTE</strong>): cuotas en estado
                 PENDIENTE con vencimiento dentro de 2 días; plantilla, envío,
                 PDF y adjuntos del caso{' '}
@@ -1424,7 +1506,7 @@ export function ConfiguracionNotificaciones({
                     <p className="mt-2 text-sm text-gray-600">
                       Solo caso MASIVOS: un correo por contacto de la lista
                       masiva (campañas en Comunicaciones). No ejecuta día
-                      siguiente al vencimiento, prejudicial, D:2 días ni
+                      siguiente al vencimiento, prejudicial, 2 días antes ni
                       retrasadas. En modo prueba los destinos reales se
                       redirigen al correo de pruebas. Guarde antes si cambió
                       plantillas o campañas.
@@ -1460,7 +1542,7 @@ export function ConfiguracionNotificaciones({
             <CardDescription className="text-xs">
               Resultado del último lote grande (p. ej. «Enviar todas» en segundo
               plano), del programador o de «Enviar este caso ahora» por fila. El
-              submódulo D:2 días no entra en «Enviar todas». Útil cuando una
+              submódulo 2 días antes no entra en «Enviar todas». Útil cuando una
               petición responde 202 sin cuerpo.
             </CardDescription>
           </CardHeader>

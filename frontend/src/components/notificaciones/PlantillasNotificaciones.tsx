@@ -165,6 +165,11 @@ export function PlantillasNotificaciones({
 
     { key: 'fecha_vencimiento', label: 'Fecha venc.' },
 
+    {
+      key: 'fecha_vencimiento_display',
+      label: 'Fecha venc. (texto, ej. 5 de abril de 2026)',
+    },
+
     { key: 'numero_cuota', label: 'Nº cuota' },
 
     { key: 'monto', label: 'Monto' },
@@ -971,7 +976,7 @@ export function PlantillasNotificaciones({
 
     PAGO_2_DIAS_ANTES_PENDIENTE: {
       categoria: 'Notificación previa (heredada)',
-      caso: 'D:2 días (pendiente, vence en 2 días)',
+      caso: '2 días antes (pendiente, vence en 2 días)',
     },
 
     PAGO_DIA_0: {
@@ -1133,6 +1138,8 @@ export function PlantillasNotificaciones({
 
       fecha_vencimiento: '15/03/2025',
 
+      fecha_vencimiento_display: '15 de marzo de 2025',
+
       numero_cuota: '3',
 
       monto: '150.00',
@@ -1286,19 +1293,6 @@ export function PlantillasNotificaciones({
                   pantalla.
                 </p>
               ) : null}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                id="activa"
-                type="checkbox"
-                checked={activa}
-                onChange={e => setActiva(e.target.checked)}
-              />
-
-              <label htmlFor="activa" className="text-sm">
-                Habilitar envío automático a las 3:00 AM
-              </label>
             </div>
           </div>
 

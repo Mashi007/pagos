@@ -62,7 +62,7 @@ const mapeoTipos = {
 
   PAGO_2_DIAS_ANTES_PENDIENTE: {
     categoria: 'Notificación previa (heredada)',
-    caso: 'D:2 días (pendiente, vence en 2 días)',
+    caso: '2 días antes (pendiente, vence en 2 días)',
   },
 
   PAGO_DIA_0: {
