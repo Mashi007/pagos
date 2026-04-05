@@ -122,6 +122,40 @@ function normalizarCedulaInput(val: string): string {
     .replace(/[\s.\-]/g, '')
 }
 
+/** En cobros público no existe el paso interno 2 (moneda); badges van 1..6 en lugar de 1..7. */
+function badgePasoFormulario(step: number, isInfopagos: boolean): number {
+  if (step >= 3 && step <= 7 && !isInfopagos) return step - 1
+  return step
+}
+
+function getStepAnnouncement(step: number, isInfopagos: boolean): string {
+  if (!isInfopagos) {
+    const m: Record<number, string> = {
+      0: 'Pantalla de bienvenida: reporte de pago',
+      1: 'Paso 1: Ingrese su número de cédula',
+      3: 'Paso 2: Institución financiera',
+      4: 'Paso 3: Fecha y monto del pago',
+      5: 'Paso 4: Número de documento u operación',
+      6: 'Paso 5: Adjuntar comprobante',
+      7: 'Paso 6: Confirmar y enviar',
+      8: 'Reporte enviado correctamente',
+    }
+    return m[step] ?? `Paso ${step}`
+  }
+  const m: Record<number, string> = {
+    0: 'Pantalla de bienvenida: reporte de pago',
+    1: 'Paso 1: Ingrese su número de cédula',
+    2: 'Paso 2: Camino de moneda y datos del pago',
+    3: 'Paso 3: Institución financiera',
+    4: 'Paso 4: Fecha y monto segun camino Bs. o USD',
+    5: 'Paso 5: Número de documento u operación',
+    6: 'Paso 6: Adjuntar comprobante',
+    7: 'Paso 7: Confirmar y enviar',
+    8: 'Reporte enviado correctamente',
+  }
+  return m[step] ?? `Paso ${step}`
+}
+
 function validarMonto(
   val: string,
   moneda: 'BS' | 'USD'
@@ -421,6 +455,10 @@ export default function ReportePagoPage({
     []
   )
 
+  useEffect(() => {
+    if (!isInfopagos && step === 2) setStep(3)
+  }, [isInfopagos, step])
+
   // Resetear confirmación de monto alto cuando cambia el monto o moneda
   useEffect(() => {
     setMontoAltoConfirmado(false)
@@ -481,27 +519,7 @@ export default function ReportePagoPage({
     setStep(irAStep)
   }
 
-  const stepAnnouncements: Record<number, string> = {
-    0: 'Pantalla de bienvenida: reporte de pago',
-
-    1: 'Paso 1: Ingrese su número de cédula',
-
-    2: 'Paso 2: Camino de moneda y datos del pago',
-
-    3: 'Paso 3: Institución financiera',
-
-    4: 'Paso 4: Fecha y monto segun camino Bs. o USD',
-
-    5: 'Paso 5: Número de documento u operación',
-
-    6: 'Paso 6: Adjuntar comprobante',
-
-    7: 'Paso 7: Confirmar y enviar',
-
-    8: 'Reporte enviado correctamente',
-  }
-
-  const stepAnnouncement = stepAnnouncements[step] || `Paso ${step}`
+  const stepAnnouncement = getStepAnnouncement(step, isInfopagos)
 
   const handleValidarCedula = async () => {
     const v = normalizarCedulaParaProcesar(cedula)
@@ -534,7 +552,7 @@ export default function ReportePagoPage({
 
       setPuedeReportarBs(puedeBs)
 
-      if (!puedeBs) setMoneda('USD')
+      setMoneda(puedeBs ? 'BS' : 'USD')
 
       setCedula(cedulaEnviar)
 
@@ -542,7 +560,7 @@ export default function ReportePagoPage({
 
       setEmailParaVerificacion(res.email ?? res.email_enmascarado ?? '')
 
-      setStep(2)
+      setStep(isInfopagos ? 2 : 3)
     } catch (e: any) {
       showNotification('error', e?.message || 'Error al validar cédula.')
     } finally {
@@ -782,11 +800,6 @@ export default function ReportePagoPage({
             icon: 'id' as const,
             text: 'Tu cedula',
             desc: '(V, E, G o J + digitos)',
-          },
-          {
-            icon: 'path' as const,
-            text: 'Tu moneda',
-            desc: 'Bs. o USD según tu cuenta',
           },
           {
             icon: 'bank' as const,
@@ -1088,7 +1101,7 @@ export default function ReportePagoPage({
     )
   }
 
-  if (step === 2) {
+  if (step === 2 && isInfopagos) {
     return (
       <div
         className={
@@ -1246,7 +1259,7 @@ export default function ReportePagoPage({
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                  3
+                  {badgePasoFormulario(3, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
                   Institución financiera
@@ -1286,7 +1299,7 @@ export default function ReportePagoPage({
                 <Button
                   variant="outline"
                   className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(isInfopagos ? 2 : 1)}
                 >
                   Atrás
                 </Button>
@@ -1357,15 +1370,21 @@ export default function ReportePagoPage({
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                  4
+                  {badgePasoFormulario(4, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
                   Fecha y monto
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                Modalidad:{' '}
-                {moneda === 'BS' ? 'bolivares (Bs.)' : 'dólares (USD)'}
+                {isInfopagos ? (
+                  <>
+                    Modalidad:{' '}
+                    {moneda === 'BS' ? 'bolivares (Bs.)' : 'dólares (USD)'}
+                  </>
+                ) : (
+                  'Ingresa la fecha y el monto del pago según corresponda a tu caso.'
+                )}
               </p>
             </CardHeader>
 
@@ -1418,15 +1437,28 @@ export default function ReportePagoPage({
                     value={monto}
                     onChange={e => setMonto(e.target.value)}
                   />
-                  <select
-                    className="min-h-[48px] w-full flex-shrink-0 touch-manipulation rounded-lg border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium focus:border-slate-900 focus:outline-none sm:w-24"
-                    value={moneda}
-                    onChange={e => setMoneda(e.target.value as 'BS' | 'USD')}
-                    aria-label="Moneda"
-                  >
-                    {puedeReportarBs && <option value="BS">Bs.</option>}
-                    <option value="USD">USD</option>
-                  </select>
+                  {isInfopagos ? (
+                    <select
+                      className="min-h-[48px] w-full flex-shrink-0 touch-manipulation rounded-lg border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium focus:border-slate-900 focus:outline-none sm:w-24"
+                      value={moneda}
+                      onChange={e => setMoneda(e.target.value as 'BS' | 'USD')}
+                      aria-label="Moneda"
+                    >
+                      {puedeReportarBs && <option value="BS">Bs.</option>}
+                      <option value="USD">USD</option>
+                    </select>
+                  ) : (
+                    <div
+                      className="flex min-h-[48px] w-full flex-shrink-0 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-100 px-3 text-base font-semibold text-slate-800 sm:w-24"
+                      aria-label={
+                        moneda === 'BS'
+                          ? 'Monto en bolívares'
+                          : 'Monto en dólares'
+                      }
+                    >
+                      {moneda === 'BS' ? 'Bs.' : 'USD'}
+                    </div>
+                  )}
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
                   {moneda === 'BS'
@@ -1466,7 +1498,9 @@ export default function ReportePagoPage({
                     if (montoNumerico >= 4000 && !montoAltoConfirmado) {
                       showNotification(
                         'error',
-                        '⚠️ Monto alto - Verifica que sea en Bs y no en USD.'
+                        moneda === 'BS'
+                          ? '⚠️ Monto alto - Verifica que el monto esté en bolívares y no en dólares.'
+                          : '⚠️ Monto alto - Verifica que el monto sea correcto.'
                       )
                       setMontoAltoConfirmado(true)
                       return
@@ -1519,7 +1553,7 @@ export default function ReportePagoPage({
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                  5
+                  {badgePasoFormulario(5, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
                   Número de operación
@@ -1615,7 +1649,7 @@ export default function ReportePagoPage({
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                  6
+                  {badgePasoFormulario(6, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
                   Comprobante de pago
@@ -1739,7 +1773,7 @@ export default function ReportePagoPage({
             <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
               <div className="mb-2 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                  7
+                  {badgePasoFormulario(7, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
                   Confirma tus datos
@@ -1776,7 +1810,7 @@ export default function ReportePagoPage({
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Monto:</span>
                   <span className="font-semibold text-slate-900">
-                    {monto} {moneda}
+                    {monto} {moneda === 'BS' ? 'Bs.' : 'USD'}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">

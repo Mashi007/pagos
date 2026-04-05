@@ -623,6 +623,30 @@ export function PrestamosList() {
     return labels[estado] || estado
   }
 
+  const gestionFiniquitoBadgeClass = (g: string) => {
+    const map: Record<string, string> = {
+      ANTIGUO: 'border-amber-200 bg-amber-50 text-amber-900',
+
+      EN_PROCESO: 'border-sky-200 bg-sky-50 text-sky-900',
+
+      TERMINADO: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    }
+
+    return map[g] || 'border-slate-200 bg-slate-50 text-slate-800'
+  }
+
+  const gestionFiniquitoLabel = (g: string) => {
+    const labels: Record<string, string> = {
+      ANTIGUO: 'Finiquito: Antiguo',
+
+      EN_PROCESO: 'Finiquito: En proceso',
+
+      TERMINADO: 'Finiquito: Terminado',
+    }
+
+    return labels[g] || g
+  }
+
   const handleEdit = async (prestamo: { id: number }) => {
     setLoadingPrestamoParaEditar(true)
 
@@ -1703,9 +1727,26 @@ export function PrestamosList() {
                           </TableCell>
 
                           <TableCell>
-                            <Badge className={getEstadoBadge(prestamo.estado)}>
-                              {getEstadoLabel(prestamo.estado)}
-                            </Badge>
+                            <div className="flex flex-col items-start gap-1">
+                              <Badge
+                                className={getEstadoBadge(prestamo.estado)}
+                              >
+                                {getEstadoLabel(prestamo.estado)}
+                              </Badge>
+
+                              {prestamo.estado_gestion_finiquito ? (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs font-normal ${gestionFiniquitoBadgeClass(
+                                    prestamo.estado_gestion_finiquito
+                                  )}`}
+                                >
+                                  {gestionFiniquitoLabel(
+                                    prestamo.estado_gestion_finiquito
+                                  )}
+                                </Badge>
+                              ) : null}
+                            </div>
                           </TableCell>
 
                           <TableCell>

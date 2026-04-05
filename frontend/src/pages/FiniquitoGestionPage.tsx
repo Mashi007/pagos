@@ -49,7 +49,6 @@ import { FiniquitoRevisionDialog } from '../components/finiquito/FiniquitoRevisi
 
 import {
   type FiniquitoCasoItem,
-  finiquitoAdminContactarCliente,
   finiquitoAdminListar,
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
@@ -235,9 +234,6 @@ function FiniquitoGestionPageInner() {
     /** Si true, exige Si/No (contacto para pasos siguientes); si false, Terminado directo desde Aceptado. */
     preguntarContactoCliente: boolean
   } | null>(null)
-  const [contactandoClienteCasoId, setContactandoClienteCasoId] = useState<
-    number | null
-  >(null)
   const [itemsRechazados, setItemsRechazados] = useState<FiniquitoCasoItem[]>(
     []
   )
@@ -486,22 +482,6 @@ function FiniquitoGestionPageInner() {
     }
   }
 
-  const enviarContactarCliente = async (casoId: number) => {
-    setContactandoClienteCasoId(casoId)
-    try {
-      const r = await finiquitoAdminContactarCliente(casoId)
-      if (!r.ok) {
-        toast.error(r.error || 'No se pudo enviar el correo')
-        return
-      }
-      toast.success(r.message || 'Correo enviado al cliente')
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error')
-    } finally {
-      setContactandoClienteCasoId(null)
-    }
-  }
-
   const limpiarCedula = () => {
     setCedulaInput('')
     setCedulaBusqueda('')
@@ -605,22 +585,6 @@ function FiniquitoGestionPageInner() {
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            className="inline-flex h-8 items-center gap-1.5 border-slate-300 text-xs"
-            disabled={contactandoClienteCasoId === row.id}
-            onClick={() => void enviarContactarCliente(row.id)}
-          >
-            {contactandoClienteCasoId === row.id ? (
-              <Loader2
-                className="h-3.5 w-3.5 shrink-0 animate-spin"
-                aria-hidden
-              />
-            ) : null}
-            Contactar
-          </Button>
-          <Button
-            type="button"
-            size="sm"
             className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
             onClick={() =>
               setDialogTerminado({
@@ -643,22 +607,6 @@ function FiniquitoGestionPageInner() {
             onClick={() => cambiarEstado(row.id, 'ACEPTADO')}
           >
             Volver a aceptado
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="inline-flex h-8 items-center gap-1.5 border-slate-300 text-xs"
-            disabled={contactandoClienteCasoId === row.id}
-            onClick={() => void enviarContactarCliente(row.id)}
-          >
-            {contactandoClienteCasoId === row.id ? (
-              <Loader2
-                className="h-3.5 w-3.5 shrink-0 animate-spin"
-                aria-hidden
-              />
-            ) : null}
-            Contactar
           </Button>
           <Button
             type="button"
@@ -911,9 +859,8 @@ function FiniquitoGestionPageInner() {
             ) : itemsAreaTrabajo.length === 0 ? (
               <p className="rounded-lg border border-dashed border-emerald-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
                 No hay casos en esta bandeja. Los aceptados aparecen aquí; puede
-                usar «En proceso» (aviso a operaciones/cobranza), «Contactar»
-                (correo al cliente con WhatsApp) o «Terminado» para dejar el
-                caso en pasivo.
+                usar «En proceso» (aviso a operaciones/cobranza) o «Terminado»
+                para dejar el caso en pasivo.
               </p>
             ) : (
               renderTablaAreaTrabajo(itemsAreaTrabajo)

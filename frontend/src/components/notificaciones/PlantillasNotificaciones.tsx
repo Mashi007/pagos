@@ -1746,9 +1746,7 @@ export function PlantillasNotificaciones({
       </TabsContent>
 
       <TabsContent value="html-editor" className="space-y-4">
-        <EditorPlantillaHTML
-          tipoServicioPorDefecto={tipoServicioPlantilla}
-        />
+        <EditorPlantillaHTML tipoServicioPorDefecto={tipoServicioPlantilla} />
       </TabsContent>
 
       <TabsContent value="resumen" className="space-y-4">
@@ -1761,9 +1759,9 @@ export function PlantillasNotificaciones({
 
             <CardDescription>
               Servicio activo:{' '}
-              {etiquetaServicioPlantilla(tipoServicioPlantilla)}. Las
-              plantillas de otros tipos, si existen, aparecen como heredadas para
-              revisión o eliminación.
+              {etiquetaServicioPlantilla(tipoServicioPlantilla)}. Las plantillas
+              de otros tipos, si existen, aparecen como heredadas para revisión
+              o eliminación.
             </CardDescription>
           </CardHeader>
 

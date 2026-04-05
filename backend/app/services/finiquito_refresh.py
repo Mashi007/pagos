@@ -12,6 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.models.finiquito import FiniquitoCaso
 from app.services.finiquito_db_schema import finiquito_casos_has_contacto_para_siguientes
+from app.services.finiquito_prestamo_gestion_sync import (
+    limpiar_estado_gestion_finiquito_prestamos,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +23,8 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
     """
     - Inserta nuevos casos en REVISION (solo prestamos LIQUIDADO que cumplen la regla).
     - Actualiza sum_total_pagado / totales en casos existentes (mantiene estado).
-    - Elimina casos cuyo prestamo ya no cumple la regla (p. ej. dejo de ser LIQUIDADO).
+    - Elimina casos cuyo prestamo ya no califica (dejo de ser LIQUIDADO, cuotas sin cuadrar, etc.),
+      en cualquier estado del caso (REVISION, ACEPTADO, area de trabajo, etc.).
     """
     sql = text(
         """
@@ -44,6 +48,11 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
     actualizados = 0
 
     if not qualifying_ids:
+        pids_borrar = [
+            int(r[0])
+            for r in db.query(FiniquitoCaso.prestamo_id).distinct().all()
+        ]
+        limpiar_estado_gestion_finiquito_prestamos(db, pids_borrar)
         eliminados = db.query(FiniquitoCaso).delete(synchronize_session=False)
         db.commit()
         logger.info(
@@ -104,13 +113,17 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
                 )
             insertados += 1
 
-    # No borrar casos ya aceptados o en flujo de area de trabajo (evita perder auditoria).
+    pids_borrar = [
+        int(r[0])
+        for r in db.query(FiniquitoCaso.prestamo_id)
+        .filter(~FiniquitoCaso.prestamo_id.in_(qualifying_ids))
+        .distinct()
+        .all()
+    ]
+    limpiar_estado_gestion_finiquito_prestamos(db, pids_borrar)
     eliminados = (
         db.query(FiniquitoCaso)
-        .filter(
-            ~FiniquitoCaso.prestamo_id.in_(qualifying_ids),
-            ~FiniquitoCaso.estado.in_(["ACEPTADO", "EN_PROCESO", "TERMINADO", "ANTIGUO"]),
-        )
+        .filter(~FiniquitoCaso.prestamo_id.in_(qualifying_ids))
         .delete(synchronize_session=False)
     )
 

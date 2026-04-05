@@ -191,6 +191,9 @@ export interface Prestamo {
     | 'LIQUIDADO'
     | 'DESISTIMIENTO'
 
+  /** Fase finiquito (Antiguo / En proceso / Terminado), reflejada en el préstamo. */
+  estado_gestion_finiquito?: 'ANTIGUO' | 'EN_PROCESO' | 'TERMINADO' | null
+
   usuario_proponente: string
 
   usuario_aprobador?: string

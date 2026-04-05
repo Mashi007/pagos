@@ -263,6 +263,31 @@ export type FiniquitoAdminListaResult = {
   offset: number
 }
 
+/** Ventana por defecto alineada con el backend (horas UTC hacia atrás). */
+export const FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT = 72
+
+export type FiniquitoConteoRevisionNuevos = {
+  total: number
+  ventana_horas: number
+}
+
+/** Casos en REVISION materializados recientemente (alarma de nuevos liquidados en finiquito). */
+export async function finiquitoAdminConteoRevisionNuevos(
+  cedula?: string,
+  horas: number = FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT
+): Promise<FiniquitoConteoRevisionNuevos> {
+  const params = new URLSearchParams()
+  params.set('horas', String(horas))
+  const ced = (cedula ?? '').trim()
+  if (ced) {
+    params.set('cedula', ced)
+  }
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return apiClient.get<FiniquitoConteoRevisionNuevos>(
+    `${BASE}/admin/casos/conteo-revision-nuevos${q}`
+  )
+}
+
 export async function finiquitoAdminListar(
   estado?: string,
   cedula?: string,
@@ -311,20 +336,6 @@ export async function finiquitoAdminPatchEstado(
     caso?: FiniquitoCasoItem
     error?: string
   }>(`${BASE}/admin/casos/${casoId}/estado`, body)
-}
-
-export type FiniquitoContactarClienteResult = {
-  ok: boolean
-  error?: string
-  message?: string
-}
-
-/** Correo al cliente: finiquito en gestion y WhatsApp de contacto. */
-export async function finiquitoAdminContactarCliente(casoId: number) {
-  return apiClient.post<FiniquitoContactarClienteResult>(
-    `${BASE}/admin/casos/${casoId}/contactar-cliente`,
-    {}
-  )
 }
 
 export type FiniquitoRefreshStats = {

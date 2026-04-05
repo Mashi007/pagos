@@ -117,33 +117,33 @@ export function DocumentosAlmacenadosPorPestana({
 
               <ul className="mt-2 space-y-1">
                 {items.map(doc => (
-                    <li
-                      key={doc.id}
-                      className="flex items-center justify-between gap-2 text-sm"
-                    >
-                      <span className="flex items-center gap-2 truncate">
-                        <FileText className="h-4 w-4 shrink-0 text-gray-500" />
+                  <li
+                    key={doc.id}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      <FileText className="h-4 w-4 shrink-0 text-gray-500" />
 
-                        {doc.nombre_archivo}
-                      </span>
+                      {doc.nombre_archivo}
+                    </span>
 
-                      {permitirEliminar && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEliminar(doc.id)}
-                          disabled={eliminandoId === doc.id}
-                          aria-label={'Eliminar ' + doc.nombre_archivo}
-                        >
-                          {eliminandoId === doc.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          )}
-                        </Button>
-                      )}
-                    </li>
+                    {permitirEliminar && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEliminar(doc.id)}
+                        disabled={eliminandoId === doc.id}
+                        aria-label={'Eliminar ' + doc.nombre_archivo}
+                      >
+                        {eliminandoId === doc.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        )}
+                      </Button>
+                    )}
+                  </li>
                 ))}
               </ul>
             </div>

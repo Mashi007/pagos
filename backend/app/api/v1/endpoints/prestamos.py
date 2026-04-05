@@ -883,6 +883,10 @@ def listar_prestamos(
 
             estado=estado_resp,
 
+            estado_gestion_finiquito=getattr(
+                p, "estado_gestion_finiquito", None
+            ),
+
             concesionario=p.concesionario,
 
             modelo=p.modelo,
@@ -1524,6 +1528,10 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
                     total_financiamiento=p.total_financiamiento,
 
                     estado=estado_resp,
+
+                    estado_gestion_finiquito=getattr(
+                        p, "estado_gestion_finiquito", None
+                    ),
 
                     concesionario=p.concesionario,
 

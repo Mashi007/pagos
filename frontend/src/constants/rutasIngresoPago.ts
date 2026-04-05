@@ -4,7 +4,8 @@
  * endpoints publicos de cobros.
  *
  * Fuentes de ingreso (producto):
- * - /pagos/rapicredit-cobros: deudor, sin login.
+ * - /pagos/rapicredit-cobros: deudor, sin login; moneda Bs./USD según lista en
+ *   backend (sin pantalla de elección; solo instrucciones al ingresar monto).
  * - /pagos/infopagos: colaborador con login; mismo flujo que cobros con variant.
  * - /pagos/pagos: Excel, Gmail y revision; la importacion y conciliacion en
  *   backend usan la misma logica de moneda/tasa cuando el origen trae Bs.

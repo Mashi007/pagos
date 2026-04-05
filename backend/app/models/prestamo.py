@@ -34,6 +34,8 @@ class Prestamo(Base):
     fecha_base_calculo = Column(Date, nullable=True)
     producto = Column(String(255), nullable=False)
     estado = Column(String(50), nullable=False, index=True, server_default=text("'DRAFT'"))
+    # Fase finiquito visible en listados (ANTIGUO, EN_PROCESO, TERMINADO); no sustituye `estado`.
+    estado_gestion_finiquito = Column(String(32), nullable=True, index=True)
     # Fecha calendario (America/Caracas) en que el prestamo paso a LIQUIDADO; emails con PDF se programan dias despues.
     fecha_liquidado = Column(Date, nullable=True, index=True)
     usuario_proponente = Column(String(255), nullable=False, server_default=text("'itmaster@rapicreditca.com'"))

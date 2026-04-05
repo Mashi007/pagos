@@ -522,9 +522,7 @@ class NotificacionService {
 
   /** Recalcular dias_mora en clientes (POST manual desde la UI «Actualizar» o API). */
 
-  async actualizarNotificaciones(opts?: {
-    signal?: AbortSignal
-  }): Promise<{
+  async actualizarNotificaciones(opts?: { signal?: AbortSignal }): Promise<{
     mensaje: string
     clientes_actualizados: number
   }> {
@@ -797,9 +795,7 @@ class NotificacionService {
     )
   }
 
-  async enviarNotificacionesMasivos(opts?: {
-    signal?: AbortSignal
-  }): Promise<{
+  async enviarNotificacionesMasivos(opts?: { signal?: AbortSignal }): Promise<{
     mensaje: string
     enviados: number
     sin_email: number

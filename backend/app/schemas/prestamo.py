@@ -174,6 +174,7 @@ class PrestamoResponse(BaseModel):
     cliente_id: int
     total_financiamiento: Decimal
     estado: str = "DRAFT"
+    estado_gestion_finiquito: Optional[str] = None
     concesionario: Optional[str] = None
     modelo: Optional[str] = None
     analista: Optional[str] = None

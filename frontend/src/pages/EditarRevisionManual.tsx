@@ -8,6 +8,8 @@ import { motion } from 'framer-motion'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
+import { Badge } from '../components/ui/badge'
+
 import { Button } from '../components/ui/button'
 
 import {
@@ -24,7 +26,6 @@ import {
   X,
   ChevronLeft,
   Check,
-  Trash2,
   AlertTriangle,
   User,
   CreditCard,
@@ -42,9 +43,22 @@ import { Input } from '../components/ui/input'
 
 import { Textarea } from '../components/ui/textarea'
 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table'
+
 import { toast } from 'sonner'
 
+import { formatDate } from '../utils'
+
 import { revisionManualService } from '../services/revisionManualService'
+
+import { pagoService, type Pago } from '../services/pagoService'
 
 import { prestamoService } from '../services/prestamoService'
 
@@ -264,7 +278,6 @@ function firmaSoloCuotas(cuotas: Partial<CuotaData>[]): string {
       fp: normDateCmp(c.fecha_pago as string | null | undefined),
       tp: Number(c.total_pagado) || 0,
       est: String(c.estado ?? '').trim(),
-      obs: String(c.observaciones ?? ''),
     }))
   )
 }
@@ -289,6 +302,20 @@ async function ejecutarEnLotes<T>(
 
 /** Lista de préstamos (en producción: /pagos/prestamos vía basename). */
 const RUTA_LISTA_PRESTAMOS = '/prestamos'
+
+const PER_PAGE_PAGOS_REGISTRADOS = 20
+
+function badgeEstadoPagoRegistrado(estado: string) {
+  const estados: Record<string, { color: string; label: string }> = {
+    PAGADO: { color: 'bg-green-500', label: 'Pagado' },
+    PENDIENTE: { color: 'bg-yellow-500', label: 'Pendiente' },
+    ATRASADO: { color: 'bg-red-500', label: 'Atrasado' },
+    PARCIAL: { color: 'bg-blue-500', label: 'Parcial' },
+    ADELANTADO: { color: 'bg-purple-500', label: 'Adelantado' },
+  }
+  const config = estados[estado] || { color: 'bg-gray-500', label: estado }
+  return <Badge className={`${config.color} text-white`}>{config.label}</Badge>
+}
 
 export function EditarRevisionManual() {
   const { prestamoId } = useParams()
@@ -316,9 +343,6 @@ export function EditarRevisionManual() {
 
   const [cuotasData, setCuotasData] = useState<Partial<CuotaData>[]>([])
 
-  /** IDs pendientes de borrar en BD al guardar (parciales o guardar y cerrar). */
-  const [cuotasIdsAEliminar, setCuotasIdsAEliminar] = useState<number[]>([])
-
   const [guardandoParcial, setGuardandoParcial] = useState(false)
 
   const [guardandoFinal, setGuardandoFinal] = useState(false)
@@ -331,6 +355,8 @@ export function EditarRevisionManual() {
   const [motivoRechazo, setMotivoRechazo] = useState('')
 
   const [guardandoRechazo, setGuardandoRechazo] = useState(false)
+
+  const [pagePagosRegistrados, setPagePagosRegistrados] = useState(1)
 
   /** Fecha de aprobación original cargada desde BD - para detectar si cambió */
   const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<
@@ -361,17 +387,8 @@ export function EditarRevisionManual() {
   const firmaCargaInicialRef = useRef<FirmaCargaRevision | null>(null)
 
   useLayoutEffect(() => {
-    formDirtyRef.current =
-      cambios.cliente ||
-      cambios.prestamo ||
-      cambios.cuotas ||
-      cuotasIdsAEliminar.length > 0
-  }, [
-    cambios.cliente,
-    cambios.prestamo,
-    cambios.cuotas,
-    cuotasIdsAEliminar.length,
-  ])
+    formDirtyRef.current = cambios.cliente || cambios.prestamo || cambios.cuotas
+  }, [cambios.cliente, cambios.prestamo, cambios.cuotas])
 
   const validarFormulario = (): boolean => {
     const e: Record<string, string> = {}
@@ -540,6 +557,45 @@ export function EditarRevisionManual() {
     refetchOnWindowFocus: false,
   })
 
+  const cedulaParaPagosRealizados = (
+    detalleData?.cliente?.cedula ??
+    detalleData?.prestamo?.cedula ??
+    ''
+  )
+    .toString()
+    .trim()
+
+  useEffect(() => {
+    setPagePagosRegistrados(1)
+  }, [cedulaParaPagosRealizados])
+
+  const {
+    data: pagosRealizadosData,
+    isLoading: loadingPagosRealizados,
+    isFetching: fetchingPagosRealizados,
+    refetch: refetchPagosRealizados,
+  } = useQuery({
+    queryKey: [
+      'pagos-por-cedula',
+      cedulaParaPagosRealizados,
+      pagePagosRegistrados,
+      PER_PAGE_PAGOS_REGISTRADOS,
+    ],
+    queryFn: () =>
+      pagoService.getAllPagos(
+        pagePagosRegistrados,
+        PER_PAGE_PAGOS_REGISTRADOS,
+        {
+          cedula: cedulaParaPagosRealizados,
+          prestamo_cartera: 'todos',
+        }
+      ),
+    enabled: cedulaParaPagosRealizados.length > 0,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
+  })
+
   const estadoRevision = (detalleData?.revision?.estado_revision ?? 'pendiente')
     .toString()
     .toLowerCase()
@@ -576,7 +632,7 @@ export function EditarRevisionManual() {
   }
 
   /**
-   * Guarda en BD el texto actual de observaciones (préstamo + cuotas) y notas del cliente.
+   * Guarda en BD observaciones del préstamo y notas del cliente.
    * Se usa antes de rechazar o finalizar para no perder comentarios aunque no hubiera otros "cambios".
    */
   const persistObservacionesYNotasRevision = async () => {
@@ -596,14 +652,6 @@ export function EditarRevisionManual() {
         { prestamoId: pid }
       )
     }
-    const cuotasObs = cuotasData.filter(
-      (c): c is typeof c & { cuota_id: number } => !!c.cuota_id
-    )
-    await ejecutarEnLotes(cuotasObs, CUOTAS_REVISION_PUT_CONCURRENCY, c =>
-      revisionManualService.editarCuota(c.cuota_id, {
-        observaciones: String(c.observaciones ?? ''),
-      })
-    )
   }
 
   // Estados de cliente desde BD (tabla estados_cliente)
@@ -745,7 +793,7 @@ export function EditarRevisionManual() {
         ]
       : opcionesBase
 
-  /** Botón "Guardar Cambios": PUT a BD (cliente, préstamo incl. estado, cuotas, bajas de cuotas). */
+  /** Botón "Guardar Cambios": PUT a BD (cliente, préstamo incl. estado, cuotas). */
   const handleGuardarParciales = async () => {
     if (!prestamoId) return
 
@@ -763,7 +811,7 @@ export function EditarRevisionManual() {
     }
 
     // Sin cambios reales vs datos cargados: no operar (no es validación de negocio)
-    if (cuotasIdsAEliminar.length === 0 && !hayDiferenciaVsCargaInicial()) {
+    if (!hayDiferenciaVsCargaInicial()) {
       toast.info('ℹ️ No hay cambios para guardar')
       return
     }
@@ -994,37 +1042,6 @@ export function EditarRevisionManual() {
         }
       }
 
-      // Eliminar cuotas marcadas (BD)
-
-      const pid = parseInt(prestamoId, 10)
-
-      let eliminacionesOk = true
-
-      if (cuotasIdsAEliminar.length > 0) {
-        for (const cuotaId of cuotasIdsAEliminar) {
-          try {
-            await revisionManualService.eliminarCuota(pid, cuotaId)
-
-            savedSomething = true
-          } catch (err: any) {
-            eliminacionesOk = false
-
-            errorOccurred = true
-
-            const errorMsg =
-              err?.response?.data?.detail ||
-              err?.message ||
-              'Error al eliminar cuota'
-
-            toast.error(`❌ Error al eliminar cuota: ${errorMsg}`)
-
-            console.error('Error eliminando cuota:', err)
-          }
-        }
-
-        if (eliminacionesOk) setCuotasIdsAEliminar([])
-      }
-
       // Guardar cuotas si difieren de la carga inicial
 
       if (needGuardarCuotas) {
@@ -1036,9 +1053,7 @@ export function EditarRevisionManual() {
         const jobsCuotas: JobCuota[] = []
         for (const cuota of cuotasData) {
           if (!cuota.cuota_id) continue
-          const cuotaUpdate: Record<string, any> = {
-            observaciones: String(cuota.observaciones ?? ''),
-          }
+          const cuotaUpdate: Record<string, any> = {}
 
           if (cuota.fecha_pago)
             cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
@@ -1156,7 +1171,7 @@ export function EditarRevisionManual() {
       return
     }
 
-    if (cuotasIdsAEliminar.length === 0 && !hayDiferenciaVsCargaInicial()) {
+    if (!hayDiferenciaVsCargaInicial()) {
       toast.info('No hay cambios respecto a los datos cargados')
       return
     }
@@ -1369,20 +1384,6 @@ export function EditarRevisionManual() {
         }
       }
 
-      const pidFinal = parseInt(prestamoId, 10)
-
-      for (const cuotaId of cuotasIdsAEliminar) {
-        try {
-          await revisionManualService.eliminarCuota(pidFinal, cuotaId)
-        } catch (err: any) {
-          throw new Error(
-            `Error al eliminar cuota: ${err?.response?.data?.detail || err?.message || 'Error desconocido'}`
-          )
-        }
-      }
-
-      setCuotasIdsAEliminar([])
-
       if (needCuotasCierre) {
         type JobCuotaCierre = {
           cuota_id: number
@@ -1392,9 +1393,7 @@ export function EditarRevisionManual() {
         const jobsCierre: JobCuotaCierre[] = []
         for (const cuota of cuotasData) {
           if (!cuota.cuota_id) continue
-          const cuotaUpdate: Record<string, any> = {
-            observaciones: String(cuota.observaciones ?? ''),
-          }
+          const cuotaUpdate: Record<string, any> = {}
 
           if (cuota.fecha_pago)
             cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
@@ -1495,24 +1494,6 @@ export function EditarRevisionManual() {
     }
   }
 
-  const handleEliminarFilaCuota = (cuotaId: number | undefined) => {
-    if (!cuotaId) return
-
-    if (soloLectura) return
-
-    const ok = window.confirm(
-      'Esta cuota desaparecerá de la tabla. Al pulsar Guardar parciales o Guardar y cerrar se eliminará en la base de datos.'
-    )
-
-    if (!ok) return
-
-    setCuotasIdsAEliminar(prev => [...prev, cuotaId])
-
-    setCuotasData(prev => prev.filter(c => c.cuota_id !== cuotaId))
-
-    setCambios(c => ({ ...c, cuotas: true }))
-  }
-
   const handleConfirmarRechazo = async () => {
     if (!prestamoId || !motivoRechazo.trim()) {
       toast.error('Debes ingresar un motivo de rechazo')
@@ -1543,7 +1524,7 @@ export function EditarRevisionManual() {
   const handleCerrar = () => {
     // Si hay cambios sin guardar, advertir
 
-    if (cuotasIdsAEliminar.length > 0 || hayDiferenciaVsCargaInicial()) {
+    if (hayDiferenciaVsCargaInicial()) {
       const confirmar = window.confirm(
         '⚠️ Tienes cambios sin guardar.\n\n' +
           'Si cierras ahora, se perderán todos los cambios realizados.\n' +
@@ -2646,6 +2627,11 @@ export function EditarRevisionManual() {
                 <CardTitle className="flex items-center gap-2">
                   💳 Cuotas/Pagos
                 </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  La cantidad de cuotas y el calendario provienen del préstamo
+                  (número de cuotas, fechas de aprobación y reglas de
+                  amortización), no se agregan ni quitan filas desde aquí.
+                </p>
               </CardHeader>
 
               <CardContent>
@@ -2664,15 +2650,6 @@ export function EditarRevisionManual() {
                         <th className="px-4 py-2 text-right">Pagado</th>
 
                         <th className="px-4 py-2 text-left">Estado</th>
-
-                        <th className="px-4 py-2 text-left">Observaciones</th>
-
-                        <th
-                          className="w-12 px-2 py-2 text-center"
-                          aria-label="Eliminar"
-                        >
-                          {' '}
-                        </th>
                       </tr>
                     </thead>
 
@@ -2807,43 +2784,6 @@ export function EditarRevisionManual() {
                               )}
                             </select>
                           </td>
-
-                          <td className="px-4 py-2">
-                            <input
-                              type="text"
-                              value={cuota.observaciones || ''}
-                              onChange={e => {
-                                const newCuotas = [...cuotasData]
-
-                                newCuotas[idx] = {
-                                  ...cuota,
-                                  observaciones: e.target.value,
-                                }
-
-                                setCuotasData(newCuotas)
-
-                                setCambios({ ...cambios, cuotas: true })
-                              }}
-                              className="w-32 rounded border px-2 py-1 text-sm"
-                              placeholder="Obs."
-                            />
-                          </td>
-
-                          <td className="px-2 py-2 text-center align-middle">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-800"
-                              title="Eliminar cuota (se confirma en BD al guardar)"
-                              onClick={() =>
-                                handleEliminarFilaCuota(cuota.cuota_id)
-                              }
-                            >
-                              <Trash2 className="h-4 w-4" aria-hidden />
-                              <span className="sr-only">Eliminar cuota</span>
-                            </Button>
-                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2851,6 +2791,178 @@ export function EditarRevisionManual() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Pagos reales en tabla pagos (mismo origen que carga masiva / módulo Pagos) */}
+            {cedulaParaPagosRealizados ? (
+              <Card>
+                <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <CreditCard className="h-5 w-5" />
+                      Pagos registrados en cartera
+                    </CardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Cédula {cedulaParaPagosRealizados}: fecha, monto (USD),
+                      banco, documento y crédito asociado. Se actualiza al
+                      volver a la pestaña, cada minuto mientras esta página está
+                      abierta, y al registrar pagos (incluida carga masiva).
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-2"
+                    disabled={loadingPagosRealizados || fetchingPagosRealizados}
+                    onClick={() => void refetchPagosRealizados()}
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 ${fetchingPagosRealizados ? 'animate-spin' : ''}`}
+                    />
+                    Actualizar
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {loadingPagosRealizados && !pagosRealizadosData ? (
+                    <div className="flex items-center gap-2 py-8 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Cargando pagos…
+                    </div>
+                  ) : !pagosRealizadosData?.pagos?.length ? (
+                    <p className="py-6 text-sm text-muted-foreground">
+                      No hay filas en la tabla de pagos para esta cédula
+                      todavía.
+                    </p>
+                  ) : (
+                    <>
+                      {pagosRealizadosData.sum_monto_pagado_cedula != null && (
+                        <p className="mb-3 text-sm font-medium text-foreground">
+                          Total acumulado (todos los pagos de la cédula): $
+                          {Number(
+                            pagosRealizadosData.sum_monto_pagado_cedula
+                          ).toFixed(2)}{' '}
+                          USD
+                        </p>
+                      )}
+                      <div className="overflow-x-auto rounded-lg border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="whitespace-nowrap">
+                                ID
+                              </TableHead>
+                              <TableHead className="whitespace-nowrap">
+                                Fecha pago
+                              </TableHead>
+                              <TableHead className="whitespace-nowrap text-right">
+                                Monto USD
+                              </TableHead>
+                              <TableHead className="whitespace-nowrap">
+                                Banco
+                              </TableHead>
+                              <TableHead className="whitespace-nowrap">
+                                Nº documento
+                              </TableHead>
+                              <TableHead className="whitespace-nowrap">
+                                Crédito
+                              </TableHead>
+                              <TableHead className="whitespace-nowrap">
+                                Estado
+                              </TableHead>
+                              <TableHead>Notas</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {pagosRealizadosData.pagos.map((pago: Pago) => (
+                              <TableRow key={pago.id}>
+                                <TableCell className="font-mono text-xs">
+                                  {pago.id}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {formatDate(pago.fecha_pago)}
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  $
+                                  {typeof pago.monto_pagado === 'number'
+                                    ? pago.monto_pagado.toFixed(2)
+                                    : parseFloat(
+                                        String(pago.monto_pagado || 0)
+                                      ).toFixed(2)}
+                                </TableCell>
+                                <TableCell className="max-w-[180px] truncate text-sm">
+                                  {pago.institucion_bancaria?.trim()
+                                    ? pago.institucion_bancaria
+                                    : '-'}
+                                </TableCell>
+                                <TableCell className="max-w-[200px] font-mono text-xs">
+                                  {pago.numero_documento?.trim()
+                                    ? pago.numero_documento
+                                    : '-'}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {pago.prestamo_id != null
+                                    ? pago.prestamo_id
+                                    : '-'}
+                                </TableCell>
+                                <TableCell>
+                                  {badgeEstadoPagoRegistrado(
+                                    (pago.estado || 'PENDIENTE').toUpperCase()
+                                  )}
+                                </TableCell>
+                                <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
+                                  {pago.notas?.trim() ? pago.notas : '-'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {pagosRealizadosData.total_pages > 1 && (
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+                          <span>
+                            Página {pagosRealizadosData.page} de{' '}
+                            {pagosRealizadosData.total_pages} (
+                            {pagosRealizadosData.total} pagos)
+                          </span>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={pagePagosRegistrados <= 1}
+                              onClick={() =>
+                                setPagePagosRegistrados(p => Math.max(1, p - 1))
+                              }
+                            >
+                              Anterior
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                pagePagosRegistrados >=
+                                pagosRealizadosData.total_pages
+                              }
+                              onClick={() =>
+                                setPagePagosRegistrados(p =>
+                                  Math.min(
+                                    pagosRealizadosData.total_pages,
+                                    p + 1
+                                  )
+                                )
+                              }
+                            >
+                              Siguiente
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
           </div>
         </div>
 

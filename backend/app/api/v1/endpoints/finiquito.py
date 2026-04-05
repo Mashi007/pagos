@@ -54,9 +54,9 @@ from app.models.finiquito import (
 from app.models.prestamo import Prestamo
 from app.schemas.auth import UserResponse
 from app.schemas.finiquito import (
+    FiniquitoConteoRevisionNuevosResponse,
     FiniquitoCasoListaResponse,
     FiniquitoCasoOut,
-    FiniquitoContactarClienteResponse,
     FiniquitoDetalleResponse,
     FiniquitoPatchEstadoRequest,
     FiniquitoPatchEstadoResponse,
@@ -68,9 +68,11 @@ from app.schemas.finiquito import (
     FiniquitoVerificarCodigoResponse,
 )
 from app.services.finiquito_area_trabajo_emails import (
-    enviar_correo_contactar_cliente_finiquito,
     enviar_correo_en_proceso_operaciones,
     enviar_correo_rechazo_itmaster,
+)
+from app.services.finiquito_prestamo_gestion_sync import (
+    sincronizar_prestamo_estado_gestion_finiquito,
 )
 from app.services.finiquito_db_schema import (
     finiquito_casos_has_contacto_para_siguientes,
@@ -353,6 +355,7 @@ def _prestamo_caso_completo(p: Prestamo) -> dict[str, Any]:
         "concesionario_id": p.concesionario_id,
         "analista_id": p.analista_id,
         "modelo_vehiculo_id": p.modelo_vehiculo_id,
+        "estado_gestion_finiquito": getattr(p, "estado_gestion_finiquito", None),
     }
 
 
@@ -824,6 +827,7 @@ def finiquito_public_patch_estado(
         actor_tipo="finiquito_externo",
         finiquito_usuario_id=fu.id,
     )
+    sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
     db.commit()
     db.refresh(caso)
     mp = _map_ultima_fecha_pago_por_prestamo(db, [caso.prestamo_id])
@@ -894,6 +898,45 @@ def finiquito_admin_listar(
     )
 
 
+@router.get(
+    "/admin/casos/conteo-revision-nuevos",
+    response_model=FiniquitoConteoRevisionNuevosResponse,
+)
+def finiquito_admin_conteo_revision_nuevos(
+    horas: int = Query(
+        72,
+        ge=1,
+        le=720,
+        description=(
+            "Ventana en horas: cuenta casos en REVISION cuyo creado_en (materializacion) "
+            "cae en ese intervalo hacia atras desde ahora (UTC)."
+        ),
+    ),
+    cedula: Optional[str] = Query(
+        None,
+        description="Subcadena de cedula (coincidencia parcial), misma regla que GET /admin/casos.",
+    ),
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin),
+):
+    """
+    KPI alarma: préstamos recién ingresados a finiquito (REVISION) al catalogarse como
+    LIQUIDADO elegibles en el job / refresco materializado.
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=int(horas))
+    q = db.query(func.count(FiniquitoCaso.id)).filter(
+        FiniquitoCaso.estado == "REVISION",
+        FiniquitoCaso.creado_en >= cutoff,
+    )
+    if cedula and cedula.strip():
+        q = q.filter(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
+    total_raw = q.scalar()
+    total = int(total_raw or 0)
+    return FiniquitoConteoRevisionNuevosResponse(
+        total=total, ventana_horas=int(horas)
+    )
+
+
 @router.get("/admin/casos/{caso_id}/revision-datos")
 def finiquito_admin_revision_datos(
     caso_id: int,
@@ -955,6 +998,7 @@ def finiquito_admin_patch_estado(
             user_id=admin.id,
             nota=nota or None,
         )
+        sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
         db.commit()
         db.refresh(caso)
         caso_out = _admin_casos_to_items(db, [caso])[0]
@@ -1030,6 +1074,7 @@ def finiquito_admin_patch_estado(
                 user_id=admin.id,
             )
 
+    sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
     db.commit()
     db.refresh(caso)
     if nuevo == "EN_PROCESO":
@@ -1043,48 +1088,6 @@ def finiquito_admin_patch_estado(
         enviar_correo_rechazo_itmaster(caso)
     caso_out = _admin_casos_to_items(db, [caso])[0]
     return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
-
-
-@router.post(
-    "/admin/casos/{caso_id}/contactar-cliente",
-    response_model=FiniquitoContactarClienteResponse,
-)
-def finiquito_admin_contactar_cliente(
-    caso_id: int,
-    db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_admin),
-):
-    """Envia al cliente un correo sobre el finiquito y la linea de WhatsApp."""
-    caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
-    if not caso:
-        raise HTTPException(status_code=404, detail="Caso no encontrado")
-    est = (caso.estado or "").strip().upper()
-    if est not in ("ACEPTADO", "EN_PROCESO"):
-        return FiniquitoContactarClienteResponse(
-            ok=False,
-            error="Solo puede usar Contactar con el caso en Aceptado o En proceso.",
-        )
-    ok, err = enviar_correo_contactar_cliente_finiquito(db, caso)
-    if not ok:
-        return FiniquitoContactarClienteResponse(
-            ok=False,
-            error=err or "No se pudo enviar el correo.",
-        )
-    if finiquito_has_area_trabajo_auditoria_table(db):
-        _registrar_auditoria_area_trabajo(
-            db,
-            caso_id=caso.id,
-            accion="CONTACTAR_CLIENTE",
-            estado_anterior=caso.estado,
-            estado_nuevo=caso.estado,
-            contacto_para_siguientes=None,
-            user_id=admin.id,
-        )
-        db.commit()
-    return FiniquitoContactarClienteResponse(
-        ok=True,
-        message="Correo enviado al cliente.",
-    )
 
 
 @router.post("/admin/refresh-materializado")

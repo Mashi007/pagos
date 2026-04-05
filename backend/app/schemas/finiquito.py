@@ -64,6 +64,21 @@ class FiniquitoCasoOut(BaseModel):
         from_attributes = True
 
 
+class FiniquitoConteoRevisionNuevosResponse(BaseModel):
+    """Casos en REVISION creados recientemente (al materializarse como LIQUIDADO elegible)."""
+
+    total: int = Field(
+        ...,
+        ge=0,
+        description="Cantidad en revision dentro de la ventana temporal.",
+    )
+    ventana_horas: int = Field(
+        ...,
+        ge=1,
+        description="Horas hacia atras desde ahora (UTC) usadas en el conteo.",
+    )
+
+
 class FiniquitoCasoListaResponse(BaseModel):
     items: List[FiniquitoCasoOut]
     total: int = Field(
@@ -97,12 +112,6 @@ class FiniquitoPatchEstadoRequest(BaseModel):
             "obligatoria (min. 15 caracteres). Opcional si ultima fecha <= 2026-01-01."
         ),
     )
-
-
-class FiniquitoContactarClienteResponse(BaseModel):
-    ok: bool
-    error: Optional[str] = None
-    message: Optional[str] = None
 
 
 class FiniquitoPatchEstadoResponse(BaseModel):

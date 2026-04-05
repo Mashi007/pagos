@@ -320,6 +320,14 @@ class PrestamosService:
         except PrestamoCedulaClienteError as e:
             raise PrestamoValidationError("cedula", str(e)) from e
 
+        from app.services.finiquito_caso_cleanup import (
+            eliminar_finiquito_casos_si_prestamo_no_liquidado,
+        )
+
+        eliminar_finiquito_casos_si_prestamo_no_liquidado(
+            self.db, prestamo_id, prestamo.estado
+        )
+
         self.db.add(prestamo)
         self.db.commit()
         self.db.refresh(prestamo)
@@ -352,6 +360,14 @@ class PrestamosService:
         self.validacion.validar_transicion_estado(prestamo.estado, nuevo_estado)
 
         prestamo.estado = nuevo_estado
+
+        from app.services.finiquito_caso_cleanup import (
+            eliminar_finiquito_casos_si_prestamo_no_liquidado,
+        )
+
+        eliminar_finiquito_casos_si_prestamo_no_liquidado(
+            self.db, prestamo_id, nuevo_estado
+        )
 
         # Registrar información del cambio según el nuevo estado
         if nuevo_estado == 'APROBADO':

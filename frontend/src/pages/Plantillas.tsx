@@ -37,7 +37,6 @@ import {
   Bell,
 } from 'lucide-react'
 
-
 import type { NotificacionPlantilla } from '../services/notificacionService'
 
 import {

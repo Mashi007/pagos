@@ -161,14 +161,14 @@ export function DocumentosPdfAnexos({
               <>
                 PDFs fijos solo para{' '}
                 <strong>{etiquetaCaso(casoDestinoFijo)}</strong>. Se guardan en
-                la base de datos y se reutilizan en cada envío de este
-                submenú. Solo PDF.
+                la base de datos y se reutilizan en cada envío de este submenú.
+                Solo PDF.
               </>
             ) : (
               <>
-                Elija el <strong>caso de envío</strong> y suba el PDF; el archivo
-                queda asociado solo a ese criterio (sin aplicar a varios a la
-                vez). Los datos persisten en la base de datos. Solo PDF.
+                Elija el <strong>caso de envío</strong> y suba el PDF; el
+                archivo queda asociado solo a ese criterio (sin aplicar a varios
+                a la vez). Los datos persisten en la base de datos. Solo PDF.
               </>
             )}
           </CardDescription>

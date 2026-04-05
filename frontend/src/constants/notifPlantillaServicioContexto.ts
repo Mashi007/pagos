@@ -47,7 +47,9 @@ export function bordeTarjetaServicioPlantilla(tipo: string): string {
 }
 
 /** Listado Notificaciones acorde al tipo de plantilla (submenú). */
-export function rutaListadoNotificacionesPorTipoPlantilla(tipo: string): string {
+export function rutaListadoNotificacionesPorTipoPlantilla(
+  tipo: string
+): string {
   switch (tipo) {
     case 'PAGO_2_DIAS_ANTES_PENDIENTE':
       return '/notificaciones/d-1-dia'

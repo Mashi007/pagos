@@ -851,7 +851,15 @@ def editar_prestamo_revision(
             prestamo_editado=True,
         )
         db.add(rev_manual)
-    
+
+    from app.services.finiquito_caso_cleanup import (
+        eliminar_finiquito_casos_si_prestamo_no_liquidado,
+    )
+
+    eliminar_finiquito_casos_si_prestamo_no_liquidado(
+        db, prestamo_id, prestamo.estado
+    )
+
     _commit_revision_seguro(
         db,
         operacion="editar_prestamo_revision",

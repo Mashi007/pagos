@@ -181,6 +181,30 @@ export function PrestamoDetalleModal({
     return labels[estado] || estado
   }
 
+  const gestionFiniquitoBadgeClass = (g: string) => {
+    const map: Record<string, string> = {
+      ANTIGUO: 'border-amber-200 bg-amber-50 text-amber-900',
+
+      EN_PROCESO: 'border-sky-200 bg-sky-50 text-sky-900',
+
+      TERMINADO: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    }
+
+    return map[g] || 'border-slate-200 bg-slate-50 text-slate-800'
+  }
+
+  const gestionFiniquitoLabel = (g: string) => {
+    const labels: Record<string, string> = {
+      ANTIGUO: 'Finiquito: Antiguo',
+
+      EN_PROCESO: 'Finiquito: En proceso',
+
+      TERMINADO: 'Finiquito: Terminado',
+    }
+
+    return labels[g] || g
+  }
+
   return (
     <AnimatePresence>
       <motion.div
@@ -262,10 +286,23 @@ export function PrestamoDetalleModal({
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle className="flex flex-wrap items-center gap-2">
                       <Badge className={getEstadoBadge(prestamoData.estado)}>
                         {getEstadoLabel(prestamoData.estado)}
                       </Badge>
+
+                      {prestamoData.estado_gestion_finiquito ? (
+                        <Badge
+                          variant="outline"
+                          className={`text-xs font-normal ${gestionFiniquitoBadgeClass(
+                            prestamoData.estado_gestion_finiquito
+                          )}`}
+                        >
+                          {gestionFiniquitoLabel(
+                            prestamoData.estado_gestion_finiquito
+                          )}
+                        </Badge>
+                      ) : null}
                     </CardTitle>
                   </CardHeader>
                 </Card>

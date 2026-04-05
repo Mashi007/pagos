@@ -1,4 +1,4 @@
-"""Correos del area de trabajo Finiquito (operaciones/cobranza y aviso al cliente)."""
+"""Correos del area de trabajo Finiquito (operaciones/cobranza, avisos internos)."""
 from __future__ import annotations
 
 import logging
@@ -7,7 +7,6 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.core.email import send_email
-from app.models.cliente import Cliente
 from app.models.finiquito import FiniquitoCaso
 
 logger = logging.getLogger(__name__)
@@ -15,7 +14,6 @@ logger = logging.getLogger(__name__)
 FINIQUITO_EMAIL_OPERACIONES = "operaciones@rapicreditca.com"
 FINIQUITO_EMAIL_COBRANZA = "cobranza@rapicreditca.com"
 FINIQUITO_EMAIL_ITMASTER = "itmaster@rapicreditca.com"
-FINIQUITO_WHATSAPP_LINEA = "424-4579934"
 
 
 def enviar_correo_en_proceso_operaciones(
@@ -56,46 +54,6 @@ def enviar_correo_rechazo_itmaster(caso: FiniquitoCaso) -> Tuple[bool, Optional[
     if not ok:
         logger.warning(
             "finiquito rechazo itmaster: fallo envio caso_id=%s err=%s",
-            caso.id,
-            err,
-        )
-    return ok, err
-
-
-def enviar_correo_contactar_cliente_finiquito(
-    db: Session,
-    caso: FiniquitoCaso,
-) -> Tuple[bool, Optional[str]]:
-    """Aviso al cliente: proceso de finiquito y linea WhatsApp."""
-    if not caso.cliente_id:
-        return False, "Caso sin cliente_id; no se puede resolver el correo."
-    cl = db.query(Cliente).filter(Cliente.id == caso.cliente_id).first()
-    if not cl:
-        return False, "Cliente no encontrado."
-    to = (cl.email or "").strip()
-    if not to or "@" not in to:
-        return False, "El cliente no tiene correo electronico registrado."
-    subj = "[RapiCredit] Su proceso de finiquito"
-    wa = FINIQUITO_WHATSAPP_LINEA
-    body = (
-        "Estimado/a cliente,\n\n"
-        "Le informamos que su proceso de finiquito en RapiCredit esta en gestion.\n\n"
-        f"Para cualquier consulta, escribanos al WhatsApp: {wa}.\n\n"
-        "Saludos cordiales,\n"
-        "RapiCredit\n"
-    )
-    html = (
-        "<p>Estimado/a cliente,</p>"
-        "<p>Le informamos que su proceso de finiquito en <strong>RapiCredit</strong> "
-        "esta en gestion.</p>"
-        "<p>Para cualquier consulta, escribanos al WhatsApp: "
-        f"<strong>{wa}</strong>.</p>"
-        "<p>Saludos cordiales,<br/>RapiCredit</p>"
-    )
-    ok, err = send_email([to], subj, body, body_html=html, servicio=None)
-    if not ok:
-        logger.warning(
-            "finiquito contactar_cliente: fallo envio caso_id=%s err=%s",
             caso.id,
             err,
         )
