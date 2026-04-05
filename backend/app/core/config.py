@@ -156,6 +156,11 @@ class Settings(BaseSettings):
         default="notificaciones@rapicreditca.com",
         description="Email remitente para notificaciones (rechazos, etc.). Por defecto notificaciones@rapicreditca.com.",
     )
+    # Solo PAGO_2_DIAS_ANTES / tipo_tab d_2_antes_vencimiento (tiene prioridad sobre NOTIFICACIONES_FROM_EMAIL).
+    NOTIFICACIONES_FROM_EMAIL_2_DIAS_ANTES: str = Field(
+        default="recuerda@rapicreditca.com",
+        description="Remitente From para correos «2 dias antes del vencimiento». Dejar vacio en .env para usar la cuenta SMTP sin forzar.",
+    )
     # Correo(s) para notificaciones de tickets CRM (varios separados por coma). Incluye tickets automáticos por recibo no claro (3 intentos).
     TICKETS_NOTIFY_EMAIL: Optional[str] = Field(
         default="itmaster@rapicreditca.com",

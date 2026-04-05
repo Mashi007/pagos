@@ -166,7 +166,9 @@ def init_from_settings() -> None:
 
 
 def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = None) -> dict[str, Any]:
-    """Devuelve la config SMTP para el servicio/tab. Cobros=cuenta 1, Estado cuenta=2, Notificaciones=cuenta por tab (3 o 4). Para servicio=notificaciones se fuerza From a NOTIFICACIONES_FROM_EMAIL si está definido."""
+    """Devuelve la config SMTP para el servicio/tab. Cobros=cuenta 1, Estado cuenta=2, Notificaciones=cuenta por tab (3 o 4).
+    Para servicio=notificaciones: «2 dias antes» (d_2_antes_vencimiento) usa NOTIFICACIONES_FROM_EMAIL_2_DIAS_ANTES si no está vacío;
+    el resto usa NOTIFICACIONES_FROM_EMAIL si está definido."""
     sync_from_db()
     cfg: dict[str, Any]
     if servicio and _cuentas_data.get("cuentas"):
@@ -198,10 +200,22 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
     else:
         cfg = _fallback_smtp_config()
     if servicio == "notificaciones":
-        from_notif = getattr(settings, "NOTIFICACIONES_FROM_EMAIL", None) or ""
-        if (from_notif or "").strip():
-            cfg["from_email"] = from_notif.strip()
-            logger.info("[EMAIL] Servicio notificaciones: remitente forzado a %s.", cfg["from_email"])
+        if (tipo_tab or "").strip() == "d_2_antes_vencimiento":
+            from_2d = getattr(settings, "NOTIFICACIONES_FROM_EMAIL_2_DIAS_ANTES", None) or ""
+            if (from_2d or "").strip():
+                cfg["from_email"] = from_2d.strip()
+                logger.info(
+                    "[EMAIL] Notificaciones 2 dias antes (d_2_antes_vencimiento): remitente From=%s.",
+                    cfg["from_email"],
+                )
+        else:
+            from_notif = getattr(settings, "NOTIFICACIONES_FROM_EMAIL", None) or ""
+            if (from_notif or "").strip():
+                cfg["from_email"] = from_notif.strip()
+                logger.info(
+                    "[EMAIL] Servicio notificaciones: remitente forzado a %s.",
+                    cfg["from_email"],
+                )
     return cfg
 
 
