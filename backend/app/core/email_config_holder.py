@@ -201,13 +201,15 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
         cfg = _fallback_smtp_config()
     if servicio == "notificaciones":
         if (tipo_tab or "").strip() == "d_2_antes_vencimiento":
-            from_2d = getattr(settings, "NOTIFICACIONES_FROM_EMAIL_2_DIAS_ANTES", None) or ""
-            if (from_2d or "").strip():
-                cfg["from_email"] = from_2d.strip()
-                logger.info(
-                    "[EMAIL] Notificaciones 2 dias antes (d_2_antes_vencimiento): remitente From=%s.",
-                    cfg["from_email"],
-                )
+            # Siempre forzar From para «2 dias antes»; la cuenta SMTP sigue siendo la 3/4.
+            # Fallback literal: si .env vacía o despliegue sin el campo en Settings, igual se aplica.
+            raw_2d = getattr(settings, "NOTIFICACIONES_FROM_EMAIL_2_DIAS_ANTES", None)
+            from_2d = (raw_2d.strip() if isinstance(raw_2d, str) else "") or "recuerda@rapicreditca.com"
+            cfg["from_email"] = from_2d
+            logger.info(
+                "[EMAIL] Notificaciones 2 dias antes (d_2_antes_vencimiento): remitente From=%s.",
+                cfg["from_email"],
+            )
         else:
             from_notif = getattr(settings, "NOTIFICACIONES_FROM_EMAIL", None) or ""
             if (from_notif or "").strip():

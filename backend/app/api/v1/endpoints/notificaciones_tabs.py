@@ -452,6 +452,8 @@ def _enviar_correos_items(
         email_sent_ok = False
         if to_email:
             tipo_tab_envio = _tipo_tab_para_persistencia(tipo)
+            if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
+                tipo_tab_envio = "d_2_antes_vencimiento"
             smtp_meta: dict = {}
             ok, msg = send_email(
                 to_email,
