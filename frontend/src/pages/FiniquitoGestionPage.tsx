@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import {
+  Bell,
   CheckCircle2,
   Download,
   Eye,
@@ -49,10 +50,12 @@ import { FiniquitoRevisionDialog } from '../components/finiquito/FiniquitoRevisi
 
 import {
   type FiniquitoCasoItem,
+  finiquitoAdminConteoRevisionNuevos,
   finiquitoAdminListar,
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
   type FiniquitoRefreshStats,
+  FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT,
 } from '../services/finiquitoService'
 import { prestamoService } from '../services/prestamoService'
 
@@ -155,69 +158,43 @@ function textoToastRefresco(r: FiniquitoRefreshStats): {
 
 const DEBOUNCE_MS = 420
 
-const PAGE_SIZE = 100
+/** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` (listar sin paginar en UI). */
+const FETCH_LIMIT = 2000
 
-function FiniquitoPaginationBar(props: {
-  page: number
-  pageSize: number
+/**
+ * Altura máxima del cuerpo de la tabla: ~10 filas en primer plano; el resto con scroll.
+ * Área de trabajo usa filas más altas (contacto): un poco más de alto.
+ */
+const TABLA_SCROLL_MAX_H_COMPACTO = 'max-h-[min(26rem,46vh)]'
+const TABLA_SCROLL_MAX_H_AREA_TRABAJO = 'max-h-[min(34rem,52vh)]'
+
+const theadStickyClass =
+  'sticky top-0 z-10 border-b border-slate-700 bg-slate-800 shadow-sm [&_tr]:border-slate-700'
+
+function FiniquitoTablaScrollHint({
+  total,
+  cargados,
+}: {
   total: number
-  onPageChange: (p: number) => void
-  loading: boolean
-  className?: string
-  /**
-   * Si false, no muestra el total global (ej. "de 500"); solo rango de fila y página.
-   * Bandeja principal: true solo cuando hay filtro por cédula aplicado.
-   */
-  showTotalCount?: boolean
+  cargados: number
 }) {
-  const {
-    page,
-    pageSize,
-    total,
-    onPageChange,
-    loading,
-    className,
-    showTotalCount = true,
-  } = props
-  if (total === 0) return null
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  if (totalPages <= 1) return null
-  const from = page * pageSize + 1
-  const to = Math.min((page + 1) * pageSize, total)
-  const canPrev = page > 0 && !loading
-  const canNext = page + 1 < totalPages && !loading
-  const textoRango = showTotalCount
-    ? `Filas ${from}-${to} de ${total} · Página ${page + 1} de ${totalPages}`
-    : `Filas ${from}-${to} · Página ${page + 1} de ${totalPages}`
+  if (cargados === 0) return null
+  const truncado = total > FETCH_LIMIT && cargados === FETCH_LIMIT
   return (
-    <div
-      className={cn(
-        'flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/80 px-3 py-2.5',
-        className
-      )}
-    >
-      <p className="text-xs text-slate-600">{textoRango}</p>
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={!canPrev}
-          onClick={() => onPageChange(page - 1)}
-        >
-          Anterior
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={!canNext}
-          onClick={() => onPageChange(page + 1)}
-        >
-          Siguiente
-        </Button>
-      </div>
-    </div>
+    <p className="mt-2 text-center text-[11px] leading-snug text-slate-500">
+      {cargados === total
+        ? `${total} caso(s).`
+        : `${cargados} en pantalla de ${total} totales.`}
+      {truncado ? (
+        <>
+          {' '}
+          <span className="font-medium text-amber-900">
+            Listado acotado a {FETCH_LIMIT} (límite API).
+          </span>
+        </>
+      ) : null}{' '}
+      Desplácese dentro de la tabla para ver más filas (~10 visibles a la vez).
+    </p>
   )
 }
 
@@ -228,7 +205,6 @@ function FiniquitoGestionPageInner() {
     []
   )
   const [totalAreaTrabajo, setTotalAreaTrabajo] = useState(0)
-  const [pageTrabajo, setPageTrabajo] = useState(0)
   const [dialogTerminado, setDialogTerminado] = useState<{
     casoId: number
     /** Si true, exige Si/No (contacto para pasos siguientes); si false, Terminado directo desde Aceptado. */
@@ -238,10 +214,8 @@ function FiniquitoGestionPageInner() {
     []
   )
   const [totalRechazados, setTotalRechazados] = useState(0)
-  const [pageRechazados, setPageRechazados] = useState(0)
   const [itemsBandeja, setItemsBandeja] = useState<FiniquitoCasoItem[]>([])
   const [totalBandeja, setTotalBandeja] = useState(0)
-  const [pageBandeja, setPageBandeja] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [revisionOpen, setRevisionOpen] = useState(false)
@@ -257,6 +231,10 @@ function FiniquitoGestionPageInner() {
     useState<FiniquitoCasoItem | null>(null)
   const [antiguoNota, setAntiguoNota] = useState('')
   const [antiguoSubmitting, setAntiguoSubmitting] = useState(false)
+  const [kpiNuevosRevision, setKpiNuevosRevision] = useState<{
+    total: number
+    ventana_horas: number
+  } | null>(null)
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -266,10 +244,6 @@ function FiniquitoGestionPageInner() {
     return () => window.clearTimeout(t)
   }, [cedulaInput])
 
-  useEffect(() => {
-    setPageBandeja(0)
-  }, [cedulaBusqueda])
-
   const cargarListas = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true
@@ -277,25 +251,29 @@ function FiniquitoGestionPageInner() {
         setLoading(true)
       }
       try {
-        const [rTrabajo, rRech, rBandeja] = await Promise.all([
+        const [rTrabajo, rRech, rBandeja, rNuevos] = await Promise.all([
           finiquitoAdminListar(
             undefined,
             undefined,
             'ACEPTADO,EN_PROCESO,TERMINADO',
-            { limit: PAGE_SIZE, offset: pageTrabajo * PAGE_SIZE }
+            { limit: FETCH_LIMIT, offset: 0 }
           ),
           finiquitoAdminListar('RECHAZADO', undefined, undefined, {
-            limit: PAGE_SIZE,
-            offset: pageRechazados * PAGE_SIZE,
+            limit: FETCH_LIMIT,
+            offset: 0,
           }),
           finiquitoAdminListar(
             'REVISION',
             cedulaBusqueda || undefined,
             undefined,
             {
-              limit: PAGE_SIZE,
-              offset: pageBandeja * PAGE_SIZE,
+              limit: FETCH_LIMIT,
+              offset: 0,
             }
+          ),
+          finiquitoAdminConteoRevisionNuevos(
+            cedulaBusqueda || undefined,
+            FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT
           ),
         ])
         setItemsAreaTrabajo(rTrabajo.items || [])
@@ -304,7 +282,13 @@ function FiniquitoGestionPageInner() {
         setTotalRechazados(rRech.total ?? (rRech.items || []).length)
         setItemsBandeja(rBandeja.items || [])
         setTotalBandeja(rBandeja.total ?? (rBandeja.items || []).length)
+        setKpiNuevosRevision({
+          total: rNuevos.total ?? 0,
+          ventana_horas:
+            rNuevos.ventana_horas ?? FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT,
+        })
       } catch (e: unknown) {
+        setKpiNuevosRevision(null)
         toast.error(e instanceof Error ? e.message : 'Error al cargar')
       } finally {
         if (!silent) {
@@ -312,7 +296,7 @@ function FiniquitoGestionPageInner() {
         }
       }
     },
-    [pageTrabajo, pageRechazados, pageBandeja, cedulaBusqueda]
+    [cedulaBusqueda]
   )
 
   /** Actualiza filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
@@ -657,7 +641,9 @@ function FiniquitoGestionPageInner() {
             <SelectValue placeholder="Volver a Revisión…" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="REVISION">Revisión (bandeja principal)</SelectItem>
+            <SelectItem value="REVISION">
+              Revisión (bandeja principal)
+            </SelectItem>
           </SelectContent>
         </Select>
       ) : null}
@@ -665,177 +651,182 @@ function FiniquitoGestionPageInner() {
   )
 
   const renderTabla = (items: FiniquitoCasoItem[]) => (
-    <div className="overflow-hidden rounded-md border border-slate-200">
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-0 hover:bg-transparent">
-              <TableHead className={thGestion} scope="col">
-                ID caso
-              </TableHead>
-              <TableHead className={thGestion} scope="col">
-                Cédula
-              </TableHead>
-              <TableHead className={thGestion} scope="col">
-                Préstamo
-              </TableHead>
-              <TableHead
-                className={cn(thGestion, 'whitespace-normal')}
-                scope="col"
+    <div
+      className={cn(
+        TABLA_SCROLL_MAX_H_COMPACTO,
+        'overflow-x-auto overflow-y-auto overscroll-y-contain rounded-md border border-slate-200'
+      )}
+    >
+      <Table>
+        <TableHeader className={theadStickyClass}>
+          <TableRow className="border-0 hover:bg-transparent">
+            <TableHead className={thGestion} scope="col">
+              ID caso
+            </TableHead>
+            <TableHead className={thGestion} scope="col">
+              Cédula
+            </TableHead>
+            <TableHead className={thGestion} scope="col">
+              Préstamo
+            </TableHead>
+            <TableHead
+              className={cn(thGestion, 'whitespace-normal')}
+              scope="col"
+            >
+              Último pago
+            </TableHead>
+            <TableHead className={thGestion} scope="col">
+              Estado
+            </TableHead>
+            <TableHead className={cn(thGestion, 'text-right')} scope="col">
+              Acciones
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((row, idx) => (
+            <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
+              <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                {row.id}
+              </TableCell>
+              <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                {row.cedula}
+              </TableCell>
+              <TableCell className={cn(tdGestion, 'tabular-nums')}>
+                {row.prestamo_id}
+              </TableCell>
+              <TableCell
+                className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
+                title={
+                  row.ultima_fecha_pago
+                    ? `Desde pagos: ${row.ultima_fecha_pago}`
+                    : 'Sin pagos con préstamo vinculado'
+                }
               >
-                Último pago
-              </TableHead>
-              <TableHead className={thGestion} scope="col">
-                Estado
-              </TableHead>
-              <TableHead className={cn(thGestion, 'text-right')} scope="col">
-                Acciones
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((row, idx) => (
-              <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
-                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
-                  {row.id}
-                </TableCell>
-                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
-                  {row.cedula}
-                </TableCell>
-                <TableCell className={cn(tdGestion, 'tabular-nums')}>
-                  {row.prestamo_id}
-                </TableCell>
-                <TableCell
-                  className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
-                  title={
-                    row.ultima_fecha_pago
-                      ? `Desde pagos: ${row.ultima_fecha_pago}`
-                      : 'Sin pagos con préstamo vinculado'
-                  }
+                {textoUltimoPago(row.ultima_fecha_pago)}
+              </TableCell>
+              <TableCell className={tdGestion}>
+                <span
+                  className={cn(
+                    'rounded px-1.5 py-0.5 text-xs font-medium',
+                    estadoBadgeClassName(row.estado)
+                  )}
                 >
-                  {textoUltimoPago(row.ultima_fecha_pago)}
-                </TableCell>
-                <TableCell className={tdGestion}>
-                  <span
-                    className={cn(
-                      'rounded px-1.5 py-0.5 text-xs font-medium',
-                      estadoBadgeClassName(row.estado)
-                    )}
-                  >
-                    {estadoEtiquetaVisible(row.estado)}
-                  </span>
-                </TableCell>
-                <TableCell className={cn(tdGestion, 'text-right')}>
-                  {renderAcciones(row)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+                  {estadoEtiquetaVisible(row.estado)}
+                </span>
+              </TableCell>
+              <TableCell className={cn(tdGestion, 'text-right')}>
+                {renderAcciones(row)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 
   const renderTablaAreaTrabajo = (items: FiniquitoCasoItem[]) => (
-    <div className="overflow-hidden rounded-md border border-slate-200">
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-0 hover:bg-transparent">
-              <TableHead className={thGestion} scope="col">
-                ID caso
-              </TableHead>
-              <TableHead className={thGestion} scope="col">
-                Cédula
-              </TableHead>
-              <TableHead className={thGestion} scope="col">
-                Préstamo
-              </TableHead>
-              <TableHead
-                className={cn(thGestion, 'whitespace-normal')}
-                scope="col"
+    <div
+      className={cn(
+        TABLA_SCROLL_MAX_H_AREA_TRABAJO,
+        'overflow-x-auto overflow-y-auto overscroll-y-contain rounded-md border border-slate-200'
+      )}
+    >
+      <Table>
+        <TableHeader className={theadStickyClass}>
+          <TableRow className="border-0 hover:bg-transparent">
+            <TableHead className={thGestion} scope="col">
+              ID caso
+            </TableHead>
+            <TableHead className={thGestion} scope="col">
+              Cédula
+            </TableHead>
+            <TableHead className={thGestion} scope="col">
+              Préstamo
+            </TableHead>
+            <TableHead
+              className={cn(thGestion, 'whitespace-normal')}
+              scope="col"
+            >
+              Último pago
+            </TableHead>
+            <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
+              Contacto
+            </TableHead>
+            <TableHead className={thGestion} scope="col">
+              Estado
+            </TableHead>
+            <TableHead className={cn(thGestion, 'text-right')} scope="col">
+              Acciones
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((row, idx) => (
+            <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
+              <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                {row.id}
+              </TableCell>
+              <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                {row.cedula}
+              </TableCell>
+              <TableCell className={cn(tdGestion, 'tabular-nums')}>
+                {row.prestamo_id}
+              </TableCell>
+              <TableCell
+                className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
+                title={
+                  row.ultima_fecha_pago
+                    ? `Desde pagos: ${row.ultima_fecha_pago}`
+                    : 'Sin pagos con préstamo vinculado'
+                }
               >
-                Último pago
-              </TableHead>
-              <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
-                Contacto
-              </TableHead>
-              <TableHead className={thGestion} scope="col">
-                Estado
-              </TableHead>
-              <TableHead className={cn(thGestion, 'text-right')} scope="col">
-                Acciones
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((row, idx) => (
-              <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
-                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
-                  {row.id}
-                </TableCell>
-                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
-                  {row.cedula}
-                </TableCell>
-                <TableCell className={cn(tdGestion, 'tabular-nums')}>
-                  {row.prestamo_id}
-                </TableCell>
-                <TableCell
-                  className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
-                  title={
-                    row.ultima_fecha_pago
-                      ? `Desde pagos: ${row.ultima_fecha_pago}`
-                      : 'Sin pagos con préstamo vinculado'
-                  }
-                >
-                  {textoUltimoPago(row.ultima_fecha_pago)}
-                </TableCell>
-                <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
-                  <div className="space-y-0.5 text-xs leading-snug text-slate-800">
-                    <div className="font-medium">
-                      {row.cliente_nombres?.trim() || '-'}
-                    </div>
-                    <div className="break-all text-slate-600">
-                      {row.cliente_email?.trim() || '-'}
-                    </div>
-                    <div className="font-mono text-slate-700">
-                      {row.cliente_telefono?.trim() || '-'}
-                    </div>
-                    {row.estado === 'TERMINADO' &&
-                    row.contacto_para_siguientes !== undefined &&
-                    row.contacto_para_siguientes !== null ? (
-                      <div className="pt-1 text-[11px] text-slate-500">
-                        Contactó para siguientes:{' '}
-                        <span className="font-semibold text-slate-700">
-                          {row.contacto_para_siguientes ? 'Sí' : 'No'}
-                        </span>
-                      </div>
-                    ) : null}
+                {textoUltimoPago(row.ultima_fecha_pago)}
+              </TableCell>
+              <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
+                <div className="space-y-0.5 text-xs leading-snug text-slate-800">
+                  <div className="font-medium">
+                    {row.cliente_nombres?.trim() || '-'}
                   </div>
-                </TableCell>
-                <TableCell className={tdGestion}>
-                  <span
-                    className={cn(
-                      'rounded px-1.5 py-0.5 text-xs font-medium',
-                      row.estado === 'ACEPTADO' &&
-                        'bg-slate-100 text-slate-800',
-                      row.estado === 'EN_PROCESO' &&
-                        'bg-amber-100 text-amber-950',
-                      row.estado === 'TERMINADO' &&
-                        'bg-emerald-100 text-emerald-950'
-                    )}
-                  >
-                    {estadoEtiquetaVisible(row.estado)}
-                  </span>
-                </TableCell>
-                <TableCell className={cn(tdGestion, 'text-right')}>
-                  {renderAccionesAreaTrabajo(row)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+                  <div className="break-all text-slate-600">
+                    {row.cliente_email?.trim() || '-'}
+                  </div>
+                  <div className="font-mono text-slate-700">
+                    {row.cliente_telefono?.trim() || '-'}
+                  </div>
+                  {row.estado === 'TERMINADO' &&
+                  row.contacto_para_siguientes !== undefined &&
+                  row.contacto_para_siguientes !== null ? (
+                    <div className="pt-1 text-[11px] text-slate-500">
+                      Contactó para siguientes:{' '}
+                      <span className="font-semibold text-slate-700">
+                        {row.contacto_para_siguientes ? 'Sí' : 'No'}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              </TableCell>
+              <TableCell className={tdGestion}>
+                <span
+                  className={cn(
+                    'rounded px-1.5 py-0.5 text-xs font-medium',
+                    row.estado === 'ACEPTADO' && 'bg-slate-100 text-slate-800',
+                    row.estado === 'EN_PROCESO' &&
+                      'bg-amber-100 text-amber-950',
+                    row.estado === 'TERMINADO' &&
+                      'bg-emerald-100 text-emerald-950'
+                  )}
+                >
+                  {estadoEtiquetaVisible(row.estado)}
+                </span>
+              </TableCell>
+              <TableCell className={cn(tdGestion, 'text-right')}>
+                {renderAccionesAreaTrabajo(row)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 
@@ -862,6 +853,90 @@ function FiniquitoGestionPageInner() {
         </Button>
       }
     >
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="space-y-1 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Revisión (bandeja)
+            </p>
+            <p className="text-2xl font-bold tabular-nums text-[#1e3a5f]">
+              {loading ? '—' : totalBandeja}
+            </p>
+            <p className="text-xs text-slate-500">
+              Total en estado Revisión
+              {cedulaBusqueda ? ' (filtro cédula)' : ''}
+            </p>
+          </CardContent>
+        </Card>
+        <Card
+          className={cn(
+            'border-slate-200 shadow-sm',
+            !loading &&
+              (kpiNuevosRevision?.total ?? 0) > 0 &&
+              'border-amber-300/90 bg-amber-50/40 ring-1 ring-amber-200/80'
+          )}
+        >
+          <CardContent className="space-y-1 p-4">
+            <div className="flex items-center gap-1.5">
+              <Bell
+                className={cn(
+                  'h-3.5 w-3.5 shrink-0',
+                  !loading && (kpiNuevosRevision?.total ?? 0) > 0
+                    ? 'text-amber-700'
+                    : 'text-slate-400'
+                )}
+                aria-hidden
+              />
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Nuevos en revisión
+              </p>
+            </div>
+            <p
+              className={cn(
+                'text-2xl font-bold tabular-nums',
+                !loading && (kpiNuevosRevision?.total ?? 0) > 0
+                  ? 'text-amber-950'
+                  : 'text-slate-800'
+              )}
+            >
+              {loading ? '—' : (kpiNuevosRevision?.total ?? 0)}
+            </p>
+            <p className="text-xs text-slate-500">
+              Creados hace ≤{' '}
+              {kpiNuevosRevision?.ventana_horas ??
+                FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT}{' '}
+              h (UTC)
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="space-y-1 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Área de trabajo
+            </p>
+            <p className="text-2xl font-bold tabular-nums text-emerald-900">
+              {loading ? '—' : totalAreaTrabajo}
+            </p>
+            <p className="text-xs text-slate-500">
+              Aceptado / En proceso / Terminado
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="space-y-1 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Rechazados
+            </p>
+            <p className="text-2xl font-bold tabular-nums text-rose-900">
+              {loading ? '—' : totalRechazados}
+            </p>
+            <p className="text-xs text-slate-500">
+              Casos rechazados en el portal
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       <section
         className={cn(
           'overflow-hidden rounded-2xl border border-emerald-200/90 bg-white shadow-md',
@@ -901,17 +976,15 @@ function FiniquitoGestionPageInner() {
                 para dejar el caso en pasivo.
               </p>
             ) : (
-              renderTablaAreaTrabajo(itemsAreaTrabajo)
+              <>
+                {renderTablaAreaTrabajo(itemsAreaTrabajo)}
+                <FiniquitoTablaScrollHint
+                  total={totalAreaTrabajo}
+                  cargados={itemsAreaTrabajo.length}
+                />
+              </>
             )}
           </div>
-          <FiniquitoPaginationBar
-            page={pageTrabajo}
-            pageSize={PAGE_SIZE}
-            total={totalAreaTrabajo}
-            loading={loading}
-            onPageChange={setPageTrabajo}
-            className="border-emerald-200/60 bg-emerald-50/40"
-          />
         </div>
       </section>
 
@@ -1007,17 +1080,15 @@ function FiniquitoGestionPageInner() {
                   : 'No hay casos en revisión. Use «Refrescar materializado» tras marcar préstamos como LIQUIDADO y cuadrar cuotas.'}
               </p>
             ) : (
-              renderTabla(itemsBandeja)
+              <>
+                {renderTabla(itemsBandeja)}
+                <FiniquitoTablaScrollHint
+                  total={totalBandeja}
+                  cargados={itemsBandeja.length}
+                />
+              </>
             )}
           </div>
-          <FiniquitoPaginationBar
-            page={pageBandeja}
-            pageSize={PAGE_SIZE}
-            total={totalBandeja}
-            loading={loading}
-            onPageChange={setPageBandeja}
-            showTotalCount={cedulaBusqueda.trim().length > 0}
-          />
         </div>
       </section>
 
@@ -1058,17 +1129,15 @@ function FiniquitoGestionPageInner() {
                 «Rechazado».
               </p>
             ) : (
-              renderTabla(itemsRechazados)
+              <>
+                {renderTabla(itemsRechazados)}
+                <FiniquitoTablaScrollHint
+                  total={totalRechazados}
+                  cargados={itemsRechazados.length}
+                />
+              </>
             )}
           </div>
-          <FiniquitoPaginationBar
-            page={pageRechazados}
-            pageSize={PAGE_SIZE}
-            total={totalRechazados}
-            loading={loading}
-            onPageChange={setPageRechazados}
-            className="border-amber-200/80 bg-amber-50/50"
-          />
         </div>
       </section>
 
