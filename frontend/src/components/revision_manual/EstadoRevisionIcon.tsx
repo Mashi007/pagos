@@ -28,7 +28,7 @@ interface EstadoRevisionIconProps {
  * - ⚠️ Pendiente: Clickeable, inicia revisión → pasa a ❓
  * - ❓ Revisando: Clickeable, abre diálogo para cambiar a ❌ o ✓
  * - ❌ En espera: Clickeable, regresa a ❓ o marca ✓
- * - ✓ Revisado: solo administradores pueden reabrir (→ revisando) desde el icono
+ * - ✓ Revisado: admin u operario pueden reabrir (→ revisando) desde el icono
  */
 export function EstadoRevisionIcon({
   prestamoId,
@@ -38,7 +38,7 @@ export function EstadoRevisionIcon({
 }: EstadoRevisionIconProps) {
   const queryClient = useQueryClient()
   const [isLoading, setIsLoading] = useState(false)
-  const { isAdmin } = usePermissions()
+  const { revisionManualFullEdit } = usePermissions()
 
   const estadoNorm = (estadoActual || 'pendiente').toLowerCase().trim()
 
@@ -96,9 +96,9 @@ export function EstadoRevisionIcon({
         handleChangeState('revisando')
       }
     } else if (estadoNorm === 'revisado') {
-      if (!isAdmin) {
+      if (!revisionManualFullEdit) {
         toast.error(
-          'Solo un administrador puede reabrir una revisión cerrada (Visto).'
+          'Solo administrador u operario pueden reabrir una revisión cerrada (Visto).'
         )
         return
       }
@@ -175,12 +175,12 @@ export function EstadoRevisionIcon({
         )
 
       case 'revisado':
-        if (isAdmin) {
+        if (revisionManualFullEdit) {
           return (
             <div
               className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-green-100 px-2 py-1 transition-all hover:bg-green-200"
               onClick={handleShowDialog}
-              title="Revisado (Visto): click para reabrir (solo administrador)"
+              title="Revisado (Visto): click para reabrir (admin u operario)"
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-green-600" />
@@ -196,7 +196,7 @@ export function EstadoRevisionIcon({
         return (
           <div
             className="flex items-center justify-center gap-1 rounded-lg bg-green-100 px-2 py-1"
-            title="Revisado (Visto); solo un administrador puede reabrir"
+            title="Revisado (Visto); solo administrador u operario pueden reabrir"
           >
             <CheckCircle className="h-4 w-4 text-green-600" />
             <span className="text-xs font-semibold text-green-700">

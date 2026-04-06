@@ -28,6 +28,7 @@ const MANAGER_PREFIXES = [
 const OPERATOR_PREFIXES = [
   '/clientes',
   '/prestamos',
+  '/revision-manual',
   '/infopagos',
   '/finiquitos',
 ]

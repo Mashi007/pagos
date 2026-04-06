@@ -600,9 +600,9 @@ export function EditarRevisionManual() {
     .toString()
     .toLowerCase()
 
-  const { isAdmin } = usePermissions()
+  const { revisionManualFullEdit } = usePermissions()
 
-  const soloLectura = estadoRevision === 'revisado' && !isAdmin
+  const soloLectura = estadoRevision === 'revisado' && !revisionManualFullEdit
 
   useEffect(() => {
     if (!detalleData) return
@@ -1671,8 +1671,8 @@ export function EditarRevisionManual() {
               <p className="text-sm text-gray-600">
                 {soloLectura
                   ? 'Solo lectura: la revisión de este préstamo ya fue cerrada.'
-                  : estadoRevision === 'revisado' && isAdmin
-                    ? 'Administrador: revisión cerrada (Visto); puede editar, guardar y cambiar el estado desde la lista (icono de revisión manual).'
+                  : estadoRevision === 'revisado' && revisionManualFullEdit
+                    ? 'Revisión cerrada (Visto); puede editar, guardar y cambiar el estado desde la lista (icono de revisión manual).'
                     : 'Edita los detalles del préstamo (cambios parciales permitidos)'}
               </p>
             </div>
@@ -1741,12 +1741,12 @@ export function EditarRevisionManual() {
           </div>
         )}
 
-        {estadoRevision === 'revisado' && isAdmin && !soloLectura && (
+        {estadoRevision === 'revisado' && revisionManualFullEdit && !soloLectura && (
           <div
             className="-mx-6 border-y border-sky-200 bg-sky-50 px-6 py-3 text-sm text-sky-950"
             role="status"
           >
-            <strong>Modo administrador.</strong> La revisión figura como cerrada
+            <strong>Edición con revisión cerrada.</strong> La revisión figura como cerrada
             (Visto); puede editar y guardar. Para volver a pendiente / en
             revisión / otros estados use el icono de revisión manual en la lista
             de préstamos.

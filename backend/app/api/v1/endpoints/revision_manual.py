@@ -41,14 +41,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
-def _usuario_es_admin_revision(current_user: Any) -> bool:
-    """True si el usuario tiene rol admin (incluye alias administrador / finiquitador vía canonical_rol)."""
+def _usuario_rol_elevado_revision_manual(current_user: Any) -> bool:
+    """
+    Admin u operario: misma capacidad en revisión manual (estados revisando/revisado y reapertura).
+    Alineado con RBAC de préstamos para operadores.
+    """
     if isinstance(current_user, dict):
         rol_raw = current_user.get("rol")
     else:
         rol_raw = getattr(current_user, "rol", None)
     rol = rol_raw if isinstance(rol_raw, str) else None
-    return canonical_rol(rol) == "admin"
+    return canonical_rol(rol) in ("admin", "operator")
 
 
 def _actor_revision_manual(current_user: Any) -> str:
@@ -140,8 +143,8 @@ def _validar_permiso_edicion(
     Valida permisos de edición según el estado y rol del usuario.
     
     Reglas:
-    - ✓ REVISADO: Solo administradores pueden editar (reapertura operativa)
-    - ❓ REVISANDO: Solo admin
+    - ✓ REVISADO: Solo admin u operario pueden editar (reapertura operativa)
+    - ❓ REVISANDO: Solo admin u operario (misma capacidad)
     - ⚠️ PENDIENTE, ❌ EN ESPERA: Todos
     """
     rev = db.execute(
@@ -153,11 +156,11 @@ def _validar_permiso_edicion(
         return
     
     estado = (rev.estado_revision or "").strip().lower()
-    es_admin = _usuario_es_admin_revision(current_user)
+    elevado = _usuario_rol_elevado_revision_manual(current_user)
     
-    # ✓ REVISADO: solo admin
+    # ✓ REVISADO: solo admin u operario
     if estado == "revisado":
-        if es_admin:
+        if elevado:
             return
         logger.warning(
             "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisado_cerrado actor=%s",
@@ -169,16 +172,16 @@ def _validar_permiso_edicion(
             detail="Este préstamo ya fue revisado y cerrado; no admite más ediciones.",
         )
     
-    # ❓ REVISANDO: Solo admin
-    if estado == "revisando" and not es_admin:
+    # ❓ REVISANDO: admin u operario
+    if estado == "revisando" and not elevado:
         logger.warning(
-            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisando_solo_admin actor=%s",
+            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisando_solo_elevado actor=%s",
             prestamo_id,
             actor,
         )
         raise HTTPException(
             status_code=403,
-            detail="Este préstamo está en revisión. Solo administradores pueden editar en este estado. Contacta con tu administrador.",
+            detail="Este préstamo está en revisión. Solo personal autorizado (administrador u operario) puede editar en este estado.",
         )
 
 
@@ -520,7 +523,7 @@ def iniciar_revision_prestamo(
         db.add(rev_manual)
     else:
         prev = (rev_manual.estado_revision or "").strip().lower()
-        if prev == "revisado" and not _usuario_es_admin_revision(current_user):
+        if prev == "revisado" and not _usuario_rol_elevado_revision_manual(current_user):
             logger.warning(
                 "revision_manual iniciar_revision rechazado prestamo_id=%s ya_revisado",
                 prestamo_id,
@@ -1244,7 +1247,7 @@ def cambiar_estado_revision(
     - rechazado (✕)  → revisando (?) : reabrir para corregir
     """
     actor = _actor_revision_manual(current_user)
-    es_admin = _usuario_es_admin_revision(current_user)
+    elevado = _usuario_rol_elevado_revision_manual(current_user)
 
     ESTADOS_VALIDOS = {"revisando", "en_espera", "rechazado", "revisado"}
     if payload.nuevo_estado not in ESTADOS_VALIDOS:
@@ -1268,10 +1271,10 @@ def cambiar_estado_revision(
     usuario_email = getattr(current_user, "email", None)
 
     if estado_actual == "revisado" and payload.nuevo_estado != "revisado":
-        if not es_admin:
+        if not elevado:
             raise HTTPException(
                 status_code=403,
-                detail="Solo administradores pueden reabrir o modificar el estado de una revisión cerrada (Visto).",
+                detail="Solo administradores u operarios pueden reabrir o modificar el estado de una revisión cerrada (Visto).",
             )
 
     if not rev_manual:

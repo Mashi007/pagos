@@ -3,7 +3,7 @@ import { useSimpleAuth } from '../store/simpleAuthStore'
 import { User } from '../types'
 
 import { isDelegatedPathForRol } from '../config/roleRoutes'
-import { canonicalRol, isAdminRole } from '../utils/rol'
+import { canonicalRol, isAdminRole, isOperatorRole } from '../utils/rol'
 
 /**
 
@@ -355,10 +355,15 @@ export function usePermissions() {
     return allowedForOperativos.includes(reportType)
   }
 
+  /** Revisión manual de préstamos: operario tiene la misma edición que admin (revisando / revisado / reabrir). */
+  const revisionManualFullEdit = isAdmin() || isOperatorRole(user?.rol)
+
   return {
     user,
 
     isAdmin: isAdmin(),
+
+    revisionManualFullEdit,
 
     isFiniquitador: isFiniquitador(),
 
