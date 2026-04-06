@@ -5644,13 +5644,26 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
 def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
 
-    """Actualiza un pago en la tabla pagos. Nº documento no puede repetirse."""
+    """Actualiza un pago en la tabla pagos. Nº documento no puede repetirse.
+
+    Si el pago ya estaba articulado a cuotas (cuota_pagos) y cambian monto, fecha de pago o préstamo,
+    se ejecuta la misma reconstrucción en cascada que POST .../prestamos/{id}/reaplicar-cascada-aplicacion
+    sobre el o los préstamos afectados para que la amortización y servicios alineados vuelvan a cuadrar.
+    """
 
     row = db.get(Pago, pago_id)
 
     if not row:
 
         raise HTTPException(status_code=404, detail="Pago no encontrado")
+
+    had_cuota_pagos_antes = pago_tiene_aplicaciones_cuotas(db, pago_id)
+
+    old_prestamo_id = row.prestamo_id
+
+    old_monto_pagado = row.monto_pagado
+
+    old_fecha_pago = row.fecha_pago
 
     data = payload.model_dump(exclude_unset=True)
 
@@ -5801,6 +5814,84 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
         raise HTTPException(status_code=500, detail="Error de integridad en la base de datos.")
 
+    def _fecha_pago_a_date(fp):
+
+        if fp is None:
+
+            return None
+
+        return fp.date() if hasattr(fp, "date") and callable(getattr(fp, "date", None)) else fp
+
+    new_fd = _fecha_pago_a_date(row.fecha_pago)
+
+    old_fd = _fecha_pago_a_date(old_fecha_pago)
+
+    monto_changed = had_cuota_pagos_antes and abs(float(old_monto_pagado or 0) - float(row.monto_pagado or 0)) >= 0.01
+
+    fecha_changed = had_cuota_pagos_antes and (old_fd != new_fd)
+
+    prestamo_changed = had_cuota_pagos_antes and (old_prestamo_id != row.prestamo_id)
+
+    articulacion_afectada = monto_changed or fecha_changed or prestamo_changed
+
+    if articulacion_afectada:
+
+        from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
+
+        try:
+
+            for pid in sorted({p for p in (old_prestamo_id, row.prestamo_id) if p}):
+
+                r = reset_y_reaplicar_cascada_prestamo(db, pid)
+
+                if not r.get("ok"):
+
+                    raise HTTPException(
+
+                        status_code=400,
+
+                        detail=(
+
+                            f"No se pudo sincronizar la tabla de amortización del préstamo {pid}: "
+
+                            f"{r.get('error') or 'error desconocido'}."
+
+                        ),
+
+                    )
+
+            db.commit()
+
+            db.refresh(row)
+
+        except HTTPException:
+
+            db.rollback()
+
+            raise
+
+        except Exception as e:
+
+            logger.exception(
+
+                "actualizar_pago pago_id=%s: fallo reaplicar cascada tras cambio de articulacion",
+
+                pago_id,
+
+            )
+
+            db.rollback()
+
+            raise HTTPException(
+
+                status_code=500,
+
+                detail=f"Error al recalcular cuotas tras editar el pago: {str(e)[:280]}",
+
+            ) from e
+
+        return _pago_response_enriquecido(db, row)
+
     # Regla: si el pago cumple validadores (prestamo_id + monto), aplicar automáticamente a cuotas en cualquier canal
 
     if row.prestamo_id and float(row.monto_pagado or 0) > 0:
@@ -5809,7 +5900,9 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
 
-            row.estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
+            if cuotas_completadas > 0 or cuotas_parciales > 0:
+
+                row.estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
 
             db.commit()
 
