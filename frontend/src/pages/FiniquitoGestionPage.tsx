@@ -201,6 +201,8 @@ function FiniquitoTablaScrollHint({
 function FiniquitoGestionPageInner() {
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaBusqueda, setCedulaBusqueda] = useState('')
+  const [cedulaTrabajoInput, setCedulaTrabajoInput] = useState('')
+  const [cedulaTrabajoBusqueda, setCedulaTrabajoBusqueda] = useState('')
   const [itemsAreaTrabajo, setItemsAreaTrabajo] = useState<FiniquitoCasoItem[]>(
     []
   )
@@ -244,6 +246,14 @@ function FiniquitoGestionPageInner() {
     return () => window.clearTimeout(t)
   }, [cedulaInput])
 
+  useEffect(() => {
+    const t = window.setTimeout(
+      () => setCedulaTrabajoBusqueda(cedulaTrabajoInput.trim()),
+      DEBOUNCE_MS
+    )
+    return () => window.clearTimeout(t)
+  }, [cedulaTrabajoInput])
+
   const cargarListas = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true
@@ -254,7 +264,7 @@ function FiniquitoGestionPageInner() {
         const [rTrabajo, rRech, rBandeja, rNuevos] = await Promise.all([
           finiquitoAdminListar(
             undefined,
-            undefined,
+            cedulaTrabajoBusqueda || undefined,
             'ACEPTADO,EN_PROCESO,TERMINADO',
             { limit: FETCH_LIMIT, offset: 0 }
           ),
@@ -296,7 +306,7 @@ function FiniquitoGestionPageInner() {
         }
       }
     },
-    [cedulaBusqueda]
+    [cedulaBusqueda, cedulaTrabajoBusqueda]
   )
 
   /** Actualiza filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
@@ -471,6 +481,11 @@ function FiniquitoGestionPageInner() {
   const limpiarCedula = () => {
     setCedulaInput('')
     setCedulaBusqueda('')
+  }
+
+  const limpiarCedulaTrabajo = () => {
+    setCedulaTrabajoInput('')
+    setCedulaTrabajoBusqueda('')
   }
 
   const renderAcciones = (row: FiniquitoCasoItem) => (
@@ -919,6 +934,7 @@ function FiniquitoGestionPageInner() {
             </p>
             <p className="text-xs text-slate-500">
               Aceptado / En proceso / Terminado
+              {cedulaTrabajoBusqueda ? ' (filtro cédula)' : ''}
             </p>
           </CardContent>
         </Card>
@@ -963,6 +979,73 @@ function FiniquitoGestionPageInner() {
             </div>
           </div>
         </div>
+        <div className="border-b border-emerald-200/70 bg-emerald-50/30 px-4 py-3.5 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <p className="max-w-xl text-xs text-slate-600">
+              Escriba parte de la cédula para acotar el área de trabajo (espera
+              ~{DEBOUNCE_MS / 1000} s tras dejar de escribir). Independiente del
+              filtro de la bandeja principal.
+            </p>
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Label
+                  htmlFor="finiquito-filtro-cedula-trabajo"
+                  className="text-xs font-semibold text-slate-700"
+                >
+                  Filtrar por cédula
+                </Label>
+                <div className="relative">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    aria-hidden
+                  />
+                  <Input
+                    id="finiquito-filtro-cedula-trabajo"
+                    type="search"
+                    autoComplete="off"
+                    placeholder="Ej. V12345678 o parte del número"
+                    value={cedulaTrabajoInput}
+                    onChange={e => setCedulaTrabajoInput(e.target.value)}
+                    className="h-10 border-slate-300 bg-white pl-9 pr-10 font-mono text-sm"
+                  />
+                  {cedulaTrabajoInput ? (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                      onClick={limpiarCedulaTrabajo}
+                      title="Limpiar filtro"
+                      aria-label="Limpiar filtro de cédula en área de trabajo"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 shrink-0 border-slate-300 bg-white"
+                disabled={loading}
+                onClick={() => void cargarListas()}
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Recargar'
+                )}
+              </Button>
+            </div>
+          </div>
+          {cedulaTrabajoBusqueda ? (
+            <p className="mt-3 text-xs text-slate-600">
+              Filtro activo (área de trabajo):{' '}
+              <span className="font-mono font-semibold text-emerald-900">
+                {cedulaTrabajoBusqueda}
+              </span>
+            </p>
+          ) : null}
+        </div>
         <div className="bg-gradient-to-b from-emerald-50/50 to-white">
           <div className="p-3 sm:p-4">
             {loading ? (
@@ -971,9 +1054,18 @@ function FiniquitoGestionPageInner() {
               </div>
             ) : itemsAreaTrabajo.length === 0 ? (
               <p className="rounded-lg border border-dashed border-emerald-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
-                No hay casos en esta bandeja. Los aceptados aparecen aquí; puede
-                usar «En proceso» (aviso a operaciones/cobranza) o «Terminado»
-                para dejar el caso en pasivo.
+                {cedulaTrabajoBusqueda ? (
+                  <>
+                    Ningún caso en el área de trabajo coincide con esa cédula.
+                    Pruebe otra subcadena o limpie el filtro.
+                  </>
+                ) : (
+                  <>
+                    No hay casos en esta bandeja. Los aceptados aparecen aquí;
+                    puede usar «En proceso» (aviso a operaciones/cobranza) o
+                    «Terminado» para dejar el caso en pasivo.
+                  </>
+                )}
               </p>
             ) : (
               <>
@@ -1010,7 +1102,7 @@ function FiniquitoGestionPageInner() {
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
               <div className="min-w-0 flex-1 space-y-1.5">
                 <Label
-                  htmlFor="finiquito-filtro-cedula"
+                  htmlFor="finiquito-filtro-cedula-bandeja"
                   className="text-xs font-semibold text-slate-700"
                 >
                   Filtrar por cédula
@@ -1021,7 +1113,7 @@ function FiniquitoGestionPageInner() {
                     aria-hidden
                   />
                   <Input
-                    id="finiquito-filtro-cedula"
+                    id="finiquito-filtro-cedula-bandeja"
                     type="search"
                     autoComplete="off"
                     placeholder="Ej. V12345678 o parte del número"
@@ -1060,7 +1152,7 @@ function FiniquitoGestionPageInner() {
           </div>
           {cedulaBusqueda ? (
             <p className="mt-3 text-xs text-slate-600">
-              Filtro activo:{' '}
+              Filtro activo (bandeja principal):{' '}
               <span className="font-mono font-semibold text-[#1e3a5f]">
                 {cedulaBusqueda}
               </span>
