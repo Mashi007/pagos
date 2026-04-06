@@ -59,6 +59,12 @@ class FiniquitoCasoOut(BaseModel):
     cliente_nombres: Optional[str] = None
     cliente_email: Optional[str] = None
     cliente_telefono: Optional[str] = None
+    finiquito_tramite_fecha_limite: Optional[str] = Field(
+        default=None,
+        description=(
+            "Desde prestamos: fecha limite del tramite (15 dias laborales al pasar a EN_PROCESO), ISO date."
+        ),
+    )
 
     class Config:
         from_attributes = True

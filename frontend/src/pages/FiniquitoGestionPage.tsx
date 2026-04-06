@@ -169,7 +169,7 @@ const TABLA_SCROLL_MAX_H_COMPACTO = 'max-h-[min(26rem,46vh)]'
 const TABLA_SCROLL_MAX_H_AREA_TRABAJO = 'max-h-[min(34rem,52vh)]'
 
 const theadStickyClass =
-  'sticky top-0 z-10 border-b border-slate-700 bg-slate-800 shadow-sm [&_tr]:border-slate-700'
+  'sticky top-0 z-20 border-b border-slate-700 bg-slate-800 shadow-sm [&_tr]:border-slate-700'
 
 function FiniquitoTablaScrollHint({
   total,
@@ -672,7 +672,10 @@ function FiniquitoGestionPageInner() {
         'overflow-x-auto overflow-y-auto overscroll-y-contain rounded-md border border-slate-200'
       )}
     >
-      <Table>
+      <Table
+        containerClassName="overflow-visible"
+        className="border-separate border-spacing-0"
+      >
         <TableHeader className={theadStickyClass}>
           <TableRow className="border-0 hover:bg-transparent">
             <TableHead className={thGestion} scope="col">
@@ -747,7 +750,10 @@ function FiniquitoGestionPageInner() {
         'overflow-x-auto overflow-y-auto overscroll-y-contain rounded-md border border-slate-200'
       )}
     >
-      <Table>
+      <Table
+        containerClassName="overflow-visible"
+        className="border-separate border-spacing-0"
+      >
         <TableHeader className={theadStickyClass}>
           <TableRow className="border-0 hover:bg-transparent">
             <TableHead className={thGestion} scope="col">
@@ -764,6 +770,16 @@ function FiniquitoGestionPageInner() {
               scope="col"
             >
               Último pago
+            </TableHead>
+            <TableHead
+              className={cn(
+                thGestion,
+                'max-w-[10.5rem] whitespace-normal leading-tight'
+              )}
+              scope="col"
+              title="Fecha estimada de terminación del proceso de finiquito (15 días laborales desde En proceso)"
+            >
+              Fecha estimada de terminación del proceso de finiquito
             </TableHead>
             <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
               Contacto
@@ -797,6 +813,18 @@ function FiniquitoGestionPageInner() {
                 }
               >
                 {textoUltimoPago(row.ultima_fecha_pago)}
+              </TableCell>
+              <TableCell
+                className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
+                title={
+                  row.finiquito_tramite_fecha_limite
+                    ? 'Plazo calculado al marcar En proceso (días laborales)'
+                    : undefined
+                }
+              >
+                {row.finiquito_tramite_fecha_limite
+                  ? formatDate(String(row.finiquito_tramite_fecha_limite))
+                  : '-'}
               </TableCell>
               <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
                 <div className="space-y-0.5 text-xs leading-snug text-slate-800">
@@ -875,7 +903,7 @@ function FiniquitoGestionPageInner() {
               Revisión (bandeja)
             </p>
             <p className="text-2xl font-bold tabular-nums text-[#1e3a5f]">
-              {loading ? '—' : totalBandeja}
+              {loading ? '-' : totalBandeja}
             </p>
             <p className="text-xs text-slate-500">
               Total en estado Revisión
@@ -914,7 +942,7 @@ function FiniquitoGestionPageInner() {
                   : 'text-slate-800'
               )}
             >
-              {loading ? '—' : (kpiNuevosRevision?.total ?? 0)}
+              {loading ? '-' : (kpiNuevosRevision?.total ?? 0)}
             </p>
             <p className="text-xs text-slate-500">
               Creados hace ≤{' '}
@@ -930,7 +958,7 @@ function FiniquitoGestionPageInner() {
               Área de trabajo
             </p>
             <p className="text-2xl font-bold tabular-nums text-emerald-900">
-              {loading ? '—' : totalAreaTrabajo}
+              {loading ? '-' : totalAreaTrabajo}
             </p>
             <p className="text-xs text-slate-500">
               Aceptado / En proceso / Terminado
@@ -944,7 +972,7 @@ function FiniquitoGestionPageInner() {
               Rechazados
             </p>
             <p className="text-2xl font-bold tabular-nums text-rose-900">
-              {loading ? '—' : totalRechazados}
+              {loading ? '-' : totalRechazados}
             </p>
             <p className="text-xs text-slate-500">
               Casos rechazados en el portal

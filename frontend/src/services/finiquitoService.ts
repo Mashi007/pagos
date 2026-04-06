@@ -105,6 +105,8 @@ export type FiniquitoCasoItem = {
   cliente_nombres?: string | null
   cliente_email?: string | null
   cliente_telefono?: string | null
+  /** ISO date: plazo 15 días laborales al pasar a En proceso (prestamos.finiquito_tramite_fecha_limite). */
+  finiquito_tramite_fecha_limite?: string | null
 }
 
 export async function finiquitoRegistro(cedula: string, email: string) {

@@ -29,6 +29,11 @@ import { Prestamo } from '../../types'
 
 import { formatDate } from '../../utils'
 
+import {
+  finiquitoGestionBadgeClass,
+  lineasFiniquitoColumna,
+} from '../../utils/prestamoFiniquitoDisplay'
+
 import { TablaAmortizacionPrestamo } from './TablaAmortizacionPrestamo'
 
 import { usePrestamo } from '../../hooks/usePrestamos'
@@ -181,29 +186,11 @@ export function PrestamoDetalleModal({
     return labels[estado] || estado
   }
 
-  const gestionFiniquitoBadgeClass = (g: string) => {
-    const map: Record<string, string> = {
-      ANTIGUO: 'border-amber-200 bg-amber-50 text-amber-900',
-
-      EN_PROCESO: 'border-sky-200 bg-sky-50 text-sky-900',
-
-      TERMINADO: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-    }
-
-    return map[g] || 'border-slate-200 bg-slate-50 text-slate-800'
-  }
-
-  const gestionFiniquitoLabel = (g: string) => {
-    const labels: Record<string, string> = {
-      ANTIGUO: 'Finiquito: Antiguo',
-
-      EN_PROCESO: 'Finiquito: En proceso',
-
-      TERMINADO: 'Finiquito: Terminado',
-    }
-
-    return labels[g] || g
-  }
+  const lineasFiniquito = lineasFiniquitoColumna({
+    estado: prestamoData.estado,
+    estado_gestion_finiquito: prestamoData.estado_gestion_finiquito,
+    finiquito_tramite_fecha_limite: prestamoData.finiquito_tramite_fecha_limite,
+  })
 
   return (
     <AnimatePresence>
@@ -286,38 +273,45 @@ export function PrestamoDetalleModal({
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex flex-wrap items-center gap-2">
+                    <CardTitle>Estado del préstamo</CardTitle>
+                  </CardHeader>
+
+                  <CardContent className="space-y-4">
+                    <div>
+                      <p className="mb-1.5 text-sm text-gray-600">Estado</p>
+
                       <Badge className={getEstadoBadge(prestamoData.estado)}>
                         {getEstadoLabel(prestamoData.estado)}
                       </Badge>
+                    </div>
 
-                      {prestamoData.estado_gestion_finiquito ? (
-                        <Badge
-                          variant="outline"
-                          className={`text-xs font-normal ${gestionFiniquitoBadgeClass(
-                            prestamoData.estado_gestion_finiquito
-                          )}`}
-                        >
-                          {gestionFiniquitoLabel(
-                            prestamoData.estado_gestion_finiquito
-                          )}
-                        </Badge>
-                      ) : null}
-                    </CardTitle>
-                  </CardHeader>
+                    <div>
+                      <p className="mb-1.5 text-sm text-gray-600">Finiquito</p>
 
-                  {prestamoData.estado_gestion_finiquito === 'EN_PROCESO' &&
-                  prestamoData.finiquito_tramite_fecha_limite ? (
-                    <CardContent className="pt-0 text-sm text-slate-600">
-                      El trámite de finiquito debería terminar el{' '}
-                      <span className="font-medium text-slate-800">
-                        {formatDate(
-                          prestamoData.finiquito_tramite_fecha_limite
-                        )}
-                      </span>
-                      .
-                    </CardContent>
-                  ) : null}
+                      {prestamoData.estado !== 'LIQUIDADO' ? (
+                        <p className="text-sm text-slate-500">No aplica</p>
+                      ) : !lineasFiniquito ? (
+                        <p className="text-sm text-slate-500">-</p>
+                      ) : (
+                        <div className="space-y-1">
+                          <Badge
+                            variant="outline"
+                            className={`text-xs font-normal ${finiquitoGestionBadgeClass(
+                              String(prestamoData.estado_gestion_finiquito)
+                            )}`}
+                          >
+                            {lineasFiniquito.primary}
+                          </Badge>
+
+                          {lineasFiniquito.secondary ? (
+                            <p className="text-xs text-slate-600">
+                              {lineasFiniquito.secondary}
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
                 </Card>
 
                 {/* Información del Cliente */}

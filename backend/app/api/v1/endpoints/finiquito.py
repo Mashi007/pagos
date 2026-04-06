@@ -206,12 +206,43 @@ def _map_clientes_por_id(db: Session, cliente_ids: List[int]) -> dict[int, Clien
     return {int(cl.id): cl for cl in rows}
 
 
+def _map_finiquito_tramite_fecha_limite_por_prestamo(
+    db: Session, prestamo_ids: List[int]
+) -> dict[int, Any]:
+    """finiquito_tramite_fecha_limite en prestamos por prestamo_id."""
+    seen: set[int] = set()
+    uniq: List[int] = []
+    for i in prestamo_ids:
+        if i is None:
+            continue
+        ii = int(i)
+        if ii not in seen:
+            seen.add(ii)
+            uniq.append(ii)
+    if not uniq:
+        return {}
+    rows = (
+        db.query(Prestamo.id, Prestamo.finiquito_tramite_fecha_limite)
+        .filter(Prestamo.id.in_(uniq))
+        .all()
+    )
+    return {int(r[0]): r[1] for r in rows}
+
+
 def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[FiniquitoCasoOut]:
     mp = _map_ultima_fecha_pago_por_prestamo(db, [c.prestamo_id for c in casos])
+    flmap = _map_finiquito_tramite_fecha_limite_por_prestamo(
+        db, [c.prestamo_id for c in casos]
+    )
     clmap = _map_clientes_por_id(db, [c.cliente_id for c in casos if c.cliente_id])
     items: List[FiniquitoCasoOut] = []
     for c in casos:
-        base = _caso_to_out(c, mp.get(c.prestamo_id), db)
+        base = _caso_to_out(
+            c,
+            mp.get(c.prestamo_id),
+            db,
+            finiquito_tramite_fecha_limite=flmap.get(c.prestamo_id),
+        )
         cl = clmap.get(int(c.cliente_id)) if c.cliente_id else None
         items.append(
             base.model_copy(
@@ -229,6 +260,8 @@ def _caso_to_out(
     c: FiniquitoCaso,
     ultima_fecha_pago: Optional[Any] = None,
     db: Optional[Session] = None,
+    *,
+    finiquito_tramite_fecha_limite: Optional[Any] = None,
 ) -> FiniquitoCasoOut:
     ufp: Optional[str] = None
     if ultima_fecha_pago is not None:
@@ -237,6 +270,10 @@ def _caso_to_out(
             if hasattr(ultima_fecha_pago, "isoformat")
             else str(ultima_fecha_pago)
         )
+    ftl: Optional[str] = None
+    if finiquito_tramite_fecha_limite is not None:
+        v = finiquito_tramite_fecha_limite
+        ftl = v.isoformat() if hasattr(v, "isoformat") else str(v)
     cps: Optional[bool] = None
     if db is not None and finiquito_casos_has_contacto_para_siguientes(db):
         try:
@@ -254,6 +291,7 @@ def _caso_to_out(
         ultimo_refresh_utc=c.ultimo_refresh_utc.isoformat() if c.ultimo_refresh_utc else None,
         ultima_fecha_pago=ufp,
         contacto_para_siguientes=cps,
+        finiquito_tramite_fecha_limite=ftl,
     )
 
 
@@ -744,8 +782,17 @@ def finiquito_public_listar_casos(
         )
     casos = q.all()
     mp = _map_ultima_fecha_pago_por_prestamo(db, [c.prestamo_id for c in casos])
+    flmap = _map_finiquito_tramite_fecha_limite_por_prestamo(
+        db, [c.prestamo_id for c in casos]
+    )
     items: List[FiniquitoCasoOut] = [
-        _caso_to_out(c, mp.get(c.prestamo_id), db) for c in casos
+        _caso_to_out(
+            c,
+            mp.get(c.prestamo_id),
+            db,
+            finiquito_tramite_fecha_limite=flmap.get(c.prestamo_id),
+        )
+        for c in casos
     ]
     n = len(items)
     return FiniquitoCasoListaResponse(items=items, total=n, limit=n, offset=0)
@@ -772,8 +819,14 @@ def finiquito_public_detalle(
         prestamo_d = _prestamo_caso_completo(prestamo)
     cuotas_l = [_cuota_to_dict(cu) for cu in cuotas]
     mp = _map_ultima_fecha_pago_por_prestamo(db, [caso.prestamo_id])
+    flmap = _map_finiquito_tramite_fecha_limite_por_prestamo(db, [caso.prestamo_id])
     return FiniquitoDetalleResponse(
-        caso=_caso_to_out(caso, mp.get(caso.prestamo_id), db),
+        caso=_caso_to_out(
+            caso,
+            mp.get(caso.prestamo_id),
+            db,
+            finiquito_tramite_fecha_limite=flmap.get(caso.prestamo_id),
+        ),
         prestamo=prestamo_d,
         cuotas=cuotas_l,
     )
@@ -834,8 +887,15 @@ def finiquito_public_patch_estado(
     db.commit()
     db.refresh(caso)
     mp = _map_ultima_fecha_pago_por_prestamo(db, [caso.prestamo_id])
+    flmap = _map_finiquito_tramite_fecha_limite_por_prestamo(db, [caso.prestamo_id])
     return FiniquitoPatchEstadoResponse(
-        ok=True, caso=_caso_to_out(caso, mp.get(caso.prestamo_id), db)
+        ok=True,
+        caso=_caso_to_out(
+            caso,
+            mp.get(caso.prestamo_id),
+            db,
+            finiquito_tramite_fecha_limite=flmap.get(caso.prestamo_id),
+        ),
     )
 
 
