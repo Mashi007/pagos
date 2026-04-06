@@ -27,6 +27,7 @@ from app.core.database import get_db
 from app.core.deps import (
     get_finiquito_usuario_acceso,
     require_admin,
+    require_admin_or_operator,
 )
 from app.core.email import mask_email_for_log, send_email
 from app.core.email_cuentas import SERVICIO_FINIQUITO
@@ -921,7 +922,7 @@ def finiquito_admin_listar(
     ),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginacion."),
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin),
+    _: UserResponse = Depends(require_admin_or_operator),
 ):
     # Filtros reutilizables: no usar .count() y luego el mismo Query con order_by
     # (en SQLAlchemy eso puede dejar el objeto en estado invalido y producir 500).
@@ -980,7 +981,7 @@ def finiquito_admin_conteo_revision_nuevos(
         description="Subcadena de cedula (coincidencia parcial), misma regla que GET /admin/casos.",
     ),
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin),
+    _: UserResponse = Depends(require_admin_or_operator),
 ):
     """
     KPI alarma: préstamos recién ingresados a finiquito (REVISION) al catalogarse como
@@ -1004,7 +1005,7 @@ def finiquito_admin_conteo_revision_nuevos(
 def finiquito_admin_revision_datos(
     caso_id: int,
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin),
+    _: UserResponse = Depends(require_admin_or_operator),
 ):
     """Misma carga que GET public/revision-datos (préstamo caso, cuotas, préstamos/pagos por cédula)."""
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
@@ -1021,9 +1022,9 @@ def finiquito_admin_patch_estado(
     caso_id: int,
     body: FiniquitoPatchEstadoRequest,
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_admin),
+    panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
-    """Administrador: bandejas y area de trabajo (REVISION desde area, EN_PROCESO, TERMINADO)."""
+    """Panel interno (admin u operario): bandejas y area de trabajo (REVISION desde area, EN_PROCESO, TERMINADO)."""
     nuevo = (body.estado or "").upper().strip()
     if nuevo not in ESTADOS_VALIDOS:
         return FiniquitoPatchEstadoResponse(ok=False, error="Estado invalido")
@@ -1058,7 +1059,7 @@ def finiquito_admin_patch_estado(
             estado_anterior=anterior,
             estado_nuevo=nuevo,
             actor_tipo="admin",
-            user_id=admin.id,
+            user_id=panel_user.id,
             nota=nota or None,
         )
         sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
@@ -1085,7 +1086,7 @@ def finiquito_admin_patch_estado(
             estado_anterior=anterior,
             estado_nuevo=nuevo,
             actor_tipo="admin",
-            user_id=admin.id,
+            user_id=panel_user.id,
         )
         if finiquito_has_area_trabajo_auditoria_table(db):
             _registrar_auditoria_area_trabajo(
@@ -1095,7 +1096,7 @@ def finiquito_admin_patch_estado(
                 estado_anterior=anterior,
                 estado_nuevo=nuevo,
                 contacto_para_siguientes=None,
-                user_id=admin.id,
+                user_id=panel_user.id,
             )
         sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
         db.commit()
@@ -1146,7 +1147,7 @@ def finiquito_admin_patch_estado(
         estado_anterior=anterior,
         estado_nuevo=nuevo,
         actor_tipo="admin",
-        user_id=admin.id,
+        user_id=panel_user.id,
     )
     if finiquito_has_area_trabajo_auditoria_table(db):
         if nuevo == "EN_PROCESO":
@@ -1157,7 +1158,7 @@ def finiquito_admin_patch_estado(
                 estado_anterior=anterior,
                 estado_nuevo=nuevo,
                 contacto_para_siguientes=None,
-                user_id=admin.id,
+                user_id=panel_user.id,
             )
         elif nuevo == "TERMINADO":
             _cps_aud = body.contacto_para_siguientes
@@ -1170,7 +1171,7 @@ def finiquito_admin_patch_estado(
                 estado_anterior=anterior,
                 estado_nuevo=nuevo,
                 contacto_para_siguientes=_cps_aud,
-                user_id=admin.id,
+                user_id=panel_user.id,
             )
 
     sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
@@ -1180,8 +1181,8 @@ def finiquito_admin_patch_estado(
         enviar_correo_en_proceso_operaciones(
             db,
             caso,
-            admin_email=admin.email or "",
-            admin_nombre=f"{(admin.nombre or '').strip()} {(admin.apellido or '').strip()}".strip(),
+            admin_email=panel_user.email or "",
+            admin_nombre=f"{(panel_user.nombre or '').strip()} {(panel_user.apellido or '').strip()}".strip(),
         )
     elif nuevo == "RECHAZADO":
         enviar_correo_rechazo_itmaster(caso)
@@ -1192,7 +1193,7 @@ def finiquito_admin_patch_estado(
 @router.post("/admin/refresh-materializado")
 def finiquito_admin_refresh_manual(
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin),
+    _: UserResponse = Depends(require_admin_or_operator),
 ):
     """Uso operativo: ejecutar el mismo refresco que el job 02:00 (sin esperar al cron)."""
     from app.services.finiquito_refresh import ejecutar_refresh_finiquito_casos

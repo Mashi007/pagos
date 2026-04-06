@@ -47,12 +47,12 @@ export function usePermissions() {
   }
 
   /**
-   * Panel interno /finiquitos/gestion (bandeja admin): solo rol admin (alias legados incl.).
+   * Panel interno /finiquitos/gestion (misma vista que administrador): admin u operario.
    * Colaboradores externos usan OTP (FiniquitoPanelPage), no este flag.
    */
 
   const isFiniquitador = (): boolean => {
-    return isAdminRole(user?.rol)
+    return isAdminRole(user?.rol) || isOperatorRole(user?.rol)
   }
 
   /**
