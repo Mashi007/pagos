@@ -396,22 +396,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           return isHrefDelegatedForRol(user?.rol, child.href)
         })
 
-        if (isOperatorRole(user?.rol) && item.title === 'CRM') {
-          const hasInfopagos = children.some(c =>
-            (c.href || '').split('?')[0].startsWith('/infopagos')
-          )
-          if (!hasInfopagos && isHrefDelegatedForRol(user?.rol, '/infopagos')) {
-            children = [
-              ...children,
-              {
-                title: 'Infopagos',
-                href: '/infopagos',
-                icon: Building2,
-              } as MenuItem,
-            ]
-          }
-        }
-
         if (children.length === 0) return null
         return { ...item, children }
       }
