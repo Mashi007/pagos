@@ -47,7 +47,6 @@ import {
   Plus,
   Edit,
   Trash2,
-  Eye,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -95,8 +94,6 @@ import { useAnalistasActivos } from '../hooks/useAnalistas'
 import { useModelosVehiculosActivos } from '../hooks/useModelosVehiculos'
 
 import { codigoEstadoCuotaParaUi } from '../utils/cuotaEstadoDisplay'
-
-import { openComprobanteInNewTab } from '../services/cobrosService'
 
 import { getErrorMessage } from '../types/errors'
 
@@ -361,17 +358,6 @@ function pagoRowAPagoCreateInicial(
   }
 }
 
-function urlComprobantePagoRevision(pago: Pago): string {
-  return (
-    (pago.link_comprobante || '').trim() || (pago.documento_ruta || '').trim()
-  )
-}
-
-function esProbableUrlImagenComprobante(url: string): boolean {
-  const base = url.split(/[?#]/)[0].toLowerCase()
-  return /\.(jpe?g|png|gif|webp|bmp|svg)$/.test(base)
-}
-
 function badgeEstadoPagoRegistrado(estado: string) {
   const estados: Record<string, { color: string; label: string }> = {
     PAGADO: { color: 'bg-green-500', label: 'Pagado' },
@@ -434,9 +420,6 @@ export function EditarRevisionManual() {
   >(undefined)
 
   const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null)
-
-  const [abriendoComprobanteRevisionId, setAbriendoComprobanteRevisionId] =
-    useState<number | null>(null)
 
   /** Fecha de aprobación original cargada desde BD - para detectar si cambió */
   const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<
@@ -3002,8 +2985,8 @@ export function EditarRevisionManual() {
                     </CardTitle>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Cédula {cedulaParaPagosRealizados}: fecha, monto (USD),
-                      banco, documento, comprobante y crédito asociado. Cada
-                      alta o edición exige URL de comprobante y respeta los
+                      banco, documento y crédito asociado. Cada alta o edición
+                      exige URL de comprobante en el formulario y respeta los
                       validadores del módulo Pagos (incluido Nº documento
                       único). Si el mismo documento aparece dos veces en esta
                       página se resalta en la tabla. Use «Agregar pago»,
@@ -3126,9 +3109,6 @@ export function EditarRevisionManual() {
                               <TableHead className="whitespace-nowrap">
                                 Nº documento
                               </TableHead>
-                              <TableHead className="min-w-[140px] whitespace-nowrap">
-                                Comprobante
-                              </TableHead>
                               <TableHead className="whitespace-nowrap">
                                 Crédito
                               </TableHead>
@@ -3186,92 +3166,6 @@ export function EditarRevisionManual() {
                                     {pago.numero_documento?.trim()
                                       ? pago.numero_documento
                                       : '-'}
-                                  </TableCell>
-                                  <TableCell className="max-w-[200px] align-top text-sm">
-                                    {(() => {
-                                      const u = urlComprobantePagoRevision(pago)
-                                      if (u) {
-                                        return (
-                                          <div className="flex flex-col gap-2">
-                                            {esProbableUrlImagenComprobante(
-                                              u
-                                            ) ? (
-                                              <a
-                                                href={u}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="block overflow-hidden rounded border bg-muted/30"
-                                                title="Abrir imagen completa"
-                                              >
-                                                <img
-                                                  src={u}
-                                                  alt=""
-                                                  className="h-14 w-full object-cover"
-                                                  loading="lazy"
-                                                  referrerPolicy="no-referrer"
-                                                />
-                                              </a>
-                                            ) : null}
-                                            <a
-                                              href={u}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="inline-flex items-center gap-1 font-medium text-blue-600 hover:text-blue-800"
-                                              title="Abrir comprobante (foto o PDF)"
-                                            >
-                                              <Eye className="h-4 w-4 shrink-0" />
-                                              Ver
-                                            </a>
-                                          </div>
-                                        )
-                                      }
-                                      const prId = pago.pago_reportado_id
-                                      if (prId != null && prId > 0) {
-                                        return (
-                                          <Button
-                                            type="button"
-                                            variant="link"
-                                            className="h-auto p-0 text-blue-600"
-                                            disabled={
-                                              abriendoComprobanteRevisionId ===
-                                              pago.id
-                                            }
-                                            onClick={async () => {
-                                              setAbriendoComprobanteRevisionId(
-                                                pago.id
-                                              )
-                                              try {
-                                                await openComprobanteInNewTab(
-                                                  prId
-                                                )
-                                              } catch (e) {
-                                                toast.error(
-                                                  getErrorMessage(e) ||
-                                                    'No se pudo abrir el comprobante'
-                                                )
-                                              } finally {
-                                                setAbriendoComprobanteRevisionId(
-                                                  null
-                                                )
-                                              }
-                                            }}
-                                          >
-                                            {abriendoComprobanteRevisionId ===
-                                            pago.id ? (
-                                              <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
-                                            ) : (
-                                              <Eye className="mr-1 inline h-4 w-4" />
-                                            )}
-                                            Cobros
-                                          </Button>
-                                        )
-                                      }
-                                      return (
-                                        <span className="text-muted-foreground">
-                                          -
-                                        </span>
-                                      )
-                                    })()}
                                   </TableCell>
                                   <TableCell className="whitespace-nowrap">
                                     {pago.prestamo_id != null
