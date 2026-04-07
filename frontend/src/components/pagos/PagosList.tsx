@@ -86,7 +86,7 @@ import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { BASE_PATH } from '../../config/env'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
 
-import { invalidateListasNotificacionesMora } from '../../constants/queryKeys'
+import { invalidatePagosPrestamosRevisionYCuotas } from '../../constants/queryKeys'
 import { getTasaHoy } from '../../services/tasaCambioService'
 import { normalizarNumeroDocumento } from '../../utils/pagoExcelValidation'
 
@@ -357,16 +357,7 @@ export function PagosList() {
         pagos_sin_aplicacion_cuotas: res.pagos_sin_aplicacion_cuotas,
         mensaje: res.mensaje,
       })
-      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-kpis'],
-        exact: false,
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-con-errores'],
-        exact: false,
-      })
-      await invalidateListasNotificacionesMora(queryClient)
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
       const ops =
         typeof res.operaciones_cuota_total === 'number'
           ? res.operaciones_cuota_total
@@ -445,11 +436,7 @@ export function PagosList() {
       await createAndDownloadExcel(datos, 'Revisión pagos', nombre)
       const ids = pagos.map(p => p.id)
       await pagoConErrorService.eliminarPorDescarga(ids)
-      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-con-errores'],
-        exact: false,
-      })
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
       toast.success(`${pagos.length} pagos exportados y eliminados de la lista`)
     } catch (err) {
       if (import.meta.env.DEV) console.error('Error al descargar Excel', err)
@@ -534,11 +521,7 @@ export function PagosList() {
       // Tras guardar el Excel en PC, mover a revisar_pagos para que desaparezcan de la vista
       const ids = pagos.map(p => p.id)
       await pagoConErrorService.eliminarPorDescarga(ids)
-      queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-      queryClient.invalidateQueries({
-        queryKey: ['pagos-con-errores'],
-        exact: false,
-      })
+      void invalidatePagosPrestamosRevisionYCuotas(queryClient)
       toast.success(`${pagos.length} pagos exportados y eliminados de la lista`)
     } catch (err) {
       if (import.meta.env.DEV) console.error('Error al exportar', err)
@@ -633,15 +616,7 @@ export function PagosList() {
   }
   const handleRefresh = async () => {
     try {
-      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-con-errores'],
-        exact: false,
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-kpis'],
-        exact: false,
-      })
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
       await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
       await queryClient.refetchQueries({
         queryKey: ['pagos-con-errores'],
@@ -723,28 +698,7 @@ export function PagosList() {
       )
       cerrarReemplazarPagos()
       setShowCargaMasivaPagos(true)
-      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-kpis'],
-        exact: false,
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-ultimos'],
-        exact: false,
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['cuotas-prestamo'],
-        exact: false,
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['prestamos'],
-        exact: false,
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-por-cedula'],
-        exact: false,
-      })
-      await invalidateListasNotificacionesMora(queryClient)
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
       await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
       await queryClient.refetchQueries({
         queryKey: ['pagos-kpis'],
@@ -2172,39 +2126,7 @@ export function PagosList() {
                                               toast.success(
                                                 'Pago eliminado exitosamente'
                                               )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['pagos'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: [
-                                                    'pagos-con-errores',
-                                                  ],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['pagos-kpis'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['cuotas-prestamo'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['prestamos'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await invalidateListasNotificacionesMora(
+                                              await invalidatePagosPrestamosRevisionYCuotas(
                                                 queryClient
                                               )
                                             } catch (error) {
@@ -2240,25 +2162,7 @@ export function PagosList() {
                                               toast.success(
                                                 'Pago marcado como NO conciliado'
                                               )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['pagos'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['pagos-kpis'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['cuotas-prestamo'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await invalidateListasNotificacionesMora(
+                                              await invalidatePagosPrestamosRevisionYCuotas(
                                                 queryClient
                                               )
                                             } catch (error) {
@@ -2334,38 +2238,9 @@ export function PagosList() {
                                                   'Pago marcado como conciliado'
                                                 )
                                               }
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['pagos'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['pagos-kpis'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['dashboard'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['cuotas-prestamo'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await queryClient.invalidateQueries(
-                                                {
-                                                  queryKey: ['prestamos'],
-                                                  exact: false,
-                                                }
-                                              )
-                                              await invalidateListasNotificacionesMora(
-                                                queryClient
+                                              await invalidatePagosPrestamosRevisionYCuotas(
+                                                queryClient,
+                                                { includeDashboardMenu: true }
                                               )
                                             } catch (error) {
                                               toast.error(
@@ -2483,67 +2358,22 @@ export function PagosList() {
             setShowRegistrarPago(false)
             setPagoEditando(null)
             try {
-              // Invalidar todas las queries relacionadas con pagos primero
-              await queryClient.invalidateQueries({
-                queryKey: ['pagos'],
-                exact: false,
-              })
-              await queryClient.invalidateQueries({
-                queryKey: ['pagos-kpis'],
-                exact: false,
-              })
-              await queryClient.invalidateQueries({
-                queryKey: ['kpis'],
-                exact: false,
-              })
-              await queryClient.invalidateQueries({
-                queryKey: ['dashboard'],
-                exact: false,
-              })
-              await queryClient.invalidateQueries({
-                queryKey: ['kpis-principales-menu'],
-                exact: false,
-              })
-              await queryClient.invalidateQueries({
-                queryKey: ['dashboard-menu'],
-                exact: false,
-              })
-              // Invalidar también la query de últimos pagos (resumen)
-              await queryClient.invalidateQueries({
-                queryKey: ['pagos-ultimos'],
-                exact: false,
-              })
-              // Cuotas y préstamos (Guardar y Procesar actualiza cuotas en BD)
-              await queryClient.invalidateQueries({
-                queryKey: ['cuotas-prestamo'],
-                exact: false,
+              await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+                includeDashboardMenu: true,
               })
               await queryClient.refetchQueries({
                 queryKey: ['cuotas-prestamo'],
                 exact: false,
               })
-              await queryClient.invalidateQueries({
-                queryKey: ['prestamos'],
-                exact: false,
-              })
-              await queryClient.invalidateQueries({
-                queryKey: ['pagos-por-cedula'],
-                exact: false,
-              })
-              await invalidateListasNotificacionesMora(queryClient)
-              // Refetch inmediato de KPIs para actualización en tiempo real
               await queryClient.refetchQueries({
                 queryKey: ['pagos-kpis'],
                 exact: false,
               })
-              // Refetch de todas las queries relacionadas con pagos (no solo activas)
-              // Esto asegura que las queries se actualicen incluso si no están montadas
-              const refetchResult = await queryClient.refetchQueries({
+              await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false,
               })
-              // Refetch también de queries activas para actualización inmediata
-              const activeRefetchResult = await queryClient.refetchQueries({
+              await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false,
                 type: 'active',
@@ -2567,17 +2397,8 @@ export function PagosList() {
           onClose={() => setShowCargaMasivaPagos(false)}
           onSuccess={async () => {
             setShowCargaMasivaPagos(false)
-            await queryClient.invalidateQueries({
-              queryKey: ['pagos'],
-              exact: false,
-            })
-            await queryClient.invalidateQueries({
-              queryKey: ['pagos-kpis'],
-              exact: false,
-            })
-            await queryClient.invalidateQueries({
-              queryKey: ['pagos-ultimos'],
-              exact: false,
+            await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+              includeDashboardMenu: true,
             })
             await queryClient.refetchQueries({
               queryKey: ['pagos'],
@@ -2587,7 +2408,6 @@ export function PagosList() {
               queryKey: ['pagos-kpis'],
               exact: false,
             })
-            await invalidateListasNotificacionesMora(queryClient)
             toast.success('Datos actualizados correctamente')
           }}
         />

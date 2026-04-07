@@ -5934,6 +5934,94 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
 
 
+@router.post("/por-prestamo/{prestamo_id:int}/aplicar-pagos-cuotas", response_model=dict)
+
+def aplicar_pagos_pendientes_cuotas_por_prestamo(
+
+    prestamo_id: int,
+
+    db: Session = Depends(get_db),
+
+):
+
+    """
+
+    Aplica en cascada (FIFO por fecha_pago) los pagos del préstamo que aún no tienen
+
+    filas en cuota_pagos y cumplen criterios de elegibilidad (conciliado / verificado / PAGADO).
+
+    Persiste en BD. Útil tras editar/crear pagos en revisión manual o regenerar cuotas.
+
+    """
+
+    p = db.get(Prestamo, prestamo_id)
+
+    if not p:
+
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    try:
+
+        n = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
+
+        db.commit()
+
+    except HTTPException:
+
+        db.rollback()
+
+        raise
+
+    except Exception as e:
+
+        db.rollback()
+
+        logger.exception(
+
+            "aplicar-pagos-cuotas por prestamo_id=%s: %s",
+
+            prestamo_id,
+
+            e,
+
+        )
+
+        raise HTTPException(
+
+            status_code=500,
+
+            detail=f"Error al aplicar pagos a cuotas: {str(e)}",
+
+        ) from e
+
+    return {
+
+        "prestamo_id": prestamo_id,
+
+        "pagos_con_aplicacion": n,
+
+        "mensaje": (
+
+            f"Cascada aplicada: {n} pago(s) con abono efectivo en cuotas."
+
+            if n
+
+            else (
+
+                "No se aplicó ningún pago nuevo (sin filas pendientes en cuota_pagos, "
+
+                "montos en cero o pagos no elegibles para reaplicación)."
+
+            )
+
+        ),
+
+    }
+
+
+
+
+
 @router.delete("/por-prestamo/{prestamo_id:int}/todos", response_model=dict)
 
 def eliminar_todos_pagos_por_prestamo(prestamo_id: int, db: Session = Depends(get_db)):

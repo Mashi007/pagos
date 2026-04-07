@@ -33,8 +33,7 @@ export function FiniquitoGestionGatePage() {
   const finiToken = getFiniquitoAccessToken()?.trim()
 
   const esPanelGestionFiniquito =
-    isAuthenticated &&
-    (isAdminRole(user?.rol) || isOperatorRole(user?.rol))
+    isAuthenticated && (isAdminRole(user?.rol) || isOperatorRole(user?.rol))
 
   if (finiToken) {
     if (isLoading && isAuthenticated) {

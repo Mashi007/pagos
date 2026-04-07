@@ -34,7 +34,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
-import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
+import { invalidatePagosPrestamosRevisionYCuotas } from '../constants/queryKeys'
 
 import { pagoService } from '../services/pagoService'
 
@@ -815,22 +815,9 @@ export function useExcelUploadPagos({
   }, [showPreview, excelData.length, cedulasUnicas.join(',')])
 
   const refreshPagos = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-
-    queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
-
-    queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
-
-    queryClient.invalidateQueries({
-      queryKey: ['pagos-por-cedula'],
-      exact: false,
+    void invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+      includeDashboardMenu: true,
     })
-
-    queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
-
-    queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
-
-    void invalidateListasNotificacionesMora(queryClient)
   }, [queryClient])
 
   const getValidRows = useCallback((): PagoExcelRow[] => {

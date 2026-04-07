@@ -28,7 +28,7 @@ interface EstadoRevisionIconProps {
  * - ⚠️ Pendiente: Clickeable, inicia revisión → pasa a ❓
  * - ❓ Revisando: Clickeable, abre diálogo para cambiar a ❌ o ✓
  * - ❌ En espera: Clickeable, regresa a ❓ o marca ✓
- * - ✓ Revisado: admin u operario pueden reabrir (→ revisando) desde el icono
+ * - ✓ Revisado (Visto): administrador reabre (→ revisando); el operario puede clicar para solicitar reapertura al administrador
  */
 export function EstadoRevisionIcon({
   prestamoId,
@@ -46,7 +46,7 @@ export function EstadoRevisionIcon({
     const confirmMsgs: Record<string, string> = {
       revisando: `🔍 Iniciar revisión de ${nombreCliente}?`,
       en_espera: `⚠️ Marcar como EN ESPERA (requiere más revisión): ${nombreCliente}?\n\nNo se guardarán cambios, solo se marca para revisión posterior.`,
-      revisado: `✅ FINALIZAR REVISIÓN de ${nombreCliente}?\n\n⚠️ Esta acción NO se puede deshacer. Solo admin.\n\nTodos los cambios se guardarán en las tablas originales.`,
+      revisado: `✅ FINALIZAR REVISIÓN de ${nombreCliente}?\n\n⚠️ Quedará en Visto. Solo un administrador podrá reabrir la revisión después.\n\nLos cambios pendientes deben guardarse antes desde la pantalla de edición.`,
     }
 
     const confirmar = window.confirm(
@@ -79,7 +79,7 @@ export function EstadoRevisionIcon({
       handleChangeState('revisando')
     } else if (estadoNorm === 'revisando' || estadoNorm === 'en_espera') {
       const seleccion = window.prompt(
-        `Selecciona la acción:\n\n1. ❓ REVISANDO - Continuar revisando\n2. ✅ REVISADO - Finalizar (solo admin)\n3. Cancelar`,
+        `Selecciona la acción:\n\n1. ❓ REVISANDO - Continuar revisando\n2. ✅ REVISADO - Finalizar (Visto; solo admin reabre)\n3. Cancelar`,
         ''
       )
       if (seleccion === '1') {
@@ -97,17 +97,52 @@ export function EstadoRevisionIcon({
       }
     } else if (estadoNorm === 'revisado') {
       if (!revisionManualFullEdit) {
-        toast.error(
-          'Solo administrador u operario pueden reabrir una revisión cerrada (Visto).'
-        )
         return
       }
       const confirmar = window.confirm(
-        `Este préstamo está REVISADO ✓.\n\n¿Reabrir como "En revisión" para continuar?`
+        `Este préstamo está REVISADO ✓ (Visto).\n\n¿Reabrir como «En revisión» para que el equipo vuelva a editar?`
       )
       if (confirmar) {
         handleChangeState('revisando')
       }
+    }
+  }
+
+  const handleSolicitarReaperturaOperario = async () => {
+    if (estadoNorm !== 'revisado' || revisionManualFullEdit) return
+    const confirmar = window.confirm(
+      `Este préstamo está en Visto (revisado). No puede editarlo ni reabrirlo usted mismo.\n\n¿Enviar una solicitud al administrador para que reabra la revisión (préstamo #${prestamoId})?`
+    )
+    if (!confirmar) return
+    const mensajeRaw = window.prompt(
+      'Motivo u observación para el administrador (opcional):',
+      ''
+    )
+    const mensaje =
+      mensajeRaw != null && String(mensajeRaw).trim()
+        ? String(mensajeRaw).trim().slice(0, 2000)
+        : undefined
+
+    setIsLoading(true)
+    try {
+      const res = await revisionManualService.solicitarReaperturaRevision(
+        prestamoId,
+        mensaje ? { mensaje } : {}
+      )
+      toast.success(res.mensaje || 'Solicitud registrada')
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+      void invalidateListasNotificacionesMora(queryClient)
+      onStateChange?.()
+    } catch (err: any) {
+      const errorMsg =
+        err?.response?.data?.detail || 'No se pudo registrar la solicitud'
+      toast.error(
+        typeof errorMsg === 'string'
+          ? errorMsg
+          : 'No se pudo registrar la solicitud'
+      )
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -180,7 +215,7 @@ export function EstadoRevisionIcon({
             <div
               className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-green-100 px-2 py-1 transition-all hover:bg-green-200"
               onClick={handleShowDialog}
-              title="Revisado (Visto): click para reabrir (admin u operario)"
+              title="Revisado (Visto): clic para reabrir (solo administrador)"
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-green-600" />
@@ -195,10 +230,15 @@ export function EstadoRevisionIcon({
         }
         return (
           <div
-            className="flex items-center justify-center gap-1 rounded-lg bg-green-100 px-2 py-1"
-            title="Revisado (Visto); solo administrador u operario pueden reabrir"
+            className="flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-green-100 px-2 py-1 transition-all hover:bg-green-200"
+            onClick={() => void handleSolicitarReaperturaOperario()}
+            title="Visto: clic para solicitar al administrador que reabra la revisión"
           >
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+            ) : (
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            )}
             <span className="text-xs font-semibold text-green-700">
               Revisado
             </span>

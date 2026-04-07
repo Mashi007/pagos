@@ -356,6 +356,70 @@ class RevisionManualService {
       }
     )
   }
+
+  /**
+   * Operario (no admin): préstamo en Visto (revisado) - registra solicitud para que un administrador reabra.
+   */
+  async solicitarReaperturaRevision(
+    prestamoId: number,
+    payload?: { mensaje?: string | null }
+  ): Promise<{
+    solicitud_id: number
+    ya_registrada: boolean
+    mensaje: string
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/prestamos/${prestamoId}/solicitar-reapertura-revision`,
+      payload ?? {},
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  /** Solo administrador: cola de solicitudes de reapertura. */
+  async getAutorizacionesReaperturaPendientes(): Promise<
+    Array<{
+      id: number
+      prestamo_id: number
+      cedula: string
+      nombres_cliente: string
+      solicitante_nombre: string
+      solicitante_apellido: string
+      solicitante_email: string | null
+      mensaje: string | null
+      creado_en: string
+    }>
+  > {
+    return await apiClient.get(
+      `${this.baseUrl}/autorizaciones-reapertura/pendientes`
+    )
+  }
+
+  async aprobarSolicitudReapertura(
+    solicitudId: number,
+    payload?: { nota?: string | null }
+  ): Promise<{
+    mensaje: string
+    prestamo_id: number
+    solicitud_id: number
+    nuevo_estado_revision: string
+  }> {
+    return await apiClient.patch(
+      `${this.baseUrl}/autorizaciones-reapertura/${solicitudId}/aprobar`,
+      payload ?? {},
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  async rechazarSolicitudReapertura(
+    solicitudId: number,
+    payload?: { nota?: string | null }
+  ): Promise<{ mensaje: string; prestamo_id: number; solicitud_id: number }> {
+    return await apiClient.patch(
+      `${this.baseUrl}/autorizaciones-reapertura/${solicitudId}/rechazar`,
+      payload ?? {},
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+  }
 }
 
 export const revisionManualService = new RevisionManualService()

@@ -371,6 +371,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         },
 
         { title: 'Usuarios', href: '/usuarios', icon: Shield, adminOnly: true },
+
+        {
+          title: 'Autorizaciones (revisión manual)',
+          href: '/administracion/autorizaciones-revision-manual',
+          icon: CheckCircle,
+          adminOnly: true,
+        },
       ],
     },
   ]

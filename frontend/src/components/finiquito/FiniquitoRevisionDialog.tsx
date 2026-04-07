@@ -459,7 +459,9 @@ export function FiniquitoRevisionDialog({
                               estado: String(prestamoCaso.estado ?? ''),
                               estado_gestion_finiquito:
                                 prestamoCaso.estado_gestion_finiquito != null
-                                  ? String(prestamoCaso.estado_gestion_finiquito)
+                                  ? String(
+                                      prestamoCaso.estado_gestion_finiquito
+                                    )
                                   : null,
                               finiquito_tramite_fecha_limite:
                                 prestamoCaso.finiquito_tramite_fecha_limite !=

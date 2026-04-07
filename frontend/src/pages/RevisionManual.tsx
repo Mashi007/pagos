@@ -33,7 +33,10 @@ import { revisionManualService } from '../services/revisionManualService'
 
 import { EstadoRevisionIcon } from '../components/revision_manual/EstadoRevisionIcon'
 
-import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
+import {
+  invalidateListasNotificacionesMora,
+  invalidatePagosPrestamosRevisionYCuotas,
+} from '../constants/queryKeys'
 
 interface PrestamoRevision {
   prestamo_id: number
@@ -323,9 +326,9 @@ export function RevisionManual() {
 
       toast.success('✅ Préstamo eliminado')
 
-      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
-
-      queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+        skipNotificacionesMora: true,
+      })
 
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
 

@@ -1,8 +1,15 @@
-import { useState, useLayoutEffect, useRef, useEffect } from 'react'
+import {
+  useState,
+  useLayoutEffect,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from 'react'
 
 import { useParams, useNavigate } from 'react-router-dom'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
 
@@ -37,6 +44,10 @@ import {
   FileText,
   DollarSign,
   RefreshCw,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -58,11 +69,20 @@ import { formatDate } from '../utils'
 
 import { revisionManualService } from '../services/revisionManualService'
 
-import { pagoService, type Pago } from '../services/pagoService'
+import {
+  pagoService,
+  type Pago,
+  type PagoCreate,
+} from '../services/pagoService'
+
+import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
 
 import { prestamoService } from '../services/prestamoService'
 
-import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
+import {
+  invalidateListasNotificacionesMora,
+  invalidatePagosPrestamosRevisionYCuotas,
+} from '../constants/queryKeys'
 
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 
@@ -74,9 +94,11 @@ import { useAnalistasActivos } from '../hooks/useAnalistas'
 
 import { useModelosVehiculosActivos } from '../hooks/useModelosVehiculos'
 
-import { prestamoKeys } from '../hooks/usePrestamos'
-
 import { codigoEstadoCuotaParaUi } from '../utils/cuotaEstadoDisplay'
+
+import { openComprobanteInNewTab } from '../services/cobrosService'
+
+import { getErrorMessage } from '../types/errors'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
 const OPCIONES_ESTADO_PRESTAMO_REVISION: { value: string; label: string }[] = [
@@ -305,6 +327,51 @@ const RUTA_LISTA_PRESTAMOS = '/prestamos'
 
 const PER_PAGE_PAGOS_REGISTRADOS = 20
 
+function fechaPagoPagoRowParaInput(pago: Pago): string {
+  const fp = pago.fecha_pago
+  if (fp == null || fp === '') {
+    return new Date().toISOString().slice(0, 10)
+  }
+  if (typeof fp === 'string') {
+    return fp.length >= 10 ? fp.slice(0, 10) : fp
+  }
+  try {
+    return new Date(fp as Date).toISOString().slice(0, 10)
+  } catch {
+    return new Date().toISOString().slice(0, 10)
+  }
+}
+
+function pagoRowAPagoCreateInicial(
+  pago: Pago
+): Partial<PagoCreate> & { moneda_registro?: string } {
+  return {
+    cedula_cliente: pago.cedula_cliente || '',
+    prestamo_id: pago.prestamo_id ?? null,
+    fecha_pago: fechaPagoPagoRowParaInput(pago),
+    monto_pagado:
+      typeof pago.monto_pagado === 'number'
+        ? pago.monto_pagado
+        : parseFloat(String(pago.monto_pagado || 0)) || 0,
+    numero_documento: pago.numero_documento || '',
+    institucion_bancaria: pago.institucion_bancaria ?? null,
+    notas: pago.notas ?? null,
+    moneda_registro: pago.moneda_registro === 'BS' ? 'BS' : 'USD',
+    link_comprobante: pago.link_comprobante ?? null,
+  }
+}
+
+function urlComprobantePagoRevision(pago: Pago): string {
+  return (
+    (pago.link_comprobante || '').trim() || (pago.documento_ruta || '').trim()
+  )
+}
+
+function esProbableUrlImagenComprobante(url: string): boolean {
+  const base = url.split(/[?#]/)[0].toLowerCase()
+  return /\.(jpe?g|png|gif|webp|bmp|svg)$/.test(base)
+}
+
 function badgeEstadoPagoRegistrado(estado: string) {
   const estados: Record<string, { color: string; label: string }> = {
     PAGADO: { color: 'bg-green-500', label: 'Pagado' },
@@ -357,6 +424,19 @@ export function EditarRevisionManual() {
   const [guardandoRechazo, setGuardandoRechazo] = useState(false)
 
   const [pagePagosRegistrados, setPagePagosRegistrados] = useState(1)
+
+  const [pagoModalAbierto, setPagoModalAbierto] = useState(false)
+
+  const [pagoModalId, setPagoModalId] = useState<number | undefined>(undefined)
+
+  const [pagoModalInicial, setPagoModalInicial] = useState<
+    Partial<PagoCreate> | undefined
+  >(undefined)
+
+  const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null)
+
+  const [abriendoComprobanteRevisionId, setAbriendoComprobanteRevisionId] =
+    useState<number | null>(null)
 
   /** Fecha de aprobación original cargada desde BD - para detectar si cambió */
   const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<
@@ -596,6 +676,17 @@ export function EditarRevisionManual() {
     refetchInterval: 60_000,
   })
 
+  const conteoDocumentoPagosRevision = useMemo(() => {
+    const m = new Map<string, number>()
+    const rows = pagosRealizadosData?.pagos ?? []
+    for (const p of rows) {
+      const k = (p.numero_documento || '').trim().toLowerCase()
+      if (!k) continue
+      m.set(k, (m.get(k) || 0) + 1)
+    }
+    return m
+  }, [pagosRealizadosData?.pagos])
+
   const estadoRevision = (detalleData?.revision?.estado_revision ?? 'pendiente')
     .toString()
     .toLowerCase()
@@ -603,6 +694,113 @@ export function EditarRevisionManual() {
   const { revisionManualFullEdit } = usePermissions()
 
   const soloLectura = estadoRevision === 'revisado' && !revisionManualFullEdit
+
+  const refrescarTrasCambioPagosRevision = useCallback(async () => {
+    await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+      skipNotificacionesMora: true,
+      includeDashboardMenu: true,
+    })
+    if (prestamoId) {
+      await queryClient.refetchQueries({
+        queryKey: ['revision-editar', prestamoId],
+      })
+    }
+    void refetchPagosRealizados()
+    void invalidateListasNotificacionesMora(queryClient)
+  }, [queryClient, prestamoId, refetchPagosRealizados])
+
+  const aplicarCascadaPagosMutation = useMutation({
+    mutationFn: async () => {
+      const pid = Number(prestamoData.prestamo_id)
+      if (!Number.isFinite(pid) || pid <= 0) {
+        throw new Error('No hay crédito válido para aplicar la cascada')
+      }
+      return pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
+    },
+    onSuccess: async data => {
+      toast.success(data.mensaje || 'Operación completada')
+      await refrescarTrasCambioPagosRevision()
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err &&
+        typeof err === 'object' &&
+        'message' in err &&
+        typeof (err as { message: unknown }).message === 'string'
+          ? (err as { message: string }).message
+          : String(err)
+      toast.error(msg || 'No se pudo aplicar pagos a cuotas')
+    },
+  })
+
+  const eliminarPagoRevision = async (pago: Pago) => {
+    if (soloLectura) return
+    const doc = pago.numero_documento?.trim()
+      ? pago.numero_documento
+      : `#${pago.id}`
+    if (
+      !window.confirm(
+        `Eliminar el pago ${doc} por $${Number(pago.monto_pagado || 0).toFixed(2)} USD? Esta acción no se puede deshacer.`
+      )
+    ) {
+      return
+    }
+    setEliminandoPagoId(pago.id)
+    try {
+      await pagoService.deletePago(pago.id)
+      toast.success('Pago eliminado')
+      await refrescarTrasCambioPagosRevision()
+    } catch (err: unknown) {
+      const msg =
+        err &&
+        typeof err === 'object' &&
+        'message' in err &&
+        typeof (err as { message: unknown }).message === 'string'
+          ? (err as { message: string }).message
+          : String(err)
+      toast.error(msg || 'No se pudo eliminar el pago')
+    } finally {
+      setEliminandoPagoId(null)
+    }
+  }
+
+  const cerrarModalPagoRevision = () => {
+    setPagoModalAbierto(false)
+    setPagoModalId(undefined)
+    setPagoModalInicial(undefined)
+  }
+
+  const abrirAgregarPagoRevision = () => {
+    if (soloLectura) return
+    const ced = cedulaParaPagosRealizados
+    const pid = prestamoData.prestamo_id
+    setPagoModalId(undefined)
+    setPagoModalInicial({
+      cedula_cliente: ced,
+      prestamo_id: pid != null && pid > 0 ? pid : null,
+      fecha_pago: new Date().toISOString().slice(0, 10),
+      monto_pagado: 0,
+      numero_documento: '',
+      institucion_bancaria: null,
+      notas: null,
+      link_comprobante: null,
+    })
+    setPagoModalAbierto(true)
+  }
+
+  const abrirEditarPagoRevision = (pago: Pago) => {
+    if (soloLectura) return
+    setPagoModalId(pago.id)
+    setPagoModalInicial(pagoRowAPagoCreateInicial(pago))
+    setPagoModalAbierto(true)
+  }
+
+  const onExitoModalPagoRevision = async () => {
+    const fueEdicion = pagoModalId != null
+    cerrarModalPagoRevision()
+    toast.success(fueEdicion ? 'Pago actualizado' : 'Pago registrado')
+    await refrescarTrasCambioPagosRevision()
+  }
 
   useEffect(() => {
     if (!detalleData) return
@@ -747,13 +945,8 @@ export function EditarRevisionManual() {
         `Fecha guardada en el servidor y ${actualizadas} cuota(s) con vencimientos actualizados. Los cambios quedan en la base (estado de cuenta, amortización, etc.).`
       )
 
-      queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
-      queryClient.invalidateQueries({
-        queryKey: ['revision-manual-prestamos'],
-        exact: false,
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['revision-editar', prestamoId],
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+        skipNotificacionesMora: true,
       })
       void invalidateListasNotificacionesMora(queryClient)
     } catch (err: any) {
@@ -1109,17 +1302,11 @@ export function EditarRevisionManual() {
 
         setCambios({ cliente: false, prestamo: false, cuotas: false })
 
-        // Invalidar todas las vistas que muestran datos de préstamos, clientes y cuotas
+        // Pagos, cuotas, préstamos, revisión manual y listas de mora (otras pestañas)
 
-        queryClient.invalidateQueries({
-          queryKey: ['revision-manual-prestamos'],
+        await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+          skipNotificacionesMora: true,
         })
-
-        queryClient.invalidateQueries({
-          queryKey: ['revision-editar', prestamoId],
-        })
-
-        queryClient.invalidateQueries({ queryKey: ['prestamos'] })
 
         queryClient.invalidateQueries({ queryKey: ['clientes'] })
 
@@ -1448,17 +1635,9 @@ export function EditarRevisionManual() {
 
         toast.success(res.mensaje)
 
-        // Invalidar todas las vistas para reflejar cambios en tablas originales
-
-        queryClient.invalidateQueries({
-          queryKey: ['revision-manual-prestamos'],
+        await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+          skipNotificacionesMora: true,
         })
-
-        queryClient.invalidateQueries({
-          queryKey: ['revision-editar', prestamoId],
-        })
-
-        queryClient.invalidateQueries({ queryKey: ['prestamos'] })
 
         queryClient.invalidateQueries({ queryKey: ['clientes'] })
 
@@ -1509,8 +1688,9 @@ export function EditarRevisionManual() {
       toast.success('Préstamo marcado como rechazado')
       setShowRechazarModal(false)
       setMotivoRechazo('')
-      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
-      queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+        skipNotificacionesMora: true,
+      })
       void invalidateListasNotificacionesMora(queryClient)
       irAListaPrestamos()
     } catch (err: any) {
@@ -1534,11 +1714,9 @@ export function EditarRevisionManual() {
       if (!confirmar) return
     }
 
-    // Invalidar para que al volver se muestren datos actualizados
-
-    queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
-
-    queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+    void invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+      skipNotificacionesMora: true,
+    })
 
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
 
@@ -1741,28 +1919,32 @@ export function EditarRevisionManual() {
           </div>
         )}
 
-        {estadoRevision === 'revisado' && revisionManualFullEdit && !soloLectura && (
-          <div
-            className="-mx-6 border-y border-sky-200 bg-sky-50 px-6 py-3 text-sm text-sky-950"
-            role="status"
-          >
-            <strong>Edición con revisión cerrada.</strong> La revisión figura como cerrada
-            (Visto); puede editar y guardar. Para volver a pendiente / en
-            revisión / otros estados use el icono de revisión manual en la lista
-            de préstamos.
-            {detalleData?.revision?.fecha_revision ? (
-              <span className="ml-2 text-sky-900">
-                Cierre:{' '}
-                {new Date(detalleData.revision.fecha_revision).toLocaleString()}
-              </span>
-            ) : null}
-            {detalleData?.revision?.usuario_revision_email ? (
-              <span className="ml-2">
-                Usuario: {detalleData.revision.usuario_revision_email}
-              </span>
-            ) : null}
-          </div>
-        )}
+        {estadoRevision === 'revisado' &&
+          revisionManualFullEdit &&
+          !soloLectura && (
+            <div
+              className="-mx-6 border-y border-sky-200 bg-sky-50 px-6 py-3 text-sm text-sky-950"
+              role="status"
+            >
+              <strong>Edición con revisión cerrada.</strong> La revisión figura
+              como cerrada (Visto); puede editar y guardar. Para volver a
+              pendiente / en revisión / otros estados use el icono de revisión
+              manual en la lista de préstamos.
+              {detalleData?.revision?.fecha_revision ? (
+                <span className="ml-2 text-sky-900">
+                  Cierre:{' '}
+                  {new Date(
+                    detalleData.revision.fecha_revision
+                  ).toLocaleString()}
+                </span>
+              ) : null}
+              {detalleData?.revision?.usuario_revision_email ? (
+                <span className="ml-2">
+                  Usuario: {detalleData.revision.usuario_revision_email}
+                </span>
+              ) : null}
+            </div>
+          )}
 
         {/* Secciones */}
 
@@ -2296,13 +2478,8 @@ export function EditarRevisionManual() {
                         if (errores['numero_cuotas'])
                           setErrores({ ...errores, numero_cuotas: '' })
                       }}
-                      disabled={prestamoData.estado === 'LIQUIDADO'}
-                      title={
-                        prestamoData.estado === 'LIQUIDADO'
-                          ? 'No se puede modificar en préstamos liquidados'
-                          : undefined
-                      }
-                      className={`disabled:cursor-not-allowed disabled:bg-gray-100 ${errores['numero_cuotas'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
+                      title="En revisión manual puede ajustar el plazo; el servidor rechaza cambios inválidos (p. ej. préstamo liquidado con reglas de cuotas)."
+                      className={`${errores['numero_cuotas'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
                       placeholder="0"
                     />
                     {errores['numero_cuotas'] && (
@@ -2803,24 +2980,75 @@ export function EditarRevisionManual() {
                     </CardTitle>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Cédula {cedulaParaPagosRealizados}: fecha, monto (USD),
-                      banco, documento y crédito asociado. Se actualiza al
-                      volver a la pestaña, cada minuto mientras esta página está
-                      abierta, y al registrar pagos (incluida carga masiva).
+                      banco, documento, comprobante y crédito asociado. Cada
+                      alta o edición exige URL de comprobante y respeta los
+                      validadores del módulo Pagos (incluido Nº documento
+                      único). Si el mismo documento aparece dos veces en esta
+                      página se resalta en la tabla. Use «Agregar pago»,
+                      «Editar» o «Eliminar»; «Aplicar a cuotas (cascada)»
+                      adjudica en la BD los pagos pendientes de este crédito a
+                      las cuotas (FIFO). La tabla se actualiza al guardar y
+                      también al volver a la pestaña o cada minuto.
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-2"
-                    disabled={loadingPagosRealizados || fetchingPagosRealizados}
-                    onClick={() => void refetchPagosRealizados()}
-                  >
-                    <RefreshCw
-                      className={`h-4 w-4 ${fetchingPagosRealizados ? 'animate-spin' : ''}`}
-                    />
-                    Actualizar
-                  </Button>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="gap-2"
+                      disabled={
+                        soloLectura ||
+                        aplicarCascadaPagosMutation.isPending ||
+                        !prestamoData.prestamo_id ||
+                        Number(prestamoData.prestamo_id) <= 0
+                      }
+                      onClick={() => aplicarCascadaPagosMutation.mutate()}
+                      title={
+                        soloLectura
+                          ? 'Revisión cerrada: solo lectura'
+                          : 'Persiste en BD la aplicación de pagos elegibles a cuotas de este crédito'
+                      }
+                    >
+                      {aplicarCascadaPagosMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <DollarSign className="h-4 w-4" />
+                      )}
+                      Aplicar a cuotas (cascada)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      className="gap-2"
+                      disabled={soloLectura}
+                      onClick={abrirAgregarPagoRevision}
+                      title={
+                        soloLectura
+                          ? 'Revision cerrada: solo lectura'
+                          : 'Registrar un pago para esta cedula'
+                      }
+                    >
+                      <Plus className="h-4 w-4" />
+                      Agregar pago
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      disabled={
+                        loadingPagosRealizados || fetchingPagosRealizados
+                      }
+                      onClick={() => void refetchPagosRealizados()}
+                    >
+                      <RefreshCw
+                        className={`h-4 w-4 ${fetchingPagosRealizados ? 'animate-spin' : ''}`}
+                      />
+                      Actualizar
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {loadingPagosRealizados && !pagosRealizadosData ? (
@@ -2829,10 +3057,23 @@ export function EditarRevisionManual() {
                       Cargando pagos…
                     </div>
                   ) : !pagosRealizadosData?.pagos?.length ? (
-                    <p className="py-6 text-sm text-muted-foreground">
-                      No hay filas en la tabla de pagos para esta cédula
-                      todavía.
-                    </p>
+                    <div className="space-y-3 py-6">
+                      <p className="text-sm text-muted-foreground">
+                        No hay filas en la tabla de pagos para esta cédula
+                        todavía. Puede registrar el primero con «Agregar pago».
+                      </p>
+                      {!soloLectura && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="gap-2"
+                          onClick={abrirAgregarPagoRevision}
+                        >
+                          <Plus className="h-4 w-4" />
+                          Agregar pago
+                        </Button>
+                      )}
+                    </div>
                   ) : (
                     <>
                       {pagosRealizadosData.sum_monto_pagado_cedula != null && (
@@ -2863,6 +3104,9 @@ export function EditarRevisionManual() {
                               <TableHead className="whitespace-nowrap">
                                 Nº documento
                               </TableHead>
+                              <TableHead className="min-w-[140px] whitespace-nowrap">
+                                Comprobante
+                              </TableHead>
                               <TableHead className="whitespace-nowrap">
                                 Crédito
                               </TableHead>
@@ -2870,50 +3114,206 @@ export function EditarRevisionManual() {
                                 Estado
                               </TableHead>
                               <TableHead>Notas</TableHead>
+                              <TableHead className="min-w-[200px] whitespace-nowrap text-right">
+                                Acciones
+                              </TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {pagosRealizadosData.pagos.map((pago: Pago) => (
-                              <TableRow key={pago.id}>
-                                <TableCell className="font-mono text-xs">
-                                  {pago.id}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {formatDate(pago.fecha_pago)}
-                                </TableCell>
-                                <TableCell className="text-right font-medium">
-                                  $
-                                  {typeof pago.monto_pagado === 'number'
-                                    ? pago.monto_pagado.toFixed(2)
-                                    : parseFloat(
-                                        String(pago.monto_pagado || 0)
-                                      ).toFixed(2)}
-                                </TableCell>
-                                <TableCell className="max-w-[180px] truncate text-sm">
-                                  {pago.institucion_bancaria?.trim()
-                                    ? pago.institucion_bancaria
-                                    : '-'}
-                                </TableCell>
-                                <TableCell className="max-w-[200px] font-mono text-xs">
-                                  {pago.numero_documento?.trim()
-                                    ? pago.numero_documento
-                                    : '-'}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {pago.prestamo_id != null
-                                    ? pago.prestamo_id
-                                    : '-'}
-                                </TableCell>
-                                <TableCell>
-                                  {badgeEstadoPagoRegistrado(
-                                    (pago.estado || 'PENDIENTE').toUpperCase()
-                                  )}
-                                </TableCell>
-                                <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
-                                  {pago.notas?.trim() ? pago.notas : '-'}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            {pagosRealizadosData.pagos.map((pago: Pago) => {
+                              const docKey = (pago.numero_documento || '')
+                                .trim()
+                                .toLowerCase()
+                              const documentoDuplicadoEnPagina =
+                                !!docKey &&
+                                (conteoDocumentoPagosRevision.get(docKey) ||
+                                  0) > 1
+                              return (
+                                <TableRow key={pago.id}>
+                                  <TableCell className="font-mono text-xs">
+                                    {pago.id}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {formatDate(pago.fecha_pago)}
+                                  </TableCell>
+                                  <TableCell className="text-right font-medium">
+                                    $
+                                    {typeof pago.monto_pagado === 'number'
+                                      ? pago.monto_pagado.toFixed(2)
+                                      : parseFloat(
+                                          String(pago.monto_pagado || 0)
+                                        ).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="max-w-[180px] truncate text-sm">
+                                    {pago.institucion_bancaria?.trim()
+                                      ? pago.institucion_bancaria
+                                      : '-'}
+                                  </TableCell>
+                                  <TableCell
+                                    className={`max-w-[200px] font-mono text-xs ${
+                                      documentoDuplicadoEnPagina
+                                        ? 'bg-orange-100 text-orange-950'
+                                        : ''
+                                    }`}
+                                    title={
+                                      documentoDuplicadoEnPagina
+                                        ? 'Mismo Nº de documento aparece más de una vez en esta página.'
+                                        : undefined
+                                    }
+                                  >
+                                    {pago.numero_documento?.trim()
+                                      ? pago.numero_documento
+                                      : '-'}
+                                  </TableCell>
+                                  <TableCell className="max-w-[200px] align-top text-sm">
+                                    {(() => {
+                                      const u = urlComprobantePagoRevision(pago)
+                                      if (u) {
+                                        return (
+                                          <div className="flex flex-col gap-2">
+                                            {esProbableUrlImagenComprobante(
+                                              u
+                                            ) ? (
+                                              <a
+                                                href={u}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block overflow-hidden rounded border bg-muted/30"
+                                                title="Abrir imagen completa"
+                                              >
+                                                <img
+                                                  src={u}
+                                                  alt=""
+                                                  className="h-14 w-full object-cover"
+                                                  loading="lazy"
+                                                  referrerPolicy="no-referrer"
+                                                />
+                                              </a>
+                                            ) : null}
+                                            <a
+                                              href={u}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-1 font-medium text-blue-600 hover:text-blue-800"
+                                              title="Abrir comprobante (foto o PDF)"
+                                            >
+                                              <Eye className="h-4 w-4 shrink-0" />
+                                              Ver
+                                            </a>
+                                          </div>
+                                        )
+                                      }
+                                      const prId = pago.pago_reportado_id
+                                      if (prId != null && prId > 0) {
+                                        return (
+                                          <Button
+                                            type="button"
+                                            variant="link"
+                                            className="h-auto p-0 text-blue-600"
+                                            disabled={
+                                              abriendoComprobanteRevisionId ===
+                                              pago.id
+                                            }
+                                            onClick={async () => {
+                                              setAbriendoComprobanteRevisionId(
+                                                pago.id
+                                              )
+                                              try {
+                                                await openComprobanteInNewTab(
+                                                  prId
+                                                )
+                                              } catch (e) {
+                                                toast.error(
+                                                  getErrorMessage(e) ||
+                                                    'No se pudo abrir el comprobante'
+                                                )
+                                              } finally {
+                                                setAbriendoComprobanteRevisionId(
+                                                  null
+                                                )
+                                              }
+                                            }}
+                                          >
+                                            {abriendoComprobanteRevisionId ===
+                                            pago.id ? (
+                                              <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
+                                            ) : (
+                                              <Eye className="mr-1 inline h-4 w-4" />
+                                            )}
+                                            Cobros
+                                          </Button>
+                                        )
+                                      }
+                                      return (
+                                        <span className="text-muted-foreground">
+                                          -
+                                        </span>
+                                      )
+                                    })()}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {pago.prestamo_id != null
+                                      ? pago.prestamo_id
+                                      : '-'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {badgeEstadoPagoRegistrado(
+                                      (pago.estado || 'PENDIENTE').toUpperCase()
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
+                                    {pago.notas?.trim() ? pago.notas : '-'}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex flex-wrap items-center justify-end gap-1">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 gap-1 px-2"
+                                        disabled={soloLectura}
+                                        onClick={() =>
+                                          abrirEditarPagoRevision(pago)
+                                        }
+                                        title={
+                                          soloLectura
+                                            ? 'Revision cerrada: solo lectura'
+                                            : 'Editar pago'
+                                        }
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                        Editar
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 gap-1 px-2 text-destructive hover:text-destructive"
+                                        disabled={
+                                          soloLectura ||
+                                          eliminandoPagoId === pago.id
+                                        }
+                                        onClick={() =>
+                                          void eliminarPagoRevision(pago)
+                                        }
+                                        title={
+                                          soloLectura
+                                            ? 'Revision cerrada: solo lectura'
+                                            : 'Eliminar pago'
+                                        }
+                                      >
+                                        {eliminandoPagoId === pago.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="h-4 w-4" />
+                                        )}
+                                        Eliminar
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })}
                           </TableBody>
                         </Table>
                       </div>
@@ -3009,6 +3409,22 @@ export function EditarRevisionManual() {
           </Button>
         </div>
       </div>
+
+      {pagoModalAbierto && pagoModalInicial != null && (
+        <RegistrarPagoForm
+          onClose={cerrarModalPagoRevision}
+          onSuccess={onExitoModalPagoRevision}
+          pagoInicial={pagoModalInicial}
+          pagoId={pagoModalId}
+          requiereLinkComprobante
+          prestamoContextoRevisionManualId={
+            prestamoData.prestamo_id != null &&
+            Number(prestamoData.prestamo_id) > 0
+              ? Number(prestamoData.prestamo_id)
+              : undefined
+          }
+        />
+      )}
     </motion.div>
   )
 }

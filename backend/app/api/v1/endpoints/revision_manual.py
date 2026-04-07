@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy import select, func, and_, case, literal_column, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
@@ -26,6 +26,8 @@ from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
+from app.models.revision_manual_solicitud_reapertura import RevisionManualSolicitudReapertura
+from app.models.user import User
 from app.models.auditoria import Auditoria
 from app.models.estado_cliente import EstadoCliente
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
@@ -43,8 +45,8 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 def _usuario_rol_elevado_revision_manual(current_user: Any) -> bool:
     """
-    Admin u operario: misma capacidad en revisión manual (estados revisando/revisado y reapertura).
-    Alineado con RBAC de préstamos para operadores.
+    Admin u operario: pueden editar mientras la revisión NO está cerrada (pendiente / revisando / en_espera).
+    No incluye reapertura ni edición con estado revisado (Visto); eso es solo administrador.
     """
     if isinstance(current_user, dict):
         rol_raw = current_user.get("rol")
@@ -52,6 +54,16 @@ def _usuario_rol_elevado_revision_manual(current_user: Any) -> bool:
         rol_raw = getattr(current_user, "rol", None)
     rol = rol_raw if isinstance(rol_raw, str) else None
     return canonical_rol(rol) in ("admin", "operator")
+
+
+def _usuario_es_admin_revision_manual(current_user: Any) -> bool:
+    """Administrador: puede reabrir desde Visto (revisado) y editar con la revisión cerrada."""
+    if isinstance(current_user, dict):
+        rol_raw = current_user.get("rol")
+    else:
+        rol_raw = getattr(current_user, "rol", None)
+    rol = rol_raw if isinstance(rol_raw, str) else None
+    return canonical_rol(rol) == "admin"
 
 
 def _actor_revision_manual(current_user: Any) -> str:
@@ -143,9 +155,9 @@ def _validar_permiso_edicion(
     Valida permisos de edición según el estado y rol del usuario.
     
     Reglas:
-    - ✓ REVISADO: Solo admin u operario pueden editar (reapertura operativa)
-    - ❓ REVISANDO: Solo admin u operario (misma capacidad)
-    - ⚠️ PENDIENTE, ❌ EN ESPERA: Todos
+    - ✓ REVISADO (Visto): solo administrador puede editar o guardar (corrección tras cierre)
+    - ❓ REVISANDO: solo admin u operario
+    - ⚠️ PENDIENTE, ❌ EN ESPERA: cualquier usuario autenticado con acceso al endpoint
     """
     rev = db.execute(
         select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
@@ -157,19 +169,23 @@ def _validar_permiso_edicion(
     
     estado = (rev.estado_revision or "").strip().lower()
     elevado = _usuario_rol_elevado_revision_manual(current_user)
+    es_admin = _usuario_es_admin_revision_manual(current_user)
     
-    # ✓ REVISADO: solo admin u operario
+    # ✓ REVISADO: solo administrador (el operario debe esperar que admin pase a «revisando»)
     if estado == "revisado":
-        if elevado:
+        if es_admin:
             return
         logger.warning(
-            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisado_cerrado actor=%s",
+            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisado_solo_admin actor=%s",
             prestamo_id,
             actor,
         )
         raise HTTPException(
             status_code=403,
-            detail="Este préstamo ya fue revisado y cerrado; no admite más ediciones.",
+            detail=(
+                "Esta revisión está cerrada (Visto). Solo un administrador puede editarla o reabrirla "
+                "pasando el estado a «En revisión»."
+            ),
         )
     
     # ❓ REVISANDO: admin u operario
@@ -523,14 +539,17 @@ def iniciar_revision_prestamo(
         db.add(rev_manual)
     else:
         prev = (rev_manual.estado_revision or "").strip().lower()
-        if prev == "revisado" and not _usuario_rol_elevado_revision_manual(current_user):
+        if prev == "revisado" and not _usuario_es_admin_revision_manual(current_user):
             logger.warning(
                 "revision_manual iniciar_revision rechazado prestamo_id=%s ya_revisado",
                 prestamo_id,
             )
             raise HTTPException(
                 status_code=403,
-                detail="La revisión de este préstamo ya fue cerrada; no se puede volver a iniciar.",
+                detail=(
+                    "La revisión de este préstamo ya fue cerrada (Visto). "
+                    "Solo un administrador puede volver a ponerla en revisión."
+                ),
             )
         rev_manual.estado_revision = "revisando"
     
@@ -1243,11 +1262,11 @@ def cambiar_estado_revision(
     - revisando (?)  → revisando    : guardar cambios (guarda en BD, sigue revisando)
     - revisando (?)  → rechazado (✕): solo marca, pide motivo, no guarda cambios de formulario
     - revisando (?)  → revisado (✓) : guardar y cerrar (guarda todo, finaliza)
-    - revisado (✓)   → revisando (?) : cualquier usuario reabre (visto es nuevo punto de inicio)
+    - revisado (✓)   → revisando (?) : solo administrador reabre (el operario no puede salir de Visto)
     - rechazado (✕)  → revisando (?) : reabrir para corregir
     """
     actor = _actor_revision_manual(current_user)
-    elevado = _usuario_rol_elevado_revision_manual(current_user)
+    es_admin = _usuario_es_admin_revision_manual(current_user)
 
     ESTADOS_VALIDOS = {"revisando", "en_espera", "rechazado", "revisado"}
     if payload.nuevo_estado not in ESTADOS_VALIDOS:
@@ -1271,10 +1290,13 @@ def cambiar_estado_revision(
     usuario_email = getattr(current_user, "email", None)
 
     if estado_actual == "revisado" and payload.nuevo_estado != "revisado":
-        if not elevado:
+        if not es_admin:
             raise HTTPException(
                 status_code=403,
-                detail="Solo administradores u operarios pueden reabrir o modificar el estado de una revisión cerrada (Visto).",
+                detail=(
+                    "Solo un administrador puede cambiar el estado de una revisión cerrada (Visto); "
+                    "por ejemplo reabrir como «En revisión» para que un operario vuelva a editar."
+                ),
             )
 
     if not rev_manual:
@@ -1513,4 +1535,318 @@ def finalizar_revision_prestamo(
         "mensaje": "Usted ha auditado todos los términos de este préstamo por lo que no podrá editar de nuevo",
         "prestamo_id": prestamo_id,
         "estado": "revisado"
+    }
+
+
+# ----- Solicitudes de reapertura (operario en Visto → cola para administrador) -----
+
+
+def _require_admin_para_autorizaciones_reapertura(current_user: Any) -> None:
+    if not _usuario_es_admin_revision_manual(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo un administrador puede consultar o resolver autorizaciones de reapertura.",
+        )
+
+
+class SolicitarReaperturaRevisionBody(BaseModel):
+    mensaje: Optional[str] = Field(None, max_length=2000)
+
+
+class SolicitudReaperturaPendienteOut(BaseModel):
+    id: int
+    prestamo_id: int
+    cedula: str
+    nombres_cliente: str
+    solicitante_nombre: str
+    solicitante_apellido: str
+    solicitante_email: Optional[str] = None
+    mensaje: Optional[str] = None
+    creado_en: str
+
+
+class SolicitarReaperturaRevisionResponse(BaseModel):
+    solicitud_id: int
+    ya_registrada: bool
+    mensaje: str
+
+
+class ResolverSolicitudReaperturaBody(BaseModel):
+    nota: Optional[str] = Field(None, max_length=2000)
+
+
+@router.post(
+    "/prestamos/{prestamo_id}/solicitar-reapertura-revision",
+    response_model=SolicitarReaperturaRevisionResponse,
+)
+def solicitar_reapertura_revision_manual(
+    prestamo_id: int,
+    payload: SolicitarReaperturaRevisionBody = Body(default=SolicitarReaperturaRevisionBody()),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """
+    Operario u otro usuario no administrador: registra que necesita que un administrador reabra
+    la revisión (préstamo en Visto / revisado). El administrador ve la cola en el módulo Autorizaciones.
+    """
+    actor = _actor_revision_manual(current_user)
+    if _usuario_es_admin_revision_manual(current_user):
+        raise HTTPException(
+            status_code=400,
+            detail="Los administradores pueden reabrir la revisión directamente; no deben usar esta solicitud.",
+        )
+
+    usuario_id = getattr(current_user, "id", None)
+    usuario_email = getattr(current_user, "email", None)
+
+    rev = db.execute(
+        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
+    ).scalars().first()
+    estado_rev = (rev.estado_revision or "pendiente").strip().lower() if rev else "pendiente"
+    if not rev or estado_rev != "revisado":
+        raise HTTPException(
+            status_code=400,
+            detail="Solo puede solicitar autorización cuando la revisión manual está cerrada en Visto (revisado).",
+        )
+
+    existente = db.execute(
+        select(RevisionManualSolicitudReapertura).where(
+            RevisionManualSolicitudReapertura.prestamo_id == prestamo_id,
+            RevisionManualSolicitudReapertura.estado == "pendiente",
+        )
+    ).scalars().first()
+    if existente:
+        return SolicitarReaperturaRevisionResponse(
+            solicitud_id=existente.id,
+            ya_registrada=True,
+            mensaje="Ya hay una solicitud pendiente para este préstamo. Un administrador la verá en Autorizaciones.",
+        )
+
+    msg = (payload.mensaje or "").strip() or None
+    sol = RevisionManualSolicitudReapertura(
+        prestamo_id=prestamo_id,
+        solicitante_usuario_id=usuario_id if isinstance(usuario_id, int) else None,
+        solicitante_email=usuario_email if isinstance(usuario_email, str) else None,
+        mensaje=msg,
+        estado="pendiente",
+    )
+    db.add(sol)
+    _commit_revision_seguro(
+        db,
+        operacion="solicitar_reapertura_revision_manual",
+        actor=actor,
+        tabla_principal="revision_manual_solicitudes_reapertura",
+        id_principal=prestamo_id,
+        resumen_campos=[f"solicitud_prestamo_id={prestamo_id}"],
+    )
+
+    if isinstance(usuario_id, int):
+        try:
+            registrar_cambio(
+                db=db,
+                usuario_id=usuario_id,
+                modulo="Revisión Manual",
+                tipo_cambio="CREAR",
+                descripcion=f"Solicitud de reapertura (Visto) préstamo #{prestamo_id}",
+                registro_id=sol.id,
+                tabla_afectada="revision_manual_solicitudes_reapertura",
+                campos_anteriores=None,
+                campos_nuevos={"prestamo_id": prestamo_id, "estado": "pendiente"},
+            )
+            db.commit()
+        except Exception:
+            logger.warning(
+                "revision_manual: no se pudo registrar auditoría solicitud reapertura prestamo_id=%s",
+                prestamo_id,
+            )
+
+    return SolicitarReaperturaRevisionResponse(
+        solicitud_id=sol.id,
+        ya_registrada=False,
+        mensaje="Solicitud registrada. Un administrador podrá reabrir la revisión desde el módulo Autorizaciones.",
+    )
+
+
+@router.get(
+    "/autorizaciones-reapertura/pendientes",
+    response_model=List[SolicitudReaperturaPendienteOut],
+)
+def listar_solicitudes_reapertura_pendientes(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Solo administrador: cola de solicitudes para reabrir revisiones en Visto."""
+    _require_admin_para_autorizaciones_reapertura(current_user)
+
+    SolUser = aliased(User)
+    rows = db.execute(
+        select(
+            RevisionManualSolicitudReapertura,
+            Prestamo.cedula,
+            Prestamo.nombres,
+            SolUser.nombre,
+            SolUser.apellido,
+            SolUser.email,
+        )
+        .join(Prestamo, Prestamo.id == RevisionManualSolicitudReapertura.prestamo_id)
+        .outerjoin(SolUser, SolUser.id == RevisionManualSolicitudReapertura.solicitante_usuario_id)
+        .where(RevisionManualSolicitudReapertura.estado == "pendiente")
+        .order_by(RevisionManualSolicitudReapertura.creado_en.desc())
+    ).all()
+
+    out: List[SolicitudReaperturaPendienteOut] = []
+    for sol, ced, nom_cli, sn, sa, se in rows:
+        creado = sol.creado_en.isoformat() if sol.creado_en else ""
+        out.append(
+            SolicitudReaperturaPendienteOut(
+                id=sol.id,
+                prestamo_id=sol.prestamo_id,
+                cedula=ced or "",
+                nombres_cliente=nom_cli or "",
+                solicitante_nombre=(sn or "").strip() or "—",
+                solicitante_apellido=(sa or "").strip() or "",
+                solicitante_email=se if se else (sol.solicitante_email or None),
+                mensaje=sol.mensaje,
+                creado_en=creado,
+            )
+        )
+    return out
+
+
+@router.patch("/autorizaciones-reapertura/{solicitud_id}/aprobar")
+def aprobar_solicitud_reapertura_revision(
+    solicitud_id: int,
+    payload: ResolverSolicitudReaperturaBody = Body(default=ResolverSolicitudReaperturaBody()),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Administrador: aprueba y reabre la revisión manual (Visto → En revisión)."""
+    _require_admin_para_autorizaciones_reapertura(current_user)
+    actor = _actor_revision_manual(current_user)
+    admin_id = getattr(current_user, "id", None)
+    admin_email = getattr(current_user, "email", None)
+
+    sol = db.get(RevisionManualSolicitudReapertura, solicitud_id)
+    if not sol or (sol.estado or "").strip().lower() != "pendiente":
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada o ya resuelta.")
+
+    rev = db.execute(
+        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == sol.prestamo_id)
+    ).scalars().first()
+    if not rev:
+        raise HTTPException(status_code=409, detail="No existe registro de revisión manual para este préstamo.")
+    estado_rev = (rev.estado_revision or "").strip().lower()
+    if estado_rev != "revisado":
+        raise HTTPException(
+            status_code=409,
+            detail="El préstamo ya no está en Visto (revisado). Revise el estado actual antes de aprobar.",
+        )
+
+    rev.estado_revision = "revisando"
+    rev.fecha_revision = None
+    rev.motivo_rechazo = None
+    rev.usuario_revision_id = admin_id if isinstance(admin_id, int) else None
+    rev.usuario_revision_email = admin_email if isinstance(admin_email, str) else None
+    rev.actualizado_en = datetime.now()
+
+    nota = (payload.nota or "").strip() or None
+    sol.estado = "aprobada"
+    sol.resuelto_por_usuario_id = admin_id if isinstance(admin_id, int) else None
+    sol.resuelto_en = datetime.now()
+    sol.nota_resolucion = nota
+    sol.actualizado_en = datetime.now()
+
+    _commit_revision_seguro(
+        db,
+        operacion="aprobar_solicitud_reapertura_revision",
+        actor=actor,
+        tabla_principal="revision_manual_solicitudes_reapertura",
+        id_principal=solicitud_id,
+        resumen_campos=[f"prestamo_id={sol.prestamo_id}", "reabrir=revisando"],
+    )
+
+    if isinstance(admin_id, int):
+        try:
+            registrar_cambio(
+                db=db,
+                usuario_id=admin_id,
+                modulo="Revisión Manual",
+                tipo_cambio="ACTUALIZAR",
+                descripcion=f"Aprobó solicitud reapertura #{solicitud_id} → préstamo #{sol.prestamo_id} en revisión",
+                registro_id=sol.prestamo_id,
+                tabla_afectada="revision_manual_solicitudes_reapertura",
+                campos_anteriores={"estado": "pendiente"},
+                campos_nuevos={"estado": "aprobada", "prestamo_id": sol.prestamo_id},
+            )
+            db.commit()
+        except Exception:
+            logger.warning(
+                "revision_manual: no se pudo registrar auditoría aprobar solicitud id=%s",
+                solicitud_id,
+            )
+
+    return {
+        "mensaje": "Solicitud aprobada. La revisión quedó en «En revisión».",
+        "prestamo_id": sol.prestamo_id,
+        "solicitud_id": solicitud_id,
+        "nuevo_estado_revision": "revisando",
+    }
+
+
+@router.patch("/autorizaciones-reapertura/{solicitud_id}/rechazar")
+def rechazar_solicitud_reapertura_revision(
+    solicitud_id: int,
+    payload: ResolverSolicitudReaperturaBody = Body(default=ResolverSolicitudReaperturaBody()),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Administrador: rechaza la solicitud; el préstamo permanece en Visto (revisado)."""
+    _require_admin_para_autorizaciones_reapertura(current_user)
+    actor = _actor_revision_manual(current_user)
+    admin_id = getattr(current_user, "id", None)
+
+    sol = db.get(RevisionManualSolicitudReapertura, solicitud_id)
+    if not sol or (sol.estado or "").strip().lower() != "pendiente":
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada o ya resuelta.")
+
+    nota = (payload.nota or "").strip() or None
+    sol.estado = "rechazada"
+    sol.resuelto_por_usuario_id = admin_id if isinstance(admin_id, int) else None
+    sol.resuelto_en = datetime.now()
+    sol.nota_resolucion = nota
+    sol.actualizado_en = datetime.now()
+
+    _commit_revision_seguro(
+        db,
+        operacion="rechazar_solicitud_reapertura_revision",
+        actor=actor,
+        tabla_principal="revision_manual_solicitudes_reapertura",
+        id_principal=solicitud_id,
+        resumen_campos=[f"prestamo_id={sol.prestamo_id}"],
+    )
+
+    if isinstance(admin_id, int):
+        try:
+            registrar_cambio(
+                db=db,
+                usuario_id=admin_id,
+                modulo="Revisión Manual",
+                tipo_cambio="ACTUALIZAR",
+                descripcion=f"Rechazó solicitud reapertura #{solicitud_id} (préstamo #{sol.prestamo_id})",
+                registro_id=sol.prestamo_id,
+                tabla_afectada="revision_manual_solicitudes_reapertura",
+                campos_anteriores={"estado": "pendiente"},
+                campos_nuevos={"estado": "rechazada"},
+            )
+            db.commit()
+        except Exception:
+            logger.warning(
+                "revision_manual: no se pudo registrar auditoría rechazar solicitud id=%s",
+                solicitud_id,
+            )
+
+    return {
+        "mensaje": "Solicitud rechazada. La revisión sigue en Visto (revisado).",
+        "prestamo_id": sol.prestamo_id,
+        "solicitud_id": solicitud_id,
     }

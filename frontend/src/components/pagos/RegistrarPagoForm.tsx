@@ -74,6 +74,18 @@ interface RegistrarPagoFormProps {
   /** Si true, edición usa pagos_con_errores */
 
   esPagoConError?: boolean
+
+  /**
+   * Revisión manual: exige URL de comprobante al crear o actualizar (trazabilidad).
+   * Los duplicados de Nº documento siguen validándose en el servidor (409).
+   */
+  requiereLinkComprobante?: boolean
+
+  /**
+   * Revisión manual: ID del préstamo que se está editando. Garantiza que ese crédito
+   * (p. ej. LIQUIDADO) figure en el selector y pase validación aunque la lista por cédula falle o venga incompleta.
+   */
+  prestamoContextoRevisionManualId?: number
 }
 
 export function RegistrarPagoForm({
@@ -83,6 +95,8 @@ export function RegistrarPagoForm({
   pagoId,
   modoGuardarYProcesar,
   esPagoConError,
+  requiereLinkComprobante,
+  prestamoContextoRevisionManualId,
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
 
@@ -101,6 +115,8 @@ export function RegistrarPagoForm({
     institucion_bancaria: pagoInicial?.institucion_bancaria || null,
 
     notas: pagoInicial?.notas || null,
+
+    link_comprobante: pagoInicial?.link_comprobante ?? null,
   })
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -137,19 +153,45 @@ export function RegistrarPagoForm({
 
   const { data: prestamoSeleccionado } = usePrestamo(formData.prestamo_id || 0)
 
+  const pidRevisionCtx =
+    prestamoContextoRevisionManualId && prestamoContextoRevisionManualId > 0
+      ? prestamoContextoRevisionManualId
+      : 0
+
+  const { data: prestamoContextoRevisionManual } = usePrestamo(pidRevisionCtx)
+
   /** Incluye el préstamo cargado por ID si la lista por cédula aún no lo trae (evita placeholder "Seleccione el crédito" con valor 478). */
   const prestamosParaSelect = useMemo((): Prestamo[] => {
     const list = Array.isArray(prestamos) ? [...prestamos] : []
+
+    const mergeIfMissing = (base: Prestamo[], p?: Prestamo): Prestamo[] => {
+      if (!p?.id) return base
+      if (base.some(x => x.id === p.id)) return base
+      return [p, ...base]
+    }
+
+    let out = list
+    const pCtx = prestamoContextoRevisionManual as Prestamo | undefined
+    if (pidRevisionCtx > 0 && pCtx?.id === pidRevisionCtx) {
+      out = mergeIfMissing(out, pCtx)
+    }
+
     const pid = formData.prestamo_id
-    if (!pid || list.some(p => p.id === pid)) {
-      return list
+    if (!pid || out.some(p => p.id === pid)) {
+      return out
     }
     const psel = prestamoSeleccionado as Prestamo | undefined
     if (psel && psel.id === pid) {
-      return [psel, ...list]
+      return mergeIfMissing(out, psel)
     }
-    return list
-  }, [prestamos, formData.prestamo_id, prestamoSeleccionado])
+    return out
+  }, [
+    prestamos,
+    formData.prestamo_id,
+    prestamoSeleccionado,
+    pidRevisionCtx,
+    prestamoContextoRevisionManual,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -254,10 +296,15 @@ export function RegistrarPagoForm({
           : 'Debe seleccionar el crédito'
     }
 
+    const permiteCreditoRevisionManual =
+      !!prestamoContextoRevisionManualId &&
+      formData.prestamo_id === prestamoContextoRevisionManualId
+
     if (
       formData.prestamo_id &&
       prestamosParaSelect.length > 0 &&
-      !prestamosParaSelect.some(p => p.id === formData.prestamo_id)
+      !prestamosParaSelect.some(p => p.id === formData.prestamo_id) &&
+      !permiteCreditoRevisionManual
     ) {
       newErrors.prestamo_id =
         'El crédito debe ser uno de la lista para esta cédula'
@@ -265,9 +312,16 @@ export function RegistrarPagoForm({
 
     // CRITERIO 1: Verificación de cédula del pago vs cédula del préstamo
 
-    if (formData.prestamo_id && prestamoSeleccionado) {
-      if (formData.cedula_cliente !== prestamoSeleccionado.cedula) {
-        newErrors.cedula_cliente = `La cédula del pago (${formData.cedula_cliente}) no coincide con la cédula del préstamo (${prestamoSeleccionado.cedula}). El pago solo se aplicará si las cédulas coinciden.`
+    const prestamoParaCedula: Prestamo | undefined =
+      permiteCreditoRevisionManual &&
+      (prestamoContextoRevisionManual as Prestamo | undefined)?.id ===
+        formData.prestamo_id
+        ? (prestamoContextoRevisionManual as Prestamo)
+        : (prestamoSeleccionado as Prestamo | undefined)
+
+    if (formData.prestamo_id && prestamoParaCedula) {
+      if (formData.cedula_cliente !== prestamoParaCedula.cedula) {
+        newErrors.cedula_cliente = `La cédula del pago (${formData.cedula_cliente}) no coincide con la cédula del préstamo (${prestamoParaCedula.cedula}). El pago solo se aplicará si las cédulas coinciden.`
 
         newErrors.prestamo_id =
           'La cédula del pago debe coincidir con la cédula del préstamo seleccionado'
@@ -306,6 +360,23 @@ export function RegistrarPagoForm({
 
     if (!numeroDocumentoNormalizado || numeroDocumentoNormalizado === '') {
       newErrors.numero_documento = 'Número de documento requerido'
+    }
+
+    const linkComprobanteTrim = (formData.link_comprobante || '').trim()
+
+    if (requiereLinkComprobante && !linkComprobanteTrim) {
+      newErrors.link_comprobante =
+        'Enlace al comprobante (imagen o PDF) requerido en revisión manual.'
+    } else if (linkComprobanteTrim) {
+      try {
+        const u = new URL(linkComprobanteTrim)
+        if (!['http:', 'https:'].includes(u.protocol)) {
+          newErrors.link_comprobante =
+            'El comprobante debe ser una URL http o https válida.'
+        }
+      } catch {
+        newErrors.link_comprobante = 'URL de comprobante no válida.'
+      }
     }
 
     // CRITERIO 4: Validación de fecha
@@ -350,6 +421,8 @@ export function RegistrarPagoForm({
         numero_documento: numeroDocumentoNormalizado,
 
         moneda_registro: monedaRegistro,
+
+        link_comprobante: linkComprobanteTrim || null,
       }
 
       if (monedaRegistro === 'BS' && !tasaBd) {
@@ -449,7 +522,7 @@ export function RegistrarPagoForm({
           >
             {/* Error general */}
 
-            {!isEditing && (
+            {!isEditing && !requiereLinkComprobante && (
               <div className="rounded border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
                 <p>
                   Para elegir moneda (Bs./USD), adjuntar comprobante y recibo
@@ -467,6 +540,17 @@ export function RegistrarPagoForm({
                   </a>
                   . Este formulario es para registro o edición directa en la
                   tabla interna de pagos (conciliación).
+                </p>
+              </div>
+            )}
+
+            {requiereLinkComprobante && (
+              <div className="rounded border border-sky-100 bg-sky-50/90 px-3 py-2 text-xs text-sky-950">
+                <p>
+                  <strong>Revisión manual:</strong> indique la URL del
+                  comprobante (foto o PDF en Drive, etc.). El sistema no admite
+                  el mismo Nº de documento dos veces; si ya existe, el servidor
+                  rechazará el guardado.
                 </p>
               </div>
             )}
@@ -894,6 +978,76 @@ export function RegistrarPagoForm({
                   {errors.numero_documento}
                 </p>
               )}
+            </div>
+
+            {/* Comprobante (URL) - revisión manual y trazabilidad */}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Comprobante (URL){' '}
+                {requiereLinkComprobante ? (
+                  <span className="text-red-500">*</span>
+                ) : (
+                  <span className="text-xs font-normal text-gray-500">
+                    (opcional)
+                  </span>
+                )}
+              </label>
+
+              <div className="relative">
+                <Upload className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+
+                <Input
+                  type="url"
+                  inputMode="url"
+                  autoComplete="off"
+                  value={formData.link_comprobante || ''}
+                  onChange={e =>
+                    setFormData({
+                      ...formData,
+                      link_comprobante: e.target.value || null,
+                    })
+                  }
+                  className={`pl-10 ${errors.link_comprobante ? 'border-red-500' : ''}`}
+                  placeholder="https://… (enlace al comprobante)"
+                />
+              </div>
+
+              {errors.link_comprobante && (
+                <p className="text-sm text-red-600">
+                  {errors.link_comprobante}
+                </p>
+              )}
+
+              {(() => {
+                const u = (formData.link_comprobante || '').trim()
+
+                if (!u) return null
+
+                const base = u.split(/[?#]/)[0].toLowerCase()
+
+                const esImg = /\.(jpe?g|png|gif|webp|bmp|svg)$/.test(base)
+
+                if (!esImg) return null
+
+                return (
+                  <div className="overflow-hidden rounded border bg-muted/40 p-2">
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      Vista previa (solo URLs directas a imagen):
+                    </p>
+                    <img
+                      src={u}
+                      alt="Vista previa comprobante"
+                      className="max-h-40 max-w-full rounded object-contain"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      onError={e => {
+                        ;(e.target as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Notas */}

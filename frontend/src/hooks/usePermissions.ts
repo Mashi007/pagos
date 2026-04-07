@@ -355,8 +355,11 @@ export function usePermissions() {
     return allowedForOperativos.includes(reportType)
   }
 
-  /** Revisión manual de préstamos: operario tiene la misma edición que admin (revisando / revisado / reabrir). */
-  const revisionManualFullEdit = isAdmin() || isOperatorRole(user?.rol)
+  /**
+   * Revisión manual: con la revisión cerrada (Visto / `revisado`), solo el administrador puede
+   * editar, guardar o reabrir el estado a «En revisión». El operario trabaja mientras no esté en Visto.
+   */
+  const revisionManualFullEdit = isAdmin()
 
   return {
     user,

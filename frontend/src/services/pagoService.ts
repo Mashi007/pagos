@@ -336,6 +336,20 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/${pagoId}/aplicar-cuotas`)
   }
 
+  /**
+   * Aplica en cascada todos los pagos del préstamo elegibles que aún no tienen cuota_pagos
+   * (misma lógica que jobs internos / revisión manual al cerrar saldo cero).
+   */
+  async aplicarPagosPendientesCuotasPorPrestamo(prestamoId: number): Promise<{
+    prestamo_id: number
+    pagos_con_aplicacion: number
+    mensaje: string
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/por-prestamo/${prestamoId}/aplicar-pagos-cuotas`
+    )
+  }
+
   async uploadExcel(file: File): Promise<any> {
     const formData = new FormData()
 
