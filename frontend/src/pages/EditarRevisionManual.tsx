@@ -704,19 +704,10 @@ export function EditarRevisionManual() {
   const soloLectura = estadoRevision === 'revisado' && !revisionManualFullEdit
 
   const refrescarTrasCambioPagosRevision = useCallback(async () => {
+    // La invalidación de `revision-editar` en refrescarOrigen ya dispara un refetch (RQ v5).
     await refrescarOrigenDatosTrasRevisionManual()
-    if (prestamoId) {
-      await queryClient.refetchQueries({
-        queryKey: ['revision-editar', prestamoId],
-      })
-    }
     void refetchPagosRealizados()
-  }, [
-    queryClient,
-    prestamoId,
-    refetchPagosRealizados,
-    refrescarOrigenDatosTrasRevisionManual,
-  ])
+  }, [refetchPagosRealizados, refrescarOrigenDatosTrasRevisionManual])
 
   const aplicarCascadaPagosMutation = useMutation({
     mutationFn: async () => {
@@ -727,7 +718,13 @@ export function EditarRevisionManual() {
       return pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
     },
     onSuccess: async data => {
-      toast.success(data.mensaje || 'Operación completada')
+      const aplicados = Number(data.pagos_con_aplicacion ?? 0)
+      const texto = data.mensaje || 'Operación completada'
+      if (aplicados > 0) {
+        toast.success(texto)
+      } else {
+        toast.info(texto)
+      }
       await refrescarTrasCambioPagosRevision()
       /**
        * La cascada actualiza cuotas en BD. El queryFn del detalle no llama a setCuotasData
@@ -977,11 +974,6 @@ export function EditarRevisionManual() {
       )
 
       await refrescarOrigenDatosTrasRevisionManual()
-      if (prestamoId) {
-        await queryClient.refetchQueries({
-          queryKey: ['revision-editar', prestamoId],
-        })
-      }
     } catch (err: any) {
       const msg =
         err?.response?.data?.detail ||
@@ -2781,178 +2773,6 @@ export function EditarRevisionManual() {
               </CardContent>
             </Card>
 
-            {/* Cuotas */}
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  💳 Cuotas/Pagos
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  La cantidad de cuotas y el calendario provienen del préstamo
-                  (número de cuotas, fechas de aprobación y reglas de
-                  amortización), no se agregan ni quitan filas desde aquí.
-                </p>
-              </CardHeader>
-
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left">Cuota</th>
-
-                        <th className="px-4 py-2 text-right">Monto</th>
-
-                        <th className="px-4 py-2 text-left">Vencimiento</th>
-
-                        <th className="px-4 py-2 text-left">Fecha Pago</th>
-
-                        <th className="px-4 py-2 text-right">Pagado</th>
-
-                        <th className="px-4 py-2 text-left">Estado</th>
-                      </tr>
-                    </thead>
-
-                    <tbody className="divide-y">
-                      {cuotasData.map((cuota, idx) => (
-                        <tr
-                          key={cuota.cuota_id ?? `fila-${idx}`}
-                          className="hover:bg-gray-50"
-                        >
-                          <td className="px-4 py-2 font-medium">
-                            {cuota.numero_cuota}
-                          </td>
-
-                          <td className="px-4 py-2">
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={cuota.monto ?? ''}
-                              onChange={e => {
-                                const newCuotas = [...cuotasData]
-
-                                newCuotas[idx] = {
-                                  ...cuota,
-                                  monto: parseFloat(e.target.value) || 0,
-                                }
-
-                                setCuotasData(newCuotas)
-
-                                setCambios({ ...cambios, cuotas: true })
-                              }}
-                              className="w-20 rounded border px-2 py-1 text-right text-sm"
-                            />
-                          </td>
-
-                          <td className="px-4 py-2">
-                            <input
-                              type="date"
-                              value={
-                                cuota.fecha_vencimiento
-                                  ? formatDateForInput(cuota.fecha_vencimiento)
-                                  : ''
-                              }
-                              onChange={e => {
-                                const newCuotas = [...cuotasData]
-
-                                newCuotas[idx] = {
-                                  ...cuota,
-                                  fecha_vencimiento: e.target.value
-                                    ? `${e.target.value}T00:00:00`
-                                    : null,
-                                }
-
-                                setCuotasData(newCuotas)
-
-                                setCambios({ ...cambios, cuotas: true })
-                              }}
-                              className="w-full rounded border px-2 py-1 text-sm"
-                            />
-                          </td>
-
-                          <td className="px-4 py-2">
-                            <input
-                              type="date"
-                              value={
-                                cuota.fecha_pago
-                                  ? formatDateForInput(cuota.fecha_pago)
-                                  : ''
-                              }
-                              onChange={e => {
-                                const newCuotas = [...cuotasData]
-
-                                newCuotas[idx] = {
-                                  ...cuota,
-                                  fecha_pago: e.target.value
-                                    ? `${e.target.value}T00:00:00`
-                                    : null,
-                                }
-
-                                setCuotasData(newCuotas)
-
-                                setCambios({ ...cambios, cuotas: true })
-                              }}
-                              className="w-full rounded border px-2 py-1 text-sm"
-                            />
-                          </td>
-
-                          <td className="px-4 py-2">
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={cuota.total_pagado || ''}
-                              onChange={e => {
-                                const newCuotas = [...cuotasData]
-
-                                newCuotas[idx] = {
-                                  ...cuota,
-                                  total_pagado: parseFloat(e.target.value) || 0,
-                                }
-
-                                setCuotasData(newCuotas)
-
-                                setCambios({ ...cambios, cuotas: true })
-                              }}
-                              className="w-20 rounded border px-2 py-1 text-sm"
-                              placeholder="0.00"
-                            />
-                          </td>
-
-                          <td className="px-4 py-2">
-                            <select
-                              value={codigoEstadoCuotaParaUi(cuota.estado)}
-                              onChange={e => {
-                                const newCuotas = [...cuotasData]
-
-                                newCuotas[idx] = {
-                                  ...cuota,
-                                  estado: e.target.value,
-                                }
-
-                                setCuotasData(newCuotas)
-
-                                setCambios({ ...cambios, cuotas: true })
-                              }}
-                              className="rounded border px-2 py-1 text-sm"
-                            >
-                              {opcionesSelectCuotaRevision(cuota.estado).map(
-                                opt => (
-                                  <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </option>
-                                )
-                              )}
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Pagos reales en tabla pagos (mismo origen que carga masiva / módulo Pagos) */}
             {cedulaParaPagosRealizados ? (
               <Card>
@@ -3258,6 +3078,178 @@ export function EditarRevisionManual() {
                 </CardContent>
               </Card>
             ) : null}
+
+            {/* Cuotas (después del reporte de pagos en cartera) */}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  💳 Cuotas/Pagos
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  La cantidad de cuotas y el calendario provienen del préstamo
+                  (número de cuotas, fechas de aprobación y reglas de
+                  amortización), no se agregan ni quitan filas desde aquí.
+                </p>
+              </CardHeader>
+
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Cuota</th>
+
+                        <th className="px-4 py-2 text-right">Monto</th>
+
+                        <th className="px-4 py-2 text-left">Vencimiento</th>
+
+                        <th className="px-4 py-2 text-left">Fecha Pago</th>
+
+                        <th className="px-4 py-2 text-right">Pagado</th>
+
+                        <th className="px-4 py-2 text-left">Estado</th>
+                      </tr>
+                    </thead>
+
+                    <tbody className="divide-y">
+                      {cuotasData.map((cuota, idx) => (
+                        <tr
+                          key={cuota.cuota_id ?? `fila-${idx}`}
+                          className="hover:bg-gray-50"
+                        >
+                          <td className="px-4 py-2 font-medium">
+                            {cuota.numero_cuota}
+                          </td>
+
+                          <td className="px-4 py-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={cuota.monto ?? ''}
+                              onChange={e => {
+                                const newCuotas = [...cuotasData]
+
+                                newCuotas[idx] = {
+                                  ...cuota,
+                                  monto: parseFloat(e.target.value) || 0,
+                                }
+
+                                setCuotasData(newCuotas)
+
+                                setCambios({ ...cambios, cuotas: true })
+                              }}
+                              className="w-20 rounded border px-2 py-1 text-right text-sm"
+                            />
+                          </td>
+
+                          <td className="px-4 py-2">
+                            <input
+                              type="date"
+                              value={
+                                cuota.fecha_vencimiento
+                                  ? formatDateForInput(cuota.fecha_vencimiento)
+                                  : ''
+                              }
+                              onChange={e => {
+                                const newCuotas = [...cuotasData]
+
+                                newCuotas[idx] = {
+                                  ...cuota,
+                                  fecha_vencimiento: e.target.value
+                                    ? `${e.target.value}T00:00:00`
+                                    : null,
+                                }
+
+                                setCuotasData(newCuotas)
+
+                                setCambios({ ...cambios, cuotas: true })
+                              }}
+                              className="w-full rounded border px-2 py-1 text-sm"
+                            />
+                          </td>
+
+                          <td className="px-4 py-2">
+                            <input
+                              type="date"
+                              value={
+                                cuota.fecha_pago
+                                  ? formatDateForInput(cuota.fecha_pago)
+                                  : ''
+                              }
+                              onChange={e => {
+                                const newCuotas = [...cuotasData]
+
+                                newCuotas[idx] = {
+                                  ...cuota,
+                                  fecha_pago: e.target.value
+                                    ? `${e.target.value}T00:00:00`
+                                    : null,
+                                }
+
+                                setCuotasData(newCuotas)
+
+                                setCambios({ ...cambios, cuotas: true })
+                              }}
+                              className="w-full rounded border px-2 py-1 text-sm"
+                            />
+                          </td>
+
+                          <td className="px-4 py-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={cuota.total_pagado || ''}
+                              onChange={e => {
+                                const newCuotas = [...cuotasData]
+
+                                newCuotas[idx] = {
+                                  ...cuota,
+                                  total_pagado: parseFloat(e.target.value) || 0,
+                                }
+
+                                setCuotasData(newCuotas)
+
+                                setCambios({ ...cambios, cuotas: true })
+                              }}
+                              className="w-20 rounded border px-2 py-1 text-sm"
+                              placeholder="0.00"
+                            />
+                          </td>
+
+                          <td className="px-4 py-2">
+                            <select
+                              value={codigoEstadoCuotaParaUi(cuota.estado)}
+                              onChange={e => {
+                                const newCuotas = [...cuotasData]
+
+                                newCuotas[idx] = {
+                                  ...cuota,
+                                  estado: e.target.value,
+                                }
+
+                                setCuotasData(newCuotas)
+
+                                setCambios({ ...cambios, cuotas: true })
+                              }}
+                              className="rounded border px-2 py-1 text-sm"
+                            >
+                              {opcionesSelectCuotaRevision(cuota.estado).map(
+                                opt => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                )
+                              )}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 

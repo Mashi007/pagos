@@ -6056,9 +6056,13 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
         mensaje = (
 
-            "No se aplicó ningún pago nuevo (sin filas pendientes en cuota_pagos, "
+            "Ningún pago nuevo se articuló en cuotas: no quedaban pagos elegibles "
 
-            "montos en cero o pagos no elegibles para reaplicación)."
+            "sin filas en cuota_pagos (o monto 0 / no conciliados). "
+
+            "La reaplicación completa del préstamo solo corre si el sistema detecta "
+
+            "inconsistencia de integridad."
 
         )
 

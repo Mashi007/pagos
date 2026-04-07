@@ -343,6 +343,8 @@ class PagoService {
   async aplicarPagosPendientesCuotasPorPrestamo(prestamoId: number): Promise<{
     prestamo_id: number
     pagos_con_aplicacion: number
+    reaplicacion_completa?: boolean
+    detalle_reaplicacion?: Record<string, unknown> | null
     mensaje: string
   }> {
     return await apiClient.post(
