@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 """
+AVISO (producto): NO usar como flujo operativo normal. Este script hace **replay
+completo** del préstamo: borra cuota_pagos, resetea cuotas y vuelve a aplicar **todos**
+los pagos en orden cronológico (FIFO de pagos). La política del equipo es **solo
+cascada por pago** (p. ej. POST /pagos/{id}/aplicar-cuotas), sin re-replay global del
+préstamo salvo excepción explícita de negocio.
+
+---
+
 Rearticula un préstamo: borra la aplicación de pagos a cuotas y vuelve a aplicar
 todos los pagos del préstamo en orden cronológico con lógica en cascada (cuota más
 antigua primero, por numero_cuota).

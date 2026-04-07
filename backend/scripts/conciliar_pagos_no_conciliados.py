@@ -10,6 +10,10 @@ Uso (desde la carpeta backend, con .env y DATABASE_URL):
 
 Opcional: limitar a IDs concretos:
   python scripts/conciliar_pagos_no_conciliados.py --execute --ids 61050,61053
+
+Pagos que sigan PENDIENTE tras ejecutar: la cascada no encontro saldo pendiente en
+cuotas (p. ej. sobrepago o duplicado). Resolver con revision operativa y aplicar-cuotas
+por pago; no usar replay FIFO de todo el prestamo (ver regla de producto: solo cascada).
 """
 from __future__ import annotations
 
