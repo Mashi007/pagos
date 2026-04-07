@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import type { ComponentType } from 'react'
 
 import {
@@ -925,7 +924,6 @@ export function FiniquitoRevisionDialog({
                           <TableHead className={thFin}>Monto</TableHead>
                           <TableHead className={thFin}>Fecha</TableHead>
                           <TableHead className={thFin}>Doc.</TableHead>
-                          <TableHead className={thFin}>Comprobante</TableHead>
                           <TableHead className={thFin}>Conc.</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -933,7 +931,7 @@ export function FiniquitoRevisionDialog({
                         {pagosItems.length === 0 ? (
                           <TableRow>
                             <TableCell
-                              colSpan={10}
+                              colSpan={9}
                               className={cn(
                                 tdFin,
                                 'text-center text-slate-500'
@@ -990,40 +988,6 @@ export function FiniquitoRevisionDialog({
                               </TableCell>
                               <TableCell className={tdFin}>
                                 {String(p.numero_documento ?? '')}
-                              </TableCell>
-                              <TableCell className={tdFin}>
-                                {(() => {
-                                  const rid = p.pago_reportado_id
-                                  const idNum =
-                                    rid != null && rid !== ''
-                                      ? Number(rid)
-                                      : NaN
-                                  if (
-                                    Number.isFinite(idNum) &&
-                                    !Number.isNaN(idNum)
-                                  ) {
-                                    return (
-                                      <Link
-                                        to={`/cobros/pagos-reportados/${idNum}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 font-semibold text-[#1e3a5f] underline-offset-2 hover:underline"
-                                        title="Abrir detalle en Pagos reportados (imagen / comprobante)"
-                                      >
-                                        <FileText
-                                          className="h-3.5 w-3.5 shrink-0"
-                                          aria-hidden
-                                        />
-                                        Ver
-                                      </Link>
-                                    )
-                                  }
-                                  return (
-                                    <span className="text-slate-500">
-                                      No disponible
-                                    </span>
-                                  )
-                                })()}
                               </TableCell>
                               <TableCell className={tdFin}>
                                 {p.conciliado ? 'Sí' : 'No'}
