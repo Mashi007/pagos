@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { useQueryClient } from '@tanstack/react-query'
+
 import {
   Bell,
   CheckCircle2,
@@ -60,6 +62,7 @@ import {
 import { prestamoService } from '../services/prestamoService'
 
 import { cn, formatDate } from '../utils'
+import { invalidatePrestamosQueries } from '../hooks/usePrestamos'
 import { usePermissions } from '../hooks/usePermissions'
 import { Card, CardContent } from '../components/ui/card'
 
@@ -199,6 +202,8 @@ function FiniquitoTablaScrollHint({
 }
 
 function FiniquitoGestionPageInner() {
+  const queryClient = useQueryClient()
+
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaBusqueda, setCedulaBusqueda] = useState('')
   const [cedulaTrabajoInput, setCedulaTrabajoInput] = useState('')
@@ -345,6 +350,7 @@ function FiniquitoGestionPageInner() {
       const r = await finiquitoAdminRefreshMaterializado()
       const { titulo, descripcion } = textoToastRefresco(r)
       toast.success(titulo, { description: descripcion })
+      void invalidatePrestamosQueries(queryClient)
       await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al refrescar')
@@ -387,6 +393,7 @@ function FiniquitoGestionPageInner() {
       } else {
         toast.success('Estado actualizado')
       }
+      void invalidatePrestamosQueries(queryClient)
       await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
@@ -436,6 +443,7 @@ function FiniquitoGestionPageInner() {
       if (r.caso) {
         incorporarCasoActualizado(r.caso)
       }
+      void invalidatePrestamosQueries(queryClient)
       await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
@@ -472,6 +480,7 @@ function FiniquitoGestionPageInner() {
       if (r.caso) {
         incorporarCasoActualizado(r.caso)
       }
+      void invalidatePrestamosQueries(queryClient)
       await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')

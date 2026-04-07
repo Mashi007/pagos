@@ -39,6 +39,13 @@ export const prestamoKeys = {
     [...prestamoKeys.all, 'auditoria', prestamoId] as const,
 }
 
+type PrestamoQueryClient = ReturnType<typeof useQueryClient>
+
+/** Lista, detalle, KPIs y búsquedas: invalidar tras cambios en BD (p. ej. fase finiquito). */
+export function invalidatePrestamosQueries(queryClient: PrestamoQueryClient) {
+  return queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+}
+
 // Tipo para filtros de préstamos
 
 export interface PrestamoFilters {

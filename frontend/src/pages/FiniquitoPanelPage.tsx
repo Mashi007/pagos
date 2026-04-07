@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { Link, useNavigate } from 'react-router-dom'
 
+import { useQueryClient } from '@tanstack/react-query'
+
 import {
   Eye,
   CheckCircle2,
@@ -41,6 +43,8 @@ import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 
 import { formatDate } from '../utils'
 
+import { invalidatePrestamosQueries } from '../hooks/usePrestamos'
+
 function textoUltimoPago(iso: string | null | undefined): string {
   if (iso == null || String(iso).trim() === '') return '-'
   try {
@@ -68,6 +72,8 @@ function etiquetaEstadoFiniquito(estado: string) {
 }
 
 export function FiniquitoPanelPage() {
+  const queryClient = useQueryClient()
+
   const navigate = useNavigate()
   const [items, setItems] = useState<FiniquitoCasoItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,6 +130,7 @@ export function FiniquitoPanelPage() {
         return
       }
       toast.success('Caso aceptado (desk).')
+      void invalidatePrestamosQueries(queryClient)
       cargar()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
@@ -138,6 +145,7 @@ export function FiniquitoPanelPage() {
         return
       }
       toast.success('Caso rechazado; solo un administrador puede revertirlo.')
+      void invalidatePrestamosQueries(queryClient)
       cargar()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
