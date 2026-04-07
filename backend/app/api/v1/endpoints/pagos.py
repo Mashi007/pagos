@@ -109,6 +109,10 @@ from app.services.cuota_pago_integridad import (
     pago_tiene_aplicaciones_cuotas,
     validar_suma_aplicada_vs_monto_pago,
 )
+from app.services.pagos_cuotas_reaplicacion import (
+    prestamo_requiere_correccion_cascada,
+    reset_y_reaplicar_cascada_prestamo,
+)
 from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquidado
 
 
@@ -5964,6 +5968,34 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
         n = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
 
+        reaplicacion_completa = False
+
+        detalle_reaplicacion: Optional[dict] = None
+
+        if n == 0 and prestamo_requiere_correccion_cascada(db, prestamo_id):
+
+            detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(db, prestamo_id)
+
+            reaplicacion_completa = True
+
+            if not detalle_reaplicacion.get("ok"):
+
+                raise HTTPException(
+
+                    status_code=400,
+
+                    detail=str(
+
+                        detalle_reaplicacion.get("error")
+
+                        or "No se pudo reconstruir la cascada de cuotas."
+
+                    ),
+
+                )
+
+            n = int(detalle_reaplicacion.get("pagos_reaplicados") or 0)
+
         db.commit()
 
     except HTTPException:
@@ -5994,27 +6026,53 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
         ) from e
 
+    if n > 0:
+
+        if reaplicacion_completa:
+
+            mensaje = (
+
+                f"Amortización recalculada: se reinició la aplicación a cuotas y "
+
+                f"{n} pago(s) quedaron distribuidos (cascada)."
+
+            )
+
+        else:
+
+            mensaje = f"Cascada aplicada: {n} pago(s) con abono efectivo en cuotas."
+
+    elif reaplicacion_completa:
+
+        mensaje = (
+
+            "Tabla de amortización reiniciada; no había pagos elegibles para volver a aplicar "
+
+            "(conciliado / verificado / PAGADO, monto > 0). Revise la conciliación de los pagos."
+
+        )
+
+    else:
+
+        mensaje = (
+
+            "No se aplicó ningún pago nuevo (sin filas pendientes en cuota_pagos, "
+
+            "montos en cero o pagos no elegibles para reaplicación)."
+
+        )
+
     return {
 
         "prestamo_id": prestamo_id,
 
         "pagos_con_aplicacion": n,
 
-        "mensaje": (
+        "reaplicacion_completa": reaplicacion_completa,
 
-            f"Cascada aplicada: {n} pago(s) con abono efectivo en cuotas."
+        "detalle_reaplicacion": detalle_reaplicacion,
 
-            if n
-
-            else (
-
-                "No se aplicó ningún pago nuevo (sin filas pendientes en cuota_pagos, "
-
-                "montos en cero o pagos no elegibles para reaplicación)."
-
-            )
-
-        ),
+        "mensaje": mensaje,
 
     }
 
