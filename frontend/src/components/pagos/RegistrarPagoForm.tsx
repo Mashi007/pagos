@@ -63,6 +63,8 @@ import {
   pareceCedulaEnCampoDocumento,
 } from '../../utils/pagoExcelValidation'
 
+import { hoyYmdCaracas } from '../../utils/fechaZona'
+
 const DUPLICADO_DOCUMENTO_UI =
   'Este comprobante ya fue registrado. Verifique el numero_documento.'
 
@@ -215,6 +217,12 @@ export function RegistrarPagoForm({
     prestamoContextoRevisionManual,
   ])
 
+  const exigeComprobantePorFechaCaracas = useMemo(() => {
+    const fp = (formData.fecha_pago || '').trim()
+    if (!fp) return false
+    return fp === hoyYmdCaracas()
+  }, [formData.fecha_pago])
+
   useEffect(() => {
     let cancelled = false
 
@@ -305,6 +313,8 @@ export function RegistrarPagoForm({
 
     const newErrors: Record<string, string> = {}
 
+    const hoyCaracas = hoyYmdCaracas()
+
     if (!formData.cedula_cliente) {
       newErrors.cedula_cliente = 'Cédula requerida'
     }
@@ -373,9 +383,27 @@ export function RegistrarPagoForm({
       newErrors.numero_documento = `El número de documento no puede superar ${NUMERO_DOCUMENTO_MAX_LEN} caracteres.`
     }
 
+    // CRITERIO 4: Validación de fecha (Caracas; antes del comprobante para no exigir URL en fechas inválidas)
+
+    if (!formData.fecha_pago) {
+      newErrors.fecha_pago = 'Fecha de pago requerida'
+    } else if (formData.fecha_pago > hoyCaracas) {
+      newErrors.fecha_pago =
+        'La fecha de pago no puede ser posterior a hoy (America/Caracas).'
+    }
+
     const linkComprobanteTrim = (formData.link_comprobante || '').trim()
 
-    if (requiereLinkComprobante && !linkComprobanteTrim) {
+    const fechaPagoPermitida =
+      !!formData.fecha_pago && formData.fecha_pago <= hoyCaracas
+
+    const exigeComprobantePorFecha =
+      fechaPagoPermitida && formData.fecha_pago >= hoyCaracas
+
+    if (exigeComprobantePorFecha && !linkComprobanteTrim) {
+      newErrors.link_comprobante =
+        'Para fecha de pago desde hoy (America/Caracas) debe indicar el enlace al comprobante (imagen o PDF).'
+    } else if (requiereLinkComprobante && !linkComprobanteTrim) {
       newErrors.link_comprobante =
         'Enlace al comprobante (imagen o PDF) requerido en revisión manual.'
     } else if (linkComprobanteTrim) {
@@ -387,22 +415,6 @@ export function RegistrarPagoForm({
         }
       } catch {
         newErrors.link_comprobante = 'URL de comprobante no válida.'
-      }
-    }
-
-    // CRITERIO 4: Validación de fecha
-
-    if (!formData.fecha_pago) {
-      newErrors.fecha_pago = 'Fecha de pago requerida'
-    } else {
-      const fechaPago = new Date(formData.fecha_pago)
-
-      const hoy = new Date()
-
-      hoy.setHours(23, 59, 59, 999) // Permitir hasta el final del día
-
-      if (fechaPago > hoy) {
-        newErrors.fecha_pago = 'La fecha de pago no puede ser futura'
       }
     }
 
@@ -822,7 +834,7 @@ export function RegistrarPagoForm({
                       setFormData({ ...formData, fecha_pago: e.target.value })
                     }
                     className={`pl-10 ${errors.fecha_pago ? 'border-red-500' : ''}`}
-                    max={new Date().toISOString().split('T')[0]} // No permitir fechas futuras
+                    max={hoyYmdCaracas()}
                   />
                 </div>
 
@@ -1022,11 +1034,11 @@ export function RegistrarPagoForm({
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
                 Comprobante (URL){' '}
-                {requiereLinkComprobante ? (
+                {requiereLinkComprobante || exigeComprobantePorFechaCaracas ? (
                   <span className="text-red-500">*</span>
                 ) : (
                   <span className="text-xs font-normal text-gray-500">
-                    (opcional)
+                    (opcional si la fecha es anterior a hoy en Caracas)
                   </span>
                 )}
               </label>
@@ -1053,6 +1065,13 @@ export function RegistrarPagoForm({
               {errors.link_comprobante && (
                 <p className="text-sm text-red-600">
                   {errors.link_comprobante}
+                </p>
+              )}
+
+              {exigeComprobantePorFechaCaracas && (
+                <p className="text-xs text-amber-800">
+                  Obligatorio: la fecha de pago es hoy (America/Caracas).
+                  Adjunte enlace al comprobante (imagen o PDF).
                 </p>
               )}
 

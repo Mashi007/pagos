@@ -46,6 +46,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
+def _solicitud_reapertura_estado_pendiente_sql(column):
+    """
+    Comparación robusta del estado de la solicitud (trim + minúsculas).
+    Evita que filas con 'PENDIENTE' u otros matices queden fuera del listado admin.
+    """
+    return func.lower(func.trim(func.coalesce(column, ""))) == "pendiente"
+
+
 def _usuario_rol_elevado_revision_manual(current_user: Any) -> bool:
     """
     Admin u operario: pueden editar mientras la revisión NO está cerrada (pendiente / revisando / en_espera).
@@ -1760,7 +1768,7 @@ def solicitar_reapertura_revision_manual(
     existente = db.execute(
         select(RevisionManualSolicitudReapertura).where(
             RevisionManualSolicitudReapertura.prestamo_id == prestamo_id,
-            RevisionManualSolicitudReapertura.estado == "pendiente",
+            _solicitud_reapertura_estado_pendiente_sql(RevisionManualSolicitudReapertura.estado),
         )
     ).scalars().first()
     if existente:
@@ -1838,7 +1846,7 @@ def listar_solicitudes_reapertura_pendientes(
         )
         .join(Prestamo, Prestamo.id == RevisionManualSolicitudReapertura.prestamo_id)
         .outerjoin(SolUser, SolUser.id == RevisionManualSolicitudReapertura.solicitante_usuario_id)
-        .where(RevisionManualSolicitudReapertura.estado == "pendiente")
+        .where(_solicitud_reapertura_estado_pendiente_sql(RevisionManualSolicitudReapertura.estado))
         .order_by(RevisionManualSolicitudReapertura.creado_en.desc())
     ).all()
 

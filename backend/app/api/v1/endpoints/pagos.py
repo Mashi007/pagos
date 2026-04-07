@@ -87,7 +87,13 @@ from app.models.datos_importados_conerrores import DatosImportadosConErrores
 
 from app.models.cedula_reportar_bs import CedulaReportarBs
 
-from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
+from app.schemas.pago import (
+    PagoCreate,
+    PagoUpdate,
+    PagoResponse,
+    fecha_pago_requiere_link_comprobante_caracas,
+    normalizar_link_comprobante,
+)
 
 from app.schemas.auth import UserResponse
 
@@ -5823,6 +5829,39 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         else:
 
             setattr(row, k, v)
+
+    # Comprobante obligatorio si la fecha de pago (calendario) es hoy o posterior en Caracas.
+    _fp_comprobante = row.fecha_pago
+
+    if isinstance(_fp_comprobante, datetime):
+
+        _d_comprobante = _fp_comprobante.date()
+
+    elif isinstance(_fp_comprobante, date):
+
+        _d_comprobante = _fp_comprobante
+
+    else:
+
+        _d_comprobante = None
+
+    if _d_comprobante is not None and fecha_pago_requiere_link_comprobante_caracas(_d_comprobante):
+
+        if not normalizar_link_comprobante(getattr(row, "link_comprobante", None)):
+
+            raise HTTPException(
+
+                status_code=400,
+
+                detail=(
+
+                    "Para fecha de pago igual o posterior a hoy (America/Caracas) debe indicar "
+
+                    "el enlace al comprobante (imagen o PDF)."
+
+                ),
+
+            )
 
     fp_row = row.fecha_pago
 

@@ -403,9 +403,40 @@ class RevisionManualService {
       creado_en: string
     }>
   > {
-    return await apiClient.get(
+    const raw: unknown = await apiClient.get(
       `${this.baseUrl}/autorizaciones-reapertura/pendientes`
     )
+    if (Array.isArray(raw)) {
+      return raw as Array<{
+        id: number
+        prestamo_id: number
+        cedula: string
+        nombres_cliente: string
+        solicitante_nombre: string
+        solicitante_apellido: string
+        solicitante_email: string | null
+        mensaje: string | null
+        creado_en: string
+      }>
+    }
+    if (
+      raw != null &&
+      typeof raw === 'object' &&
+      Array.isArray((raw as { items?: unknown }).items)
+    ) {
+      return (raw as { items: unknown[] }).items as Array<{
+        id: number
+        prestamo_id: number
+        cedula: string
+        nombres_cliente: string
+        solicitante_nombre: string
+        solicitante_apellido: string
+        solicitante_email: string | null
+        mensaje: string | null
+        creado_en: string
+      }>
+    }
+    return []
   }
 
   async aprobarSolicitudReapertura(

@@ -156,7 +156,10 @@ export function DashboardAnalisis() {
 
         variacion_mes_anterior: number
 
-        creditos_nuevos_mes: number
+        pagos_conciliados_hoy: {
+          valor_actual: number
+          variacion_porcentual?: number
+        }
 
         total_clientes: number
 

@@ -32,7 +32,7 @@ interface KPIsPrincipalesData {
     financiamiento_total?: number
   }
 
-  creditos_nuevos_mes: {
+  pagos_conciliados_hoy: {
     valor_actual: number
 
     valor_mes_anterior: number
@@ -110,7 +110,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
   if (
     !kpisData ||
     !kpisData.total_prestamos ||
-    !kpisData.creditos_nuevos_mes ||
+    !kpisData.pagos_conciliados_hoy ||
     !kpisData.total_clientes ||
     !kpisData.total_morosidad_usd
   ) {
@@ -141,12 +141,12 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
       />
 
       <KpiCard
-        title="Créditos Nuevos en el Mes"
-        value={kpisData.creditos_nuevos_mes?.valor_actual ?? 0}
+        title="Pagos conciliados (hoy)"
+        value={kpisData.pagos_conciliados_hoy?.valor_actual ?? 0}
         variationPercent={
-          kpisData.creditos_nuevos_mes?.variacion_porcentual ?? 0
+          kpisData.pagos_conciliados_hoy?.variacion_porcentual ?? 0
         }
-        variationAbs={kpisData.creditos_nuevos_mes?.variacion_absoluta ?? 0}
+        variationAbs={kpisData.pagos_conciliados_hoy?.variacion_absoluta ?? 0}
         color="green"
         icon={TrendingUp}
         formatValue={v =>

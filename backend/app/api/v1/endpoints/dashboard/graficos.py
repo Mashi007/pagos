@@ -11,14 +11,16 @@ Para vistas explicitamente por mes de aprobacion use la variante
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import Float, and_, case, cast, distinct, exists, extract, func, literal, literal_column, or_, select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import Date, Float, and_, case, cast, distinct, exists, extract, func, literal, literal_column, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.core.database import get_db, SessionLocal
 from app.core.deps import get_current_user
 from app.models.cliente import Cliente
+from app.models.envio_notificacion import EnvioNotificacion
 from app.models.cuota import Cuota
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.pago import Pago
@@ -28,7 +30,11 @@ from app.models.tasa_cambio_diaria import TasaCambioDiaria
 from app.services.prestamos.prestamo_fecha_referencia_query import (
     prestamo_fecha_referencia_negocio,
 )
-from app.services.cuota_estado import SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO
+from app.services.cuota_estado import (
+    SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO,
+    TZ_NEGOCIO,
+    hoy_negocio,
+)
 
 from .utils import (
     _CACHE_COBRANZAS_SEMANALES,
@@ -1238,6 +1244,103 @@ def get_cuentas_cobrar_tendencias(
 ):
     """Tendencias cuentas por cobrar desde BD."""
     return {"tendencias": []}
+
+
+# Tipo(s) de pestaña permitidos para la tendencia diaria (ampliar cuando se agreguen más series en UI).
+TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA = frozenset({"dias_1_retraso"})
+
+
+def _compute_notificaciones_envios_por_dia(db: Session, tipo_tab: str, dias: int) -> dict:
+    """
+    Cuenta envíos registrados en envios_notificacion por día calendario (America/Caracas).
+    dias_1_retraso = notificaciones «día siguiente al vencimiento» en la UI.
+    """
+    try:
+        dias_ef = min(366, max(7, int(dias)))
+        hoy_c = hoy_negocio()
+        inicio = hoy_c - timedelta(days=dias_ef - 1)
+        nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+        z = ZoneInfo(TZ_NEGOCIO)
+        start_local = datetime.combine(inicio, datetime.min.time(), tzinfo=z)
+        start_utc_naive = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+
+        bind = db.get_bind()
+        dialect = bind.dialect.name if bind is not None else "postgresql"
+        fe = EnvioNotificacion.fecha_envio
+        if dialect == "postgresql":
+            dia_expr = cast(
+                func.timezone("America/Caracas", func.timezone("UTC", fe)),
+                Date,
+            )
+        else:
+            dia_expr = cast(fe, Date)
+
+        enviados_sum = func.coalesce(
+            func.sum(case((EnvioNotificacion.exito.is_(True), 1), else_=0)),
+            0,
+        )
+        fallidos_sum = func.coalesce(
+            func.sum(case((EnvioNotificacion.exito.is_(False), 1), else_=0)),
+            0,
+        )
+        stmt = (
+            select(
+                dia_expr.label("dia"),
+                enviados_sum.label("enviados"),
+                fallidos_sum.label("fallidos"),
+            )
+            .where(
+                EnvioNotificacion.tipo_tab == tipo_tab,
+                EnvioNotificacion.fecha_envio >= start_utc_naive,
+            )
+            .group_by(dia_expr)
+            .order_by(dia_expr)
+        )
+        rows = db.execute(stmt).all()
+        counts: dict[date, tuple[int, int]] = {}
+        for row in rows:
+            d = row.dia
+            if isinstance(d, datetime):
+                d = d.date()
+            if not isinstance(d, date):
+                continue
+            counts[d] = (int(row.enviados or 0), int(row.fallidos or 0))
+
+        serie = []
+        d = inicio
+        while d <= hoy_c:
+            ev, fa = counts.get(d, (0, 0))
+            serie.append(
+                {
+                    "fecha": d.isoformat(),
+                    "dia": f"{d.day} {nombres_mes[d.month - 1]}",
+                    "enviados": ev,
+                    "fallidos": fa,
+                }
+            )
+            d += timedelta(days=1)
+        return {"tipo_tab": tipo_tab, "serie": serie}
+    except Exception as e:
+        logger.exception("Error en notificaciones-envios-por-dia: %s", e)
+        return {"tipo_tab": tipo_tab, "serie": []}
+
+
+@router.get("/notificaciones-envios-por-dia")
+def get_notificaciones_envios_por_dia(
+    tipo_tab: str = Query(
+        "dias_1_retraso",
+        description="tipo_tab en envíos. Por ahora solo dias_1_retraso (día siguiente al vencimiento).",
+    ),
+    dias: int = Query(90, ge=7, le=366),
+    db: Session = Depends(get_db),
+):
+    """Tendencia diaria de envíos de notificación (éxito / fallo) desde envios_notificacion."""
+    if tipo_tab not in TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA:
+        raise HTTPException(
+            status_code=400,
+            detail=f"tipo_tab debe ser uno de: {', '.join(sorted(TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA))}",
+        )
+    return _compute_notificaciones_envios_por_dia(db, tipo_tab, dias)
 
 
 @router.get("/distribucion-prestamos", summary="[Stub] Devuelve distribucion vacía hasta tener datos.")

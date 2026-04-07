@@ -149,11 +149,10 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     setShowUserMenu(false)
   }
 
+  /** Un solo submenú abierto a la vez: al abrir uno se cierran los demás. */
   const toggleSubmenu = (title: string) => {
     setOpenSubmenus(prev =>
-      prev.includes(title)
-        ? prev.filter(item => item !== title)
-        : [...prev, title]
+      prev.includes(title) ? prev.filter(item => item !== title) : [title]
     )
   }
 
@@ -416,58 +415,77 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     .filter((x): x is MenuItem => x !== null)
 
   const menuItemsWithBadges = useMemo(() => {
-    const n = counts.autorizacionesRevisionManual ?? 0
-    const badge = n > 0 ? (n > 99 ? '99+' : String(n)) : undefined
+    const nAuth = counts.autorizacionesRevisionManual ?? 0
+    const nUnread = counts.notificacionesNoLeidas ?? 0
+    const reaperturaBadge =
+      nAuth > 0 ? (nAuth > 99 ? '99+' : String(nAuth)) : undefined
+    const notificacionesParentTotal = nUnread + nAuth
+    const notificacionesParentBadge =
+      notificacionesParentTotal > 0
+        ? notificacionesParentTotal > 99
+          ? '99+'
+          : String(notificacionesParentTotal)
+        : undefined
     return filteredMenuItems.map(item => {
       if (!item.isSubmenu || !item.children) return item
       const children = item.children.map(ch => {
         if (ch.href === '/administracion/autorizaciones-revision-manual') {
-          return badge ? { ...ch, badge } : ch
+          return reaperturaBadge ? { ...ch, badge: reaperturaBadge } : ch
         }
         return ch
       })
+      if (item.title === 'Notificaciones' && notificacionesParentBadge) {
+        return {
+          ...item,
+          children,
+          badge: notificacionesParentBadge,
+        }
+      }
       return { ...item, children }
     })
-  }, [filteredMenuItems, counts.autorizacionesRevisionManual])
+  }, [
+    filteredMenuItems,
+    counts.autorizacionesRevisionManual,
+    counts.notificacionesNoLeidas,
+  ])
 
-  // Abrir automáticamente el submenú si alguna de sus rutas está activa
+  // Sincronizar submenús con la ruta: solo el (los) que contienen la ruta activa; al cambiar de sección se repliegan el resto.
 
   useEffect(() => {
     const pathname = location.pathname
+    const search = location.search
+
+    const titlesWithActiveChild: string[] = []
 
     filteredMenuItems.forEach(item => {
-      if (item.isSubmenu && item.children) {
-        const visibleChildren = item.children
+      if (!item.isSubmenu || !item.children) return
 
-        const hasActiveChild = visibleChildren.some(child => {
-          if (!child.href) return false
+      const visibleChildren = item.children
 
-          if (child.href.includes('?')) {
-            return `${pathname}${location.search}` === child.href
-          }
+      const hasActiveChild = visibleChildren.some(child => {
+        if (!child.href) return false
 
-          const pathOnly = child.href.split('?')[0] || child.href
-          if (child.exactHref) {
-            return pathname === pathOnly
-          }
-
-          return (
-            pathname === child.href ||
-            (pathname.startsWith(child.href) && child.href !== '/')
-          )
-        })
-
-        if (hasActiveChild) {
-          setOpenSubmenus(prev => {
-            if (!prev.includes(item.title)) {
-              return [...prev, item.title]
-            }
-
-            return prev
-          })
+        if (child.href.includes('?')) {
+          return `${pathname}${search}` === child.href
         }
+
+        const pathOnly = child.href.split('?')[0] || child.href
+        if (child.exactHref) {
+          return pathname === pathOnly
+        }
+
+        return (
+          pathname === child.href ||
+          (pathname.startsWith(child.href) && child.href !== '/')
+        )
+      })
+
+      if (hasActiveChild) {
+        titlesWithActiveChild.push(item.title)
       }
     })
+
+    setOpenSubmenus(titlesWithActiveChild)
   }, [location.pathname, location.search, user?.rol])
 
   // Cerrar drawer en móvil con Escape (no afecta desktop ni rutas)
@@ -823,26 +841,44 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
                           isCompact ? 'justify-center px-2 py-2' : 'px-3 py-2'
                         )}
-                        title={isCompact ? item.title : undefined}
+                        title={
+                          isCompact
+                            ? item.badge
+                              ? `${item.title} (${item.badge})`
+                              : item.title
+                            : undefined
+                        }
                         aria-expanded={openSubmenus.includes(item.title)}
                       >
                         <div
                           className={cn(
-                            'flex items-center',
+                            'flex min-w-0 flex-1 items-center',
 
                             isCompact ? 'justify-center' : 'space-x-3'
                           )}
                         >
-                          <item.icon className="h-5 w-5" />
+                          <item.icon className="h-5 w-5 shrink-0" />
 
-                          {!isCompact && <span>{item.title}</span>}
+                          {!isCompact && (
+                            <>
+                              <span className="truncate">{item.title}</span>
+                              {item.badge ? (
+                                <Badge
+                                  variant="destructive"
+                                  className="ml-1 flex h-5 min-w-[20px] shrink-0 items-center justify-center px-1.5 text-xs"
+                                >
+                                  {item.badge}
+                                </Badge>
+                              ) : null}
+                            </>
+                          )}
                         </div>
 
                         {!isCompact &&
                           (openSubmenus.includes(item.title) ? (
-                            <ChevronDown className="h-4 w-4" />
+                            <ChevronDown className="h-4 w-4 shrink-0" />
                           ) : (
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-4 w-4 shrink-0" />
                           ))}
                       </button>
 

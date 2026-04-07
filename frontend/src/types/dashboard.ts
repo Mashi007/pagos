@@ -32,7 +32,8 @@ export interface KpiPrestamosMensual extends KpiValor {
 export interface KpisPrincipalesResponse {
   total_prestamos: KpiPrestamosMensual
 
-  creditos_nuevos_mes: KpiValor
+  /** Pagos con conciliado=true y fecha_conciliacion en el día actual (Caracas). */
+  pagos_conciliados_hoy: KpiValor
 
   total_clientes: KpiValor
 
@@ -46,9 +47,11 @@ export interface KpisPrincipalesResponse {
 
   total_morosidad_usd: KpiValor
 
-  cuotas_programadas?: { valor_actual: number }
+  /** Suma monto de cuotas con fecha_vencimiento = hoy (Caracas). */
+  pagos_programados_hoy: KpiValor
 
-  porcentaje_cuotas_pagadas?: number
+  /** % de cuotas con vencimiento hoy que ya tienen fecha_pago. */
+  porcentaje_cuotas_pagadas_hoy?: number
 }
 
 export interface OpcionesFiltrosResponse {
@@ -248,4 +251,21 @@ export interface RecibosPagosMensualUsdResponse {
   estadistica: RecibosPagosMensualUsdEstadistica
 
   origen: 'demo' | 'bd'
+}
+
+/** GET /api/v1/dashboard/notificaciones-envios-por-dia */
+export interface NotificacionesEnviosPorDiaItem {
+  fecha: string
+
+  dia: string
+
+  enviados: number
+
+  fallidos: number
+}
+
+export interface NotificacionesEnviosPorDiaResponse {
+  tipo_tab: string
+
+  serie: NotificacionesEnviosPorDiaItem[]
 }

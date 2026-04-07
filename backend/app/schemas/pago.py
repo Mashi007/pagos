@@ -4,8 +4,12 @@ Schemas Pydantic para Pago (registro de pagos). Alineados con el frontend.
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
+# Misma zona que `TZ_NEGOCIO` en endpoints de pagos (fecha calendario del negocio).
+TZ_PAGO_CARACAS = "America/Caracas"
 
 # Límite de INTEGER en PostgreSQL (evita 500 cuando se envía número de documento como prestamo_id)
 PRESTAMO_ID_MAX = 2147483647
@@ -21,6 +25,12 @@ def normalizar_link_comprobante(v: Any) -> Optional[str]:
     if not s.startswith(("http://", "https://")):
         s = "https://drive.google.com/file/d/" + s + "/view"
     return s
+
+
+def fecha_pago_requiere_link_comprobante_caracas(fecha_pago: date) -> bool:
+    """True si la fecha de pago (solo calendario) es hoy o posterior en America/Caracas."""
+    hoy = datetime.now(ZoneInfo(TZ_PAGO_CARACAS)).date()
+    return fecha_pago >= hoy
 
 
 class PagoCreate(BaseModel):
@@ -73,6 +83,22 @@ class PagoCreate(BaseModel):
         if v is None or v == "":
             return "USD"
         return str(v).strip().upper()
+
+    @model_validator(mode="after")
+    def link_comprobante_obligatorio_si_fecha_desde_hoy_caracas(self) -> "PagoCreate":
+        fp = self.fecha_pago
+        if isinstance(fp, datetime):
+            fp = fp.date()
+        if not isinstance(fp, date):
+            return self
+        if fecha_pago_requiere_link_comprobante_caracas(fp):
+            if not normalizar_link_comprobante(self.link_comprobante):
+                raise ValueError(
+                    "Para fecha de pago igual o posterior a hoy (America/Caracas) debe indicar "
+                    "el enlace al comprobante (imagen o PDF)."
+                )
+        return self
+
 
 class PagoUpdate(BaseModel):
     cedula_cliente: Optional[str] = None
