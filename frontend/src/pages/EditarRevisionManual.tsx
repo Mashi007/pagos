@@ -543,6 +543,29 @@ export function EditarRevisionManual() {
     return Object.keys(e).length === 0
   }
 
+  /**
+   * Tras cualquier persistencia en revisión manual: invalida cachés que leen las mismas tablas
+   * de BD (pagos, cuotas, préstamos, clientes, revisión, mora, KPIs) para alinear listados y reportes.
+   */
+  const refrescarOrigenDatosTrasRevisionManual = useCallback(
+    async (opts?: { skipRevisionEditar?: boolean }) => {
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+        skipNotificacionesMora: true,
+        includeDashboardMenu: true,
+        skipRevisionEditar: opts?.skipRevisionEditar,
+      })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['clientes'], exact: false }),
+        queryClient.invalidateQueries({
+          queryKey: ['clientes-stats'],
+          exact: false,
+        }),
+      ])
+      await invalidateListasNotificacionesMora(queryClient)
+    },
+    [queryClient]
+  )
+
   const {
     data: detalleData,
     isLoading,
@@ -583,7 +606,9 @@ export function EditarRevisionManual() {
       if (estRev === 'pendiente') {
         await revisionManualService.iniciarRevision(pid)
         data = await revisionManualService.getDetallePrestamoRevision(pid)
-        void invalidateListasNotificacionesMora(queryClient)
+        void refrescarOrigenDatosTrasRevisionManual({
+          skipRevisionEditar: true,
+        })
       }
 
       if (!formDirtyRef.current) {
@@ -679,18 +704,19 @@ export function EditarRevisionManual() {
   const soloLectura = estadoRevision === 'revisado' && !revisionManualFullEdit
 
   const refrescarTrasCambioPagosRevision = useCallback(async () => {
-    await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
-      skipNotificacionesMora: true,
-      includeDashboardMenu: true,
-    })
+    await refrescarOrigenDatosTrasRevisionManual()
     if (prestamoId) {
       await queryClient.refetchQueries({
         queryKey: ['revision-editar', prestamoId],
       })
     }
     void refetchPagosRealizados()
-    void invalidateListasNotificacionesMora(queryClient)
-  }, [queryClient, prestamoId, refetchPagosRealizados])
+  }, [
+    queryClient,
+    prestamoId,
+    refetchPagosRealizados,
+    refrescarOrigenDatosTrasRevisionManual,
+  ])
 
   const aplicarCascadaPagosMutation = useMutation({
     mutationFn: async () => {
@@ -950,10 +976,12 @@ export function EditarRevisionManual() {
         `Fecha guardada en el servidor y ${actualizadas} cuota(s) con vencimientos actualizados. Los cambios quedan en la base (estado de cuenta, amortización, etc.).`
       )
 
-      await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
-        skipNotificacionesMora: true,
-      })
-      void invalidateListasNotificacionesMora(queryClient)
+      await refrescarOrigenDatosTrasRevisionManual()
+      if (prestamoId) {
+        await queryClient.refetchQueries({
+          queryKey: ['revision-editar', prestamoId],
+        })
+      }
     } catch (err: any) {
       const msg =
         err?.response?.data?.detail ||
@@ -1307,27 +1335,7 @@ export function EditarRevisionManual() {
 
         setCambios({ cliente: false, prestamo: false, cuotas: false })
 
-        // Pagos, cuotas, préstamos, revisión manual y listas de mora (otras pestañas)
-
-        await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
-          skipNotificacionesMora: true,
-        })
-
-        queryClient.invalidateQueries({ queryKey: ['clientes'] })
-
-        queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
-
-        queryClient.invalidateQueries({
-          queryKey: ['kpis-principales-menu'],
-          exact: false,
-        })
-
-        queryClient.invalidateQueries({
-          queryKey: ['dashboard-menu'],
-          exact: false,
-        })
-
-        void invalidateListasNotificacionesMora(queryClient)
+        await refrescarOrigenDatosTrasRevisionManual()
 
         setTimeout(() => irAListaPrestamos(), 400)
       } else if (errorOccurred) {
@@ -1640,25 +1648,7 @@ export function EditarRevisionManual() {
 
         toast.success(res.mensaje)
 
-        await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
-          skipNotificacionesMora: true,
-        })
-
-        queryClient.invalidateQueries({ queryKey: ['clientes'] })
-
-        queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
-
-        queryClient.invalidateQueries({
-          queryKey: ['kpis-principales-menu'],
-          exact: false,
-        })
-
-        queryClient.invalidateQueries({
-          queryKey: ['dashboard-menu'],
-          exact: false,
-        })
-
-        void invalidateListasNotificacionesMora(queryClient)
+        await refrescarOrigenDatosTrasRevisionManual()
 
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
         setTimeout(() => irAListaPrestamos(), 1500)
@@ -1693,10 +1683,7 @@ export function EditarRevisionManual() {
       toast.success('Préstamo marcado como rechazado')
       setShowRechazarModal(false)
       setMotivoRechazo('')
-      await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
-        skipNotificacionesMora: true,
-      })
-      void invalidateListasNotificacionesMora(queryClient)
+      await refrescarOrigenDatosTrasRevisionManual()
       irAListaPrestamos()
     } catch (err: any) {
       const msg = err?.response?.data?.detail || 'Error al rechazar'
@@ -1719,15 +1706,7 @@ export function EditarRevisionManual() {
       if (!confirmar) return
     }
 
-    void invalidatePagosPrestamosRevisionYCuotas(queryClient, {
-      skipNotificacionesMora: true,
-    })
-
-    queryClient.invalidateQueries({ queryKey: ['clientes'] })
-
-    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
-
-    void invalidateListasNotificacionesMora(queryClient)
+    void refrescarOrigenDatosTrasRevisionManual()
 
     navigate('/revision-manual')
   }

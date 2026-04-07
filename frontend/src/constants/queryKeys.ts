@@ -95,6 +95,11 @@ export type InvalidatePagosRevisionOptions = {
   skipNotificacionesMora?: boolean
   /** KPIs/resumen menú y dashboard (misma idea que tras registrar pago en Pagos). */
   includeDashboardMenu?: boolean
+  /**
+   * No invalidar la query del detalle de edición en revisión manual (p. ej. dentro del queryFn
+   * que acaba de traer datos frescos; evita refetch duplicado del mismo GET).
+   */
+  skipRevisionEditar?: boolean
 }
 
 /**
@@ -108,6 +113,8 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
   const inv: Promise<unknown>[] = [
     queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false }),
     queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }),
+    /** Sidebar / DashboardPagos usan esta clave para GET /pagos/kpis sin filtros. */
+    queryClient.invalidateQueries({ queryKey: ['kpis-pagos'], exact: false }),
     queryClient.invalidateQueries({
       queryKey: ['pagos-ultimos'],
       exact: false,
@@ -124,16 +131,25 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
       queryKey: [CUOTAS_PRESTAMO_QUERY_PREFIX],
       exact: false,
     }),
+    /** Reportes / amortización masiva (clave plural distinta de `cuotas-prestamo`). */
+    queryClient.invalidateQueries({
+      queryKey: ['cuotas-prestamos'],
+      exact: false,
+    }),
     queryClient.invalidateQueries({ queryKey: ['prestamos'], exact: false }),
     queryClient.invalidateQueries({
       queryKey: [REVISION_MANUAL_PRESTAMOS_QUERY_PREFIX],
       exact: false,
     }),
-    queryClient.invalidateQueries({
-      queryKey: [REVISION_EDITAR_QUERY_PREFIX],
-      exact: false,
-    }),
   ]
+  if (!options?.skipRevisionEditar) {
+    inv.push(
+      queryClient.invalidateQueries({
+        queryKey: [REVISION_EDITAR_QUERY_PREFIX],
+        exact: false,
+      })
+    )
+  }
   if (options?.includeDashboardMenu) {
     inv.push(
       queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false }),
