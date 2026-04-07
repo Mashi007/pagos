@@ -59,6 +59,7 @@ import {
   validateExcelData,
   sanitizeFileName,
   normalizarNumeroDocumento,
+  NUMERO_DOCUMENTO_MAX_LEN,
   cedulaParaLookup,
   cedulaLookupParaFila,
   looksLikeDocumentNotCedula,
@@ -75,9 +76,6 @@ const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
 // Layout de columnas (primera fila Excel)
 
 const PRESTAMO_ID_MAX = 2147483647
-
-/** Alineado con backend `pagos.numero_documento` String(100). */
-const NUMERO_DOCUMENTO_MAX_LEN = 100
 
 /**
  * Sufijo admin carga masiva: _ + A|P + 4 digitos (mismo archivo vs otro prestamo en BD).

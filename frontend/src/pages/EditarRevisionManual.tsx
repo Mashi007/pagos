@@ -720,6 +720,28 @@ export function EditarRevisionManual() {
     onSuccess: async data => {
       toast.success(data.mensaje || 'Operación completada')
       await refrescarTrasCambioPagosRevision()
+      /**
+       * La cascada actualiza cuotas en BD. El queryFn del detalle no llama a setCuotasData
+       * si hay cambios locales sin guardar (formDirtyRef), y la tabla de cuotas quedaría desactualizada.
+       * Tras FIFO en servidor, alineamos siempre cuotas (y marcamos cuotas como no sucias).
+       */
+      if (prestamoId) {
+        const fresh = queryClient.getQueryData([
+          'revision-editar',
+          prestamoId,
+        ]) as { cuotas?: Partial<CuotaData>[] } | undefined
+        if (fresh != null && Array.isArray(fresh.cuotas)) {
+          setCuotasData(fresh.cuotas)
+          setCambios(prev => ({ ...prev, cuotas: false }))
+          const base = firmaCargaInicialRef.current
+          if (base) {
+            firmaCargaInicialRef.current = {
+              ...base,
+              cuotas: firmaSoloCuotas(fresh.cuotas),
+            }
+          }
+        }
+      }
     },
     onError: (err: unknown) => {
       const msg =

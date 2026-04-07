@@ -185,6 +185,9 @@ export function convertirFechaParaBackendPago(f: string): string {
 
 const LOOKS_LIKE_CEDULA = /^[VEJZ]\d{6,11}$/i
 
+/** Alineado con backend `pagos.numero_documento` String(100). */
+export const NUMERO_DOCUMENTO_MAX_LEN = 100
+
 export function cedulaParaLookup(val: unknown): string {
   if (val == null || val === '') return ''
 
@@ -349,6 +352,17 @@ export function normalizarNumeroDocumento(val: unknown): string {
   s = s.replace(/\s+/g, ' ').trim()
 
   return s
+}
+
+/**
+ * True si el valor parece cédula (V/E/J/Z + dígitos), no referencia bancaria.
+ * Misma idea que al parsear Excel: no usar el campo documento para la cédula.
+ */
+export function pareceCedulaEnCampoDocumento(val: unknown): boolean {
+  const s = normalizarNumeroDocumento(val)
+  if (!s) return false
+  const compact = s.replace(/-/g, '').replace(/\s+/g, '')
+  return LOOKS_LIKE_CEDULA.test(compact)
 }
 
 const MAX_MONTO = 999_999_999_999.99

@@ -40,6 +40,11 @@ import { useDebounce } from '../../hooks/useDebounce'
 
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 
+import {
+  opcionesBancoConValorActual,
+  SIN_ESPECIFICAR_VALUE,
+} from '../../constants/institucionesBancariasPagos'
+
 import { BASE_PATH } from '../../config/env'
 
 import { getTasaPorFecha } from '../../services/tasaCambioService'
@@ -51,6 +56,12 @@ import {
 } from '../../types/errors'
 
 import type { Prestamo } from '../../types'
+
+import {
+  normalizarNumeroDocumento,
+  NUMERO_DOCUMENTO_MAX_LEN,
+  pareceCedulaEnCampoDocumento,
+} from '../../utils/pagoExcelValidation'
 
 const DUPLICADO_DOCUMENTO_UI =
   'Este comprobante ya fue registrado. Verifique el numero_documento.'
@@ -161,6 +172,17 @@ export function RegistrarPagoForm({
   const { data: prestamoContextoRevisionManual } = usePrestamo(pidRevisionCtx)
 
   /** Incluye el préstamo cargado por ID si la lista por cédula aún no lo trae (evita placeholder "Seleccione el crédito" con valor 478). */
+  const opcionesBancoSelect = useMemo(
+    () => opcionesBancoConValorActual(formData.institucion_bancaria),
+    [formData.institucion_bancaria]
+  )
+
+  const bancoSelectValue = (() => {
+    const t = (formData.institucion_bancaria || '').trim()
+    if (!t) return SIN_ESPECIFICAR_VALUE
+    return t
+  })()
+
   const prestamosParaSelect = useMemo((): Prestamo[] => {
     const list = Array.isArray(prestamos) ? [...prestamos] : []
 
@@ -336,30 +358,19 @@ export function RegistrarPagoForm({
       newErrors.monto_pagado = 'Monto muy alto. Por favor verifique el valor'
     }
 
-    // CRITERIO 3: Validación y normalización de número de documento
+    // CRITERIO 3: Número de documento (misma lógica que carga masiva Excel)
 
-    // Normalizar formato científico si existe (ej: 7.40087E+14 -> 740087000000000)
+    const numeroDocumentoNormalizado = normalizarNumeroDocumento(
+      formData.numero_documento
+    )
 
-    let numeroDocumentoNormalizado = formData.numero_documento.trim()
-
-    if (numeroDocumentoNormalizado && /[eE]/.test(numeroDocumentoNormalizado)) {
-      try {
-        const numeroFloat = parseFloat(numeroDocumentoNormalizado)
-
-        numeroDocumentoNormalizado = Math.floor(numeroFloat).toString()
-
-        // Mostrar advertencia al usuario
-
-        console.warn(
-          `Numero de documento normalizado de formato científico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`
-        )
-      } catch (e) {
-        console.error('Error normalizando número de documento:', e)
-      }
-    }
-
-    if (!numeroDocumentoNormalizado || numeroDocumentoNormalizado === '') {
+    if (!numeroDocumentoNormalizado) {
       newErrors.numero_documento = 'Número de documento requerido'
+    } else if (pareceCedulaEnCampoDocumento(formData.numero_documento)) {
+      newErrors.numero_documento =
+        'No ingrese la cédula aquí. Use el campo de cédula del cliente; en documento va la referencia o comprobante del banco (regla alineada con carga masiva).'
+    } else if (numeroDocumentoNormalizado.length > NUMERO_DOCUMENTO_MAX_LEN) {
+      newErrors.numero_documento = `El número de documento no puede superar ${NUMERO_DOCUMENTO_MAX_LEN} caracteres.`
     }
 
     const linkComprobanteTrim = (formData.link_comprobante || '').trim()
@@ -932,20 +943,34 @@ export function RegistrarPagoForm({
               <label className="text-sm font-medium text-gray-700">Banco</label>
 
               <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+                <Building2 className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400" />
 
-                <Input
-                  type="text"
-                  value={formData.institucion_bancaria || ''}
-                  onChange={e =>
+                <Select
+                  value={bancoSelectValue}
+                  onValueChange={v =>
                     setFormData({
                       ...formData,
-                      institucion_bancaria: e.target.value || null,
+                      institucion_bancaria:
+                        v === SIN_ESPECIFICAR_VALUE ? null : v,
                     })
                   }
-                  className="pl-10"
-                  placeholder="Ej. BINANCE, BNC, Banesco, Banco de Venezuela"
-                />
+                >
+                  <SelectTrigger className="w-full pl-10">
+                    <SelectValue placeholder="Seleccione banco" />
+                  </SelectTrigger>
+
+                  <SelectContent className="max-h-[min(24rem,70vh)]">
+                    <SelectItem value={SIN_ESPECIFICAR_VALUE}>
+                      Sin especificar
+                    </SelectItem>
+
+                    {opcionesBancoSelect.map(b => (
+                      <SelectItem key={b} value={b}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -968,6 +993,16 @@ export function RegistrarPagoForm({
                       numero_documento: e.target.value,
                     })
                   }
+                  onBlur={() => {
+                    const n = normalizarNumeroDocumento(formData.numero_documento)
+                    const raw = String(formData.numero_documento ?? '').trim()
+                    if (n !== raw) {
+                      setFormData(prev => ({
+                        ...prev,
+                        numero_documento: n,
+                      }))
+                    }
+                  }}
                   className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
                   placeholder="Número de referencia"
                 />
