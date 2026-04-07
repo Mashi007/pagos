@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 
@@ -415,6 +415,21 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     })
     .filter((x): x is MenuItem => x !== null)
 
+  const menuItemsWithBadges = useMemo(() => {
+    const n = counts.autorizacionesRevisionManual ?? 0
+    const badge = n > 0 ? (n > 99 ? '99+' : String(n)) : undefined
+    return filteredMenuItems.map(item => {
+      if (!item.isSubmenu || !item.children) return item
+      const children = item.children.map(ch => {
+        if (ch.href === '/administracion/autorizaciones-revision-manual') {
+          return badge ? { ...ch, badge } : ch
+        }
+        return ch
+      })
+      return { ...item, children }
+    })
+  }, [filteredMenuItems, counts.autorizacionesRevisionManual])
+
   // Abrir automáticamente el submenú si alguna de sus rutas está activa
 
   useEffect(() => {
@@ -779,7 +794,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 isCompact ? 'px-2' : 'px-3'
               )}
             >
-              {filteredMenuItems.map((item, index) => (
+              {menuItemsWithBadges.map((item, index) => (
                 <motion.div
                   key={item.href || item.title}
                   variants={itemVariants}

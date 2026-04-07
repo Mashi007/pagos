@@ -107,6 +107,9 @@ class PagoService {
 
       /** activa (defecto en API): solo préstamo APROBADO o sin crédito. todos: incluye LIQUIDADO etc. */
       prestamo_cartera?: 'activa' | 'todos'
+
+      /** Agregados de pagos de este crédito (todas las páginas); no filtra el listado principal. */
+      resumen_prestamo_id?: number
     }
   ): Promise<{
     pagos: Pago[]
@@ -116,6 +119,16 @@ class PagoService {
     total_pages: number
     /** Presente solo si el listado se filtró por cédula: suma de monto_pagado de todos los registros que coinciden (no solo la página). */
     sum_monto_pagado_cedula?: number
+    /** Presente si se envió resumen_prestamo_id: totales en BD para ese préstamo (y cédula si aplica). */
+    resumen_prestamo?: {
+      prestamo_id: number
+      cantidad: number
+      suma_monto_pagado: number
+      cantidad_pendiente: number
+      suma_monto_pendiente: number
+      cantidad_pagado: number
+      suma_monto_estado_pagado: number
+    }
   }> {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -140,6 +153,14 @@ class PagoService {
       ...(filters?.prestamo_cartera === 'todos' && {
         prestamo_cartera: 'todos',
       }),
+
+      ...(filters?.resumen_prestamo_id != null &&
+        Number.isFinite(Number(filters.resumen_prestamo_id)) &&
+        Number(filters.resumen_prestamo_id) > 0 && {
+          resumen_prestamo_id: String(
+            Math.trunc(Number(filters.resumen_prestamo_id))
+          ),
+        }),
     })
 
     const url = `${this.baseUrl}?${params.toString()}`
@@ -151,6 +172,15 @@ class PagoService {
       per_page: number
       total_pages: number
       sum_monto_pagado_cedula?: number
+      resumen_prestamo?: {
+        prestamo_id: number
+        cantidad: number
+        suma_monto_pagado: number
+        cantidad_pendiente: number
+        suma_monto_pendiente: number
+        cantidad_pagado: number
+        suma_monto_estado_pagado: number
+      }
     }>(url)
   }
 

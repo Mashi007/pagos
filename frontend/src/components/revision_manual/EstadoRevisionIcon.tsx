@@ -131,6 +131,9 @@ export function EstadoRevisionIcon({
       )
       toast.success(res.mensaje || 'Solicitud registrada')
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+      queryClient.invalidateQueries({
+        queryKey: ['revision-manual-autorizaciones-reapertura'],
+      })
       void invalidateListasNotificacionesMora(queryClient)
       onStateChange?.()
     } catch (err: any) {

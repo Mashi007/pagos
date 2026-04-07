@@ -758,6 +758,16 @@ def listar_pagos(
         description="activa=solo pagos sin crédito o con préstamo APROBADO (oculta LIQUIDADO y otros). todos=sin filtrar por estado del préstamo.",
     ),
 
+    resumen_prestamo_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description=(
+            "Si se indica, la respuesta incluye resumen_prestamo: agregados de la tabla pagos "
+            "para ese prestamo_id (cantidad, suma de montos, pendiente vs PAGADO). Opcionalmente "
+            "cruzado con filtro cédula si viene en la misma petición. No altera el listado paginado."
+        ),
+    ),
+
     db: Session = Depends(get_db),
 
 ):
@@ -961,6 +971,65 @@ def listar_pagos(
             raw_sum = db.scalar(sum_q)
 
             out["sum_monto_pagado_cedula"] = float(raw_sum or 0)
+
+        # Resumen por crédito (sin filtrar el listado principal): auditoría revisión manual / coherencia con cuotas.
+        if resumen_prestamo_id is not None and isinstance(resumen_prestamo_id, int) and resumen_prestamo_id > 0:
+
+            pid = int(resumen_prestamo_id)
+
+            rp_conds = [Pago.prestamo_id == pid]
+
+            if cedula and cedula.strip():
+
+                rp_conds.append(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
+
+            rp_where = and_(*rp_conds)
+
+            n_all = db.scalar(select(func.count()).select_from(Pago).where(rp_where)) or 0
+
+            s_all = db.scalar(
+
+                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(rp_where)
+
+            ) or 0
+
+            pend_where = and_(rp_where, Pago.estado == "PENDIENTE")
+
+            n_pend = db.scalar(select(func.count()).select_from(Pago).where(pend_where)) or 0
+
+            s_pend = db.scalar(
+
+                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(pend_where)
+
+            ) or 0
+
+            pag_where = and_(rp_where, Pago.estado == "PAGADO")
+
+            n_pag = db.scalar(select(func.count()).select_from(Pago).where(pag_where)) or 0
+
+            s_pag = db.scalar(
+
+                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(pag_where)
+
+            ) or 0
+
+            out["resumen_prestamo"] = {
+
+                "prestamo_id": pid,
+
+                "cantidad": int(n_all),
+
+                "suma_monto_pagado": float(s_all or 0),
+
+                "cantidad_pendiente": int(n_pend),
+
+                "suma_monto_pendiente": float(s_pend or 0),
+
+                "cantidad_pagado": int(n_pag),
+
+                "suma_monto_estado_pagado": float(s_pag or 0),
+
+            }
 
         return out
 

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { apiClient } from '../services/api'
+import { revisionManualService } from '../services/revisionManualService'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { isAdminRole } from '../utils/rol'
 
@@ -10,6 +11,9 @@ interface SidebarCounts {
   cuotasEnMora: number
 
   notificacionesNoLeidas: number
+
+  /** Cola admin: solicitudes de reapertura de revisión manual (operario → admin). */
+  autorizacionesRevisionManual: number
 }
 
 /**
@@ -101,6 +105,19 @@ export function useSidebarCounts() {
       retry: 1,
     })
 
+  const { data: reaperturaPendientes, isLoading: loadingReaperturaRevision } =
+    useQuery({
+      queryKey: ['revision-manual-autorizaciones-reapertura'],
+      queryFn: () =>
+        revisionManualService.getAutorizacionesReaperturaPendientes(),
+      enabled: adminNotifications,
+      staleTime: 30 * 1000,
+      refetchOnWindowFocus: true,
+      refetchInterval: adminNotifications ? 2 * 60 * 1000 : false,
+      refetchIntervalInBackground: false,
+      retry: 1,
+    })
+
   // Calcular contadores desde los datos obtenidos
 
   const counts: SidebarCounts = {
@@ -111,9 +128,16 @@ export function useSidebarCounts() {
     notificacionesNoLeidas: adminNotifications
       ? notificacionesData?.no_leidas || 0
       : 0,
+
+    autorizacionesRevisionManual: adminNotifications
+      ? (reaperturaPendientes?.length ?? 0)
+      : 0,
   }
 
-  const loading = loadingKPIs || (adminNotifications && loadingNotificaciones)
+  const loading =
+    loadingKPIs ||
+    (adminNotifications && loadingNotificaciones) ||
+    (adminNotifications && loadingReaperturaRevision)
 
   return { counts, loading }
 }

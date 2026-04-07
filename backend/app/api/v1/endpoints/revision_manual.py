@@ -37,6 +37,9 @@ from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
     asegurar_prestamo_alineado_con_cliente,
 )
 from app.services.registro_cambios_service import registrar_cambio
+from app.services.revision_manual.revision_manual_flags import (
+    marcar_o_crear_prestamo_editado_en_revision_manual,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -698,6 +701,136 @@ def editar_cliente_revision(
     }
 
 
+def _mutar_prestamo_desde_update_data_revision(
+    db: Session,
+    prestamo: Prestamo,
+    prestamo_id: int,
+    update_data: PrestamoUpdateData,
+) -> dict:
+    """
+    Aplica campos del body al ORM prestamo; no commit.
+    Devuelve cambios_dict (vacío si nada cambió vs valores ya en memoria).
+    """
+    cambios_dict: dict = {}
+
+    if update_data.total_financiamiento is not None and update_data.total_financiamiento >= 0:
+        cambios_dict["total_financiamiento"] = (
+            float(prestamo.total_financiamiento),
+            update_data.total_financiamiento,
+        )
+        prestamo.total_financiamiento = update_data.total_financiamiento
+
+    if update_data.numero_cuotas is not None and update_data.numero_cuotas >= 1:
+        if update_data.numero_cuotas != prestamo.numero_cuotas:
+            bloqueo_plazo = prestamo_bloquea_nuevas_cuotas_o_cambio_plazo(db, prestamo)
+            if bloqueo_plazo:
+                raise HTTPException(status_code=400, detail=bloqueo_plazo)
+        cambios_dict["numero_cuotas"] = (prestamo.numero_cuotas, update_data.numero_cuotas)
+        prestamo.numero_cuotas = update_data.numero_cuotas
+
+    if update_data.tasa_interes is not None and update_data.tasa_interes >= 0:
+        cambios_dict["tasa_interes"] = (float(prestamo.tasa_interes), update_data.tasa_interes)
+        prestamo.tasa_interes = update_data.tasa_interes
+
+    if update_data.producto is not None and update_data.producto.strip():
+        cambios_dict["producto"] = (prestamo.producto, update_data.producto)
+        prestamo.producto = update_data.producto
+
+    if update_data.observaciones is not None:
+        cambios_dict["observaciones"] = (prestamo.observaciones, update_data.observaciones)
+        prestamo.observaciones = update_data.observaciones
+
+    if update_data.nombres is not None and update_data.nombres.strip():
+        cambios_dict["nombres"] = (prestamo.nombres, update_data.nombres.strip())
+        prestamo.nombres = update_data.nombres.strip()
+
+    if update_data.fecha_requerimiento is not None:
+        try:
+            fecha_req = datetime.strptime(update_data.fecha_requerimiento, "%Y-%m-%d").date()
+            cambios_dict["fecha_requerimiento"] = (str(prestamo.fecha_requerimiento), str(fecha_req))
+            prestamo.fecha_requerimiento = fecha_req
+        except ValueError:
+            pass
+
+    if update_data.modalidad_pago is not None and update_data.modalidad_pago.strip():
+        cambios_dict["modalidad_pago"] = (
+            prestamo.modalidad_pago,
+            update_data.modalidad_pago.strip().upper(),
+        )
+        prestamo.modalidad_pago = update_data.modalidad_pago.strip().upper()
+
+    if update_data.cuota_periodo is not None and update_data.cuota_periodo >= 0:
+        cambios_dict["cuota_periodo"] = (float(prestamo.cuota_periodo or 0), update_data.cuota_periodo)
+        prestamo.cuota_periodo = update_data.cuota_periodo
+
+    if _body_tiene_fecha_iso_no_vacia(update_data.fecha_base_calculo) and not _body_tiene_fecha_iso_no_vacia(
+        update_data.fecha_aprobacion
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Indique fecha_aprobacion (YYYY-MM-DD) de forma explícita. "
+                "No se actualiza la base de cálculo ni la amortización sin fecha de aprobación ingresada manualmente."
+            ),
+        )
+
+    if update_data.fecha_aprobacion is not None:
+        s_fa = (update_data.fecha_aprobacion or "").strip()
+        if not s_fa:
+            raise HTTPException(
+                status_code=400,
+                detail="La fecha de aprobación no puede estar vacía; indique una fecha válida (YYYY-MM-DD).",
+            )
+        try:
+            fecha_ap = datetime.strptime(s_fa, "%Y-%m-%d")
+            cambios_dict["fecha_aprobacion"] = (str(prestamo.fecha_aprobacion), str(fecha_ap))
+            prestamo.fecha_aprobacion = fecha_ap
+            fecha_base_nueva = fecha_ap.date()
+            cambios_dict["fecha_base_calculo"] = (str(prestamo.fecha_base_calculo), str(fecha_base_nueva))
+            prestamo.fecha_base_calculo = fecha_base_nueva
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="fecha_aprobacion inválida; use formato YYYY-MM-DD.",
+            ) from exc
+
+    if update_data.estado is not None and update_data.estado.strip():
+        cambios_dict["estado"] = (prestamo.estado, update_data.estado.strip().upper())
+        prestamo.estado = update_data.estado.strip().upper()
+
+    if update_data.concesionario is not None:
+        cambios_dict["concesionario"] = (prestamo.concesionario, update_data.concesionario or "")
+        prestamo.concesionario = update_data.concesionario or ""
+
+    if update_data.analista is not None and update_data.analista.strip():
+        cambios_dict["analista"] = (prestamo.analista, update_data.analista.strip())
+        prestamo.analista = update_data.analista.strip()
+
+    if update_data.modelo_vehiculo is not None:
+        cambios_dict["modelo_vehiculo"] = (prestamo.modelo_vehiculo, update_data.modelo_vehiculo or "")
+        prestamo.modelo_vehiculo = update_data.modelo_vehiculo or ""
+
+    if update_data.valor_activo is not None and update_data.valor_activo >= 0:
+        cambios_dict["valor_activo"] = (float(prestamo.valor_activo or 0), update_data.valor_activo)
+        prestamo.valor_activo = update_data.valor_activo
+
+    if update_data.usuario_proponente is not None and update_data.usuario_proponente.strip():
+        cambios_dict["usuario_proponente"] = (
+            prestamo.usuario_proponente,
+            update_data.usuario_proponente.strip(),
+        )
+        prestamo.usuario_proponente = update_data.usuario_proponente.strip()
+
+    if update_data.usuario_aprobador is not None:
+        cambios_dict["usuario_aprobador"] = (
+            prestamo.usuario_aprobador,
+            update_data.usuario_aprobador or "",
+        )
+        prestamo.usuario_aprobador = update_data.usuario_aprobador or ""
+
+    return cambios_dict
+
+
 @router.put("/prestamos/{prestamo_id}")
 def editar_prestamo_revision(
     prestamo_id: int,
@@ -718,115 +851,8 @@ def editar_prestamo_revision(
 
     fecha_base_amort_antes = _fecha_para_amortizacion(prestamo)
 
-    cambios_dict = {}
-    
-    if update_data.total_financiamiento is not None and update_data.total_financiamiento >= 0:
-        cambios_dict['total_financiamiento'] = (float(prestamo.total_financiamiento), update_data.total_financiamiento)
-        prestamo.total_financiamiento = update_data.total_financiamiento
-    
-    if update_data.numero_cuotas is not None and update_data.numero_cuotas >= 1:
-        if update_data.numero_cuotas != prestamo.numero_cuotas:
-            bloqueo_plazo = prestamo_bloquea_nuevas_cuotas_o_cambio_plazo(db, prestamo)
-            if bloqueo_plazo:
-                raise HTTPException(status_code=400, detail=bloqueo_plazo)
-        cambios_dict['numero_cuotas'] = (prestamo.numero_cuotas, update_data.numero_cuotas)
-        prestamo.numero_cuotas = update_data.numero_cuotas
-    
-    if update_data.tasa_interes is not None and update_data.tasa_interes >= 0:
-        cambios_dict['tasa_interes'] = (float(prestamo.tasa_interes), update_data.tasa_interes)
-        prestamo.tasa_interes = update_data.tasa_interes
-    
-    if update_data.producto is not None and update_data.producto.strip():
-        cambios_dict['producto'] = (prestamo.producto, update_data.producto)
-        prestamo.producto = update_data.producto
-    
-    if update_data.observaciones is not None:
-        cambios_dict['observaciones'] = (prestamo.observaciones, update_data.observaciones)
-        prestamo.observaciones = update_data.observaciones
+    cambios_dict = _mutar_prestamo_desde_update_data_revision(db, prestamo, prestamo_id, update_data)
 
-    # La cedula del prestamo debe coincidir con la del cliente; no se edita aqui (use ficha cliente).
-
-    if update_data.nombres is not None and update_data.nombres.strip():
-        cambios_dict['nombres'] = (prestamo.nombres, update_data.nombres.strip())
-        prestamo.nombres = update_data.nombres.strip()
-
-    if update_data.fecha_requerimiento is not None:
-        try:
-            fecha_req = datetime.strptime(update_data.fecha_requerimiento, "%Y-%m-%d").date()
-            cambios_dict['fecha_requerimiento'] = (str(prestamo.fecha_requerimiento), str(fecha_req))
-            prestamo.fecha_requerimiento = fecha_req
-        except ValueError:
-            pass
-
-    if update_data.modalidad_pago is not None and update_data.modalidad_pago.strip():
-        cambios_dict['modalidad_pago'] = (prestamo.modalidad_pago, update_data.modalidad_pago.strip().upper())
-        prestamo.modalidad_pago = update_data.modalidad_pago.strip().upper()
-
-    if update_data.cuota_periodo is not None and update_data.cuota_periodo >= 0:
-        cambios_dict['cuota_periodo'] = (float(prestamo.cuota_periodo or 0), update_data.cuota_periodo)
-        prestamo.cuota_periodo = update_data.cuota_periodo
-
-    # fecha_aprobacion solo explicita (manual). No se infiere desde fecha_base_calculo.
-    if _body_tiene_fecha_iso_no_vacia(
-        update_data.fecha_base_calculo
-    ) and not _body_tiene_fecha_iso_no_vacia(update_data.fecha_aprobacion):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Indique fecha_aprobacion (YYYY-MM-DD) de forma explícita. "
-                "No se actualiza la base de cálculo ni la amortización sin fecha de aprobación ingresada manualmente."
-            ),
-        )
-
-    if update_data.fecha_aprobacion is not None:
-        s_fa = (update_data.fecha_aprobacion or "").strip()
-        if not s_fa:
-            raise HTTPException(
-                status_code=400,
-                detail="La fecha de aprobación no puede estar vacía; indique una fecha válida (YYYY-MM-DD).",
-            )
-        try:
-            fecha_ap = datetime.strptime(s_fa, "%Y-%m-%d")
-            cambios_dict['fecha_aprobacion'] = (str(prestamo.fecha_aprobacion), str(fecha_ap))
-            prestamo.fecha_aprobacion = fecha_ap
-            # fecha_base_calculo siempre igual a fecha_aprobacion
-            fecha_base_nueva = fecha_ap.date()
-            cambios_dict['fecha_base_calculo'] = (str(prestamo.fecha_base_calculo), str(fecha_base_nueva))
-            prestamo.fecha_base_calculo = fecha_base_nueva
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=400,
-                detail="fecha_aprobacion inválida; use formato YYYY-MM-DD.",
-            ) from exc
-
-    if update_data.estado is not None and update_data.estado.strip():
-        cambios_dict['estado'] = (prestamo.estado, update_data.estado.strip().upper())
-        prestamo.estado = update_data.estado.strip().upper()
-
-    if update_data.concesionario is not None:
-        cambios_dict['concesionario'] = (prestamo.concesionario, update_data.concesionario or "")
-        prestamo.concesionario = update_data.concesionario or ""
-
-    if update_data.analista is not None and update_data.analista.strip():
-        cambios_dict['analista'] = (prestamo.analista, update_data.analista.strip())
-        prestamo.analista = update_data.analista.strip()
-
-    if update_data.modelo_vehiculo is not None:
-        cambios_dict['modelo_vehiculo'] = (prestamo.modelo_vehiculo, update_data.modelo_vehiculo or "")
-        prestamo.modelo_vehiculo = update_data.modelo_vehiculo or ""
-
-    if update_data.valor_activo is not None and update_data.valor_activo >= 0:
-        cambios_dict['valor_activo'] = (float(prestamo.valor_activo or 0), update_data.valor_activo)
-        prestamo.valor_activo = update_data.valor_activo
-
-    if update_data.usuario_proponente is not None and update_data.usuario_proponente.strip():
-        cambios_dict['usuario_proponente'] = (prestamo.usuario_proponente, update_data.usuario_proponente.strip())
-        prestamo.usuario_proponente = update_data.usuario_proponente.strip()
-
-    if update_data.usuario_aprobador is not None:
-        cambios_dict['usuario_aprobador'] = (prestamo.usuario_aprobador, update_data.usuario_aprobador or "")
-        prestamo.usuario_aprobador = update_data.usuario_aprobador or ""
-    
     if not cambios_dict:
         return {"mensaje": "No hay cambios que guardar", "prestamo_id": prestamo_id}
 
@@ -857,22 +883,8 @@ def editar_prestamo_revision(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     prestamo.fecha_actualizacion = datetime.now()
-    
-    # Marcar en tabla de revisión que se editó préstamo
-    rev_manual = db.execute(
-        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
-    ).scalars().first()
-    
-    if rev_manual:
-        rev_manual.prestamo_editado = True
-        rev_manual.actualizado_en = datetime.now()
-    else:
-        rev_manual = RevisionManualPrestamo(
-            prestamo_id=prestamo_id,
-            estado_revision="revisando",
-            prestamo_editado=True,
-        )
-        db.add(rev_manual)
+
+    marcar_o_crear_prestamo_editado_en_revision_manual(db, prestamo_id)
 
     from app.services.finiquito_caso_cleanup import (
         eliminar_finiquito_casos_si_prestamo_no_liquidado,
@@ -952,6 +964,142 @@ def editar_prestamo_revision(
     if resultado_recalc is not None:
         out["recalculo_cuotas"] = resultado_recalc
     return out
+
+
+@router.post("/prestamos/{prestamo_id}/guardar-prestamo-y-reconstruir-cuotas")
+def guardar_prestamo_y_reconstruir_cuotas(
+    prestamo_id: int,
+    update_data: PrestamoUpdateData = Body(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    Una sola transacción en BD: aplica el mismo cuerpo que PUT /prestamos/{id}
+    y reconstruye la tabla de cuotas desde la fila préstamo (sin hueco entre guardado y cuotas).
+    """
+    actor = _actor_revision_manual(current_user)
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    _forbid_si_prestamo_revision_cerrada(db, prestamo_id)
+    _validar_permiso_edicion(db, prestamo_id, current_user, actor)
+
+    from app.api.v1.endpoints.prestamos import (
+        _reconstruir_tabla_cuotas_desde_prestamo_en_sesion,
+    )
+
+    cambios_dict = _mutar_prestamo_desde_update_data_revision(db, prestamo, prestamo_id, update_data)
+
+    if not cambios_dict:
+        prestamo.fecha_actualizacion = datetime.now()
+        marcar_o_crear_prestamo_editado_en_revision_manual(db, prestamo_id)
+    else:
+        rellenar_fecha_aprobacion_desde_base_si_falta(prestamo)
+        alinear_fecha_aprobacion_y_base_calculo(prestamo)
+
+        if prestamo_estado_exige_fecha_aprobacion(prestamo.estado) and prestamo.fecha_aprobacion is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Falta la fecha de aprobación. Los préstamos aprobados, desembolsados o liquidados deben tener fecha de aprobación.",
+            )
+
+        _req = getattr(prestamo, "fecha_requerimiento", None)
+        _ap = getattr(prestamo, "fecha_aprobacion", None)
+        if _req and _ap:
+            req_date = _req.date() if hasattr(_req, "date") and callable(getattr(_req, "date", None)) else _req
+            ap_date = _ap.date() if hasattr(_ap, "date") and callable(getattr(_ap, "date", None)) else _ap
+            if req_date and ap_date and ap_date < req_date:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"La fecha de aprobación ({ap_date}) debe ser igual o posterior a la fecha de "
+                        f"requerimiento ({req_date})."
+                    ),
+                )
+
+        try:
+            asegurar_prestamo_alineado_con_cliente(db, prestamo)
+        except PrestamoCedulaClienteError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+        prestamo.fecha_actualizacion = datetime.now()
+        marcar_o_crear_prestamo_editado_en_revision_manual(db, prestamo_id)
+
+        from app.services.finiquito_caso_cleanup import eliminar_finiquito_casos_si_prestamo_no_liquidado
+
+        eliminar_finiquito_casos_si_prestamo_no_liquidado(db, prestamo_id, prestamo.estado)
+
+    try:
+        stats = _reconstruir_tabla_cuotas_desde_prestamo_en_sesion(db, prestamo_id)
+    except HTTPException:
+        db.rollback()
+        raise
+
+    creadas = int(stats.get("cuotas_creadas") or 0)
+    pagos_aplicados = int(stats.get("pagos_con_aplicacion") or 0)
+    elim = {k: v for k, v in stats.items() if k not in ("message", "cuotas_creadas", "pagos_con_aplicacion")}
+
+    _fallback_uid = db.execute(text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")).scalar() or 1
+    uid_audit = getattr(current_user, "id", None) or _fallback_uid
+
+    db.add(
+        Auditoria(
+            usuario_id=int(uid_audit),
+            accion="REVISION_MANUAL_GUARDAR_Y_RECONSTRUIR_CUOTAS",
+            entidad="prestamos",
+            entidad_id=prestamo_id,
+            detalles=(
+                "Revisión manual: préstamo y tabla de cuotas en una transacción. "
+                f"Campos préstamo: {list(cambios_dict.keys()) if cambios_dict else 'sin cambios en fila'}. "
+                f"Cuotas creadas: {creadas}. Pagos con nueva aplicación: {pagos_aplicados}. "
+                f"Eliminadas (rowcount): {elim}"
+            ),
+            exito=True,
+        )
+    )
+
+    _commit_revision_seguro(
+        db,
+        operacion="guardar_prestamo_y_reconstruir_cuotas",
+        actor=actor,
+        tabla_principal="prestamos",
+        id_principal=prestamo_id,
+        resumen_campos=(list(cambios_dict.keys()) if cambios_dict else []) + ["reconstruccion_cuotas"],
+    )
+
+    usuario_id = getattr(current_user, "id", None)
+    if usuario_id:
+        try:
+            registrar_cambio(
+                db=db,
+                usuario_id=usuario_id,
+                modulo="Revisión Manual",
+                tipo_cambio="ACTUALIZAR",
+                descripcion=(
+                    f"Guardar préstamo y reconstruir cuotas #{prestamo_id}: "
+                    f"{creadas} cuota(s); pagos con nueva aplicación: {pagos_aplicados}."
+                ),
+                registro_id=prestamo_id,
+                tabla_afectada="prestamos,cuotas",
+                campos_anteriores={k: v[0] for k, v in cambios_dict.items()} if cambios_dict else None,
+                campos_nuevos={
+                    **({k: v[1] for k, v in cambios_dict.items()} if cambios_dict else {}),
+                    "reconstruccion": stats,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "revision_manual: no se pudo registrar_cambio guardar_y_reconstruir prestamo_id=%s",
+                prestamo_id,
+            )
+
+    return {
+        "mensaje": "Préstamo guardado y tabla de cuotas reconstruida en una sola operación.",
+        "prestamo_id": prestamo_id,
+        "cambios": {k: {"anterior": v[0], "nuevo": v[1]} for k, v in cambios_dict.items()},
+        "reconstruccion_cuotas": stats,
+    }
 
 
 @router.delete("/prestamos/{prestamo_id}")

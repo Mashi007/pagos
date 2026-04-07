@@ -324,6 +324,9 @@ const RUTA_LISTA_PRESTAMOS = '/prestamos'
 
 const PER_PAGE_PAGOS_REGISTRADOS = 20
 
+/** Tolerancia USD para comparar totales (redondeos / centavos). */
+const COHERENCIA_USD_TOL = 0.02
+
 function fechaPagoPagoRowParaInput(pago: Pago): string {
   const fp = pago.fecha_pago
   if (fp == null || fp === '') {
@@ -657,6 +660,11 @@ export function EditarRevisionManual() {
     setPagePagosRegistrados(1)
   }, [cedulaParaPagosRealizados])
 
+  const prestamoIdNumParaResumenPagos = useMemo(() => {
+    const n = Number(prestamoId)
+    return Number.isFinite(n) && n > 0 ? n : undefined
+  }, [prestamoId])
+
   const {
     data: pagosRealizadosData,
     isLoading: loadingPagosRealizados,
@@ -668,6 +676,7 @@ export function EditarRevisionManual() {
       cedulaParaPagosRealizados,
       pagePagosRegistrados,
       PER_PAGE_PAGOS_REGISTRADOS,
+      prestamoIdNumParaResumenPagos ?? 0,
     ],
     queryFn: () =>
       pagoService.getAllPagos(
@@ -676,6 +685,9 @@ export function EditarRevisionManual() {
         {
           cedula: cedulaParaPagosRealizados,
           prestamo_cartera: 'todos',
+          ...(prestamoIdNumParaResumenPagos != null && {
+            resumen_prestamo_id: prestamoIdNumParaResumenPagos,
+          }),
         }
       ),
     enabled: cedulaParaPagosRealizados.length > 0,
@@ -694,6 +706,24 @@ export function EditarRevisionManual() {
     }
     return m
   }, [pagosRealizadosData?.pagos])
+
+  const agregadosCuotasRevision = useMemo(() => {
+    let sumMonto = 0
+    let sumPagado = 0
+    for (const c of cuotasData) {
+      sumMonto += Number(c.monto) || 0
+      sumPagado += Number(c.total_pagado) || 0
+    }
+    return { sumMonto, sumPagado }
+  }, [cuotasData])
+
+  const estadoPrestamoNorm = useMemo(
+    () => (prestamoData.estado ?? '').toString().trim().toUpperCase(),
+    [prestamoData.estado]
+  )
+
+  const auditoriaCoherenciaActiva =
+    estadoPrestamoNorm === 'APROBADO' || estadoPrestamoNorm === 'LIQUIDADO'
 
   const estadoRevision = (detalleData?.revision?.estado_revision ?? 'pendiente')
     .toString()
@@ -915,8 +945,9 @@ export function EditarRevisionManual() {
   }
 
   /**
-   * Persiste fecha_aprobacion + fecha_base_calculo en BD y recalcula vencimientos de cuotas.
-   * Misma lógica de negocio que al guardar cambios con fecha distinta; actualiza listados/reportes vía BD.
+   * Persiste en BD los datos de préstamo del formulario (incl. amortización) y reconstruye
+   * la tabla de cuotas: número de filas, montos por período y fechas de vencimiento según
+   * total, plazo, modalidad y fecha base; luego reaplica pagos pendientes del préstamo.
    */
   const handleGuardarFechaYRecalcularVencimientos = async () => {
     if (!prestamoId || soloLectura) {
@@ -925,6 +956,11 @@ export function EditarRevisionManual() {
           'Este préstamo está en solo lectura; no se puede modificar la fecha.'
         )
       }
+      return
+    }
+
+    if (!validarFormulario()) {
+      toast.error('Corrija los errores marcados en rojo antes de recalcular')
       return
     }
 
@@ -945,39 +981,80 @@ export function EditarRevisionManual() {
       return
     }
 
-    if (cuotasData.length === 0) {
-      toast.info(
-        'No hay cuotas en este préstamo; no hay vencimientos que recalcular.'
-      )
-      return
-    }
-
     setRecalculandoFechasCuotas(true)
     try {
-      await revisionManualService.editarPrestamo(pid, {
+      const prestamoPatch: Record<string, unknown> = {
         fecha_aprobacion: fa,
         fecha_base_calculo: fa,
-      })
+        observaciones: String(prestamoData.observaciones ?? ''),
+      }
 
-      const res = await prestamoService.recalcularFechasAmortizacion(pid)
-      const actualizadas = res?.data?.actualizadas ?? res?.actualizadas ?? '?'
+      if (
+        prestamoData.total_financiamiento !== undefined &&
+        prestamoData.total_financiamiento >= 0
+      ) {
+        prestamoPatch.total_financiamiento = prestamoData.total_financiamiento
+      }
+
+      if (
+        prestamoData.numero_cuotas !== undefined &&
+        prestamoData.numero_cuotas >= 1
+      ) {
+        prestamoPatch.numero_cuotas = prestamoData.numero_cuotas
+      }
+
+      if (
+        prestamoData.tasa_interes !== undefined &&
+        prestamoData.tasa_interes >= 0
+      ) {
+        prestamoPatch.tasa_interes = prestamoData.tasa_interes
+      }
+
+      if (prestamoData.modalidad_pago !== undefined) {
+        prestamoPatch.modalidad_pago = prestamoData.modalidad_pago
+      }
+
+      if (
+        prestamoData.cuota_periodo !== undefined &&
+        prestamoData.cuota_periodo >= 0
+      ) {
+        prestamoPatch.cuota_periodo = prestamoData.cuota_periodo
+      }
+
+      const res = await revisionManualService.guardarPrestamoYReconstruirCuotas(
+        pid,
+        prestamoPatch
+      )
+      const r = res as {
+        reconstruccion_cuotas?: {
+          cuotas_creadas?: number
+          pagos_con_aplicacion?: number
+        }
+      }
+      const stats = r.reconstruccion_cuotas
+      const creadas = stats?.cuotas_creadas ?? '?'
+      const pagosAplic = stats?.pagos_con_aplicacion ?? '?'
 
       setFechaAprobacionOriginal(fa)
 
       const datos = await revisionManualService.getDetallePrestamoRevision(pid)
+      if (datos?.prestamo) {
+        setPrestamoData(datos.prestamo)
+      }
       if (datos?.cuotas) {
         setCuotasData(datos.cuotas)
       }
 
       toast.success(
-        `Fecha guardada en el servidor y ${actualizadas} cuota(s) con vencimientos actualizados. Los cambios quedan en la base (estado de cuenta, amortización, etc.).`
+        `Datos de préstamo guardados y tabla de cuotas reconstruida: ${creadas} cuota(s); ` +
+          `pagos con nueva aplicación a cuotas: ${pagosAplic}. Los cambios quedan en la base.`
       )
 
-      await refrescarOrigenDatosTrasRevisionManual()
+      await refrescarOrigenDatosTrasRevisionManual({ skipRevisionEditar: true })
     } catch (err: any) {
       const msg =
         err?.response?.data?.detail ||
-        'No se pudo guardar la fecha o recalcular vencimientos'
+        'No se pudo guardar los datos del préstamo o reconstruir la tabla de cuotas'
       toast.error(msg)
       console.error(err)
     } finally {
@@ -2508,7 +2585,10 @@ export function EditarRevisionManual() {
                       Obligatoria para préstamos aprobados/liquidados: debe
                       ingresarla usted (no se infiere de otras fechas). La base
                       de cálculo es la misma fecha. El botón guarda en servidor
-                      y recalcula vencimientos. &quot;Guardar cambios&quot; y
+                      los datos de préstamo del formulario (total, plazo, cuota
+                      por período, modalidad, tasa) y reconstruye la tabla de
+                      cuotas (cantidad, montos y fechas de vencimiento); luego
+                      reaplica pagos pendientes. &quot;Guardar cambios&quot; y
                       &quot;Guardar y cerrar&quot; persisten el resto en la
                       base.
                     </p>
@@ -2543,13 +2623,9 @@ export function EditarRevisionManual() {
                         type="button"
                         variant="outline"
                         className="shrink-0 sm:max-w-[220px]"
-                        disabled={
-                          soloLectura ||
-                          recalculandoFechasCuotas ||
-                          cuotasData.length === 0
-                        }
+                        disabled={soloLectura || recalculandoFechasCuotas}
                         onClick={handleGuardarFechaYRecalcularVencimientos}
-                        title="Guarda la fecha en el servidor y recalcula fechas de vencimiento de las cuotas"
+                        title="Guarda fecha y datos de amortización del formulario y reconstruye la tabla de cuotas (montos y vencimientos)"
                       >
                         {recalculandoFechasCuotas ? (
                           <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
@@ -2775,308 +2851,520 @@ export function EditarRevisionManual() {
 
             {/* Pagos reales en tabla pagos (mismo origen que carga masiva / módulo Pagos) */}
             {cedulaParaPagosRealizados ? (
-              <Card>
-                <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <CreditCard className="h-5 w-5" />
-                      Pagos registrados en cartera
-                    </CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Cédula {cedulaParaPagosRealizados}: fecha, monto (USD),
-                      banco, documento y crédito asociado. Cada alta o edición
-                      exige URL de comprobante en el formulario y respeta los
-                      validadores del módulo Pagos (incluido Nº documento
-                      único). Si el mismo documento aparece dos veces en esta
-                      página se resalta en la tabla. Use «Agregar pago»,
-                      «Editar» o «Eliminar»; «Aplicar a cuotas (cascada)»
-                      adjudica en la BD los pagos pendientes de este crédito a
-                      las cuotas (FIFO). La tabla se actualiza al guardar y
-                      también al volver a la pestaña o cada minuto.
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="gap-2"
-                      disabled={
-                        soloLectura ||
-                        aplicarCascadaPagosMutation.isPending ||
-                        !prestamoData.prestamo_id ||
-                        Number(prestamoData.prestamo_id) <= 0
-                      }
-                      onClick={() => aplicarCascadaPagosMutation.mutate()}
-                      title={
-                        soloLectura
-                          ? 'Revisión cerrada: solo lectura'
-                          : 'Persiste en BD la aplicación de pagos elegibles a cuotas de este crédito'
-                      }
-                    >
-                      {aplicarCascadaPagosMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <DollarSign className="h-4 w-4" />
-                      )}
-                      Aplicar a cuotas (cascada)
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="default"
-                      size="sm"
-                      className="gap-2"
-                      disabled={soloLectura}
-                      onClick={abrirAgregarPagoRevision}
-                      title={
-                        soloLectura
-                          ? 'Revision cerrada: solo lectura'
-                          : 'Registrar un pago para esta cedula'
-                      }
-                    >
-                      <Plus className="h-4 w-4" />
-                      Agregar pago
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      disabled={
-                        loadingPagosRealizados || fetchingPagosRealizados
-                      }
-                      onClick={() => void refetchPagosRealizados()}
-                    >
-                      <RefreshCw
-                        className={`h-4 w-4 ${fetchingPagosRealizados ? 'animate-spin' : ''}`}
-                      />
-                      Actualizar
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {loadingPagosRealizados && !pagosRealizadosData ? (
-                    <div className="flex items-center gap-2 py-8 text-muted-foreground">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Cargando pagos…
-                    </div>
-                  ) : !pagosRealizadosData?.pagos?.length ? (
-                    <div className="space-y-3 py-6">
-                      <p className="text-sm text-muted-foreground">
-                        No hay filas en la tabla de pagos para esta cédula
-                        todavía. Puede registrar el primero con «Agregar pago».
+              <>
+                <Card>
+                  <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <CreditCard className="h-5 w-5" />
+                        Pagos registrados en cartera
+                      </CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Cédula {cedulaParaPagosRealizados}: fecha, monto (USD),
+                        banco, documento y crédito asociado. Cada alta o edición
+                        exige URL de comprobante en el formulario y respeta los
+                        validadores del módulo Pagos (incluido Nº documento
+                        único). Si el mismo documento aparece dos veces en esta
+                        página se resalta en la tabla. Use «Agregar pago»,
+                        «Editar» o «Eliminar»; «Aplicar a cuotas (cascada)»
+                        adjudica en la BD los pagos pendientes de este crédito a
+                        las cuotas (FIFO). La tabla se actualiza al guardar y
+                        también al volver a la pestaña o cada minuto.
                       </p>
-                      {!soloLectura && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="gap-2"
-                          onClick={abrirAgregarPagoRevision}
-                        >
-                          <Plus className="h-4 w-4" />
-                          Agregar pago
-                        </Button>
-                      )}
                     </div>
-                  ) : (
-                    <>
-                      {pagosRealizadosData.sum_monto_pagado_cedula != null && (
-                        <p className="mb-3 text-sm font-medium text-foreground">
-                          Total acumulado (todos los pagos de la cédula): $
-                          {Number(
-                            pagosRealizadosData.sum_monto_pagado_cedula
-                          ).toFixed(2)}{' '}
-                          USD
-                        </p>
-                      )}
-                      <div className="overflow-x-auto rounded-lg border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="whitespace-nowrap">
-                                ID
-                              </TableHead>
-                              <TableHead className="whitespace-nowrap">
-                                Fecha pago
-                              </TableHead>
-                              <TableHead className="whitespace-nowrap text-right">
-                                Monto USD
-                              </TableHead>
-                              <TableHead className="whitespace-nowrap">
-                                Banco
-                              </TableHead>
-                              <TableHead className="whitespace-nowrap">
-                                Nº documento
-                              </TableHead>
-                              <TableHead className="whitespace-nowrap">
-                                Crédito
-                              </TableHead>
-                              <TableHead className="whitespace-nowrap">
-                                Estado
-                              </TableHead>
-                              <TableHead>Notas</TableHead>
-                              <TableHead className="min-w-[200px] whitespace-nowrap text-right">
-                                Acciones
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {pagosRealizadosData.pagos.map((pago: Pago) => {
-                              const docKey = (pago.numero_documento || '')
-                                .trim()
-                                .toLowerCase()
-                              const documentoDuplicadoEnPagina =
-                                !!docKey &&
-                                (conteoDocumentoPagosRevision.get(docKey) ||
-                                  0) > 1
-                              return (
-                                <TableRow key={pago.id}>
-                                  <TableCell className="font-mono text-xs">
-                                    {pago.id}
-                                  </TableCell>
-                                  <TableCell className="whitespace-nowrap">
-                                    {formatDate(pago.fecha_pago)}
-                                  </TableCell>
-                                  <TableCell className="text-right font-medium">
-                                    $
-                                    {typeof pago.monto_pagado === 'number'
-                                      ? pago.monto_pagado.toFixed(2)
-                                      : parseFloat(
-                                          String(pago.monto_pagado || 0)
-                                        ).toFixed(2)}
-                                  </TableCell>
-                                  <TableCell className="max-w-[180px] truncate text-sm">
-                                    {pago.institucion_bancaria?.trim()
-                                      ? pago.institucion_bancaria
-                                      : '-'}
-                                  </TableCell>
-                                  <TableCell
-                                    className={`max-w-[200px] font-mono text-xs ${
-                                      documentoDuplicadoEnPagina
-                                        ? 'bg-orange-100 text-orange-950'
-                                        : ''
-                                    }`}
-                                    title={
-                                      documentoDuplicadoEnPagina
-                                        ? 'Mismo Nº de documento aparece más de una vez en esta página.'
-                                        : undefined
-                                    }
-                                  >
-                                    {pago.numero_documento?.trim()
-                                      ? pago.numero_documento
-                                      : '-'}
-                                  </TableCell>
-                                  <TableCell className="whitespace-nowrap">
-                                    {pago.prestamo_id != null
-                                      ? pago.prestamo_id
-                                      : '-'}
-                                  </TableCell>
-                                  <TableCell>
-                                    {badgeEstadoPagoRegistrado(
-                                      (pago.estado || 'PENDIENTE').toUpperCase()
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
-                                    {pago.notas?.trim() ? pago.notas : '-'}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex flex-wrap items-center justify-end gap-1">
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 gap-1 px-2"
-                                        disabled={soloLectura}
-                                        onClick={() =>
-                                          abrirEditarPagoRevision(pago)
-                                        }
-                                        title={
-                                          soloLectura
-                                            ? 'Revision cerrada: solo lectura'
-                                            : 'Editar pago'
-                                        }
-                                      >
-                                        <Edit className="h-4 w-4" />
-                                        Editar
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 gap-1 px-2 text-destructive hover:text-destructive"
-                                        disabled={
-                                          soloLectura ||
-                                          eliminandoPagoId === pago.id
-                                        }
-                                        onClick={() =>
-                                          void eliminarPagoRevision(pago)
-                                        }
-                                        title={
-                                          soloLectura
-                                            ? 'Revision cerrada: solo lectura'
-                                            : 'Eliminar pago'
-                                        }
-                                      >
-                                        {eliminandoPagoId === pago.id ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <Trash2 className="h-4 w-4" />
-                                        )}
-                                        Eliminar
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              )
-                            })}
-                          </TableBody>
-                        </Table>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="gap-2"
+                        disabled={
+                          soloLectura ||
+                          aplicarCascadaPagosMutation.isPending ||
+                          !prestamoData.prestamo_id ||
+                          Number(prestamoData.prestamo_id) <= 0
+                        }
+                        onClick={() => aplicarCascadaPagosMutation.mutate()}
+                        title={
+                          soloLectura
+                            ? 'Revisión cerrada: solo lectura'
+                            : 'Persiste en BD la aplicación de pagos elegibles a cuotas de este crédito'
+                        }
+                      >
+                        {aplicarCascadaPagosMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <DollarSign className="h-4 w-4" />
+                        )}
+                        Aplicar a cuotas (cascada)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="gap-2"
+                        disabled={soloLectura}
+                        onClick={abrirAgregarPagoRevision}
+                        title={
+                          soloLectura
+                            ? 'Revision cerrada: solo lectura'
+                            : 'Registrar un pago para esta cedula'
+                        }
+                      >
+                        <Plus className="h-4 w-4" />
+                        Agregar pago
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        disabled={
+                          loadingPagosRealizados || fetchingPagosRealizados
+                        }
+                        onClick={() => void refetchPagosRealizados()}
+                      >
+                        <RefreshCw
+                          className={`h-4 w-4 ${fetchingPagosRealizados ? 'animate-spin' : ''}`}
+                        />
+                        Actualizar
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingPagosRealizados && !pagosRealizadosData ? (
+                      <div className="flex items-center gap-2 py-8 text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Cargando pagos…
                       </div>
-                      {pagosRealizadosData.total_pages > 1 && (
-                        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-                          <span>
-                            Página {pagosRealizadosData.page} de{' '}
-                            {pagosRealizadosData.total_pages} (
-                            {pagosRealizadosData.total} pagos)
-                          </span>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={pagePagosRegistrados <= 1}
-                              onClick={() =>
-                                setPagePagosRegistrados(p => Math.max(1, p - 1))
-                              }
-                            >
-                              Anterior
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={
-                                pagePagosRegistrados >=
-                                pagosRealizadosData.total_pages
-                              }
-                              onClick={() =>
-                                setPagePagosRegistrados(p =>
-                                  Math.min(
-                                    pagosRealizadosData.total_pages,
-                                    p + 1
-                                  )
+                    ) : !pagosRealizadosData?.pagos?.length ? (
+                      <div className="space-y-3 py-6">
+                        <p className="text-sm text-muted-foreground">
+                          No hay filas en la tabla de pagos para esta cédula
+                          todavía. Puede registrar el primero con «Agregar
+                          pago».
+                        </p>
+                        {!soloLectura && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="gap-2"
+                            onClick={abrirAgregarPagoRevision}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Agregar pago
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        {pagosRealizadosData.sum_monto_pagado_cedula !=
+                          null && (
+                          <p className="mb-3 text-sm font-medium text-foreground">
+                            Total acumulado (todos los pagos de la cédula): $
+                            {Number(
+                              pagosRealizadosData.sum_monto_pagado_cedula
+                            ).toFixed(2)}{' '}
+                            USD
+                          </p>
+                        )}
+                        <div className="overflow-x-auto rounded-lg border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="whitespace-nowrap">
+                                  ID
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap">
+                                  Fecha pago
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap text-right">
+                                  Monto USD
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap">
+                                  Banco
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap">
+                                  Nº documento
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap">
+                                  Crédito
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap">
+                                  Estado
+                                </TableHead>
+                                <TableHead>Notas</TableHead>
+                                <TableHead className="min-w-[200px] whitespace-nowrap text-right">
+                                  Acciones
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {pagosRealizadosData.pagos.map((pago: Pago) => {
+                                const docKey = (pago.numero_documento || '')
+                                  .trim()
+                                  .toLowerCase()
+                                const documentoDuplicadoEnPagina =
+                                  !!docKey &&
+                                  (conteoDocumentoPagosRevision.get(docKey) ||
+                                    0) > 1
+                                return (
+                                  <TableRow key={pago.id}>
+                                    <TableCell className="font-mono text-xs">
+                                      {pago.id}
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap">
+                                      {formatDate(pago.fecha_pago)}
+                                    </TableCell>
+                                    <TableCell className="text-right font-medium">
+                                      $
+                                      {typeof pago.monto_pagado === 'number'
+                                        ? pago.monto_pagado.toFixed(2)
+                                        : parseFloat(
+                                            String(pago.monto_pagado || 0)
+                                          ).toFixed(2)}
+                                    </TableCell>
+                                    <TableCell className="max-w-[180px] truncate text-sm">
+                                      {pago.institucion_bancaria?.trim()
+                                        ? pago.institucion_bancaria
+                                        : '-'}
+                                    </TableCell>
+                                    <TableCell
+                                      className={`max-w-[200px] font-mono text-xs ${
+                                        documentoDuplicadoEnPagina
+                                          ? 'bg-orange-100 text-orange-950'
+                                          : ''
+                                      }`}
+                                      title={
+                                        documentoDuplicadoEnPagina
+                                          ? 'Mismo Nº de documento aparece más de una vez en esta página.'
+                                          : undefined
+                                      }
+                                    >
+                                      {pago.numero_documento?.trim()
+                                        ? pago.numero_documento
+                                        : '-'}
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap">
+                                      {pago.prestamo_id != null
+                                        ? pago.prestamo_id
+                                        : '-'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {badgeEstadoPagoRegistrado(
+                                        (
+                                          pago.estado || 'PENDIENTE'
+                                        ).toUpperCase()
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
+                                      {pago.notas?.trim() ? pago.notas : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <div className="flex flex-wrap items-center justify-end gap-1">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 gap-1 px-2"
+                                          disabled={soloLectura}
+                                          onClick={() =>
+                                            abrirEditarPagoRevision(pago)
+                                          }
+                                          title={
+                                            soloLectura
+                                              ? 'Revision cerrada: solo lectura'
+                                              : 'Editar pago'
+                                          }
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                          Editar
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 gap-1 px-2 text-destructive hover:text-destructive"
+                                          disabled={
+                                            soloLectura ||
+                                            eliminandoPagoId === pago.id
+                                          }
+                                          onClick={() =>
+                                            void eliminarPagoRevision(pago)
+                                          }
+                                          title={
+                                            soloLectura
+                                              ? 'Revision cerrada: solo lectura'
+                                              : 'Eliminar pago'
+                                          }
+                                        >
+                                          {eliminandoPagoId === pago.id ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                          ) : (
+                                            <Trash2 className="h-4 w-4" />
+                                          )}
+                                          Eliminar
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
                                 )
-                              }
-                            >
-                              Siguiente
-                            </Button>
-                          </div>
+                              })}
+                            </TableBody>
+                          </Table>
                         </div>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                        {pagosRealizadosData.total_pages > 1 && (
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+                            <span>
+                              Página {pagosRealizadosData.page} de{' '}
+                              {pagosRealizadosData.total_pages} (
+                              {pagosRealizadosData.total} pagos)
+                            </span>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={pagePagosRegistrados <= 1}
+                                onClick={() =>
+                                  setPagePagosRegistrados(p =>
+                                    Math.max(1, p - 1)
+                                  )
+                                }
+                              >
+                                Anterior
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={
+                                  pagePagosRegistrados >=
+                                  pagosRealizadosData.total_pages
+                                }
+                                onClick={() =>
+                                  setPagePagosRegistrados(p =>
+                                    Math.min(
+                                      pagosRealizadosData.total_pages,
+                                      p + 1
+                                    )
+                                  )
+                                }
+                              >
+                                Siguiente
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <FileText className="h-5 w-5" />
+                      Resumen: pagos del crédito vs cuotas
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Cifras del crédito en revisión (no solo la página visible
+                      de la tabla). Sirve para contrastar montos registrados en{' '}
+                      <span className="font-medium">pagos</span> con lo aplicado
+                      en el <span className="font-medium">plan de cuotas</span>.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {!auditoriaCoherenciaActiva ? (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
+                        <span className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>
+                            El cuadro de coherencia con cuotas y financiamiento
+                            se activa cuando el préstamo está en estado{' '}
+                            <span className="font-semibold">Aprobado</span> o{' '}
+                            <span className="font-semibold">Liquidado</span>.
+                            Estado actual:{' '}
+                            <span className="font-semibold">
+                              {estadoPrestamoNorm || '-'}
+                            </span>
+                            .
+                          </span>
+                        </span>
+                      </div>
+                    ) : loadingPagosRealizados &&
+                      !pagosRealizadosData?.resumen_prestamo ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Cargando resumen del crédito…
+                      </div>
+                    ) : !pagosRealizadosData?.resumen_prestamo ? (
+                      <p className="text-muted-foreground">
+                        No se recibió el agregado{' '}
+                        <span className="rounded bg-muted px-1 font-mono text-xs">
+                          resumen_prestamo
+                        </span>{' '}
+                        del servidor. Actualice el backend o use «Actualizar» en
+                        pagos.
+                      </p>
+                    ) : (
+                      (() => {
+                        const rp = pagosRealizadosData.resumen_prestamo
+                        const tf =
+                          Number(prestamoData.total_financiamiento) || 0
+                        const {
+                          sumMonto: sumCuotasMonto,
+                          sumPagado: sumCuotasPagado,
+                        } = agregadosCuotasRevision
+                        const sumPagosCredito =
+                          Number(rp.suma_monto_pagado) || 0
+                        const cantPagosCredito = Number(rp.cantidad) || 0
+                        const diffPlanVsFin = sumCuotasMonto - tf
+                        const diffPagosVsCuotas =
+                          sumPagosCredito - sumCuotasPagado
+                        const faltaCubrirPlan = Math.max(
+                          0,
+                          sumCuotasMonto - sumCuotasPagado
+                        )
+                        const planAlineadoFin =
+                          Math.abs(diffPlanVsFin) <= COHERENCIA_USD_TOL
+                        const pagosAlineadosCuotas =
+                          Math.abs(diffPagosVsCuotas) <= COHERENCIA_USD_TOL
+                        const pendN = Number(rp.cantidad_pendiente) || 0
+                        const pendSum = Number(rp.suma_monto_pendiente) || 0
+                        const pagN = Number(rp.cantidad_pagado) || 0
+                        const pagSum = Number(rp.suma_monto_estado_pagado) || 0
+
+                        return (
+                          <div className="space-y-3">
+                            <div className="grid gap-2 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
+                              <div>
+                                <p className="text-xs font-medium uppercase text-muted-foreground">
+                                  Pagos cargados (este crédito, BD)
+                                </p>
+                                <p className="text-base font-semibold">
+                                  {cantPagosCredito}{' '}
+                                  {cantPagosCredito === 1 ? 'pago' : 'pagos'} ·
+                                  ${sumPagosCredito.toFixed(2)} USD
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Pendientes (estado): {pendN} · $
+                                  {pendSum.toFixed(2)} · Pagado (estado): {pagN}{' '}
+                                  · ${pagSum.toFixed(2)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium uppercase text-muted-foreground">
+                                  Plan de cuotas (formulario / BD)
+                                </p>
+                                <p className="text-base font-semibold">
+                                  Suma montos: ${sumCuotasMonto.toFixed(2)} ·
+                                  Aplicado: ${sumCuotasPagado.toFixed(2)}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Financiamiento declarado: ${tf.toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+
+                            {!planAlineadoFin && (
+                              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                <span>
+                                  La suma de montos de cuotas ($
+                                  {sumCuotasMonto.toFixed(2)}) no coincide con
+                                  el financiamiento (${tf.toFixed(2)});
+                                  diferencia ${diffPlanVsFin.toFixed(2)}. Revise
+                                  cuotas o el total del préstamo.
+                                </span>
+                              </div>
+                            )}
+
+                            <div
+                              className={`flex items-start gap-2 rounded-md border px-3 py-2 ${
+                                pagosAlineadosCuotas
+                                  ? 'border-green-200 bg-green-50 text-green-950'
+                                  : diffPagosVsCuotas > COHERENCIA_USD_TOL
+                                    ? 'border-sky-200 bg-sky-50 text-sky-950'
+                                    : 'border-orange-200 bg-orange-50 text-orange-950'
+                              }`}
+                            >
+                              {pagosAlineadosCuotas ? (
+                                <Check className="mt-0.5 h-4 w-4 shrink-0" />
+                              ) : (
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                              )}
+                              <div className="space-y-1">
+                                <p className="font-medium">
+                                  Pagos del crédito vs total aplicado en cuotas
+                                </p>
+                                {pagosAlineadosCuotas ? (
+                                  <p>
+                                    Coherente: la suma de pagos del crédito
+                                    coincide con lo aplicado en cuotas
+                                    (tolerancia ${COHERENCIA_USD_TOL.toFixed(2)}
+                                    ).
+                                  </p>
+                                ) : diffPagosVsCuotas > COHERENCIA_USD_TOL ? (
+                                  <p>
+                                    <span className="font-semibold">
+                                      Sobrante en cartera
+                                    </span>{' '}
+                                    respecto a lo aplicado en cuotas: $
+                                    {diffPagosVsCuotas.toFixed(2)} USD. Puede
+                                    haber pagos sin cascada o cuotas
+                                    desactualizadas; use «Aplicar a cuotas
+                                    (cascada)» si corresponde.
+                                  </p>
+                                ) : (
+                                  <p>
+                                    <span className="font-semibold">
+                                      Falta en pagos
+                                    </span>{' '}
+                                    respecto a lo aplicado en cuotas: $
+                                    {Math.abs(diffPagosVsCuotas).toFixed(2)}{' '}
+                                    USD. Revise aplicaciones o registros en
+                                    tabla pagos.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="rounded-md border bg-background px-3 py-2">
+                              <p className="font-medium">
+                                Falta por cubrir en el plan de cuotas
+                              </p>
+                              <p className="text-muted-foreground">
+                                Saldo pendiente del cronograma (suma montos −
+                                aplicado):{' '}
+                                <span className="font-semibold text-foreground">
+                                  ${faltaCubrirPlan.toFixed(2)} USD
+                                </span>
+                                {estadoPrestamoNorm === 'LIQUIDADO' &&
+                                faltaCubrirPlan > COHERENCIA_USD_TOL ? (
+                                  <span className="mt-1 block text-orange-700">
+                                    Crédito liquidado pero el plan aún muestra
+                                    saldo; conviene validar cuotas y pagos.
+                                  </span>
+                                ) : null}
+                              </p>
+                            </div>
+
+                            {pendN > 0 && estadoPrestamoNorm === 'APROBADO' ? (
+                              <p className="text-xs text-muted-foreground">
+                                Hay {pendN} {pendN === 1 ? 'pago' : 'pagos'} en
+                                estado Pendiente por ${pendSum.toFixed(2)}; si
+                                ya ingresaron a caja, use «Aplicar a cuotas
+                                (cascada)» para alinear cuotas.
+                              </p>
+                            ) : null}
+                          </div>
+                        )
+                      })()
+                    )}
+                  </CardContent>
+                </Card>
+              </>
             ) : null}
 
             {/* Cuotas (después del reporte de pagos en cartera) */}

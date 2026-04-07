@@ -628,6 +628,16 @@ class PrestamoService {
   }
 
   /**
+   * Elimina y regenera filas de cuotas según datos del préstamo en BD (total, plazo,
+   * modalidad, cuota por período si tasa 0, fecha base). Reaplica pagos pendientes.
+   */
+  async reconstruirTablaCuotasDesdePrestamo(prestamoId: number): Promise<any> {
+    return await apiClient.post<any>(
+      `${this.baseUrl}/${prestamoId}/reconstruir-tabla-cuotas-desde-prestamo`
+    )
+  }
+
+  /**
 
 
 

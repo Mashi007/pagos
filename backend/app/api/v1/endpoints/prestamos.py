@@ -79,7 +79,10 @@ from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdat
 
 from app.constants.prestamo_estados import prestamo_estado_exige_fecha_aprobacion
 
-from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
+from app.api.v1.endpoints.pagos import (
+    aplicar_pagos_pendientes_prestamo,
+    _marcar_prestamo_liquidado_si_corresponde,
+)
 
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 from app.services.estado_cuenta_datos import obtener_pago_para_recibo_cuota, texto_institucion_recibo_cuota
@@ -123,6 +126,10 @@ from app.services.prestamo_estado_coherencia import (
     prestamo_bloquea_nuevas_cuotas_o_cambio_plazo,
     prestamo_ids_aprobados_todas_cuotas_cubiertas,
 )
+from app.services.revision_manual.revision_manual_flags import (
+    marcar_prestamo_editado_si_existe_revision_manual,
+)
+
 from app.services.prestamo_db_compat import (
     fetch_prestamos_fecha_desistimiento_map,
     prestamos_tiene_columna_fecha_desistimiento,
@@ -2036,6 +2043,88 @@ def _resolver_monto_cuota(prestamo: "Prestamo", total: float, numero_cuotas: int
 
 
 
+def _monto_cuota_tabla_desde_prestamo(prestamo: Prestamo, total: float, numero_cuotas: int) -> float:
+
+    """
+
+    Monto por fila de cuota al generar/reconstruir la tabla.
+
+    Si no hay tasa (<=0) y el préstamo tiene cuota_periodo > 0, se usa ese valor
+
+    (coherente con formularios donde el usuario fija la cuota por período).
+
+    En caso contrario, misma lógica que _resolver_monto_cuota (plana o francesa).
+
+    """
+
+    if numero_cuotas <= 0:
+
+        return 0.0
+
+    tasa = float(prestamo.tasa_interes or 0)
+
+    cp = float(prestamo.cuota_periodo or 0)
+
+    if tasa <= 0 and cp > 0:
+
+        return cp
+
+    return _resolver_monto_cuota(prestamo, total, numero_cuotas)
+
+
+
+
+
+def _eliminar_tabla_cuotas_prestamo(db: Session, prestamo_id: int) -> dict[str, int]:
+
+    """
+
+    Elimina todas las cuotas del préstamo y dependencias (cuota_pagos, caché contable,
+
+    auditoría de conciliación manual por cuota). No elimina pagos.
+
+    """
+
+    subq_cuotas = select(Cuota.id).where(Cuota.prestamo_id == prestamo_id)
+
+    r_cp = db.execute(delete(CuotaPago).where(CuotaPago.cuota_id.in_(subq_cuotas)))
+
+    r_acm = db.execute(
+
+        delete(AuditoriaConciliacionManual).where(
+
+            AuditoriaConciliacionManual.cuota_id.in_(subq_cuotas)
+
+        )
+
+    )
+
+    r_cache = db.execute(
+
+        delete(ReporteContableCache).where(ReporteContableCache.cuota_id.in_(subq_cuotas))
+
+    )
+
+    r_cu = db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
+
+    db.flush()
+
+    return {
+
+        "cuotas_eliminadas": int(getattr(r_cu, "rowcount", -1) or -1),
+
+        "cuota_pagos_eliminadas": int(getattr(r_cp, "rowcount", -1) or -1),
+
+        "auditoria_conciliacion_eliminadas": int(getattr(r_acm, "rowcount", -1) or -1),
+
+        "cache_contable_eliminadas": int(getattr(r_cache, "rowcount", -1) or -1),
+
+    }
+
+
+
+
+
 def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, numero_cuotas: int, monto_cuota: float) -> int:
 
     """
@@ -2821,7 +2910,7 @@ def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
 
         raise HTTPException(status_code=400, detail="Préstamo sin número de cuotas o monto válido.")
 
-    monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
+    monto_cuota = _monto_cuota_tabla_desde_prestamo(p, total, numero_cuotas)
 
     # Regla unica: amortizacion con fecha_base_calculo (alineada con fecha de aprobacion en formularios).
 
@@ -2914,6 +3003,185 @@ def recalcular_fechas_amortizacion(
     db.commit()
 
     return resultado
+
+
+
+
+
+def _reconstruir_tabla_cuotas_desde_prestamo_en_sesion(
+    db: Session, prestamo_id: int
+) -> dict:
+    """
+    Elimina y regenera cuotas + reaplica pagos pendientes. Sin commit.
+    Actualiza prestamos.fecha_actualizacion. Lanza HTTPException si no aplica.
+    """
+    p = db.get(Prestamo, prestamo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    bloqueo = prestamo_bloquea_insertar_filas_cuota_si_liquidado_bd(p)
+    if bloqueo:
+        raise HTTPException(status_code=400, detail=bloqueo)
+    fecha_base = _fecha_para_amortizacion(p)
+    if not fecha_base:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "El préstamo debe tener fecha base de cálculo (o fecha de aprobación en datos antiguos) "
+                "para reconstruir la tabla de cuotas."
+            ),
+        )
+    n = int(p.numero_cuotas or 0)
+    total = float(p.total_financiamiento or 0)
+    if n <= 0 or total <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Préstamo sin número de cuotas o total de financiamiento válido en base de datos.",
+        )
+    elim = _eliminar_tabla_cuotas_prestamo(db, prestamo_id)
+    monto_cuota = _monto_cuota_tabla_desde_prestamo(p, total, n)
+    creadas = _generar_cuotas_amortizacion(db, p, fecha_base, n, monto_cuota)
+    pagos_aplicados = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
+    cuotas_nuevas = (
+        db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id == prestamo_id)
+            .order_by(Cuota.numero_cuota.asc())
+        )
+        .scalars()
+        .all()
+    )
+    sincronizar_columna_estado_cuotas(db, list(cuotas_nuevas), commit=False)
+    _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+    p2 = db.get(Prestamo, prestamo_id)
+    if p2 is not None:
+        p2.fecha_actualizacion = datetime.now()
+    return {
+        "message": "Tabla de cuotas reconstruida según datos del préstamo.",
+        "cuotas_creadas": creadas,
+        "pagos_con_aplicacion": pagos_aplicados,
+        **elim,
+    }
+
+
+@router.post("/{prestamo_id}/reconstruir-tabla-cuotas-desde-prestamo", response_model=dict)
+
+def reconstruir_tabla_cuotas_desde_prestamo(
+
+    prestamo_id: int,
+
+    db: Session = Depends(get_db),
+
+    current_user: UserResponse = Depends(get_current_user),
+
+):
+
+    """
+
+    Elimina la tabla de cuotas del préstamo y la vuelve a crear según los datos
+
+    persistidos en préstamo: total_financiamiento, número de cuotas, modalidad,
+
+    tasa, cuota_periodo (si tasa 0), fecha base de amortización.
+
+    Luego reaplica a la nueva tabla los pagos del préstamo que sigan pendientes de vínculo en cuota_pagos.
+
+    """
+
+    stats = _reconstruir_tabla_cuotas_desde_prestamo_en_sesion(db, prestamo_id)
+
+    marcar_prestamo_editado_si_existe_revision_manual(db, prestamo_id)
+
+    creadas = int(stats.get("cuotas_creadas") or 0)
+
+    pagos_aplicados = int(stats.get("pagos_con_aplicacion") or 0)
+
+    elim = {k: v for k, v in stats.items() if k not in ("message", "cuotas_creadas", "pagos_con_aplicacion")}
+
+    _fallback_uid = db.execute(
+
+        text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")
+
+    ).scalar() or 1
+
+    uid_audit = getattr(current_user, "id", None) or _fallback_uid
+
+    db.add(
+
+        Auditoria(
+
+            usuario_id=int(uid_audit),
+
+            accion="RECONSTRUCCION_TABLA_CUOTAS",
+
+            entidad="prestamos",
+
+            entidad_id=prestamo_id,
+
+            detalles=(
+
+                f"Reconstrucción de tabla de cuotas desde datos del préstamo (endpoint). "
+
+                f"Cuotas creadas: {creadas}. Pagos con nueva aplicación: {pagos_aplicados}. "
+
+                f"Eliminadas (rowcount): {elim}"
+
+            ),
+
+            exito=True,
+
+        )
+
+    )
+
+    db.commit()
+
+    usuario_id = getattr(current_user, "id", None)
+
+    if usuario_id:
+
+        try:
+
+            from app.services.registro_cambios_service import registrar_cambio
+
+            registrar_cambio(
+
+                db=db,
+
+                usuario_id=int(usuario_id),
+
+                modulo="Préstamos",
+
+                tipo_cambio="ACTUALIZAR",
+
+                descripcion=(
+
+                    f"Reconstrucción tabla de cuotas préstamo #{prestamo_id}: "
+
+                    f"{creadas} cuota(s), pagos con aplicación: {pagos_aplicados}."
+
+                ),
+
+                registro_id=prestamo_id,
+
+                tabla_afectada="cuotas",
+
+                campos_anteriores=None,
+
+                campos_nuevos={"reconstruccion": stats},
+
+            )
+
+        except Exception:
+
+            logger.warning(
+
+                "prestamos reconstruir_cuotas: no se pudo registrar_cambio prestamo_id=%s",
+
+                prestamo_id,
+
+            )
+
+    return stats
 
 
 @router.post("/{prestamo_id}/aplicar-condiciones-aprobacion", response_model=PrestamoResponse)

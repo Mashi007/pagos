@@ -994,7 +994,9 @@ export function RegistrarPagoForm({
                     })
                   }
                   onBlur={() => {
-                    const n = normalizarNumeroDocumento(formData.numero_documento)
+                    const n = normalizarNumeroDocumento(
+                      formData.numero_documento
+                    )
                     const raw = String(formData.numero_documento ?? '').trim()
                     if (n !== raw) {
                       setFormData(prev => ({

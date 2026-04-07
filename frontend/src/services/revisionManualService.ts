@@ -211,6 +211,20 @@ class RevisionManualService {
   }
 
   /**
+   * Persiste préstamo (mismo payload que editarPrestamo) y reconstruye cuotas en una sola operación en BD.
+   */
+  async guardarPrestamoYReconstruirCuotas(
+    prestamoId: number,
+    datos: Record<string, unknown>
+  ): Promise<any> {
+    return await apiClient.post(
+      `${this.baseUrl}/prestamos/${prestamoId}/guardar-prestamo-y-reconstruir-cuotas`,
+      datos,
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  /**
 
 
 
