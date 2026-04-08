@@ -794,16 +794,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     const confirmar =
       n === 0
         ? window.confirm(
-            'No hay filas en el listado en pantalla. El servidor procesará su lista prejudicial actual (puede estar vacía). ¿Ejecutar envío manual?'
+            'No hay filas en el listado en pantalla. El servidor procesará su lista prejudicial actual (puede estar vacía).\n\n¿Ejecutar envío manual? Aceptar = enviar. Cancelar en este cuadro = no enviar.'
           )
         : window.confirm(
-            `Envío manual a clientes del caso PREJUDICIAL (${n} filas visibles; el servidor usa la misma regla de lista). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
+            `Envío manual a clientes del caso PREJUDICIAL (${n} filas visibles; el servidor usa la misma regla de lista). Respeta plantilla, CCO y modo prueba en Configuración.\n\n¿Enviar correos ahora? Use Aceptar para enviar o Cancelar en este cuadro del navegador para no enviar (no se llama al servidor).`
           )
 
     if (!confirmar) {
-      toast.info(
-        'Envío cancelado. Si quiere enviar, pulse otra vez el botón y acepte el mensaje de confirmación.'
-      )
       return
     }
 
@@ -860,16 +857,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     const confirmar =
       n === 0
         ? window.confirm(
-            'No hay filas en el listado. El servidor procesará la lista actual del criterio PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía). ¿Ejecutar envío manual?'
+            'No hay filas en el listado. El servidor procesará la lista actual del criterio PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía).\n\n¿Ejecutar envío manual? Aceptar = enviar. Cancelar en este cuadro = no enviar.'
           )
         : window.confirm(
-            `Envío manual para 2 días antes (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
+            `Envío manual para 2 días antes (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración.\n\n¿Enviar correos ahora? Aceptar = enviar. Cancelar en este cuadro = no enviar (sin petición al servidor).`
           )
 
     if (!confirmar) {
-      toast.info(
-        'Envío cancelado. Si quiere enviar, pulse otra vez el botón y acepte el mensaje de confirmación.'
-      )
       return
     }
 
@@ -926,16 +920,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     const confirmar =
       n === 0
         ? window.confirm(
-            'No hay filas en el listado. El servidor procesará la lista actual del criterio día siguiente al vencimiento (puede estar vacía). ¿Ejecutar envío manual?'
+            'No hay filas en el listado. El servidor procesará la lista actual del criterio día siguiente al vencimiento (puede estar vacía).\n\n¿Ejecutar envío manual? Aceptar = enviar. Cancelar en este cuadro = no enviar.'
           )
         : window.confirm(
-            `Envío manual para día siguiente al vencimiento (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
+            `Envío manual para día siguiente al vencimiento (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración.\n\n¿Enviar correos ahora? Aceptar = enviar. Cancelar en este cuadro = no enviar (sin petición al servidor).`
           )
 
     if (!confirmar) {
-      toast.info(
-        'Envío cancelado. Si quiere enviar, pulse otra vez el botón y acepte el mensaje de confirmación.'
-      )
       return
     }
 
