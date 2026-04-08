@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   Shield,
   Clock,
-  CalendarClock,
   FileText,
   PieChart,
   LineChart,
@@ -1112,7 +1111,7 @@ export function DashboardMenu() {
                             }
                           : undefined
                       }
-                      icon={CalendarClock}
+                      icon={Clock}
                       color="text-amber-700"
                       bgColor="bg-amber-100"
                       borderColor="border-amber-500"
