@@ -1,6 +1,7 @@
 """
 Aplicacion principal FastAPI
 """
+import os
 import time
 import logging
 import warnings
@@ -344,14 +345,20 @@ def on_startup():
     init_email_config()
     logger.info("Configuracion de email (SMTP/tickets) inicializada desde variables de entorno.")
 
-    # Crear tablas y verificar BD con reintentos (Render puede tener la BD aun no lista en el primer worker)
+    # Crear tablas y verificar BD con reintentos (Render puede tener la BD aun no lista en el primer worker).
+    # En Render: menos reintentos y backoff mas corto — el health check no responde hasta terminar startup (timeout de deploy).
+    _on_render = (os.environ.get("RENDER") or "").lower() in ("true", "1", "yes")
     try:
-        _startup_db_with_retry(engine)
+        _startup_db_with_retry(
+            engine,
+            max_attempts=6 if _on_render else 10,
+            delay_sec=2.0 if _on_render else 3.0,
+        )
     except Exception as e:
         logger.exception("Startup BD fallo tras reintentos: %s", e)
         raise
 
-    # Scheduler: un proceso lider ejecuta APScheduler (evita duplicados con --workers 2).
+    # Scheduler: un proceso lider ejecuta APScheduler (con varios workers, solo uno es lider en BD).
     # Watcher en todos los workers: si el lider muere, otro reclama tras heartbeat obsoleto en BD.
     try:
         from app.core.database import SessionLocal

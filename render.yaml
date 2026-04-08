@@ -28,7 +28,8 @@
     preDeployCommand: alembic upgrade head
     # graceful-timeout: tiempo para que los workers terminen peticiones al recibir SIGTERM
     # (reduce "Error while closing socket [Errno 9] Bad file descriptor" en shutdown)
-    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 180 --graceful-timeout 45 --worker-class uvicorn.workers.UvicornWorker
+    # 1 worker: menos RAM y un solo startup BD (workers>1 duplican import ML + on_startup; deploy Render suele timeout ~15m).
+    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 180 --graceful-timeout 45 --worker-class uvicorn.workers.UvicornWorker
     rootDir: backend
     # /health responde sin BD; /health/db puede marcar 503 si Postgres aun no acepta conexiones.
     healthCheckPath: /health
