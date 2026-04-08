@@ -51,38 +51,55 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
-def _sum_monto_usd_pagos_conciliados_en_dia_caracas(
+def _sum_monto_cuotas_vencen_dia_conciliadas_mismo_dia_caracas(
     db: Session,
     dia: date,
     analista: Optional[str],
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> float:
-    """Suma monto en USD de pagos conciliados cuya fecha_conciliacion cae en `dia` (calendario America/Caracas).
+    """Suma monto_cuota (USD en cartera) solo de cuotas con vencimiento = `dia` (calendario Caracas).
 
-    Usa la misma expresión de USD que el resto del dashboard (BS con tasa vs monto_pagado).
+    Incluye filas donde ya hay pago vinculado y ese pago está conciliado con fecha_conciliacion
+    en el mismo `dia` (Caracas). No suma cuotas con vencimiento anterior (atrasos / otros meses)
+    aunque se hayan conciliado ese día.
     """
     bind = db.get_bind()
     dialect = bind.dialect.name if bind is not None else "postgresql"
     fe = Pago.fecha_conciliacion
     if dialect == "postgresql":
-        dia_expr = cast(
+        dia_conc = cast(
             func.timezone("America/Caracas", func.timezone("UTC", fe)),
             Date,
         )
     else:
-        dia_expr = cast(fe, Date)
-    monto_usd = _monto_pago_usd_sql()
+        dia_conc = cast(fe, Date)
+    producto_valido_kpi = func.nullif(
+        func.nullif(func.trim(Prestamo.producto), ""),
+        "Financiamiento",
+    )
+    modelo_lbl_expr = _modelo_label_dashboard_expr(
+        producto_valido_kpi,
+        incluir_sin_modelo=False,
+    )
     conds = [
+        Cuota.prestamo_id == Prestamo.id,
+        Prestamo.cliente_id == Cliente.id,
+        Prestamo.estado == "APROBADO",
+        Cuota.fecha_vencimiento == dia,
+        Cuota.pago_id.isnot(None),
+        Cuota.pago_id == Pago.id,
+        Pago.prestamo_id == Cuota.prestamo_id,
         Pago.conciliado.is_(True),
         Pago.fecha_conciliacion.isnot(None),
-        dia_expr == dia,
+        dia_conc == dia,
     ]
     q = (
-        select(func.coalesce(func.sum(monto_usd), 0))
-        .select_from(Pago)
-        .join(Prestamo, Pago.prestamo_id == Prestamo.id)
+        select(func.coalesce(func.sum(Cuota.monto), 0))
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .join(Pago, Cuota.pago_id == Pago.id)
         .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
         .where(and_(*conds))
     )
@@ -91,14 +108,66 @@ def _sum_monto_usd_pagos_conciliados_en_dia_caracas(
     if concesionario:
         q = q.where(Prestamo.concesionario == concesionario)
     if modelo:
-        producto_valido_kpi = func.nullif(
-            func.nullif(func.trim(Prestamo.producto), ""),
-            "Financiamiento",
+        q = q.where(modelo_lbl_expr == modelo)
+    return _safe_float(db.scalar(q) or 0)
+
+
+def _sum_monto_cuotas_atrasadas_conciliadas_mismo_dia_caracas(
+    db: Session,
+    dia: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> float:
+    """Suma monto_cuota (USD) de cuotas con vencimiento *estrictamente anterior* a `dia` y conciliación en `dia` (Caracas).
+
+    Complemento de «vence hoy»: aquí solo entran cuotas atrasadas (fecha_vencimiento < día calendario)
+    cuyo pago se concilió ese mismo día. No incluye cuotas con vencimiento = `dia`.
+    """
+    bind = db.get_bind()
+    dialect = bind.dialect.name if bind is not None else "postgresql"
+    fe = Pago.fecha_conciliacion
+    if dialect == "postgresql":
+        dia_conc = cast(
+            func.timezone("America/Caracas", func.timezone("UTC", fe)),
+            Date,
         )
-        modelo_lbl_expr = _modelo_label_dashboard_expr(
-            producto_valido_kpi,
-            incluir_sin_modelo=False,
-        )
+    else:
+        dia_conc = cast(fe, Date)
+    producto_valido_kpi = func.nullif(
+        func.nullif(func.trim(Prestamo.producto), ""),
+        "Financiamiento",
+    )
+    modelo_lbl_expr = _modelo_label_dashboard_expr(
+        producto_valido_kpi,
+        incluir_sin_modelo=False,
+    )
+    conds = [
+        Cuota.prestamo_id == Prestamo.id,
+        Prestamo.cliente_id == Cliente.id,
+        Prestamo.estado == "APROBADO",
+        Cuota.fecha_vencimiento < dia,
+        Cuota.pago_id.isnot(None),
+        Cuota.pago_id == Pago.id,
+        Pago.prestamo_id == Cuota.prestamo_id,
+        Pago.conciliado.is_(True),
+        Pago.fecha_conciliacion.isnot(None),
+        dia_conc == dia,
+    ]
+    q = (
+        select(func.coalesce(func.sum(Cuota.monto), 0))
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .join(Pago, Cuota.pago_id == Pago.id)
+        .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
+        .where(and_(*conds))
+    )
+    if analista:
+        q = q.where(Prestamo.analista == analista)
+    if concesionario:
+        q = q.where(Prestamo.concesionario == concesionario)
+    if modelo:
         q = q.where(modelo_lbl_expr == modelo)
     return _safe_float(db.scalar(q) or 0)
 
@@ -111,10 +180,31 @@ def _kpi_pagos_conciliados_hoy(
 ) -> dict:
     hoy_c = hoy_negocio()
     ayer_c = hoy_c - timedelta(days=1)
-    hoy_m = _sum_monto_usd_pagos_conciliados_en_dia_caracas(
+    hoy_m = _sum_monto_cuotas_vencen_dia_conciliadas_mismo_dia_caracas(
         db, hoy_c, analista, concesionario, modelo
     )
-    ayer_m = _sum_monto_usd_pagos_conciliados_en_dia_caracas(
+    ayer_m = _sum_monto_cuotas_vencen_dia_conciliadas_mismo_dia_caracas(
+        db, ayer_c, analista, concesionario, modelo
+    )
+    if ayer_m:
+        variacion = ((hoy_m - ayer_m) / ayer_m) * 100.0
+    else:
+        variacion = 0.0
+    return _kpi(round(hoy_m, 2), round(variacion, 1))
+
+
+def _kpi_cuotas_atrasadas_conciliadas_hoy(
+    db: Session,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> dict:
+    hoy_c = hoy_negocio()
+    ayer_c = hoy_c - timedelta(days=1)
+    hoy_m = _sum_monto_cuotas_atrasadas_conciliadas_mismo_dia_caracas(
+        db, hoy_c, analista, concesionario, modelo
+    )
+    ayer_m = _sum_monto_cuotas_atrasadas_conciliadas_mismo_dia_caracas(
         db, ayer_c, analista, concesionario, modelo
     )
     if ayer_m:
@@ -201,19 +291,6 @@ def _pagos_programados_hoy_metrics(
         variacion = 0.0
     pct = (float(pag_hoy) / float(tot_hoy) * 100.0) if tot_hoy else 0.0
     return _kpi(round(m_hoy, 2), round(variacion, 1)), round(pct, 1)
-
-
-def _monto_pago_usd_sql():
-    """Expresión SQL: USD de cartera. Si el registro es BS con tasa y monto en Bs., usa conversión (evita picos por monto_pagado mal cargado)."""
-    moneda_bs = func.lower(func.trim(Pago.moneda_registro)) == "bs"
-    tasa_ok = and_(
-        Pago.tasa_cambio_bs_usd.isnot(None),
-        Pago.tasa_cambio_bs_usd > 0,
-    )
-    return case(
-        (and_(moneda_bs, Pago.monto_bs_original.isnot(None), tasa_ok), Pago.monto_bs_original / Pago.tasa_cambio_bs_usd),
-        else_=Pago.monto_pagado,
-    )
 
 
 def _compute_kpis_principales(
@@ -340,6 +417,10 @@ def _compute_kpis_principales(
             db, analista, concesionario, modelo
         )
 
+        cuotas_atrasadas_conciliadas_hoy_kpi = _kpi_cuotas_atrasadas_conciliadas_hoy(
+            db, analista, concesionario, modelo
+        )
+
         hoy = date.today()
         inicio_d = inicio_dt.date() if hasattr(inicio_dt, "date") else (inicio if usar_rango else inicio_dt.date())
         fin_d = fin_dt.date() if hasattr(fin_dt, "date") else (fin if usar_rango else fin_dt.date())
@@ -410,6 +491,7 @@ def _compute_kpis_principales(
                 "financiamiento_total": round(_safe_float(financiamiento_aprobado_mes), 2),
             },
             "pagos_conciliados_hoy": pagos_conciliados_hoy_kpi,
+            "cuotas_atrasadas_conciliadas_hoy": cuotas_atrasadas_conciliadas_hoy_kpi,
             "total_clientes": _kpi(_safe_float(total_clientes), 0.0),
             "clientes_por_estado": {
                 "activos": _kpi(_safe_float(activos), 0.0),
@@ -606,6 +688,9 @@ def get_kpis_principales(
             # KPI diario: recalcular siempre para reflejar el día actual (el resto sigue en caché).
             merged = dict(cached)
             merged["pagos_conciliados_hoy"] = _kpi_pagos_conciliados_hoy(
+                db, analista, concesionario, modelo
+            )
+            merged["cuotas_atrasadas_conciliadas_hoy"] = _kpi_cuotas_atrasadas_conciliadas_hoy(
                 db, analista, concesionario, modelo
             )
             k_prog, pct_prog = _pagos_programados_hoy_metrics(

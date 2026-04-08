@@ -145,8 +145,7 @@ export function RegistrarPagoForm({
 
   const codigoDocumentoInputRef = useRef<HTMLInputElement>(null)
 
-  const [vistoRevisionManualOpen, setVistoRevisionManualOpen] =
-    useState(false)
+  const [vistoRevisionManualOpen, setVistoRevisionManualOpen] = useState(false)
 
   const [formData, setFormData] = useState<PagoCreate>({
     cedula_cliente: pagoInicial?.cedula_cliente || '',
@@ -1296,7 +1295,9 @@ export function RegistrarPagoForm({
           >
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>Comprobante duplicado (revisión manual)</DialogTitle>
+                <DialogTitle>
+                  Comprobante duplicado (revisión manual)
+                </DialogTitle>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p>
                     Misma decisión que en carga masiva al pulsar «Visto»:
@@ -1305,10 +1306,9 @@ export function RegistrarPagoForm({
                   <ul className="list-inside list-disc space-y-1 text-xs">
                     <li>
                       <strong>Añadir sufijos</strong>: agrega{' '}
-                      <code className="rounded bg-gray-100 px-1">_A####</code>{' '}
-                      o{' '}
-                      <code className="rounded bg-gray-100 px-1">_P####</code> al
-                      comprobante (único en la base de datos).
+                      <code className="rounded bg-gray-100 px-1">_A####</code> o{' '}
+                      <code className="rounded bg-gray-100 px-1">_P####</code>{' '}
+                      al comprobante (único en la base de datos).
                     </li>
                     <li>
                       <strong>Autorizar sin cambiar el documento</strong>: el
@@ -1327,8 +1327,7 @@ export function RegistrarPagoForm({
                     const msg = [errors.general, errors.numero_documento]
                       .filter(Boolean)
                       .join(' ')
-                    const letter =
-                      letterSufijoVistoDesdeMensajeDuplicado(msg)
+                    const letter = letterSufijoVistoDesdeMensajeDuplicado(msg)
                     const usados = collectTokensSufijoVistoArchivoDesdeFilas([
                       { numero_documento: formData.numero_documento },
                     ])
@@ -1344,8 +1343,7 @@ export function RegistrarPagoForm({
                       const g = next.general
                       if (
                         g === DUPLICADO_DOCUMENTO_UI ||
-                        (g &&
-                          g.toLowerCase().includes('documento'))
+                        (g && g.toLowerCase().includes('documento'))
                       ) {
                         delete next.general
                       }

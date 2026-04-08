@@ -27,6 +27,15 @@ import { Input } from '../components/ui/input'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
+
 import { toast } from 'sonner'
 
 import { revisionManualService } from '../services/revisionManualService'
@@ -80,7 +89,27 @@ interface ResumenRevision {
 
 const PER_PAGE = 20
 
+/** Máximo permitido por GET /revision-manual/prestamos (backend le=100). */
+const PRESTAMOS_POR_CEDULA_PARA_MULTI_CREDITO = 100
+
 const STORAGE_KEY = 'revision-manual-state'
+
+function normalizarCedulaRevisionLista(c: string): string {
+  return String(c ?? '')
+    .trim()
+    .replace(/-/g, '')
+    .toUpperCase()
+}
+
+function etiquetaEstadoRevisionManual(estado: string): string {
+  const e = (estado ?? '').trim().toLowerCase()
+  if (e === 'revisado') return 'Revisado'
+  if (e === 'revisando') return 'En revisión'
+  if (e === 'pendiente') return 'Pendiente'
+  if (e === 'en_espera') return 'En espera'
+  if (e === 'rechazado') return 'Rechazado'
+  return estado || '-'
+}
 
 function getStoredState(): {
   page: number
@@ -130,6 +159,17 @@ export function RevisionManual() {
   const [prestamosOcultos, setPrestamosOcultos] = useState<Set<number>>(
     new Set()
   )
+
+  const [elegirCreditoOpen, setElegirCreditoOpen] = useState(false)
+
+  const [elegirCreditoPayload, setElegirCreditoPayload] = useState<{
+    cedula: string
+    nombres: string
+    opciones: PrestamoRevision[]
+    sugeridoId: number
+  } | null>(null)
+
+  const [resolviendoMultiCredito, setResolviendoMultiCredito] = useState(false)
 
   const timeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(
     new Map()
@@ -263,16 +303,18 @@ export function RevisionManual() {
     }
   }
 
-  const handleEditarNo = (prestamoId: number) => {
-    // Confirmar antes de abrir editor
-
+  const confirmarYIniciarRevision = async (
+    prestamoId: number,
+    nombres: string
+  ) => {
     const confirmar = window.confirm(
       '⚠️ INICIAR EDICIÓN\n\n' +
-        'Al presionar "No", accederás a la interfaz de edición donde podrás:\n' +
+        `Crédito seleccionado: préstamo #${prestamoId} - ${nombres}\n\n` +
+        'Accederás a la interfaz de edición donde podrás:\n' +
         '✓ Editar datos del cliente\n' +
         '✓ Editar datos del préstamo\n' +
         '✓ Editar cuotas y pagos\n\n' +
-        '✓ Puedes guardar cambios parciales (Guardar Parciales)\n' +
+        '✓ Puedes guardar cambios parciales (Guardar cambios)\n' +
         '✓ O finalizar la revisión (Guardar y Cerrar)\n\n' +
         '¿Deseas continuar?'
     )
@@ -283,30 +325,99 @@ export function RevisionManual() {
       return
     }
 
-    // Inicia revisión (cambia estado a 'revisando')
+    try {
+      await revisionManualService.iniciarRevision(prestamoId)
 
-    revisionManualService
-      .iniciarRevision(prestamoId)
-      .then(() => {
-        toast.info('ℹ️ Edición iniciada. Abriendo editor...')
+      toast.info('ℹ️ Edición iniciada. Abriendo editor...')
 
-        queryClient.invalidateQueries({
-          queryKey: ['revision-manual-prestamos'],
-        })
-        void invalidateListasNotificacionesMora(queryClient)
-
-        // Navega a página de edición
-
-        navigate(`/revision-manual/editar/${prestamoId}`)
+      queryClient.invalidateQueries({
+        queryKey: ['revision-manual-prestamos'],
       })
-      .catch((err: any) => {
-        const errorMsg =
-          err?.response?.data?.detail || 'Error al iniciar revisión'
+      void invalidateListasNotificacionesMora(queryClient)
 
-        toast.error(`❌ ${errorMsg}`)
+      navigate(`/revision-manual/editar/${prestamoId}`)
+    } catch (err: any) {
+      const errorMsg =
+        err?.response?.data?.detail || 'Error al iniciar revisión'
 
-        console.error('Error iniciando revisión:', err)
+      toast.error(`❌ ${errorMsg}`)
+
+      console.error('Error iniciando revisión:', err)
+    }
+  }
+
+  const handleEditarNo = async (prestamoId: number) => {
+    if (resolviendoMultiCredito) return
+
+    const visibles = (data?.prestamos ?? []).filter(
+      p => !prestamosOcultos.has(p.prestamo_id)
+    )
+
+    const fila = visibles.find(p => p.prestamo_id === prestamoId)
+    const cedulaRaw = (fila?.cedula ?? '').trim()
+    const nombresFila = fila?.nombres ?? ''
+
+    if (!cedulaRaw) {
+      await confirmarYIniciarRevision(prestamoId, nombresFila || 'Cliente')
+
+      return
+    }
+
+    setResolviendoMultiCredito(true)
+
+    try {
+      const res = await revisionManualService.getPrestamosRevision(
+        'todos',
+        1,
+        PRESTAMOS_POR_CEDULA_PARA_MULTI_CREDITO,
+        cedulaRaw
+      )
+
+      const norm = normalizarCedulaRevisionLista(cedulaRaw)
+      const mapa = new Map<number, PrestamoRevision>()
+
+      for (const p of res.prestamos ?? []) {
+        if (normalizarCedulaRevisionLista(p.cedula) === norm) {
+          mapa.set(p.prestamo_id, p)
+        }
+      }
+
+      const misma = [...mapa.values()].sort(
+        (a, b) => a.prestamo_id - b.prestamo_id
+      )
+
+      if (misma.length === 0) {
+        await confirmarYIniciarRevision(prestamoId, nombresFila || 'Cliente')
+
+        return
+      }
+
+      if (misma.length === 1) {
+        const unico = misma[0]
+        await confirmarYIniciarRevision(
+          unico.prestamo_id,
+          unico.nombres || nombresFila || 'Cliente'
+        )
+
+        return
+      }
+
+      setElegirCreditoPayload({
+        cedula: cedulaRaw,
+        nombres: nombresFila || misma[0]?.nombres || 'Cliente',
+        opciones: misma,
+        sugeridoId: prestamoId,
       })
+      setElegirCreditoOpen(true)
+    } catch (e) {
+      console.error('Error comprobando créditos por cédula:', e)
+      toast.error(
+        'No se pudo verificar si hay varios créditos. Se continúa con la fila seleccionada.'
+      )
+      await confirmarYIniciarRevision(prestamoId, nombresFila || 'Cliente')
+    } finally {
+      setResolviendoMultiCredito(false)
+    }
   }
 
   const handleEliminar = async (prestamoId: number, nombres: string) => {
@@ -763,8 +874,9 @@ export function RevisionManual() {
                               <Button
                                 size="sm"
                                 className="h-8 bg-blue-600 px-2 text-xs text-white hover:bg-blue-700"
+                                disabled={resolviendoMultiCredito}
                                 onClick={() =>
-                                  handleEditarNo(prestamo.prestamo_id)
+                                  void handleEditarNo(prestamo.prestamo_id)
                                 }
                               >
                                 ✎ No
@@ -806,8 +918,9 @@ export function RevisionManual() {
                               <Button
                                 size="sm"
                                 className="h-8 bg-blue-600 px-2 text-xs text-white hover:bg-blue-700"
+                                disabled={resolviendoMultiCredito}
                                 onClick={() =>
-                                  handleEditarNo(prestamo.prestamo_id)
+                                  void handleEditarNo(prestamo.prestamo_id)
                                 }
                                 title="Reiniciar edición"
                               >
@@ -884,6 +997,137 @@ export function RevisionManual() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={elegirCreditoOpen}
+        onOpenChange={open => {
+          setElegirCreditoOpen(open)
+
+          if (!open) setElegirCreditoPayload(null)
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Varios créditos para la misma cédula</DialogTitle>
+
+            <DialogDescription>
+              Esta cédula tiene más de un préstamo en la cola de revisión
+              manual. Elija el crédito que va a abrir para no mezclar montos,
+              cuotas ni pagos entre operaciones distintas.
+            </DialogDescription>
+
+            <div className="mt-3 space-y-2 text-sm text-gray-600">
+              {elegirCreditoPayload ? (
+                <p className="font-medium text-gray-800">
+                  Cédula: {elegirCreditoPayload.cedula}
+                  {elegirCreditoPayload.nombres ? (
+                    <> · {elegirCreditoPayload.nombres}</>
+                  ) : null}
+                </p>
+              ) : null}
+
+              <p className="text-xs text-amber-800">
+                Si hay más de {PRESTAMOS_POR_CEDULA_PARA_MULTI_CREDITO}{' '}
+                préstamos para esta cédula, use la búsqueda por cédula y revise
+                el listado completo.
+              </p>
+            </div>
+          </DialogHeader>
+
+          <div className="max-h-[min(360px,50vh)] space-y-2 overflow-y-auto pr-1">
+            {elegirCreditoPayload?.opciones.map(op => {
+              const esSugerido =
+                op.prestamo_id === elegirCreditoPayload.sugeridoId
+
+              return (
+                <button
+                  key={op.prestamo_id}
+                  type="button"
+                  className={`w-full rounded-lg border p-3 text-left text-sm transition-colors hover:bg-slate-50 ${
+                    esSugerido
+                      ? 'border-blue-400 bg-blue-50/80 ring-1 ring-blue-200'
+                      : 'border-gray-200 bg-white'
+                  }`}
+                  onClick={() => {
+                    const payload = elegirCreditoPayload
+
+                    setElegirCreditoOpen(false)
+
+                    setElegirCreditoPayload(null)
+
+                    void confirmarYIniciarRevision(
+                      op.prestamo_id,
+                      op.nombres || payload?.nombres || 'Cliente'
+                    )
+                  }}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold text-gray-900">
+                      Préstamo #{op.prestamo_id}
+                    </span>
+
+                    {esSugerido ? (
+                      <span className="rounded bg-blue-600 px-2 py-0.5 text-xs font-medium text-white">
+                        Fila desde la que hizo clic
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-2 grid gap-1 text-xs text-gray-600 sm:grid-cols-2">
+                    <span>
+                      Total: $
+                      {op.total_prestamo.toLocaleString('es-ES', {
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+
+                    <span>
+                      Saldo: $
+                      {op.saldo.toLocaleString('es-ES', {
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+
+                    <span>
+                      Abonos: $
+                      {op.total_abonos.toLocaleString('es-ES', {
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+
+                    <span>
+                      Revisión:{' '}
+                      {etiquetaEstadoRevisionManual(op.estado_revision)}
+                    </span>
+                  </div>
+
+                  {op.cuotas_pagadas != null && op.cuotas_total != null ? (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Cuotas pagadas: {op.cuotas_pagadas} / {op.cuotas_total}
+                    </p>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setElegirCreditoOpen(false)
+
+                setElegirCreditoPayload(null)
+
+                toast.info('ℹ️ Elija un crédito cuando esté listo.')
+              }}
+            >
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }

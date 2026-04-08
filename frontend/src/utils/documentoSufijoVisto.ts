@@ -18,7 +18,9 @@ export function collectTokensSufijoVistoArchivoDesdeFilas(
 ): Set<string> {
   const usados = new Set<string>()
   for (const r of rows) {
-    const m = String(r.numero_documento ?? '').match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)
+    const m = String(r.numero_documento ?? '').match(
+      TOKEN_SUFIJO_VISTO_ARCHIVO_RE
+    )
     if (m) usados.add(m[1].toUpperCase())
   }
   return usados
@@ -64,7 +66,9 @@ export function aplicarSufijoVistoADocumento(
 }
 
 /** Heurística: mensaje de error 409 / detalle indica duplicado ligado a otro préstamo → sufijo P. */
-export function letterSufijoVistoDesdeMensajeDuplicado(msg: string | undefined): 'A' | 'P' {
+export function letterSufijoVistoDesdeMensajeDuplicado(
+  msg: string | undefined
+): 'A' | 'P' {
   const m = (msg || '').toLowerCase()
   if (
     m.includes('otro prestamo') ||

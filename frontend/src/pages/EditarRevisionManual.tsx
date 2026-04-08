@@ -2711,7 +2711,9 @@ export function EditarRevisionManual() {
                     </label>
                     <p className="mb-2 text-xs text-gray-600">
                       Fecha de solicitud/requerimiento del expediente (tabla{' '}
-                      <code className="rounded bg-white px-1">prestamos.fecha_requerimiento</code>
+                      <code className="rounded bg-white px-1">
+                        prestamos.fecha_requerimiento
+                      </code>
                       ). Se muestra el valor cargado desde la base; puede
                       corregirla aquí si debe alinearse con la fecha de
                       aprobación u otros datos.
@@ -2747,10 +2749,10 @@ export function EditarRevisionManual() {
                       en revisión manual. La base de cálculo es la misma fecha.
                       El botón guarda en servidor los datos de préstamo del
                       formulario (total, plazo, cuota por período, modalidad,
-                      tasa) y reconstruye la tabla de cuotas (cantidad, montos
-                      y fechas de vencimiento); luego reaplica pagos
-                      pendientes. &quot;Guardar cambios&quot; y &quot;Guardar y
-                      cerrar&quot; persisten el resto en la base.
+                      tasa) y reconstruye la tabla de cuotas (cantidad, montos y
+                      fechas de vencimiento); luego reaplica pagos pendientes.
+                      &quot;Guardar cambios&quot; y &quot;Guardar y cerrar&quot;
+                      persisten el resto en la base.
                     </p>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                       <div className="relative min-w-0 flex-1">

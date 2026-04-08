@@ -995,14 +995,14 @@ export function DashboardMenu() {
           </motion.div>
         )}
 
-        {/* KPIs PRINCIPALES (dos tarjetas; el gráfico de notificaciones va en la sección de gráficos) */}
+        {/* KPIs PRINCIPALES (tres tarjetas en una fila en pantallas grandes) */}
 
         <section id="dashboard-kpis" aria-label="KPIs principales">
           <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-2 lg:items-stretch">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:items-stretch">
               {loadingKPIs ? (
                 <>
-                  {[1, 2].map(i => (
+                  {[1, 2, 3].map(i => (
                     <div
                       key={i}
                       className="h-[180px] animate-pulse rounded-xl bg-gray-100"
@@ -1010,7 +1010,7 @@ export function DashboardMenu() {
                   ))}
                 </>
               ) : errorKPIs ? (
-                <Card className="border-red-200 bg-red-50 md:col-span-2 lg:col-span-2">
+                <Card className="border-red-200 bg-red-50 md:col-span-2 lg:col-span-3">
                   <CardContent className="p-6">
                     <div className="flex items-center gap-3 text-red-700">
                       <AlertTriangle className="h-5 w-5" />
@@ -1031,7 +1031,7 @@ export function DashboardMenu() {
                   >
                     <KpiCardLarge
                       title="Pagos conciliados (hoy)"
-                      subtitle="Monto en USD (pagos con conciliación = hoy, America/Caracas; BS convertidos con tasa del registro)"
+                      subtitle="Monto en USD solo de cuotas con vencimiento hoy (Caracas) y conciliación ese mismo día; no incluye atrasos ni otras fechas de vencimiento"
                       value={kpisPrincipales.pagos_conciliados_hoy.valor_actual}
                       variation={
                         kpisPrincipales.pagos_conciliados_hoy
@@ -1086,41 +1086,38 @@ export function DashboardMenu() {
                       format="currency"
                     />
                   </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.12 }}
+                  >
+                    <KpiCardLarge
+                      title="Pago vencido (mensual)"
+                      subtitle="Cuotas vencidas sin pagar (solo si ya pasó la fecha de vencimiento)"
+                      value={kpisPrincipales.total_morosidad_usd.valor_actual}
+                      variation={
+                        kpisPrincipales.total_morosidad_usd
+                          .variacion_porcentual !== undefined
+                          ? {
+                              percent:
+                                kpisPrincipales.total_morosidad_usd
+                                  .variacion_porcentual,
+
+                              label: 'vs mes anterior',
+                            }
+                          : undefined
+                      }
+                      icon={AlertTriangle}
+                      color="text-red-600"
+                      bgColor="bg-red-100"
+                      borderColor="border-red-500"
+                      format="currency"
+                    />
+                  </motion.div>
                 </>
               ) : null}
             </div>
-
-            {!loadingKPIs && !errorKPIs && kpisPrincipales ? (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.14 }}
-                className="max-w-full"
-              >
-                <KpiCardLarge
-                  title="Pago vencido (mensual)"
-                  subtitle="Cuotas vencidas sin pagar (solo si ya pasó la fecha de vencimiento)"
-                  value={kpisPrincipales.total_morosidad_usd.valor_actual}
-                  variation={
-                    kpisPrincipales.total_morosidad_usd.variacion_porcentual !==
-                    undefined
-                      ? {
-                          percent:
-                            kpisPrincipales.total_morosidad_usd
-                              .variacion_porcentual,
-
-                          label: 'vs mes anterior',
-                        }
-                      : undefined
-                  }
-                  icon={AlertTriangle}
-                  color="text-red-600"
-                  bgColor="bg-red-100"
-                  borderColor="border-red-500"
-                  format="currency"
-                />
-              </motion.div>
-            ) : null}
           </div>
         </section>
 
