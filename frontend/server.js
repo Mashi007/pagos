@@ -9,6 +9,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Health al inicio (antes de CSP, compresion y proxy): Render debe obtener 200 rapido; si /health queda
+// despues de middlewares pesados o el dashboard sigue usando GET / (302), el deploy hace timeout.
+function sendHealthJson(res) {
+  res.status(200).json({
+    status: 'healthy',
+    service: 'rapicredit-frontend',
+    version: '1.0.1',
+  });
+}
+app.get('/health', (_req, res) => sendHealthJson(res));
+app.head('/health', (_req, res) => res.status(200).end());
+app.get('/healthz', (_req, res) => sendHealthJson(res));
+app.head('/healthz', (_req, res) => res.status(200).end());
+
 // URL del backend - Prioridad: API_BASE_URL (runtime) > VITE_API_BASE_URL (build-time fallback) > VITE_API_URL > localhost
 // ⚠️ IMPORTANTE: En Render, DEBE estar configurada la variable API_BASE_URL (SIN prefijo VITE_)
 // Las variables VITE_* solo funcionan durante el build, NO en runtime de Node.js
@@ -357,26 +372,13 @@ app.use((req, res, next) => {
 // Servir estáticos bajo /pagos (index.html, /pagos/assets/*, etc.)
 app.use(FRONTEND_BASE, express.static(distPath, staticOptions));
 
-// Health check endpoint - IMPORTANTE para Render
-// Render usa esto para verificar que el servicio está vivo
-// OPTIMIZADO: Respuesta ultra rápida sin procesamiento adicional
-app.get('/health', (req, res) => {
-  // Responder inmediatamente sin procesamiento adicional
-  res.status(200).json({
-    status: 'healthy',
-    service: 'rapicredit-frontend',
-    version: '1.0.1'
-  });
-});
-
-// También responder a HEAD requests (usado por Render)
-// OPTIMIZADO: Respuesta inmediata sin body
-app.head('/health', (req, res) => {
-  res.status(200).end();
-});
-
 // Redirigir raíz a /pagos (frontend en https://rapicredit.onrender.com/pagos)
+// Si el health check del panel sigue en "/" (por defecto), devolver 200 para no bloquear deploy (302 no cuenta como sano).
 app.get('/', (req, res) => {
+  const ua = (req.headers['user-agent'] || '').toLowerCase();
+  if (ua.includes('render') || ua.includes('healthcheck') || ua.includes('kube-probe')) {
+    return sendHealthJson(res);
+  }
   res.redirect(302, FRONTEND_BASE + (req.url !== '/' ? req.url : ''));
 });
 

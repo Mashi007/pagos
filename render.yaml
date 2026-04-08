@@ -6,11 +6,11 @@
     rootDir: frontend
     buildCommand: npm ci && npm run build
     startCommand: node server.js
-    # GET / devuelve 302 -> /pagos; Render exige 200 en el health check por defecto -> timeout.
+    # GET / redirige a /pagos; healthCheckPath /health devuelve 200 JSON sin pasar por el proxy.
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
-        value: 20.11.0
+        value: 20.19.0
       # API_BASE_URL: URL del backend para proxy /api/*. Render la inyecta desde pagos-backend.
       - key: API_BASE_URL
         fromService:
