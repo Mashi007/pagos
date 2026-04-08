@@ -14,6 +14,8 @@ import {
   clearAuthStorage,
 } from '../utils/storage'
 
+import { normalizeAuthUser } from '../utils/rol'
+
 export interface LoginForm {
   email: string
 
@@ -73,15 +75,22 @@ export class AuthService {
 
       const refreshToken = response?.refresh_token
 
-      const user = response?.user
+      const userRaw = response?.user
+      const user = normalizeAuthUser(userRaw ?? null)
 
       if (!accessToken || typeof accessToken !== 'string') {
         console.error('Login: el servidor no devolvió access_token.', {
-          hasUser: !!user,
+          hasUser: !!userRaw,
         })
 
         throw new Error(
           'El servidor no devolvió un token de sesión. Intenta de nuevo.'
+        )
+      }
+
+      if (!user) {
+        throw new Error(
+          'El servidor no devolvió datos de usuario válidos. Intenta de nuevo.'
         )
       }
 
@@ -98,7 +107,7 @@ export class AuthService {
 
         safeSetItem('refresh_token', refreshToken ?? '')
 
-        safeSetItem('user', user ?? null)
+        safeSetItem('user', user)
 
         safeSetItem('remember_me', true)
       } else {
@@ -106,7 +115,7 @@ export class AuthService {
 
         safeSetSessionItem('refresh_token', refreshToken ?? '')
 
-        safeSetSessionItem('user', user ?? null)
+        safeSetSessionItem('user', user)
 
         safeRemoveItem('remember_me')
       }
@@ -115,7 +124,10 @@ export class AuthService {
 
       apiClient.resetRefreshTokenExpired()
 
-      return response
+      return {
+        ...response,
+        user,
+      }
     } catch (error: any) {
       if (error.code === 'NETWORK_ERROR' || !error.response) {
         const networkError = new Error(
@@ -210,7 +222,13 @@ export class AuthService {
 
       // El backend retorna directamente el objeto User, no envuelto en ApiResponse
 
-      const user = response
+      const raw = response
+
+      if (!raw) {
+        throw new Error('Usuario no encontrado en la respuesta')
+      }
+
+      const user = normalizeAuthUser(raw)
 
       if (!user) {
         throw new Error('Usuario no encontrado en la respuesta')

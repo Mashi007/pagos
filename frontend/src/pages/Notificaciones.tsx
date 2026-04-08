@@ -563,6 +563,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [enviandoD2Antes, setEnviandoD2Antes] = useState(false)
 
+  const [enviandoPago1Dia, setEnviandoPago1Dia] = useState(false)
+
   const operacionListaAbortRef = useRef<AbortController | null>(null)
 
   const beginOperacionListaAbortable = () => {
@@ -578,13 +580,17 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setActualizandoListas(false)
     setEnviandoPrejudicial(false)
     setEnviandoD2Antes(false)
+    setEnviandoPago1Dia(false)
     toast.warning(
       'Cancelación: se cortó la petición en el navegador. El servidor puede seguir unos segundos.'
     )
   }
 
   const hayOperacionListaEnCurso =
-    actualizandoListas || enviandoPrejudicial || enviandoD2Antes
+    actualizandoListas ||
+    enviandoPrejudicial ||
+    enviandoD2Antes ||
+    enviandoPago1Dia
 
   const handleDescargarEstadoCuentaPdf = async (prestamoId: number) => {
     setDescargandoEstadoCuentaId(prestamoId)
@@ -791,6 +797,64 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         operacionListaAbortRef.current = null
       }
       setEnviandoD2Antes(false)
+    }
+  }
+
+  const handleEnviarPago1DiaManual = async () => {
+    if (modulo !== 'a1dia') return
+
+    const n = data?.dias_1_atraso?.length ?? 0
+
+    const confirmar =
+      n === 0
+        ? window.confirm(
+            'No hay filas en el listado. El servidor procesará la lista actual del criterio día siguiente al vencimiento (puede estar vacía). ¿Ejecutar envío manual?'
+          )
+        : window.confirm(
+            `Envío manual para día siguiente al vencimiento (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
+          )
+
+    if (!confirmar) return
+
+    const ac = beginOperacionListaAbortable()
+    setEnviandoPago1Dia(true)
+
+    try {
+      const res = await notificacionService.enviarCasoManual(
+        'PAGO_1_DIA_ATRASADO',
+        { signal: ac.signal }
+      )
+
+      toast.success(
+        `${res.mensaje} Enviados: ${res.enviados}. Sin email: ${res.sin_email}. Fallidos: ${res.fallidos}.`
+      )
+
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+      })
+
+      await invalidateListasNotificacionesMora(queryClient, {
+        skipCrossTabBroadcast: true,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+      })
+    } catch (e) {
+      console.error(e)
+      if (isRequestCanceled(e)) {
+        toast.info('Envío cancelado en el navegador.')
+        return
+      }
+
+      toast.error(
+        'No se pudo completar el envío. Revise PAGO_1_DIA_ATRASADO en Configuración, cuentas de correo y modo prueba.'
+      )
+    } finally {
+      if (operacionListaAbortRef.current === ac) {
+        operacionListaAbortRef.current = null
+      }
+      setEnviandoPago1Dia(false)
     }
   }
 
@@ -1146,7 +1210,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 size="sm"
                 onClick={() => void handleRefresh()}
                 disabled={
-                  actualizandoListas || enviandoPrejudicial || enviandoD2Antes
+                  actualizandoListas ||
+                  enviandoPrejudicial ||
+                  enviandoD2Antes ||
+                  enviandoPago1Dia
                 }
               >
                 <RefreshCw
@@ -1154,6 +1221,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 />
                 Actualizacion manual
               </Button>
+
+              {modulo === 'a1dia' && (
+                <Button
+                  size="sm"
+                  onClick={() => void handleEnviarPago1DiaManual()}
+                  disabled={
+                    enviandoPago1Dia || actualizandoListas || isLoadingLista
+                  }
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  <Mail
+                    className={`mr-2 h-4 w-4 ${enviandoPago1Dia ? 'animate-pulse' : ''}`}
+                  />
+                  {enviandoPago1Dia
+                    ? 'Enviando...'
+                    : 'Enviar notificaciones (manual)'}
+                </Button>
+              )}
 
               {modulo === 'a3cuotas' && (
                 <Button

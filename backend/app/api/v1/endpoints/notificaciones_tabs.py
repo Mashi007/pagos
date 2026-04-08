@@ -1024,11 +1024,28 @@ def _config_envios_forzar_habilitado_caso(config_envios: dict, tipo: str) -> dic
     return out
 
 
+def _resolver_tipo_envio_manual_fijo(tipo_caso: str) -> Callable[[dict], str]:
+    """
+    POST /notificaciones/enviar-caso-manual debe usar siempre la misma clave de configuracion
+    (plantilla, CCO, PDFs, tipo_tab) para todos los destinatarios del lote, la del caso elegido.
+
+    No usar _tipo_previas / _tipo_retrasadas aqui: infieren por dias_antes_vencimiento / dias_atraso
+    de cada fila y pueden mezclar PAGO_1_DIA_ANTES con PAGO_3_DIAS_ATRASADO, etc.
+    """
+
+    def _inner(_item: dict) -> str:
+        return tipo_caso
+
+    return _inner
+
+
 def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
     """
-    Envio masivo solo para un criterio (fila de configuracion).
-    Misma logica que previas/dia/retrasadas/prejudicial pero filtrando items por tipo.
-    Respeta modo_pruebas, plantilla, CCO y paquete estricto desde BD.
+    Envio sincrono solo para un criterio (una fila de configuracion: PAGO_1_DIA_ANTES, etc.).
+    No programa tareas en segundo plano ni dispara otros casos: un solo tipo por peticion.
+
+    Lista de destinatarios = la misma regla que la pestaña correspondiente; cada correo usa
+    unicamente la config de ese tipo (plantilla/CCO/PDF del caso), sin inferir otro tipo por fila.
     """
     tipo = (tipo or "").strip()
     if tipo not in TIPOS_CASO_MANUAL:
@@ -1087,7 +1104,14 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
 
     if tipo == "PREJUDICIAL":
         items = build_prejudicial_items(db)
-        res = _enviar_correos_items(items, asunto_prej, cuerpo_prej, config_envios, _tipo_prejudicial, db)
+        res = _enviar_correos_items(
+            items,
+            asunto_prej,
+            cuerpo_prej,
+            config_envios,
+            _resolver_tipo_envio_manual_fijo("PREJUDICIAL"),
+            db,
+        )
     elif tipo == "MASIVOS":
         items = get_items_masivos(db)
         res = ejecutar_envio_masivos_por_campanas(db, config_envios, forzar_habilitado=True)
@@ -1095,13 +1119,34 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
         data = get_notificaciones_tabs_data(db)
         if tipo == "PAGO_5_DIAS_ANTES":
             items = data["dias_5"]
-            res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+            res = _enviar_correos_items(
+                items,
+                asunto_prev,
+                cuerpo_prev,
+                config_envios,
+                _resolver_tipo_envio_manual_fijo("PAGO_5_DIAS_ANTES"),
+                db,
+            )
         elif tipo == "PAGO_3_DIAS_ANTES":
             items = data["dias_3"]
-            res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+            res = _enviar_correos_items(
+                items,
+                asunto_prev,
+                cuerpo_prev,
+                config_envios,
+                _resolver_tipo_envio_manual_fijo("PAGO_3_DIAS_ANTES"),
+                db,
+            )
         elif tipo == "PAGO_1_DIA_ANTES":
             items = data["dias_1"]
-            res = _enviar_correos_items(items, asunto_prev, cuerpo_prev, config_envios, _tipo_previas, db)
+            res = _enviar_correos_items(
+                items,
+                asunto_prev,
+                cuerpo_prev,
+                config_envios,
+                _resolver_tipo_envio_manual_fijo("PAGO_1_DIA_ANTES"),
+                db,
+            )
         elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
             items = build_cuotas_pendiente_2_dias_antes_items(db)
             res = _enviar_correos_items(
@@ -1109,24 +1154,59 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE,
                 CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE,
                 config_envios,
-                _tipo_pago_2_dias_antes_pendiente,
+                _resolver_tipo_envio_manual_fijo("PAGO_2_DIAS_ANTES_PENDIENTE"),
                 db,
             )
         elif tipo == "PAGO_DIA_0":
             items = data["hoy"]
-            res = _enviar_correos_items(items, asunto_hoy, cuerpo_hoy, config_envios, _tipo_dia_pago, db)
+            res = _enviar_correos_items(
+                items,
+                asunto_hoy,
+                cuerpo_hoy,
+                config_envios,
+                _resolver_tipo_envio_manual_fijo("PAGO_DIA_0"),
+                db,
+            )
         elif tipo == "PAGO_1_DIA_ATRASADO":
             items = data["dias_1_retraso"]
-            res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+            res = _enviar_correos_items(
+                items,
+                asunto_ret,
+                cuerpo_ret,
+                config_envios,
+                _resolver_tipo_envio_manual_fijo("PAGO_1_DIA_ATRASADO"),
+                db,
+            )
         elif tipo == "PAGO_3_DIAS_ATRASADO":
             items = data["dias_3_retraso"]
-            res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+            res = _enviar_correos_items(
+                items,
+                asunto_ret,
+                cuerpo_ret,
+                config_envios,
+                _resolver_tipo_envio_manual_fijo("PAGO_3_DIAS_ATRASADO"),
+                db,
+            )
         elif tipo == "PAGO_5_DIAS_ATRASADO":
             items = data["dias_5_retraso"]
-            res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+            res = _enviar_correos_items(
+                items,
+                asunto_ret,
+                cuerpo_ret,
+                config_envios,
+                _resolver_tipo_envio_manual_fijo("PAGO_5_DIAS_ATRASADO"),
+                db,
+            )
         elif tipo == "PAGO_30_DIAS_ATRASADO":
             items = data["dias_30_retraso"]
-            res = _enviar_correos_items(items, asunto_ret, cuerpo_ret, config_envios, _tipo_retrasadas, db)
+            res = _enviar_correos_items(
+                items,
+                asunto_ret,
+                cuerpo_ret,
+                config_envios,
+                _resolver_tipo_envio_manual_fijo("PAGO_30_DIAS_ATRASADO"),
+                db,
+            )
         else:
             raise ValueError("tipo_caso_manual_invalido")
 

@@ -89,8 +89,8 @@ interface RegistrarPagoFormProps {
   esPagoConError?: boolean
 
   /**
-   * Revisión manual: exige URL de comprobante al crear o actualizar (trazabilidad).
-   * Los duplicados de Nº documento siguen validándose en el servidor (409).
+   * Si true, exige URL de comprobante aunque la fecha no sea «hoy» en Caracas.
+   * Por defecto el enlace es opcional salvo la regla de fecha (hoy Caracas) y validación de URL si se completa.
    */
   requiereLinkComprobante?: boolean
 

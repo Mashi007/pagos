@@ -67,7 +67,6 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
         "PAGO_5_DIAS_ATRASADO",
         "PAGO_30_DIAS_ATRASADO",
     ):
-        get_tipo = nt._tipo_retrasadas
         asunto = "Cuenta con cuota atrasada - Rapicredit"
         cuerpo = (
             "Estimado/a {nombre} (cedula {cedula}),\n\n"
@@ -79,11 +78,9 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
             "Saludos,\nRapicredit"
         )
     elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
-        get_tipo = nt._tipo_pago_2_dias_antes_pendiente
         asunto = nt.ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
         cuerpo = nt.CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
     else:
-        get_tipo = nt._tipo_prejudicial
         asunto = "Aviso prejudicial - Rapicredit"
         cuerpo = (
             "Estimado/a {nombre} (cedula {cedula}),\n\n"
@@ -95,13 +92,12 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
             "Saludos,\nRapicredit"
         )
 
-    # Igual que enviar-caso-manual: la prueba debe enviar aunque el toggle Envio este apagado
-    # en la fila del criterio que aplica al item (p. ej. PAGO_3 vs PAGO_1 en retrasadas).
-    tipo_resuelto = get_tipo(item)
+    # Misma fila de config que el caso elegido en el payload (no inferir por dias_atraso del item).
     config_envios = nt._config_envios_forzar_habilitado_caso(
         get_notificaciones_envios_config(db),
-        tipo_resuelto,
+        tipo,
     )
+    get_tipo = nt._resolver_tipo_envio_manual_fijo(tipo)
 
     try:
         res = nt._enviar_correos_items(
@@ -201,21 +197,18 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
         "PAGO_5_DIAS_ATRASADO",
         "PAGO_30_DIAS_ATRASADO",
     ):
-        get_tipo = nt._tipo_retrasadas
         asunto_base = "Cuenta con cuota atrasada - Rapicredit"
         cuerpo_base = "Prueba diagnostico"
     elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
-        get_tipo = nt._tipo_pago_2_dias_antes_pendiente
         asunto_base = nt.ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
         cuerpo_base = nt.CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
     else:
-        get_tipo = nt._tipo_prejudicial
         asunto_base = "Aviso prejudicial - Rapicredit"
         cuerpo_base = "Prueba diagnostico"
 
     item = deepcopy(item)
     paquete_estricto = bool(getattr(settings, "NOTIFICACIONES_PAQUETE_ESTRICTO", True))
-    tipo_res = get_tipo(item)
+    tipo_res = tipo
     config_envios = nt._config_envios_forzar_habilitado_caso(
         get_notificaciones_envios_config(db),
         tipo_res,
@@ -240,7 +233,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
         out["motivo"] = "envio_desactivado_para_este_tipo"
         return out
 
-    solo_2d = nt._tipo_dos_dias_antes_solo_correo(tipo_res)
+    solo_2d = nt._tipo_dos_dias_antes_solo_correo(tipo)
     if paquete_estricto:
         if solo_2d:
             out["plantilla_ok"] = True
@@ -279,7 +272,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     correlativos_en_batch: dict = {}
     if db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
         plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
-        solo_correo_2d = nt._tipo_dos_dias_antes_solo_correo(tipo_res)
+        solo_correo_2d = nt._tipo_dos_dias_antes_solo_correo(tipo)
         need_ctx = (
             (paquete_estricto and not solo_correo_2d)
             or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")

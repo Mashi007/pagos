@@ -28,7 +28,7 @@ def canonical_rol(rol: Optional[str]) -> str:
         return r
     if r in ("operador", "operario", "operadora"):
         return "operator"
-    if r in ("administrador", "finiquitador"):
+    if r in ("administrador", "finiquitador", "administrator", "root", "superadmin"):
         return "admin"
     if r in ("gerente", "supervisor"):
         return "manager"

@@ -906,10 +906,21 @@ export function ConfiguracionNotificaciones({
         )
         return
       }
-      if (smtpConfigurado === false) {
-        toast.error('Configure SMTP en Configuración → Email para enviar.')
+      const estadoEmail =
+        await emailConfigService.verificarEstadoConfiguracionEmail()
+      if (!estadoEmail?.configurada) {
+        const problemas =
+          estadoEmail?.problemas?.join('. ') ||
+          'servidor SMTP, usuario y contrasena'
+        toast.error(
+          `Configura el email SMTP antes de enviar este caso: ${problemas} Ve a Configuracion > Email.`,
+          { duration: 6000 }
+        )
         return
       }
+      void queryClient.invalidateQueries({
+        queryKey: NOTIFICACIONES_QUERY_KEYS.emailEstado,
+      })
     } else {
       const ok = window.confirm(
         `¿Enviar ahora el caso «${etiquetaCaso}» a los correos de los clientes en lista? ` +
@@ -2021,8 +2032,7 @@ export function ConfiguracionNotificaciones({
                           enviandoMasivo ||
                           diagnosticoCargando ||
                           enviandoPruebaIndice !== null ||
-                          guardandoEnvios ||
-                          (modoPruebas && smtpConfigurado === false)
+                          guardandoEnvios
                         }
                         onClick={() => void handleEnviarCasoManual(tipo, label)}
                       >
@@ -2034,9 +2044,11 @@ export function ConfiguracionNotificaciones({
                       </Button>
 
                       <p className="max-w-md text-[11px] leading-snug text-gray-500">
-                        Masivo según listas en BD para este criterio. Usa la
-                        config <strong>guardada</strong> (pulse Guardar si
-                        cambió plantilla o CCO).
+                        Solo este criterio (esta fila): un POST sincrono, sin
+                        programar otros casos ni mezclar plantillas de otras
+                        filas. Lista = misma regla de BD que la pestaña
+                        correspondiente. Usa la config <strong>guardada</strong>{' '}
+                        (pulse Guardar si cambió plantilla o CCO).
                         {modoPruebas
                           ? ' Modo prueba: destino = correo(s) de pruebas.'
                           : ' Producción: un correo por cliente con email.'}{' '}

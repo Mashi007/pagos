@@ -1240,9 +1240,11 @@ def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
 @router.post("/enviar-caso-manual")
 def enviar_caso_manual(payload: dict = Body(...), db: Session = Depends(get_db)):
     """
-    Envio masivo sincrono para un solo criterio (fila de configuracion: PAGO_5_DIAS_ANTES, etc.).
-    En produccion: un correo por cliente en la lista de ese caso. En modo pruebas: al correo de pruebas.
-    Ignora el toggle Envio apagado para esa fila (accion explicita del operador). Respeta plantilla, CCO y paquete estricto.
+    Envio sincrono para un solo criterio por peticion (una fila: PAGO_1_DIA_ANTES, PAGO_1_DIA_ATRASADO, etc.).
+
+    No encola otros casos ni programa envios: solo el tipo indicado en el JSON. Cada destinatario usa la
+    plantilla/CCO/PDF de esa fila (no se infiere otro tipo por fila). En produccion: un correo por cliente
+    en la lista de ese caso; en modo pruebas: destinos de prueba. Ignora el toggle Envio apagado en esa fila.
     """
     from datetime import timezone
 

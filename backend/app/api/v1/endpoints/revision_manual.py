@@ -66,7 +66,7 @@ def _solicitud_reapertura_estado_pendiente_sql(column):
 def _usuario_rol_elevado_revision_manual(current_user: Any) -> bool:
     """
     Admin u operario: pueden editar mientras la revisión NO está cerrada (pendiente / revisando / en_espera).
-    No incluye reapertura ni edición con estado revisado (Visto); eso es solo administrador.
+    Con estado revisado (Visto), el permiso lo define `_usuario_puede_mutar_revision_visto`.
     """
     if isinstance(current_user, dict):
         rol_raw = current_user.get("rol")
@@ -84,6 +84,16 @@ def _usuario_es_admin_revision_manual(current_user: Any) -> bool:
         rol_raw = getattr(current_user, "rol", None)
     rol = rol_raw if isinstance(rol_raw, str) else None
     return canonical_rol(rol) == "admin"
+
+
+def _usuario_puede_mutar_revision_visto(current_user: Any) -> bool:
+    """Con revisión en Visto (revisado): admin, gerente y operador (misma política que la UI)."""
+    if isinstance(current_user, dict):
+        rol_raw = current_user.get("rol")
+    else:
+        rol_raw = getattr(current_user, "rol", None)
+    rol = rol_raw if isinstance(rol_raw, str) else None
+    return canonical_rol(rol) in ("admin", "manager", "operator")
 
 
 def _actor_revision_manual(current_user: Any) -> str:
@@ -149,22 +159,6 @@ def _commit_revision_seguro(
     )
 
 
-def _forbid_si_prestamo_revision_cerrada(db: Session, prestamo_id: int) -> None:
-    """Evita mutar préstamo/cuotas si la revisión manual ya se cerró como revisado."""
-    rev = db.execute(
-        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
-    ).scalars().first()
-    if rev and (rev.estado_revision or "").strip().lower() == "revisado":
-        logger.warning(
-            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisado_cerrado",
-            prestamo_id,
-        )
-        raise HTTPException(
-            status_code=403,
-            detail="Este préstamo ya fue revisado y cerrado; no admite más ediciones en revisión manual.",
-        )
-
-
 def _validar_permiso_edicion(
     db: Session,
     prestamo_id: int,
@@ -175,7 +169,7 @@ def _validar_permiso_edicion(
     Valida permisos de edición según el estado y rol del usuario.
     
     Reglas:
-    - ✓ REVISADO (Visto): solo administrador puede editar o guardar (corrección tras cierre)
+    - ✓ REVISADO (Visto): administrador, gerente o operador (corrección tras cierre; alineado con UI)
     - ❓ REVISANDO: solo admin u operario
     - ⚠️ PENDIENTE, ❌ EN ESPERA: cualquier usuario autenticado con acceso al endpoint
     """
@@ -189,22 +183,21 @@ def _validar_permiso_edicion(
     
     estado = (rev.estado_revision or "").strip().lower()
     elevado = _usuario_rol_elevado_revision_manual(current_user)
-    es_admin = _usuario_es_admin_revision_manual(current_user)
-    
-    # ✓ REVISADO: solo administrador (el operario debe esperar que admin pase a «revisando»)
+
+    # ✓ REVISADO (Visto): admin, gerente u operador
     if estado == "revisado":
-        if es_admin:
+        if _usuario_puede_mutar_revision_visto(current_user):
             return
         logger.warning(
-            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisado_solo_admin actor=%s",
+            "revision_manual EDICION_RECHAZADA prestamo_id=%s motivo=revisado_sin_permiso actor=%s",
             prestamo_id,
             actor,
         )
         raise HTTPException(
             status_code=403,
             detail=(
-                "Esta revisión está cerrada (Visto). Solo un administrador puede editarla o reabrirla "
-                "pasando el estado a «En revisión»."
+                "Esta revisión está cerrada (Visto). Solo administrador, gerente u operario pueden editarla "
+                "o reabrirla pasando el estado a «En revisión»."
             ),
         )
     
@@ -1007,7 +1000,6 @@ def guardar_prestamo_y_reconstruir_cuotas(
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-    _forbid_si_prestamo_revision_cerrada(db, prestamo_id)
     _validar_permiso_edicion(db, prestamo_id, current_user, actor)
 
     from app.api.v1.endpoints.prestamos import (

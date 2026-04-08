@@ -3,7 +3,12 @@ import { useSimpleAuth } from '../store/simpleAuthStore'
 import { User } from '../types'
 
 import { isDelegatedPathForRol } from '../config/roleRoutes'
-import { canonicalRol, isAdminRole, isOperatorRole } from '../utils/rol'
+import {
+  canonicalRol,
+  isAdminRole,
+  isManagerRole,
+  isOperatorRole,
+} from '../utils/rol'
 
 /**
 
@@ -356,10 +361,14 @@ export function usePermissions() {
   }
 
   /**
-   * Revisión manual: con la revisión cerrada (Visto / `revisado`), solo el administrador puede
-   * editar, guardar o reabrir el estado a «En revisión». El operario trabaja mientras no esté en Visto.
+   * Revisión manual: con la revisión cerrada (Visto / `revisado`), perfiles operativos con mutación
+   * (admin, gerente/supervisor, operador) pueden editar pagos, eliminar y reabrir; el visualizador no.
+   * El `rol` en sesión debe ser canónico (ver `normalizeAuthUser` / `canonicalRol`).
    */
-  const revisionManualFullEdit = isAdmin()
+  const revisionManualFullEdit =
+    isAdminRole(user?.rol) ||
+    isOperatorRole(user?.rol) ||
+    isManagerRole(user?.rol)
 
   return {
     user,

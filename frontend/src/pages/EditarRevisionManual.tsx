@@ -3777,7 +3777,6 @@ export function EditarRevisionManual() {
           onSuccess={onExitoModalPagoRevision}
           pagoInicial={pagoModalInicial}
           pagoId={pagoModalId}
-          requiereLinkComprobante
           prestamoContextoRevisionManualId={
             prestamoData.prestamo_id != null &&
             Number(prestamoData.prestamo_id) > 0

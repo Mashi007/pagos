@@ -905,7 +905,7 @@ class NotificacionService {
     )
   }
 
-  /** Ultimo resumen persistido tras enviar-todas o job 01:00 (sin depender solo de logs). */
+  /** Ultimo resumen persistido tras enviar-todas o enviar-caso-manual (sin depender solo de logs). */
 
   async obtenerUltimoEnvioBatch(): Promise<{
     ultimo: Record<string, unknown> | null
