@@ -2704,24 +2704,53 @@ export function EditarRevisionManual() {
 
                   {/* Valor Activo - OCULTO */}
 
-                  {/* Fecha Requerimiento - OCULTO */}
-                  {/* Este campo se usa en gestión de préstamos, no en revisión manual */}
-
-                  {/* Fecha Aprobación + recálculo de vencimientos en la misma caja */}
+                  {/* Fecha de requerimiento + aprobación: valores desde BD, editables; sin orden forzado en servidor */}
                   <div className="rounded-lg border border-gray-200 bg-slate-50/80 p-3 md:col-span-2">
+                    <label className="mb-2 block text-sm font-medium">
+                      Fecha de requerimiento
+                    </label>
+                    <p className="mb-2 text-xs text-gray-600">
+                      Fecha de solicitud/requerimiento del expediente (tabla{' '}
+                      <code className="rounded bg-white px-1">prestamos.fecha_requerimiento</code>
+                      ). Se muestra el valor cargado desde la base; puede
+                      corregirla aquí si debe alinearse con la fecha de
+                      aprobación u otros datos.
+                    </p>
+                    <div className="relative mb-4 max-w-md">
+                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="date"
+                        disabled={soloLectura}
+                        value={formatDateForInput(
+                          prestamoData.fecha_requerimiento
+                        )}
+                        onChange={e => {
+                          formDirtyRef.current = true
+                          const v = e.target.value || null
+                          setPrestamoData({
+                            ...prestamoData,
+                            fecha_requerimiento: v,
+                          })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                      />
+                    </div>
+
                     <label className="mb-2 block text-sm font-medium">
                       Fecha de Aprobación
                     </label>
                     <p className="mb-2 text-xs text-gray-600">
                       Obligatoria para préstamos aprobados/liquidados: debe
-                      ingresarla usted (no se infiere de otras fechas). La base
-                      de cálculo es la misma fecha. El botón guarda en servidor
-                      los datos de préstamo del formulario (total, plazo, cuota
-                      por período, modalidad, tasa) y reconstruye la tabla de
-                      cuotas (cantidad, montos y fechas de vencimiento); luego
-                      reaplica pagos pendientes. &quot;Guardar cambios&quot; y
-                      &quot;Guardar y cerrar&quot; persisten el resto en la
-                      base.
+                      ingresarla usted (no se infiere de otras fechas). No hay
+                      restricción de orden respecto a la fecha de requerimiento
+                      en revisión manual. La base de cálculo es la misma fecha.
+                      El botón guarda en servidor los datos de préstamo del
+                      formulario (total, plazo, cuota por período, modalidad,
+                      tasa) y reconstruye la tabla de cuotas (cantidad, montos
+                      y fechas de vencimiento); luego reaplica pagos
+                      pendientes. &quot;Guardar cambios&quot; y &quot;Guardar y
+                      cerrar&quot; persisten el resto en la base.
                     </p>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                       <div className="relative min-w-0 flex-1">

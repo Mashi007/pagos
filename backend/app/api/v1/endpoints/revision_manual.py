@@ -883,17 +883,7 @@ def editar_prestamo_revision(
             detail="Falta la fecha de aprobación. Los préstamos aprobados, desembolsados o liquidados deben tener fecha de aprobación.",
         )
 
-    # Coherencia: fecha de aprobación debe ser >= fecha de requerimiento
-    _req = getattr(prestamo, "fecha_requerimiento", None)
-    _ap = getattr(prestamo, "fecha_aprobacion", None)
-    if _req and _ap:
-        req_date = _req.date() if hasattr(_req, "date") and callable(getattr(_req, "date", None)) else _req
-        ap_date = _ap.date() if hasattr(_ap, "date") and callable(getattr(_ap, "date", None)) else _ap
-        if req_date and ap_date and ap_date < req_date:
-            raise HTTPException(
-                status_code=400,
-                detail=f"La fecha de aprobación ({ap_date}) debe ser igual o posterior a la fecha de requerimiento ({req_date}).",
-            )
+    # No se exige orden fecha_aprobacion vs fecha_requerimiento: revisión manual puede ajustar ambas en pantalla.
 
     try:
         asegurar_prestamo_alineado_con_cliente(db, prestamo)
@@ -1021,19 +1011,7 @@ def guardar_prestamo_y_reconstruir_cuotas(
                 detail="Falta la fecha de aprobación. Los préstamos aprobados, desembolsados o liquidados deben tener fecha de aprobación.",
             )
 
-        _req = getattr(prestamo, "fecha_requerimiento", None)
-        _ap = getattr(prestamo, "fecha_aprobacion", None)
-        if _req and _ap:
-            req_date = _req.date() if hasattr(_req, "date") and callable(getattr(_req, "date", None)) else _req
-            ap_date = _ap.date() if hasattr(_ap, "date") and callable(getattr(_ap, "date", None)) else _ap
-            if req_date and ap_date and ap_date < req_date:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"La fecha de aprobación ({ap_date}) debe ser igual o posterior a la fecha de "
-                        f"requerimiento ({req_date})."
-                    ),
-                )
+        # No se exige orden fecha_aprobacion vs fecha_requerimiento (mismo criterio que PUT /prestamos en revisión manual).
 
         try:
             asegurar_prestamo_alineado_con_cliente(db, prestamo)
