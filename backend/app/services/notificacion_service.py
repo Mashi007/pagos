@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -182,6 +182,79 @@ def sum_saldo_pendiente_total_por_prestamos(
         xf = to_finite_float(total)
         if xf is not None:
             out[pid] = xf
+    return out
+
+
+def sum_saldo_pendiente_cuotas_tabla_amortizacion_ui(
+    db: Session, prestamo_ids: Sequence[int]
+) -> Dict[int, float]:
+    """
+    Por préstamo: suma de GREATEST(0, monto_cuota - total_pagado) sobre todas las cuotas.
+
+    Alineado con «Total pendiente pagar» en TablaAmortizacionPrestamo (cuando el monto
+    efectivo abonado coincide con total_pagado; no usa heurísticas de notificaciones).
+
+    Difiere de sum_saldo_pendiente_total_por_prestamos: ese solo suma cuotas «notificables»
+    (sin fecha_pago, estado no marcado como pagado en columna, etc.). Este incluye todas
+    las filas de amortización y excluye préstamos LIQUIDADO / DESISTIMIENTO del agregado
+    (mismo criterio que el listado mostraba con saldo 0 en cartera cerrada).
+    """
+    ids = sorted({int(x) for x in prestamo_ids if x is not None})
+    if not ids:
+        return {}
+    m = func.coalesce(Cuota.monto, 0)
+    tp = func.coalesce(Cuota.total_pagado, 0)
+    per_cuota = func.greatest(0, m - tp)
+    q = (
+        select(Cuota.prestamo_id, func.sum(per_cuota).label("total_pend"))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .where(Cuota.prestamo_id.in_(ids))
+        .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
+        .group_by(Cuota.prestamo_id)
+    )
+    out: Dict[int, float] = {}
+    for row in db.execute(q).all():
+        pid = int(row[0])
+        total = row[1]
+        xf = to_finite_float(total)
+        if xf is not None:
+            out[pid] = xf
+    return out
+
+
+def contar_cuotas_pagadas_tabla_amortizacion_ui(
+    db: Session, prestamo_ids: Sequence[int]
+) -> Dict[int, tuple[int, int]]:
+    """
+    Por préstamo: (cuotas_pagadas, cuotas_total) con la misma regla que el chip «Pagadas»
+    en TablaAmortizacionPrestamo.tsx (estado PAGADO/PAGADA/PAGO_ADELANTADO o
+    total_pagado >= monto - 0,01).
+    """
+    ids = sorted({int(x) for x in prestamo_ids if x is not None})
+    if not ids:
+        return {}
+    est_u = func.upper(func.trim(func.coalesce(Cuota.estado, "")))
+    es_pagada = or_(
+        est_u.in_(["PAGADO", "PAGADA", "PAGO_ADELANTADO"]),
+        func.coalesce(Cuota.total_pagado, 0) >= func.coalesce(Cuota.monto, 0) - TOL_SALDO_CUOTA_NOTIFICACION,
+    )
+    pagadas_expr = case((es_pagada, 1), else_=0)
+    q = (
+        select(
+            Cuota.prestamo_id,
+            func.count().label("n_total"),
+            func.sum(pagadas_expr).label("n_pagadas"),
+        )
+        .select_from(Cuota)
+        .where(Cuota.prestamo_id.in_(ids))
+        .group_by(Cuota.prestamo_id)
+    )
+    out: Dict[int, tuple[int, int]] = {}
+    for row in db.execute(q).all():
+        pid = int(row[0])
+        total = int(row[1] or 0)
+        pag = int(row[2] or 0)
+        out[pid] = (pag, total)
     return out
 
 

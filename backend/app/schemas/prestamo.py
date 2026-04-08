@@ -209,5 +209,7 @@ class PrestamoListResponse(PrestamoResponse):
     numero_cuotas: Optional[int] = None
     modalidad_pago: Optional[str] = None
     revision_manual_estado: Optional[str] = None  # pendiente | revisando | revisado (None si no tiene)
-    # Suma monto de cuotas sin fecha_pago (misma regla que resumen por cédula / cartera pendiente).
+    # Suma por fila de amortización: max(0, monto - total_pagado); alineado con «Total pendiente pagar» del modal.
     saldo_pendiente: Decimal = Decimal("0")
+    # Cuotas contadas como pagadas (misma regla que chip «Pagadas» en tabla de amortización del modal).
+    cuotas_pagadas_listado: Optional[int] = None

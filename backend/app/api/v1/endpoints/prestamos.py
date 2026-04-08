@@ -98,7 +98,10 @@ from app.services.analistas_catalogo_sync import (
     sincronizar_analistas_desde_prestamos_si_catalogo_vacio,
 )
 
-from app.services.notificacion_service import sum_saldo_pendiente_total_por_prestamos
+from app.services.notificacion_service import (
+    contar_cuotas_pagadas_tabla_amortizacion_ui,
+    sum_saldo_pendiente_cuotas_tabla_amortizacion_ui,
+)
 from app.services.cuota_estado import (
     estado_cuota_para_mostrar,
     etiqueta_estado_cuota,
@@ -526,16 +529,16 @@ class AprobarManualBody(BaseModel):
 def _saldo_pendiente_por_prestamo_cuotas(db: Session, prestamo_ids: List[int]) -> dict[int, Decimal]:
 
     """
-    Saldo pendiente real por préstamo: suma (monto_cuota - total_pagado) de cuotas sin pagar,
-    misma regla que notificaciones y estado de cuenta (abonos parciales restan; estados PAGADO
-    excluidos; préstamos LIQUIDADO/DESISTIMIENTO sin saldo en este agregado).
+    Saldo pendiente por préstamo alineado con la tabla de amortización en UI: suma sobre todas
+    las cuotas de GREATEST(0, monto - total_pagado). Préstamos LIQUIDADO/DESISTIMIENTO no
+    acumulan (cartera cerrada). Las notificaciones siguen usando sum_saldo_pendiente_total_por_prestamos.
     """
 
     if not prestamo_ids:
 
         return {}
 
-    raw = sum_saldo_pendiente_total_por_prestamos(db, prestamo_ids)
+    raw = sum_saldo_pendiente_cuotas_tabla_amortizacion_ui(db, prestamo_ids)
 
     return {pid: Decimal(str(v)) for pid, v in raw.items()}
 
@@ -853,6 +856,24 @@ def listar_prestamos(
 
             saldos_pendiente = {}
 
+        try:
+
+            cuotas_pagadas_map = contar_cuotas_pagadas_tabla_amortizacion_ui(db, prestamo_ids)
+
+        except Exception as e:
+
+            logger.warning(
+
+                "cuotas pagadas (tabla UI) no disponible al listar prestamos: %s",
+
+                e,
+
+                exc_info=True,
+
+            )
+
+            cuotas_pagadas_map = {}
+
         # Estados de revisión manual
 
         revision_manual_estados = {}
@@ -964,6 +985,12 @@ def listar_prestamos(
                 fecha_desistimiento=fd_desist_map.get(p.id),
 
                 saldo_pendiente=saldos_pendiente.get(p.id, Decimal("0")),
+
+                cuotas_pagadas_listado=(
+                    int(cuotas_pagadas_map.get(p.id)[0])
+                    if cuotas_pagadas_map.get(p.id) is not None
+                    else None
+                ),
 
             )
 
@@ -1569,6 +1596,14 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
         saldos_pendiente_ced = _saldo_pendiente_por_prestamo_cuotas(db, prestamo_ids)
 
+        try:
+
+            cuotas_pagadas_ced = contar_cuotas_pagadas_tabla_amortizacion_ui(db, prestamo_ids)
+
+        except Exception:
+
+            cuotas_pagadas_ced = {}
+
         liquidacion_efectiva_ids = prestamo_ids_aprobados_todas_cuotas_cubiertas(
             db, prestamo_ids
         )
@@ -1632,6 +1667,12 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
                     fecha_desistimiento=fd_desist_map_ced.get(p.id),
 
                     saldo_pendiente=saldos_pendiente_ced.get(p.id, Decimal("0")),
+
+                    cuotas_pagadas_listado=(
+                        int(cuotas_pagadas_ced.get(p.id)[0])
+                        if cuotas_pagadas_ced.get(p.id) is not None
+                        else None
+                    ),
 
                 )
 
@@ -1713,7 +1754,7 @@ def resumen_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
     prestamo_ids = [p.id for p in prestamos]
 
-    # Saldo pendiente: misma regla que lista de préstamos / notificaciones (monto - abonos)
+    # Saldo pendiente: misma regla que tabla de amortización (suma max(0, monto-total_pagado) por cuota)
 
     saldos_dec = _saldo_pendiente_por_prestamo_cuotas(db, prestamo_ids)
 

@@ -53,6 +53,10 @@ interface PrestamoRevision {
 
   saldo: number
 
+  cuotas_pagadas?: number | null
+
+  cuotas_total?: number | null
+
   cuotas_vencidas: number
 
   cuotas_morosas: number
@@ -589,6 +593,13 @@ export function RevisionManual() {
                       Saldo
                     </th>
 
+                    <th
+                      className="px-4 py-2 text-center font-semibold"
+                      title="Pagadas / total de cuotas (misma regla que el detalle de amortización)"
+                    >
+                      Pagadas
+                    </th>
+
                     <th className="px-4 py-2 text-center font-semibold">
                       Vencidas
                     </th>
@@ -650,6 +661,18 @@ export function RevisionManual() {
                           {prestamo.saldo.toLocaleString('es-ES', {
                             maximumFractionDigits: 2,
                           })}
+                        </td>
+
+                        <td className="px-4 py-3 text-center text-gray-700">
+                          {prestamo.cuotas_pagadas != null &&
+                          prestamo.cuotas_total != null ? (
+                            <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold tabular-nums">
+                              {prestamo.cuotas_pagadas} /{' '}
+                              {prestamo.cuotas_total}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
                         </td>
 
                         <td className="px-4 py-3 text-center">

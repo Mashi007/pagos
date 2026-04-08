@@ -376,6 +376,13 @@ class PagoService {
     reaplicacion_completa?: boolean
     detalle_reaplicacion?: Record<string, unknown> | null
     mensaje: string
+    diagnostico?: {
+      pagos_operativos_sin_cuota_pagos?: number
+      pagos_elegibles_cascada_sin_cuota_pagos?: number
+      pagos_no_elegibles_sin_cuota_pagos?: number
+      pagos_con_intento_sin_abono_ids?: number[]
+      errores_por_pago?: Array<{ pago_id: number; error: string }>
+    }
   }> {
     return await apiClient.post(
       `${this.baseUrl}/por-prestamo/${prestamoId}/aplicar-pagos-cuotas`

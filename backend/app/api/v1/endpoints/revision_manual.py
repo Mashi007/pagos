@@ -32,6 +32,10 @@ from app.models.user import User
 from app.models.auditoria import Auditoria
 from app.models.estado_cliente import EstadoCliente
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
+from app.services.notificacion_service import (
+    contar_cuotas_pagadas_tabla_amortizacion_ui,
+    sum_saldo_pendiente_cuotas_tabla_amortizacion_ui,
+)
 from app.services.prestamo_estado_coherencia import prestamo_bloquea_nuevas_cuotas_o_cambio_plazo
 from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
     PrestamoCedulaClienteError,
@@ -40,6 +44,10 @@ from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
 from app.services.registro_cambios_service import registrar_cambio
 from app.services.revision_manual.revision_manual_flags import (
     marcar_o_crear_prestamo_editado_en_revision_manual,
+)
+from app.services.revision_manual.revision_manual_reapertura_notificaciones import (
+    notify_admins_nueva_solicitud_reapertura,
+    notify_operario_solicitud_reapertura_aprobada,
 )
 
 logger = logging.getLogger(__name__)
@@ -275,6 +283,8 @@ class PrestamoDetalleRevision(BaseModel):
     total_prestamo: float
     total_abonos: float
     saldo: float
+    cuotas_pagadas: Optional[int] = None
+    cuotas_total: Optional[int] = None
     cuotas_vencidas: int
     cuotas_morosas: int
     estado_revision: str
@@ -423,6 +433,9 @@ def get_prestamos_revision_manual(
     agg_rows = db.execute(agg_subq).all()
     agg_map = {r.prestamo_id: {"abonos": _safe_float(r.total_abonos), "vencidas": int(r.vencidas or 0), "morosas": int(r.morosas or 0)} for r in agg_rows}
 
+    saldos_tabla = sum_saldo_pendiente_cuotas_tabla_amortizacion_ui(db, prestamo_ids)
+    cuotas_pagadas_map = contar_cuotas_pagadas_tabla_amortizacion_ui(db, prestamo_ids)
+
     # 6. Construir respuesta
     prestamos_detalles: List[PrestamoDetalleRevision] = []
     for prestamo, estado_rev, fecha_rev in rows:
@@ -430,7 +443,8 @@ def get_prestamos_revision_manual(
         fecha_revision = fecha_rev.isoformat() if fecha_rev else None
         agg = agg_map.get(prestamo.id, {"abonos": 0.0, "vencidas": 0, "morosas": 0})
         total_prestamo = _safe_float(prestamo.total_financiamiento)
-        saldo = total_prestamo - agg["abonos"]
+        saldo = _safe_float(saldos_tabla.get(prestamo.id, 0.0))
+        _cp = cuotas_pagadas_map.get(prestamo.id)
         prestamos_detalles.append(
             PrestamoDetalleRevision(
                 prestamo_id=prestamo.id,
@@ -440,6 +454,8 @@ def get_prestamos_revision_manual(
                 total_prestamo=total_prestamo,
                 total_abonos=agg["abonos"],
                 saldo=saldo,
+                cuotas_pagadas=int(_cp[0]) if _cp is not None else None,
+                cuotas_total=int(_cp[1]) if _cp is not None else None,
                 cuotas_vencidas=agg["vencidas"],
                 cuotas_morosas=agg["morosas"],
                 estado_revision=estado_revision,
@@ -1817,10 +1833,48 @@ def solicitar_reapertura_revision_manual(
                 prestamo_id,
             )
 
+    nom_solicitante = (
+        current_user.get("nombre")
+        if isinstance(current_user, dict)
+        else getattr(current_user, "nombre", None)
+    )
+    ue = usuario_email if isinstance(usuario_email, str) else ""
+    solicitante_etiqueta = f"{(nom_solicitante or '').strip()} {ue}".strip() or actor
+
+    try:
+        if getattr(sol, "id", None) is None:
+            db.refresh(sol)
+    except Exception:
+        logger.warning("revision_manual: refresh solicitud reapertura para id falló prestamo_id=%s", prestamo_id)
+
+    sid = getattr(sol, "id", None)
+    if isinstance(sid, int):
+        try:
+            notify_admins_nueva_solicitud_reapertura(
+                db,
+                prestamo_id=prestamo_id,
+                solicitante_etiqueta=solicitante_etiqueta,
+                mensaje_opcional=msg,
+                solicitud_id=sid,
+            )
+        except Exception:
+            logger.exception(
+                "revision_manual: aviso por correo a administradores falló (solicitud ok) prestamo_id=%s",
+                prestamo_id,
+            )
+    else:
+        logger.warning(
+            "revision_manual: solicitud sin id tras commit; no se envía correo a admins prestamo_id=%s",
+            prestamo_id,
+        )
+
     return SolicitarReaperturaRevisionResponse(
         solicitud_id=sol.id,
         ya_registrada=False,
-        mensaje="Solicitud registrada. Un administrador podrá reabrir la revisión desde el módulo Autorizaciones.",
+        mensaje=(
+            "Solicitud registrada. Si el correo del sistema está configurado, los administradores reciben un aviso. "
+            "Pueden aprobarla en Administración → Autorizaciones (revisión manual)."
+        ),
     )
 
 
@@ -1963,6 +2017,30 @@ def aprobar_solicitud_reapertura_revision(
                 "revision_manual: no se pudo registrar auditoría aprobar solicitud id=%s",
                 solicitud_id,
             )
+
+    operario_email: Optional[str] = None
+    if isinstance(sol.solicitante_usuario_id, int):
+        u_sol = db.get(User, sol.solicitante_usuario_id)
+        if u_sol and isinstance(u_sol.email, str) and "@" in u_sol.email.strip():
+            operario_email = u_sol.email.strip()
+    if not operario_email and isinstance(sol.solicitante_email, str):
+        se = sol.solicitante_email.strip()
+        if "@" in se:
+            operario_email = se
+    admin_etiqueta = (
+        admin_email if isinstance(admin_email, str) and admin_email.strip() else actor
+    )
+    try:
+        notify_operario_solicitud_reapertura_aprobada(
+            prestamo_id=sol.prestamo_id,
+            operario_email=operario_email,
+            admin_etiqueta=admin_etiqueta,
+        )
+    except Exception:
+        logger.exception(
+            "revision_manual: aviso por correo al operario falló (aprobación ok) prestamo_id=%s",
+            sol.prestamo_id,
+        )
 
     return {
         "mensaje": "Solicitud aprobada. La revisión quedó en «En revisión».",

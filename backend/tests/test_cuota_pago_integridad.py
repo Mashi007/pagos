@@ -250,3 +250,93 @@ def test_aplicar_pagos_pendientes_incluye_pagado_sin_conciliar(db: Session):
         select(func.count()).select_from(CuotaPago).where(CuotaPago.pago_id == pago.id)
     )
     assert int(n_cp or 0) >= 1
+
+
+def test_mensaje_sin_aplicacion_cascada_no_elegibles():
+    from app.api.v1.endpoints.pagos import _mensaje_sin_aplicacion_cascada
+
+    msg = _mensaje_sin_aplicacion_cascada(
+        {
+            "pagos_operativos_sin_cuota_pagos": 3,
+            "pagos_elegibles_cascada_sin_cuota_pagos": 0,
+            "pagos_no_elegibles_sin_cuota_pagos": 3,
+            "pagos_con_intento_sin_abono_ids": [],
+            "errores_por_pago": [],
+        }
+    )
+    assert "Ningún pago nuevo se articuló" in msg
+    assert "no cumplen criterio de elegibilidad" in msg
+    assert "3" in msg
+
+
+def test_diagnostico_cascada_sin_cupo_cuotas_llenas(db: Session):
+    """Pago elegible sin cuota_pagos pero todas las cuotas ya cubiertas: sin abono, contador 0."""
+    from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo_con_diagnostico
+
+    hoy = date.today()
+    cedula = f"VDI{datetime.now().strftime('%H%M%S')}"
+    cliente = Cliente(
+        cedula=cedula,
+        nombres="Test diagnostico cascada",
+        telefono="0",
+        email="vdi@test.local",
+        direccion="X",
+        fecha_nacimiento=date(1990, 1, 1),
+        ocupacion="T",
+        estado="ACTIVO",
+        usuario_registro="test@test.local",
+        notas="diagnostico cascada",
+    )
+    db.add(cliente)
+    db.flush()
+    prestamo = Prestamo(
+        cliente_id=cliente.id,
+        cedula=cliente.cedula,
+        nombres=cliente.nombres,
+        total_financiamiento=Decimal("100.00"),
+        fecha_requerimiento=hoy,
+        modalidad_pago="MENSUAL",
+        numero_cuotas=1,
+        cuota_periodo=Decimal("100.00"),
+        producto="T",
+        analista="test@test.local",
+    )
+    db.add(prestamo)
+    db.flush()
+    db.add(
+        Cuota(
+            prestamo_id=prestamo.id,
+            numero_cuota=1,
+            fecha_vencimiento=hoy + timedelta(days=30),
+            monto=Decimal("100.00"),
+            saldo_capital_inicial=Decimal("100.00"),
+            saldo_capital_final=Decimal("0.00"),
+            monto_capital=Decimal("100.00"),
+            monto_interes=Decimal("0.00"),
+            total_pagado=Decimal("100.00"),
+            estado="PAGADO",
+        )
+    )
+    db.flush()
+    doc = f"VDI-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    pago = Pago(
+        prestamo_id=prestamo.id,
+        cedula_cliente=cliente.cedula,
+        fecha_pago=datetime.now(),
+        monto_pagado=Decimal("50.00"),
+        numero_documento=doc,
+        referencia_pago=doc,
+        conciliado=True,
+        verificado_concordancia="SI",
+        estado="PAGADO",
+    )
+    db.add(pago)
+    db.flush()
+
+    out = aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo.id, db)
+    db.flush()
+    assert int(out.get("pagos_con_aplicacion") or 0) == 0
+    diag = out.get("diagnostico") or {}
+    assert int(diag.get("pagos_elegibles_cascada_sin_cuota_pagos") or 0) >= 1
+    sin_abono = diag.get("pagos_con_intento_sin_abono_ids") or []
+    assert pago.id in sin_abono

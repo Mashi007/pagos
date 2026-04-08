@@ -10,9 +10,12 @@ import {
   BarChart3,
   ChevronRight,
   Filter,
+  TrendingUp,
+  TrendingDown,
   AlertTriangle,
   Shield,
   Clock,
+  FileText,
   PieChart,
   LineChart,
   Database,
@@ -70,6 +73,7 @@ import {
 import { getPeriodoEtiqueta, PERIODOS_VALORES } from '../constants/dashboard'
 
 import type {
+  KpisPrincipalesResponse,
   OpcionesFiltrosResponse,
   DashboardAdminResponse,
   FinanciamientoPorRangosResponse,
@@ -82,6 +86,8 @@ import type {
 } from '../types/dashboard'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
+
+import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
@@ -109,6 +115,52 @@ import {
 } from 'recharts'
 
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
+
+function parseIsoDateLocal(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s).trim())
+
+  if (!m) return null
+
+  const y = Number(m[1])
+
+  const mo = Number(m[2])
+
+  const d = Number(m[3])
+
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null
+
+  return new Date(y, mo - 1, d)
+}
+
+/**
+ * Deja solo puntos con fecha >= 2 de abril del año del último dato (calendario local).
+ * Si no quedara ninguno, devuelve la serie original (evita gráfico vacío fuera de temporada).
+ */
+function serieNotificacionesEjeDesde2Abril<T extends { fecha: string }>(
+  serie: T[]
+): T[] {
+  if (!serie.length) return serie
+
+  let max: Date | null = null
+
+  for (const row of serie) {
+    const dt = parseIsoDateLocal(row.fecha)
+
+    if (dt && (!max || dt.getTime() > max.getTime())) max = dt
+  }
+
+  if (!max) return serie
+
+  const cutoff = new Date(max.getFullYear(), 3, 2)
+
+  const out = serie.filter(row => {
+    const dt = parseIsoDateLocal(row.fecha)
+
+    return dt != null && dt >= cutoff
+  })
+
+  return out.length > 0 ? out : serie
+}
 
 export function DashboardMenu() {
   const navigate = useNavigate()
@@ -182,7 +234,7 @@ export function DashboardMenu() {
 
   // Así. OPTIMIZACIÓN PRIORIDAD 1: Carga por batches con priorización
 
-  // Batch 1: CRÍTICO - Opciones de filtros (carga inmediata)
+  // Batch 1: CRÍTICO - Opciones de filtros y KPIs principales (carga inmediata)
 
   const {
     data: opcionesFiltros,
@@ -202,6 +254,56 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false, // No recargar automáticamente
 
     // Prioridad máxima - carga inmediatamente
+  })
+
+  // Batch 1: CRÍTICO - KPIs principales (visible primero para el usuario)
+
+  // Los KPIs siempre reflejan solo el mes actual (ej. febrero) - independiente del período de los gráficos
+
+  const mesActualKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+
+  const {
+    data: kpisPrincipales,
+    isLoading: loadingKPIs,
+    isError: errorKPIs,
+    refetch,
+  } = useQuery({
+    queryKey: [
+      'kpis-principales-menu',
+      'mes',
+      mesActualKey,
+      JSON.stringify(filtros),
+    ],
+
+    queryFn: async (): Promise<KpisPrincipalesResponse> => {
+      const params = construirFiltrosObject('mes')
+
+      const queryParams = new URLSearchParams()
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+
+      const queryString = queryParams.toString()
+
+      const response = await apiClient.get(
+        `/api/v1/dashboard/kpis-principales${queryString ? '?' + queryString : ''}`
+      )
+
+      return response as KpisPrincipalesResponse
+    },
+
+    staleTime: 5 * 60 * 1000, // 5 min para datos más frescos
+
+    refetchOnWindowFocus: true,
+
+    refetchOnMount: true,
+
+    refetchInterval: 10 * 60 * 1000, // Refrescar cada 10 min
+
+    enabled: true,
+
+    retry: false,
   })
 
   // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal). Siempre con período que incluya 2025 si hay datos.
@@ -523,22 +625,25 @@ export function DashboardMenu() {
     enabled: true,
   })
 
-  /** Si la serie empieza el 1 abr (recorte backend), la etiqueta lo refleja; si no, ventana de N días. */
-  const etiquetaVentanaNotificacionesEnvios = useMemo(() => {
-    const serie = datosNotificacionesPorDia?.serie
+  const serieNotificacionesGrafico = useMemo(
+    () =>
+      serieNotificacionesEjeDesde2Abril(datosNotificacionesPorDia?.serie ?? []),
+    [datosNotificacionesPorDia?.serie]
+  )
 
-    if (!serie?.length) {
-      return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
-    }
+  const etiquetaRangoNotificacionesEjeX = useMemo(() => {
+    const s = serieNotificacionesGrafico
 
-    const primera = serie[0]?.fecha
+    if (!s.length) return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
 
-    if (primera && /^\d{4}-04-01$/.test(primera)) {
-      return 'Desde 1 abr · Caracas'
-    }
+    const a = s[0]?.fecha
+
+    const b = s[s.length - 1]?.fecha
+
+    if (a && b) return a === b ? `${a} · Caracas` : `${a} - ${b} · Caracas`
 
     return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
-  }, [datosNotificacionesPorDia?.serie])
+  }, [serieNotificacionesGrafico])
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -563,6 +668,11 @@ export function DashboardMenu() {
 
     try {
       // Invalidar y refrescar solo las queries usadas por esta página (auditoría: alinear con queryKeys reales)
+
+      await queryClient.invalidateQueries({
+        queryKey: ['kpis-principales-menu'],
+        exact: false,
+      })
 
       await queryClient.invalidateQueries({
         queryKey: ['dashboard-menu'],
@@ -607,6 +717,11 @@ export function DashboardMenu() {
       // Refrescar todas las queries activas del dashboard
 
       await queryClient.refetchQueries({
+        queryKey: ['kpis-principales-menu'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
         queryKey: ['dashboard-menu'],
         exact: false,
       })
@@ -645,6 +760,8 @@ export function DashboardMenu() {
         queryKey: ['notificaciones-envios-por-dia'],
         exact: false,
       })
+
+      await refetch()
 
       toast.success('Datos actualizados correctamente')
     } catch (error) {
@@ -832,7 +949,7 @@ export function DashboardMenu() {
   // Si hay un error crítico en las queries principales, mostrar mensaje pero no bloquear
 
   const hasCriticalError =
-    errorOpcionesFiltros || errorDashboardAdmin
+    errorOpcionesFiltros || errorKPIs || errorDashboardAdmin
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -852,7 +969,7 @@ export function DashboardMenu() {
                 <p>
                   Bienvenido,{' '}
                   <strong className="font-semibold">{userName}</strong>.
-                  Monitoreo estratégico de gráficos.
+                  Monitoreo estratégico de KPIs y gráficos.
                 </p>
               </>
             }
@@ -877,6 +994,135 @@ export function DashboardMenu() {
             </div>
           </motion.div>
         )}
+
+        {/* KPIs PRINCIPALES (dos tarjetas; el gráfico de notificaciones va en la sección de gráficos) */}
+
+        <section id="dashboard-kpis" aria-label="KPIs principales">
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-2 lg:items-stretch">
+              {loadingKPIs ? (
+                <>
+                  {[1, 2].map(i => (
+                    <div
+                      key={i}
+                      className="h-[180px] animate-pulse rounded-xl bg-gray-100"
+                    />
+                  ))}
+                </>
+              ) : errorKPIs ? (
+                <Card className="border-red-200 bg-red-50 md:col-span-2 lg:col-span-2">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 text-red-700">
+                      <AlertTriangle className="h-5 w-5" />
+
+                      <p>
+                        Error al cargar los KPIs principales. Por favor, intente
+                        nuevamente.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : kpisPrincipales ? (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <KpiCardLarge
+                      title="Pagos conciliados (hoy)"
+                      subtitle="Monto en USD (pagos con conciliación = hoy, America/Caracas; BS convertidos con tasa del registro)"
+                      value={kpisPrincipales.pagos_conciliados_hoy.valor_actual}
+                      variation={
+                        kpisPrincipales.pagos_conciliados_hoy
+                          .variacion_porcentual !== undefined
+                          ? {
+                              percent:
+                                kpisPrincipales.pagos_conciliados_hoy
+                                  .variacion_porcentual,
+
+                              label: 'vs día anterior',
+                            }
+                          : undefined
+                      }
+                      icon={TrendingUp}
+                      color="text-green-600"
+                      bgColor="bg-green-100"
+                      borderColor="border-green-500"
+                      format="currency"
+                    />
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <KpiCardLarge
+                      title="Pagos programados (hoy)"
+                      subtitle={
+                        kpisPrincipales.porcentaje_cuotas_pagadas_hoy !==
+                        undefined
+                          ? `Monto con vencimiento hoy (Caracas) · ${Number(kpisPrincipales.porcentaje_cuotas_pagadas_hoy).toFixed(1)}% de esas cuotas ya con fecha de pago`
+                          : 'Monto con vencimiento hoy (America/Caracas)'
+                      }
+                      value={kpisPrincipales.pagos_programados_hoy.valor_actual}
+                      variation={
+                        kpisPrincipales.pagos_programados_hoy
+                          .variacion_porcentual !== undefined
+                          ? {
+                              percent:
+                                kpisPrincipales.pagos_programados_hoy
+                                  .variacion_porcentual,
+
+                              label: 'vs día anterior',
+                            }
+                          : undefined
+                      }
+                      icon={FileText}
+                      color="text-blue-600"
+                      bgColor="bg-blue-100"
+                      borderColor="border-blue-500"
+                      format="currency"
+                    />
+                  </motion.div>
+                </>
+              ) : null}
+            </div>
+
+            {!loadingKPIs && !errorKPIs && kpisPrincipales ? (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.14 }}
+                className="max-w-full"
+              >
+                <KpiCardLarge
+                  title="Pago vencido (mensual)"
+                  subtitle="Cuotas vencidas sin pagar (solo si ya pasó la fecha de vencimiento)"
+                  value={kpisPrincipales.total_morosidad_usd.valor_actual}
+                  variation={
+                    kpisPrincipales.total_morosidad_usd.variacion_porcentual !==
+                    undefined
+                      ? {
+                          percent:
+                            kpisPrincipales.total_morosidad_usd
+                              .variacion_porcentual,
+
+                          label: 'vs mes anterior',
+                        }
+                      : undefined
+                  }
+                  icon={AlertTriangle}
+                  color="text-red-600"
+                  bgColor="bg-red-100"
+                  borderColor="border-red-500"
+                  format="currency"
+                />
+              </motion.div>
+            ) : null}
+          </div>
+        </section>
 
         {/* Barra de filtros: período general (cada gráfico puede usar este o uno propio) */}
 
@@ -968,11 +1214,13 @@ export function DashboardMenu() {
           <div className="space-y-6">
             {/* Aviso cuando no hay datos en los gráficos */}
 
-            {!datosDashboard?.evolucion_mensual?.length ||
-            datosDashboard.evolucion_mensual.every(
-              (e: EvolucionMensualItem) =>
-                !e.cartera && !e.cobrado && !(e.pagos_atrasos ?? 0)
-            ) ? (
+            {kpisPrincipales &&
+            Number(kpisPrincipales.total_prestamos?.valor_actual ?? 0) === 0 &&
+            (!datosDashboard?.evolucion_mensual?.length ||
+              datosDashboard.evolucion_mensual.every(
+                (e: EvolucionMensualItem) =>
+                  !e.cartera && !e.cobrado && !(e.pagos_atrasos ?? 0)
+              )) ? (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -1415,7 +1663,7 @@ export function DashboardMenu() {
                   variant="secondary"
                   className="shrink-0 border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
                 >
-                  {etiquetaVentanaNotificacionesEnvios}
+                  {etiquetaRangoNotificacionesEjeX}
                 </Badge>
               </div>
 
@@ -1424,7 +1672,9 @@ export function DashboardMenu() {
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
                   dias_1_retraso
                 </code>
-                : correos aceptados por SMTP (enviados) por día.
+                : correos aceptados por SMTP (enviados) por día. Eje X desde el{' '}
+                <strong>2 de abril</strong> del año del último día con datos
+                (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada).
               </CardDescription>
             </CardHeader>
 
@@ -1449,7 +1699,7 @@ export function DashboardMenu() {
                 <div className="h-[320px] w-full">
                   <ResponsiveContainer width="100%" height={320}>
                     <RechartsLineChart
-                      data={datosNotificacionesPorDia?.serie ?? []}
+                      data={serieNotificacionesGrafico}
                       margin={{
                         top: 12,
                         right: 20,

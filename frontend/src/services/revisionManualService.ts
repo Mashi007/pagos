@@ -15,6 +15,12 @@ export interface PrestamoDetalleRevision {
 
   saldo: number
 
+  /** Misma regla que el chip «Pagadas» en la tabla de amortización (opcional). */
+  cuotas_pagadas?: number | null
+
+  /** Total de filas de cuota del préstamo (opcional). */
+  cuotas_total?: number | null
+
   cuotas_vencidas: number
 
   cuotas_morosas: number

@@ -314,6 +314,21 @@ def _debe_aplicar_cascada_pago(pago: Pago) -> bool:
     return True
 
 
+def _where_pago_excluido_operacion():
+    """
+    Estados que no cuentan como pagos operativos (anulados, duplicado declarado, etc.).
+    Reutilizado en elegibilidad de cascada y en resúmenes diagnósticos.
+    """
+    est = func.upper(func.coalesce(func.trim(Pago.estado), ""))
+    est_lower = func.lower(func.coalesce(func.trim(Pago.estado), ""))
+    return or_(
+        est.in_(["ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO"]),
+        est.like("%ANUL%"),
+        est.like("%REVERS%"),
+        est_lower.in_(["cancelado", "rechazado"]),
+    )
+
+
 def _where_pago_elegible_reaplicacion_cascada():
     """
     Condicion SQLAlchemy para pagos que deben articularse al reconstruir la cascada
@@ -326,19 +341,12 @@ def _where_pago_elegible_reaplicacion_cascada():
     Excluye: mismo criterio que totales de cartera en auditoria (_sql_fragment_pago_excluido_cartera).
     """
     est = func.upper(func.coalesce(func.trim(Pago.estado), ""))
-    est_lower = func.lower(func.coalesce(func.trim(Pago.estado), ""))
-    excl = or_(
-        est.in_(["ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO"]),
-        est.like("%ANUL%"),
-        est.like("%REVERS%"),
-        est_lower.in_(["cancelado", "rechazado"]),
-    )
     incl = or_(
         Pago.conciliado.is_(True),
         func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
         est == "PAGADO",
     )
-    return and_(incl, not_(excl))
+    return and_(incl, not_(_where_pago_excluido_operacion()))
 
 
 def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuotas_parciales: int) -> str:
@@ -352,7 +360,9 @@ def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuota
 
         pago.fecha_conciliacion = None
 
-        pago.verificado_concordancia = "NO"
+        # Mantener verificado_concordancia "SI" si ya venía de alta conciliada: el criterio de
+        # elegibilidad para aplicar_pagos_pendientes_prestamo incluye verificado SI, y así el
+        # pago no queda bloqueado para «Aplicar a cuotas» masivo en revisión manual.
 
     return estado
 
@@ -2310,7 +2320,7 @@ async def upload_excel_pagos(
 
                     institucion_bancaria=ib_carga,
 
-                    estado="PAGADO" if conciliado else "PENDIENTE",
+                    estado="PAGADO",
 
                     referencia_pago=ref_pago,
 
@@ -2388,7 +2398,7 @@ async def upload_excel_pagos(
 
                     ),
 
-                    estado="PAGADO" if conciliado else "PENDIENTE",
+                    estado="PENDIENTE",
 
                     errores_descripcion=pce_data["errores"],
 
@@ -6043,7 +6053,41 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
     return _pago_response_enriquecido(db, row)
 
 
-
+def _mensaje_sin_aplicacion_cascada(diagnostico: dict[str, Any]) -> str:
+    """Texto explicativo cuando pagos_con_aplicacion == 0 sin reaplicación completa."""
+    n_no = int(diagnostico.get("pagos_no_elegibles_sin_cuota_pagos") or 0)
+    n_eleg = int(diagnostico.get("pagos_elegibles_cascada_sin_cuota_pagos") or 0)
+    n_oper = int(diagnostico.get("pagos_operativos_sin_cuota_pagos") or 0)
+    sin_abono = diagnostico.get("pagos_con_intento_sin_abono_ids") or []
+    errs = diagnostico.get("errores_por_pago") or []
+    partes: list[str] = []
+    if n_no > 0 and n_eleg == 0:
+        partes.append(
+            f"Hay {n_no} pago(s) sin articulación en cuota_pagos que no cumplen criterio de elegibilidad "
+            "(conciliado, verificado SÍ o estado PAGADO; excluye anulados/rechazados). "
+            "Concilie o verifique esos pagos en el módulo Pagos."
+        )
+    elif n_eleg > 0 and isinstance(sin_abono, list) and len(sin_abono) > 0:
+        muestra = ", ".join(str(x) for x in sin_abono[:20])
+        suf = "…" if len(sin_abono) > 20 else ""
+        partes.append(
+            f"Se intentó con {n_eleg} pago(s) elegible(s) ordenados por fecha, "
+            f"pero ninguno generó abono en cuotas (sin saldo pendiente en cuotas en BD o bloqueo). "
+            f"IDs: {muestra}{suf}."
+        )
+    elif n_oper == 0:
+        partes.append(
+            "No hay pagos operativos con monto > 0 pendientes de articulación para este crédito "
+            "(todos tienen filas en cuota_pagos o no hay registros aplicables)."
+        )
+    if isinstance(errs, list) and len(errs) > 0:
+        partes.append(f"Fallos al aplicar en {len(errs)} pago(s); revise logs o integridad.")
+    if not partes:
+        partes.append(
+            "No quedaban pagos elegibles sin filas en cuota_pagos (o monto 0). "
+            "La reaplicación completa del préstamo solo corre si el sistema detecta inconsistencia de integridad."
+        )
+    return "Ningún pago nuevo se articuló en cuotas. " + " ".join(partes)
 
 
 @router.post("/por-prestamo/{prestamo_id:int}/aplicar-pagos-cuotas", response_model=dict)
@@ -6058,9 +6102,11 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
     """
 
-    Aplica en cascada (FIFO por fecha_pago) los pagos del préstamo que aún no tienen
+    Aplica en cascada (por fecha_pago, luego id) los pagos del préstamo que aún no tienen
 
     filas en cuota_pagos y cumplen criterios de elegibilidad (conciliado / verificado / PAGADO).
+
+    Por cada pago, el reparto a cuotas sigue el orden numero_cuota (cascada / waterfall).
 
     Persiste en BD. Útil tras editar/crear pagos en revisión manual o regenerar cuotas.
 
@@ -6072,9 +6118,15 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
+    diagnostico: dict[str, Any] = {}
+
     try:
 
-        n = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
+        res_primera = aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db)
+
+        n = int(res_primera.get("pagos_con_aplicacion") or 0)
+
+        diagnostico = dict(res_primera.get("diagnostico") or {})
 
         reaplicacion_completa = False
 
@@ -6162,17 +6214,7 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
     else:
 
-        mensaje = (
-
-            "Ningún pago nuevo se articuló en cuotas: no quedaban pagos elegibles "
-
-            "sin filas en cuota_pagos (o monto 0 / no conciliados). "
-
-            "La reaplicación completa del préstamo solo corre si el sistema detecta "
-
-            "inconsistencia de integridad."
-
-        )
+        mensaje = _mensaje_sin_aplicacion_cascada(diagnostico)
 
     return {
 
@@ -6185,6 +6227,8 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
         "detalle_reaplicacion": detalle_reaplicacion,
 
         "mensaje": mensaje,
+
+        "diagnostico": diagnostico,
 
     }
 
@@ -6761,26 +6805,31 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
 
 
 
-def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
-
+def aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id: int, db: Session) -> dict[str, Any]:
     """
+    Igual que aplicar_pagos_pendientes_prestamo pero devuelve diagnóstico para UI y soporte.
 
-    Aplica a cuotas los pagos del préstamo que aún no tienen enlaces en cuota_pagos.
-
-    Criterio de elegibilidad: conciliado, verificado_concordancia SI, o estado PAGADO;
-    excluye anulados/reversados/duplicado declarado (alineado con auditoria cartera).
-
-    No hace commit. Retorna el número de pagos a los que se les aplicó algo (cc o cp > 0).
-
+    diagnostico incluye conteos antes de aplicar y listas de pagos sin abono o con error.
     """
-
+    vacio: dict[str, Any] = {
+        "pagos_operativos_sin_cuota_pagos": 0,
+        "pagos_elegibles_cascada_sin_cuota_pagos": 0,
+        "pagos_no_elegibles_sin_cuota_pagos": 0,
+        "pagos_con_intento_sin_abono_ids": [],
+        "errores_por_pago": [],
+    }
     prestamo_chk = db.get(Prestamo, prestamo_id)
-
     if prestamo_chk and (prestamo_chk.estado or "").strip().upper() == "DESISTIMIENTO":
-
-        return 0
+        return {"pagos_con_aplicacion": 0, "diagnostico": vacio}
 
     subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
+    base_operativo = and_(
+        Pago.prestamo_id == prestamo_id,
+        Pago.monto_pagado > 0,
+        ~Pago.id.in_(subq),
+        not_(_where_pago_excluido_operacion()),
+    )
+    n_oper = int(db.scalar(select(func.count()).select_from(Pago).where(base_operativo)) or 0)
 
     rows = db.execute(
         select(Pago)
@@ -6793,31 +6842,52 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
         .order_by(Pago.fecha_pago.asc().nulls_last(), Pago.id.asc())
     ).scalars().all()
 
+    n_eleg = len(rows)
+    n_no_eleg = max(0, n_oper - n_eleg)
+
     n = 0
+    sin_abono: list[int] = []
+    errores: list[dict[str, Any]] = []
 
     for pago in rows:
-
         try:
-
             cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
-
             if cc > 0 or cp > 0:
-
                 pago.estado = "PAGADO"
-
                 n += 1
-
+            else:
+                sin_abono.append(int(pago.id))
         except Exception as e:
-
             logger.warning(
-
                 "aplicar_pagos_pendientes_prestamo prestamo_id=%s pago id=%s: %s",
-
-                prestamo_id, pago.id, e,
-
+                prestamo_id,
+                pago.id,
+                e,
             )
+            errores.append({"pago_id": int(pago.id), "error": str(e)})
 
-    return n
+    return {
+        "pagos_con_aplicacion": n,
+        "diagnostico": {
+            "pagos_operativos_sin_cuota_pagos": n_oper,
+            "pagos_elegibles_cascada_sin_cuota_pagos": n_eleg,
+            "pagos_no_elegibles_sin_cuota_pagos": n_no_eleg,
+            "pagos_con_intento_sin_abono_ids": sin_abono,
+            "errores_por_pago": errores,
+        },
+    }
+
+
+def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
+    """
+    Aplica a cuotas los pagos del préstamo que aún no tienen enlaces en cuota_pagos.
+
+    Criterio de elegibilidad: conciliado, verificado_concordancia SI, o estado PAGADO;
+    excluye anulados/reversados/duplicado declarado (alineado con auditoria cartera).
+
+    No hace commit. Retorna el número de pagos a los que se les aplicó algo (cc o cp > 0).
+    """
+    return int(aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db)["pagos_con_aplicacion"])
 
 
 

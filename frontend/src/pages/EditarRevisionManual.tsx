@@ -373,6 +373,37 @@ function badgeEstadoPagoRegistrado(estado: string) {
   return <Badge className={`${config.color} text-white`}>{config.label}</Badge>
 }
 
+/** Segunda línea del toast tras «Aplicar a cuotas (cascada)» cuando el backend envía diagnostico. */
+function descripcionDiagnosticoCascada(d: {
+  pagos_operativos_sin_cuota_pagos?: number
+  pagos_elegibles_cascada_sin_cuota_pagos?: number
+  pagos_no_elegibles_sin_cuota_pagos?: number
+  pagos_con_intento_sin_abono_ids?: number[]
+  errores_por_pago?: Array<{ pago_id: number; error: string }>
+}): string | undefined {
+  const partes: string[] = []
+  const op = d.pagos_operativos_sin_cuota_pagos
+  const el = d.pagos_elegibles_cascada_sin_cuota_pagos
+  const noEl = d.pagos_no_elegibles_sin_cuota_pagos
+  if (op != null || el != null || noEl != null) {
+    partes.push(
+      `Resumen: ${op ?? 0} pago(s) sin cuota_pagos (operativos), ${el ?? 0} elegible(s) cascada, ${noEl ?? 0} no elegible(s).`
+    )
+  }
+  const ids = d.pagos_con_intento_sin_abono_ids
+  if (ids != null && ids.length > 0) {
+    const muestra = ids.slice(0, 12).join(', ')
+    const suf = ids.length > 12 ? '…' : ''
+    partes.push(`Intentados sin abono (IDs): ${muestra}${suf}`)
+  }
+  const errs = d.errores_por_pago
+  if (errs != null && errs.length > 0) {
+    partes.push(`${errs.length} pago(s) con error al aplicar.`)
+  }
+  if (partes.length === 0) return undefined
+  return partes.join(' ')
+}
+
 export function EditarRevisionManual() {
   const { prestamoId } = useParams()
 
@@ -750,16 +781,20 @@ export function EditarRevisionManual() {
     onSuccess: async data => {
       const aplicados = Number(data.pagos_con_aplicacion ?? 0)
       const texto = data.mensaje || 'Operación completada'
+      const desc =
+        data.diagnostico != null
+          ? descripcionDiagnosticoCascada(data.diagnostico)
+          : undefined
       if (aplicados > 0) {
-        toast.success(texto)
+        toast.success(texto, desc != null ? { description: desc } : undefined)
       } else {
-        toast.info(texto)
+        toast.info(texto, desc != null ? { description: desc } : undefined)
       }
       await refrescarTrasCambioPagosRevision()
       /**
        * La cascada actualiza cuotas en BD. El queryFn del detalle no llama a setCuotasData
        * si hay cambios locales sin guardar (formDirtyRef), y la tabla de cuotas quedaría desactualizada.
-       * Tras FIFO en servidor, alineamos siempre cuotas (y marcamos cuotas como no sucias).
+       * Tras cascada en servidor, alineamos siempre cuotas (y marcamos cuotas como no sucias).
        */
       if (prestamoId) {
         const fresh = queryClient.getQueryData([
@@ -2867,8 +2902,11 @@ export function EditarRevisionManual() {
                         único). Si el mismo documento aparece dos veces en esta
                         página se resalta en la tabla. Use «Agregar pago»,
                         «Editar» o «Eliminar»; «Aplicar a cuotas (cascada)»
-                        adjudica en la BD los pagos pendientes de este crédito a
-                        las cuotas (FIFO). La tabla se actualiza al guardar y
+                        adjudica en la BD los pagos elegibles de este crédito a
+                        las cuotas en orden de vencimiento (cascada por número
+                        de cuota; pagos ordenados por fecha). Solo entran pagos
+                        conciliados, verificados o en estado Pagado, sin filas
+                        en cuota_pagos. La tabla se actualiza al guardar y
                         también al volver a la pestaña o cada minuto.
                       </p>
                     </div>
