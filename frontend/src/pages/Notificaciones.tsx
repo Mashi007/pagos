@@ -965,6 +965,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? isPendingPrej
         : isPendingD2
 
+  /**
+   * No deshabilitar «Enviar notificaciones (manual)» durante refetch en segundo plano
+   * (staleTime 0 + refocus): solo hasta la primera respuesta de la lista.
+   */
+  const esperandoPrimeraCargaLista =
+    (modulo === 'a1dia' && isPending && !isFetched) ||
+    (modulo === 'a3cuotas' && isPendingPrej && !isFetchedPrej) ||
+    (modulo === 'd2antes' && isPendingD2 && !isFetchedD2)
+
   const isErrorLista =
     modulo === 'a1dia'
       ? isError
@@ -1227,7 +1236,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   size="sm"
                   onClick={() => void handleEnviarPago1DiaManual()}
                   disabled={
-                    enviandoPago1Dia || actualizandoListas || isLoadingLista
+                    enviandoPago1Dia ||
+                    actualizandoListas ||
+                    esperandoPrimeraCargaLista
                   }
                   className="bg-blue-600 text-white hover:bg-blue-700"
                 >
@@ -1245,7 +1256,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   size="sm"
                   onClick={() => void handleEnviarPrejudicialManual()}
                   disabled={
-                    enviandoPrejudicial || actualizandoListas || isLoadingLista
+                    enviandoPrejudicial ||
+                    actualizandoListas ||
+                    esperandoPrimeraCargaLista
                   }
                   className="bg-blue-600 text-white hover:bg-blue-700"
                 >
@@ -1263,7 +1276,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   size="sm"
                   onClick={() => void handleEnviarD2AntesManual()}
                   disabled={
-                    enviandoD2Antes || actualizandoListas || isLoadingLista
+                    enviandoD2Antes ||
+                    actualizandoListas ||
+                    esperandoPrimeraCargaLista
                   }
                   className="bg-blue-600 text-white hover:bg-blue-700"
                 >

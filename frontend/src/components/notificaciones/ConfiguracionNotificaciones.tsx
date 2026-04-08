@@ -656,7 +656,7 @@ export function ConfiguracionNotificaciones({
 
     refetchOnWindowFocus: false,
 
-    refetchOnMount: false,
+    refetchOnMount: 'always',
   })
 
   const {
@@ -1523,8 +1523,7 @@ export function ConfiguracionNotificaciones({
                   disabled={
                     diagnosticoCargando ||
                     enviandoPruebaIndice !== null ||
-                    enviandoMasivo ||
-                    smtpConfigurado === false
+                    enviandoMasivo
                   }
                   className="flex h-auto w-full items-center justify-center gap-2 rounded-lg py-2"
                 >
@@ -1542,9 +1541,7 @@ export function ConfiguracionNotificaciones({
                 <Button
                   onClick={handleEnviarNotificacionesPrueba}
                   disabled={
-                    diagnosticoCargando ||
-                    enviandoPruebaIndice !== null ||
-                    smtpConfigurado === false
+                    diagnosticoCargando || enviandoPruebaIndice !== null
                   }
                   className="flex h-auto w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 py-2 font-semibold text-white transition-all hover:from-green-600 hover:to-emerald-700 disabled:opacity-50"
                 >
@@ -1565,11 +1562,7 @@ export function ConfiguracionNotificaciones({
                   <>
                     <Button
                       onClick={handleEnviosMasivosPrueba}
-                      disabled={
-                        enviandoMasivo ||
-                        smtpConfigurado === false ||
-                        diagnosticoCargando
-                      }
+                      disabled={enviandoMasivo || diagnosticoCargando}
                       variant="outline"
                       className="flex h-auto w-full items-center justify-center gap-2 rounded-lg border-amber-400 bg-amber-50 py-2 font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
                     >
@@ -2033,6 +2026,19 @@ export function ConfiguracionNotificaciones({
                           diagnosticoCargando ||
                           enviandoPruebaIndice !== null ||
                           guardandoEnvios
+                        }
+                        title={
+                          guardandoEnvios
+                            ? 'Espere a que termine Guardar o pulse Cancelar si quedó colgado.'
+                            : enviandoCasoTipo !== null
+                              ? 'Hay otro envío de caso en curso.'
+                              : enviandoMasivo
+                                ? 'Hay un envío masivos de prueba en curso.'
+                                : diagnosticoCargando
+                                  ? 'Diagnóstico de paquete en curso.'
+                                  : enviandoPruebaIndice !== null
+                                    ? 'Envío de notificación de prueba en curso.'
+                                    : 'Enviar solo este criterio (POST sincrono).'
                         }
                         onClick={() => void handleEnviarCasoManual(tipo, label)}
                       >
