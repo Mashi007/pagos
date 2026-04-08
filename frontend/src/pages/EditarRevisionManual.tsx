@@ -373,6 +373,35 @@ function badgeEstadoPagoRegistrado(estado: string) {
   return <Badge className={`${config.color} text-white`}>{config.label}</Badge>
 }
 
+/**
+ * Misma familia que exclusión operativa en cascada (anulados, rechazados, duplicado declarado).
+ * No se ofrece marcar conciliado en esos registros desde esta pantalla.
+ */
+function pagoEstadoExcluyeToggleConciliadoRevision(
+  estadoRaw: string | undefined
+): boolean {
+  const e = (estadoRaw ?? '').trim().toUpperCase()
+  const el = (estadoRaw ?? '').trim().toLowerCase()
+  if (
+    [
+      'DUPLICADO',
+      'ANULADO_IMPORT',
+      'CANCELADO',
+      'RECHAZADO',
+      'REVERSADO',
+    ].includes(e)
+  ) {
+    return true
+  }
+  if (e.includes('ANUL') || e.includes('REVERS')) {
+    return true
+  }
+  if (el === 'cancelado' || el === 'rechazado') {
+    return true
+  }
+  return false
+}
+
 /** Segunda línea del toast tras «Aplicar a cuotas (cascada)» cuando el backend envía diagnostico. */
 function descripcionDiagnosticoCascada(d: {
   pagos_operativos_sin_cuota_pagos?: number
@@ -454,6 +483,10 @@ export function EditarRevisionManual() {
   >(undefined)
 
   const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null)
+
+  const [conciliandoPagoId, setConciliandoPagoId] = useState<number | null>(
+    null
+  )
 
   /** Fecha de aprobación original cargada desde BD - para detectar si cambió */
   const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<
@@ -854,6 +887,30 @@ export function EditarRevisionManual() {
       toast.error(msg || 'No se pudo eliminar el pago')
     } finally {
       setEliminandoPagoId(null)
+    }
+  }
+
+  const toggleConciliadoPagoRevision = async (pago: Pago, checked: boolean) => {
+    if (soloLectura) return
+    if (pagoEstadoExcluyeToggleConciliadoRevision(pago.estado)) {
+      toast.error(
+        'No se puede cambiar conciliación en pagos anulados, rechazados o duplicado declarado.'
+      )
+      return
+    }
+    setConciliandoPagoId(pago.id)
+    try {
+      await pagoService.updateConciliado(pago.id, checked)
+      toast.success(
+        checked
+          ? 'Pago marcado como conciliado (elegible para «Aplicar pagos a cuotas»).'
+          : 'Pago marcado como no conciliado. En servidor verificado pasa a NO.'
+      )
+      await refrescarTrasCambioPagosRevision()
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err) || 'No se pudo actualizar conciliación')
+    } finally {
+      setConciliandoPagoId(null)
     }
   }
 
@@ -3031,6 +3088,12 @@ export function EditarRevisionManual() {
                                 <TableHead className="whitespace-nowrap">
                                   Estado
                                 </TableHead>
+                                <TableHead
+                                  className="whitespace-nowrap text-center"
+                                  title="Marca conciliado en BD: el pago entra en el criterio de elegibilidad para «Aplicar pagos a cuotas» (junto con verificado Sí o estado Pagado). Quitar conciliado pone verificado en NO en el servidor."
+                                >
+                                  Conciliado
+                                </TableHead>
                                 <TableHead>Notas</TableHead>
                                 <TableHead className="min-w-[200px] whitespace-nowrap text-right">
                                   Acciones
@@ -3094,6 +3157,39 @@ export function EditarRevisionManual() {
                                           pago.estado || 'PENDIENTE'
                                         ).toUpperCase()
                                       )}
+                                    </TableCell>
+                                    <TableCell className="text-center align-middle">
+                                      <input
+                                        type="checkbox"
+                                        className="h-4 w-4 cursor-pointer rounded border-input accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                        checked={Boolean(pago.conciliado)}
+                                        disabled={
+                                          soloLectura ||
+                                          conciliandoPagoId === pago.id ||
+                                          eliminandoPagoId === pago.id ||
+                                          pagoEstadoExcluyeToggleConciliadoRevision(
+                                            pago.estado
+                                          )
+                                        }
+                                        title={
+                                          soloLectura
+                                            ? 'Revisión cerrada: solo lectura'
+                                            : pagoEstadoExcluyeToggleConciliadoRevision(
+                                                  pago.estado
+                                                )
+                                              ? 'Estado del pago no admite cambiar conciliación aquí'
+                                              : pago.conciliado
+                                                ? 'Quitar conciliado (en servidor verificado → NO)'
+                                                : 'Marcar conciliado para elegir en cascada masiva'
+                                        }
+                                        onChange={e => {
+                                          void toggleConciliadoPagoRevision(
+                                            pago,
+                                            e.target.checked
+                                          )
+                                        }}
+                                        aria-label={`Conciliado pago ${pago.id}`}
+                                      />
                                     </TableCell>
                                     <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
                                       {pago.notas?.trim() ? pago.notas : '-'}
