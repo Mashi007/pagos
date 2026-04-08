@@ -38,6 +38,12 @@ export interface KpisPrincipalesResponse {
    */
   pagos_conciliados_hoy: KpiValor
 
+  /**
+   * Suma monto_cuota (USD) de cuotas vencidas antes de hoy (Caracas) con pago conciliado hoy.
+   * Complemento de pagos_conciliados_hoy (solo vence hoy).
+   */
+  cuotas_atrasadas_conciliadas_hoy: KpiValor
+
   total_clientes: KpiValor
 
   clientes_por_estado?: {

@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Shield,
   Clock,
+  History,
   FileText,
   PieChart,
   LineChart,
@@ -995,14 +996,14 @@ export function DashboardMenu() {
           </motion.div>
         )}
 
-        {/* KPIs PRINCIPALES (tres tarjetas en una fila en pantallas grandes) */}
+        {/* KPIs PRINCIPALES (cuatro tarjetas; fila completa en xl) */}
 
         <section id="dashboard-kpis" aria-label="KPIs principales">
           <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:items-stretch">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
               {loadingKPIs ? (
                 <>
-                  {[1, 2, 3].map(i => (
+                  {[1, 2, 3, 4].map(i => (
                     <div
                       key={i}
                       className="h-[180px] animate-pulse rounded-xl bg-gray-100"
@@ -1010,7 +1011,7 @@ export function DashboardMenu() {
                   ))}
                 </>
               ) : errorKPIs ? (
-                <Card className="border-red-200 bg-red-50 md:col-span-2 lg:col-span-3">
+                <Card className="border-red-200 bg-red-50 md:col-span-2 xl:col-span-4">
                   <CardContent className="p-6">
                     <div className="flex items-center gap-3 text-red-700">
                       <AlertTriangle className="h-5 w-5" />
@@ -1083,6 +1084,39 @@ export function DashboardMenu() {
                       color="text-blue-600"
                       bgColor="bg-blue-100"
                       borderColor="border-blue-500"
+                      format="currency"
+                    />
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.11 }}
+                  >
+                    <KpiCardLarge
+                      title="Atrasos cobrados (hoy)"
+                      subtitle="Monto en USD de cuotas con vencimiento anterior a hoy (Caracas) y conciliación hoy; no incluye cuotas que vencen hoy"
+                      value={
+                        kpisPrincipales.cuotas_atrasadas_conciliadas_hoy
+                          ?.valor_actual ?? 0
+                      }
+                      variation={
+                        kpisPrincipales.cuotas_atrasadas_conciliadas_hoy
+                          ?.variacion_porcentual !== undefined
+                          ? {
+                              percent:
+                                kpisPrincipales
+                                  .cuotas_atrasadas_conciliadas_hoy
+                                  .variacion_porcentual,
+
+                              label: 'vs día anterior',
+                            }
+                          : undefined
+                      }
+                      icon={History}
+                      color="text-amber-700"
+                      bgColor="bg-amber-100"
+                      borderColor="border-amber-500"
                       format="currency"
                     />
                   </motion.div>
