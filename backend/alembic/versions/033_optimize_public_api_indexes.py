@@ -7,7 +7,13 @@ from alembic import op
 import sqlalchemy as sa
 
 
-def upgrade():
+revision = "033_optimize_public_api_indexes"
+down_revision = "032_auditoria_cartera_revision_payload_snapshot"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
     """Crear índices para optimizar queries públicas."""
     
     # Índice 1: clientes por cédula (validación rápida)
@@ -44,7 +50,7 @@ def upgrade():
     """)
 
 
-def downgrade():
+def downgrade() -> None:
     """Eliminar índices."""
     op.execute("DROP INDEX IF EXISTS idx_cliente_cedula;")
     op.execute("DROP INDEX IF EXISTS idx_estado_cuenta_codigo_cedula_activo;")

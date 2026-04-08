@@ -6,7 +6,13 @@ from alembic import op
 import sqlalchemy as sa
 
 
-def upgrade():
+revision = "034_fase2_vistas_triggers_cache"
+down_revision = "033_optimize_public_api_indexes"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
     """Crear vistas materializadas, triggers y tablas de caché."""
     
     # ============================================================================
@@ -31,7 +37,10 @@ def upgrade():
         $$ LANGUAGE plpgsql;
     """)
     
-    # Trigger cuando se crea/actualiza cuota
+    # Trigger cuando se crea/actualiza cuota (re-ejecutable si ya existía)
+    op.execute(
+        "DROP TRIGGER IF EXISTS trigger_actualizar_retraso_snapshot ON cuotas;"
+    )
     op.execute("""
         CREATE TRIGGER trigger_actualizar_retraso_snapshot
         AFTER INSERT OR UPDATE ON cuotas
@@ -43,6 +52,8 @@ def upgrade():
     # 2. VISTA MATERIALIZADA para KPIs (refresh cada 1 hora)
     # ============================================================================
     
+    op.execute("DROP INDEX IF EXISTS idx_pagos_kpis_mv_fecha;")
+    op.execute("DROP MATERIALIZED VIEW IF EXISTS pagos_kpis_mv CASCADE;")
     op.execute("""
         CREATE MATERIALIZED VIEW pagos_kpis_mv AS
         SELECT 
@@ -60,7 +71,7 @@ def upgrade():
     
     # Índice en vista para búsquedas rápidas
     op.execute("""
-        CREATE INDEX idx_pagos_kpis_mv_fecha 
+        CREATE INDEX IF NOT EXISTS idx_pagos_kpis_mv_fecha 
         ON pagos_kpis_mv (fecha_snapshot DESC);
     """)
     
@@ -69,18 +80,22 @@ def upgrade():
     # ============================================================================
     
     op.execute("""
-        CREATE TABLE adjuntos_fijos_cache (
+        CREATE TABLE IF NOT EXISTS adjuntos_fijos_cache (
             caso VARCHAR(100) PRIMARY KEY,
             contenido BYTEA,
             nombre_archivo VARCHAR(255),
-            tamaño_bytes BIGINT,
+            tamano_bytes BIGINT,
             hash_contenido VARCHAR(64),
             created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW(),
-            INDEX idx_adjuntos_fijos_cache_created 
-                ON adjuntos_fijos_cache (created_at)
+            updated_at TIMESTAMP DEFAULT NOW()
         );
-        COMMENT ON TABLE adjuntos_fijos_cache IS 
+    """)
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS idx_adjuntos_fijos_cache_created
+        ON adjuntos_fijos_cache (created_at);
+    """)
+    op.execute("""
+        COMMENT ON TABLE adjuntos_fijos_cache IS
             'Caché en BD para adjuntos fijos. TTL: 24h (eliminar vía job)';
     """)
     
@@ -89,7 +104,7 @@ def upgrade():
     # ============================================================================
     
     op.execute("""
-        CREATE TABLE email_config_cache (
+        CREATE TABLE IF NOT EXISTS email_config_cache (
             config_key VARCHAR(100) PRIMARY KEY,
             config_value JSONB,
             servicio VARCHAR(50),
@@ -97,7 +112,9 @@ def upgrade():
             created_at TIMESTAMP DEFAULT NOW(),
             expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '15 minutes'
         );
-        COMMENT ON TABLE email_config_cache IS 
+    """)
+    op.execute("""
+        COMMENT ON TABLE email_config_cache IS
             'Caché en BD para configuración de email. TTL: 15 min';
     """)
     
@@ -139,11 +156,11 @@ def upgrade():
         WHERE estado = 'PAGADO';
     """)
     
-    # Índice para búsqueda de cuotas vencidas
+    # Índice para cuotas operativas (sin CURRENT_DATE en el predicado: no es IMMUTABLE en PG)
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_cuotas_vencidas 
-        ON cuotas (prestamo_id, fecha_pago) 
-        WHERE fecha_pago < CURRENT_DATE AND estado != 'CANCELADA';
+        ON cuotas (prestamo_id, fecha_vencimiento) 
+        WHERE estado IS NOT NULL AND estado <> 'CANCELADA';
     """)
     
     # Índice en clientes para búsqueda por cédula + estado
@@ -154,7 +171,7 @@ def upgrade():
     """)
 
 
-def downgrade():
+def downgrade() -> None:
     """Remover vistas, triggers y tablas de caché."""
     
     # Remover triggers

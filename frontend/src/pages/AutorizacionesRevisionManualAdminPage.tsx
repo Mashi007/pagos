@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useNavigate } from 'react-router-dom'
 
+import { useState } from 'react'
+
 import { CheckCircle, Loader2, RefreshCw } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -9,6 +11,10 @@ import { toast } from 'sonner'
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
 import { Button } from '../components/ui/button'
+
+import { Input } from '../components/ui/input'
+
+import { Label } from '../components/ui/label'
 
 import {
   Table,
@@ -29,6 +35,8 @@ export default function AutorizacionesRevisionManualAdminPage() {
   const navigate = useNavigate()
 
   const queryClient = useQueryClient()
+
+  const [prestamoIdReabrir, setPrestamoIdReabrir] = useState('')
 
   const q = useQuery({
     queryKey: ['revision-manual-autorizaciones-reapertura'],
@@ -89,6 +97,35 @@ export default function AutorizacionesRevisionManualAdminPage() {
     },
   })
 
+  const mutReabrirPorId = useMutation({
+    mutationFn: async (prestamoId: number) =>
+      revisionManualService.iniciarRevision(prestamoId),
+    onSuccess: (_data, prestamoId) => {
+      toast.success(
+        'Revisión puesta en «En revisión». El operario puede editar de nuevo.'
+      )
+      setPrestamoIdReabrir('')
+      void queryClient.invalidateQueries({
+        queryKey: ['revision-manual-autorizaciones-reapertura'],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['revision-manual-prestamos'],
+      })
+      const abrir = window.confirm(
+        `¿Abrir ahora la pantalla de edición del préstamo #${prestamoId}?`
+      )
+      if (abrir) {
+        navigate(`/revision-manual/editar/${prestamoId}`)
+      }
+    },
+    onError: (err: unknown) => {
+      toast.error(
+        getErrorMessage(err) ||
+          'No se pudo cambiar el estado. Compruebe el ID y que exista revisión manual.'
+      )
+    },
+  })
+
   const items = q.data ?? []
 
   return (
@@ -116,6 +153,62 @@ export default function AutorizacionesRevisionManualAdminPage() {
       />
 
       <Card>
+        <CardContent className="space-y-4 pt-6">
+          <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 p-4">
+            <p className="text-sm font-medium text-foreground">
+              Reabrir sin solicitud previa
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Si un préstamo está en Visto (revisado) y no hay fila en la cola,
+              puede ponerlo en «En revisión» aquí. Los operarios, en cambio,
+              deben usar Revisión manual: clic en el estado Revisado y enviar
+              solicitud al administrador.
+            </p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="prestamo-id-reabrir">ID del préstamo</Label>
+                <Input
+                  id="prestamo-id-reabrir"
+                  inputMode="numeric"
+                  placeholder="Ej. 12345"
+                  value={prestamoIdReabrir}
+                  onChange={e =>
+                    setPrestamoIdReabrir(e.target.value.replace(/\D/g, ''))
+                  }
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={
+                  mutReabrirPorId.isPending ||
+                  !prestamoIdReabrir.trim() ||
+                  Number(prestamoIdReabrir) < 1
+                }
+                onClick={() => {
+                  const id = Number(prestamoIdReabrir)
+                  if (!Number.isFinite(id) || id < 1) {
+                    toast.error('Indique un ID de préstamo válido')
+                    return
+                  }
+                  mutReabrirPorId.mutate(id)
+                }}
+              >
+                {mutReabrirPorId.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Aplicando…
+                  </>
+                ) : (
+                  'Poner en revisión'
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardContent className="pt-6">
           {q.isLoading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
@@ -127,9 +220,16 @@ export default function AutorizacionesRevisionManualAdminPage() {
               {getErrorMessage(q.error) || 'No se pudo cargar la lista'}
             </p>
           ) : items.length === 0 ? (
-            <p className="py-8 text-center text-muted-foreground">
-              No hay solicitudes pendientes.
-            </p>
+            <div className="space-y-3 py-8 text-center text-muted-foreground">
+              <p>No hay solicitudes pendientes de operarios.</p>
+              <p className="mx-auto max-w-lg text-sm">
+                Las solicitudes aparecen cuando un operario, con un préstamo en
+                Visto, hace clic en el estado «Revisado» en la lista de Revisión
+                manual y confirma enviar la petición al administrador. Si solo
+                necesita reabrir usted mismo, use el bloque «Reabrir sin
+                solicitud previa» arriba.
+              </p>
+            </div>
           ) : (
             <Table>
               <TableHeader>

@@ -12,6 +12,7 @@ doesn't have it. This migration adds the missing column.
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 
 
@@ -23,12 +24,25 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add payload_snapshot column as JSONB, nullable
-    op.add_column('auditoria_cartera_revision', 
-        sa.Column('payload_snapshot', postgresql.JSONB(astext_type=sa.Text()), nullable=True)
+    bind = op.get_bind()
+    insp = inspect(bind)
+    cols = {c["name"] for c in insp.get_columns("auditoria_cartera_revision")}
+    if "payload_snapshot" in cols:
+        return
+    op.add_column(
+        "auditoria_cartera_revision",
+        sa.Column(
+            "payload_snapshot",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
     )
 
 
 def downgrade() -> None:
-    # Remove payload_snapshot column
-    op.drop_column('auditoria_cartera_revision', 'payload_snapshot')
+    bind = op.get_bind()
+    insp = inspect(bind)
+    cols = {c["name"] for c in insp.get_columns("auditoria_cartera_revision")}
+    if "payload_snapshot" not in cols:
+        return
+    op.drop_column("auditoria_cartera_revision", "payload_snapshot")

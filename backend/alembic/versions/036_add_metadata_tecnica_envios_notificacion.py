@@ -12,22 +12,32 @@ doesn't have it. This migration adds the missing column.
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
 revision = '036_add_metadata_tecnica'
-down_revision = '035_fix_materialized_views_indices'
+down_revision = '035_fix_mv_indices'
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    # Add metadata_tecnica column as JSON, nullable
-    op.add_column('envios_notificacion', 
-        sa.Column('metadata_tecnica', sa.JSON(), nullable=True)
+    bind = op.get_bind()
+    insp = inspect(bind)
+    cols = {c["name"] for c in insp.get_columns("envios_notificacion")}
+    if "metadata_tecnica" in cols:
+        return
+    op.add_column(
+        "envios_notificacion",
+        sa.Column("metadata_tecnica", sa.JSON(), nullable=True),
     )
 
 
 def downgrade() -> None:
-    # Remove metadata_tecnica column
-    op.drop_column('envios_notificacion', 'metadata_tecnica')
+    bind = op.get_bind()
+    insp = inspect(bind)
+    cols = {c["name"] for c in insp.get_columns("envios_notificacion")}
+    if "metadata_tecnica" not in cols:
+        return
+    op.drop_column("envios_notificacion", "metadata_tecnica")

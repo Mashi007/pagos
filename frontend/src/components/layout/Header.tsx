@@ -50,35 +50,16 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
   const showAdminNotifications = isAdminRole(user?.rol)
 
-  // Solo administradores: campana (módulo de notificaciones lo gestiona admin)
+  /** Sin listado en cabecera hasta conectar un feed real; el menú lateral lleva envíos y autorizaciones. */
+  const notifications: {
+    id: number
+    title: string
+    message: string
+    time: string
+    read: boolean
+  }[] = []
 
-  const notifications = showAdminNotifications
-    ? [
-        {
-          id: 1,
-          title: 'Pago recibido',
-          message: 'Cliente Juan Pérez realizó pago de $500',
-          time: '5 min',
-          read: false,
-        },
-        {
-          id: 2,
-          title: 'Cuota vencida',
-          message: '3 clientes tienen cuotas vencidas hoy',
-          time: '1 hora',
-          read: false,
-        },
-        {
-          id: 3,
-          title: 'Reporte generado',
-          message: 'Reporte de cartera mensual disponible',
-          time: '2 horas',
-          read: true,
-        },
-      ]
-    : []
-
-  const unreadCount = notifications.filter(n => !n.read).length
+  const unreadCount = 0
 
   const handleLogout = async () => {
     await logout()
@@ -159,40 +140,41 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     </div>
 
                     <div className="max-h-96 overflow-y-auto">
-                      {notifications.map(notification => (
-                        <div
-                          key={notification.id}
-                          className={`cursor-pointer border-b border-gray-100 p-4 hover:bg-gray-50 ${
-                            !notification.read ? 'bg-blue-50' : ''
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h4 className="text-sm font-medium text-gray-900">
-                                {notification.title}
-                              </h4>
+                      {notifications.length === 0 ? (
+                        <p className="px-4 py-8 text-center text-sm text-gray-500">
+                          No hay notificaciones para mostrar. Use el menú
+                          lateral (Notificaciones) para envíos y autorizaciones.
+                        </p>
+                      ) : (
+                        notifications.map(notification => (
+                          <div
+                            key={notification.id}
+                            className={`cursor-pointer border-b border-gray-100 p-4 hover:bg-gray-50 ${
+                              !notification.read ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h4 className="text-sm font-medium text-gray-900">
+                                  {notification.title}
+                                </h4>
 
-                              <p className="mt-1 text-sm text-gray-600">
-                                {notification.message}
-                              </p>
+                                <p className="mt-1 text-sm text-gray-600">
+                                  {notification.message}
+                                </p>
+                              </div>
+
+                              <span className="ml-2 text-xs text-gray-500">
+                                {notification.time}
+                              </span>
                             </div>
 
-                            <span className="ml-2 text-xs text-gray-500">
-                              {notification.time}
-                            </span>
+                            {!notification.read && (
+                              <div className="mt-2 h-2 w-2 rounded-full bg-blue-500"></div>
+                            )}
                           </div>
-
-                          {!notification.read && (
-                            <div className="mt-2 h-2 w-2 rounded-full bg-blue-500"></div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="border-t border-gray-200 p-3">
-                      <Button variant="ghost" className="w-full text-sm">
-                        Ver todas las notificaciones
-                      </Button>
+                        ))
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -275,7 +257,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                         }}
                         className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50"
                       >
-                        <span>ðŸ"„ Actualizar Rol</span>
+                        <span>Actualizar rol</span>
                       </button>
                     )}
                   </div>

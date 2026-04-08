@@ -1,7 +1,7 @@
 """create pagos_reportados_exportados table
 
 Revision ID: 020_pagos_reportados_exportados
-Revises: 019_prestamos_estado_liquidado
+Revises: 019_prestamos_liquidado
 Create Date: 2026-03-20
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '020_pagos_reportados_exportados'
-down_revision = '019_prestamos_estado_liquidado'
+down_revision = "019_prestamos_liquidado"
 branch_labels = None
 depends_on = None
 

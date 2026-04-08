@@ -1,7 +1,7 @@
 """Add referential integrity to DefinicionCampo
 
 Revision ID: 002_add_referential_integrity
-Revises: 001_initial
+Revises: (raíz; no existe 001_initial en el repo)
 Create Date: 2026-02-19 
 
 This migration adds foreign key constraints and indexed lookup tables for DefinicionCampo
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # Revision identifiers, used by Alembic.
 revision = '002_add_referential_integrity'
-down_revision = '001_initial'
+down_revision = None
 branch_labels = None
 depends_on = None
 

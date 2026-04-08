@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
+from app.core.serializers import to_finite_float
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
@@ -178,8 +179,9 @@ def sum_saldo_pendiente_total_por_prestamos(
     for row in db.execute(q).all():
         pid = int(row[0])
         total = row[1]
-        if total is not None:
-            out[pid] = float(total)
+        xf = to_finite_float(total)
+        if xf is not None:
+            out[pid] = xf
     return out
 
 
@@ -400,10 +402,12 @@ def format_cuota_item(
         "prestamo_id": cuota.prestamo_id,
         "numero_cuota": cuota.numero_cuota,
         "fecha_vencimiento": cuota.fecha_vencimiento.isoformat() if cuota.fecha_vencimiento else None,
-        "monto": float(cuota.monto) if cuota.monto is not None else None,
+        "monto": to_finite_float(cuota.monto) if cuota.monto is not None else None,
     }
     if total_pendiente_pagar is not None:
-        base_item["total_pendiente_pagar"] = float(total_pendiente_pagar)
+        tp = to_finite_float(total_pendiente_pagar)
+        if tp is not None:
+            base_item["total_pendiente_pagar"] = tp
 
     if dias_atraso is not None:
         base_item["dias_atraso"] = dias_atraso
@@ -416,7 +420,7 @@ def format_cuota_item(
             "correo": (cliente.email or "").strip(),
             "telefono": (cliente.telefono or "").strip(),
             "modelo_vehiculo": None,
-            "monto_cuota": float(cuota.monto) if cuota.monto is not None else None,
+            "monto_cuota": to_finite_float(cuota.monto) if cuota.monto is not None else None,
             "estado": "PENDIENTE",
         })
         if cuota.fecha_vencimiento is not None:

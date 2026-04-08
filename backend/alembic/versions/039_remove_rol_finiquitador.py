@@ -1,7 +1,7 @@
 """Remove finiquitador role and standardize to RBAC
 
 Revision ID: 039_remove_rol_finiquitador
-Revises: 038_add_rol_finiquitador
+Revises: 037_add_payload_snapshot_auditoria
 Create Date: 2026-04-01 00:00:00.000000
 
 Removes finiquitador role and migrates to standardized RBAC roles:
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '039_remove_rol_finiquitador'
-down_revision = '038_add_rol_finiquitador'
+down_revision = '037_add_payload_snapshot_auditoria'
 branch_labels = None
 depends_on = None
 

@@ -23,6 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.serializers import to_finite_float_or_zero
 from app.services.cuota_estado import hoy_negocio
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
@@ -1865,12 +1866,8 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
                 "nombre": m.get("nombres") or "",
                 "cedula": m.get("cedula") or "",
                 "prestamo_id": m["prestamo_id"],
-                "total_financiamiento": float(m["total_financiamiento"])
-                if m.get("total_financiamiento") is not None
-                else 0,
-                "total_abonos": float(m["total_abonos"])
-                if m.get("total_abonos") is not None
-                else 0,
+                "total_financiamiento": to_finite_float_or_zero(m.get("total_financiamiento")),
+                "total_abonos": to_finite_float_or_zero(m.get("total_abonos")),
             })
     except Exception as e:
         logger.exception(

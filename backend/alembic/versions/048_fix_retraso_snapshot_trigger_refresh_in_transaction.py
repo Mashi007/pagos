@@ -1,6 +1,6 @@
 """Trigger clientes_retrasados: REFRESH MV sin CONCURRENTLY y por sentencia.
 
-Revision ID: 048_fix_retraso_snapshot_trigger_refresh_in_transaction
+Revision ID: 048_retraso_mv_refresh_trigger
 Revises: 047_auditoria_control5_sufijo_prefijo_ap
 Create Date: 2026-04-04
 
@@ -17,7 +17,7 @@ actualizan muchas cuotas en la misma transacción y el commit fallaba con 500.
 from alembic import op
 
 
-revision = "048_fix_retraso_snapshot_trigger_refresh_in_transaction"
+revision = "048_retraso_mv_refresh_trigger"
 down_revision = "047_auditoria_control5_sufijo_prefijo_ap"
 branch_labels = None
 depends_on = None

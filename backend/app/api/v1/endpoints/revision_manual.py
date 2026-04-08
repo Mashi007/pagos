@@ -9,6 +9,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy import select, func, and_, case, literal_column, text
 from sqlalchemy.orm import Session, aliased
+from sqlalchemy.exc import ProgrammingError
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
@@ -20,7 +21,7 @@ from app.services.prestamos.fechas_prestamo_coherencia import (
     alinear_fecha_aprobacion_y_base_calculo,
     rellenar_fecha_aprobacion_desde_base_si_falta,
 )
-from app.core.serializers import to_float, format_datetime_iso
+from app.core.serializers import format_datetime_iso, to_finite_float, to_finite_float_or_zero
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
@@ -1579,14 +1580,14 @@ def get_detalle_prestamo_revision(
         {
             "cuota_id": c.id,
             "numero_cuota": c.numero_cuota,
-            "monto": float(c.monto) if c.monto else 0.0,
+            "monto": to_finite_float_or_zero(c.monto),
             "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
             "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
-            "total_pagado": float(c.total_pagado) if c.total_pagado else 0.0,
+            "total_pagado": to_finite_float_or_zero(c.total_pagado),
             "estado": _norm_codigo_estado(c.estado, "PENDIENTE"),
             "observaciones": c.observaciones or "",
-            "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial else 0.0,
-            "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final else 0.0,
+            "saldo_capital_inicial": to_finite_float_or_zero(c.saldo_capital_inicial),
+            "saldo_capital_final": to_finite_float_or_zero(c.saldo_capital_final),
         }
         for c in cuotas
     ]
@@ -1618,21 +1619,21 @@ def get_detalle_prestamo_revision(
             "cliente_id": prestamo.cliente_id,
             "cedula": prestamo.cedula or "",
             "nombres": prestamo.nombres or "",
-            "total_financiamiento": float(prestamo.total_financiamiento) if prestamo.total_financiamiento else 0.0,
+            "total_financiamiento": to_finite_float_or_zero(prestamo.total_financiamiento),
             "numero_cuotas": prestamo.numero_cuotas or 0,
-            "tasa_interes": float(prestamo.tasa_interes) if prestamo.tasa_interes else 0.0,
+            "tasa_interes": to_finite_float_or_zero(prestamo.tasa_interes),
             "producto": prestamo.producto or "",
             "observaciones": prestamo.observaciones or "",
             "fecha_requerimiento": _dt_iso(prestamo.fecha_requerimiento),
             "modalidad_pago": prestamo.modalidad_pago or "",
-            "cuota_periodo": float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0.0,
+            "cuota_periodo": to_finite_float_or_zero(prestamo.cuota_periodo),
             "fecha_base_calculo": _dt_iso(prestamo.fecha_base_calculo),
             "fecha_aprobacion": _dt_iso(prestamo.fecha_aprobacion),
             "estado": _norm_codigo_estado(prestamo.estado, ""),
             "concesionario": prestamo.concesionario or "",
             "analista": prestamo.analista or "",
             "modelo_vehiculo": prestamo.modelo_vehiculo or "",
-            "valor_activo": float(prestamo.valor_activo) if prestamo.valor_activo else None,
+            "valor_activo": to_finite_float(prestamo.valor_activo) if prestamo.valor_activo is not None else None,
             "usuario_proponente": prestamo.usuario_proponente or "",
             "usuario_aprobador": prestamo.usuario_aprobador or "",
         },
@@ -1835,20 +1836,35 @@ def listar_solicitudes_reapertura_pendientes(
     _require_admin_para_autorizaciones_reapertura(current_user)
 
     SolUser = aliased(User)
-    rows = db.execute(
-        select(
-            RevisionManualSolicitudReapertura,
-            Prestamo.cedula,
-            Prestamo.nombres,
-            SolUser.nombre,
-            SolUser.apellido,
-            SolUser.email,
-        )
-        .join(Prestamo, Prestamo.id == RevisionManualSolicitudReapertura.prestamo_id)
-        .outerjoin(SolUser, SolUser.id == RevisionManualSolicitudReapertura.solicitante_usuario_id)
-        .where(_solicitud_reapertura_estado_pendiente_sql(RevisionManualSolicitudReapertura.estado))
-        .order_by(RevisionManualSolicitudReapertura.creado_en.desc())
-    ).all()
+    try:
+        rows = db.execute(
+            select(
+                RevisionManualSolicitudReapertura,
+                Prestamo.cedula,
+                Prestamo.nombres,
+                SolUser.nombre,
+                SolUser.apellido,
+                SolUser.email,
+            )
+            .join(Prestamo, Prestamo.id == RevisionManualSolicitudReapertura.prestamo_id)
+            .outerjoin(SolUser, SolUser.id == RevisionManualSolicitudReapertura.solicitante_usuario_id)
+            .where(_solicitud_reapertura_estado_pendiente_sql(RevisionManualSolicitudReapertura.estado))
+            .order_by(RevisionManualSolicitudReapertura.creado_en.desc())
+        ).all()
+    except ProgrammingError as exc:
+        msg = str(getattr(exc, "orig", exc) or exc).lower()
+        if "revision_manual_solicitudes_reapertura" in msg or "does not exist" in msg or "no such table" in msg:
+            logger.exception(
+                "revision_manual listar_solicitudes_reapertura: tabla ausente; migración 051 pendiente"
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Falta la tabla de solicitudes de reapertura en la base de datos. "
+                    "Ejecute la migración Alembic 051 (revision_manual_solicitudes_reapertura)."
+                ),
+            ) from exc
+        raise
 
     out: List[SolicitudReaperturaPendienteOut] = []
     for sol, ced, nom_cli, sn, sa, se in rows:

@@ -7,6 +7,7 @@ Create Date: 2026-03-27
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 
 
@@ -17,6 +18,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    insp = inspect(bind)
+    cols = {c["name"] for c in insp.get_columns("auditoria_cartera_revision")}
+    if "payload_snapshot" in cols:
+        return
     op.add_column(
         "auditoria_cartera_revision",
         sa.Column(
@@ -28,4 +34,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    insp = inspect(bind)
+    cols = {c["name"] for c in insp.get_columns("auditoria_cartera_revision")}
+    if "payload_snapshot" not in cols:
+        return
     op.drop_column("auditoria_cartera_revision", "payload_snapshot")

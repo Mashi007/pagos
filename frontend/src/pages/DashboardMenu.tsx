@@ -929,136 +929,272 @@ export function DashboardMenu() {
           </motion.div>
         )}
 
-        {/* KPIs PRINCIPALES (primero: vista por defecto al abrir /dashboard/menu) */}
+        {/* KPIs PRINCIPALES + puesto 4: gráfico notificaciones (día siguiente al vencimiento) */}
 
         <section id="dashboard-kpis" aria-label="KPIs principales">
-          {loadingKPIs ? (
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-              {[1, 2, 3, 4].map(i => (
-                <div
-                  key={i}
-                  className="h-[180px] animate-pulse rounded-xl bg-gray-100"
-                />
-              ))}
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 lg:items-stretch">
+              {loadingKPIs ? (
+                <>
+                  {[1, 2, 3].map(i => (
+                    <div
+                      key={i}
+                      className="h-[180px] animate-pulse rounded-xl bg-gray-100"
+                    />
+                  ))}
+                </>
+              ) : errorKPIs ? (
+                <Card className="border-red-200 bg-red-50 md:col-span-2 lg:col-span-3">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 text-red-700">
+                      <AlertTriangle className="h-5 w-5" />
+
+                      <p>
+                        Error al cargar los KPIs principales. Por favor, intente
+                        nuevamente.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : kpisPrincipales ? (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <KpiCardLarge
+                      title="Prestamos (mensual)"
+                      subtitle={`Financiamiento comprometido: ${formatCurrency(
+                        kpisPrincipales.total_prestamos.financiamiento_total ??
+                          0
+                      )} · según fecha de aprobación`}
+                      value={kpisPrincipales.total_prestamos.valor_actual}
+                      variation={
+                        kpisPrincipales.total_prestamos.variacion_porcentual !==
+                        undefined
+                          ? {
+                              percent:
+                                kpisPrincipales.total_prestamos
+                                  .variacion_porcentual,
+
+                              label: 'vs mes anterior',
+                            }
+                          : undefined
+                      }
+                      icon={FileText}
+                      color="text-cyan-600"
+                      bgColor="bg-cyan-100"
+                      borderColor="border-cyan-500"
+                      format="number"
+                    />
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <KpiCardLarge
+                      title="Pagos conciliados (hoy)"
+                      subtitle="Cantidad con fecha de conciliación = hoy (America/Caracas)"
+                      value={kpisPrincipales.pagos_conciliados_hoy.valor_actual}
+                      variation={
+                        kpisPrincipales.pagos_conciliados_hoy
+                          .variacion_porcentual !== undefined
+                          ? {
+                              percent:
+                                kpisPrincipales.pagos_conciliados_hoy
+                                  .variacion_porcentual,
+
+                              label: 'vs día anterior',
+                            }
+                          : undefined
+                      }
+                      icon={TrendingUp}
+                      color="text-green-600"
+                      bgColor="bg-green-100"
+                      borderColor="border-green-500"
+                      format="number"
+                    />
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <KpiCardLarge
+                      title="Pagos programados (hoy)"
+                      subtitle={
+                        kpisPrincipales.porcentaje_cuotas_pagadas_hoy !==
+                        undefined
+                          ? `Monto con vencimiento hoy (Caracas) · ${Number(kpisPrincipales.porcentaje_cuotas_pagadas_hoy).toFixed(1)}% de esas cuotas ya con fecha de pago`
+                          : 'Monto con vencimiento hoy (America/Caracas)'
+                      }
+                      value={kpisPrincipales.pagos_programados_hoy.valor_actual}
+                      variation={
+                        kpisPrincipales.pagos_programados_hoy
+                          .variacion_porcentual !== undefined
+                          ? {
+                              percent:
+                                kpisPrincipales.pagos_programados_hoy
+                                  .variacion_porcentual,
+
+                              label: 'vs día anterior',
+                            }
+                          : undefined
+                      }
+                      icon={FileText}
+                      color="text-blue-600"
+                      bgColor="bg-blue-100"
+                      borderColor="border-blue-500"
+                      format="currency"
+                    />
+                  </motion.div>
+                </>
+              ) : null}
+
+              {/* Puesto 4: notificaciones enviadas por día */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.12 }}
+                className="flex min-h-[320px] flex-col md:col-span-2 lg:col-span-1"
+                id="dashboard-notificaciones-dia"
+              >
+                <Card className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+                  <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-2 pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-base font-bold text-gray-800">
+                        <Mail className="h-5 w-5 shrink-0 text-sky-600" />
+
+                        <span className="leading-tight">
+                          Notificaciones por día (día siguiente al vencimiento)
+                        </span>
+                      </CardTitle>
+
+                      <Badge
+                        variant="secondary"
+                        className="shrink-0 border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                      >
+                        {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas
+                      </Badge>
+                    </div>
+
+                    <CardDescription className="mt-1 text-[11px] leading-snug text-gray-600">
+                      Historial{' '}
+                      <code className="rounded bg-gray-100 px-1 py-0.5">
+                        dias_1_retraso
+                      </code>
+                      : correos aceptados por SMTP (enviados) por día.
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="flex flex-1 flex-col p-3 pt-2">
+                    {loadingNotificacionesPorDia ? (
+                      <div className="flex flex-1 items-center justify-center text-sm text-gray-500">
+                        Cargando…
+                      </div>
+                    ) : errorNotificacionesPorDia ? (
+                      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-2 text-center text-red-700">
+                        <AlertTriangle className="h-7 w-7" />
+
+                        <p className="text-xs font-medium">
+                          No se pudo cargar la tendencia.
+                        </p>
+                      </div>
+                    ) : (datosNotificacionesPorDia?.serie?.length ?? 0) ===
+                      0 ? (
+                      <div className="flex flex-1 items-center justify-center text-xs text-gray-500">
+                        Sin envíos en el período.
+                      </div>
+                    ) : (
+                      <div className="h-[240px] w-full">
+                        <ResponsiveContainer width="100%" height={240}>
+                          <RechartsLineChart
+                            data={datosNotificacionesPorDia?.serie ?? []}
+                            margin={{ top: 4, right: 4, left: 0, bottom: 4 }}
+                          >
+                            <CartesianGrid {...chartCartesianGrid} />
+
+                            <XAxis
+                              dataKey="dia"
+                              tick={{ fontSize: 10, fill: '#374151' }}
+                              interval="preserveStartEnd"
+                              minTickGap={16}
+                            />
+
+                            <YAxis
+                              tick={{ fontSize: 10, fill: '#374151' }}
+                              allowDecimals={false}
+                              width={32}
+                            />
+
+                            <Tooltip
+                              contentStyle={chartTooltipStyle.contentStyle}
+                              labelStyle={chartTooltipStyle.labelStyle}
+                              formatter={(value: number) => [
+                                value,
+                                'Enviados (éxito SMTP)',
+                              ]}
+                              labelFormatter={(_, payload) =>
+                                payload?.[0]?.payload?.fecha
+                                  ? String(payload[0].payload.fecha)
+                                  : ''
+                              }
+                            />
+
+                            <Line
+                              type="monotone"
+                              dataKey="enviados"
+                              name="Enviados"
+                              stroke="#0ea5e9"
+                              strokeWidth={2}
+                              dot={{ r: 1.5 }}
+                              activeDot={{ r: 3 }}
+                            />
+                          </RechartsLineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
             </div>
-          ) : errorKPIs ? (
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 text-red-700">
-                  <AlertTriangle className="h-5 w-5" />
 
-                  <p>
-                    Error al cargar los KPIs principales. Por favor, intente
-                    nuevamente.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : kpisPrincipales ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4"
-            >
-              <KpiCardLarge
-                title="Prestamos (mensual)"
-                subtitle={`Financiamiento comprometido: ${formatCurrency(
-                  kpisPrincipales.total_prestamos.financiamiento_total ?? 0
-                )} · según fecha de aprobación`}
-                value={kpisPrincipales.total_prestamos.valor_actual}
-                variation={
-                  kpisPrincipales.total_prestamos.variacion_porcentual !==
-                  undefined
-                    ? {
-                        percent:
-                          kpisPrincipales.total_prestamos.variacion_porcentual,
+            {!loadingKPIs && !errorKPIs && kpisPrincipales ? (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.14 }}
+                className="max-w-full"
+              >
+                <KpiCardLarge
+                  title="Pago vencido (mensual)"
+                  subtitle="Cuotas vencidas sin pagar (solo si ya pasó la fecha de vencimiento)"
+                  value={kpisPrincipales.total_morosidad_usd.valor_actual}
+                  variation={
+                    kpisPrincipales.total_morosidad_usd.variacion_porcentual !==
+                    undefined
+                      ? {
+                          percent:
+                            kpisPrincipales.total_morosidad_usd
+                              .variacion_porcentual,
 
-                        label: 'vs mes anterior',
-                      }
-                    : undefined
-                }
-                icon={FileText}
-                color="text-cyan-600"
-                bgColor="bg-cyan-100"
-                borderColor="border-cyan-500"
-                format="number"
-              />
-
-              <KpiCardLarge
-                title="Pagos conciliados (hoy)"
-                subtitle="Cantidad con fecha de conciliación = hoy (America/Caracas)"
-                value={kpisPrincipales.pagos_conciliados_hoy.valor_actual}
-                variation={
-                  kpisPrincipales.pagos_conciliados_hoy.variacion_porcentual !==
-                  undefined
-                    ? {
-                        percent:
-                          kpisPrincipales.pagos_conciliados_hoy
-                            .variacion_porcentual,
-
-                        label: 'vs día anterior',
-                      }
-                    : undefined
-                }
-                icon={TrendingUp}
-                color="text-green-600"
-                bgColor="bg-green-100"
-                borderColor="border-green-500"
-                format="number"
-              />
-
-              <KpiCardLarge
-                title="Pagos programados (hoy)"
-                subtitle={
-                  kpisPrincipales.porcentaje_cuotas_pagadas_hoy !== undefined
-                    ? `Monto con vencimiento hoy (Caracas) · ${Number(kpisPrincipales.porcentaje_cuotas_pagadas_hoy).toFixed(1)}% de esas cuotas ya con fecha de pago`
-                    : 'Monto con vencimiento hoy (America/Caracas)'
-                }
-                value={kpisPrincipales.pagos_programados_hoy.valor_actual}
-                variation={
-                  kpisPrincipales.pagos_programados_hoy.variacion_porcentual !==
-                  undefined
-                    ? {
-                        percent:
-                          kpisPrincipales.pagos_programados_hoy
-                            .variacion_porcentual,
-
-                        label: 'vs día anterior',
-                      }
-                    : undefined
-                }
-                icon={FileText}
-                color="text-blue-600"
-                bgColor="bg-blue-100"
-                borderColor="border-blue-500"
-                format="currency"
-              />
-
-              <KpiCardLarge
-                title="Pago vencido (mensual)"
-                subtitle="Cuotas vencidas sin pagar (solo si ya pasó la fecha de vencimiento)"
-                value={kpisPrincipales.total_morosidad_usd.valor_actual}
-                variation={
-                  kpisPrincipales.total_morosidad_usd.variacion_porcentual !==
-                  undefined
-                    ? {
-                        percent:
-                          kpisPrincipales.total_morosidad_usd
-                            .variacion_porcentual,
-
-                        label: 'vs mes anterior',
-                      }
-                    : undefined
-                }
-                icon={AlertTriangle}
-                color="text-red-600"
-                bgColor="bg-red-100"
-                borderColor="border-red-500"
-                format="currency"
-              />
-            </motion.div>
-          ) : null}
+                          label: 'vs mes anterior',
+                        }
+                      : undefined
+                  }
+                  icon={AlertTriangle}
+                  color="text-red-600"
+                  bgColor="bg-red-100"
+                  borderColor="border-red-500"
+                  format="currency"
+                />
+              </motion.div>
+            ) : null}
+          </div>
         </section>
 
         {/* Barra de filtros: período general (cada gráfico puede usar este o uno propio) */}
@@ -1116,134 +1252,6 @@ export function DashboardMenu() {
                   />
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Notificaciones: tendencia diaria (día siguiente al vencimiento) */}
-
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.18 }}
-        >
-          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                  <Mail className="h-5 w-5 text-sky-600" />
-
-                  <span>
-                    Notificaciones enviadas por día (día siguiente al
-                    vencimiento)
-                  </span>
-                </CardTitle>
-
-                <Badge
-                  variant="secondary"
-                  className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                >
-                  Últimos {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} días · Caracas
-                </Badge>
-              </div>
-
-              <CardDescription className="mt-2 text-xs text-gray-600">
-                Registros en historial de envíos (
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
-                  dias_1_retraso
-                </code>
-                ): correos aceptados por SMTP vs. fallidos o rebotados.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="p-6 pt-4">
-              {loadingNotificacionesPorDia ? (
-                <div className="flex h-[280px] items-center justify-center text-gray-500">
-                  Cargando tendencia de notificaciones…
-                </div>
-              ) : errorNotificacionesPorDia ? (
-                <div className="flex h-[280px] flex-col items-center justify-center gap-2 text-center text-red-700">
-                  <AlertTriangle className="h-8 w-8" />
-
-                  <p className="text-sm font-medium">
-                    No se pudo cargar la tendencia de notificaciones.
-                  </p>
-
-                  <p className="text-xs text-gray-600">
-                    Usa «Actualizar» en filtros o recarga la página.
-                  </p>
-                </div>
-              ) : (datosNotificacionesPorDia?.serie?.length ?? 0) === 0 ? (
-                <div className="flex h-[280px] items-center justify-center text-gray-500">
-                  No hay envíos registrados en este período para este tipo.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={320}>
-                  <RechartsLineChart
-                    data={datosNotificacionesPorDia?.serie ?? []}
-                    margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
-                  >
-                    <CartesianGrid {...chartCartesianGrid} />
-
-                    <XAxis
-                      dataKey="dia"
-                      tick={chartAxisTick}
-                      interval="preserveStartEnd"
-                      minTickGap={24}
-                    />
-
-                    <YAxis
-                      tick={chartAxisTick}
-                      allowDecimals={false}
-                      width={40}
-                      label={{
-                        value: 'Cantidad',
-                        angle: -90,
-                        position: 'insideLeft',
-                        style: { fill: '#374151', fontSize: 12 },
-                      }}
-                    />
-
-                    <Tooltip
-                      contentStyle={chartTooltipStyle.contentStyle}
-                      labelStyle={chartTooltipStyle.labelStyle}
-                      formatter={(value: number, name: string) => [
-                        value,
-                        name === 'enviados'
-                          ? 'Enviados (éxito)'
-                          : 'Fallidos / rebotados',
-                      ]}
-                      labelFormatter={(_, payload) =>
-                        payload?.[0]?.payload?.fecha
-                          ? String(payload[0].payload.fecha)
-                          : ''
-                      }
-                    />
-
-                    <Legend {...chartLegendStyle} />
-
-                    <Line
-                      type="monotone"
-                      dataKey="enviados"
-                      name="Enviados"
-                      stroke="#0ea5e9"
-                      strokeWidth={2}
-                      dot={{ r: 2 }}
-                      activeDot={{ r: 4 }}
-                    />
-
-                    <Line
-                      type="monotone"
-                      dataKey="fallidos"
-                      name="Fallidos"
-                      stroke="#f97316"
-                      strokeWidth={2}
-                      dot={{ r: 2 }}
-                      strokeDasharray="4 4"
-                    />
-                  </RechartsLineChart>
-                </ResponsiveContainer>
-              )}
             </CardContent>
           </Card>
         </motion.div>

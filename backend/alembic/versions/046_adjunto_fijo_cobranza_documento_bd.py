@@ -7,6 +7,7 @@ Create Date: 2026-04-03
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 revision = "046_adjunto_fijo_cobranza_documento_bd"
@@ -16,24 +17,41 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "adjunto_fijo_cobranza_documento",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("tipo_caso", sa.String(length=32), nullable=False),
-        sa.Column("nombre_archivo", sa.String(length=512), nullable=False),
-        sa.Column("pdf_data", sa.LargeBinary(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_adjunto_fijo_cobranza_documento_tipo_caso"),
-        "adjunto_fijo_cobranza_documento",
-        ["tipo_caso"],
-        unique=False,
-    )
+    bind = op.get_bind()
+    insp = inspect(bind)
+    if not insp.has_table("adjunto_fijo_cobranza_documento"):
+        op.create_table(
+            "adjunto_fijo_cobranza_documento",
+            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("tipo_caso", sa.String(length=32), nullable=False),
+            sa.Column("nombre_archivo", sa.String(length=512), nullable=False),
+            sa.Column("pdf_data", sa.LargeBinary(), nullable=False),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=True,
+            ),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(
+            op.f("ix_adjunto_fijo_cobranza_documento_tipo_caso"),
+            "adjunto_fijo_cobranza_documento",
+            ["tipo_caso"],
+            unique=False,
+        )
+    else:
+        op.execute(
+            "CREATE INDEX IF NOT EXISTS ix_adjunto_fijo_cobranza_documento_tipo_caso "
+            "ON adjunto_fijo_cobranza_documento (tipo_caso);"
+        )
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    insp = inspect(bind)
+    if not insp.has_table("adjunto_fijo_cobranza_documento"):
+        return
     op.drop_index(
         op.f("ix_adjunto_fijo_cobranza_documento_tipo_caso"),
         table_name="adjunto_fijo_cobranza_documento",

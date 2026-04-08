@@ -416,16 +416,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
   const menuItemsWithBadges = useMemo(() => {
     const nAuth = counts.autorizacionesRevisionManual ?? 0
-    const nUnread = counts.notificacionesNoLeidas ?? 0
     const reaperturaBadge =
       nAuth > 0 ? (nAuth > 99 ? '99+' : String(nAuth)) : undefined
-    const notificacionesParentTotal = nUnread + nAuth
-    const notificacionesParentBadge =
-      notificacionesParentTotal > 0
-        ? notificacionesParentTotal > 99
-          ? '99+'
-          : String(notificacionesParentTotal)
-        : undefined
     return filteredMenuItems.map(item => {
       if (!item.isSubmenu || !item.children) return item
       const children = item.children.map(ch => {
@@ -434,20 +426,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         }
         return ch
       })
-      if (item.title === 'Notificaciones' && notificacionesParentBadge) {
-        return {
-          ...item,
-          children,
-          badge: notificacionesParentBadge,
-        }
-      }
       return { ...item, children }
     })
-  }, [
-    filteredMenuItems,
-    counts.autorizacionesRevisionManual,
-    counts.notificacionesNoLeidas,
-  ])
+  }, [filteredMenuItems, counts.autorizacionesRevisionManual])
 
   // Sincronizar submenús con la ruta: solo el (los) que contienen la ruta activa; al cambiar de sección se repliegan el resto.
 

@@ -2,6 +2,7 @@
 Módulo centralizado para serialización y conversiones comunes.
 Centraliza funciones de formato que se usan repetidamente en múltiples endpoints.
 """
+import math
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Any, Optional
@@ -33,6 +34,24 @@ def to_float(value: Any) -> Optional[float]:
             return None
     
     return None
+
+
+def to_finite_float(value: Any) -> Optional[float]:
+    """
+    Float seguro para JSON (Starlette/FastAPI usan allow_nan=False: nan/inf rompen la respuesta → 500).
+    """
+    x = to_float(value)
+    if x is None:
+        return None
+    if not math.isfinite(x):
+        return None
+    return x
+
+
+def to_finite_float_or_zero(value: Any) -> float:
+    """Igual que to_finite_float pero devuelve 0.0 si el valor no es un número finito."""
+    x = to_finite_float(value)
+    return 0.0 if x is None else x
 
 
 def format_date_iso(value: Any) -> Optional[str]:
