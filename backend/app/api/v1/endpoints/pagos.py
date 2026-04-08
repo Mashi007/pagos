@@ -10,16 +10,13 @@ Endpoints de pagos. Datos reales desde BD.
 
 Nº documento / referencia de pago:
 
-- Regla general: no se aceptan duplicados en documentos. En todo el sistema (carga masiva, crear,
+- El mismo texto de comprobante puede usarse en varios pagos (p. ej. varias aplicaciones al mismo banco).
 
-  actualizar, BD) no puede existir dos pagos con el mismo Nº documento. Misma clave canónica =
+- Se aceptan TODOS los formatos (BNC/, BINANCE, VE/, ZELLE/, numérico, REF, etc.). Límite 100 caracteres.
 
-  duplicado â†’ rechazo.
-
-- Se aceptan TODOS los formatos (BNC/, BINANCE, VE/, ZELLE/, numérico, REF, etc.). Límite 100 caracteres. Varias filas sin documento (vacío) se permiten. Única regla: no duplicados.
-
-- Huella funcional (prestamo + fecha + monto + ref_norm normalizada): no duplicar respecto a pagos
-  operativos (409), alineado con ux_pagos_fingerprint_activos.
+- Huella funcional (prestamo + fecha + monto + ref_norm normalizada): no duplicar el mismo pago operativo
+  respecto a pagos ya registrados (409), alineado con ux_pagos_fingerprint_activos. En carga masiva se
+  detecta además colisión entre filas del mismo archivo por esa huella.
 
 """
 
@@ -63,7 +60,6 @@ from app.core.deps import get_current_user
 
 from app.core.documento import normalize_documento
 from app.utils.cedula_almacenamiento import alinear_cedulas_clientes_existentes, normalizar_cedula_almacenamiento
-from app.services.pago_numero_documento import numero_documento_ya_registrado
 
 from app.core.serializers import to_float, format_date_iso
 
@@ -2102,45 +2098,7 @@ async def upload_excel_pagos(
 
 
 
-        # --- FASE 2: Validar documentos (única regla: no duplicados) e insertar ---
-
-        numeros_doc_en_lote: set[str] = set()
-
-        documentos_ya_en_bd: set[str] = set()
-
-        # Precarga en lote: documentos del archivo que ya existen en BD (evita N consultas)
-
-        docs_en_archivo: set[str] = set()
-
-        for item in FilasParseadas:
-
-            numero_doc = (item.get("numero_doc_raw") or "").strip()
-
-            if not numero_doc or numero_doc.upper() in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
-
-                continue
-
-            numero_doc_norm = normalize_documento(numero_doc)
-
-            if numero_doc_norm:
-
-                docs_en_archivo.add(numero_doc_norm)
-
-        if docs_en_archivo:
-
-            chunk_size = 1000
-
-            docs_list = list(docs_en_archivo)
-
-            for ichunk in range(0, len(docs_list), chunk_size):
-
-                chunk = docs_list[ichunk : ichunk + chunk_size]
-
-                existentes = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(chunk))).scalars().all()
-
-                documentos_ya_en_bd.update(str(d) for d in existentes if d)
-
-
+        # --- FASE 2: Insertar (antiduplicado = huella funcional por fila y dentro del lote) ---
 
         registros = 0
 
@@ -2175,78 +2133,6 @@ async def upload_excel_pagos(
 
 
             numero_doc_norm = normalize_documento(numero_doc)
-
-            key_doc = (numero_doc_norm or "").strip()
-
-
-
-            # Validación post-documentos: duplicado en archivo ? enviar a pagos_con_errores
-
-            if key_doc and key_doc in numeros_doc_en_lote:
-
-                err_msg = "Nº documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos."
-
-                errores.append(f"Fila {i}: Nº documento duplicado en este archivo")
-
-                errores_detalle.append({"fila": i, "cedula": cedula, "error": err_msg, "datos": {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}})
-
-                pagos_con_error_list.append({
-
-                    "fila_idx": i,
-
-                    "cedula": cedula or "",
-
-                    "prestamo_id": prestamo_id,
-
-                    "fecha_val": fecha_val,
-
-                    "monto": monto,
-
-                    "numero_doc": numero_doc or "",
-
-                    "errores": [err_msg],
-
-                })
-
-                continue
-
-
-
-            # Validación post-documentos: duplicado en BD ? enviar a pagos_con_errores
-
-            if key_doc:
-
-                if key_doc in documentos_ya_en_bd:
-
-                    err_msg = "Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos."
-
-                    errores.append(f"Fila {i}: Ya existe un pago con ese Nº de documento")
-
-                    errores_detalle.append({"fila": i, "cedula": cedula, "error": err_msg, "datos": {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}})
-
-                    pagos_con_error_list.append({
-
-                        "fila_idx": i,
-
-                        "cedula": cedula or "",
-
-                        "prestamo_id": prestamo_id,
-
-                        "fecha_val": fecha_val,
-
-                        "monto": monto,
-
-                        "numero_doc": numero_doc or "",
-
-                        "errores": [err_msg],
-
-                    })
-
-                    continue
-
-                numeros_doc_en_lote.add(key_doc)
-
-
 
             # Identificación automática de préstamo: si la cédula tiene exactamente 1 crédito activo, asignarlo
 
@@ -3899,22 +3785,6 @@ def guardar_fila_editable(
 
         numero_doc_norm = normalize_documento(numero_doc)
 
-
-
-        # Validar duplicado global (pagos + pagos_con_errores)
-
-        if numero_doc_norm and numero_documento_ya_registrado(db, numero_doc_norm):
-
-            raise HTTPException(
-
-                status_code=409,
-
-                detail=f"Ya existe un registro con este documento: {numero_doc_norm}",
-
-            )
-
-
-
         # Si prestamo_id es None, buscar por cédula en préstamos (normalizada)
 
         if prestamo_id is None:
@@ -4982,7 +4852,9 @@ def crear_pagos_batch(
 
     Devuelve éxitos y errores por índice para reducir rondas y timeouts en "Guardar todos".
 
-    Optimizado: una sola consulta para docs existentes, préstamos y clientes en lugar de N por fila.
+    Optimizado: precarga de préstamos y clientes en lugar de N consultas por fila.
+
+    Mismo Nº de documento puede repetirse; colisiones operativas las resuelve la huella funcional.
 
     """
 
@@ -4992,31 +4864,7 @@ def crear_pagos_batch(
 
         pagos_list = body.pagos
 
-        # Preload: documentos ya existentes en BD (una sola consulta)
-
         docs_en_payload = [normalize_documento(p.numero_documento) for p in pagos_list]
-
-        docs_no_vacios = [d for d in docs_en_payload if d]
-
-        existing_docs: set[str] = set()
-
-        if docs_no_vacios:
-
-            rows = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(docs_no_vacios))).scalars().all()
-
-            existing_docs = {r for r in rows if r}
-
-            rows_pe = db.execute(
-
-                select(PagoConError.numero_documento).where(
-
-                    PagoConError.numero_documento.in_(docs_no_vacios)
-
-                )
-
-            ).scalars().all()
-
-            existing_docs.update({r for r in rows_pe if r})
 
         cedulas_payload = list(
 
@@ -5135,17 +4983,9 @@ def crear_pagos_batch(
 
         resolved_prestamo_id_by_index: dict[int, int] = {}
 
-        docs_added_in_batch: set[str] = set()
-
         for idx, payload in enumerate(pagos_list):
 
             num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
-
-            if num_doc and (num_doc in existing_docs or num_doc in docs_added_in_batch):
-
-                errors_by_index[idx] = {"error": "Ya existe un pago con ese numero de documento.", "status_code": 409}
-
-                continue
 
             ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
 
@@ -5242,10 +5082,6 @@ def crear_pagos_batch(
                 continue
 
             resolved_prestamo_id_by_index[idx] = effective_prestamo_id
-
-            if num_doc:
-
-                docs_added_in_batch.add(num_doc)
 
         if len(errors_by_index) == len(pagos_list):
 
@@ -5536,7 +5372,7 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
 
-    """Crea un pago. Documento acepta cualquier formato. Regla general: no duplicados (409 si ya existe)."""
+    """Crea un pago. Mismo Nº de documento puede repetirse; 409 solo por huella funcional (prestamo+fecha+monto+ref)."""
 
     if payload.prestamo_id is None:
 
@@ -5547,16 +5383,6 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
     if not num_doc:
 
         raise HTTPException(status_code=400, detail="numero_documento es obligatorio para crear pagos.")
-
-    if num_doc and numero_documento_ya_registrado(db, num_doc):
-
-        raise HTTPException(
-
-            status_code=409,
-
-            detail="Ya existe un pago con ese numero_documento. Regla general: no se aceptan duplicados en documentos.",
-
-        )
 
     ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
 
@@ -5766,7 +5592,15 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
                 status_code=409,
 
-                detail="Ya existe un pago con ese numero_documento. El documento debe ser unico; no se permiten repetidos.",
+                detail=(
+
+                    "Violación de unicidad en base de datos (restricción distinta a la huella funcional). "
+
+                    "Si el mensaje menciona numero_documento, ejecute en BD: "
+
+                    "ALTER TABLE public.pagos DROP CONSTRAINT IF EXISTS uq_pagos_numero_documento;"
+
+                ),
 
             )
 
@@ -5794,7 +5628,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
 def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
 
-    """Actualiza un pago en la tabla pagos. Nº documento no puede repetirse.
+    """Actualiza un pago en la tabla pagos. Mismo texto de documento puede existir en otros pagos.
 
     Si el pago ya estaba articulado a cuotas (cuota_pagos) y cambian monto, fecha de pago o préstamo,
     se ejecuta la misma reconstrucción en cascada que POST .../prestamos/{id}/reaplicar-cascada-aplicacion
@@ -5834,16 +5668,6 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
                 status_code=409,
 
                 detail="No se permite cambiar numero_documento en pagos conciliados o pagados.",
-
-            )
-
-        if numero_documento_ya_registrado(db, num_doc, exclude_pago_id=pago_id):
-
-            raise HTTPException(
-
-                status_code=409,
-
-                detail="Ya existe otro pago con ese numero_documento. Regla general: no se aceptan duplicados en documentos.",
 
             )
 
@@ -5960,7 +5784,13 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
                 status_code=409,
 
-                detail="Ya existe otro pago con ese numero_documento. El documento debe ser unico; no se permiten repetidos.",
+                detail=(
+
+                    "Violación de unicidad en base de datos. Si aplica a numero_documento, "
+
+                    "ejecute: ALTER TABLE public.pagos DROP CONSTRAINT IF EXISTS uq_pagos_numero_documento;"
+
+                ),
 
             )
 

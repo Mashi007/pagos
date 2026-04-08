@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS pagos (
     cedula VARCHAR(20),
     fecha_pago TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     monto_pagado NUMERIC(14, 2) NOT NULL,
-    numero_documento VARCHAR(100) UNIQUE,
+    numero_documento VARCHAR(100),
     institucion_bancaria VARCHAR(255),
     estado VARCHAR(30),
     fecha_registro TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

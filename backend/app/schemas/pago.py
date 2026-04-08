@@ -30,7 +30,7 @@ class PagoCreate(BaseModel):
     prestamo_id: Optional[int] = None
     fecha_pago: date
     monto_pagado: Decimal
-    numero_documento: str  # Único en el sistema: no puede haber dos pagos con el mismo Nº documento.
+    numero_documento: str  # Puede repetirse entre pagos; antiduplicado = huella funcional en API.
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None  # Sí/No en carga masiva
@@ -82,7 +82,7 @@ class PagoUpdate(BaseModel):
     prestamo_id: Optional[int] = None
     fecha_pago: Optional[date] = None
     monto_pagado: Optional[Decimal] = None
-    numero_documento: Optional[str] = None  # Cualquier formato. Regla general: no duplicados en documentos.
+    numero_documento: Optional[str] = None  # Cualquier formato; puede coincidir con otros pagos.
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None

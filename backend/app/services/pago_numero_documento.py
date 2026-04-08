@@ -1,4 +1,4 @@
-"""Unicidad global del numero_documento de pago (pagos + pagos_con_errores)."""
+"""Consultas sobre numero_documento. La unicidad global en `pagos` ya no es regla de negocio (solo huella funcional)."""
 
 from typing import Optional
 

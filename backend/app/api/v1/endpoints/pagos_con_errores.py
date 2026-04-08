@@ -33,7 +33,6 @@ from app.core.deps import get_current_user
 from app.models.pago_con_error import PagoConError
 
 from app.core.documento import normalize_documento
-from app.services.pago_numero_documento import numero_documento_ya_registrado
 
 
 logger = logging.getLogger(__name__)
@@ -312,16 +311,6 @@ def crear_pago_con_error(payload: PagoConErrorCreate, db: Session = Depends(get_
 
     num_norm = normalize_documento(payload.numero_documento)
 
-    if num_norm and numero_documento_ya_registrado(db, num_norm):
-
-        raise HTTPException(
-
-            status_code=409,
-
-            detail="Ya existe un pago o registro en revisión con ese número de documento.",
-
-        )
-
     ref = (num_norm or (payload.numero_documento or "").strip() or "N/A")[:100]
 
     row = PagoConError(
@@ -393,12 +382,6 @@ def crear_pagos_con_error_batch(body: PagoConErrorBatchBody, db: Session = Depen
                 continue
 
             num_norm = normalize_documento(payload.numero_documento)
-
-            if num_norm and numero_documento_ya_registrado(db, num_norm):
-
-                results.append({"success": False, "error": "Ya existe un pago o registro en revisión con ese número de documento.", "payload_index": len(results)})
-
-                continue
 
             ref = (num_norm or (payload.numero_documento or "").strip() or "N/A")[:100]
 

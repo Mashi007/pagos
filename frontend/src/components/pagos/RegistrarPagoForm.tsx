@@ -556,9 +556,10 @@ export function RegistrarPagoForm({
               <div className="rounded border border-sky-100 bg-sky-50/90 px-3 py-2 text-xs text-sky-950">
                 <p>
                   <strong>Revisión manual:</strong> indique la URL del
-                  comprobante (foto o PDF en Drive, etc.). El sistema no admite
-                  el mismo Nº de documento dos veces; si ya existe, el servidor
-                  rechazará el guardado.
+                  comprobante (foto o PDF en Drive, etc.). El mismo Nº de
+                  documento puede usarse en varios pagos; el servidor rechaza
+                  solo si coincide la huella funcional (mismo crédito, fecha,
+                  monto y referencia normalizada).
                 </p>
               </div>
             )}

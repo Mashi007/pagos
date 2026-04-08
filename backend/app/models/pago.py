@@ -28,7 +28,9 @@ class Pago(Base):
     fecha_pago = Column(DateTime(timezone=False), nullable=False)
     # Monto en USD para cartera/cuotas (si el reporte fue en Bs, se convierte con tasa del dia de fecha_pago).
     monto_pagado = Column(Numeric(14, 2), nullable=False)
-    numero_documento = Column(String(100), nullable=True, unique=True)  # Regla general: no duplicados en documentos
+    # Mismo texto de comprobante puede repetirse en varios pagos; antiduplicado operativo = huella funcional
+    # (prestamo_id, fecha, monto, ref_norm) vía conflicto_huella_para_creacion / ux_pagos_fingerprint_activos.
+    numero_documento = Column(String(100), nullable=True)
     institucion_bancaria = Column(String(255), nullable=True)
     estado = Column(String(30), nullable=True)
     fecha_registro = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
