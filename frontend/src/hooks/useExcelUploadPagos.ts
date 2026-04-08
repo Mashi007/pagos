@@ -525,8 +525,11 @@ export function useExcelUploadPagos({
       .map(c => (c || '').trim().replace(/-/g, ''))
       .filter(c => c.length >= 5 && looksLikeCedula(c))
 
-    // DEBUG: Log cédulas siendo buscadas
-    if (result.length > 0 && typeof window !== 'undefined') {
+    if (
+      import.meta.env.DEV &&
+      result.length > 0 &&
+      typeof window !== 'undefined'
+    ) {
       console.log('[ExcelUpload] Cédulas únicas para búsqueda:', result)
     }
 
@@ -634,12 +637,14 @@ export function useExcelUploadPagos({
         .then(batch => {
           const map: Record<string, Array<{ id: number; estado: string }>> = {}
 
-          console.log(
-            '[ExcelUpload v2.1] Batch response keys:',
-            Object.keys(batch || {}).slice(0, 15),
-            'total:',
-            Object.keys(batch || {}).length
-          )
+          if (import.meta.env.DEV) {
+            console.log(
+              '[ExcelUpload v2.1] Batch response keys:',
+              Object.keys(batch || {}).slice(0, 15),
+              'total:',
+              Object.keys(batch || {}).length
+            )
+          }
 
           cedulasUnicas.forEach(cedula => {
             const raw = batch[cedula] || batch[cedula.replace(/-/g, '')] || []
@@ -653,14 +658,17 @@ export function useExcelUploadPagos({
               estado: p.estado || '',
             }))
 
-            console.log(
-              `[ExcelUpload v2.1] ${cedula}: raw=${raw.length} activos=${arr.length}`,
-              arr
-                .map(
-                  (a: { id: number; estado: string }) => `${a.id}(${a.estado})`
-                )
-                .join(',')
-            )
+            if (import.meta.env.DEV) {
+              console.log(
+                `[ExcelUpload v2.1] ${cedula}: raw=${raw.length} activos=${arr.length}`,
+                arr
+                  .map(
+                    (a: { id: number; estado: string }) =>
+                      `${a.id}(${a.estado})`
+                  )
+                  .join(',')
+              )
+            }
 
             map[cedula] = arr
 
@@ -681,11 +689,13 @@ export function useExcelUploadPagos({
             }
           })
 
-          console.log(
-            '[ExcelUpload v2.1] Mapa construido, claves:',
-            Object.keys(map).length,
-            Object.keys(map).slice(0, 15)
-          )
+          if (import.meta.env.DEV) {
+            console.log(
+              '[ExcelUpload v2.1] Mapa construido, claves:',
+              Object.keys(map).length,
+              Object.keys(map).slice(0, 15)
+            )
+          }
 
           return map
         })
@@ -694,14 +704,16 @@ export function useExcelUploadPagos({
           if (!cancelled) {
             setPrestamosPorCedula(prev => {
               const merged = { ...prev, ...map }
-              console.log(
-                '[ExcelUpload v2.1] prestamosPorCedula actualizado: prev=',
-                Object.keys(prev).length,
-                'new=',
-                Object.keys(map).length,
-                'merged=',
-                Object.keys(merged).length
-              )
+              if (import.meta.env.DEV) {
+                console.log(
+                  '[ExcelUpload v2.1] prestamosPorCedula actualizado: prev=',
+                  Object.keys(prev).length,
+                  'new=',
+                  Object.keys(map).length,
+                  'merged=',
+                  Object.keys(merged).length
+                )
+              }
               return merged
             })
 

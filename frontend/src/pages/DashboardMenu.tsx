@@ -15,7 +15,7 @@ import {
   AlertTriangle,
   Shield,
   Clock,
-  History,
+  CalendarClock,
   FileText,
   PieChart,
   LineChart,
@@ -1031,8 +1031,8 @@ export function DashboardMenu() {
                     transition={{ delay: 0.1 }}
                   >
                     <KpiCardLarge
-                      title="Pagos conciliados (hoy)"
-                      subtitle="Monto en USD solo de cuotas con vencimiento hoy (Caracas) y conciliación ese mismo día; no incluye atrasos ni otras fechas de vencimiento"
+                      title="Pagos conciliados en USD (hoy)"
+                      subtitle="Suma del monto del pago en dólares (USD del registro; BS con tasa del comprobante), conciliado hoy (Caracas), solo cuotas que vencen hoy; un pago cuenta una vez. Sin atrasos."
                       value={kpisPrincipales.pagos_conciliados_hoy.valor_actual}
                       variation={
                         kpisPrincipales.pagos_conciliados_hoy
@@ -1105,15 +1105,14 @@ export function DashboardMenu() {
                           ?.variacion_porcentual !== undefined
                           ? {
                               percent:
-                                kpisPrincipales
-                                  .cuotas_atrasadas_conciliadas_hoy
+                                kpisPrincipales.cuotas_atrasadas_conciliadas_hoy
                                   .variacion_porcentual,
 
                               label: 'vs día anterior',
                             }
                           : undefined
                       }
-                      icon={History}
+                      icon={CalendarClock}
                       color="text-amber-700"
                       bgColor="bg-amber-100"
                       borderColor="border-amber-500"

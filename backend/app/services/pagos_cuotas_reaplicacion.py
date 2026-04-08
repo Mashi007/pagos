@@ -32,6 +32,20 @@ logger = logging.getLogger(__name__)
 
 TOL_INTEGRIDAD = 0.02
 
+_SQL_DELETE_CUOTA_PAGOS_POR_PRESTAMO = text(
+    "DELETE FROM cuota_pagos WHERE cuota_id IN "
+    "(SELECT id FROM cuotas WHERE prestamo_id = :pid)"
+)
+
+
+def _delete_cuota_pagos_por_prestamo_sql(db: Session, prestamo_id: int) -> int:
+    """
+    Borra toda la articulación cuota_pagos del préstamo en una sentencia SQL.
+    Evita filas residuales que en algunos PG/SQLAlchemy dejaban rowcount incompleto con DELETE ORM + IN (subquery).
+    """
+    r = db.execute(_SQL_DELETE_CUOTA_PAGOS_POR_PRESTAMO, {"pid": prestamo_id})
+    return int(getattr(r, "rowcount", -1) or -1)
+
 
 def integridad_cuotas_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
     """Compara total_pagado con SUM(cuota_pagos) por cuota; no modifica datos."""
@@ -179,12 +193,11 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
     ).scalars().all()
 
     cuota_ids = [c.id for c in cuotas if c.id is not None]
-    subq_cuotas = select(Cuota.id).where(Cuota.prestamo_id == prestamo_id)
 
     cuota_pagos_eliminadas = 0
     if cuota_ids:
-        r_cp = db.execute(delete(CuotaPago).where(CuotaPago.cuota_id.in_(subq_cuotas)))
-        cuota_pagos_eliminadas = int(getattr(r_cp, "rowcount", 0) or 0)
+        _cp = _delete_cuota_pagos_por_prestamo_sql(db, prestamo_id)
+        cuota_pagos_eliminadas = _cp if _cp >= 0 else 0
         r_cache = db.execute(delete(ReporteContableCache).where(ReporteContableCache.cuota_id.in_(cuota_ids)))
         _ = int(getattr(r_cache, "rowcount", 0) or 0)
         db.flush()
@@ -240,11 +253,9 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
 
     cuota_pagos_eliminadas = -1
     cache_eliminadas = -1
-    subq_cuotas = select(Cuota.id).where(Cuota.prestamo_id == prestamo_id)
 
     if cuota_ids:
-        r1 = db.execute(delete(CuotaPago).where(CuotaPago.cuota_id.in_(subq_cuotas)))
-        cuota_pagos_eliminadas = int(getattr(r1, "rowcount", -1) or -1)
+        cuota_pagos_eliminadas = _delete_cuota_pagos_por_prestamo_sql(db, prestamo_id)
         r2 = db.execute(delete(ReporteContableCache).where(ReporteContableCache.cuota_id.in_(cuota_ids)))
         cache_eliminadas = int(getattr(r2, "rowcount", -1) or -1)
         db.flush()
@@ -266,17 +277,11 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
     )
     if restantes and int(restantes) > 0:
         logger.warning(
-            "reset_cascada: quedan %s filas cuota_pagos tras DELETE ORM; reintento prestamo_id=%s",
+            "reset_cascada: quedan %s filas cuota_pagos tras DELETE SQL; reintento prestamo_id=%s",
             int(restantes),
             prestamo_id,
         )
-        db.execute(
-            text(
-                "DELETE FROM cuota_pagos WHERE cuota_id IN "
-                "(SELECT id FROM cuotas WHERE prestamo_id = :pid)"
-            ),
-            {"pid": prestamo_id},
-        )
+        db.execute(_SQL_DELETE_CUOTA_PAGOS_POR_PRESTAMO, {"pid": prestamo_id})
         db.flush()
         restantes = db.scalar(
             select(func.count())

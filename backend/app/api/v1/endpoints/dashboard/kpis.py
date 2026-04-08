@@ -51,6 +51,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
+def _monto_pago_usd_sql():
+    """Expresión SQL: monto del pago en USD (BS con tasa del registro vs monto_pagado)."""
+    moneda_bs = func.lower(func.trim(Pago.moneda_registro)) == "bs"
+    tasa_ok = and_(
+        Pago.tasa_cambio_bs_usd.isnot(None),
+        Pago.tasa_cambio_bs_usd > 0,
+    )
+    return case(
+        (and_(moneda_bs, Pago.monto_bs_original.isnot(None), tasa_ok), Pago.monto_bs_original / Pago.tasa_cambio_bs_usd),
+        else_=Pago.monto_pagado,
+    )
+
+
 def _sum_monto_cuotas_vencen_dia_conciliadas_mismo_dia_caracas(
     db: Session,
     dia: date,
@@ -58,11 +71,10 @@ def _sum_monto_cuotas_vencen_dia_conciliadas_mismo_dia_caracas(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> float:
-    """Suma monto_cuota (USD en cartera) solo de cuotas con vencimiento = `dia` (calendario Caracas).
+    """Suma monto del **pago** en USD (monto_pagado o BS/tasa) por pagos conciliados en `dia` (Caracas).
 
-    Incluye filas donde ya hay pago vinculado y ese pago está conciliado con fecha_conciliacion
-    en el mismo `dia` (Caracas). No suma cuotas con vencimiento anterior (atrasos / otros meses)
-    aunque se hayan conciliado ese día.
+    Solo pagos vinculados a cuotas con vencimiento = `dia`. Cada pago se cuenta una sola vez aunque
+    aplique a varias cuotas con el mismo vencimiento. No incluye cuotas atrasadas (vencimiento estrictamente anterior a `dia`).
     """
     bind = db.get_bind()
     dialect = bind.dialect.name if bind is not None else "postgresql"
@@ -94,8 +106,9 @@ def _sum_monto_cuotas_vencen_dia_conciliadas_mismo_dia_caracas(
         Pago.fecha_conciliacion.isnot(None),
         dia_conc == dia,
     ]
-    q = (
-        select(func.coalesce(func.sum(Cuota.monto), 0))
+    monto_usd = _monto_pago_usd_sql()
+    inner = (
+        select(Pago.id.label("pago_id"), func.max(monto_usd).label("usd"))
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
@@ -104,11 +117,14 @@ def _sum_monto_cuotas_vencen_dia_conciliadas_mismo_dia_caracas(
         .where(and_(*conds))
     )
     if analista:
-        q = q.where(Prestamo.analista == analista)
+        inner = inner.where(Prestamo.analista == analista)
     if concesionario:
-        q = q.where(Prestamo.concesionario == concesionario)
+        inner = inner.where(Prestamo.concesionario == concesionario)
     if modelo:
-        q = q.where(modelo_lbl_expr == modelo)
+        inner = inner.where(modelo_lbl_expr == modelo)
+    inner = inner.group_by(Pago.id)
+    sub = inner.subquery()
+    q = select(func.coalesce(func.sum(sub.c.usd), 0)).select_from(sub)
     return _safe_float(db.scalar(q) or 0)
 
 
@@ -119,10 +135,9 @@ def _sum_monto_cuotas_atrasadas_conciliadas_mismo_dia_caracas(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> float:
-    """Suma monto_cuota (USD) de cuotas con vencimiento *estrictamente anterior* a `dia` y conciliación en `dia` (Caracas).
+    """Suma monto del **pago** en USD por pagos conciliados en `dia` (Caracas) vinculados a cuotas atrasadas.
 
-    Complemento de «vence hoy»: aquí solo entran cuotas atrasadas (fecha_vencimiento < día calendario)
-    cuyo pago se concilió ese mismo día. No incluye cuotas con vencimiento = `dia`.
+    Solo cuotas con vencimiento estrictamente anterior a `dia`. Cada pago se cuenta una sola vez.
     """
     bind = db.get_bind()
     dialect = bind.dialect.name if bind is not None else "postgresql"
@@ -154,8 +169,9 @@ def _sum_monto_cuotas_atrasadas_conciliadas_mismo_dia_caracas(
         Pago.fecha_conciliacion.isnot(None),
         dia_conc == dia,
     ]
-    q = (
-        select(func.coalesce(func.sum(Cuota.monto), 0))
+    monto_usd = _monto_pago_usd_sql()
+    inner = (
+        select(Pago.id.label("pago_id"), func.max(monto_usd).label("usd"))
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
@@ -164,11 +180,14 @@ def _sum_monto_cuotas_atrasadas_conciliadas_mismo_dia_caracas(
         .where(and_(*conds))
     )
     if analista:
-        q = q.where(Prestamo.analista == analista)
+        inner = inner.where(Prestamo.analista == analista)
     if concesionario:
-        q = q.where(Prestamo.concesionario == concesionario)
+        inner = inner.where(Prestamo.concesionario == concesionario)
     if modelo:
-        q = q.where(modelo_lbl_expr == modelo)
+        inner = inner.where(modelo_lbl_expr == modelo)
+    inner = inner.group_by(Pago.id)
+    sub = inner.subquery()
+    q = select(func.coalesce(func.sum(sub.c.usd), 0)).select_from(sub)
     return _safe_float(db.scalar(q) or 0)
 
 

@@ -33,8 +33,8 @@ export interface KpisPrincipalesResponse {
   total_prestamos: KpiPrestamosMensual
 
   /**
-   * Suma monto_cuota (USD) de cuotas con fecha_vencimiento = hoy (Caracas) y pago conciliado ese mismo día.
-   * No incluye cuotas vencidas en fechas anteriores aunque se concilien hoy (atrasos).
+   * Suma del monto del pago en USD (monto_pagado o BS/tasa del registro), un pago una vez,
+   * solo si está vinculado a cuotas con vencimiento = hoy (Caracas) y conciliación ese día.
    */
   pagos_conciliados_hoy: KpiValor
 

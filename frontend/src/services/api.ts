@@ -924,6 +924,7 @@ class ApiClient {
         url.includes('/prestamos/cedula/batch') || // Batch carga masiva: muchas cédulas
         url.includes('/pagos/upload') || // Carga masiva pagos: puede tardar con muchas filas
         url.includes('/pagos/batch') || // POST batch pagos: muchas filas + validaciones
+        url.includes('/aplicar-pagos-cuotas') || // Cascada por préstamo: muchos pagos/cuotas en Render
         url.includes('/pagos/gmail/run-now') ||
         url.includes('/clientes/check-emails') ||
         url.includes('/clientes/check-cedulas') // Pipeline Gmail: puede tardar si el backend es síncrono (credenciales OAuth)
@@ -949,16 +950,18 @@ class ApiClient {
       } else if (isSlowEndpoint) {
         defaultTimeout = url.includes('/prestamos/cedula/batch')
           ? 60000
-          : url.includes('/pagos/upload')
-            ? 120000
-            : url.includes('/pagos/batch')
-              ? 180000 // 3 min: Render frío + muchas filas
-              : url.includes('/pagos/gmail/run-now')
-                ? 90000 // 90s: cubre credenciales OAuth + margen para backend síncrono viejo
-                : url.includes('/clientes/check-emails') ||
-                    url.includes('/clientes/check-cedulas')
-                  ? 60000
-                  : 300000
+          : url.includes('/aplicar-pagos-cuotas')
+            ? 120000 // 2 min: cascada por préstamo puede exceder 30s en producción
+            : url.includes('/pagos/upload')
+              ? 120000
+              : url.includes('/pagos/batch')
+                ? 180000 // 3 min: Render frío + muchas filas
+                : url.includes('/pagos/gmail/run-now')
+                  ? 90000 // 90s: cubre credenciales OAuth + margen para backend síncrono viejo
+                  : url.includes('/clientes/check-emails') ||
+                      url.includes('/clientes/check-cedulas')
+                    ? 60000
+                    : 300000
       }
 
       // Priorizar timeout explícito si se proporciona, sino usar el calculado
@@ -1153,7 +1156,17 @@ class ApiClient {
   }
 
   async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.delete(url, config)
+    const pathOnly = (url || '').split('?')[0]
+    const isSlowPagosDelete =
+      /\/pagos\/\d+$/.test(pathOnly) ||
+      /\/pagos\/por-prestamo\/\d+\/todos$/.test(pathOnly)
+    const timeoutMs =
+      config?.timeout ?? (isSlowPagosDelete ? 180000 : DEFAULT_TIMEOUT_MS)
+
+    const response: AxiosResponse<T> = await this.client.delete(url, {
+      ...config,
+      timeout: timeoutMs,
+    })
 
     // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
 
