@@ -51,14 +51,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
-def _count_pagos_conciliados_en_dia_caracas(
+def _sum_monto_usd_pagos_conciliados_en_dia_caracas(
     db: Session,
     dia: date,
     analista: Optional[str],
     concesionario: Optional[str],
     modelo: Optional[str],
-) -> int:
-    """Cuenta pagos con conciliado=True cuya fecha_conciliacion cae en `dia` (calendario America/Caracas)."""
+) -> float:
+    """Suma monto en USD de pagos conciliados cuya fecha_conciliacion cae en `dia` (calendario America/Caracas).
+
+    Usa la misma expresión de USD que el resto del dashboard (BS con tasa vs monto_pagado).
+    """
     bind = db.get_bind()
     dialect = bind.dialect.name if bind is not None else "postgresql"
     fe = Pago.fecha_conciliacion
@@ -69,13 +72,14 @@ def _count_pagos_conciliados_en_dia_caracas(
         )
     else:
         dia_expr = cast(fe, Date)
+    monto_usd = _monto_pago_usd_sql()
     conds = [
         Pago.conciliado.is_(True),
         Pago.fecha_conciliacion.isnot(None),
         dia_expr == dia,
     ]
     q = (
-        select(func.count(Pago.id))
+        select(func.coalesce(func.sum(monto_usd), 0))
         .select_from(Pago)
         .join(Prestamo, Pago.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
@@ -96,7 +100,7 @@ def _count_pagos_conciliados_en_dia_caracas(
             incluir_sin_modelo=False,
         )
         q = q.where(modelo_lbl_expr == modelo)
-    return int(db.scalar(q) or 0)
+    return _safe_float(db.scalar(q) or 0)
 
 
 def _kpi_pagos_conciliados_hoy(
@@ -107,17 +111,17 @@ def _kpi_pagos_conciliados_hoy(
 ) -> dict:
     hoy_c = hoy_negocio()
     ayer_c = hoy_c - timedelta(days=1)
-    hoy_n = _count_pagos_conciliados_en_dia_caracas(
+    hoy_m = _sum_monto_usd_pagos_conciliados_en_dia_caracas(
         db, hoy_c, analista, concesionario, modelo
     )
-    ayer_n = _count_pagos_conciliados_en_dia_caracas(
+    ayer_m = _sum_monto_usd_pagos_conciliados_en_dia_caracas(
         db, ayer_c, analista, concesionario, modelo
     )
-    if ayer_n:
-        variacion = ((float(hoy_n) - float(ayer_n)) / float(ayer_n)) * 100.0
+    if ayer_m:
+        variacion = ((hoy_m - ayer_m) / ayer_m) * 100.0
     else:
         variacion = 0.0
-    return _kpi(float(hoy_n), round(variacion, 1))
+    return _kpi(round(hoy_m, 2), round(variacion, 1))
 
 
 def _pagos_programados_hoy_metrics(

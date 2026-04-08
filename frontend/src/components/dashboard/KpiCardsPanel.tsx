@@ -149,9 +149,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
         variationAbs={kpisData.pagos_conciliados_hoy?.variacion_absoluta ?? 0}
         color="green"
         icon={TrendingUp}
-        formatValue={v =>
-          typeof v === 'number' ? v.toLocaleString('es-EC') : String(v)
-        }
+        formatValue={v => formatCurrency(Number(v))}
       />
 
       <KpiCard

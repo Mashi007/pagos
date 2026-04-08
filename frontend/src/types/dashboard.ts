@@ -32,7 +32,7 @@ export interface KpiPrestamosMensual extends KpiValor {
 export interface KpisPrincipalesResponse {
   total_prestamos: KpiPrestamosMensual
 
-  /** Pagos con conciliado=true y fecha_conciliacion en el día actual (Caracas). */
+  /** Suma monto en USD de pagos conciliados con fecha_conciliacion en el día actual (Caracas). */
   pagos_conciliados_hoy: KpiValor
 
   total_clientes: KpiValor
