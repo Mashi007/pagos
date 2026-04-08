@@ -315,6 +315,33 @@ export function claveDocumentoExcelCompuesta(
   )
 }
 
+/**
+ * Misma unicidad que en BD / POST pagos: comprobante normalizado + código opcional.
+ * Minúsculas para resaltar duplicados en listas sin depender de mayúsculas.
+ */
+export function claveDocumentoPagoListaNormalizada(
+  numero_documento: unknown,
+  codigo_documento?: string | null
+): string {
+  return claveDocumentoExcelCompuesta(numero_documento, codigo_documento)
+    .trim()
+    .toLowerCase()
+}
+
+/**
+ * Celda de lista / Excel: comprobante que ve el usuario + código (sin marcador interno §CD:).
+ */
+export function textoDocumentoPagoParaListado(
+  numero_documento: string | null | undefined,
+  codigo_documento?: string | null
+): string {
+  const base = (numero_documento ?? '').trim()
+  const c = (codigo_documento ?? '').trim()
+  if (!base) return '-'
+  if (!c) return base
+  return `${base} · ${c}`
+}
+
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
 

@@ -97,6 +97,11 @@ import { codigoEstadoCuotaParaUi } from '../utils/cuotaEstadoDisplay'
 
 import { getErrorMessage } from '../types/errors'
 
+import {
+  claveDocumentoPagoListaNormalizada,
+  textoDocumentoPagoParaListado,
+} from '../utils/pagoExcelValidation'
+
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
 const OPCIONES_ESTADO_PRESTAMO_REVISION: { value: string; label: string }[] = [
   { value: 'DRAFT', label: 'Borrador' },
@@ -794,7 +799,10 @@ export function EditarRevisionManual() {
     const m = new Map<string, number>()
     const rows = pagosRealizadosData?.pagos ?? []
     for (const p of rows) {
-      const k = (p.numero_documento || '').trim().toLowerCase()
+      const k = claveDocumentoPagoListaNormalizada(
+        p.numero_documento,
+        p.codigo_documento ?? null
+      )
       if (!k) continue
       m.set(k, (m.get(k) || 0) + 1)
     }
@@ -3025,9 +3033,9 @@ export function EditarRevisionManual() {
                         Cédula {cedulaParaPagosRealizados}: fecha, monto (USD),
                         banco, documento y crédito asociado. Cada alta o edición
                         exige URL de comprobante en el formulario y respeta los
-                        validadores del módulo Pagos (incluido Nº documento
-                        único). Si el mismo documento aparece dos veces en esta
-                        página se resalta en la tabla. Use «Agregar pago»,
+                        validadores del módulo Pagos (clave única comprobante +
+                        código opcional). Si la misma clave aparece dos veces en
+                        esta página se resalta en la tabla. Use «Agregar pago»,
                         «Editar» o «Eliminar»; «Aplicar a cuotas (cascada)»
                         adjudica en la BD los pagos elegibles de este crédito a
                         las cuotas en orden de vencimiento (cascada por número
@@ -3172,9 +3180,10 @@ export function EditarRevisionManual() {
                             </TableHeader>
                             <TableBody>
                               {pagosRealizadosData.pagos.map((pago: Pago) => {
-                                const docKey = (pago.numero_documento || '')
-                                  .trim()
-                                  .toLowerCase()
+                                const docKey = claveDocumentoPagoListaNormalizada(
+                                  pago.numero_documento,
+                                  pago.codigo_documento ?? null
+                                )
                                 const documentoDuplicadoEnPagina =
                                   !!docKey &&
                                   (conteoDocumentoPagosRevision.get(docKey) ||
@@ -3208,13 +3217,14 @@ export function EditarRevisionManual() {
                                       }`}
                                       title={
                                         documentoDuplicadoEnPagina
-                                          ? 'Mismo Nº de documento aparece más de una vez en esta página.'
+                                          ? 'Misma clave comprobante + código aparece más de una vez en esta página.'
                                           : undefined
                                       }
                                     >
-                                      {pago.numero_documento?.trim()
-                                        ? pago.numero_documento
-                                        : '-'}
+                                      {textoDocumentoPagoParaListado(
+                                        pago.numero_documento,
+                                        pago.codigo_documento
+                                      )}
                                     </TableCell>
                                     <TableCell className="whitespace-nowrap">
                                       {pago.prestamo_id != null

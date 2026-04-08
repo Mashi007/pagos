@@ -87,7 +87,10 @@ import { useGmailPipeline } from '../../hooks/useGmailPipeline'
 
 import { invalidatePagosPrestamosRevisionYCuotas } from '../../constants/queryKeys'
 import { getTasaHoy } from '../../services/tasaCambioService'
-import { normalizarNumeroDocumento } from '../../utils/pagoExcelValidation'
+import {
+  claveDocumentoPagoListaNormalizada,
+  textoDocumentoPagoParaListado,
+} from '../../utils/pagoExcelValidation'
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
@@ -423,7 +426,10 @@ export function PagosList() {
             ? p.fecha_pago
             : ((p.fecha_pago as Date)?.toISOString?.()?.slice(0, 10) ?? ''),
         'Monto pagado': p.monto_pagado,
-        'Nº documento': p.numero_documento,
+        'Nº documento': textoDocumentoPagoParaListado(
+          p.numero_documento,
+          p.codigo_documento
+        ),
         'Institución bancaria': p.institucion_bancaria ?? '',
         Estado: p.estado,
         Observaciones: (p as PagoConError).observaciones ?? '',
@@ -493,7 +499,10 @@ export function PagosList() {
             ? p.fecha_pago
             : ((p.fecha_pago as Date)?.toISOString?.()?.slice(0, 10) ?? ''),
         'Monto pagado': p.monto_pagado,
-        'Nº documento': p.numero_documento,
+        'Nº documento': textoDocumentoPagoParaListado(
+          p.numero_documento,
+          p.codigo_documento
+        ),
         'Institución bancaria': p.institucion_bancaria ?? '',
         Estado: p.estado,
         'Fecha registro': p.fecha_registro
@@ -574,13 +583,16 @@ export function PagosList() {
     data?.total,
   ])
 
-  /** Claves normalizadas de nº documento que aparecen más de una vez en la página actual (advertencia visual). */
+  /** Claves comprobante+código (misma lógica que BD) repetidas en la página actual (advertencia visual). */
   const documentosDuplicadosEnPagina = useMemo(() => {
     const pagos = data?.pagos
     if (!pagos?.length) return new Set<string>()
     const counts = new Map<string, number>()
     for (const p of pagos) {
-      const key = normalizarNumeroDocumento(p.numero_documento)
+      const key = claveDocumentoPagoListaNormalizada(
+        p.numero_documento,
+        p.codigo_documento ?? null
+      )
       if (!key) continue
       counts.set(key, (counts.get(key) ?? 0) + 1)
     }
@@ -1906,8 +1918,9 @@ export function PagosList() {
                       </TableHeader>
                       <TableBody>
                         {data.pagos.map((pago: Pago) => {
-                          const docKey = normalizarNumeroDocumento(
-                            pago.numero_documento
+                          const docKey = claveDocumentoPagoListaNormalizada(
+                            pago.numero_documento,
+                            pago.codigo_documento ?? null
                           )
                           const documentoDuplicadoEnVista =
                             Boolean(docKey) &&
@@ -1953,11 +1966,14 @@ export function PagosList() {
                                 )}
                                 title={
                                   documentoDuplicadoEnVista
-                                    ? 'Advertencia: mismo número de documento aparece más de una vez en esta página.'
+                                    ? 'Advertencia: misma clave comprobante + código aparece más de una vez en esta página.'
                                     : undefined
                                 }
                               >
-                                {pago.numero_documento ?? '-'}
+                                {textoDocumentoPagoParaListado(
+                                  pago.numero_documento,
+                                  pago.codigo_documento
+                                )}
                               </TableCell>
                               <TableCell>
                                 {pago.verificado_concordancia === 'SI' ||
