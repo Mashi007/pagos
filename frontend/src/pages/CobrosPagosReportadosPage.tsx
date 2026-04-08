@@ -55,6 +55,8 @@ import { Badge } from '../components/ui/badge'
 
 import toast from 'react-hot-toast'
 
+import { getErrorMessage } from '../types/errors'
+
 /** Toast según envío real del correo de rechazo (API devuelve mensaje + flags). */
 function toastAfterRechazoCobros(data: CambiarEstadoPagoResponse) {
   const msg = data.mensaje ?? 'Estado actualizado a rechazado.'
@@ -428,10 +430,11 @@ export default function CobrosPagosReportadosPage() {
   }
 
   const handleEliminar = async (id: number, ref: string) => {
+    const refLabel = (ref || '').trim() || '#' + String(id)
     if (
       !window.confirm(
         'Eliminar el pago reportado ' +
-          ref +
+          refLabel +
           '? Esta acción no se puede deshacer.'
       )
     )
@@ -440,13 +443,21 @@ export default function CobrosPagosReportadosPage() {
     setDeletingId(id)
 
     try {
-      await eliminarPagoReportado(id)
-
-      toast.success('Pago reportado eliminado.')
-
+      const res = await eliminarPagoReportado(id)
+      if (res && res.ok === false) {
+        toast.error(res.mensaje || 'No se pudo eliminar.')
+        return
+      }
+      toast.success(res?.mensaje || 'Pago reportado eliminado.')
       await load()
-    } catch (e: any) {
-      toast.error(e?.message || 'Error al eliminar.')
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail
+      toast.error(
+        typeof detail === 'string'
+          ? detail
+          : getErrorMessage(e) || 'Error al eliminar.'
+      )
     } finally {
       setDeletingId(null)
     }
@@ -1231,9 +1242,10 @@ export default function CobrosPagosReportadosPage() {
                           </span>
 
                           <Button
+                            type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-8 w-8 shrink-0"
                             title="Ver detalle"
                             onClick={() =>
                               navigate(
@@ -1248,6 +1260,7 @@ export default function CobrosPagosReportadosPage() {
                             row.estado === 'en_revision' ||
                             row.estado === 'rechazado') && (
                             <Button
+                              type="button"
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 shrink-0"
@@ -1267,6 +1280,7 @@ export default function CobrosPagosReportadosPage() {
                           {(row.estado === 'pendiente' ||
                             row.estado === 'en_revision') && (
                             <Button
+                              type="button"
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -1282,11 +1296,12 @@ export default function CobrosPagosReportadosPage() {
                             </Button>
                           )}
 
-                          <div className="relative inline-block h-8 w-8">
+                          <div className="relative inline-block h-8 w-8 shrink-0 overflow-hidden rounded-md">
                             <select
-                              className="absolute inset-0 h-full w-full min-w-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                              className="absolute inset-0 box-border h-full max-h-full w-full min-w-0 max-w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                               value=""
                               title="Estado"
+                              aria-label="Cambiar estado del reporte"
                               onChange={e => {
                                 const v = e.target.value
 
@@ -1326,9 +1341,10 @@ export default function CobrosPagosReportadosPage() {
                           </div>
 
                           <Button
+                            type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            className="relative z-10 h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                             title="Eliminar"
                             onClick={() =>
                               handleEliminar(row.id, row.referencia_interna)
