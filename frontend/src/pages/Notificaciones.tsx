@@ -1022,11 +1022,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   /**
    * No deshabilitar «Enviar notificaciones (manual)» durante refetch en segundo plano
    * (staleTime 0 + refocus): solo hasta la primera respuesta de la lista.
+   * Si el GET de la lista falló (isError), no bloquear envío: el servidor puede armar la lista al enviar.
    */
   const esperandoPrimeraCargaLista =
-    (modulo === 'a1dia' && isPending && !isFetched) ||
-    (modulo === 'a3cuotas' && isPendingPrej && !isFetchedPrej) ||
-    (modulo === 'd2antes' && isPendingD2 && !isFetchedD2)
+    (modulo === 'a1dia' && isPending && !isFetched && !isError) ||
+    (modulo === 'a3cuotas' &&
+      isPendingPrej &&
+      !isFetchedPrej &&
+      !isErrorPrej) ||
+    (modulo === 'd2antes' && isPendingD2 && !isFetchedD2 && !isErrorD2)
 
   const isErrorLista =
     modulo === 'a1dia'
@@ -1328,12 +1332,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
               {modulo === 'a1dia' && (
                 <Button
+                  type="button"
                   size="sm"
                   onClick={() => void handleEnviarPago1DiaManual()}
-                  disabled={
-                    enviandoPago1Dia ||
-                    actualizandoListas ||
+                  disabled={enviandoPago1Dia || esperandoPrimeraCargaLista}
+                  title={
                     esperandoPrimeraCargaLista
+                      ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                      : undefined
                   }
                   className="bg-blue-600 text-white hover:bg-blue-700"
                 >
@@ -1348,12 +1354,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
               {modulo === 'a3cuotas' && (
                 <Button
+                  type="button"
                   size="sm"
                   onClick={() => void handleEnviarPrejudicialManual()}
-                  disabled={
-                    enviandoPrejudicial ||
-                    actualizandoListas ||
+                  disabled={enviandoPrejudicial || esperandoPrimeraCargaLista}
+                  title={
                     esperandoPrimeraCargaLista
+                      ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                      : undefined
                   }
                   className="bg-blue-600 text-white hover:bg-blue-700"
                 >
@@ -1368,12 +1376,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
               {modulo === 'd2antes' && (
                 <Button
+                  type="button"
                   size="sm"
                   onClick={() => void handleEnviarD2AntesManual()}
-                  disabled={
-                    enviandoD2Antes ||
-                    actualizandoListas ||
+                  disabled={enviandoD2Antes || esperandoPrimeraCargaLista}
+                  title={
                     esperandoPrimeraCargaLista
+                      ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                      : undefined
                   }
                   className="bg-blue-600 text-white hover:bg-blue-700"
                 >
