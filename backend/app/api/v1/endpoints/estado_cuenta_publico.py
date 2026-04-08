@@ -504,9 +504,9 @@ def get_recibo_cuota_publico(
 
 @router.get("/recibo-pago")
 def get_recibo_pago_cartera_publico(
-    token: str = Query(None, description="Token en query (deprecated: usar Authorization header)"),
+    request: Request,
     pago_id: int = Query(..., description="ID del pago en tabla pagos (cartera)"),
-    request: Request = None,
+    token: Optional[str] = Query(None, description="Token en query (deprecated: usar Authorization header)"),
     db: Session = Depends(get_db),
 ):
     """
@@ -517,7 +517,7 @@ def get_recibo_pago_cartera_publico(
     - Header: Authorization: Bearer <token>
     - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
     """
-    auth_header = request.headers.get("Authorization", "") if request else ""
+    auth_header = request.headers.get("Authorization", "") or ""
     token_from_header = None
     if auth_header.lower().startswith("bearer "):
         token_from_header = auth_header[7:].strip()
