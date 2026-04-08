@@ -78,8 +78,11 @@ import {
 
 import {
   aplicarSufijoVistoADocumento,
+  allocarTokenSufijoVistoArchivo,
   collectTokensSufijoVistoArchivoDesdeFilas,
   letterSufijoVistoDesdeMensajeDuplicado,
+  SUFIJO_VISTO_ARCHIVO_RE,
+  TOKEN_SUFIJO_VISTO_ARCHIVO_RE,
 } from '../../utils/documentoSufijoVisto'
 
 import { hoyYmdCaracas } from '../../utils/fechaZona'
@@ -393,24 +396,17 @@ export function RegistrarPagoForm({
     }
   }, [prestamos, isEditing, pagoInicial?.prestamo_id, formData.prestamo_id])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // Validaciones segun criterios documentados
-
-    // Validar campos básicos
-
+  /** Validación + POST/PUT usando el snapshot `fd` (p. ej. Visto rellena código y guarda sin esperar re-render). */
+  const submitPago = async (fd: PagoCreate) => {
     const newErrors: Record<string, string> = {}
 
     const hoyCaracas = hoyYmdCaracas()
 
-    if (!formData.cedula_cliente) {
+    if (!fd.cedula_cliente) {
       newErrors.cedula_cliente = 'Cédula requerida'
     }
 
-    // Crédito: solo se acepta uno de la lista obtenida por cédula (tabla prestamos). Si hay más de uno, debe escogerse.
-
-    if (prestamosParaSelect.length > 0 && !formData.prestamo_id) {
+    if (prestamosParaSelect.length > 0 && !fd.prestamo_id) {
       newErrors.prestamo_id =
         prestamosParaSelect.length > 1
           ? 'Debe escoger un crédito de la lista'
@@ -419,69 +415,61 @@ export function RegistrarPagoForm({
 
     const permiteCreditoRevisionManual =
       !!prestamoContextoRevisionManualId &&
-      formData.prestamo_id === prestamoContextoRevisionManualId
+      fd.prestamo_id === prestamoContextoRevisionManualId
 
     if (
-      formData.prestamo_id &&
+      fd.prestamo_id &&
       prestamosParaSelect.length > 0 &&
-      !prestamosParaSelect.some(p => p.id === formData.prestamo_id) &&
+      !prestamosParaSelect.some(p => p.id === fd.prestamo_id) &&
       !permiteCreditoRevisionManual
     ) {
       newErrors.prestamo_id =
         'El crédito debe ser uno de la lista para esta cédula'
     }
 
-    // CRITERIO 1: Verificación de cédula del pago vs cédula del préstamo
-
     const prestamoParaCedula: Prestamo | undefined =
       permiteCreditoRevisionManual &&
       (prestamoContextoRevisionManual as Prestamo | undefined)?.id ===
-        formData.prestamo_id
+        fd.prestamo_id
         ? (prestamoContextoRevisionManual as Prestamo)
         : (prestamoSeleccionado as Prestamo | undefined)
 
-    if (formData.prestamo_id && prestamoParaCedula) {
-      if (formData.cedula_cliente !== prestamoParaCedula.cedula) {
-        newErrors.cedula_cliente = `La cédula del pago (${formData.cedula_cliente}) no coincide con la cédula del préstamo (${prestamoParaCedula.cedula}). El pago solo se aplicará si las cédulas coinciden.`
+    if (fd.prestamo_id && prestamoParaCedula) {
+      if (fd.cedula_cliente !== prestamoParaCedula.cedula) {
+        newErrors.cedula_cliente = `La cédula del pago (${fd.cedula_cliente}) no coincide con la cédula del préstamo (${prestamoParaCedula.cedula}). El pago solo se aplicará si las cédulas coinciden.`
 
         newErrors.prestamo_id =
           'La cédula del pago debe coincidir con la cédula del préstamo seleccionado'
       }
     }
 
-    // CRITERIO 2: Validación de monto
-
-    if (!formData.monto_pagado || formData.monto_pagado <= 0) {
+    if (!fd.monto_pagado || fd.monto_pagado <= 0) {
       newErrors.monto_pagado = 'Monto inválido. Debe ser mayor a cero'
-    } else if (formData.monto_pagado > 1000000) {
+    } else if (fd.monto_pagado > 1000000) {
       newErrors.monto_pagado = 'Monto muy alto. Por favor verifique el valor'
     }
 
-    // CRITERIO 3: Número de documento (misma lógica que carga masiva Excel)
-
     const numeroDocumentoNormalizado = normalizarNumeroDocumento(
-      formData.numero_documento
+      fd.numero_documento
     )
 
     if (!numeroDocumentoNormalizado) {
       newErrors.numero_documento = 'Número de documento requerido'
-    } else if (pareceCedulaEnCampoDocumento(formData.numero_documento)) {
+    } else if (pareceCedulaEnCampoDocumento(fd.numero_documento)) {
       newErrors.numero_documento =
         'No ingrese la cédula aquí. Use el campo de cédula del cliente; en documento va la referencia o comprobante del banco (regla alineada con carga masiva).'
     } else if (numeroDocumentoNormalizado.length > NUMERO_DOCUMENTO_MAX_LEN) {
       newErrors.numero_documento = `El número de documento no puede superar ${NUMERO_DOCUMENTO_MAX_LEN} caracteres.`
     }
 
-    // CRITERIO 4: Validación de fecha (Caracas; antes del comprobante para no exigir URL en fechas inválidas)
-
-    if (!formData.fecha_pago) {
+    if (!fd.fecha_pago) {
       newErrors.fecha_pago = 'Fecha de pago requerida'
-    } else if (formData.fecha_pago > hoyCaracas) {
+    } else if (fd.fecha_pago > hoyCaracas) {
       newErrors.fecha_pago =
         'La fecha de pago no puede ser posterior a hoy (America/Caracas).'
     }
 
-    const linkComprobanteTrim = (formData.link_comprobante || '').trim()
+    const linkComprobanteTrim = (fd.link_comprobante || '').trim()
 
     if (requiereLinkComprobante && !linkComprobanteTrim) {
       newErrors.link_comprobante =
@@ -516,12 +504,10 @@ export function RegistrarPagoForm({
     setIsSubmitting(true)
 
     try {
-      // Aplicar normalización al número de documento antes de enviar
+      const codigoTrim = String(fd.codigo_documento ?? '').trim()
 
-      const codigoTrim = String(formData.codigo_documento ?? '').trim()
-
-      const datosEnvio: any = {
-        ...formData,
+      const datosEnvio = {
+        ...fd,
 
         numero_documento: numeroDocumentoNormalizado,
 
@@ -530,7 +516,7 @@ export function RegistrarPagoForm({
         moneda_registro: monedaRegistro,
 
         link_comprobante: linkComprobanteTrim || null,
-      }
+      } as PagoCreate & { tasa_cambio_manual?: number; conciliado?: boolean }
 
       if (monedaRegistro === 'BS' && !tasaBd) {
         const tm = parseFloat(String(tasaManual).replace(',', '.'))
@@ -538,11 +524,7 @@ export function RegistrarPagoForm({
         if (Number.isFinite(tm) && tm > 0) datosEnvio.tasa_cambio_manual = tm
       }
 
-      // Siempre conciliar cuando hay crédito asignado: así el backend aplica el pago a cuotas
-
-      // (desde tabla normal o desde "Revisar Pagos" con Guardar y Procesar)
-
-      if (formData.prestamo_id && formData.monto_pagado > 0) {
+      if (fd.prestamo_id && fd.monto_pagado > 0) {
         datosEnvio.conciliado = true
       }
 
@@ -552,8 +534,6 @@ export function RegistrarPagoForm({
         } else {
           await pagoService.updatePago(pagoId, datosEnvio)
         }
-
-        // La asignación a cuotas la hace el backend al recibir conciliado=true (con prestamo_id y monto)
       } else {
         await pagoService.createPago(datosEnvio)
       }
@@ -593,6 +573,59 @@ export function RegistrarPagoForm({
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    await submitPago(formData)
+  }
+
+  /** Visto (revisión manual): desambigua con código A####/P#### en el campo Código y guarda (BD almacena comprobante + §CD: + código). */
+  const handleVistoRellenarCodigoYGuardar = async () => {
+    if (isSubmitting || !mostrarCampoCodigoDocumento || !isAdmin) return
+
+    const msg = [errors.general, errors.numero_documento]
+      .filter(Boolean)
+      .join(' ')
+    const letter = letterSufijoVistoDesdeMensajeDuplicado(msg)
+    const usados = new Set<string>()
+
+    const codExistente = String(formData.codigo_documento ?? '').trim()
+    const mc = codExistente.match(/^([AP]\d{4})$/i)
+    if (mc) usados.add(mc[1].toUpperCase())
+
+    let numeroDoc = String(formData.numero_documento ?? '').trim()
+    if (SUFIJO_VISTO_ARCHIVO_RE.test(numeroDoc)) {
+      const mDoc = numeroDoc.match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)
+      if (mDoc) usados.add(mDoc[1].toUpperCase())
+      numeroDoc = numeroDoc.replace(SUFIJO_VISTO_ARCHIVO_RE, '').trim()
+    }
+
+    const token = allocarTokenSufijoVistoArchivo(letter, usados)
+    const fd: PagoCreate = {
+      ...formData,
+      numero_documento: numeroDoc,
+      codigo_documento: token,
+    }
+
+    setFormData(fd)
+
+    setErrors(prev => {
+      const next = { ...prev }
+      delete next.numero_documento
+      delete next.codigo_documento
+      const g = next.general
+      if (
+        g === DUPLICADO_DOCUMENTO_UI ||
+        (g && g.toLowerCase().includes('documento'))
+      ) {
+        delete next.general
+      }
+      return next
+    })
+
+    await submitPago(fd)
   }
 
   return (
@@ -1173,20 +1206,31 @@ export function RegistrarPagoForm({
             {mostrarCampoCodigoDocumento && isAdmin ? (
               <div className="rounded-md border border-violet-200 bg-violet-50/90 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-violet-950">
-                    <span className="font-semibold">Visto (admin):</span> mismo
-                    comprobante en archivo o en BD -{' '}
-                    <span className="whitespace-nowrap">
-                      añadir sufijo _A#### / _P####
-                    </span>{' '}
-                    o autorizar sin cambiar el número (como en carga masiva).
-                  </p>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-xs text-violet-950">
+                      <span className="font-semibold">Visto (admin):</span>{' '}
+                      rellena el campo <strong>Código</strong> con un token único{' '}
+                      <span className="whitespace-nowrap">
+                        (A#### / P####, misma regla que carga masiva)
+                      </span>{' '}
+                      y <strong>guarda</strong>. El comprobante del banco puede
+                      quedar igual; en BD se guarda la clave compuesta.
+                    </p>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-violet-800 underline decoration-violet-400 hover:text-violet-950"
+                      onClick={() => setVistoRevisionManualOpen(true)}
+                    >
+                      Opciones: sufijo en Nº documento o autorizar sin código…
+                    </button>
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="shrink-0 border-violet-400 bg-violet-100 text-violet-950 hover:bg-violet-200"
-                    onClick={() => setVistoRevisionManualOpen(true)}
+                    disabled={isSubmitting}
+                    className="shrink-0 border-violet-400 bg-violet-100 text-violet-950 hover:bg-violet-200 disabled:opacity-60"
+                    onClick={() => void handleVistoRellenarCodigoYGuardar()}
                   >
                     <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />
                     Visto
@@ -1345,22 +1389,25 @@ export function RegistrarPagoForm({
                 </DialogTitle>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p>
-                    Misma decisión que en carga masiva al pulsar «Visto»:
-                    modificar el número de documento o solo marcar revisión.
+                    El botón principal <strong>Visto</strong> ya rellena{' '}
+                    <strong>Código</strong> y guarda. Use esta ventana solo si
+                    necesita el comprobante visible con{' '}
+                    <code className="rounded bg-gray-100 px-1">_A####</code>/
+                    <code className="rounded bg-gray-100 px-1">_P####</code> o
+                    marcar revisión sin código.
                   </p>
                   <ul className="list-inside list-disc space-y-1 text-xs">
                     <li>
-                      <strong>Añadir sufijos</strong>: agrega o sustituye{' '}
+                      <strong>Añadir sufijos al Nº documento</strong>: agrega o
+                      sustituye{' '}
                       <code className="rounded bg-gray-100 px-1">_A####</code> o{' '}
                       <code className="rounded bg-gray-100 px-1">_P####</code>{' '}
-                      (código único: aleatorio entre libres; si hace falta,
-                      siguiente libre en orden).
+                      en el campo comprobante (no en Código).
                     </li>
                     <li>
-                      <strong>Autorizar sin cambiar el documento</strong>: el
-                      texto del comprobante queda igual; puede usar el campo{' '}
-                      <strong>Código</strong> para distinguir filas. Si la
-                      unicidad en BD no lo permite, use «Añadir sufijos».
+                      <strong>Autorizar sin cambiar</strong>: quita avisos de
+                      duplicado en pantalla; use el campo <strong>Código</strong>{' '}
+                      a mano si aplica.
                     </li>
                   </ul>
                 </div>
