@@ -217,12 +217,6 @@ export function RegistrarPagoForm({
     prestamoContextoRevisionManual,
   ])
 
-  const exigeComprobantePorFechaCaracas = useMemo(() => {
-    const fp = (formData.fecha_pago || '').trim()
-    if (!fp) return false
-    return fp === hoyYmdCaracas()
-  }, [formData.fecha_pago])
-
   useEffect(() => {
     let cancelled = false
 
@@ -394,16 +388,7 @@ export function RegistrarPagoForm({
 
     const linkComprobanteTrim = (formData.link_comprobante || '').trim()
 
-    const fechaPagoPermitida =
-      !!formData.fecha_pago && formData.fecha_pago <= hoyCaracas
-
-    const exigeComprobantePorFecha =
-      fechaPagoPermitida && formData.fecha_pago >= hoyCaracas
-
-    if (exigeComprobantePorFecha && !linkComprobanteTrim) {
-      newErrors.link_comprobante =
-        'Para fecha de pago desde hoy (America/Caracas) debe indicar el enlace al comprobante (imagen o PDF).'
-    } else if (requiereLinkComprobante && !linkComprobanteTrim) {
+    if (requiereLinkComprobante && !linkComprobanteTrim) {
       newErrors.link_comprobante =
         'Enlace al comprobante (imagen o PDF) requerido en revisión manual.'
     } else if (linkComprobanteTrim) {
@@ -1034,11 +1019,11 @@ export function RegistrarPagoForm({
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
                 Comprobante (URL){' '}
-                {requiereLinkComprobante || exigeComprobantePorFechaCaracas ? (
+                {requiereLinkComprobante ? (
                   <span className="text-red-500">*</span>
                 ) : (
                   <span className="text-xs font-normal text-gray-500">
-                    (opcional si la fecha es anterior a hoy en Caracas)
+                    (opcional)
                   </span>
                 )}
               </label>
@@ -1065,13 +1050,6 @@ export function RegistrarPagoForm({
               {errors.link_comprobante && (
                 <p className="text-sm text-red-600">
                   {errors.link_comprobante}
-                </p>
-              )}
-
-              {exigeComprobantePorFechaCaracas && (
-                <p className="text-xs text-amber-800">
-                  Obligatorio: la fecha de pago es hoy (America/Caracas).
-                  Adjunte enlace al comprobante (imagen o PDF).
                 </p>
               )}
 
