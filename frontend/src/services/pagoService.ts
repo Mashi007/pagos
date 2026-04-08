@@ -13,6 +13,8 @@ export interface Pago {
 
   numero_documento: string
 
+  codigo_documento?: string
+
   institucion_bancaria: string | null
 
   estado: string
@@ -65,6 +67,8 @@ export interface PagoCreate {
   monto_pagado: number
 
   numero_documento: string
+
+  codigo_documento?: string | null
 
   institucion_bancaria: string | null
 
@@ -678,6 +682,8 @@ class PagoService {
     fecha_pago: string // formato "DD-MM-YYYY"
 
     numero_documento: string | null
+
+    codigo_documento?: string | null
 
     moneda_registro?: 'USD' | 'BS'
 

@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.serializers import to_finite_float_or_zero
-from app.services.cuota_estado import hoy_negocio
+from app.services.cuota_estado import hoy_negocio, parse_fecha_referencia_negocio
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
     ESTADOS_CUOTA_VENCIDO_Y_MORA,
@@ -314,7 +314,10 @@ def contexto_cobranza_aplica_a_prestamo(contexto: object, prestamo_id: object) -
 
 
 def build_contexto_cobranza_para_item(
-    db: Session, item: dict, correlativos_en_batch: dict
+    db: Session,
+    item: dict,
+    correlativos_en_batch: dict,
+    fecha_referencia: Optional[date] = None,
 ) -> tuple:
     """
     Construye contexto_cobranza para un item (plantilla COBRANZA).
@@ -324,12 +327,13 @@ def build_contexto_cobranza_para_item(
     hoy = fecha calendario America/Caracas (misma regla que mora en cuotas).
     Si no hay prestamo_id devuelve (None, None).
     correlativos_en_batch: dict prestamo_id -> ultimo correlativo usado en este batch.
+    fecha_referencia: si se indica, corte de cuotas vencidas y FECHA_CARTA alineados a ese día (Caracas).
     """
     prestamo_id = item.get("prestamo_id")
     if not prestamo_id:
         return None, None
     from app.services.plantilla_cobranza import construir_contexto_cobranza
-    hoy = hoy_negocio()
+    ref = fecha_referencia or hoy_negocio()
     cuotas = (
         db.execute(
             select(Cuota)
@@ -337,7 +341,7 @@ def build_contexto_cobranza_para_item(
                 Cuota.prestamo_id == prestamo_id,
                 Cuota.fecha_pago.is_(None),
                 CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-                Cuota.fecha_vencimiento <= hoy,
+                Cuota.fecha_vencimiento <= ref,
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
             )
             .order_by(Cuota.numero_cuota)
@@ -366,6 +370,7 @@ def build_contexto_cobranza_para_item(
         tratamiento=tratamiento,
         cedula=cedula,
         numero_correlativo=next_correlativo,
+        fecha_carta=ref,
     )
     # Cuota concreta del envío (pestaña 1 día después, etc.): no confundir con FECHA_CARTA (hoy).
     fv_item = item.get("fecha_vencimiento")
@@ -1245,6 +1250,9 @@ def enviar_caso_manual(payload: dict = Body(...), db: Session = Depends(get_db))
     No encola otros casos ni programa envios: solo el tipo indicado en el JSON. Cada destinatario usa la
     plantilla/CCO/PDF de esa fila (no se infiere otro tipo por fila). En produccion: un correo por cliente
     en la lista de ese caso; en modo pruebas: destinos de prueba. Ignora el toggle Envio apagado en esa fila.
+
+    Opcional en JSON: fecha_caracas (YYYY-MM-DD) = fecha de referencia America/Caracas para armar la lista
+    y la carta PDF (mismo criterio que GET listados con ?fecha_caracas=).
     """
     from datetime import timezone
 
@@ -1258,9 +1266,18 @@ def enviar_caso_manual(payload: dict = Body(...), db: Session = Depends(get_db))
             status_code=422,
             detail=f"tipo invalido. Use uno de: {allowed}",
         )
+    raw_fc = payload.get("fecha_caracas")
+    if raw_fc is not None and not isinstance(raw_fc, str):
+        raw_fc = str(raw_fc)
+    try:
+        fecha_ref = parse_fecha_referencia_negocio(raw_fc)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     inicio = datetime.now(timezone.utc).isoformat()
     try:
-        res = notificaciones_tabs.ejecutar_envio_caso_manual(db, tipo)
+        res = notificaciones_tabs.ejecutar_envio_caso_manual(
+            db, tipo, fecha_referencia=fecha_ref
+        )
         para_persist = {k: v for k, v in res.items() if k != "mensaje"}
         para_persist["detalles"] = {"tipo_caso": tipo}
         persist_ultimo_envio_batch(
@@ -1746,7 +1763,16 @@ def get_historial_envio_comprobante_pdf(
 
 
 @router.get("/clientes-retrasados", response_model=dict)
-def get_clientes_retrasados(db: Session = Depends(get_db)):
+def get_clientes_retrasados(
+    db: Session = Depends(get_db),
+    fecha_caracas: Optional[str] = Query(
+        None,
+        description=(
+            "Fecha de referencia en America/Caracas (YYYY-MM-DD). "
+            "Listado como si fuera ese día (p. ej. envío atrasado). Omitir = hoy."
+        ),
+    ),
+):
     """
     Clientes a notificar por cuotas no pagadas, agrupados por reglas.
     Politica: no se listan avisos antes del vencimiento ni el dia del vencimiento;
@@ -1762,7 +1788,11 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     Solo cuotas con fecha_pago nula: si se registra un pago que liquida la cuota,
     deja de listarse en la siguiente lectura (sin depender de un job de refresco).
     """
-    hoy = hoy_negocio()
+    try:
+        ref_opt = parse_fecha_referencia_negocio(fecha_caracas)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    hoy = ref_opt or hoy_negocio()
     fechas_retraso = (hoy - timedelta(days=1), hoy - timedelta(days=5), hoy - timedelta(days=30))
     try:
         rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
@@ -1782,7 +1812,9 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     dias_30_atraso: List[dict] = []  # 30 dÃƒÂ­as atrasado (cuota vencida hace 30 dÃƒÂ­as)
 
     pids_retraso = [c.prestamo_id for c, _ in rows]
-    counts_retraso = contar_cuotas_atraso_por_prestamos(db, pids_retraso)
+    counts_retraso = contar_cuotas_atraso_por_prestamos(
+        db, pids_retraso, fecha_referencia=hoy
+    )
     totales_pendiente_retraso = sum_saldo_pendiente_total_por_prestamos(
         db, pids_retraso
     )
@@ -1879,6 +1911,8 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
 
     return {
         "actualizado_en": hoy.isoformat(),
+        "fecha_referencia_caracas": hoy.isoformat(),
+        "fecha_caracas_solicitada": ref_opt.isoformat() if ref_opt else None,
         "dias_5": dias_5,
         "dias_3": dias_3,
         "dias_1": dias_1,
@@ -1891,14 +1925,27 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
 
 
 @router.get("/cuotas-pendiente-2-dias-antes", response_model=dict)
-def get_cuotas_pendiente_2_dias_antes(db: Session = Depends(get_db)):
+def get_cuotas_pendiente_2_dias_antes(
+    db: Session = Depends(get_db),
+    fecha_caracas: Optional[str] = Query(
+        None,
+        description=(
+            "Fecha de referencia en America/Caracas (YYYY-MM-DD). "
+            "Listado de cuotas con vencimiento = esta fecha + 2 días. Omitir = hoy."
+        ),
+    ),
+):
     """
     Listado ligero: solo cuotas en estado PENDIENTE con fecha_vencimiento = hoy + 2 (Caracas).
     Submenú «2 días antes»; configuración de envíos independiente (PAGO_2_DIAS_ANTES_PENDIENTE).
     """
-    hoy = hoy_negocio()
     try:
-        items = build_cuotas_pendiente_2_dias_antes_items(db)
+        ref_opt = parse_fecha_referencia_negocio(fecha_caracas)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    hoy = ref_opt or hoy_negocio()
+    try:
+        items = build_cuotas_pendiente_2_dias_antes_items(db, fecha_referencia=hoy)
     except Exception as e:
         logger.exception("cuotas-pendiente-2-dias-antes: %s", e)
         raise HTTPException(
@@ -1907,6 +1954,8 @@ def get_cuotas_pendiente_2_dias_antes(db: Session = Depends(get_db)):
         ) from e
     return {
         "actualizado_en": hoy.isoformat(),
+        "fecha_referencia_caracas": hoy.isoformat(),
+        "fecha_caracas_solicitada": ref_opt.isoformat() if ref_opt else None,
         "items": items,
         "total": len(items),
     }
@@ -1934,7 +1983,9 @@ def actualizar_notificaciones(db: Session = Depends(get_db)):
     return ejecutar_actualizacion_notificaciones(db)
 
 
-def build_prejudicial_items(db: Session) -> List[dict]:
+def build_prejudicial_items(
+    db: Session, fecha_referencia: Optional[date] = None
+) -> List[dict]:
     """
     Solo la lista prejudicial (5+ cuotas con estado VENCIDO/MORA, vencidas, saldo pendiente).
     No ejecuta la rama de retrasadas 1/3/5/30 ni contar_cuotas_atraso_por_prestamos masivo.
@@ -1942,7 +1993,7 @@ def build_prejudicial_items(db: Session) -> List[dict]:
     GET /notificaciones-prejudicial debe usar esto (no get_notificaciones_tabs_data entero) para
     evitar timeouts en carteras grandes / cold start en Render.
     """
-    hoy = hoy_negocio()
+    hoy = fecha_referencia or hoy_negocio()
     subq = (
         select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -2031,7 +2082,9 @@ def build_prejudicial_items(db: Session) -> List[dict]:
     return prejudicial
 
 
-def get_notificaciones_tabs_data(db: Session):
+def get_notificaciones_tabs_data(
+    db: Session, fecha_referencia: Optional[date] = None
+):
     """
     Datos para envio de notificaciones (retrasadas, prejudicial).
     Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1/3/5 dias de atraso)
@@ -2045,7 +2098,7 @@ def get_notificaciones_tabs_data(db: Session):
     Prejudicial: por cliente_id, al menos 4 cuotas con cuotas.estado en (VENCIDO, MORA),
     fecha_vencimiento < hoy, sin fecha_pago y saldo pendiente; préstamo no liquidado/desistimiento.
     """
-    hoy = hoy_negocio()
+    hoy = fecha_referencia or hoy_negocio()
     fechas_retraso = (
         hoy - timedelta(days=1),
         hoy - timedelta(days=3),
@@ -2054,7 +2107,9 @@ def get_notificaciones_tabs_data(db: Session):
     )
     rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
     pids_tabs = [c.prestamo_id for c, _ in rows]
-    counts_tabs = contar_cuotas_atraso_por_prestamos(db, pids_tabs)
+    counts_tabs = contar_cuotas_atraso_por_prestamos(
+        db, pids_tabs, fecha_referencia=hoy
+    )
     totales_pendiente_tabs = sum_saldo_pendiente_total_por_prestamos(db, pids_tabs)
 
     dias_5: List[dict] = []
@@ -2117,7 +2172,7 @@ def get_notificaciones_tabs_data(db: Session):
                     )
                 )
 
-    prejudicial = build_prejudicial_items(db)
+    prejudicial = build_prejudicial_items(db, fecha_referencia=hoy)
     enriquecer_items_notificacion_revision_manual(
         db,
         dias_1_retraso + dias_3_retraso + dias_5_retraso + dias_30_retraso,

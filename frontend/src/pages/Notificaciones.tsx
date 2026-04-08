@@ -61,6 +61,13 @@ import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
 import { isRequestCanceled } from '../utils/requestCanceled'
 
+/** Fecha calendario actual en America/Caracas como YYYY-MM-DD (para max en input date). */
+function fechaHoyCaracasISO(): string {
+  return new Date().toLocaleDateString('en-CA', {
+    timeZone: 'America/Caracas',
+  })
+}
+
 export type NotificacionesModulo = 'a1dia' | 'a3cuotas' | 'd2antes'
 
 type TabId = 'dias_1_atraso' | 'prejudicial' | 'd2antes' | 'configuracion'
@@ -381,6 +388,41 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const tabParam = searchParams.get('tab')
 
+  const fcParam = searchParams.get('fc')
+
+  const [fechaReferenciaCaracas, setFechaReferenciaCaracas] = useState(() => {
+    const raw = fcParam?.trim()
+    return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : ''
+  })
+
+  useEffect(() => {
+    const raw = searchParams.get('fc')?.trim()
+    if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      setFechaReferenciaCaracas(prev => (prev === raw ? prev : raw))
+    } else if (!raw) {
+      setFechaReferenciaCaracas(prev => (prev === '' ? prev : ''))
+    }
+  }, [searchParams])
+
+  const setFechaCaracasYUrl = (valor: string) => {
+    const v = valor.trim()
+    setFechaReferenciaCaracas(v)
+    setSearchParams(
+      p => {
+        const next = new URLSearchParams(p)
+        if (!v) next.delete('fc')
+        else next.set('fc', v)
+        return next
+      },
+      { replace: true }
+    )
+  }
+
+  const fechaCaracasApi =
+    fechaReferenciaCaracas && fechaReferenciaCaracas.trim()
+      ? fechaReferenciaCaracas.trim()
+      : undefined
+
   const [activeTab, setActiveTab] = useState<TabId>(() =>
     tabParam && TABS.some(t => t.id === tabParam)
       ? (tabParam as TabId)
@@ -440,9 +482,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const { data, isPending, isFetched, isError, error, refetch, isFetching } =
     useQuery({
-      queryKey: NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
+      queryKey: [
+        ...NOTIFICACIONES_CLIENTES_RETRASADOS_QUERY_KEY,
+        fechaCaracasApi ?? null,
+      ],
 
-      queryFn: () => notificacionService.getClientesRetrasados(),
+      queryFn: () => notificacionService.getClientesRetrasados(fechaCaracasApi),
 
       // Siempre considerar obsoleto: al volver a la pestaña o tras invalidar por pagos, se refetch al instante.
       staleTime: 0,
@@ -464,9 +509,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     refetch: refetchD2,
     isFetching: isFetchingD2,
   } = useQuery({
-    queryKey: NOTIFICACIONES_D2_ANTES_QUERY_KEY,
+    queryKey: [...NOTIFICACIONES_D2_ANTES_QUERY_KEY, fechaCaracasApi ?? null],
 
-    queryFn: () => notificacionService.getCuotasPendiente2DiasAntes(),
+    queryFn: () =>
+      notificacionService.getCuotasPendiente2DiasAntes(fechaCaracasApi),
 
     staleTime: 0,
 
@@ -484,9 +530,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     refetch: refetchPrej,
     isFetching: isFetchingPrej,
   } = useQuery({
-    queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+    queryKey: [
+      ...NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+      fechaCaracasApi ?? null,
+    ],
 
-    queryFn: () => notificacionService.listarNotificacionesPrejudiciales(),
+    queryFn: () =>
+      notificacionService.listarNotificacionesPrejudiciales(
+        undefined,
+        fechaCaracasApi
+      ),
 
     staleTime: 0,
 
@@ -707,6 +760,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     try {
       const res = await notificacionService.enviarNotificacionesPrejudiciales({
         signal: ac.signal,
+        fechaCaracas: fechaCaracasApi,
       })
 
       toast.success(
@@ -764,7 +818,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     try {
       const res = await notificacionService.enviarCasoManual(
         'PAGO_2_DIAS_ANTES_PENDIENTE',
-        { signal: ac.signal }
+        { signal: ac.signal, fechaCaracas: fechaCaracasApi }
       )
 
       toast.success(
@@ -822,7 +876,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     try {
       const res = await notificacionService.enviarCasoManual(
         'PAGO_1_DIA_ATRASADO',
-        { signal: ac.signal }
+        { signal: ac.signal, fechaCaracas: fechaCaracasApi }
       )
 
       toast.success(
@@ -1023,6 +1077,37 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const mostrarTablaCuotas = hasColumnasCuota
 
+  const controlFechaReferenciaCaracas = (
+    <div className="flex max-w-full flex-col gap-1 rounded-md border border-gray-200 bg-gray-50/90 px-2 py-1.5 sm:flex-row sm:items-center sm:gap-2">
+      <label
+        htmlFor="fc-notificaciones-caracas"
+        className="whitespace-nowrap text-xs font-medium text-gray-600"
+      >
+        Fecha referencia (Caracas)
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          id="fc-notificaciones-caracas"
+          type="date"
+          max={fechaHoyCaracasISO()}
+          value={fechaReferenciaCaracas}
+          onChange={e => setFechaCaracasYUrl(e.target.value)}
+          className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm"
+          title="Listados y envíos manuales como si fuera este día en America/Caracas (p. ej. si no envió a tiempo). Vacío = hoy."
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8"
+          onClick={() => setFechaCaracasYUrl('')}
+        >
+          Hoy
+        </Button>
+      </div>
+    </div>
+  )
+
   if (activeTab === 'configuracion') {
     return (
       <div className="space-y-6">
@@ -1032,6 +1117,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           description="Clientes retrasados por fecha de vencimiento y mora"
           actions={
             <div className="flex flex-wrap items-center gap-2">
+              {controlFechaReferenciaCaracas}
+
               <Button
                 variant="outline"
                 onClick={() => void handleRefresh()}
@@ -1111,6 +1198,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           }
           actions={
             <div className="flex flex-wrap items-center gap-2">
+              {controlFechaReferenciaCaracas}
+
               <Button
                 variant="outline"
                 onClick={() => void handleRefresh()}
@@ -1204,6 +1293,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             </CardTitle>
 
             <CardDescription>
+              {fechaCaracasApi ? (
+                <span className="mb-2 block font-medium text-amber-800">
+                  Referencia de listado y envío: {fechaCaracasApi}{' '}
+                  (America/Caracas). Use «Hoy» arriba para volver al día actual.
+                </span>
+              ) : null}
               {modulo === 'a3cuotas'
                 ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
                 : modulo === 'd2antes'

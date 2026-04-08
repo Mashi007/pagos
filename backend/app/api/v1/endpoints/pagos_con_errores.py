@@ -32,12 +32,44 @@ from app.core.deps import get_current_user
 
 from app.models.pago_con_error import PagoConError
 
-from app.core.documento import normalize_documento
+from app.schemas.auth import UserResponse
+
+from app.core.documento import (
+    compose_numero_documento_almacenado,
+    normalize_documento,
+    split_numero_documento_almacenado,
+)
+from app.services.pago_numero_documento import numero_documento_ya_registrado
 
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+_USUARIO_REGISTRO_FALLBACK = "import-masivo@sistema.rapicredit.com"
+
+
+def _usuario_registro_desde_current_user(current_user: Optional[Any]) -> str:
+
+    """Email o identificador estable para auditoría (misma idea que POST /pagos)."""
+
+    if current_user is None:
+
+        return _USUARIO_REGISTRO_FALLBACK
+
+    email = getattr(current_user, "email", None)
+
+    if isinstance(email, str) and email.strip():
+
+        return email.strip()[:255]
+
+    uid = getattr(current_user, "id", None)
+
+    if uid is not None:
+
+        return f"user_id:{uid}@{_USUARIO_REGISTRO_FALLBACK}"[:255]
+
+    return _USUARIO_REGISTRO_FALLBACK
 
 
 
@@ -54,6 +86,8 @@ class PagoConErrorCreate(BaseModel):
     monto_pagado: float
 
     numero_documento: Optional[str] = None
+
+    codigo_documento: Optional[str] = None
 
     institucion_bancaria: Optional[str] = None
 
@@ -82,6 +116,8 @@ class PagoConErrorUpdate(BaseModel):
     monto_pagado: Optional[float] = None
 
     numero_documento: Optional[str] = None
+
+    codigo_documento: Optional[str] = None
 
     institucion_bancaria: Optional[str] = None
 
@@ -127,6 +163,8 @@ def _pago_con_error_to_response(row: PagoConError) -> dict:
 
     fecha_pago_str = fp.date().isoformat() if hasattr(fp, "date") and fp else (fp.isoformat() if fp else "")
 
+    _nb, _nc = split_numero_documento_almacenado(row.numero_documento)
+
     return {
 
         "id": row.id,
@@ -139,7 +177,9 @@ def _pago_con_error_to_response(row: PagoConError) -> dict:
 
         "monto_pagado": float(row.monto_pagado) if row.monto_pagado is not None else 0,
 
-        "numero_documento": row.numero_documento or "",
+        "numero_documento": _nb or (row.numero_documento or ""),
+
+        "codigo_documento": _nc or "",
 
         "institucion_bancaria": row.institucion_bancaria,
 
@@ -297,7 +337,15 @@ def listar_pagos_con_errores(
 
 @router.post("", response_model=dict, status_code=201)
 
-def crear_pago_con_error(payload: PagoConErrorCreate, db: Session = Depends(get_db)):
+def crear_pago_con_error(
+
+    payload: PagoConErrorCreate,
+
+    db: Session = Depends(get_db),
+
+    current_user: UserResponse = Depends(get_current_user),
+
+):
 
     """Crea un pago con errores desde Carga Masiva (Revisar Pagos)."""
 
@@ -309,9 +357,27 @@ def crear_pago_con_error(payload: PagoConErrorCreate, db: Session = Depends(get_
 
         raise HTTPException(status_code=400, detail="fecha_pago debe ser YYYY-MM-DD")
 
-    num_norm = normalize_documento(payload.numero_documento)
+    num_norm = compose_numero_documento_almacenado(
+
+        payload.numero_documento,
+
+        getattr(payload, "codigo_documento", None),
+
+    )
+
+    if num_norm and numero_documento_ya_registrado(db, num_norm):
+
+        raise HTTPException(
+
+            status_code=409,
+
+            detail="Ya existe un pago o registro en revisión con la misma combinación comprobante + código.",
+
+        )
 
     ref = (num_norm or (payload.numero_documento or "").strip() or "N/A")[:100]
+
+    usuario_registro = _usuario_registro_desde_current_user(current_user)
 
     row = PagoConError(
 
@@ -330,6 +396,8 @@ def crear_pago_con_error(payload: PagoConErrorCreate, db: Session = Depends(get_
         estado="PENDIENTE",
 
         conciliado=payload.conciliado if payload.conciliado is not None else False,
+
+        usuario_registro=usuario_registro,
 
         notas=payload.notas,
 
@@ -357,13 +425,23 @@ def crear_pago_con_error(payload: PagoConErrorCreate, db: Session = Depends(get_
 
 @router.post("/batch", response_model=dict, status_code=201)
 
-def crear_pagos_con_error_batch(body: PagoConErrorBatchBody, db: Session = Depends(get_db)):
+def crear_pagos_con_error_batch(
+
+    body: PagoConErrorBatchBody,
+
+    db: Session = Depends(get_db),
+
+    current_user: UserResponse = Depends(get_current_user),
+
+):
 
     """Crea varios pagos con errores en una sola transaccion (Guardar todos desde Carga Masiva)."""
 
     results: list[dict] = []
 
     try:
+
+        usuario_registro = _usuario_registro_desde_current_user(current_user)
 
         for payload in body.pagos:
 
@@ -381,7 +459,31 @@ def crear_pagos_con_error_batch(body: PagoConErrorBatchBody, db: Session = Depen
 
                 continue
 
-            num_norm = normalize_documento(payload.numero_documento)
+            num_norm = compose_numero_documento_almacenado(
+
+                payload.numero_documento,
+
+                getattr(payload, "codigo_documento", None),
+
+            )
+
+            if num_norm and numero_documento_ya_registrado(db, num_norm):
+
+                results.append(
+
+                    {
+
+                        "success": False,
+
+                        "error": "Ya existe un pago o registro con la misma combinación comprobante + código.",
+
+                        "payload_index": len(results),
+
+                    }
+
+                )
+
+                continue
 
             ref = (num_norm or (payload.numero_documento or "").strip() or "N/A")[:100]
 
@@ -402,6 +504,8 @@ def crear_pagos_con_error_batch(body: PagoConErrorBatchBody, db: Session = Depen
                 estado="PENDIENTE",
 
                 conciliado=payload.conciliado if payload.conciliado is not None else False,
+
+                usuario_registro=usuario_registro,
 
                 notas=payload.notas,
 

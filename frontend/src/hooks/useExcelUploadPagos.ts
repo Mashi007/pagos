@@ -55,6 +55,7 @@ import {
   convertirFechaExcelPago,
   convertirFechaParaBackendPago,
   validatePagoField,
+  claveDocumentoExcelCompuesta,
   validateExcelFile,
   validateExcelData,
   sanitizeFileName,
@@ -113,6 +114,12 @@ function filaRequiereAdvertenciaMontoAlto(row: PagoExcelRow): boolean {
   return montoFilaParaAdvertenciaMoneda(row) >= MONTO_MIN_ADVERTENCIA_MONEDA
 }
 
+function codigoDocumentoOpcionalFila(row: PagoExcelRow): string | null {
+  const c = String(row.codigo_documento ?? '').trim()
+
+  return c ? c : null
+}
+
 /** Mapas de BD tras validar-filas-batch (también en refs para edición en vivo). */
 export type MapsValidacionBatchPagos = {
   cedulasExistentesBD: Set<string>
@@ -124,8 +131,8 @@ export type MapsValidacionBatchPagos = {
 
 /**
  * Validación de cédula y documento alineada con el batch (sin API).
- * Duplicado en archivo: mismo texto de regla; si el documento está en
- * `documentosRepetidosArchivoJustificados`, el documento pasa (un comprobante, varias filas/cuotas).
+ * Duplicado en archivo: misma clave compuesta (comprobante + código opcional); si está en
+ * `documentosRepetidosArchivoJustificados`, pasa (un comprobante, varias filas/cuotas).
  */
 export function applyRowValidationsSync(
   processed: PagoExcelRow[],
@@ -134,8 +141,11 @@ export function applyRowValidationsSync(
 ): PagoExcelRow[] {
   const docFreq = new Map<string, number>()
   processed.forEach(r => {
-    const docNorm = normalizarNumeroDocumento(r.numero_documento)
-    if (docNorm) docFreq.set(docNorm, (docFreq.get(docNorm) || 0) + 1)
+    const clave = claveDocumentoExcelCompuesta(
+      r.numero_documento,
+      r.codigo_documento ?? null
+    )
+    if (clave) docFreq.set(clave, (docFreq.get(clave) || 0) + 1)
   })
   const documentosDuplicadosEnArchivo = new Set(
     Array.from(docFreq.entries())
@@ -152,6 +162,10 @@ export function applyRowValidationsSync(
 
   return processed.map(r => {
     const docNorm = normalizarNumeroDocumento(r.numero_documento)
+    const claveDoc = claveDocumentoExcelCompuesta(
+      r.numero_documento,
+      r.codigo_documento ?? null
+    )
     const {
       _prestamoIdExistenteDuplicadoBD: _omitDup,
       _pagoIdExistenteDuplicadoBD: _omitPagoDup,
@@ -165,14 +179,14 @@ export function applyRowValidationsSync(
     })
 
     const esDuplicadoEnArchivo =
-      !!docNorm && documentosDuplicadosEnArchivo.has(docNorm)
+      !!claveDoc && documentosDuplicadosEnArchivo.has(claveDoc)
     const esDuplicadoEnBD =
-      !!docNorm && maps.documentosDuplicadosBD.has(docNorm)
+      !!claveDoc && maps.documentosDuplicadosBD.has(claveDoc)
 
     let vDoc: { isValid: boolean; message?: string }
     if (esDuplicadoEnArchivo) {
       const justificado =
-        !!docNorm && documentosRepetidosArchivoJustificados.has(docNorm)
+        !!claveDoc && documentosRepetidosArchivoJustificados.has(claveDoc)
       vDoc = {
         isValid: justificado,
         message: 'Documento repetido en este archivo',
@@ -180,11 +194,13 @@ export function applyRowValidationsSync(
     } else if (esDuplicadoEnBD) {
       vDoc = {
         isValid: false,
-        message: `Documento ya existe en la base de datos${maps.detalleDuplicadosBD.get(docNorm) || ''}`,
+        message: `Documento ya existe en la base de datos${maps.detalleDuplicadosBD.get(claveDoc) || maps.detalleDuplicadosBD.get(docNorm) || ''}`,
       }
     } else {
       vDoc = validatePagoField('numero_documento', r.numero_documento, {
         documentosEnArchivo: documentosDuplicadosEnArchivo,
+
+        codigoDocumento: r.codigo_documento ?? null,
       })
     }
 
@@ -204,12 +220,17 @@ export function applyRowValidationsSync(
       !newValidation['numero_documento']?.isValid
 
     const prestamoDupBd =
-      esDuplicadoEnBD && docNorm
-        ? (maps.prestamoPorDocDupBD.get(docNorm) ?? null)
+      esDuplicadoEnBD && claveDoc
+        ? (maps.prestamoPorDocDupBD.get(claveDoc) ??
+          maps.prestamoPorDocDupBD.get(docNorm) ??
+          null)
         : undefined
 
     const pagoDupBd =
-      esDuplicadoEnBD && docNorm ? maps.pagoPorDocDupBD.get(docNorm) : undefined
+      esDuplicadoEnBD && claveDoc
+        ? (maps.pagoPorDocDupBD.get(claveDoc) ??
+          maps.pagoPorDocDupBD.get(docNorm))
+        : undefined
 
     return {
       ...restRow,
@@ -931,6 +952,8 @@ export function useExcelUploadPagos({
 
           numero_documento: numeroDoc || null,
 
+          codigo_documento: codigoDocumentoOpcionalFila(currentRow),
+
           moneda_registro: regMonFila.moneda_registro,
 
           ...(regMonFila.tasa_cambio_manual != null
@@ -1053,6 +1076,8 @@ export function useExcelUploadPagos({
 
           numero_documento: numeroDoc || '',
 
+          codigo_documento: codigoDocumentoOpcionalFila(row),
+
           institucion_bancaria: institucionBancariaDesdeExcel(
             row.institucion_bancaria ?? undefined
           ),
@@ -1168,6 +1193,8 @@ export function useExcelUploadPagos({
 
               numero_documento: numeroDoc || null,
 
+              codigo_documento: codigoDocumentoOpcionalFila(row),
+
               institucion_bancaria: institucionBancariaDesdeExcel(
                 row.institucion_bancaria ?? undefined
               ),
@@ -1245,6 +1272,8 @@ export function useExcelUploadPagos({
 
               numero_documento:
                 normalizarNumeroDocumento(row.numero_documento) || null,
+
+              codigo_documento: codigoDocumentoOpcionalFila(row),
 
               institucion_bancaria: institucionBancariaDesdeExcel(
                 row.institucion_bancaria ?? undefined
@@ -1339,6 +1368,8 @@ export function useExcelUploadPagos({
 
             numero_documento: numeroDoc || null,
 
+            codigo_documento: codigoDocumentoOpcionalFila(row),
+
             institucion_bancaria: institucionBancariaDesdeExcel(
               row.institucion_bancaria ?? undefined
             ),
@@ -1377,6 +1408,8 @@ export function useExcelUploadPagos({
             monto_pagado: Number(row.monto_pagado) || 0,
 
             numero_documento: numeroDoc || null,
+
+            codigo_documento: codigoDocumentoOpcionalFila(row),
 
             institucion_bancaria: institucionBancariaDesdeExcel(
               row.institucion_bancaria ?? undefined
@@ -1493,6 +1526,7 @@ export function useExcelUploadPagos({
             new Date().toISOString().split('T')[0],
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
+          codigo_documento: codigoDocumentoOpcionalFila(row),
           institucion_bancaria: institucionBancariaDesdeExcel(
             row.institucion_bancaria ?? undefined
           ),
@@ -1521,6 +1555,7 @@ export function useExcelUploadPagos({
             new Date().toISOString().split('T')[0],
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
+          codigo_documento: codigoDocumentoOpcionalFila(row),
           institucion_bancaria: institucionBancariaDesdeExcel(
             row.institucion_bancaria ?? undefined
           ),
@@ -1620,6 +1655,7 @@ export function useExcelUploadPagos({
             new Date().toISOString().split('T')[0],
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
+          codigo_documento: codigoDocumentoOpcionalFila(row),
           institucion_bancaria: institucionBancariaDesdeExcel(
             row.institucion_bancaria ?? undefined
           ),
@@ -1648,6 +1684,7 @@ export function useExcelUploadPagos({
             new Date().toISOString().split('T')[0],
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
+          codigo_documento: codigoDocumentoOpcionalFila(row),
           institucion_bancaria: institucionBancariaDesdeExcel(
             row.institucion_bancaria ?? undefined
           ),
@@ -1829,6 +1866,8 @@ export function useExcelUploadPagos({
         monto_pagado: Number(row.monto_pagado) || 0,
 
         numero_documento: normalizarNumeroDocumento(row.numero_documento) || '',
+
+        codigo_documento: codigoDocumentoOpcionalFila(row),
 
         institucion_bancaria: institucionBancariaDesdeExcel(
           row.institucion_bancaria ?? undefined
@@ -2013,9 +2052,12 @@ export function useExcelUploadPagos({
       const docFreq = new Map<string, number>()
 
       processed.forEach(r => {
-        const docNorm = normalizarNumeroDocumento(r.numero_documento)
+        const clave = claveDocumentoExcelCompuesta(
+          r.numero_documento,
+          r.codigo_documento ?? null
+        )
 
-        if (docNorm) docFreq.set(docNorm, (docFreq.get(docNorm) || 0) + 1)
+        if (clave) docFreq.set(clave, (docFreq.get(clave) || 0) + 1)
       })
 
       const documentosDuplicadosEnArchivo = new Set(
@@ -2035,7 +2077,12 @@ export function useExcelUploadPagos({
       const todosDocumentos = [
         ...new Set(
           processed
-            .map(r => normalizarNumeroDocumento(r.numero_documento))
+            .map(r =>
+              claveDocumentoExcelCompuesta(
+                r.numero_documento,
+                r.codigo_documento ?? null
+              )
+            )
             .filter(d => !!d)
         ),
       ]
@@ -2273,6 +2320,8 @@ export function useExcelUploadPagos({
 
           let linkCol = -1
 
+          let codigoCol = -1
+
           let cedulaHeaderMatched = false
 
           for (let i = 0; i < Math.max(headerRow.length, 10); i++) {
@@ -2355,6 +2404,23 @@ export function useExcelUploadPagos({
               hi === 'ver imagen'
             )
               linkCol = i
+
+            if (
+              codigoCol < 0 &&
+              (match(
+                i,
+                'codigo documento',
+                'código documento',
+                'codigo_doc',
+                'cod doc',
+                'cod. documento'
+              ) ||
+                h(i) === 'codigo' ||
+                h(i) === 'código')
+            ) {
+              const hx = h(i)
+              if (!hx.includes('postal') && !hx.includes('zip')) codigoCol = i
+            }
           }
 
           return {
@@ -2368,6 +2434,7 @@ export function useExcelUploadPagos({
             tasaCol,
             bancoCol,
             linkCol,
+            codigoCol,
           }
         })()
 
@@ -2487,6 +2554,13 @@ export function useExcelUploadPagos({
 
           const link_comprobante = linkComprobanteDesdeCeldaExcel(linkRaw)
 
+          const codigoDocRaw =
+            cols.codigoCol >= 0 && row[cols.codigoCol] != null
+              ? String(row[cols.codigoCol]).trim()
+              : ''
+
+          const codigo_documento = codigoDocRaw ? codigoDocRaw : null
+
           const numeroDocStr =
             numeroDoc && numeroDoc !== 'NaN'
               ? (
@@ -2508,6 +2582,8 @@ export function useExcelUploadPagos({
             monto_pagado: monto,
 
             numero_documento: numeroDocStr || (numeroDoc ?? ''),
+
+            codigo_documento,
 
             prestamo_id: Number.isNaN(prestamoId) ? null : prestamoId,
 
@@ -2821,6 +2897,9 @@ export function useExcelUploadPagos({
               ;(updated as any).tasa_cambio_manual =
                 Number.isFinite(n) && n > 0 ? n : undefined
             }
+          } else if (field === 'codigo_documento') {
+            const c = String(value ?? '').trim()
+            ;(updated as any).codigo_documento = c ? c : null
           } else {
             ;(updated as any)[field] =
               field === 'monto_pagado' ? Number(value) || 0 : value
@@ -2828,49 +2907,51 @@ export function useExcelUploadPagos({
 
           // REGLA ESTRICTA: ningun prestamo_id sin confirmacion de columna
 
-          const documentosEnArchivo = new Set<string>()
+          const afectaClaveDocumento =
+            field === 'numero_documento' || field === 'codigo_documento'
 
-          prev.forEach(other => {
-            if (other._rowIndex !== row._rowIndex) {
-              const docNorm = (
-                normalizarNumeroDocumento(other.numero_documento) || ''
-              ).trim()
+          if (afectaClaveDocumento) {
+            const documentosEnArchivo = new Set<string>()
+            prev.forEach(other => {
+              if (other._rowIndex === row._rowIndex) return
+              const cl = claveDocumentoExcelCompuesta(
+                other.numero_documento,
+                other.codigo_documento ?? null
+              )
+              if (cl) documentosEnArchivo.add(cl)
+            })
 
-              if (docNorm) documentosEnArchivo.add(docNorm)
-            }
-          })
-
-          if (field === 'numero_documento') {
             const docFreq = new Map<string, number>()
             prev.forEach(o => {
-              const rowData =
-                o._rowIndex === row._rowIndex
-                  ? {
-                      ...o,
-                      numero_documento: (updated as any).numero_documento,
-                    }
-                  : o
-              const d = normalizarNumeroDocumento(rowData.numero_documento)
-              if (d) docFreq.set(d, (docFreq.get(d) || 0) + 1)
+              const rowData = o._rowIndex === row._rowIndex ? updated : o
+              const cl = claveDocumentoExcelCompuesta(
+                rowData.numero_documento,
+                rowData.codigo_documento ?? null
+              )
+              if (cl) docFreq.set(cl, (docFreq.get(cl) || 0) + 1)
             })
             const documentosDuplicadosEnArchivo = new Set(
               Array.from(docFreq.entries())
                 .filter(([, c]) => c > 1)
                 .map(([d]) => d)
             )
-            const docNorm = normalizarNumeroDocumento(
-              (updated as any).numero_documento
+
+            const claveCur = claveDocumentoExcelCompuesta(
+              updated.numero_documento,
+              updated.codigo_documento ?? null
             )
+            const docNorm = normalizarNumeroDocumento(updated.numero_documento)
+
             const dupArchivo =
-              !!docNorm && documentosDuplicadosEnArchivo.has(docNorm)
+              !!claveCur && documentosDuplicadosEnArchivo.has(claveCur)
             const dupBD =
-              !!docNorm && documentosDuplicadosBDRef.current.has(docNorm)
+              !!claveCur && documentosDuplicadosBDRef.current.has(claveCur)
 
             let vDoc: { isValid: boolean; message?: string }
             if (
               dupArchivo &&
-              docNorm &&
-              documentosRepetidosArchivoJustificadosRef.current.has(docNorm)
+              claveCur &&
+              documentosRepetidosArchivoJustificadosRef.current.has(claveCur)
             ) {
               vDoc = {
                 isValid: true,
@@ -2884,13 +2965,16 @@ export function useExcelUploadPagos({
             } else if (dupBD) {
               vDoc = {
                 isValid: false,
-                message: `Documento ya existe en la base de datos${detalleDuplicadosBDRef.current.get(docNorm) || ''}`,
+                message: `Documento ya existe en la base de datos${detalleDuplicadosBDRef.current.get(claveCur) || detalleDuplicadosBDRef.current.get(docNorm) || ''}`,
               }
             } else {
               vDoc = validatePagoField(
                 'numero_documento',
-                (updated as any).numero_documento,
-                { documentosEnArchivo: documentosDuplicadosEnArchivo }
+                updated.numero_documento,
+                {
+                  documentosEnArchivo: documentosDuplicadosEnArchivo,
+                  codigoDocumento: updated.codigo_documento ?? null,
+                }
               )
             }
 
@@ -2905,9 +2989,13 @@ export function useExcelUploadPagos({
               !updated._validation.monto_pagado?.isValid ||
               !vDoc.isValid
 
-            if (dupBD && docNorm) {
-              const pr = prestamoPorDocDupBDRef.current.get(docNorm)
-              const pg = pagoPorDocDupBDRef.current.get(docNorm)
+            if (dupBD && claveCur) {
+              const pr =
+                prestamoPorDocDupBDRef.current.get(claveCur) ??
+                prestamoPorDocDupBDRef.current.get(docNorm)
+              const pg =
+                pagoPorDocDupBDRef.current.get(claveCur) ??
+                pagoPorDocDupBDRef.current.get(docNorm)
               if (pr !== undefined)
                 (updated as any)._prestamoIdExistenteDuplicadoBD = pr
               if (pg !== undefined)
@@ -2995,7 +3083,11 @@ export function useExcelUploadPagos({
         })
       )
 
-      if (field === 'numero_documento' || field === 'cedula') {
+      if (
+        field === 'numero_documento' ||
+        field === 'codigo_documento' ||
+        field === 'cedula'
+      ) {
         scheduleRevalidarBatchBd()
       }
     },
@@ -3102,9 +3194,9 @@ export function useExcelUploadPagos({
   }, [])
 
   const justificarDocumentoRepetidoEnArchivo = useCallback(
-    (docNormRaw: string) => {
-      const key = normalizarNumeroDocumento(docNormRaw)
-      if (!key) return
+    (claveDocRaw: string) => {
+      const claveCompuesta = (claveDocRaw || '').trim()
+      if (!claveCompuesta) return
 
       const maps: MapsValidacionBatchPagos = {
         cedulasExistentesBD: cedulasExistentesBDRef.current,
@@ -3114,13 +3206,17 @@ export function useExcelUploadPagos({
         pagoPorDocDupBD: pagoPorDocDupBDRef.current,
       }
 
-      const dupPrestamoBd = prestamoPorDocDupBDRef.current.get(key) ?? null
+      const dupPrestamoBd =
+        prestamoPorDocDupBDRef.current.get(claveCompuesta) ?? null
 
       setExcelData(prev => {
         const usados = new Set<string>()
         const mapped = prev.map(r => {
-          const dn = normalizarNumeroDocumento(r.numero_documento)
-          if (dn !== key) return r
+          const clave = claveDocumentoExcelCompuesta(
+            r.numero_documento,
+            r.codigo_documento ?? null
+          )
+          if (clave !== claveCompuesta) return r
 
           const raw = String(r.numero_documento ?? '').trim()
           if (SUFIJO_VISTO_ARCHIVO_RE.test(raw)) return r
@@ -3157,8 +3253,8 @@ export function useExcelUploadPagos({
 
   /** Admin: permite duplicado en archivo sin tocar el texto del documento (decisión humana distinta a añadir sufijos). */
   const marcarJustificadoDocumentoRepetidoEnArchivo = useCallback(
-    (docNormRaw: string) => {
-      const key = normalizarNumeroDocumento(docNormRaw)
+    (claveDocRaw: string) => {
+      const key = (claveDocRaw || '').trim()
       if (!key) return
       setDocumentosRepetidosArchivoJustificados(prev =>
         prev.includes(key) ? prev : [...prev, key]

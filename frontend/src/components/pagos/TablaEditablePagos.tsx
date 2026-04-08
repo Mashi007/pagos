@@ -32,6 +32,7 @@ import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
 
 import {
   cedulaLookupParaFila,
+  claveDocumentoExcelCompuesta,
   convertirFechaParaBackendPago,
   buscarEnMapaPrestamos,
   normalizarNumeroDocumento,
@@ -96,17 +97,21 @@ export interface FilaEditableProps {
 
   onRefrescarValidacionDocumentosBd?: () => Promise<void>
 
-  /** Claves de documento (normalizadas) marcadas por admin: duplicado en archivo permitido (mismo comprobante, varias filas). */
+  /** Claves compuestas (comprobante + código opc.) marcadas por admin: duplicado en archivo permitido. */
 
   documentosRepetidosArchivoJustificados?: string[]
 
-  /** Añade sufijos _A#### / _P#### al documento en cada fila (tras confirmación en diálogo). */
+  /** Añade sufijos _A#### / _P#### al comprobante en cada fila con la misma clave compuesta. */
 
-  onJustificarDocumentoRepetidoArchivo?: (docNorm: string) => void
+  onJustificarDocumentoRepetidoArchivo?: (
+    claveDocumentoCompuesta: string
+  ) => void
 
-  /** Marca el duplicado en archivo como revisado sin modificar el texto del documento. */
+  /** Marca la clave compuesta duplicada como revisada sin modificar el texto del comprobante. */
 
-  onMarcarDocumentoRepetidoArchivoJustificado?: (docNorm: string) => void
+  onMarcarDocumentoRepetidoArchivoJustificado?: (
+    claveDocumentoCompuesta: string
+  ) => void
 }
 
 function CeldaEditable({
@@ -697,7 +702,10 @@ export function TablaEditablePagos({
   const docFreqEnArchivo = useMemo(() => {
     const m = new Map<string, number>()
     for (const r of rows) {
-      const d = normalizarNumeroDocumento(r.numero_documento)
+      const d = claveDocumentoExcelCompuesta(
+        r.numero_documento,
+        r.codigo_documento ?? null
+      )
       if (d) m.set(d, (m.get(d) || 0) + 1)
     }
     return m
@@ -770,6 +778,10 @@ export function TablaEditablePagos({
 
               <th className="min-w-[160px] border-r p-2 text-left font-semibold">
                 Documento
+              </th>
+
+              <th className="min-w-[100px] border-r p-2 text-left font-semibold">
+                Código
               </th>
 
               <th className="min-w-[200px] border-r p-2 text-left font-semibold">
@@ -928,6 +940,16 @@ export function TablaEditablePagos({
 
                 <td className="border-r p-2">
                   <CeldaEditable
+                    value={row.codigo_documento ?? ''}
+                    isValid={row._validation.numero_documento?.isValid}
+                    errorMsg={undefined}
+                    placeholder="Opcional"
+                    onChange={v => onUpdateCell(row, 'codigo_documento', v)}
+                  />
+                </td>
+
+                <td className="border-r p-2">
+                  <CeldaEditable
                     value={row.link_comprobante ?? ''}
                     isValid={row._validation.link_comprobante?.isValid}
                     errorMsg={row._validation.link_comprobante?.message}
@@ -1025,15 +1047,16 @@ export function TablaEditablePagos({
                             ? pagoIdDesdeMensaje
                             : null
 
-                      const docNormAccion = normalizarNumeroDocumento(
-                        row.numero_documento
+                      const claveDocAccion = claveDocumentoExcelCompuesta(
+                        row.numero_documento,
+                        row.codigo_documento ?? null
                       )
                       const esDupArchivoFila =
-                        !!docNormAccion &&
-                        (docFreqEnArchivo.get(docNormAccion) || 0) > 1
+                        !!claveDocAccion &&
+                        (docFreqEnArchivo.get(claveDocAccion) || 0) > 1
                       const archivoDupJustificado =
-                        !!docNormAccion &&
-                        justificadosArchivoSet.has(docNormAccion)
+                        !!claveDocAccion &&
+                        justificadosArchivoSet.has(claveDocAccion)
 
                       const puedeVistoControl5Bd = pagoIdParaVisto != null
 
@@ -1047,7 +1070,7 @@ export function TablaEditablePagos({
                         /ya existe en la base de datos/i.test(msgDoc)
 
                       const puedeVistoSufijoPorDupBd =
-                        !!docNormAccion &&
+                        !!claveDocAccion &&
                         !!onJustificarDocumentoRepetidoArchivo &&
                         !row._validation?.numero_documento?.isValid &&
                         mensajeIndicaDupDocumentoBd
@@ -1119,15 +1142,15 @@ export function TablaEditablePagos({
                                 // Duplicado en Excel: la decisión (sufijos o solo autorizar) es humana → diálogo.
                                 if (
                                   puedeVistoJustificarArchivo &&
-                                  docNormAccion
+                                  claveDocAccion
                                 ) {
-                                  setVistoArchivoDocNorm(docNormAccion)
+                                  setVistoArchivoDocNorm(claveDocAccion)
                                   setVistoArchivoDialogOpen(true)
                                   return
                                 }
                                 // Duplicado en BD: siempre ofrecer sufijo; control 5 solo si hay pago_id operativo.
                                 if (
-                                  docNormAccion &&
+                                  claveDocAccion &&
                                   onJustificarDocumentoRepetidoArchivo &&
                                   puedeVistoSufijoPorDupBd
                                 ) {
@@ -1137,7 +1160,7 @@ export function TablaEditablePagos({
                                       ? pagoIdParaVisto
                                       : null
                                   )
-                                  setVistoBdDocNorm(docNormAccion)
+                                  setVistoBdDocNorm(claveDocAccion)
                                   setVistoBdDialogOpen(true)
                                 }
                               }}
@@ -1245,8 +1268,8 @@ export function TablaEditablePagos({
             </li>
 
             <li>
-              <strong>Documento</strong>: no puede duplicarse en este archivo ni
-              en la BD.
+              <strong>Documento</strong>: la clave comprobante + código (columna
+              Código opcional) no puede repetirse en este archivo ni en la BD.
             </li>
           </ul>
         </div>

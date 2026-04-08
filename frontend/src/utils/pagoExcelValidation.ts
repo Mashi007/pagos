@@ -2,7 +2,7 @@
 
  * Validación carga masiva de pagos (Excel).
 
- * ÚNICA REGLA: no se acepta documento duplicado (ni en el archivo ni en el sistema).
+ * Clave única: comprobante normalizado + código opcional (misma lógica que POST /pagos).
 
  */
 
@@ -12,10 +12,13 @@ import {
   sanitizeFileName,
 } from './excelValidation'
 
+import { composeNumeroDocumentoAlmacenado } from './documentoPago'
+
 /** Texto de observación por columna; se muestra solo en la celda correspondiente del Excel. Especifican exactamente qué falla. */
 
 export const OBSERVACIONES_POR_CAMPO: Record<string, string> = {
-  numero_documento: 'Duplicado Excel (mismo documento repetido en el archivo)',
+  numero_documento:
+    'Duplicado Excel (misma clave comprobante + código repetida en el archivo)',
 
   fecha_pago: 'Fecha inválida o formato incorrecto (use DD/MM/YYYY)',
 
@@ -49,6 +52,9 @@ export interface PagoExcelRow {
   monto_pagado: number
 
   numero_documento: string
+
+  /** Columna opcional «Código» (desambigua mismo comprobante). */
+  codigo_documento?: string | null
 
   prestamo_id: number | null
 
@@ -297,6 +303,18 @@ function limpiarDocumento(s: string): string {
 
  */
 
+/** Clave canónica compuesta para duplicados (archivo / BD / API). */
+export function claveDocumentoExcelCompuesta(
+  numero_documento: unknown,
+  codigo_documento?: string | null
+): string {
+  const base = normalizarNumeroDocumento(numero_documento)
+  return (
+    composeNumeroDocumentoAlmacenado(base || null, codigo_documento ?? null) ||
+    ''
+  )
+}
+
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
 
@@ -384,6 +402,8 @@ export function validatePagoField(
     cedulasInvalidas?: Set<string>
 
     documentosDuplicadosBD?: Set<string>
+
+    codigoDocumento?: string | null
   }
 ): { isValid: boolean; message?: string } {
   // ── CÉDULA ──────────────────────────────────────────────────────────────
@@ -469,19 +489,26 @@ export function validatePagoField(
 
     if (!docNorm) return { isValid: true } // Documento vacío es permitido
 
-    if (options?.documentosDuplicadosBD?.has(docNorm))
+    const clave = claveDocumentoExcelCompuesta(
+      docNorm,
+      options?.codigoDocumento ?? null
+    )
+
+    if (!clave) return { isValid: true }
+
+    if (options?.documentosDuplicadosBD?.has(clave))
       return {
         isValid: false,
         message: 'Documento ya existe en la base de datos',
       }
 
-    if (options?.documentosExistentes?.has(docNorm))
+    if (options?.documentosExistentes?.has(clave))
       return {
         isValid: false,
         message: 'Documento duplicado. No se aceptan duplicados.',
       }
 
-    if (options?.documentosEnArchivo?.has(docNorm))
+    if (options?.documentosEnArchivo?.has(clave))
       return { isValid: false, message: 'Documento repetido en este archivo' }
 
     return { isValid: true }

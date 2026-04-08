@@ -354,6 +354,7 @@ function pagoRowAPagoCreateInicial(
         ? pago.monto_pagado
         : parseFloat(String(pago.monto_pagado || 0)) || 0,
     numero_documento: pago.numero_documento || '',
+    codigo_documento: pago.codigo_documento ?? null,
     institucion_bancaria: pago.institucion_bancaria ?? null,
     notas: pago.notas ?? null,
     moneda_registro: pago.moneda_registro === 'BS' ? 'BS' : 'USD',
@@ -3777,6 +3778,7 @@ export function EditarRevisionManual() {
           onSuccess={onExitoModalPagoRevision}
           pagoInicial={pagoModalInicial}
           pagoId={pagoModalId}
+          mostrarCampoCodigoDocumento
           prestamoContextoRevisionManualId={
             prestamoData.prestamo_id != null &&
             Number(prestamoData.prestamo_id) > 0

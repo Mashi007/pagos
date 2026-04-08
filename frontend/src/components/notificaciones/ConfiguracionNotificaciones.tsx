@@ -1231,8 +1231,9 @@ export function ConfiguracionNotificaciones({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2">
         <p className="max-w-xl text-sm text-red-900">
-          <strong>Emergencia:</strong> cancela envío/prueba en curso o desbloquea
-          si Guardar dejó el formulario colgado (revise en Red si el PUT siguió).
+          <strong>Emergencia:</strong> cancela envío/prueba en curso o
+          desbloquea si Guardar dejó el formulario colgado (revise en Red si el
+          PUT siguió).
         </p>
 
         <Button

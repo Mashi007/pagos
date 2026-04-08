@@ -16,9 +16,10 @@ Excepcion PAGO_2_DIAS_ANTES_PENDIENTE («2 dias antes»): no se exige plantilla 
 los PDFs de pestañas 2 y 3 son opcionales segun la fila de configuracion.
 """
 import logging
+from datetime import date
 from typing import Callable, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -191,6 +192,15 @@ router_prejudicial = APIRouter(dependencies=[Depends(require_admin)])
 router_masivos = APIRouter(dependencies=[Depends(require_admin)])
 
 
+def _fecha_referencia_desde_query(fecha_caracas: Optional[str]) -> Optional[date]:
+    from app.services.cuota_estado import parse_fecha_referencia_negocio
+
+    try:
+        return parse_fecha_referencia_negocio(fecha_caracas)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
 def _enviar_correos_items(
     items: List[dict],
     asunto_base: str,
@@ -199,6 +209,7 @@ def _enviar_correos_items(
     get_tipo_for_item: Callable[[dict], str],
     db,
     forzar_destinos_prueba: Optional[List[str]] = None,
+    fecha_referencia: Optional[date] = None,
 ) -> dict:
     """
     Envia por Email y/o WhatsApp por cada item.
@@ -320,7 +331,9 @@ def _enviar_correos_items(
                 or (plantilla and plantilla_usa_variables_cobranza(plantilla))
             )
             if need_ctx:
-                ctx, corr = build_contexto_cobranza_para_item(db, item, correlativos_en_batch)
+                ctx, corr = build_contexto_cobranza_para_item(
+                    db, item, correlativos_en_batch, fecha_referencia=fecha_referencia
+                )
                 if ctx is not None:
                     item["contexto_cobranza"] = ctx
                     item["_correlativo_envio"] = corr
@@ -576,10 +589,24 @@ def _enviar_correos_items(
 
 # --- Notificaciones previas (5, 3, 1 d�as antes) ---
 
+_FC_Q = Query(
+    None,
+    description=(
+        "Fecha de referencia America/Caracas (YYYY-MM-DD). Listado/envio como si fuera ese dia. "
+        "Omitir = hoy en Caracas."
+    ),
+)
+
+
 @router_previas.get("")
-def get_notificaciones_previas(estado: str = None, db: Session = Depends(get_db)):
+def get_notificaciones_previas(
+    estado: str = None,
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
     """Lista de notificaciones previas: cuotas que vencen en 5, 3 o 1 d�a. Verifica c�dula y email en tabla clientes."""
-    data = get_notificaciones_tabs_data(db)
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
+    data = get_notificaciones_tabs_data(db, fecha_referencia=fecha_ref)
     items = data["dias_5"] + data["dias_3"] + data["dias_1"]
     return {
         "items": items,
@@ -596,10 +623,14 @@ def _tipo_previas(item: dict) -> str:
 
 
 @router_previas.post("/enviar")
-def enviar_notificaciones_previas(db: Session = Depends(get_db)):
+def enviar_notificaciones_previas(
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
     """Env�a correo a cada cliente en notificaciones previas. Respeta config env�os (habilitado/CCO) desde BD."""
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     config_envios = get_notificaciones_envios_config(db)
-    data = get_notificaciones_tabs_data(db)
+    data = get_notificaciones_tabs_data(db, fecha_referencia=fecha_ref)
     items = data["dias_5"] + data["dias_3"] + data["dias_1"]
     asunto = "Recordatorio: cuota por vencer - Rapicredit"
     cuerpo = (
@@ -611,16 +642,29 @@ def enviar_notificaciones_previas(db: Session = Depends(get_db)):
         "Por favor realice el pago a tiempo.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_previas, db)
+    res = _enviar_correos_items(
+        items,
+        asunto,
+        cuerpo,
+        config_envios,
+        _tipo_previas,
+        db,
+        fecha_referencia=fecha_ref,
+    )
     return {"mensaje": "Env�o de notificaciones previas finalizado.", **res}
 
 
 # --- D�a de pago (vence hoy) ---
 
 @router_dia_pago.get("")
-def get_notificaciones_dia_pago(estado: str = None, db: Session = Depends(get_db)):
+def get_notificaciones_dia_pago(
+    estado: str = None,
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
     """Lista de notificaciones del d�a de pago: cuotas que vencen hoy. Email desde tabla clientes."""
-    data = get_notificaciones_tabs_data(db)
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
+    data = get_notificaciones_tabs_data(db, fecha_referencia=fecha_ref)
     items = data["hoy"]
     return {"items": items, "total": len(items)}
 
@@ -634,10 +678,14 @@ def _tipo_pago_2_dias_antes_pendiente(_item: dict) -> str:
 
 
 @router_dia_pago.post("/enviar")
-def enviar_notificaciones_dia_pago(db: Session = Depends(get_db)):
+def enviar_notificaciones_dia_pago(
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
     """Env�a correo a cada cliente con cuota que vence hoy. Respeta config env�os (habilitado/CCO) desde BD."""
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     config_envios = get_notificaciones_envios_config(db)
-    data = get_notificaciones_tabs_data(db)
+    data = get_notificaciones_tabs_data(db, fecha_referencia=fecha_ref)
     items = data["hoy"]
     asunto = "Vencimiento hoy: cuota de pago - Rapicredit"
     cuerpo = (
@@ -649,16 +697,29 @@ def enviar_notificaciones_dia_pago(db: Session = Depends(get_db)):
         "Por favor realice el pago hoy.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_dia_pago, db)
+    res = _enviar_correos_items(
+        items,
+        asunto,
+        cuerpo,
+        config_envios,
+        _tipo_dia_pago,
+        db,
+        fecha_referencia=fecha_ref,
+    )
     return {"mensaje": "Env�o de notificaciones d�a de pago finalizado.", **res}
 
 
 # --- Notificaciones retrasadas (1, 3, 5 d�as atrasado) ---
 
 @router_retrasadas.get("")
-def get_notificaciones_retrasadas(estado: str = None, db: Session = Depends(get_db)):
+def get_notificaciones_retrasadas(
+    estado: str = None,
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
     """Lista de notificaciones retrasadas: cuotas con 1, 3 o 5 d�as de atraso. Email desde tabla clientes."""
-    data = get_notificaciones_tabs_data(db)
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
+    data = get_notificaciones_tabs_data(db, fecha_referencia=fecha_ref)
     items = (
         data["dias_1_retraso"]
         + data["dias_3_retraso"]
@@ -686,10 +747,14 @@ def _tipo_retrasadas(item: dict) -> str:
 
 
 @router_retrasadas.post("/enviar")
-def enviar_notificaciones_retrasadas(db: Session = Depends(get_db)):
+def enviar_notificaciones_retrasadas(
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
     """Env�a correo a cada cliente con cuota retrasada. Respeta config env�os (habilitado/CCO) desde BD."""
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     config_envios = get_notificaciones_envios_config(db)
-    data = get_notificaciones_tabs_data(db)
+    data = get_notificaciones_tabs_data(db, fecha_referencia=fecha_ref)
     items = (
         data["dias_1_retraso"]
         + data["dias_3_retraso"]
@@ -706,16 +771,29 @@ def enviar_notificaciones_retrasadas(db: Session = Depends(get_db)):
         "Por favor regularice su pago lo antes posible.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_retrasadas, db)
+    res = _enviar_correos_items(
+        items,
+        asunto,
+        cuerpo,
+        config_envios,
+        _tipo_retrasadas,
+        db,
+        fecha_referencia=fecha_ref,
+    )
     return {"mensaje": "Env�o de notificaciones retrasadas finalizado.", **res}
 
 
 # --- Notificaciones prejudiciales (5+ cuotas en VENCIDO o MORA) ---
 
 @router_prejudicial.get("")
-def get_notificaciones_prejudicial(estado: str = None, db: Session = Depends(get_db)):
+def get_notificaciones_prejudicial(
+    estado: str = None,
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
     """Lista de clientes con 5+ cuotas en estado VENCIDO o MORA (prejudicial). Email desde tabla clientes."""
-    items = build_prejudicial_items(db)
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
+    items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
     return {"items": items, "total": len(items)}
 
 
@@ -724,10 +802,14 @@ def _tipo_prejudicial(_item: dict) -> str:
 
 
 @router_prejudicial.post("/enviar")
-def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
+def enviar_notificaciones_prejudicial(
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
     """Env�a correo a cada cliente en situaci�n prejudicial. Respeta config env�os (habilitado/CCO) desde BD."""
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     config_envios = get_notificaciones_envios_config(db)
-    items = build_prejudicial_items(db)
+    items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
     asunto = "Aviso prejudicial - Rapicredit"
     cuerpo = (
         "Estimado/a {nombre} (c�dula {cedula}),\n\n"
@@ -738,7 +820,15 @@ def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
         "Por favor contacte a la entidad para regularizar su situaci�n.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_prejudicial, db)
+    res = _enviar_correos_items(
+        items,
+        asunto,
+        cuerpo,
+        config_envios,
+        _tipo_prejudicial,
+        db,
+        fecha_referencia=fecha_ref,
+    )
     return {"mensaje": "Env�o de notificaciones prejudiciales finalizado.", **res}
 
 
@@ -1039,13 +1129,19 @@ def _resolver_tipo_envio_manual_fijo(tipo_caso: str) -> Callable[[dict], str]:
     return _inner
 
 
-def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
+def ejecutar_envio_caso_manual(
+    db: Session,
+    tipo: str,
+    fecha_referencia: Optional[date] = None,
+) -> dict:
     """
     Envio sincrono solo para un criterio (una fila de configuracion: PAGO_1_DIA_ANTES, etc.).
     No programa tareas en segundo plano ni dispara otros casos: un solo tipo por peticion.
 
     Lista de destinatarios = la misma regla que la pestaña correspondiente; cada correo usa
     unicamente la config de ese tipo (plantilla/CCO/PDF del caso), sin inferir otro tipo por fila.
+
+    fecha_referencia: mismo criterio que ?fecha_caracas= en GET listados (America/Caracas).
     """
     tipo = (tipo or "").strip()
     if tipo not in TIPOS_CASO_MANUAL:
@@ -1102,8 +1198,9 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
         "Saludos,\nRapicredit"
     )
 
+    ref = fecha_referencia
     if tipo == "PREJUDICIAL":
-        items = build_prejudicial_items(db)
+        items = build_prejudicial_items(db, fecha_referencia=ref)
         res = _enviar_correos_items(
             items,
             asunto_prej,
@@ -1111,12 +1208,13 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
             config_envios,
             _resolver_tipo_envio_manual_fijo("PREJUDICIAL"),
             db,
+            fecha_referencia=ref,
         )
     elif tipo == "MASIVOS":
         items = get_items_masivos(db)
         res = ejecutar_envio_masivos_por_campanas(db, config_envios, forzar_habilitado=True)
     else:
-        data = get_notificaciones_tabs_data(db)
+        data = get_notificaciones_tabs_data(db, fecha_referencia=ref)
         if tipo == "PAGO_5_DIAS_ANTES":
             items = data["dias_5"]
             res = _enviar_correos_items(
@@ -1126,6 +1224,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_5_DIAS_ANTES"),
                 db,
+                fecha_referencia=ref,
             )
         elif tipo == "PAGO_3_DIAS_ANTES":
             items = data["dias_3"]
@@ -1136,6 +1235,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_3_DIAS_ANTES"),
                 db,
+                fecha_referencia=ref,
             )
         elif tipo == "PAGO_1_DIA_ANTES":
             items = data["dias_1"]
@@ -1146,9 +1246,10 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_1_DIA_ANTES"),
                 db,
+                fecha_referencia=ref,
             )
         elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
-            items = build_cuotas_pendiente_2_dias_antes_items(db)
+            items = build_cuotas_pendiente_2_dias_antes_items(db, fecha_referencia=ref)
             res = _enviar_correos_items(
                 items,
                 ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE,
@@ -1156,6 +1257,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_2_DIAS_ANTES_PENDIENTE"),
                 db,
+                fecha_referencia=ref,
             )
         elif tipo == "PAGO_DIA_0":
             items = data["hoy"]
@@ -1166,6 +1268,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_DIA_0"),
                 db,
+                fecha_referencia=ref,
             )
         elif tipo == "PAGO_1_DIA_ATRASADO":
             items = data["dias_1_retraso"]
@@ -1176,6 +1279,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_1_DIA_ATRASADO"),
                 db,
+                fecha_referencia=ref,
             )
         elif tipo == "PAGO_3_DIAS_ATRASADO":
             items = data["dias_3_retraso"]
@@ -1186,6 +1290,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_3_DIAS_ATRASADO"),
                 db,
+                fecha_referencia=ref,
             )
         elif tipo == "PAGO_5_DIAS_ATRASADO":
             items = data["dias_5_retraso"]
@@ -1196,6 +1301,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_5_DIAS_ATRASADO"),
                 db,
+                fecha_referencia=ref,
             )
         elif tipo == "PAGO_30_DIAS_ATRASADO":
             items = data["dias_30_retraso"]
@@ -1206,6 +1312,7 @@ def ejecutar_envio_caso_manual(db: Session, tipo: str) -> dict:
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_30_DIAS_ATRASADO"),
                 db,
+                fecha_referencia=ref,
             )
         else:
             raise ValueError("tipo_caso_manual_invalido")

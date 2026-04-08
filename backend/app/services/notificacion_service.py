@@ -91,13 +91,15 @@ def _select_cuotas_pendientes_con_cliente():
     )
 
 
-def build_cuotas_pendiente_2_dias_antes_items(db: Session) -> List[dict]:
+def build_cuotas_pendiente_2_dias_antes_items(
+    db: Session, fecha_referencia: Optional[date] = None
+) -> List[dict]:
     """
     Cuotas con columna estado = PENDIENTE cuya fecha_vencimiento es exactamente
     hoy + 2 días (Caracas). Sin fecha_pago, saldo > tolerancia, préstamo no liquidado/desistimiento.
     Una fila por cuota (misma forma que otras pestañas de notificaciones).
     """
-    hoy = hoy_negocio()
+    hoy = fecha_referencia or hoy_negocio()
     fv_objetivo = hoy + timedelta(days=2)
     q = (
         select(Cuota, Cliente)
@@ -113,7 +115,7 @@ def build_cuotas_pendiente_2_dias_antes_items(db: Session) -> List[dict]:
     if not rows:
         return []
     pids = [c.prestamo_id for c, _ in rows]
-    counts = contar_cuotas_atraso_por_prestamos(db, pids)
+    counts = contar_cuotas_atraso_por_prestamos(db, pids, fecha_referencia=hoy)
     totales = sum_saldo_pendiente_total_por_prestamos(db, pids)
     out: List[dict] = []
     for cuota, cliente in rows:
@@ -259,7 +261,9 @@ def contar_cuotas_pagadas_tabla_amortizacion_ui(
 
 
 def contar_cuotas_atraso_por_prestamos(
-    db: Session, prestamo_ids: Sequence[int]
+    db: Session,
+    prestamo_ids: Sequence[int],
+    fecha_referencia: Optional[date] = None,
 ) -> dict[int, int]:
     """
     Por préstamo: cuotas en atraso con la misma regla que estado de cuenta / amortización
@@ -268,7 +272,7 @@ def contar_cuotas_atraso_por_prestamos(
     ids = sorted({int(x) for x in prestamo_ids if x is not None})
     if not ids:
         return {}
-    hoy = hoy_negocio()
+    hoy = fecha_referencia or hoy_negocio()
     cuotas = (
         db.execute(select(Cuota).where(Cuota.prestamo_id.in_(ids))).scalars().all()
     )

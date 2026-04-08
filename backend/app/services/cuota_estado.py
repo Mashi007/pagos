@@ -40,6 +40,26 @@ def hoy_negocio() -> date:
     return datetime.now(ZoneInfo(TZ_NEGOCIO)).date()
 
 
+def parse_fecha_referencia_negocio(s: str | None) -> date | None:
+    """
+    Parsea fecha_caracas (YYYY-MM-DD) para listados/envíos retroactivos.
+    None o cadena vacía → None (el llamador usa hoy_negocio()).
+    No admite fechas posteriores al hoy de negocio en Caracas.
+    """
+    if s is None:
+        return None
+    raw = str(s).strip()
+    if not raw:
+        return None
+    try:
+        d = date.fromisoformat(raw[:10])
+    except ValueError as e:
+        raise ValueError("fecha_caracas debe ser una fecha valida en formato YYYY-MM-DD") from e
+    if d > hoy_negocio():
+        raise ValueError("fecha_caracas no puede ser posterior a hoy (America/Caracas)")
+    return d
+
+
 def _fecha_vencimiento_date(fecha_vencimiento: date | datetime | None) -> date | None:
     if fecha_vencimiento is None:
         return None

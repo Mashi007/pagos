@@ -6,6 +6,8 @@ from decimal import Decimal
 from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from app.core.documento import normalize_codigo_documento
+
 # Misma zona que `TZ_NEGOCIO` en endpoints de pagos (fecha calendario del negocio).
 TZ_PAGO_CARACAS = "America/Caracas"
 
@@ -30,7 +32,8 @@ class PagoCreate(BaseModel):
     prestamo_id: Optional[int] = None
     fecha_pago: date
     monto_pagado: Decimal
-    numero_documento: str  # Puede repetirse entre pagos; antiduplicado = huella funcional en API.
+    numero_documento: str  # Comprobante visible; con codigo_documento compone clave única en BD.
+    codigo_documento: Optional[str] = None  # Opcional: desambigua mismo comprobante (p. ej. cuota/lote).
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None  # Sí/No en carga masiva
@@ -54,6 +57,16 @@ class PagoCreate(BaseModel):
         if not s:
             raise ValueError("numero_documento es obligatorio")
         return s
+
+    @field_validator("codigo_documento", mode="before")
+    @classmethod
+    def codigo_documento_opcional(cls, v: object) -> Optional[str]:
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s:
+            return None
+        return normalize_codigo_documento(s)
 
     @field_validator("prestamo_id")
     @classmethod
@@ -82,7 +95,8 @@ class PagoUpdate(BaseModel):
     prestamo_id: Optional[int] = None
     fecha_pago: Optional[date] = None
     monto_pagado: Optional[Decimal] = None
-    numero_documento: Optional[str] = None  # Cualquier formato; puede coincidir con otros pagos.
+    numero_documento: Optional[str] = None
+    codigo_documento: Optional[str] = None
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None
@@ -107,6 +121,16 @@ class PagoUpdate(BaseModel):
             raise ValueError("numero_documento no puede estar vacio")
         return s
 
+    @field_validator("codigo_documento", mode="before")
+    @classmethod
+    def codigo_documento_opcional_upd(cls, v: object) -> Optional[str]:
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s:
+            return None
+        return normalize_codigo_documento(s)
+
     @field_validator("prestamo_id")
     @classmethod
     def prestamo_id_en_rango(cls, v: Optional[int]) -> Optional[int]:
@@ -130,6 +154,7 @@ class PagoResponse(BaseModel):
     fecha_pago: date
     monto_pagado: Decimal
     numero_documento: str
+    codigo_documento: Optional[str] = ""
     institucion_bancaria: Optional[str] = None
     estado: str
     fecha_registro: Optional[datetime] = None

@@ -65,6 +65,8 @@ import {
 
 import { hoyYmdCaracas } from '../../utils/fechaZona'
 
+import { splitNumeroDocumentoAlmacenado } from '../../utils/documentoPago'
+
 const DUPLICADO_DOCUMENTO_UI =
   'Este comprobante ya fue registrado. Verifique el numero_documento.'
 
@@ -99,6 +101,12 @@ interface RegistrarPagoFormProps {
    * (p. ej. LIQUIDADO) figure en el selector y pase validación aunque la lista por cédula falle o venga incompleta.
    */
   prestamoContextoRevisionManualId?: number
+
+  /**
+   * Si true, muestra el campo «Código» (mismo comprobante + códigos distintos).
+   * Solo revisión manual debe activarlo; el modal del listado general de pagos lo deja en false.
+   */
+  mostrarCampoCodigoDocumento?: boolean
 }
 
 export function RegistrarPagoForm({
@@ -110,6 +118,7 @@ export function RegistrarPagoForm({
   esPagoConError,
   requiereLinkComprobante,
   prestamoContextoRevisionManualId,
+  mostrarCampoCodigoDocumento = false,
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
 
@@ -130,6 +139,10 @@ export function RegistrarPagoForm({
     notas: pagoInicial?.notas || null,
 
     link_comprobante: pagoInicial?.link_comprobante ?? null,
+
+    codigo_documento:
+      (pagoInicial as { codigo_documento?: string | null })?.codigo_documento ??
+      null,
   })
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -254,6 +267,31 @@ export function RegistrarPagoForm({
       cancelled = true
     }
   }, [debouncedCedula])
+
+  useEffect(() => {
+    if (!isEditing || !pagoId) return
+
+    const existingCode = (pagoInicial as { codigo_documento?: string | null })
+      ?.codigo_documento
+
+    if (existingCode) return
+
+    const raw = (pagoInicial?.numero_documento || '').trim()
+
+    if (!raw) return
+
+    const { base, codigo } = splitNumeroDocumentoAlmacenado(raw)
+
+    if (!codigo) return
+
+    setFormData(prev => ({
+      ...prev,
+
+      numero_documento: base,
+
+      codigo_documento: codigo,
+    }))
+  }, [isEditing, pagoId, pagoInicial])
 
   useEffect(() => {
     if (monedaRegistro !== 'BS') {
@@ -423,10 +461,14 @@ export function RegistrarPagoForm({
     try {
       // Aplicar normalización al número de documento antes de enviar
 
+      const codigoTrim = String(formData.codigo_documento ?? '').trim()
+
       const datosEnvio: any = {
         ...formData,
 
         numero_documento: numeroDocumentoNormalizado,
+
+        codigo_documento: codigoTrim || null,
 
         moneda_registro: monedaRegistro,
 
@@ -556,10 +598,11 @@ export function RegistrarPagoForm({
               <div className="rounded border border-sky-100 bg-sky-50/90 px-3 py-2 text-xs text-sky-950">
                 <p>
                   <strong>Revisión manual:</strong> indique la URL del
-                  comprobante (foto o PDF en Drive, etc.). El mismo Nº de
-                  documento puede usarse en varios pagos; el servidor rechaza
-                  solo si coincide la huella funcional (mismo crédito, fecha,
-                  monto y referencia normalizada).
+                  comprobante (foto o PDF en Drive, etc.). No puede repetirse la
+                  misma combinación comprobante + código; use el campo «Código»
+                  para distinguir pagos con el mismo texto de referencia
+                  bancaria. La huella funcional sigue evitando el mismo pago
+                  (crédito, fecha, monto y ref. normalizada).
                 </p>
               </div>
             )}
@@ -972,47 +1015,88 @@ export function RegistrarPagoForm({
               </div>
             </div>
 
-            {/* Número de Documento */}
+            {/* Número de Documento; «Código» solo en revisión manual (prop) */}
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Número de Documento <span className="text-red-500">*</span>
-              </label>
+            <div
+              className={`grid grid-cols-1 gap-4 ${mostrarCampoCodigoDocumento ? 'md:grid-cols-2' : ''}`}
+            >
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Número de Documento <span className="text-red-500">*</span>
+                </label>
 
-              <div className="relative">
-                <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+                <div className="relative">
+                  <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
 
-                <Input
-                  type="text"
-                  value={formData.numero_documento}
-                  onChange={e =>
-                    setFormData({
-                      ...formData,
-                      numero_documento: e.target.value,
-                    })
-                  }
-                  onBlur={() => {
-                    const n = normalizarNumeroDocumento(
-                      formData.numero_documento
-                    )
-                    const raw = String(formData.numero_documento ?? '').trim()
-                    if (n !== raw) {
-                      setFormData(prev => ({
-                        ...prev,
-                        numero_documento: n,
-                      }))
+                  <Input
+                    type="text"
+                    value={formData.numero_documento}
+                    onChange={e =>
+                      setFormData({
+                        ...formData,
+                        numero_documento: e.target.value,
+                      })
                     }
-                  }}
-                  className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
-                  placeholder="Número de referencia"
-                />
+                    onBlur={() => {
+                      const n = normalizarNumeroDocumento(
+                        formData.numero_documento
+                      )
+                      const raw = String(formData.numero_documento ?? '').trim()
+                      if (n !== raw) {
+                        setFormData(prev => ({
+                          ...prev,
+                          numero_documento: n,
+                        }))
+                      }
+                    }}
+                    className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
+                    placeholder="Ej. BS. BNC/16622222"
+                  />
+                </div>
+
+                {errors.numero_documento && (
+                  <p className="text-sm text-red-600">
+                    {errors.numero_documento}
+                  </p>
+                )}
               </div>
 
-              {errors.numero_documento && (
-                <p className="text-sm text-red-600">
-                  {errors.numero_documento}
-                </p>
-              )}
+              {mostrarCampoCodigoDocumento ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Código{' '}
+                    <span className="text-xs font-normal text-gray-500">
+                      (opcional)
+                    </span>
+                  </label>
+
+                  <Input
+                    type="text"
+                    value={String(formData.codigo_documento ?? '')}
+                    onChange={e =>
+                      setFormData({
+                        ...formData,
+                        codigo_documento: e.target.value || null,
+                      })
+                    }
+                    maxLength={24}
+                    className={errors.codigo_documento ? 'border-red-500' : ''}
+                    placeholder="Ej. C1, lote, cuota"
+                  />
+
+                  <p className="text-xs text-gray-600">
+                    Si varios pagos comparten el mismo comprobante del banco,
+                    indique un código distinto por fila. Sin código, no puede
+                    repetirse el mismo Nº de documento.
+                  </p>
+
+                  {errors.codigo_documento && (
+                    <p className="text-sm text-red-600">
+                      {errors.codigo_documento}
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             {/* Comprobante (URL) - revisión manual y trazabilidad */}

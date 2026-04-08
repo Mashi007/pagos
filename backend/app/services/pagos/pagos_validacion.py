@@ -5,8 +5,10 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
+from app.services.pago_numero_documento import numero_documento_ya_registrado
 from .pagos_excepciones import (
     PagoValidationError,
+    PagoConflictError,
     ClienteNotFoundError,
 )
 
@@ -42,10 +44,17 @@ class PagosValidacion:
     def validar_documento_no_duplicado(
         self, documento: str, excluir_pago_id: Optional[int] = None
     ) -> bool:
-        """
-        Reservado por compatibilidad. La unicidad global de `numero_documento` ya no aplica;
-        el antiduplicado operativo es la huella funcional en POST /pagos.
-        """
+        """Misma regla que POST /pagos: valor almacenado en `pagos.numero_documento` (compuesto) único."""
+        if not documento or not documento.strip():
+            return True
+
+        if numero_documento_ya_registrado(
+            self.db, documento, exclude_pago_id=excluir_pago_id
+        ):
+            raise PagoConflictError(
+                "Ya existe un pago con la misma combinación comprobante + código."
+            )
+
         return True
 
     def validar_referencia_pago(self, referencia: str) -> bool:

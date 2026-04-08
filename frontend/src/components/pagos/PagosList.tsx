@@ -2280,6 +2280,7 @@ export function PagosList() {
                           .split('T')[0],
                   monto_pagado: pagoEditando.monto_pagado,
                   numero_documento: pagoEditando.numero_documento,
+                  codigo_documento: pagoEditando.codigo_documento ?? null,
                   institucion_bancaria: pagoEditando.institucion_bancaria,
                   notas: pagoEditando.notas || null,
                 }

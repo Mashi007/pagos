@@ -13,6 +13,8 @@ export interface PagoConError {
 
   numero_documento: string
 
+  codigo_documento?: string
+
   institucion_bancaria: string | null
 
   estado: string
@@ -52,6 +54,8 @@ export interface PagoConErrorCreate {
   monto_pagado: number
 
   numero_documento?: string | null
+
+  codigo_documento?: string | null
 
   institucion_bancaria?: string | null
 

@@ -10,13 +10,16 @@ Endpoints de pagos. Datos reales desde BD.
 
 Nº documento / referencia de pago:
 
-- El mismo texto de comprobante puede usarse en varios pagos (p. ej. varias aplicaciones al mismo banco).
+- No puede repetirse el mismo valor almacenado en `pagos.numero_documento` (clave canónica compuesta).
 
-- Se aceptan TODOS los formatos (BNC/, BINANCE, VE/, ZELLE/, numérico, REF, etc.). Límite 100 caracteres.
+- El mismo comprobante del banco puede repetirse si se envía un **codigo_documento** distinto: en BD se guarda
+  comprobante + sufijo interno + código (hasta 100 caracteres en total).
 
-- Huella funcional (prestamo + fecha + monto + ref_norm normalizada): no duplicar el mismo pago operativo
-  respecto a pagos ya registrados (409), alineado con ux_pagos_fingerprint_activos. En carga masiva se
-  detecta además colisión entre filas del mismo archivo por esa huella.
+- Se aceptan TODOS los formatos de comprobante (BNC/, BINANCE, VE/, etc.). Carga masiva: columna opcional
+  inmediatamente a la derecha del Nº documento = código (formatos D, A, B, C, E según plantilla).
+
+- Huella funcional (prestamo + fecha + monto + ref_norm): evita duplicar el mismo pago operativo (409),
+  alineado con ux_pagos_fingerprint_activos.
 
 """
 
@@ -58,8 +61,14 @@ from app.core.config import settings
 
 from app.core.deps import get_current_user
 
-from app.core.documento import normalize_documento
+from app.core.documento import (
+    compose_numero_documento_almacenado,
+    normalize_codigo_documento,
+    normalize_documento,
+    split_numero_documento_almacenado,
+)
 from app.utils.cedula_almacenamiento import alinear_cedulas_clientes_existentes, normalizar_cedula_almacenamiento
+from app.services.pago_numero_documento import numero_documento_ya_registrado
 
 from app.core.serializers import to_float, format_date_iso
 
@@ -182,6 +191,8 @@ class GuardarFilaEditableBody(BaseModel):
 
     numero_documento: Optional[str] = None
 
+    codigo_documento: Optional[str] = None  # Desambigua mismo Nº comprobante (opcional)
+
     moneda_registro: Optional[str] = "USD"
 
     tasa_cambio_manual: Optional[float] = None
@@ -192,7 +203,7 @@ class GuardarFilaEditableBody(BaseModel):
 
 class ValidarFilasBatchBody(BaseModel):
 
-    """Batch: cédulas contra tabla préstamos; documentos contra pagos y pagos_con_errores (unicidad global)."""
+    """Batch: cédulas contra préstamos; documentos compuestos (comprobante+código) contra pagos y pagos_con_errores."""
 
     cedulas: list[str] = []
 
@@ -660,6 +671,8 @@ def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict
     else:
         fecha_pago_str = str(fp) if fp else ""
 
+    _nd_base, _nd_code = split_numero_documento_almacenado(row.numero_documento)
+
     return {
 
         "id": row.id,
@@ -672,7 +685,9 @@ def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict
 
         "monto_pagado": float(row.monto_pagado) if row.monto_pagado is not None else 0,
 
-        "numero_documento": row.numero_documento or "",
+        "numero_documento": _nd_base or (row.numero_documento or ""),
+
+        "codigo_documento": _nd_code or "",
 
         "institucion_bancaria": row.institucion_bancaria,
 
@@ -1495,15 +1510,15 @@ async def upload_excel_pagos(
 
     Formatos de columnas soportados (primera fila = cabecera; datos desde fila 2):
 
-    - Formato D (principal): Cédula | Monto | Fecha | Nº documento
+    - Formato D (principal): Cédula | Monto | Fecha | Nº documento [| Código opcional]
 
-    - Formato E: Banco | Cédula | Fecha | Monto [, Nº documento] (antes que A si col.1 es cédula y col.2 es fecha)
+    - Formato E: Banco | Cédula | Fecha | Monto | Nº documento [| Código opcional]
 
-    - Formato A: Documento | Cédula | Fecha | Monto
+    - Formato A: Documento | Cédula | Fecha | Monto [| Código opcional]
 
-    - Formato B: Fecha | Cédula | Monto | Documento
+    - Formato B: Fecha | Cédula | Monto | Documento [| Código opcional]
 
-    - Formato C: Cédula | ID Préstamo | Fecha | Monto | Nº documento
+    - Formato C: Cédula | ID Préstamo | Fecha | Monto | Nº documento [| Código opcional]
 
     Recomendado: hasta 2.500 filas para evitar timeouts; máximo 10.000.
 
@@ -1761,6 +1776,8 @@ async def upload_excel_pagos(
 
                 col_doc: Optional[int] = None
 
+                codigo_doc_raw = ""
+
                 institucion_bancaria: Optional[str] = None
 
                 # Formato D (PRINCIPAL): Cédula, Monto, Fecha, Nº documento
@@ -1802,6 +1819,10 @@ async def upload_excel_pagos(
                     col_doc = 3
 
                     prestamo_id = None
+
+                    if len(row) > 4 and row[4] is not None:
+
+                        codigo_doc_raw = str(row[4]).strip()
 
                 # Formato E: Banco, Cédula, Fecha, Monto [, Nº documento]
 
@@ -1856,6 +1877,10 @@ async def upload_excel_pagos(
 
                     prestamo_id = None
 
+                    if len(row) > 5 and row[5] is not None:
+
+                        codigo_doc_raw = str(row[5]).strip()
+
                 # Formato A: Documento, Cédula, Fecha, Monto
 
                 elif len(row) >= 4 and _looks_like_documento(row[0]) and _looks_like_cedula(row[1]):
@@ -1863,6 +1888,10 @@ async def upload_excel_pagos(
                     numero_doc = _celda_a_string_documento(row[0])
 
                     col_doc = 0
+
+                    if len(row) > 4 and row[4] is not None:
+
+                        codigo_doc_raw = str(row[4]).strip()
 
                     cedula = str(row[1]).strip()
 
@@ -1935,6 +1964,10 @@ async def upload_excel_pagos(
                     numero_doc = _celda_a_string_documento(row[3])
 
                     col_doc = 3
+
+                    if len(row) > 4 and row[4] is not None:
+
+                        codigo_doc_raw = str(row[4]).strip()
 
                 else:
 
@@ -2034,7 +2067,9 @@ async def upload_excel_pagos(
 
                     col_doc = 4 if len(row) > 4 else None
 
+                    if len(row) > 5 and row[5] is not None:
 
+                        codigo_doc_raw = str(row[5]).strip()
 
                 # Fallback: si documento vacío, buscar en cualquier celda de la fila
 
@@ -2086,6 +2121,8 @@ async def upload_excel_pagos(
 
                     "numero_doc_raw": (numero_doc or "").strip(),
 
+                    "codigo_doc_raw": (codigo_doc_raw or "").strip(),
+
                     "institucion_bancaria": institucion_bancaria,
 
                 })
@@ -2098,7 +2135,41 @@ async def upload_excel_pagos(
 
 
 
-        # --- FASE 2: Insertar (antiduplicado = huella funcional por fila y dentro del lote) ---
+        # --- FASE 2: Insertar (documento+código único en BD; huella funcional por fila y lote) ---
+
+        compuestos_archivo: set[str] = set()
+
+        for _it in FilasParseadas:
+
+            _c = compose_numero_documento_almacenado(
+
+                _it.get("numero_doc_raw"),
+
+                _it.get("codigo_doc_raw"),
+
+            )
+
+            if _c:
+
+                compuestos_archivo.add(_c)
+
+        documentos_ya_en_bd_excel: set[str] = set()
+
+        if compuestos_archivo:
+
+            _lista_c = list(compuestos_archivo)
+
+            _chunk = 1000
+
+            for _i0 in range(0, len(_lista_c), _chunk):
+
+                _ch = _lista_c[_i0 : _i0 + _chunk]
+
+                _ex = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(_ch))).scalars().all()
+
+                documentos_ya_en_bd_excel.update(str(d) for d in _ex if d)
+
+        numeros_doc_en_lote_excel: set[str] = set()
 
         registros = 0
 
@@ -2132,7 +2203,139 @@ async def upload_excel_pagos(
 
 
 
-            numero_doc_norm = normalize_documento(numero_doc)
+            numero_doc_norm = compose_numero_documento_almacenado(
+
+                numero_doc,
+
+                item.get("codigo_doc_raw"),
+
+            )
+
+            if numero_doc_norm and numero_doc_norm in numeros_doc_en_lote_excel:
+
+                err_msg = (
+
+                    "Misma combinación comprobante + código repetida en este archivo. "
+
+                    "Use códigos distintos o una sola fila por clave."
+
+                )
+
+                errores.append(f"Fila {i}: {err_msg}")
+
+                errores_detalle.append(
+
+                    {
+
+                        "fila": i,
+
+                        "cedula": cedula,
+
+                        "error": err_msg,
+
+                        "datos": {
+
+                            "cedula": cedula,
+
+                            "prestamo_id": prestamo_id,
+
+                            "fecha_pago": fecha_val,
+
+                            "monto_pagado": monto,
+
+                            "numero_documento": numero_doc or "",
+
+                        },
+
+                    }
+
+                )
+
+                pagos_con_error_list.append(
+
+                    {
+
+                        "fila_idx": i,
+
+                        "cedula": cedula or "",
+
+                        "prestamo_id": prestamo_id,
+
+                        "fecha_val": fecha_val,
+
+                        "monto": monto,
+
+                        "numero_doc": numero_doc or "",
+
+                        "errores": [err_msg],
+
+                    }
+
+                )
+
+                continue
+
+            if numero_doc_norm and numero_doc_norm in documentos_ya_en_bd_excel:
+
+                err_msg = "Ya existe un pago con la misma combinación comprobante + código."
+
+                errores.append(f"Fila {i}: {err_msg}")
+
+                errores_detalle.append(
+
+                    {
+
+                        "fila": i,
+
+                        "cedula": cedula,
+
+                        "error": err_msg,
+
+                        "datos": {
+
+                            "cedula": cedula,
+
+                            "prestamo_id": prestamo_id,
+
+                            "fecha_pago": fecha_val,
+
+                            "monto_pagado": monto,
+
+                            "numero_documento": numero_doc or "",
+
+                        },
+
+                    }
+
+                )
+
+                pagos_con_error_list.append(
+
+                    {
+
+                        "fila_idx": i,
+
+                        "cedula": cedula or "",
+
+                        "prestamo_id": prestamo_id,
+
+                        "fecha_val": fecha_val,
+
+                        "monto": monto,
+
+                        "numero_doc": numero_doc or "",
+
+                        "errores": [err_msg],
+
+                    }
+
+                )
+
+                continue
+
+            if numero_doc_norm:
+
+                numeros_doc_en_lote_excel.add(numero_doc_norm)
 
             # Identificación automática de préstamo: si la cédula tiene exactamente 1 crédito activo, asignarlo
 
@@ -3483,9 +3686,11 @@ def validar_filas_batch(
 
     - Cédulas: deben existir en tabla clientes (misma clave que FK fk_pagos_cedula al guardar pagos).
 
-    - Nº documento: clave canónica única global; ya usada en `pagos` o en `pagos_con_errores` → duplicado.
+    - Nº documento: clave canónica única global (comprobante normalizado + código opcional compuesto
 
-      (Un solo registro por documento; las cuotas referencian ese pago vía pago_id.)
+      como en POST /pagos); ya usada en `pagos` o en `pagos_con_errores` → duplicado.
+
+      (Un solo registro por esa clave; las cuotas referencian ese pago vía pago_id.)
 
     """
 
@@ -3728,6 +3933,8 @@ def guardar_fila_editable(
 
         numero_doc = (body.numero_documento or "").strip() if body.numero_documento else None
 
+        codigo_doc = (body.codigo_documento or "").strip() if getattr(body, "codigo_documento", None) else None
+
         prestamo_id = body.prestamo_id
 
         usuario_registro = _usuario_registro_desde_current_user(current_user)
@@ -3781,9 +3988,19 @@ def guardar_fila_editable(
 
 
 
-        # Normalizar documento
+        # Comprobante + código opcional → valor único almacenado
 
-        numero_doc_norm = normalize_documento(numero_doc)
+        numero_doc_norm = compose_numero_documento_almacenado(numero_doc, codigo_doc)
+
+        if numero_doc_norm and numero_documento_ya_registrado(db, numero_doc_norm):
+
+            raise HTTPException(
+
+                status_code=409,
+
+                detail="Ya existe un pago con la misma combinación comprobante + código.",
+
+            )
 
         # Si prestamo_id es None, buscar por cédula en préstamos (normalizada)
 
@@ -4854,7 +5071,7 @@ def crear_pagos_batch(
 
     Optimizado: precarga de préstamos y clientes en lugar de N consultas por fila.
 
-    Mismo Nº de documento puede repetirse; colisiones operativas las resuelve la huella funcional.
+    Mismo comprobante puede repetirse con codigo_documento distinto; duplicado = mismo valor almacenado.
 
     """
 
@@ -4864,7 +5081,31 @@ def crear_pagos_batch(
 
         pagos_list = body.pagos
 
-        docs_en_payload = [normalize_documento(p.numero_documento) for p in pagos_list]
+        docs_compuestos = [
+
+            compose_numero_documento_almacenado(p.numero_documento, getattr(p, "codigo_documento", None))
+
+            for p in pagos_list
+
+        ]
+
+        docs_no_vacios = [d for d in docs_compuestos if d]
+
+        existing_docs: set[str] = set()
+
+        if docs_no_vacios:
+
+            rows_bd = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(docs_no_vacios))).scalars().all()
+
+            existing_docs = {r for r in rows_bd if r}
+
+            rows_pe = db.execute(
+
+                select(PagoConError.numero_documento).where(PagoConError.numero_documento.in_(docs_no_vacios))
+
+            ).scalars().all()
+
+            existing_docs.update({r for r in rows_pe if r})
 
         cedulas_payload = list(
 
@@ -4983,13 +5224,37 @@ def crear_pagos_batch(
 
         resolved_prestamo_id_by_index: dict[int, int] = {}
 
+        docs_added_in_batch: set[str] = set()
+
         for idx, payload in enumerate(pagos_list):
 
-            num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
+            num_doc = (
 
-            ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
+                docs_compuestos[idx]
 
-            ref_norm = _normalizar_ref_fingerprint(num_doc or ref)
+                if idx < len(docs_compuestos)
+
+                else compose_numero_documento_almacenado(
+
+                    payload.numero_documento,
+
+                    getattr(payload, "codigo_documento", None),
+
+                )
+
+            )
+
+            if num_doc and (num_doc in existing_docs or num_doc in docs_added_in_batch):
+
+                errors_by_index[idx] = {
+
+                    "error": "Ya existe un pago con la misma combinación comprobante + código.",
+
+                    "status_code": 409,
+
+                }
+
+                continue
 
             cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
 
@@ -5083,6 +5348,10 @@ def crear_pagos_batch(
 
             resolved_prestamo_id_by_index[idx] = effective_prestamo_id
 
+            if num_doc:
+
+                docs_added_in_batch.add(num_doc)
+
         if len(errors_by_index) == len(pagos_list):
 
             results = [
@@ -5119,7 +5388,21 @@ def crear_pagos_batch(
 
             for idx, payload in enumerate(pagos_list):
 
-                num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
+                num_doc = (
+
+                    docs_compuestos[idx]
+
+                    if idx < len(docs_compuestos)
+
+                    else compose_numero_documento_almacenado(
+
+                        payload.numero_documento,
+
+                        getattr(payload, "codigo_documento", None),
+
+                    )
+
+                )
 
                 if idx in errors_by_index:
 
@@ -5372,21 +5655,40 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
 
-    """Crea un pago. Mismo Nº de documento puede repetirse; 409 solo por huella funcional (prestamo+fecha+monto+ref)."""
+    """Crea un pago. Clave única = comprobante + código opcional; 409 si ya existe o por huella funcional."""
 
     if payload.prestamo_id is None:
 
         raise HTTPException(status_code=400, detail="prestamo_id es obligatorio para crear pagos.")
 
-    num_doc = normalize_documento(payload.numero_documento)
+    num_stored = compose_numero_documento_almacenado(
+        payload.numero_documento,
+        payload.codigo_documento,
+    )
 
-    if not num_doc:
+    if not num_stored:
 
         raise HTTPException(status_code=400, detail="numero_documento es obligatorio para crear pagos.")
 
-    ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
+    if numero_documento_ya_registrado(db, num_stored):
 
-    ref_norm = _normalizar_ref_fingerprint(num_doc or ref)
+        raise HTTPException(
+
+            status_code=409,
+
+            detail=(
+
+                "Ya existe un pago con la misma combinación comprobante + código. "
+
+                "Use un código distinto en el campo «Código» o verifique duplicados."
+
+            ),
+
+        )
+
+    ref = (num_stored or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
+
+    ref_norm = _normalizar_ref_fingerprint(num_stored or ref)
 
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
 
@@ -5493,7 +5795,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             prestamo_id=payload.prestamo_id,
             fecha_pago=payload.fecha_pago,
             monto_pagado=monto_usd,
-            numero_documento=num_doc,
+            numero_documento=num_stored,
             referencia_pago=ref,
         )
         if msg_huella:
@@ -5510,7 +5812,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             monto_pagado=monto_usd,
 
-            numero_documento=num_doc,
+            numero_documento=num_stored,
 
             institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
 
@@ -5651,25 +5953,75 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
     data = payload.model_dump(exclude_unset=True)
 
-    if "numero_documento" in data and data["numero_documento"] is not None:
+    _doc_touch = False
 
-        num_doc = normalize_documento(data["numero_documento"])
+    if "numero_documento" in data:
 
-        if not num_doc:
+        _doc_touch = True
+
+    if "codigo_documento" in data:
+
+        _doc_touch = True
+
+    if _doc_touch:
+
+        b0, c0 = split_numero_documento_almacenado(row.numero_documento)
+
+        nb = (
+
+            normalize_documento(data["numero_documento"])
+
+            if "numero_documento" in data and data["numero_documento"] is not None
+
+            else b0
+
+        )
+
+        if not nb:
 
             raise HTTPException(status_code=400, detail="numero_documento no puede estar vacio.")
 
-        num_doc_actual = normalize_documento(row.numero_documento)
+        if "codigo_documento" in data:
 
-        if num_doc_actual and num_doc != num_doc_actual and (bool(row.conciliado) or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")):
+            nc = normalize_codigo_documento(data["codigo_documento"])
+
+        else:
+
+            nc = normalize_codigo_documento(c0) if c0 else None
+
+        new_stored = compose_numero_documento_almacenado(nb, nc)
+
+        old_stored = (row.numero_documento or "").strip()
+
+        if (new_stored or "") != old_stored and (
+
+            bool(row.conciliado) or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")
+
+        ):
 
             raise HTTPException(
 
                 status_code=409,
 
-                detail="No se permite cambiar numero_documento en pagos conciliados o pagados.",
+                detail="No se permite cambiar comprobante/código en pagos conciliados o pagados.",
 
             )
+
+        if new_stored and numero_documento_ya_registrado(db, new_stored, exclude_pago_id=pago_id):
+
+            raise HTTPException(
+
+                status_code=409,
+
+                detail="Ya existe otro pago con la misma combinación comprobante + código.",
+
+            )
+
+        data.pop("numero_documento", None)
+
+        data.pop("codigo_documento", None)
+
+        row.numero_documento = new_stored
 
     aplicar_conciliado = False
 
@@ -5682,10 +6034,6 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         elif k == "institucion_bancaria" and v is not None:
 
             setattr(row, k, v.strip() or None)
-
-        elif k == "numero_documento" and v is not None:
-
-            setattr(row, k, normalize_documento(v))
 
         elif k == "cedula_cliente" and v is not None:
 

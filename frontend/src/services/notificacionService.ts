@@ -422,18 +422,24 @@ class NotificacionService {
 
   /** Clientes retrasados por reglas (previas, hoy, atrasos, liquidados). Datos reales desde BD. */
 
-  async getClientesRetrasados(): Promise<ClientesRetrasadosResponse> {
+  async getClientesRetrasados(
+    fechaCaracas?: string | null
+  ): Promise<ClientesRetrasadosResponse> {
     return await apiClient.get<ClientesRetrasadosResponse>(
       `${this.baseUrl}/clientes-retrasados`,
       {
         timeout: 60000,
+        params:
+          fechaCaracas && String(fechaCaracas).trim()
+            ? { fecha_caracas: String(fechaCaracas).trim() }
+            : undefined,
       }
     )
   }
 
   /** Cuotas PENDIENTE con vencimiento = hoy + 2 (Caracas). Submenú 2 días antes. */
 
-  async getCuotasPendiente2DiasAntes(): Promise<{
+  async getCuotasPendiente2DiasAntes(fechaCaracas?: string | null): Promise<{
     actualizado_en: string
     items: ClienteRetrasadoItem[]
     total: number
@@ -442,7 +448,13 @@ class NotificacionService {
       actualizado_en: string
       items: ClienteRetrasadoItem[]
       total: number
-    }>(`${this.baseUrl}/cuotas-pendiente-2-dias-antes`, { timeout: 60000 })
+    }>(`${this.baseUrl}/cuotas-pendiente-2-dias-antes`, {
+      timeout: 60000,
+      params:
+        fechaCaracas && String(fechaCaracas).trim()
+          ? { fecha_caracas: String(fechaCaracas).trim() }
+          : undefined,
+    })
   }
 
   /** KPIs por pestaña: enviados y rebotados (dias_5, dias_3, dias_1, hoy, dias_1_retraso). */
@@ -674,20 +686,25 @@ class NotificacionService {
   }
 
   async listarNotificacionesPrejudiciales(
-    estado?: string
+    estado?: string,
+    fechaCaracas?: string | null
   ): Promise<{ items: ClienteRetrasadoItem[]; total: number }> {
     const params = new URLSearchParams()
 
     if (estado) params.append('estado', estado)
 
+    if (fechaCaracas && String(fechaCaracas).trim()) {
+      params.append('fecha_caracas', String(fechaCaracas).trim())
+    }
+
+    const qs = params.toString()
+
     return await apiClient.get<{
       items: ClienteRetrasadoItem[]
       total: number
-    }>(
-      `${API_V1}/notificaciones-prejudicial/?${params}`,
-
-      { timeout: 120000 }
-    )
+    }>(`${API_V1}/notificaciones-prejudicial${qs ? `?${qs}` : ''}`, {
+      timeout: 120000,
+    })
   }
 
   async listarNotificacionesDiaPago(
@@ -775,12 +792,17 @@ class NotificacionService {
 
   async enviarNotificacionesPrejudiciales(opts?: {
     signal?: AbortSignal
+    fechaCaracas?: string | null
   }): Promise<{
     mensaje: string
     enviados: number
     sin_email: number
     fallidos: number
   }> {
+    const fc =
+      opts?.fechaCaracas && String(opts.fechaCaracas).trim()
+        ? String(opts.fechaCaracas).trim()
+        : undefined
     return await apiClient.post<{
       mensaje: string
       enviados: number
@@ -788,10 +810,12 @@ class NotificacionService {
       fallidos: number
     }>(
       `${API_V1}/notificaciones-prejudicial/enviar`,
-
       {},
-
-      { timeout: 120000, signal: opts?.signal }
+      {
+        timeout: 120000,
+        signal: opts?.signal,
+        params: fc ? { fecha_caracas: fc } : undefined,
+      }
     )
   }
 
@@ -885,7 +909,7 @@ class NotificacionService {
   /** Envio masivo sincrono solo para un criterio (configuracion por fila). */
   async enviarCasoManual(
     tipo: string,
-    opts?: { signal?: AbortSignal }
+    opts?: { signal?: AbortSignal; fechaCaracas?: string | null }
   ): Promise<{
     mensaje: string
     tipo_caso: string
@@ -898,9 +922,13 @@ class NotificacionService {
     enviados_whatsapp?: number
     fallidos_whatsapp?: number
   }> {
+    const fc =
+      opts?.fechaCaracas && String(opts.fechaCaracas).trim()
+        ? String(opts.fechaCaracas).trim()
+        : undefined
     return await apiClient.post(
       `${this.baseUrl}/enviar-caso-manual`,
-      { tipo },
+      { tipo, ...(fc ? { fecha_caracas: fc } : {}) },
       { timeout: 180000, signal: opts?.signal }
     )
   }
