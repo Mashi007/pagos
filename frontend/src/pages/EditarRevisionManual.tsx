@@ -402,6 +402,34 @@ function pagoEstadoExcluyeToggleConciliadoRevision(
   return false
 }
 
+/** Conciliado o verificado Sí: criterio habitual de elegibilidad en cascada tras guardar en BD. */
+function pagoValidadoCarteraRevisionRow(pago: Pago): boolean {
+  if (Boolean(pago.conciliado)) return true
+  return (
+    String(pago.verificado_concordancia ?? '')
+      .trim()
+      .toUpperCase() === 'SI'
+  )
+}
+
+/**
+ * Pago cerrado en operación: abonado en cuotas y cartera alineada.
+ * Sin `tiene_aplicacion_cuotas` en la API se trata como false (compatibilidad).
+ */
+function pagoCarteraRevisionBloquearToggleCerrado(pago: Pago): boolean {
+  if (!pago.tiene_aplicacion_cuotas) return false
+  if (!Boolean(pago.conciliado)) return false
+  if (
+    String(pago.verificado_concordancia ?? '')
+      .trim()
+      .toUpperCase() !== 'SI'
+  ) {
+    return false
+  }
+  const est = (pago.estado ?? '').trim().toUpperCase()
+  return est === 'PAGADO' || est === 'PAGO_ADELANTADO' || est === 'ADELANTADO'
+}
+
 /** Segunda línea del toast tras «Aplicar a cuotas (cascada)» cuando el backend envía diagnostico. */
 function descripcionDiagnosticoCascada(d: {
   pagos_operativos_sin_cuota_pagos?: number
@@ -892,6 +920,12 @@ export function EditarRevisionManual() {
 
   const toggleConciliadoPagoRevision = async (pago: Pago, checked: boolean) => {
     if (soloLectura) return
+    if (!checked && pagoCarteraRevisionBloquearToggleCerrado(pago)) {
+      toast.error(
+        'Este pago ya está aplicado a cuotas con cartera validada (Pagado). No se puede quitar desde aquí.'
+      )
+      return
+    }
     if (pagoEstadoExcluyeToggleConciliadoRevision(pago.estado)) {
       toast.error(
         'No se puede cambiar conciliación en pagos anulados, rechazados o duplicado declarado.'
@@ -900,11 +934,18 @@ export function EditarRevisionManual() {
     }
     setConciliandoPagoId(pago.id)
     try {
-      await pagoService.updateConciliado(pago.id, checked)
+      if (checked) {
+        await pagoService.updateConciliado(pago.id, true)
+      } else {
+        await pagoService.updatePago(pago.id, {
+          conciliado: false,
+          verificado_concordancia: 'NO',
+        })
+      }
       toast.success(
         checked
-          ? 'Pago marcado como conciliado (elegible para «Aplicar pagos a cuotas»).'
-          : 'Pago marcado como no conciliado. En servidor verificado pasa a NO.'
+          ? 'Pago validado para cartera (conciliado / verificado). Use «Aplicar pagos a cuotas» si aún no hay cuota_pagos.'
+          : 'Validación de cartera quitada (conciliado no, verificado NO).'
       )
       await refrescarTrasCambioPagosRevision()
     } catch (err: unknown) {
@@ -3090,9 +3131,9 @@ export function EditarRevisionManual() {
                                 </TableHead>
                                 <TableHead
                                   className="whitespace-nowrap text-center"
-                                  title="Marca conciliado en BD: el pago entra en el criterio de elegibilidad para «Aplicar pagos a cuotas» (junto con verificado Sí o estado Pagado). Quitar conciliado pone verificado en NO en el servidor."
+                                  title="Marca validación para cartera (conciliado o verificado Sí en BD), elegible para «Aplicar pagos a cuotas». Tras guardar, si no hubo abono en cuotas el servidor puede dejar verificado Sí y conciliado no: el casillero sigue marcado."
                                 >
-                                  Conciliado
+                                  Cartera
                                 </TableHead>
                                 <TableHead>Notas</TableHead>
                                 <TableHead className="min-w-[200px] whitespace-nowrap text-right">
@@ -3162,25 +3203,36 @@ export function EditarRevisionManual() {
                                       <input
                                         type="checkbox"
                                         className="h-4 w-4 cursor-pointer rounded border-input accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-                                        checked={Boolean(pago.conciliado)}
+                                        checked={pagoValidadoCarteraRevisionRow(
+                                          pago
+                                        )}
                                         disabled={
                                           soloLectura ||
                                           conciliandoPagoId === pago.id ||
                                           eliminandoPagoId === pago.id ||
                                           pagoEstadoExcluyeToggleConciliadoRevision(
                                             pago.estado
+                                          ) ||
+                                          pagoCarteraRevisionBloquearToggleCerrado(
+                                            pago
                                           )
                                         }
                                         title={
                                           soloLectura
                                             ? 'Revisión cerrada: solo lectura'
-                                            : pagoEstadoExcluyeToggleConciliadoRevision(
-                                                  pago.estado
+                                            : pagoCarteraRevisionBloquearToggleCerrado(
+                                                  pago
                                                 )
-                                              ? 'Estado del pago no admite cambiar conciliación aquí'
-                                              : pago.conciliado
-                                                ? 'Quitar conciliado (en servidor verificado → NO)'
-                                                : 'Marcar conciliado para elegir en cascada masiva'
+                                              ? 'Pago aplicado a cuotas con cartera validada (Pagado): no se puede quitar la validación aquí'
+                                              : pagoEstadoExcluyeToggleConciliadoRevision(
+                                                    pago.estado
+                                                  )
+                                                ? 'Estado del pago no admite cambiar validación aquí'
+                                                : pagoValidadoCarteraRevisionRow(
+                                                      pago
+                                                    )
+                                                  ? 'Quitar validación cartera (conciliado no, verificado NO)'
+                                                  : 'Validar para cartera (conciliado; si no abona cuotas puede quedar verificado Sí)'
                                         }
                                         onChange={e => {
                                           void toggleConciliadoPagoRevision(
@@ -3188,7 +3240,7 @@ export function EditarRevisionManual() {
                                             e.target.checked
                                           )
                                         }}
-                                        aria-label={`Conciliado pago ${pago.id}`}
+                                        aria-label={`Validación cartera pago ${pago.id}`}
                                       />
                                     </TableCell>
                                     <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">

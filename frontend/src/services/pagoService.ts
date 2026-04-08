@@ -49,6 +49,9 @@ export interface Pago {
   /** Si el Nº documento enlaza con un pago reportado en Cobros. */
   pago_reportado_id?: number | null
 
+  /** True si existe al menos una fila en cuota_pagos para este pago (GET /pagos enriquecido). */
+  tiene_aplicacion_cuotas?: boolean
+
   cuotas_atrasadas?: number // ✅ Campo calculado: cuotas vencidas con pago incompleto
 }
 
@@ -329,7 +332,10 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/batch`, { pagos })
   }
 
-  async updatePago(id: number, data: Partial<PagoCreate>): Promise<Pago> {
+  async updatePago(
+    id: number,
+    data: Partial<PagoCreate & { verificado_concordancia?: string | null }>
+  ): Promise<Pago> {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }
 

@@ -367,6 +367,39 @@ def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuota
     return estado
 
 
+def _integridad_error_pgcode_y_constraint(exc: BaseException) -> tuple[Optional[str], str]:
+    """Obtiene pgcode y nombre de restricción desde IntegrityError (psycopg2 vía SQLAlchemy)."""
+    orig = getattr(exc, "orig", None)
+    pgcode = getattr(orig, "pgcode", None) or getattr(exc, "pgcode", None)
+    if pgcode is not None and not isinstance(pgcode, str):
+        pgcode = str(pgcode)
+    cname = ""
+    diag = getattr(orig, "diag", None)
+    if diag is not None:
+        cname = str(getattr(diag, "constraint_name", "") or "")
+    return (pgcode if isinstance(pgcode, str) else None, cname.strip())
+
+
+def _alinear_estado_si_toggle_conciliado_actualizar_pago(row: Pago, conciliado_nuevo: bool) -> None:
+    """
+    Alinea pagos.estado con cambios de conciliado para cumplir CHECKs en BD:
+    - conciliado True: no dejar PENDIENTE/otros; pasar a PAGADO salvo excluidos o ya pagado.
+    - conciliado False: si estaba PAGADO/PAGO_ADELANTADO, bajar a PENDIENTE (evita PAGADO sin conciliar).
+    """
+    est_u = str(getattr(row, "estado", "") or "").strip().upper()
+    if conciliado_nuevo:
+        if est_u in ("PAGADO", "PAGO_ADELANTADO"):
+            return
+        if est_u in ("DUPLICADO", "ANULADO_IMPORT", "CANCELADO", "RECHAZADO", "REVERSADO"):
+            return
+        if "ANUL" in est_u or "REVERS" in est_u:
+            return
+        row.estado = "PAGADO"
+        return
+    if est_u in ("PAGADO", "PAGO_ADELANTADO"):
+        row.estado = "PENDIENTE"
+
+
 def _usuario_registro_desde_current_user(current_user: Optional[Any]) -> str:
 
     """
@@ -683,6 +716,32 @@ def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict
     }
 
 
+def _enriquecer_items_tiene_aplicacion_cuotas(db: Session, items: list) -> None:
+    """Añade tiene_aplicacion_cuotas (filas en cuota_pagos) a cada ítem con id de pago."""
+    if not items:
+        return
+    ids: list[int] = []
+    for it in items:
+        pid = it.get("id")
+        if pid is not None:
+            try:
+                ids.append(int(pid))
+            except (TypeError, ValueError):
+                pass
+    if not ids:
+        for it in items:
+            it["tiene_aplicacion_cuotas"] = False
+        return
+    q = select(CuotaPago.pago_id).where(CuotaPago.pago_id.in_(ids)).distinct()
+    has_ids = {int(x[0]) for x in db.execute(q).all() if x[0] is not None}
+    for it in items:
+        pid = it.get("id")
+        try:
+            it["tiene_aplicacion_cuotas"] = int(pid) in has_ids if pid is not None else False
+        except (TypeError, ValueError):
+            it["tiene_aplicacion_cuotas"] = False
+
+
 def _enriquecer_pagos_pago_reportado_id(db: Session, items: list) -> None:
     """
     Si el Nº documento del pago coincide (normalizado) con alguna clave del reporte en Cobros
@@ -742,6 +801,7 @@ def _pago_response_enriquecido(
 ) -> dict:
     """Dict listo para API: base + enlace Cobros + link Gmail/Drive si aplica."""
     out = _pago_to_response(row, cuotas_atrasadas)
+    out["tiene_aplicacion_cuotas"] = pago_tiene_aplicaciones_cuotas(db, row.id)
     _enriquecer_pagos_pago_reportado_id(db, [out])
     enriquecer_items_link_comprobante_desde_gmail(db, [out])
     return out
@@ -960,6 +1020,8 @@ def listar_pagos(
         rows = db.execute(q).scalars().all()
 
         items = [_pago_to_response(r) for r in rows]
+
+        _enriquecer_items_tiene_aplicacion_cuotas(db, items)
 
         _enriquecer_pagos_pago_reportado_id(db, items)
 
@@ -5830,6 +5892,8 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             aplicar_conciliado = bool(v)
 
+            _alinear_estado_si_toggle_conciliado_actualizar_pago(row, bool(v))
+
         elif k == "verificado_concordancia" and v is not None:
 
             val = (v or "").strip().upper()
@@ -5916,9 +5980,9 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
         db.rollback()
 
-        if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
+        pgcode, cname = _integridad_error_pgcode_y_constraint(e)
 
-            cname = getattr(getattr(getattr(e, "orig", None), "diag", None), "constraint_name", "") or ""
+        if pgcode == "23505":
 
             if "ux_pagos_fingerprint_activos" in cname:
 
@@ -5934,7 +5998,40 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             )
 
-        raise HTTPException(status_code=500, detail="Error de integridad en la base de datos.")
+        if pgcode == "23514":
+
+            logger.warning(
+                "actualizar_pago pago_id=%s: violacion CHECK (23514) constraint=%s detail=%s",
+                pago_id,
+                cname,
+                str(e)[:400],
+            )
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "La base de datos rechazó la combinación estado/conciliación del pago "
+                    f"(restricción: {cname or 'CHECK'}). "
+                    "Pruebe de nuevo tras recargar; si quitó validación cartera, el estado debe pasar a Pendiente."
+                ),
+            )
+
+        logger.warning(
+            "actualizar_pago pago_id=%s IntegrityError pgcode=%s constraint=%s msg=%s",
+            pago_id,
+            pgcode,
+            cname,
+            str(e)[:500],
+        )
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "La base de datos rechazó la actualización del pago "
+                f"(código SQL {pgcode or 'desconocido'}, restricción {cname or 'N/A'}). "
+                "Revise estado, conciliación y documento; copie este mensaje si contacta soporte."
+            ),
+        )
 
     def _fecha_pago_a_date(fp):
 
@@ -6022,13 +6119,38 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
 
-            if cuotas_completadas > 0 or cuotas_parciales > 0:
-
-                row.estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
+            # Misma regla que crear_pago: alinear estado y conciliado si no hubo abono en cuotas.
+            row.estado = _estado_conciliacion_post_cascada(row, cuotas_completadas, cuotas_parciales)
 
             db.commit()
 
             db.refresh(row)
+
+        except IntegrityError as e:
+
+            try:
+                db.rollback()
+            except Exception:
+                logger.exception("Rollback tras IntegrityError cascada (actualizar_pago pago_id=%s)", pago_id)
+
+            pg2, cn2 = _integridad_error_pgcode_y_constraint(e)
+
+            logger.warning(
+                "actualizar_pago pago_id=%s commit post-cascada IntegrityError pgcode=%s cname=%s %s",
+                pago_id,
+                pg2,
+                cn2,
+                str(e)[:400],
+            )
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Integridad al guardar tras aplicar cuotas al pago "
+                    f"(código {pg2 or '?'}, restricción {cn2 or 'N/A'}). "
+                    "Revise montos y cuotas; use «Aplicar pagos a cuotas» por préstamo si corresponde."
+                ),
+            ) from e
 
         except Exception as e:
 
