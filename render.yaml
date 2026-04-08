@@ -1,11 +1,13 @@
 ﻿services:
-  # Frontend (Web Service - mantiene compatibilidad con configuraciÃ³n anterior)
+  # Frontend (Web Service - mantiene compatibilidad con configuracion anterior)
   - type: web
     name: pagos-frontend
     env: node
     rootDir: frontend
     buildCommand: npm ci && npm run build
     startCommand: node server.js
+    # GET / devuelve 302 -> /pagos; Render exige 200 en el health check por defecto -> timeout.
+    healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: 20.11.0
@@ -21,11 +23,15 @@
     name: pagos-backend
     env: python
     buildCommand: pip install -r ../requirements.txt
+    # Migraciones antes del swap de trafico: el proceso de arranque solo levanta Gunicorn
+    # (evita timeout de deploy si alembic + import pesado superan el margen de Render).
+    preDeployCommand: alembic upgrade head
     # graceful-timeout: tiempo para que los workers terminen peticiones al recibir SIGTERM
     # (reduce "Error while closing socket [Errno 9] Bad file descriptor" en shutdown)
-    startCommand: alembic upgrade head && gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 180 --graceful-timeout 45 --worker-class uvicorn.workers.UvicornWorker
+    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 180 --graceful-timeout 45 --worker-class uvicorn.workers.UvicornWorker
     rootDir: backend
-    healthCheckPath: /health/db
+    # /health responde sin BD; /health/db puede marcar 503 si Postgres aun no acepta conexiones.
+    healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
