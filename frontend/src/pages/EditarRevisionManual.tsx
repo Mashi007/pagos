@@ -272,6 +272,7 @@ function firmaSoloPrestamo(p: Partial<PrestamoData>): string {
     mod: String(p.modalidad_pago ?? '').trim(),
     cp: Number(p.cuota_periodo) || 0,
     fa: normDateCmp(p.fecha_aprobacion as string | null | undefined),
+    fb: normDateCmp(p.fecha_base_calculo as string | null | undefined),
     estado: String(p.estado ?? '')
       .trim()
       .toUpperCase(),
@@ -1574,10 +1575,9 @@ export function EditarRevisionManual() {
       return
     }
 
-    if (!hayDiferenciaVsCargaInicial()) {
-      toast.info('No hay cambios respecto a los datos cargados')
-      return
-    }
+    // «Guardar y Cerrar» también debe poder marcar la revisión como revisada (Visto)
+    // aunque el formulario coincida con la carga inicial (revisión sin ediciones).
+    // «Guardar Cambios» sigue exigiendo diferencias reales.
 
     // Confirmar si cambió la fecha de aprobación y hay cuotas
     const nuevaFechaFinalCheck = formatDateForInput(
