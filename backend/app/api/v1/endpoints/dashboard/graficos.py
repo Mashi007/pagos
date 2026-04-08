@@ -1254,11 +1254,18 @@ def _compute_notificaciones_envios_por_dia(db: Session, tipo_tab: str, dias: int
     """
     Cuenta envíos registrados en envios_notificacion por día calendario (America/Caracas).
     dias_1_retraso = notificaciones «día siguiente al vencimiento» en la UI.
+
+    A partir del 1 de abril (año calendario Caracas), la serie no incluye días anteriores
+    a ese 1 de abril: el eje X del gráfico empieza en 1 abr aunque el parámetro `dias`
+    pida una ventana más larga hacia atrás.
     """
     try:
         dias_ef = min(366, max(7, int(dias)))
         hoy_c = hoy_negocio()
         inicio = hoy_c - timedelta(days=dias_ef - 1)
+        apr1 = date(hoy_c.year, 4, 1)
+        if hoy_c >= apr1 and inicio < apr1:
+            inicio = apr1
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
         z = ZoneInfo(TZ_NEGOCIO)
         start_local = datetime.combine(inicio, datetime.min.time(), tzinfo=z)
