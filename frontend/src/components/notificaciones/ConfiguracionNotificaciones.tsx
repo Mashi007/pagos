@@ -540,14 +540,22 @@ export function ConfiguracionNotificaciones({
     setEnviandoCasoTipo(null)
     setEnviandoPruebaIndice(null)
     setEnviandoMasivo(false)
+    setDiagnosticoCargando(false)
+    setGuardandoEnvios(false)
+    guardandoRef.current = false
     toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
     toast.warning(
-      'Cancelación: petición cortada en el navegador. El servidor puede seguir unos segundos.'
+      'Cancelación: petición cortada en el navegador (o desbloqueo tras Guardar). ' +
+        'Compruebe en Red (F12) si el PUT aún estaba en curso; si hace falta, vuelva a Guardar.'
     )
   }
 
   const hayEnvioConfigEnCurso =
     enviandoCasoTipo !== null || enviandoMasivo || enviandoPruebaIndice !== null
+
+  /** Incluye Guardar en curso para poder desbloquear la UI si el estado queda colgado. */
+  const puedeCancelarEmergenciaConfig =
+    hayEnvioConfigEnCurso || guardandoEnvios || diagnosticoCargando
 
   const guardandoRef = useRef(false)
 
@@ -898,6 +906,13 @@ export function ConfiguracionNotificaciones({
     /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((e || '').trim())
 
   const handleEnviarCasoManual = async (tipo: string, etiquetaCaso: string) => {
+    if (enviosLocalDirtyRef.current) {
+      toast.error(
+        'Hay cambios sin guardar en esta pantalla. Pulse Guardar antes de enviar: el servidor solo usa la configuración ya persistida.',
+        { duration: 8000 }
+      )
+      return
+    }
     if (modoPruebas) {
       const primero = (emailsPruebas[0] || '').trim()
       if (!primero || !esEmailValido(primero)) {
@@ -1216,8 +1231,8 @@ export function ConfiguracionNotificaciones({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2">
         <p className="max-w-xl text-sm text-red-900">
-          <strong>Emergencia:</strong> cancela la petición de envío o prueba en
-          curso en este navegador (el servidor puede seguir unos segundos).
+          <strong>Emergencia:</strong> cancela envío/prueba en curso o desbloquea
+          si Guardar dejó el formulario colgado (revise en Red si el PUT siguió).
         </p>
 
         <Button
@@ -1225,9 +1240,9 @@ export function ConfiguracionNotificaciones({
           variant="outline"
           size="sm"
           className="shrink-0 border-red-400 text-red-800 hover:bg-red-100"
-          disabled={!hayEnvioConfigEnCurso}
+          disabled={!puedeCancelarEmergenciaConfig}
           onClick={cancelarEnvioConfigEmergencia}
-          title="Interrumpe el POST en curso (enviar caso, prueba de paquete o masivos)."
+          title="Interrumpe POST de envío/prueba/masivos o restablece estado tras Guardar atascado."
         >
           <X className="mr-2 h-4 w-4" />
           Cancelar
@@ -2024,21 +2039,18 @@ export function ConfiguracionNotificaciones({
                           enviandoCasoTipo !== null ||
                           enviandoMasivo ||
                           diagnosticoCargando ||
-                          enviandoPruebaIndice !== null ||
-                          guardandoEnvios
+                          enviandoPruebaIndice !== null
                         }
                         title={
-                          guardandoEnvios
-                            ? 'Espere a que termine Guardar o pulse Cancelar si quedó colgado.'
-                            : enviandoCasoTipo !== null
-                              ? 'Hay otro envío de caso en curso.'
-                              : enviandoMasivo
-                                ? 'Hay un envío masivos de prueba en curso.'
-                                : diagnosticoCargando
-                                  ? 'Diagnóstico de paquete en curso.'
-                                  : enviandoPruebaIndice !== null
-                                    ? 'Envío de notificación de prueba en curso.'
-                                    : 'Enviar solo este criterio (POST sincrono).'
+                          enviandoCasoTipo !== null
+                            ? 'Hay otro envío de caso en curso.'
+                            : enviandoMasivo
+                              ? 'Hay un envío masivos de prueba en curso.'
+                              : diagnosticoCargando
+                                ? 'Diagnóstico de paquete en curso.'
+                                : enviandoPruebaIndice !== null
+                                  ? 'Envío de notificación de prueba en curso.'
+                                  : 'Enviar solo este criterio (POST sincrono). Si acaba de guardar y el botón no respondía, use Emergencia arriba solo si Guardar quedó colgado.'
                         }
                         onClick={() => void handleEnviarCasoManual(tipo, label)}
                       >
