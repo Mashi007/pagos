@@ -61,11 +61,59 @@ import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
 import { isRequestCanceled } from '../utils/requestCanceled'
 
+import { getErrorMessage } from '../types/errors'
+
 /** Fecha calendario actual en America/Caracas como YYYY-MM-DD (para max en input date). */
 function fechaHoyCaracasISO(): string {
   return new Date().toLocaleDateString('en-CA', {
     timeZone: 'America/Caracas',
   })
+}
+
+/** Interpreta la respuesta del envío manual para que no parezca «no pasó nada» si enviados = 0. */
+function toastResultadoEnvioNotificaciones(
+  res: {
+    mensaje?: string
+    enviados?: number
+    sin_email?: number
+    fallidos?: number
+    total_en_lista?: number
+    omitidos_config?: number
+    omitidos_paquete_incompleto?: number
+  },
+  filasVisiblesEnTabla: number
+) {
+  const enviados = Number(res.enviados ?? 0)
+  const totalLista =
+    res.total_en_lista != null && !Number.isNaN(Number(res.total_en_lista))
+      ? Number(res.total_en_lista)
+      : filasVisiblesEnTabla
+  const sinEmail = Number(res.sin_email ?? 0)
+  const fallidos = Number(res.fallidos ?? 0)
+  const omitPkg = Number(res.omitidos_paquete_incompleto ?? 0)
+  const omitCfg = Number(res.omitidos_config ?? 0)
+  const msgBase = (res.mensaje ?? 'Envío finalizado').trim()
+
+  if (enviados === 0 && totalLista > 0) {
+    toast.warning(
+      `${msgBase} Nadie recibió correo aunque la lista tenía ${totalLista} fila(s). Revise: email del cliente, modo prueba, fila «Envío» en Configuración, plantilla y PDF de cobranza (paquete incompleto). Sin email: ${sinEmail}. Omitidos por config: ${omitCfg}. Paquete incompleto: ${omitPkg}. Fallidos SMTP: ${fallidos}.`,
+      { duration: 14000 }
+    )
+    return
+  }
+
+  if (enviados === 0 && totalLista === 0) {
+    toast.message(
+      'No había destinatarios en la lista para esta fecha y criterio. No se envió ningún correo.',
+      { duration: 7000 }
+    )
+    return
+  }
+
+  toast.success(
+    `${msgBase} Enviados: ${enviados}. Sin email: ${sinEmail}. Fallidos: ${fallidos}.`,
+    { duration: 9000 }
+  )
 }
 
 export type NotificacionesModulo = 'a1dia' | 'a3cuotas' | 'd2antes'
@@ -752,10 +800,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             `Envío manual a clientes del caso PREJUDICIAL (${n} filas visibles; el servidor usa la misma regla de lista). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
           )
 
-    if (!confirmar) return
+    if (!confirmar) {
+      toast.info(
+        'Envío cancelado. Si quiere enviar, pulse otra vez el botón y acepte el mensaje de confirmación.'
+      )
+      return
+    }
 
     const ac = beginOperacionListaAbortable()
     setEnviandoPrejudicial(true)
+    const loadingId = toast.loading(
+      'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
+    )
 
     try {
       const res = await notificacionService.enviarNotificacionesPrejudiciales({
@@ -763,9 +819,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         fechaCaracas: fechaCaracasApi,
       })
 
-      toast.success(
-        `${res.mensaje} Enviados: ${res.enviados}. Sin email: ${res.sin_email}. Fallidos: ${res.fallidos}.`
-      )
+      toast.dismiss(loadingId)
+      toastResultadoEnvioNotificaciones(res, n)
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -780,13 +835,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       })
     } catch (e) {
       console.error(e)
+      toast.dismiss(loadingId)
       if (isRequestCanceled(e)) {
         toast.info('Envío cancelado en el navegador.')
         return
       }
 
       toast.error(
-        'No se pudo completar el envío. Revise PREJUDICIAL en Configuración, cuentas de correo y modo prueba.'
+        `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PREJUDICIAL en Configuración y el correo del servidor.`
       )
     } finally {
       if (operacionListaAbortRef.current === ac) {
@@ -810,10 +866,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             `Envío manual para 2 días antes (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
           )
 
-    if (!confirmar) return
+    if (!confirmar) {
+      toast.info(
+        'Envío cancelado. Si quiere enviar, pulse otra vez el botón y acepte el mensaje de confirmación.'
+      )
+      return
+    }
 
     const ac = beginOperacionListaAbortable()
     setEnviandoD2Antes(true)
+    const loadingId = toast.loading(
+      'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
+    )
 
     try {
       const res = await notificacionService.enviarCasoManual(
@@ -821,9 +885,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         { signal: ac.signal, fechaCaracas: fechaCaracasApi }
       )
 
-      toast.success(
-        `${res.mensaje} Enviados: ${res.enviados}. Sin email: ${res.sin_email}. Fallidos: ${res.fallidos}.`
-      )
+      toast.dismiss(loadingId)
+      toastResultadoEnvioNotificaciones(res, n)
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -838,13 +901,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       })
     } catch (e) {
       console.error(e)
+      toast.dismiss(loadingId)
       if (isRequestCanceled(e)) {
         toast.info('Envío cancelado en el navegador.')
         return
       }
 
       toast.error(
-        'No se pudo completar el envío. Revise PAGO_2_DIAS_ANTES_PENDIENTE en Configuración, cuentas de correo y modo prueba.'
+        `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PAGO_2_DIAS_ANTES_PENDIENTE en Configuración.`
       )
     } finally {
       if (operacionListaAbortRef.current === ac) {
@@ -868,10 +932,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             `Envío manual para día siguiente al vencimiento (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración. ¿Continuar?`
           )
 
-    if (!confirmar) return
+    if (!confirmar) {
+      toast.info(
+        'Envío cancelado. Si quiere enviar, pulse otra vez el botón y acepte el mensaje de confirmación.'
+      )
+      return
+    }
 
     const ac = beginOperacionListaAbortable()
     setEnviandoPago1Dia(true)
+    const loadingId = toast.loading(
+      'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
+    )
 
     try {
       const res = await notificacionService.enviarCasoManual(
@@ -879,9 +951,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         { signal: ac.signal, fechaCaracas: fechaCaracasApi }
       )
 
-      toast.success(
-        `${res.mensaje} Enviados: ${res.enviados}. Sin email: ${res.sin_email}. Fallidos: ${res.fallidos}.`
-      )
+      toast.dismiss(loadingId)
+      toastResultadoEnvioNotificaciones(res, n)
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -896,13 +967,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       })
     } catch (e) {
       console.error(e)
+      toast.dismiss(loadingId)
       if (isRequestCanceled(e)) {
         toast.info('Envío cancelado en el navegador.')
         return
       }
 
       toast.error(
-        'No se pudo completar el envío. Revise PAGO_1_DIA_ATRASADO en Configuración, cuentas de correo y modo prueba.'
+        `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PAGO_1_DIA_ATRASADO en Configuración y el correo del servidor.`
       )
     } finally {
       if (operacionListaAbortRef.current === ac) {
