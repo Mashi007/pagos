@@ -83,6 +83,17 @@ export function isAxiosError(error: unknown): error is AxiosError {
   )
 }
 
+/** Timeout de Axios en peticiones largas (p. ej. envío masivo de correos). */
+export function isAxiosTimeoutError(error: unknown): boolean {
+  if (!isAxiosError(error)) return false
+  const msg = (error.message || '').toLowerCase()
+  return (
+    error.code === 'ECONNABORTED' ||
+    msg.includes('timeout') ||
+    msg.includes('exceeded')
+  )
+}
+
 /**
 
 

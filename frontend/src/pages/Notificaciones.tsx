@@ -42,6 +42,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   notificacionService,
+  TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL,
   type ClienteRetrasadoItem,
   type EstadisticasPorTab,
 } from '../services/notificacionService'
@@ -69,7 +70,7 @@ import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
 import { isRequestCanceled } from '../utils/requestCanceled'
 
-import { getErrorMessage } from '../types/errors'
+import { getErrorMessage, isAxiosTimeoutError } from '../types/errors'
 
 /** Fecha calendario actual en America/Caracas como YYYY-MM-DD (para max en input date). */
 function fechaHoyCaracasISO(): string {
@@ -121,6 +122,24 @@ function toastResultadoEnvioNotificaciones(
   toast.success(
     `${msgBase} Enviados: ${enviados}. Sin email: ${sinEmail}. Fallidos: ${fallidos}.`,
     { duration: 9000 }
+  )
+}
+
+function toastErrorTrasEnvioManual(e: unknown, fraseRevisionConfig: string) {
+  if (isAxiosTimeoutError(e)) {
+    const min = Math.max(
+      1,
+      Math.round(TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL / 60000)
+    )
+    toast.warning(
+      `El navegador dejó de esperar tras ${min} min (timeout). Con muchas filas y adjuntos el envío puede seguir en el servidor: antes de reintentar, revise «Último envío por lote» o el historial para no duplicar correos. ${fraseRevisionConfig}`,
+      { duration: 20000 }
+    )
+    return
+  }
+
+  toast.error(
+    `No se pudo completar el envío: ${getErrorMessage(e)}. ${fraseRevisionConfig}`
   )
 }
 
@@ -810,7 +829,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       const ac = beginOperacionListaAbortable()
       setEnviandoPrejudicial(true)
       const loadingId = toast.loading(
-        'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
+        'Enviando correos… con muchas filas puede tardar más de 10 minutos. No cierre esta pestaña.'
       )
 
       try {
@@ -843,8 +862,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           return
         }
 
-        toast.error(
-          `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PREJUDICIAL en Configuración y el correo del servidor.`
+        toastErrorTrasEnvioManual(
+          e,
+          'Revise PREJUDICIAL en Configuración y el correo del servidor.'
         )
       } finally {
         if (operacionListaAbortRef.current === ac) {
@@ -859,7 +879,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       const ac = beginOperacionListaAbortable()
       setEnviandoD2Antes(true)
       const loadingId = toast.loading(
-        'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
+        'Enviando correos… con muchas filas puede tardar más de 10 minutos. No cierre esta pestaña.'
       )
 
       try {
@@ -890,8 +910,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           return
         }
 
-        toast.error(
-          `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PAGO_2_DIAS_ANTES_PENDIENTE en Configuración.`
+        toastErrorTrasEnvioManual(
+          e,
+          'Revise PAGO_2_DIAS_ANTES_PENDIENTE en Configuración.'
         )
       } finally {
         if (operacionListaAbortRef.current === ac) {
@@ -905,7 +926,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     const ac = beginOperacionListaAbortable()
     setEnviandoPago1Dia(true)
     const loadingId = toast.loading(
-      'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
+      'Enviando correos… con muchas filas puede tardar más de 10 minutos. No cierre esta pestaña.'
     )
 
     try {
@@ -936,8 +957,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         return
       }
 
-      toast.error(
-        `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PAGO_1_DIA_ATRASADO en Configuración y el correo del servidor.`
+      toastErrorTrasEnvioManual(
+        e,
+        'Revise PAGO_1_DIA_ATRASADO en Configuración y el correo del servidor.'
       )
     } finally {
       if (operacionListaAbortRef.current === ac) {

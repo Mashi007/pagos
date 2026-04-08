@@ -1,5 +1,8 @@
 import { apiClient } from '../services/api'
 
+/** Envíos masivos sincrónicos (PDF + SMTP): listas grandes suelen superar 3 min. */
+export const TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL = 900_000
+
 export interface NotificacionPlantilla {
   id: number
 
@@ -812,7 +815,7 @@ class NotificacionService {
       `${API_V1}/notificaciones-prejudicial/enviar`,
       {},
       {
-        timeout: 120000,
+        timeout: TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL,
         signal: opts?.signal,
         params: fc ? { fecha_caracas: fc } : undefined,
       }
@@ -929,7 +932,7 @@ class NotificacionService {
     return await apiClient.post(
       `${this.baseUrl}/enviar-caso-manual`,
       { tipo, ...(fc ? { fecha_caracas: fc } : {}) },
-      { timeout: 180000, signal: opts?.signal }
+      { timeout: TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL, signal: opts?.signal }
     )
   }
 
