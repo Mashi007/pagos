@@ -1612,11 +1612,8 @@ export function EditarRevisionManual() {
         '¿Estás completamente seguro?'
     )
 
-    if (!confirmar) {
-      toast.info('ℹ️ Finalización cancelada')
-
-      return
-    }
+    // Usuario pulsó «Cancelar» en el diálogo nativo: no mostrar toast (se confundía con error).
+    if (!confirmar) return
 
     setGuardandoFinal(true)
 
