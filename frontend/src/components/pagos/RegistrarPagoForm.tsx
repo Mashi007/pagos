@@ -92,6 +92,34 @@ const DUPLICADO_DOCUMENTO_UI =
 const DUPLICADO_HUELLA_UI =
   'Pago duplicado detectado para este prestamo, fecha, monto y referencia.'
 
+function sanitizeMontoInputTexto(raw: string): string {
+  let v = raw.replace(/,/g, '.')
+  v = v.replace(/[^\d.]/g, '')
+  const dot = v.indexOf('.')
+  if (dot !== -1) {
+    v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '')
+  }
+  return v
+}
+
+function parseMontoDesdeTexto(s: string): number {
+  const t = s.trim()
+  if (t === '' || t === '.') return 0
+  const n = parseFloat(t.replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+}
+
+/** Texto inicial del campo monto: vacío en alta (evita 0 + dígitos → 013). */
+function montoInicialTextoDesdeNumero(
+  m: number | undefined | null,
+  editing: boolean
+): string {
+  const n = Number(m)
+  if (!Number.isFinite(n) || n < 0) return ''
+  if (n === 0) return editing ? '0' : ''
+  return String(n)
+}
+
 interface RegistrarPagoFormProps {
   onClose: () => void
 
@@ -169,6 +197,10 @@ export function RegistrarPagoForm({
       (pagoInicial as { codigo_documento?: string | null })?.codigo_documento ??
       null,
   })
+
+  const [montoStr, setMontoStr] = useState(() =>
+    montoInicialTextoDesdeNumero(pagoInicial?.monto_pagado, isEditing)
+  )
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -913,15 +945,28 @@ export function RegistrarPagoForm({
                   <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
 
                   <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.monto_pagado}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        monto_pagado: parseFloat(e.target.value) || 0,
-                      })
-                    }
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={montoStr}
+                    onChange={e => {
+                      const next = sanitizeMontoInputTexto(e.target.value)
+                      setMontoStr(next)
+                      setFormData(prev => ({
+                        ...prev,
+                        monto_pagado: parseMontoDesdeTexto(next),
+                      }))
+                    }}
+                    onBlur={() => {
+                      const n = parseMontoDesdeTexto(montoStr)
+                      if (montoStr.trim() === '') {
+                        setMontoStr('')
+                        setFormData(prev => ({ ...prev, monto_pagado: 0 }))
+                        return
+                      }
+                      setMontoStr(n === 0 ? (isEditing ? '0' : '') : String(n))
+                      setFormData(prev => ({ ...prev, monto_pagado: n }))
+                    }}
                     className={`pl-10 ${errors.monto_pagado ? 'border-red-500' : ''}`}
                     placeholder="0.00"
                   />
@@ -1305,10 +1350,11 @@ export function RegistrarPagoForm({
                   </p>
                   <ul className="list-inside list-disc space-y-1 text-xs">
                     <li>
-                      <strong>Añadir sufijos</strong>: agrega{' '}
+                      <strong>Añadir sufijos</strong>: agrega o sustituye{' '}
                       <code className="rounded bg-gray-100 px-1">_A####</code> o{' '}
                       <code className="rounded bg-gray-100 px-1">_P####</code>{' '}
-                      al comprobante (único en la base de datos).
+                      (código único: aleatorio entre libres; si hace falta,
+                      siguiente libre en orden).
                     </li>
                     <li>
                       <strong>Autorizar sin cambiar el documento</strong>: el
@@ -1334,7 +1380,8 @@ export function RegistrarPagoForm({
                     const nuevo = aplicarSufijoVistoADocumento(
                       formData.numero_documento,
                       letter,
-                      usados
+                      usados,
+                      { reemplazarSufijoAdmin: true }
                     )
                     setFormData(prev => ({ ...prev, numero_documento: nuevo }))
                     setErrors(prev => {
@@ -1350,7 +1397,7 @@ export function RegistrarPagoForm({
                       return next
                     })
                     toast.success(
-                      'Se añadió _A#### o _P#### al documento. Revise y guarde.'
+                      'Sufijo admin actualizado en el documento. Revise y guarde.'
                     )
                     setVistoRevisionManualOpen(false)
                   }}
