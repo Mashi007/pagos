@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -14,13 +14,24 @@ import {
   CheckCircle,
   AlertCircle,
   Info,
+  Check,
 } from 'lucide-react'
+
+import { toast } from 'sonner'
 
 import { Button } from '../../components/ui/button'
 
 import { Input } from '../../components/ui/input'
 
 import { Textarea } from '../../components/ui/textarea'
+
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog'
 
 import {
   Select,
@@ -35,6 +46,8 @@ import { pagoService, type PagoCreate } from '../../services/pagoService'
 import { pagoConErrorService } from '../../services/pagoConErrorService'
 
 import { usePrestamosByCedula, usePrestamo } from '../../hooks/usePrestamos'
+
+import { usePermissions } from '../../hooks/usePermissions'
 
 import { useDebounce } from '../../hooks/useDebounce'
 
@@ -62,6 +75,12 @@ import {
   NUMERO_DOCUMENTO_MAX_LEN,
   pareceCedulaEnCampoDocumento,
 } from '../../utils/pagoExcelValidation'
+
+import {
+  aplicarSufijoVistoADocumento,
+  collectTokensSufijoVistoArchivoDesdeFilas,
+  letterSufijoVistoDesdeMensajeDuplicado,
+} from '../../utils/documentoSufijoVisto'
 
 import { hoyYmdCaracas } from '../../utils/fechaZona'
 
@@ -121,6 +140,13 @@ export function RegistrarPagoForm({
   mostrarCampoCodigoDocumento = false,
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
+
+  const { isAdmin } = usePermissions()
+
+  const codigoDocumentoInputRef = useRef<HTMLInputElement>(null)
+
+  const [vistoRevisionManualOpen, setVistoRevisionManualOpen] =
+    useState(false)
 
   const [formData, setFormData] = useState<PagoCreate>({
     cedula_cliente: pagoInicial?.cedula_cliente || '',
@@ -1071,6 +1097,7 @@ export function RegistrarPagoForm({
                   </label>
 
                   <Input
+                    ref={codigoDocumentoInputRef}
                     type="text"
                     value={String(formData.codigo_documento ?? '')}
                     onChange={e =>
@@ -1098,6 +1125,31 @@ export function RegistrarPagoForm({
                 </div>
               ) : null}
             </div>
+
+            {mostrarCampoCodigoDocumento && isAdmin ? (
+              <div className="rounded-md border border-violet-200 bg-violet-50/90 px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-violet-950">
+                    <span className="font-semibold">Visto (admin):</span> mismo
+                    comprobante en archivo o en BD -{' '}
+                    <span className="whitespace-nowrap">
+                      añadir sufijo _A#### / _P####
+                    </span>{' '}
+                    o autorizar sin cambiar el número (como en carga masiva).
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 border-violet-400 bg-violet-100 text-violet-950 hover:bg-violet-200"
+                    onClick={() => setVistoRevisionManualOpen(true)}
+                  >
+                    <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                    Visto
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             {/* Comprobante (URL) - revisión manual y trazabilidad */}
 
@@ -1237,6 +1289,117 @@ export function RegistrarPagoForm({
               </Button>
             </div>
           </form>
+
+          <Dialog
+            open={vistoRevisionManualOpen}
+            onOpenChange={setVistoRevisionManualOpen}
+          >
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Comprobante duplicado (revisión manual)</DialogTitle>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p>
+                    Misma decisión que en carga masiva al pulsar «Visto»:
+                    modificar el número de documento o solo marcar revisión.
+                  </p>
+                  <ul className="list-inside list-disc space-y-1 text-xs">
+                    <li>
+                      <strong>Añadir sufijos</strong>: agrega{' '}
+                      <code className="rounded bg-gray-100 px-1">_A####</code>{' '}
+                      o{' '}
+                      <code className="rounded bg-gray-100 px-1">_P####</code> al
+                      comprobante (único en la base de datos).
+                    </li>
+                    <li>
+                      <strong>Autorizar sin cambiar el documento</strong>: el
+                      texto del comprobante queda igual; puede usar el campo{' '}
+                      <strong>Código</strong> para distinguir filas. Si la
+                      unicidad en BD no lo permite, use «Añadir sufijos».
+                    </li>
+                  </ul>
+                </div>
+              </DialogHeader>
+              <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
+                <button
+                  type="button"
+                  className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
+                  onClick={() => {
+                    const msg = [errors.general, errors.numero_documento]
+                      .filter(Boolean)
+                      .join(' ')
+                    const letter =
+                      letterSufijoVistoDesdeMensajeDuplicado(msg)
+                    const usados = collectTokensSufijoVistoArchivoDesdeFilas([
+                      { numero_documento: formData.numero_documento },
+                    ])
+                    const nuevo = aplicarSufijoVistoADocumento(
+                      formData.numero_documento,
+                      letter,
+                      usados
+                    )
+                    setFormData(prev => ({ ...prev, numero_documento: nuevo }))
+                    setErrors(prev => {
+                      const next = { ...prev }
+                      delete next.numero_documento
+                      const g = next.general
+                      if (
+                        g === DUPLICADO_DOCUMENTO_UI ||
+                        (g &&
+                          g.toLowerCase().includes('documento'))
+                      ) {
+                        delete next.general
+                      }
+                      return next
+                    })
+                    toast.success(
+                      'Se añadió _A#### o _P#### al documento. Revise y guarde.'
+                    )
+                    setVistoRevisionManualOpen(false)
+                  }}
+                >
+                  Añadir sufijos al documento
+                </button>
+                <button
+                  type="button"
+                  className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                  onClick={() => {
+                    setErrors(prev => {
+                      const next = { ...prev }
+                      delete next.numero_documento
+                      const g = next.general
+                      if (
+                        g === DUPLICADO_DOCUMENTO_UI ||
+                        g === DUPLICADO_HUELLA_UI ||
+                        (g &&
+                          (g.toLowerCase().includes('comprobante') ||
+                            g.toLowerCase().includes('documento')))
+                      ) {
+                        delete next.general
+                      }
+                      return next
+                    })
+                    toast.success(
+                      'Autorizado sin modificar el documento. Use «Código» si aplica.'
+                    )
+                    setVistoRevisionManualOpen(false)
+                    setTimeout(
+                      () => codigoDocumentoInputRef.current?.focus(),
+                      0
+                    )
+                  }}
+                >
+                  Autorizar sin cambiar el documento
+                </button>
+                <button
+                  type="button"
+                  className="w-full rounded-md px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                  onClick={() => setVistoRevisionManualOpen(false)}
+                >
+                  Cancelar
+                </button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </motion.div>
       </motion.div>
     </AnimatePresence>

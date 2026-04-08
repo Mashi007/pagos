@@ -60,7 +60,6 @@ import {
   validateExcelData,
   sanitizeFileName,
   normalizarNumeroDocumento,
-  NUMERO_DOCUMENTO_MAX_LEN,
   cedulaParaLookup,
   cedulaLookupParaFila,
   looksLikeDocumentNotCedula,
@@ -70,6 +69,12 @@ import {
   linkComprobanteDesdeCeldaExcel,
 } from '../utils/pagoExcelValidation'
 
+import {
+  SUFIJO_VISTO_ARCHIVO_RE,
+  aplicarSufijoVistoADocumento,
+  collectTokensSufijoVistoArchivoDesdeFilas,
+} from '../utils/documentoSufijoVisto'
+
 import { readExcelToJSON } from '../types/exceljs'
 
 const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
@@ -77,29 +82,6 @@ const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
 // Layout de columnas (primera fila Excel)
 
 const PRESTAMO_ID_MAX = 2147483647
-
-/**
- * Sufijo admin carga masiva: _ + A|P + 4 digitos (mismo archivo vs otro prestamo en BD).
- */
-const SUFIJO_VISTO_ARCHIVO_RE = /_[AP]\d{4}$/i
-
-/** Genera token A#### o P#### unicos dentro de `usados`. */
-function allocarTokenSufijoVistoArchivo(
-  letter: 'A' | 'P',
-  usados: Set<string>
-): string {
-  for (let t = 0; t < 80; t++) {
-    const n = Math.floor(Math.random() * 10000)
-    const tok = `${letter}${String(n).padStart(4, '0')}`
-    if (!usados.has(tok)) {
-      usados.add(tok)
-      return tok
-    }
-  }
-  const tok = `${letter}${String(Date.now() % 10000).padStart(4, '0')}`
-  usados.add(tok)
-  return tok
-}
 
 /** Si el monto visible antes de guardar es >= este valor, se avisa verificar USD vs Bs. */
 const MONTO_MIN_ADVERTENCIA_MONEDA = 2000
@@ -3210,7 +3192,7 @@ export function useExcelUploadPagos({
         prestamoPorDocDupBDRef.current.get(claveCompuesta) ?? null
 
       setExcelData(prev => {
-        const usados = new Set<string>()
+        const usados = collectTokensSufijoVistoArchivoDesdeFilas(prev)
         const mapped = prev.map(r => {
           const clave = claveDocumentoExcelCompuesta(
             r.numero_documento,
@@ -3229,14 +3211,13 @@ export function useExcelUploadPagos({
               ? 'P'
               : 'A'
 
-          const token = allocarTokenSufijoVistoArchivo(letter, usados)
-          const maxBase = NUMERO_DOCUMENTO_MAX_LEN - 1 - token.length
-          let base = raw
-          if (base.length > maxBase) {
-            base = base.slice(0, Math.max(0, maxBase))
-          }
+          const nuevo = aplicarSufijoVistoADocumento(
+            r.numero_documento,
+            letter,
+            usados
+          )
 
-          return { ...r, numero_documento: `${base}_${token}` }
+          return { ...r, numero_documento: nuevo }
         })
 
         return applyRowValidationsSync(
