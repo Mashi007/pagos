@@ -28,6 +28,14 @@ import {
 
 import { Button } from '../components/ui/button'
 
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
+
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -666,6 +674,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [enviandoPago1Dia, setEnviandoPago1Dia] = useState(false)
 
+  /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
+  const [confirmEnvio, setConfirmEnvio] = useState<null | {
+    kind: 'prejudicial' | 'd2antes' | 'pago1dia'
+    n: number
+  }>(null)
+
   const operacionListaAbortRef = useRef<AbortController | null>(null)
 
   const beginOperacionListaAbortable = () => {
@@ -786,147 +800,105 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     }
   }
 
-  const handleEnviarPrejudicialManual = async () => {
-    if (modulo !== 'a3cuotas') return
+  const ejecutarEnvioManualTrasConfirmar = async (p: {
+    kind: 'prejudicial' | 'd2antes' | 'pago1dia'
+    n: number
+  }) => {
+    const { kind, n } = p
 
-    const n = dataPrejudicial?.items?.length ?? 0
+    if (kind === 'prejudicial') {
+      const ac = beginOperacionListaAbortable()
+      setEnviandoPrejudicial(true)
+      const loadingId = toast.loading(
+        'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
+      )
 
-    const confirmar =
-      n === 0
-        ? window.confirm(
-            'No hay filas en el listado en pantalla. El servidor procesará su lista prejudicial actual (puede estar vacía).\n\n¿Ejecutar envío manual? Aceptar = enviar. Cancelar en este cuadro = no enviar.'
-          )
-        : window.confirm(
-            `Envío manual a clientes del caso PREJUDICIAL (${n} filas visibles; el servidor usa la misma regla de lista). Respeta plantilla, CCO y modo prueba en Configuración.\n\n¿Enviar correos ahora? Use Aceptar para enviar o Cancelar en este cuadro del navegador para no enviar (no se llama al servidor).`
-          )
+      try {
+        const res = await notificacionService.enviarNotificacionesPrejudiciales(
+          {
+            signal: ac.signal,
+            fechaCaracas: fechaCaracasApi,
+          }
+        )
 
-    if (!confirmar) {
+        toast.dismiss(loadingId)
+        toastResultadoEnvioNotificaciones(res, n)
+
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+        })
+
+        await invalidateListasNotificacionesMora(queryClient, {
+          skipCrossTabBroadcast: true,
+        })
+
+        await queryClient.refetchQueries({
+          queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+        })
+      } catch (e) {
+        console.error(e)
+        toast.dismiss(loadingId)
+        if (isRequestCanceled(e)) {
+          toast.info('Envío cancelado en el navegador.')
+          return
+        }
+
+        toast.error(
+          `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PREJUDICIAL en Configuración y el correo del servidor.`
+        )
+      } finally {
+        if (operacionListaAbortRef.current === ac) {
+          operacionListaAbortRef.current = null
+        }
+        setEnviandoPrejudicial(false)
+      }
       return
     }
 
-    const ac = beginOperacionListaAbortable()
-    setEnviandoPrejudicial(true)
-    const loadingId = toast.loading(
-      'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
-    )
-
-    try {
-      const res = await notificacionService.enviarNotificacionesPrejudiciales({
-        signal: ac.signal,
-        fechaCaracas: fechaCaracasApi,
-      })
-
-      toast.dismiss(loadingId)
-      toastResultadoEnvioNotificaciones(res, n)
-
-      await queryClient.invalidateQueries({
-        queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
-      })
-
-      await invalidateListasNotificacionesMora(queryClient, {
-        skipCrossTabBroadcast: true,
-      })
-
-      await queryClient.refetchQueries({
-        queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
-      })
-    } catch (e) {
-      console.error(e)
-      toast.dismiss(loadingId)
-      if (isRequestCanceled(e)) {
-        toast.info('Envío cancelado en el navegador.')
-        return
-      }
-
-      toast.error(
-        `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PREJUDICIAL en Configuración y el correo del servidor.`
-      )
-    } finally {
-      if (operacionListaAbortRef.current === ac) {
-        operacionListaAbortRef.current = null
-      }
-      setEnviandoPrejudicial(false)
-    }
-  }
-
-  const handleEnviarD2AntesManual = async () => {
-    if (modulo !== 'd2antes') return
-
-    const n = dataD2Antes?.items?.length ?? 0
-
-    const confirmar =
-      n === 0
-        ? window.confirm(
-            'No hay filas en el listado. El servidor procesará la lista actual del criterio PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía).\n\n¿Ejecutar envío manual? Aceptar = enviar. Cancelar en este cuadro = no enviar.'
-          )
-        : window.confirm(
-            `Envío manual para 2 días antes (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración.\n\n¿Enviar correos ahora? Aceptar = enviar. Cancelar en este cuadro = no enviar (sin petición al servidor).`
-          )
-
-    if (!confirmar) {
-      return
-    }
-
-    const ac = beginOperacionListaAbortable()
-    setEnviandoD2Antes(true)
-    const loadingId = toast.loading(
-      'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
-    )
-
-    try {
-      const res = await notificacionService.enviarCasoManual(
-        'PAGO_2_DIAS_ANTES_PENDIENTE',
-        { signal: ac.signal, fechaCaracas: fechaCaracasApi }
+    if (kind === 'd2antes') {
+      const ac = beginOperacionListaAbortable()
+      setEnviandoD2Antes(true)
+      const loadingId = toast.loading(
+        'Enviando correos… puede tardar varios minutos. No cierre esta pestaña.'
       )
 
-      toast.dismiss(loadingId)
-      toastResultadoEnvioNotificaciones(res, n)
+      try {
+        const res = await notificacionService.enviarCasoManual(
+          'PAGO_2_DIAS_ANTES_PENDIENTE',
+          { signal: ac.signal, fechaCaracas: fechaCaracasApi }
+        )
 
-      await queryClient.invalidateQueries({
-        queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
-      })
+        toast.dismiss(loadingId)
+        toastResultadoEnvioNotificaciones(res, n)
 
-      await invalidateListasNotificacionesMora(queryClient, {
-        skipCrossTabBroadcast: true,
-      })
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+        })
 
-      await queryClient.refetchQueries({
-        queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
-      })
-    } catch (e) {
-      console.error(e)
-      toast.dismiss(loadingId)
-      if (isRequestCanceled(e)) {
-        toast.info('Envío cancelado en el navegador.')
-        return
+        await invalidateListasNotificacionesMora(queryClient, {
+          skipCrossTabBroadcast: true,
+        })
+
+        await queryClient.refetchQueries({
+          queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+        })
+      } catch (e) {
+        console.error(e)
+        toast.dismiss(loadingId)
+        if (isRequestCanceled(e)) {
+          toast.info('Envío cancelado en el navegador.')
+          return
+        }
+
+        toast.error(
+          `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PAGO_2_DIAS_ANTES_PENDIENTE en Configuración.`
+        )
+      } finally {
+        if (operacionListaAbortRef.current === ac) {
+          operacionListaAbortRef.current = null
+        }
+        setEnviandoD2Antes(false)
       }
-
-      toast.error(
-        `No se pudo completar el envío: ${getErrorMessage(e)}. Revise PAGO_2_DIAS_ANTES_PENDIENTE en Configuración.`
-      )
-    } finally {
-      if (operacionListaAbortRef.current === ac) {
-        operacionListaAbortRef.current = null
-      }
-      setEnviandoD2Antes(false)
-    }
-  }
-
-  const handleEnviarPago1DiaManual = async () => {
-    if (modulo !== 'a1dia') return
-
-    const n = data?.dias_1_atraso?.length ?? 0
-
-    const confirmar =
-      n === 0
-        ? window.confirm(
-            'No hay filas en el listado. El servidor procesará la lista actual del criterio día siguiente al vencimiento (puede estar vacía).\n\n¿Ejecutar envío manual? Aceptar = enviar. Cancelar en este cuadro = no enviar.'
-          )
-        : window.confirm(
-            `Envío manual para día siguiente al vencimiento (${n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración.\n\n¿Enviar correos ahora? Aceptar = enviar. Cancelar en este cuadro = no enviar (sin petición al servidor).`
-          )
-
-    if (!confirmar) {
       return
     }
 
@@ -973,6 +945,31 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       }
       setEnviandoPago1Dia(false)
     }
+  }
+
+  const solicitarConfirmacionEnvioPrejudicial = () => {
+    if (modulo !== 'a3cuotas') return
+    const n = dataPrejudicial?.items?.length ?? 0
+    setConfirmEnvio({ kind: 'prejudicial', n })
+  }
+
+  const solicitarConfirmacionEnvioD2Antes = () => {
+    if (modulo !== 'd2antes') return
+    const n = dataD2Antes?.items?.length ?? 0
+    setConfirmEnvio({ kind: 'd2antes', n })
+  }
+
+  const solicitarConfirmacionEnvioPago1Dia = () => {
+    if (modulo !== 'a1dia') return
+    const n = data?.dias_1_atraso?.length ?? 0
+    setConfirmEnvio({ kind: 'pago1dia', n })
+  }
+
+  const confirmarEnvioManualYEnviar = () => {
+    const p = confirmEnvio
+    if (!p) return
+    setConfirmEnvio(null)
+    void ejecutarEnvioManualTrasConfirmar(p)
   }
 
   const getListForTab = (): ClienteRetrasadoItem[] => {
@@ -1204,7 +1201,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 className="border-red-400 text-red-800 hover:bg-red-50"
                 disabled={!hayOperacionListaEnCurso}
                 onClick={cancelarOperacionListaEmergencia}
-                title="Emergencia: corta la petición en curso (actualizar listas). El servidor puede seguir unos segundos."
+                title="Emergencia: corta actualización de listas en curso. No confundir con confirmar envío de correos (eso es en la pestaña de listado)."
               >
                 <X className="mr-2 h-4 w-4" />
                 Cancelar
@@ -1285,7 +1282,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 className="border-red-400 text-red-800 hover:bg-red-50"
                 disabled={!hayOperacionListaEnCurso}
                 onClick={cancelarOperacionListaEmergencia}
-                title="Emergencia: corta actualización de listas o envío manual en curso. El servidor puede seguir unos segundos."
+                title="Emergencia: corta petición en curso. No es la confirmación de envío: en el modal use «Enviar correos» o «No enviar»."
               >
                 <X className="mr-2 h-4 w-4" />
                 Cancelar
@@ -1397,7 +1394,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => void handleEnviarPago1DiaManual()}
+                  onClick={solicitarConfirmacionEnvioPago1Dia}
                   disabled={enviandoPago1Dia || esperandoPrimeraCargaLista}
                   title={
                     esperandoPrimeraCargaLista
@@ -1419,7 +1416,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => void handleEnviarPrejudicialManual()}
+                  onClick={solicitarConfirmacionEnvioPrejudicial}
                   disabled={enviandoPrejudicial || esperandoPrimeraCargaLista}
                   title={
                     esperandoPrimeraCargaLista
@@ -1441,7 +1438,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => void handleEnviarD2AntesManual()}
+                  onClick={solicitarConfirmacionEnvioD2Antes}
                   disabled={enviandoD2Antes || esperandoPrimeraCargaLista}
                   title={
                     esperandoPrimeraCargaLista
@@ -1466,7 +1463,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 className="border-red-400 text-red-800 hover:bg-red-50"
                 disabled={!hayOperacionListaEnCurso}
                 onClick={cancelarOperacionListaEmergencia}
-                title="Emergencia: interrumpe la petición en curso (actualizar listas o envío manual). El servidor puede seguir unos segundos."
+                title="Emergencia: corta actualización o envío ya en curso. No sustituye al modal de confirmación: use «Enviar correos» en la ventana que se abre al pulsar enviar."
               >
                 <X className="mr-2 h-4 w-4" />
                 Cancelar
@@ -1795,6 +1792,68 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           </CardContent>
         </Card>
       </motion.div>
+
+      <Dialog
+        open={confirmEnvio != null}
+        onOpenChange={open => {
+          if (!open) setConfirmEnvio(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar envío de correos</DialogTitle>
+
+            <div className="space-y-3 text-sm text-gray-600">
+              {confirmEnvio?.kind === 'prejudicial' ? (
+                <p>
+                  {confirmEnvio.n === 0
+                    ? 'No hay filas en pantalla. El servidor procesará la lista prejudicial actual (puede estar vacía).'
+                    : `Envío al caso PREJUDICIAL (${confirmEnvio.n} filas visibles; el servidor usa la misma regla). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                </p>
+              ) : null}
+
+              {confirmEnvio?.kind === 'd2antes' ? (
+                <p>
+                  {confirmEnvio.n === 0
+                    ? 'No hay filas en pantalla. El servidor procesará PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía).'
+                    : `Envío para 2 días antes (${confirmEnvio.n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                </p>
+              ) : null}
+
+              {confirmEnvio?.kind === 'pago1dia' ? (
+                <p>
+                  {confirmEnvio.n === 0
+                    ? 'No hay filas en pantalla. El servidor procesará el criterio «día siguiente al vencimiento» (puede estar vacía).'
+                    : `Envío para día siguiente al vencimiento (${confirmEnvio.n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                </p>
+              ) : null}
+
+              <p className="font-medium text-gray-900">
+                Pulse «Enviar correos» para llamar al servidor (aparecerá la
+                petición POST en la red). «No enviar» cierra sin enviar.
+              </p>
+            </div>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmEnvio(null)}
+            >
+              No enviar
+            </Button>
+
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={confirmarEnvioManualYEnviar}
+            >
+              Enviar correos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
