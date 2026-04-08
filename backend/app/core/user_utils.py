@@ -10,6 +10,20 @@ from app.models.user import User
 from app.schemas.auth import UserResponse
 
 
+def split_nombre_completo_para_api(full: Optional[str]) -> tuple[str, str]:
+    """
+    Parte nombre completo almacenado en usuarios.nombre (post-migración 041) en
+    nombre + apellido para la API (último token = apellido).
+    """
+    s = (full or "").strip()
+    if not s:
+        return "", ""
+    parts = s.rsplit(" ", 1)
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], parts[1]
+
+
 def user_to_response(u: User) -> UserResponse:
     """Convierte modelo User a UserResponse (fechas en ISO)."""
     def _dt_iso(dt: Optional[datetime]) -> Optional[str]:
@@ -23,12 +37,12 @@ def user_to_response(u: User) -> UserResponse:
         "admin" if getattr(u, "is_admin", False) else "viewer"
     )
     rol = canonical_rol(raw_rol)
-    apellido = getattr(u, "apellido", "") or ""
+    nombre_api, apellido_api = split_nombre_completo_para_api(getattr(u, "nombre", None))
     return UserResponse(
         id=u.id,
         email=u.email,
-        nombre=u.nombre or "",
-        apellido=apellido,
+        nombre=nombre_api,
+        apellido=apellido_api,
         cargo=u.cargo,
         rol=rol,
         is_active=bool(u.is_active),

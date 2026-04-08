@@ -6,14 +6,23 @@ from typing import Any, Optional
 
 import jwt
 from passlib.context import CryptContext
+from passlib.exc import InvalidHashError, MalformedHashError, UnknownHashError
 
 from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# Errores de passlib cuando el hash en BD no es bcrypt válido: no propagar (evita 500 en login).
+_HASH_VERIFY_ERRORS = (UnknownHashError, InvalidHashError, MalformedHashError, ValueError, TypeError)
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except _HASH_VERIFY_ERRORS:
+        return False
 
 
 def get_password_hash(password: str) -> str:

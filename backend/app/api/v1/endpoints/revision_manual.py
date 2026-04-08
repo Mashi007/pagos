@@ -1843,7 +1843,6 @@ def listar_solicitudes_reapertura_pendientes(
                 Prestamo.cedula,
                 Prestamo.nombres,
                 SolUser.nombre,
-                SolUser.apellido,
                 SolUser.email,
             )
             .join(Prestamo, Prestamo.id == RevisionManualSolicitudReapertura.prestamo_id)
@@ -1867,16 +1866,24 @@ def listar_solicitudes_reapertura_pendientes(
         raise
 
     out: List[SolicitudReaperturaPendienteOut] = []
-    for sol, ced, nom_cli, sn, sa, se in rows:
+    for sol, ced, nom_cli, sn, se in rows:
         creado = sol.creado_en.isoformat() if sol.creado_en else ""
+        sn_clean = (sn or "").strip()
+        if sn_clean:
+            parts = sn_clean.rsplit(" ", 1)
+            sol_nom = parts[0]
+            sol_ape = parts[1] if len(parts) > 1 else ""
+        else:
+            sol_nom = ""
+            sol_ape = ""
         out.append(
             SolicitudReaperturaPendienteOut(
                 id=sol.id,
                 prestamo_id=sol.prestamo_id,
                 cedula=ced or "",
                 nombres_cliente=nom_cli or "",
-                solicitante_nombre=(sn or "").strip() or "—",
-                solicitante_apellido=(sa or "").strip() or "",
+                solicitante_nombre=sol_nom or "—",
+                solicitante_apellido=sol_ape,
                 solicitante_email=se if se else (sol.solicitante_email or None),
                 mensaje=sol.mensaje,
                 creado_en=creado,

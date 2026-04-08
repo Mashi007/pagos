@@ -17,7 +17,7 @@ from sqlalchemy import func
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.core.security import get_password_hash
-from app.core.user_utils import user_to_response
+from app.core.user_utils import split_nombre_completo_para_api, user_to_response
 from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.schemas.usuario import UserCreate, UserUpdate
@@ -98,11 +98,17 @@ def crear_usuario(
         )
     
     now = datetime.utcnow()
+    nombre_completo = f"{body.nombre.strip()} {(body.apellido or '').strip()}".strip()
+    if len(nombre_completo) > 255:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nombre y apellido combinados no pueden superar 255 caracteres",
+        )
     u = User(
         email=email,
+        cedula=email[:50],
         password_hash=get_password_hash(body.password),
-        nombre=body.nombre.strip(),
-        apellido=(body.apellido or "").strip(),
+        nombre=nombre_completo,
         cargo=body.cargo.strip() if body.cargo else None,
         rol=body.rol,
         is_active=body.is_active,
@@ -144,10 +150,17 @@ def actualizar_usuario(
             )
         u.email = email
     
-    if body.nombre is not None:
-        u.nombre = body.nombre.strip()
-    if body.apellido is not None:
-        u.apellido = body.apellido.strip()
+    if body.nombre is not None or body.apellido is not None:
+        cur_n, cur_a = split_nombre_completo_para_api(u.nombre)
+        new_n = body.nombre.strip() if body.nombre is not None else cur_n
+        new_a = (body.apellido or "").strip() if body.apellido is not None else cur_a
+        merged = f"{new_n} {new_a}".strip()
+        if len(merged) > 255:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nombre y apellido combinados no pueden superar 255 caracteres",
+            )
+        u.nombre = merged
     if body.cargo is not None:
         u.cargo = body.cargo.strip() if body.cargo else None
     if body.rol is not None:
