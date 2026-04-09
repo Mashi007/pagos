@@ -4,7 +4,7 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
   Asi no quedan archivos en Drive sin fila; los enlaces existen en BD justo despues del segundo commit.
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
-Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 y ETIQUETA 4 (formato D BDV) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
+Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 / 4 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From).
 Si no hay cliente para ese email: columna Cedula = ERROR EMAIL. Si falla la consulta a clientes: ERROR BD.
@@ -43,7 +43,7 @@ from app.services.pagos_gmail.gmail_service import (
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
     PAGOS_GMAIL_LABEL_IMAGEN_3,
-    PAGOS_GMAIL_LABEL_ETIQUETA_4,
+    PAGOS_GMAIL_LABEL_IMAGEN_4,
 )
 from app.services.pagos_gmail.gemini_service import (
     classify_and_extract_pagos_gmail_attachment,
@@ -146,9 +146,9 @@ def run_pipeline(
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
-    Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o ETIQUETA 4 (D) + estrella; cierre: leido si hubo algun OK.
+    Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D) + estrella; cierre: leido si hubo algun OK.
     scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = toda la bandeja).
-      pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2/3 ni ETIQUETA 4.
+      pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2/3/4.
     Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
     Los mensajes de cada lote se ordenan por fecha (mas actual primero) antes de procesar.
     Con "unread", se repite listar+procesar hasta que no queden no leidos o hasta PAGOS_GMAIL_UNREAD_MAX_PASSES.
@@ -534,7 +534,7 @@ def run_pipeline(
                                     etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_2
                                 elif fmt == "D":
                                     label_id = id_d
-                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_ETIQUETA_4
+                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_4
                                 else:
                                     label_id = id_c
                                     etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
