@@ -25,6 +25,8 @@ PAGOS_GMAIL_LABEL_IMAGEN_1 = "IMAGEN 1"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "IMAGEN 2"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "IMAGEN 3"
 PAGOS_GMAIL_LABEL_IMAGEN_4 = "IMAGEN 4"
+# Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
+PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 
 
 def pagos_gmail_list_q_media_parts() -> str:
@@ -48,7 +50,8 @@ def pagos_gmail_pending_identification_query() -> str:
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}"'
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"'
     )
 
 
@@ -919,6 +922,23 @@ def add_message_star_and_user_labels(
         ).execute()
     except Exception as e:
         logger.warning("add_message_star_and_user_labels %s: %s", message_id, e)
+
+
+def add_message_user_labels_only(
+    service: Any, message_id: str, user_label_ids: List[str]
+) -> None:
+    """Anade solo etiquetas de usuario (sin estrella). Ej. ERROR EMAIL cuando cedula no resuelve por remitente."""
+    add_ids = [x for x in user_label_ids if x]
+    if not add_ids:
+        return
+    try:
+        service.users().messages().modify(
+            userId="me",
+            id=message_id,
+            body={"addLabelIds": add_ids},
+        ).execute()
+    except Exception as e:
+        logger.warning("add_message_user_labels_only %s: %s", message_id, e)
 
 
 def mark_as_read(service: Any, message_id: str) -> None:

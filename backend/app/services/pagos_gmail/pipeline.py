@@ -7,7 +7,7 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
 Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 / 4 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From).
-Si no hay cliente para ese email: columna Cedula = ERROR EMAIL. Si falla la consulta a clientes: ERROR BD.
+Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella IMAGEN 1–4). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
 En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
 Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas, no leido
 (en filtro unread se fuerza sin estrella + no leido para reintento). No inventar datos: Gemini ya devuelve NA si no hay certeza.
@@ -31,7 +31,9 @@ from app.services.pagos_gmail.drive_service import (
 )
 from app.services.pagos_gmail.gmail_service import (
     add_message_star_and_user_labels,
+    add_message_user_labels_only,
     build_gmail_service,
+    ensure_user_label_id,
     get_pagos_gmail_image_pdf_files_for_pipeline,
     get_message_date,
     get_message_full_payload,
@@ -40,6 +42,7 @@ from app.services.pagos_gmail.gmail_service import (
     list_messages_by_filter,
     mark_as_read,
     mark_unread_clear_star,
+    PAGOS_GMAIL_LABEL_ERROR_EMAIL,
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
     PAGOS_GMAIL_LABEL_IMAGEN_3,
@@ -300,6 +303,7 @@ def run_pipeline(
 
                 had_complete_digitalization = False
                 any_incomplete_or_skipped = False
+                any_cedula_lookup_failed = False
                 label_ids_for_message: list[str] = []
                 if not attachments:
                     any_incomplete_or_skipped = True
@@ -359,6 +363,7 @@ def run_pipeline(
                     return v if v and v.upper() != "NA" else ""
 
                 pending: list[dict] = []
+                committed_comprobante_rows = False
                 for filename, content, mime_type in attachments:
                     try:
                         fmt, data = classify_and_extract_pagos_gmail_attachment(
@@ -382,6 +387,7 @@ def run_pipeline(
                             c, c_ok = _cedula_columna_desde_remitente(db, sender_lc)
                             if not c_ok:
                                 any_incomplete_or_skipped = True
+                                any_cedula_lookup_failed = True
                                 logger.warning(
                                     "[PAGOS_GMAIL]   Imagen 3 (C): columna Cedula=%s — De=%s archivo=%s",
                                     c,
@@ -395,6 +401,7 @@ def run_pipeline(
                             c, c_ok = _cedula_columna_desde_remitente(db, sender_lc)
                             if not c_ok:
                                 any_incomplete_or_skipped = True
+                                any_cedula_lookup_failed = True
                                 logger.warning(
                                     "[PAGOS_GMAIL]   Imagen 1/2/4 (%s): columna Cedula=%s — De=%s archivo=%s",
                                     fmt,
@@ -457,6 +464,7 @@ def run_pipeline(
                     if rows_pairs:
                         try:
                             db.commit()
+                            committed_comprobante_rows = True
                             logger.info(
                                 "[PAGOS_GMAIL]   Commit BD inicial: %d fila(s) comprobante sin enlaces Drive aun",
                                 len(rows_pairs),
@@ -574,6 +582,28 @@ def run_pipeline(
                     and not any_incomplete_or_skipped
                     and had_complete_digitalization
                 )
+                # Gmail: etiqueta de usuario ERROR EMAIL (igual que columna Excel) si hubo filas guardadas
+                # y el remitente no coincide con clientes.email (o fallo BD). Bloque independiente del if/elif
+                # de estrella+IMAGEN para que no quede sin ejecutar.
+                if any_cedula_lookup_failed and committed_comprobante_rows:
+                    k_err = PAGOS_GMAIL_LABEL_ERROR_EMAIL
+                    if k_err not in plantilla_label_cache:
+                        plantilla_label_cache[k_err] = ensure_user_label_id(
+                            gmail_svc, k_err
+                        )
+                    err_lid = plantilla_label_cache.get(k_err)
+                    if err_lid:
+                        add_message_user_labels_only(gmail_svc, msg_id, [err_lid])
+                        logger.info(
+                            "[PAGOS_GMAIL]   Gmail: etiqueta %s aplicada (remitente sin match en clientes o ERROR BD)",
+                            k_err,
+                        )
+                    else:
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s — revisar permisos Gmail",
+                            k_err,
+                        )
+
                 if fully_digitized_email:
                     unique_label_ids = list(
                         dict.fromkeys(x for x in label_ids_for_message if x)
