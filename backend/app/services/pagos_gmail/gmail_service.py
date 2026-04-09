@@ -20,12 +20,12 @@ from app.services.pagos_gmail.helpers import (
 
 logger = logging.getLogger(__name__)
 
-# Etiquetas de usuario (plantilla prompt A = imagen 1, B = imagen 2, C = imagen 3 Binance, D = imagen 4 BDV). Se crean si no existen.
-PAGOS_GMAIL_LABEL_IMAGEN_1 = "IMAGEN 1"
+# Etiquetas de usuario (plantilla A = Mercantil en Gmail; B/C/D = imagen 2/3/4). Se crean si no existen.
+PAGOS_GMAIL_LABEL_IMAGEN_1 = "MERCANTIL"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "IMAGEN 2"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "IMAGEN 3"
 PAGOS_GMAIL_LABEL_IMAGEN_4 = "IMAGEN 4"
-# Remitente fijo master@rapicreditca.com: solo esta etiqueta en Gmail (no IMAGEN 1-4 ni ERROR EMAIL). Ver pipeline.
+# Remitente fijo master@rapicreditca.com: solo esta etiqueta en Gmail (no MERCANTIL / IMAGEN 2-4 ni ERROR EMAIL). Ver pipeline.
 PAGOS_GMAIL_LABEL_IMAGEN_5 = "IMAGEN 5"
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
@@ -45,7 +45,7 @@ def pagos_gmail_list_q_media_parts() -> str:
 def pagos_gmail_pending_identification_query() -> str:
     """
     Consulta Gmail (parametro q): inbox, con adjunto o imagen en cuerpo, sin estrella, sin etiquetas plantilla.
-    Asi el escaneo periodico no reprocesa correos ya marcados con IMAGEN 1 / 2 / 3 / 4 / 5 o destacados.
+    Asi el escaneo periodico no reprocesa correos ya marcados con MERCANTIL / IMAGEN 2 / 3 / 4 / 5 o destacados.
     """
     return (
         f"in:inbox -is:starred {pagos_gmail_list_q_media_parts()} "
@@ -892,7 +892,7 @@ def get_or_create_pagos_gmail_plantilla_label_ids(
     service: Any, cache: Optional[Dict[str, Optional[str]]] = None
 ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
-    Resuelve ids para PAGOS_GMAIL_LABEL_IMAGEN_1 / _2 / _3 / _4 con cache opcional por nombre.
+    Resuelve ids para MERCANTIL (formato A) / IMAGEN 2 / 3 / 4 con cache opcional por nombre.
     """
     c = cache if cache is not None else {}
     k1, k2, k3, k4 = (

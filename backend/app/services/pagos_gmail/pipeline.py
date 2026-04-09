@@ -4,11 +4,11 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
   Asi no quedan archivos en Drive sin fila; los enlaces existen en BD justo despues del segundo commit.
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
-Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **IMAGEN 5** (sin IMAGEN 1-4 ni ERROR EMAIL).
-Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 / 4 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
+Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **IMAGEN 5** (sin MERCANTIL / IMAGEN 2-4 ni ERROR EMAIL).
+Estrella Gmail + etiquetas MERCANTIL (A) / IMAGEN 2 / 3 / 4 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From).
-Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella IMAGEN 1–4). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
+Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella MERCANTIL / IMAGEN 2–4). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
 En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
 Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas, no leido
 (en filtro unread se fuerza sin estrella + no leido para reintento). No inventar datos: Gemini ya devuelve NA si no hay certeza.
@@ -631,7 +631,7 @@ def run_pipeline(
                                 correos_marcados_revision += 1
                             logger.info(
                                 "[PAGOS_GMAIL]   Gmail: %s — solo %s + estrella (100%% OK); "
-                                "sin IMAGEN 1-4 ni ERROR EMAIL",
+                                "sin MERCANTIL / IMAGEN 2-4 ni ERROR EMAIL",
                                 PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5,
                                 k5,
                             )
@@ -640,7 +640,7 @@ def run_pipeline(
                                 gmail_svc, msg_id, [id5]
                             )
                             logger.info(
-                                "[PAGOS_GMAIL]   Gmail: %s — solo %s (sin IMAGEN 1-4 / ERROR EMAIL)",
+                                "[PAGOS_GMAIL]   Gmail: %s — solo %s (sin MERCANTIL / IMAGEN 2-4 / ERROR EMAIL)",
                                 PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5,
                                 k5,
                             )

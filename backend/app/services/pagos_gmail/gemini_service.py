@@ -338,7 +338,7 @@ Salida: solo JSON, sin markdown.
   ninguno: {"formato":"ninguno","fecha_pago":"NA","cedula":"NA","monto":"NA","numero_referencia":"NA","email_cliente":"NA","banco":"NA"}
 """.strip()
 
-# Estos formatos pasan a Drive/BD/etiquetas Gmail IMAGEN 1/2/3/4 (D = BDV; cedula en Excel por remitente De en clientes).
+# Estos formatos pasan a Drive/BD/etiquetas Gmail MERCANTIL + IMAGEN 2/3/4 (D = BDV; cedula en Excel por remitente De en clientes).
 PAGOS_GMAIL_FORMATOS_PLANTILLA: frozenset[str] = frozenset({"A", "B", "C", "D"})
 
 
