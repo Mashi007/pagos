@@ -4,6 +4,7 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
   Asi no quedan archivos en Drive sin fila; los enlaces existen en BD justo despues del segundo commit.
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
+Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **IMAGEN 5** (sin IMAGEN 1-4 ni ERROR EMAIL).
 Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 / 4 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From).
@@ -43,6 +44,7 @@ from app.services.pagos_gmail.gmail_service import (
     mark_as_read,
     mark_unread_clear_star,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
+    PAGOS_GMAIL_LABEL_IMAGEN_5,
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
     PAGOS_GMAIL_LABEL_IMAGEN_3,
@@ -102,6 +104,9 @@ PAGOS_GMAIL_BANCO_IMAGEN_4 = "BDV"
 # Columna Cedula en Excel cuando no se puede resolver por remitente (max 50 chars en modelo).
 PAGOS_GMAIL_ERROR_CEDULA_BD = "ERROR BD"  # 3.1 fallo al consultar tabla clientes
 PAGOS_GMAIL_ERROR_CEDULA_EMAIL = "ERROR EMAIL"  # 3.2 remitente sin fila en clientes
+
+# De / From en minusculas: Gmail solo etiqueta IMAGEN 5 (no plantilla 1-4 ni ERROR EMAIL).
+PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5 = "master@rapicreditca.com"
 
 
 def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str], Optional[str]]:
@@ -250,6 +255,7 @@ def run_pipeline(
                         msg_id,
                     )
                     continue
+                remitente_solo_imagen_5 = sender_lc == PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5
                 subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
                 msg_date = get_message_date(headers)
                 sheet_name = get_sheet_name_for_date(msg_date)
@@ -546,7 +552,7 @@ def run_pipeline(
                                 else:
                                     label_id = id_c
                                     etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
-                                if label_id:
+                                if label_id and not remitente_solo_imagen_5:
                                     label_ids_for_message.append(label_id)
                                 logger.info(
                                     "[PAGOS_GMAIL]   Digitalizado OK (%s); estrella/etiqueta solo si 100%% adjuntos: %s",
@@ -585,7 +591,11 @@ def run_pipeline(
                 # Gmail: etiqueta de usuario ERROR EMAIL (igual que columna Excel) si hubo filas guardadas
                 # y el remitente no coincide con clientes.email (o fallo BD). Bloque independiente del if/elif
                 # de estrella+IMAGEN para que no quede sin ejecutar.
-                if any_cedula_lookup_failed and committed_comprobante_rows:
+                if (
+                    any_cedula_lookup_failed
+                    and committed_comprobante_rows
+                    and not remitente_solo_imagen_5
+                ):
                     k_err = PAGOS_GMAIL_LABEL_ERROR_EMAIL
                     if k_err not in plantilla_label_cache:
                         plantilla_label_cache[k_err] = ensure_user_label_id(
@@ -604,7 +614,42 @@ def run_pipeline(
                             k_err,
                         )
 
-                if fully_digitized_email:
+                if remitente_solo_imagen_5 and attachments:
+                    k5 = PAGOS_GMAIL_LABEL_IMAGEN_5
+                    if k5 not in plantilla_label_cache:
+                        plantilla_label_cache[k5] = ensure_user_label_id(
+                            gmail_svc, k5
+                        )
+                    id5 = plantilla_label_cache.get(k5)
+                    if id5:
+                        if fully_digitized_email:
+                            add_message_star_and_user_labels(
+                                gmail_svc, msg_id, [id5]
+                            )
+                            mark_as_read(gmail_svc, msg_id)
+                            if scan_filter == "unread":
+                                correos_marcados_revision += 1
+                            logger.info(
+                                "[PAGOS_GMAIL]   Gmail: %s — solo %s + estrella (100%% OK); "
+                                "sin IMAGEN 1-4 ni ERROR EMAIL",
+                                PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5,
+                                k5,
+                            )
+                        else:
+                            add_message_user_labels_only(
+                                gmail_svc, msg_id, [id5]
+                            )
+                            logger.info(
+                                "[PAGOS_GMAIL]   Gmail: %s — solo %s (sin IMAGEN 1-4 / ERROR EMAIL)",
+                                PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5,
+                                k5,
+                            )
+                    else:
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
+                            k5,
+                        )
+                elif fully_digitized_email:
                     unique_label_ids = list(
                         dict.fromkeys(x for x in label_ids_for_message if x)
                     )

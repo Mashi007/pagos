@@ -25,6 +25,8 @@ PAGOS_GMAIL_LABEL_IMAGEN_1 = "IMAGEN 1"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "IMAGEN 2"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "IMAGEN 3"
 PAGOS_GMAIL_LABEL_IMAGEN_4 = "IMAGEN 4"
+# Remitente fijo master@rapicreditca.com: solo esta etiqueta en Gmail (no IMAGEN 1-4 ni ERROR EMAIL). Ver pipeline.
+PAGOS_GMAIL_LABEL_IMAGEN_5 = "IMAGEN 5"
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 
@@ -43,7 +45,7 @@ def pagos_gmail_list_q_media_parts() -> str:
 def pagos_gmail_pending_identification_query() -> str:
     """
     Consulta Gmail (parametro q): inbox, con adjunto o imagen en cuerpo, sin estrella, sin etiquetas plantilla.
-    Asi el escaneo periodico no reprocesa correos ya marcados con IMAGEN 1 / 2 / 3 / 4 o destacados.
+    Asi el escaneo periodico no reprocesa correos ya marcados con IMAGEN 1 / 2 / 3 / 4 / 5 o destacados.
     """
     return (
         f"in:inbox -is:starred {pagos_gmail_list_q_media_parts()} "
@@ -51,6 +53,7 @@ def pagos_gmail_pending_identification_query() -> str:
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5}" '
         f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"'
     )
 
@@ -122,7 +125,7 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
     filter_type: "unread" | "read" | "all" | "pending_identification".
-    pending_identification: sin estrella y sin etiquetas IMAGEN 1 / 2 / 3 / 4 (reintento sin reescanear todo).
+    pending_identification: sin estrella y sin etiquetas IMAGEN 1 / 2 / 3 / 4 / 5 (reintento sin reescanear todo).
     Misma forma que antes: id, payload, headers.
     """
     from googleapiclient.errors import HttpError
