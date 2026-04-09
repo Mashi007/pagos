@@ -1,10 +1,10 @@
 """
-Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/mixed + rfc822) -> plantilla A/B/C
+Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/mixed + rfc822) -> plantilla A/B/C/D
   -> commit BD (fila sin enlaces Drive) -> subida Drive -> commit enlaces en BD.
   Asi no quedan archivos en Drive sin fila; los enlaces existen en BD justo despues del segundo commit.
-  Si no cumple plantillas 1/2/3 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
+  Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
-Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
+Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 y ETIQUETA 4 (formato D BDV) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From).
 Si no hay cliente para ese email: columna Cedula = ERROR EMAIL. Si falla la consulta a clientes: ERROR BD.
@@ -43,6 +43,7 @@ from app.services.pagos_gmail.gmail_service import (
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
     PAGOS_GMAIL_LABEL_IMAGEN_3,
+    PAGOS_GMAIL_LABEL_ETIQUETA_4,
 )
 from app.services.pagos_gmail.gemini_service import (
     classify_and_extract_pagos_gmail_attachment,
@@ -89,10 +90,11 @@ def _sort_messages_by_date_desc(messages: list[dict]) -> list[dict]:
     return sorted(messages, key=_key, reverse=True)
 
 
-# Columna Excel "Banco" al digitalizar: imagen 1 (A) / imagen 2 (B) / imagen 3 Binance (C).
+# Columna Excel "Banco" al digitalizar: imagen 1 (A) / imagen 2 (B) / imagen 3 Binance (C) / imagen 4 BDV (D).
 PAGOS_GMAIL_BANCO_IMAGEN_1 = "Mercantil"
 PAGOS_GMAIL_BANCO_IMAGEN_2 = "BNC"
 PAGOS_GMAIL_BANCO_IMAGEN_3 = "BINANCE"
+PAGOS_GMAIL_BANCO_IMAGEN_4 = "BDV"
 
 # Columna Cedula en Excel cuando no se puede resolver por remitente (max 50 chars en modelo).
 PAGOS_GMAIL_ERROR_CEDULA_BD = "ERROR BD"  # 3.1 fallo al consultar tabla clientes
@@ -143,10 +145,10 @@ def run_pipeline(
     scan_filter: str = "all",
 ) -> tuple[Optional[int], str]:
     """
-    Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD solo si plantilla 1/2/3 y datos completos; C exige cliente por email).
-    Por adjunto OK (y remitente en clientes): etiqueta IMAGEN 1 (A), IMAGEN 2 (B) o IMAGEN 3 (C) + estrella; cierre: leido si hubo algun OK.
+    Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
+    Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o ETIQUETA 4 (D) + estrella; cierre: leido si hubo algun OK.
     scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = toda la bandeja).
-      pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2/3.
+      pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2/3 ni ETIQUETA 4.
     Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
     Los mensajes de cada lote se ordenan por fecha (mas actual primero) antes de procesar.
     Con "unread", se repite listar+procesar hasta que no queden no leidos o hasta PAGOS_GMAIL_UNREAD_MAX_PASSES.
@@ -222,8 +224,8 @@ def run_pipeline(
         def process_message_batch(batch: list[dict], label: str) -> None:
             nonlocal emails_ok, files_ok, drive_errors, correos_marcados_revision
             if batch:
-                logger.info(
-                    "[PAGOS_GMAIL] Procesando lote %s: %d correos (imagen/PDF pipeline, formatos A/B/C)",
+                    logger.info(
+                    "[PAGOS_GMAIL] Procesando lote %s: %d correos (imagen/PDF pipeline, formatos A/B/C/D)",
                     label,
                     len(batch),
                 )
@@ -368,7 +370,7 @@ def run_pipeline(
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
                             any_incomplete_or_skipped = True
                             logger.warning(
-                                "[PAGOS_GMAIL]   No es plantilla A/B/C - no Drive/BD: %s",
+                                "[PAGOS_GMAIL]   No es plantilla A/B/C/D - no Drive/BD: %s",
                                 filename,
                             )
                             continue
@@ -394,7 +396,7 @@ def run_pipeline(
                             if not c_ok:
                                 any_incomplete_or_skipped = True
                                 logger.warning(
-                                    "[PAGOS_GMAIL]   Imagen 1/2 (%s): columna Cedula=%s — De=%s archivo=%s",
+                                    "[PAGOS_GMAIL]   Imagen 1/2/4 (%s): columna Cedula=%s — De=%s archivo=%s",
                                     fmt,
                                     c,
                                     sender_lc[:72],
@@ -415,6 +417,7 @@ def run_pipeline(
                             default_a=PAGOS_GMAIL_BANCO_IMAGEN_1,
                             default_b=PAGOS_GMAIL_BANCO_IMAGEN_2,
                             default_c=PAGOS_GMAIL_BANCO_IMAGEN_3,
+                            default_d=PAGOS_GMAIL_BANCO_IMAGEN_4,
                         )
                         pending.append(
                             {
@@ -520,7 +523,7 @@ def run_pipeline(
                                 files_ok += 1
                                 had_complete_digitalization = True
                                 fmt = p["fmt"]
-                                id_a, id_b, id_c = get_or_create_pagos_gmail_plantilla_label_ids(
+                                id_a, id_b, id_c, id_d = get_or_create_pagos_gmail_plantilla_label_ids(
                                     gmail_svc, plantilla_label_cache
                                 )
                                 if fmt == "A":
@@ -529,6 +532,9 @@ def run_pipeline(
                                 elif fmt == "B":
                                     label_id = id_b
                                     etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_2
+                                elif fmt == "D":
+                                    label_id = id_d
+                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_ETIQUETA_4
                                 else:
                                     label_id = id_c
                                     etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
@@ -557,7 +563,7 @@ def run_pipeline(
                     and had_complete_digitalization
                 ):
                     logger.warning(
-                        "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C valida "
+                        "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C/D valida "
                         "o fallaron -> no estrella ni leido (se exige 100%% OK en todos). "
                         "Puede haber filas BD sin link Drive si fallo la subida tras el primer commit.",
                         n_att,

@@ -266,18 +266,27 @@ def resolve_banco_para_excel_pagos_gmail(
     default_a: str,
     default_b: str,
     default_c: str,
+    default_d: str = "BDV",
     max_len: int = 50,
 ) -> str:
     """
     Columna Excel \"Banco\": institucion que aparece en el comprobante (texto de Gemini)
-    normalizado por palabras clave; si viene vacio o NA, usa el valor por plantilla A/B/C.
+    normalizado por palabras clave; si viene vacio o NA, usa el valor por plantilla A/B/C/D.
     """
     f = (fmt or "").strip().upper()
     if f == "C":
         return (default_c or "")[:max_len]
+    if f == "D":
+        template_default = default_d
+    elif f == "A":
+        template_default = default_a
+    elif f == "B":
+        template_default = default_b
+    else:
+        template_default = default_a
     raw = (banco_gemini or "").strip()
     if not raw or raw.upper() == "NA":
-        return (default_a if f == "A" else default_b)[:max_len]
+        return (template_default or "")[:max_len]
     low = raw.lower()
     one_line = re.sub(r"\s+", " ", raw).strip()
     if "mercantil" in low:
@@ -299,7 +308,7 @@ def resolve_banco_para_excel_pagos_gmail(
     if "binance" in low:
         return "BINANCE"
     out = one_line[:max_len].strip()
-    return out if out else (default_a if f == "A" else default_b)[:max_len]
+    return out if out else (template_default or "")[:max_len]
 
 
 def extract_sender_email(from_header_value: Optional[str]) -> str:

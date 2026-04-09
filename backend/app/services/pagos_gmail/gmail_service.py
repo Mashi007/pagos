@@ -1,7 +1,7 @@
 """
 Gmail: listar correos con adjunto o parte con nombre de imagen/PDF (has:attachment OR filename:png|jpg|...).
 Pipeline Pagos: toda imagen/PDF util (archivo adjunto o incrustada en cuerpo/related/HTML/mixed), mas .eml rfc822;
-deduplicado por contenido. La plantilla imagen 1/2/3 la decide solo Gemini al escanear cada binario.
+deduplicado por contenido. La plantilla imagen 1/2/3/4 la decide solo Gemini al escanear cada binario.
 """
 import base64
 import hashlib
@@ -20,10 +20,11 @@ from app.services.pagos_gmail.helpers import (
 
 logger = logging.getLogger(__name__)
 
-# Etiquetas de usuario (plantilla prompt A = imagen 1, B = imagen 2, C = imagen 3 Binance). Se crean si no existen.
+# Etiquetas de usuario (plantilla prompt A = imagen 1, B = imagen 2, C = imagen 3 Binance, D = BDV con etiqueta Gmail ETIQUETA 4). Se crean si no existen.
 PAGOS_GMAIL_LABEL_IMAGEN_1 = "IMAGEN 1"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "IMAGEN 2"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "IMAGEN 3"
+PAGOS_GMAIL_LABEL_ETIQUETA_4 = "ETIQUETA 4"
 
 
 def pagos_gmail_list_q_media_parts() -> str:
@@ -40,13 +41,14 @@ def pagos_gmail_list_q_media_parts() -> str:
 def pagos_gmail_pending_identification_query() -> str:
     """
     Consulta Gmail (parametro q): inbox, con adjunto o imagen en cuerpo, sin estrella, sin etiquetas plantilla.
-    Asi el escaneo periodico no reprocesa correos ya marcados con IMAGEN 1 / 2 / 3 o destacados.
+    Asi el escaneo periodico no reprocesa correos ya marcados con IMAGEN 1 / 2 / 3 o ETIQUETA 4 o destacados.
     """
     return (
         f"in:inbox -is:starred {pagos_gmail_list_q_media_parts()} "
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}"'
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_ETIQUETA_4}"'
     )
 
 
@@ -117,7 +119,7 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
     filter_type: "unread" | "read" | "all" | "pending_identification".
-    pending_identification: sin estrella y sin etiquetas IMAGEN 1 / 2 / 3 (reintento sin reescanear todo).
+    pending_identification: sin estrella y sin etiquetas IMAGEN 1 / 2 / 3 ni ETIQUETA 4 (reintento sin reescanear todo).
     Misma forma que antes: id, payload, headers.
     """
     from googleapiclient.errors import HttpError
@@ -882,15 +884,16 @@ def ensure_user_label_id(service: Any, label_name: str) -> Optional[str]:
 
 def get_or_create_pagos_gmail_plantilla_label_ids(
     service: Any, cache: Optional[Dict[str, Optional[str]]] = None
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
-    Resuelve ids para PAGOS_GMAIL_LABEL_IMAGEN_1 / _2 / _3 con cache opcional por nombre.
+    Resuelve ids para PAGOS_GMAIL_LABEL_IMAGEN_1 / _2 / _3 y PAGOS_GMAIL_LABEL_ETIQUETA_4 con cache opcional por nombre.
     """
     c = cache if cache is not None else {}
-    k1, k2, k3 = (
+    k1, k2, k3, k4 = (
         PAGOS_GMAIL_LABEL_IMAGEN_1,
         PAGOS_GMAIL_LABEL_IMAGEN_2,
         PAGOS_GMAIL_LABEL_IMAGEN_3,
+        PAGOS_GMAIL_LABEL_ETIQUETA_4,
     )
     if k1 not in c:
         c[k1] = ensure_user_label_id(service, k1)
@@ -898,7 +901,9 @@ def get_or_create_pagos_gmail_plantilla_label_ids(
         c[k2] = ensure_user_label_id(service, k2)
     if k3 not in c:
         c[k3] = ensure_user_label_id(service, k3)
-    return c[k1], c[k2], c[k3]
+    if k4 not in c:
+        c[k4] = ensure_user_label_id(service, k4)
+    return c[k1], c[k2], c[k3], c[k4]
 
 
 def add_message_star_and_user_labels(
