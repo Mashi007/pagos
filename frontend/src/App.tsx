@@ -58,7 +58,12 @@ function RedirectRootToLogin() {
 
 /**
  * En rutas publicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
- * para pedir usuario y clave. Con basename="/pagos", pathname puede ser "/pagos/rapicredit-cobros"; normalizamos.
+ * para pedir usuario y clave.
+ *
+ * Con basename="/pagos", useLocation().pathname ya viene sin el basename (p. ej. /pagos/pago-bs).
+ * No quitar BASE_PATH de ese valor para RBAC: coincide con el string "/pagos" y rompería rutas como
+ * /pagos/pago-bs → /pago-bs (lista blanca en roleRoutes usa /pagos/...).
+ * Solo normalizamos quitando BASE_PATH duplicado para detectar rutas públicas legacy.
  */
 
 function RootLayoutWrapper() {
@@ -66,14 +71,17 @@ function RootLayoutWrapper() {
 
   const { isAuthenticated, isLoading, user } = useSimpleAuth()
 
-  let pathname = (location.pathname || '').replace(/\/$/, '') || '/'
+  const pathnameFromRouter =
+    (location.pathname || '').replace(/\/$/, '') || '/'
 
-  if (BASE_PATH && pathname.startsWith(BASE_PATH)) {
-    const rest = pathname.slice(BASE_PATH.length)
-    if (rest !== '' && rest !== '/') pathname = rest
+  let pathnameForPublic = pathnameFromRouter
+
+  if (BASE_PATH && pathnameForPublic.startsWith(BASE_PATH)) {
+    const rest = pathnameForPublic.slice(BASE_PATH.length)
+    if (rest !== '' && rest !== '/') pathnameForPublic = rest
   }
 
-  const isPublic = PUBLIC_PATHS.some(p => pathname === p)
+  const isPublic = PUBLIC_PATHS.some(p => pathnameForPublic === p)
 
   if (isPublic) return <Outlet />
 
@@ -81,7 +89,7 @@ function RootLayoutWrapper() {
   // Esto previene que intenten acceder al dashboard quitando /infopagos de la URL
 
   if (!isLoading && !isAuthenticated) {
-    if (pathname === '/') {
+    if (pathnameFromRouter === '/') {
       return <RedirectRootToLogin />
     }
     return <Navigate to="/login" replace />
@@ -93,12 +101,12 @@ function RootLayoutWrapper() {
     isAuthenticated &&
     user &&
     !isAdminRole(user.rol) &&
-    !isDelegatedPathForRol(user.rol, pathname)
+    !isDelegatedPathForRol(user.rol, pathnameFromRouter)
   ) {
     return <Navigate to={defaultHomePathForRol(user.rol)} replace />
   }
 
-  const esGestionFiniquito = pathname === '/finiquitos/gestion'
+  const esGestionFiniquito = pathnameFromRouter === '/finiquitos/gestion'
 
   const tokenPortalFiniquito = getFiniquitoAccessToken()?.trim()
 

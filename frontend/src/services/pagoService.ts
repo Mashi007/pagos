@@ -409,6 +409,16 @@ class PagoService {
     })
   }
 
+  /** Sube imagen de comprobante; la URL devuelta se guarda en link_comprobante. */
+  async uploadComprobanteImagen(
+    file: File
+  ): Promise<{ url: string; id: string }> {
+    return apiClient.uploadFile<{ url: string; id: string }>(
+      `${this.baseUrl}/comprobante-imagen`,
+      file
+    )
+  }
+
   /**
 
 
@@ -814,7 +824,7 @@ class PagoService {
       saldo_vencido: number
 
       total_prestamos: number
-    }>,
+    }>
     total: number
 
     page: number
@@ -1064,6 +1074,21 @@ class PagoService {
 
     window.URL.revokeObjectURL(blobUrl)
   }
+}
+
+/**
+ * Ruta API /api/v1/pagos/comprobante-imagen/{id32} extraida de URL absoluta o relativa.
+ */
+export function comprobanteImagenApiPathDesdeLink(link: string): string | null {
+  const s = (link || '').trim()
+  const needle = '/api/v1/pagos/comprobante-imagen/'
+  const i = s.indexOf(needle)
+  if (i === -1) return null
+  const path = s.slice(i)
+  if (!/^\/api\/v1\/pagos\/comprobante-imagen\/[a-f0-9]{32}$/i.test(path)) {
+    return null
+  }
+  return path
 }
 
 export const pagoService = new PagoService()

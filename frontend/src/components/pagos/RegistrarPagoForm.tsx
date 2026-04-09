@@ -41,7 +41,13 @@ import {
   SelectValue,
 } from '../../components/ui/select'
 
-import { pagoService, type PagoCreate } from '../../services/pagoService'
+import { apiClient } from '../../services/api'
+
+import {
+  pagoService,
+  comprobanteImagenApiPathDesdeLink,
+  type PagoCreate,
+} from '../../services/pagoService'
 
 import { pagoConErrorService } from '../../services/pagoConErrorService'
 
@@ -176,6 +182,23 @@ export function RegistrarPagoForm({
 
   const codigoDocumentoInputRef = useRef<HTMLInputElement>(null)
 
+  const comprobanteFileInputRef = useRef<HTMLInputElement>(null)
+
+  const linkComprobanteInicialRef = useRef(
+    (pagoInicial?.link_comprobante || '').trim()
+  )
+
+  const [archivoComprobante, setArchivoComprobante] = useState<File | null>(
+    null
+  )
+
+  const [previewComprobanteLocalUrl, setPreviewComprobanteLocalUrl] = useState<
+    string | null
+  >(null)
+
+  const [previewComprobanteServidorUrl, setPreviewComprobanteServidorUrl] =
+    useState<string | null>(null)
+
   const [vistoRevisionManualOpen, setVistoRevisionManualOpen] = useState(false)
 
   const [formData, setFormData] = useState<PagoCreate>({
@@ -204,6 +227,72 @@ export function RegistrarPagoForm({
   const [montoStr, setMontoStr] = useState(() =>
     montoInicialTextoDesdeNumero(pagoInicial?.monto_pagado, isEditing)
   )
+
+  useEffect(() => {
+    linkComprobanteInicialRef.current = (
+      pagoInicial?.link_comprobante || ''
+    ).trim()
+  }, [pagoInicial?.link_comprobante])
+
+  useEffect(() => {
+    if (!archivoComprobante) {
+      setPreviewComprobanteLocalUrl(null)
+
+      return
+    }
+
+    const u = URL.createObjectURL(archivoComprobante)
+
+    setPreviewComprobanteLocalUrl(u)
+
+    return () => {
+      URL.revokeObjectURL(u)
+    }
+  }, [archivoComprobante])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const link = (formData.link_comprobante || '').trim()
+
+    const path = link ? comprobanteImagenApiPathDesdeLink(link) : null
+
+    setPreviewComprobanteServidorUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+
+      return null
+    })
+
+    if (archivoComprobante || !isEditing || !path) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    ;(async () => {
+      try {
+        const blob = await apiClient.get<Blob>(path, {
+          responseType: 'blob',
+        })
+
+        if (cancelled) return
+
+        setPreviewComprobanteServidorUrl(URL.createObjectURL(blob))
+      } catch {
+        // Sin vista previa si falla la descarga autenticada
+      }
+    })()
+
+    return () => {
+      cancelled = true
+
+      setPreviewComprobanteServidorUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev)
+
+        return null
+      })
+    }
+  }, [isEditing, formData.link_comprobante, archivoComprobante])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -487,20 +576,19 @@ export function RegistrarPagoForm({
         'La fecha de pago no puede ser posterior a hoy (America/Caracas).'
     }
 
+    const linkComprobanteInicial = (
+      linkComprobanteInicialRef.current || ''
+    ).trim()
+
     const linkComprobanteTrim = (fd.link_comprobante || '').trim()
 
-    if (requiereLinkComprobante && !linkComprobanteTrim) {
-      newErrors.link_comprobante =
-        'Enlace al comprobante (imagen o PDF) requerido en revisión manual.'
-    } else if (linkComprobanteTrim) {
-      try {
-        const u = new URL(linkComprobanteTrim)
-        if (!['http:', 'https:'].includes(u.protocol)) {
-          newErrors.link_comprobante =
-            'El comprobante debe ser una URL http o https válida.'
-        }
-      } catch {
-        newErrors.link_comprobante = 'URL de comprobante no válida.'
+    if (!archivoComprobante) {
+      if (!isEditing) {
+        newErrors.link_comprobante =
+          'Debe adjuntar una imagen del comprobante (JPEG, PNG, WebP o GIF).'
+      } else if (!linkComprobanteTrim && !linkComprobanteInicial) {
+        newErrors.link_comprobante =
+          'Debe adjuntar una imagen del comprobante (JPEG, PNG, WebP o GIF).'
       }
     }
 
@@ -522,6 +610,41 @@ export function RegistrarPagoForm({
     setIsSubmitting(true)
 
     try {
+      let linkFinal = linkComprobanteTrim || linkComprobanteInicial
+
+      if (archivoComprobante) {
+        const up = await pagoService.uploadComprobanteImagen(archivoComprobante)
+
+        linkFinal = (up.url || '').trim()
+      }
+
+      if (!linkFinal) {
+        setErrors({
+          link_comprobante:
+            'Debe adjuntar una imagen del comprobante (JPEG, PNG, WebP o GIF).',
+        })
+
+        setIsSubmitting(false)
+
+        return
+      }
+
+      try {
+        const u = new URL(linkFinal)
+
+        if (!['http:', 'https:'].includes(u.protocol)) {
+          throw new Error('protocolo')
+        }
+      } catch {
+        setErrors({
+          link_comprobante: 'No se obtuvo una URL valida para el comprobante.',
+        })
+
+        setIsSubmitting(false)
+
+        return
+      }
+
       const codigoTrim = String(fd.codigo_documento ?? '').trim()
 
       const datosEnvio = {
@@ -533,7 +656,7 @@ export function RegistrarPagoForm({
 
         moneda_registro: monedaRegistro,
 
-        link_comprobante: linkComprobanteTrim || null,
+        link_comprobante: linkFinal,
       } as PagoCreate & { tasa_cambio_manual?: number; conciliado?: boolean }
 
       if (monedaRegistro === 'BS' && !tasaBd) {
@@ -680,11 +803,12 @@ export function RegistrarPagoForm({
           >
             {/* Error general */}
 
-            {!isEditing && !requiereLinkComprobante && (
+            {!isEditing && (
               <div className="rounded border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
                 <p>
-                  Para elegir moneda (Bs./USD), adjuntar comprobante y recibo
-                  PDF con la tasa del dia de la fecha de pago, use{' '}
+                  <strong>Comprobante obligatorio:</strong> suba una foto del
+                  comprobante (hasta 8 MB). Para flujos con moneda Bs., recibo
+                  PDF de tasa u otros casos puede usar{' '}
                   <a
                     href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(
                       /\/+/g,
@@ -696,8 +820,8 @@ export function RegistrarPagoForm({
                   >
                     Infopagos
                   </a>
-                  . Este formulario es para registro o edición directa en la
-                  tabla interna de pagos (conciliación).
+                  . Este formulario registra o edita pagos en la tabla interna
+                  (conciliación).
                 </p>
               </div>
             )}
@@ -705,12 +829,12 @@ export function RegistrarPagoForm({
             {requiereLinkComprobante && (
               <div className="rounded border border-sky-100 bg-sky-50/90 px-3 py-2 text-xs text-sky-950">
                 <p>
-                  <strong>Revisión manual:</strong> indique la URL del
-                  comprobante (foto o PDF en Drive, etc.). No puede repetirse la
-                  misma combinación comprobante + código; use el campo «Código»
-                  para distinguir pagos con el mismo texto de referencia
-                  bancaria. La huella funcional sigue evitando el mismo pago
-                  (crédito, fecha, monto y ref. normalizada).
+                  <strong>Revisión manual:</strong> el comprobante es una imagen
+                  obligatoria. No puede repetirse la misma combinación
+                  comprobante + código; use el campo «Código» para distinguir
+                  pagos con el mismo texto de referencia bancaria. La huella
+                  funcional sigue evitando el mismo pago (crédito, fecha, monto
+                  y ref. normalizada).
                 </p>
               </div>
             )}
@@ -1227,7 +1351,8 @@ export function RegistrarPagoForm({
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="text-xs text-violet-950">
                       <span className="font-semibold">Visto (admin):</span>{' '}
-                      rellena el campo <strong>Código</strong> con un token único{' '}
+                      rellena el campo <strong>Código</strong> con un token
+                      único{' '}
                       <span className="whitespace-nowrap">
                         (A#### / P####, misma regla que carga masiva)
                       </span>{' '}
@@ -1257,38 +1382,81 @@ export function RegistrarPagoForm({
               </div>
             ) : null}
 
-            {/* Comprobante (URL) - revisión manual y trazabilidad */}
+            {/* Comprobante: carga obligatoria de imagen (URL externa ya no se edita aquí). */}
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
-                Comprobante (URL){' '}
-                {requiereLinkComprobante ? (
-                  <span className="text-red-500">*</span>
-                ) : (
-                  <span className="text-xs font-normal text-gray-500">
-                    (opcional)
-                  </span>
-                )}
+                Comprobante (imagen) <span className="text-red-500">*</span>
               </label>
 
-              <div className="relative">
-                <Upload className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+              <p className="text-xs text-gray-600">
+                JPEG, PNG, WebP o GIF. Tamano maximo 8 MB. Obligatorio para
+                guardar; en edicion puede conservar el comprobante ya cargado o
+                subir uno nuevo.
+              </p>
 
-                <Input
-                  type="url"
-                  inputMode="url"
-                  autoComplete="off"
-                  value={formData.link_comprobante || ''}
-                  onChange={e =>
-                    setFormData({
-                      ...formData,
-                      link_comprobante: e.target.value || null,
-                    })
-                  }
-                  className={`pl-10 ${errors.link_comprobante ? 'border-red-500' : ''}`}
-                  placeholder="https://… (enlace al comprobante)"
-                />
+              <input
+                ref={comprobanteFileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                className="sr-only"
+                onChange={e => {
+                  const f = e.target.files?.[0] ?? null
+
+                  setArchivoComprobante(f)
+
+                  setErrors(prev => {
+                    const next = { ...prev }
+
+                    delete next.link_comprobante
+
+                    return next
+                  })
+
+                  e.target.value = ''
+                }}
+              />
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSubmitting}
+                  className="gap-2"
+                  onClick={() => comprobanteFileInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" aria-hidden />
+                  Elegir imagen
+                </Button>
+
+                {archivoComprobante ? (
+                  <span className="text-sm text-gray-700">
+                    {archivoComprobante.name}
+                  </span>
+                ) : null}
+
+                {archivoComprobante ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={isSubmitting}
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => setArchivoComprobante(null)}
+                  >
+                    Quitar imagen nueva
+                  </Button>
+                ) : null}
               </div>
+
+              {isEditing &&
+              (linkComprobanteInicialRef.current || '').trim() &&
+              !archivoComprobante ? (
+                <p className="text-xs text-gray-600">
+                  Hay un comprobante guardado. Suba otra imagen solo si desea
+                  reemplazarlo.
+                </p>
+              ) : null}
 
               {errors.link_comprobante && (
                 <p className="text-sm text-red-600">
@@ -1296,35 +1464,31 @@ export function RegistrarPagoForm({
                 </p>
               )}
 
-              {(() => {
-                const u = (formData.link_comprobante || '').trim()
+              {previewComprobanteLocalUrl ? (
+                <div className="overflow-hidden rounded border bg-muted/40 p-2">
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Vista previa (imagen seleccionada):
+                  </p>
+                  <img
+                    src={previewComprobanteLocalUrl}
+                    alt="Vista previa del comprobante seleccionado"
+                    className="max-h-48 max-w-full rounded object-contain"
+                  />
+                </div>
+              ) : null}
 
-                if (!u) return null
-
-                const base = u.split(/[?#]/)[0].toLowerCase()
-
-                const esImg = /\.(jpe?g|png|gif|webp|bmp|svg)$/.test(base)
-
-                if (!esImg) return null
-
-                return (
-                  <div className="overflow-hidden rounded border bg-muted/40 p-2">
-                    <p className="mb-2 text-xs text-muted-foreground">
-                      Vista previa (solo URLs directas a imagen):
-                    </p>
-                    <img
-                      src={u}
-                      alt="Vista previa comprobante"
-                      className="max-h-40 max-w-full rounded object-contain"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      onError={e => {
-                        ;(e.target as HTMLImageElement).style.display = 'none'
-                      }}
-                    />
-                  </div>
-                )
-              })()}
+              {!previewComprobanteLocalUrl && previewComprobanteServidorUrl ? (
+                <div className="overflow-hidden rounded border bg-muted/40 p-2">
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Comprobante actual (servidor):
+                  </p>
+                  <img
+                    src={previewComprobanteServidorUrl}
+                    alt="Comprobante registrado"
+                    className="max-h-48 max-w-full rounded object-contain"
+                  />
+                </div>
+              ) : null}
             </div>
 
             {/* Notas */}
@@ -1424,8 +1588,8 @@ export function RegistrarPagoForm({
                     </li>
                     <li>
                       <strong>Autorizar sin cambiar</strong>: quita avisos de
-                      duplicado en pantalla; use el campo <strong>Código</strong>{' '}
-                      a mano si aplica.
+                      duplicado en pantalla; use el campo{' '}
+                      <strong>Código</strong> a mano si aplica.
                     </li>
                   </ul>
                 </div>

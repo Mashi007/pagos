@@ -31,6 +31,8 @@ import logging
 
 import re
 
+import uuid
+
 from datetime import date, datetime, time as dt_time
 
 from decimal import Decimal
@@ -41,9 +43,9 @@ from zoneinfo import ZoneInfo
 
 
 
-from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Body
+from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Body, Request
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 
 from pydantic import BaseModel, field_validator
 
@@ -79,6 +81,8 @@ from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 
 from app.models.pago import Pago
+
+from app.models.pago_comprobante_imagen import PagoComprobanteImagen
 
 from app.models.pago_con_error import PagoConError
 
@@ -243,6 +247,93 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+
+def _public_base_url_para_comprobante(request: Request) -> str:
+    xf_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
+    xf_host = (
+        (request.headers.get("x-forwarded-host") or request.headers.get("host") or "")
+        .split(",")[0]
+        .strip()
+    )
+    scheme = (xf_proto or request.url.scheme or "https").lower()
+    if xf_host:
+        return f"{scheme}://{xf_host}".rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+def _normalizar_id_comprobante_imagen(raw: str) -> Optional[str]:
+    s = (raw or "").strip().lower()
+    if not s:
+        return None
+    s = s.split(".")[0]
+    s = s.replace("-", "")
+    if len(s) == 32 and all(c in "0123456789abcdef" for c in s):
+        return s
+    return None
+
+
+_COMPROBANTE_IMG_CT = frozenset(
+    {"image/jpeg", "image/png", "image/webp", "image/gif"},
+)
+_MAX_COMPROBANTE_IMAGEN_BYTES = 8 * 1024 * 1024
+
+
+@router.post("/comprobante-imagen", response_model=dict)
+async def upload_pago_comprobante_imagen(
+    request: Request,
+    file: UploadFile = File(..., alias="file"),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Sube una imagen de comprobante. Devuelve URL absoluta para persistir en pagos.link_comprobante.
+    """
+    ct_raw = (file.content_type or "").split(";")[0].strip().lower()
+    if ct_raw not in _COMPROBANTE_IMG_CT:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se permiten imagenes JPEG, PNG, WebP o GIF.",
+        )
+    data = await file.read()
+    if len(data) > _MAX_COMPROBANTE_IMAGEN_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail="La imagen no puede superar 8 MB.",
+        )
+    uid = uuid.uuid4().hex
+    row = PagoComprobanteImagen(
+        id=uid,
+        content_type=ct_raw,
+        imagen_data=data,
+    )
+    db.add(row)
+    db.commit()
+    base = _public_base_url_para_comprobante(request)
+    rel_path = f"{settings.API_V1_STR}/pagos/comprobante-imagen/{uid}"
+    url = f"{base}{rel_path}"
+    return {"url": url, "id": uid}
+
+
+@router.get("/comprobante-imagen/{comprobante_id}")
+def get_pago_comprobante_imagen(
+    comprobante_id: str,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Sirve la imagen subida (requiere sesion; el enlace en link_comprobante es para personal autenticado)."""
+    cid = _normalizar_id_comprobante_imagen(comprobante_id)
+    if not cid:
+        raise HTTPException(
+            status_code=400,
+            detail="Identificador de comprobante no valido.",
+        )
+    row = db.get(PagoComprobanteImagen, cid)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Comprobante no encontrado.")
+    return Response(
+        content=row.imagen_data,
+        media_type=(row.content_type or "application/octet-stream"),
+    )
 
 
 # Límite de la columna numero_documento y referencia_pago en tabla pagos (String(100))
