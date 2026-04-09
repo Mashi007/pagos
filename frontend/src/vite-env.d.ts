@@ -77,6 +77,9 @@ declare module 'lucide-react' {
 
   export const Clock: any
 
+  /** Historial / línea de tiempo (p. ej. KPI atrasos cobrados hoy en dashboard). */
+  export const History: any
+
   export const Search: any
 
   export const RefreshCw: any

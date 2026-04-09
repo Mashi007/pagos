@@ -378,12 +378,23 @@ export function RegistrarPagoForm({
       .finally(() => setTasaBdLoading(false))
   }, [formData.fecha_pago, monedaRegistro])
 
-  // Auto-seleccionar préstamo si hay solo uno disponible
+  // Auto-seleccionar préstamo si hay solo uno en la lista efectiva (API + contexto revisión manual).
 
   useEffect(() => {
-    if (prestamos && prestamos.length === 1 && !formData.prestamo_id) {
-      setFormData(prev => ({ ...prev, prestamo_id: prestamos[0].id }))
-    } else if (prestamos && prestamos.length === 0) {
+    if (isLoadingPrestamos) return
+
+    const opts = prestamosParaSelect
+
+    if (opts.length === 1 && !formData.prestamo_id) {
+      setFormData(prev => ({ ...prev, prestamo_id: opts[0].id }))
+      return
+    }
+
+    if (
+      opts.length === 0 &&
+      Array.isArray(prestamos) &&
+      prestamos.length === 0
+    ) {
       // No borrar crédito al editar o si venía préstamo en pagoInicial (lista puede cargar tarde o Radix sin ítem).
       const preservarCredito =
         isEditing ||
@@ -394,7 +405,14 @@ export function RegistrarPagoForm({
       }
       setFormData(prev => ({ ...prev, prestamo_id: null }))
     }
-  }, [prestamos, isEditing, pagoInicial?.prestamo_id, formData.prestamo_id])
+  }, [
+    isLoadingPrestamos,
+    prestamosParaSelect,
+    prestamos,
+    isEditing,
+    pagoInicial?.prestamo_id,
+    formData.prestamo_id,
+  ])
 
   /** Validación + POST/PUT usando el snapshot `fd` (p. ej. Visto rellena código y guarda sin esperar re-render). */
   const submitPago = async (fd: PagoCreate) => {
@@ -743,20 +761,20 @@ export function RegistrarPagoForm({
                 )}
 
                 {!isLoadingPrestamos &&
-                  prestamos &&
-                  prestamos.length > 0 &&
+                  prestamosParaSelect.length > 0 &&
                   formData.cedula_cliente.length >= 2 && (
                     <p className="flex items-center gap-1 text-xs text-green-600">
                       <CheckCircle className="h-3 w-3" />
-                      {prestamos.length} préstamo
-                      {prestamos.length !== 1 ? 's' : ''} encontrado
-                      {prestamos.length !== 1 ? 's' : ''}
+                      {prestamosParaSelect.length} préstamo
+                      {prestamosParaSelect.length !== 1 ? 's' : ''} en la lista
+                      {prestamosParaSelect.length > 1
+                        ? ' — elija cuál aplica a este pago'
+                        : ''}
                     </p>
                   )}
 
                 {!isLoadingPrestamos &&
-                  prestamos &&
-                  prestamos.length === 0 &&
+                  prestamosParaSelect.length === 0 &&
                   formData.cedula_cliente.length >= 2 && (
                     <p className="text-xs text-yellow-600">
                       No se encontraron préstamos para esta cédula
@@ -773,10 +791,10 @@ export function RegistrarPagoForm({
                     )}
                 </label>
 
-                {prestamos && prestamos.length > 1 && (
-                  <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-600">
-                    Esta persona tiene {prestamos.length} préstamos. Seleccione
-                    a cuál se carga este pago.
+                {prestamosParaSelect.length > 1 && (
+                  <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+                    Hay {prestamosParaSelect.length} créditos en la lista. Debe
+                    elegir en el desplegable a cuál aplica este pago.
                   </p>
                 )}
 

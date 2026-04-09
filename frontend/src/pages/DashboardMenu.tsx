@@ -14,7 +14,7 @@ import {
   TrendingDown,
   AlertTriangle,
   Shield,
-  Clock,
+  History,
   FileText,
   PieChart,
   LineChart,
@@ -1111,7 +1111,7 @@ export function DashboardMenu() {
                             }
                           : undefined
                       }
-                      icon={Clock}
+                      icon={History}
                       color="text-amber-700"
                       bgColor="bg-amber-100"
                       borderColor="border-amber-500"
