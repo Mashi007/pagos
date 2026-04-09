@@ -21,7 +21,6 @@ import {
   Loader2,
   Mail,
   Upload,
-  DollarSign,
   Check,
   Eye,
 } from 'lucide-react'
@@ -86,7 +85,6 @@ import { BASE_PATH } from '../../config/env'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
 
 import { invalidatePagosPrestamosRevisionYCuotas } from '../../constants/queryKeys'
-import { getTasaHoy } from '../../services/tasaCambioService'
 import {
   claveDocumentoPagoListaNormalizada,
   textoDocumentoPagoParaListado,
@@ -155,28 +153,7 @@ export function PagosList() {
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
-  const [fechaTasaForm, setFechaTasaForm] = useState('')
-  const [tasaForm, setTasaForm] = useState('')
-  const [isGuardandoTasa, setIsGuardandoTasa] = useState(false)
-  const [tasaExistenteDialogo, setTasaExistenteDialogo] = useState<{
-    fecha: string
-    tasaActual: number
-    tasaNueva: number
-  } | null>(null)
   const queryClient = useQueryClient()
-
-  const { data: tasaHoyBanner, isLoading: tasaHoyBannerLoading } = useQuery({
-    queryKey: ['tasa-hoy-banner-pagos'],
-    queryFn: async () => {
-      try {
-        return await getTasaHoy()
-      } catch {
-        return null
-      }
-    },
-    staleTime: 60_000,
-    refetchOnWindowFocus: true,
-  })
 
   const {
     loading: loadingGmail,
@@ -232,86 +209,6 @@ export function PagosList() {
       toast.error(getErrorMessage(e))
     } finally {
       setIsVaciarTablaGmail(false)
-    }
-  }
-
-  const handleGuardarTasa = async () => {
-    if (!fechaTasaForm.trim()) {
-      toast.error('Seleccione una fecha')
-      return
-    }
-    const tasaNum = parseFloat(tasaForm)
-    if (isNaN(tasaNum) || tasaNum <= 0) {
-      toast.error('Ingrese una tasa válida mayor a 0')
-      return
-    }
-
-    setIsGuardandoTasa(true)
-    try {
-      // Importar servicios
-      const { getTasaPorFecha, guardarTasaPorFecha } =
-        await import('../../services/tasaCambioService')
-
-      // Verificar si ya existe tasa para esa fecha
-      const tasaExistente = await getTasaPorFecha(fechaTasaForm)
-
-      if (tasaExistente && tasaExistente.tasa_oficial !== tasaNum) {
-        // Mostrar diálogo de confirmación
-        setTasaExistenteDialogo({
-          fecha: fechaTasaForm,
-          tasaActual: tasaExistente.tasa_oficial,
-          tasaNueva: tasaNum,
-        })
-        setIsGuardandoTasa(false)
-        return
-      }
-
-      // Guardar la tasa
-      await guardarTasaPorFecha(fechaTasaForm, tasaNum)
-
-      const accion = tasaExistente ? 'Tasa actualizada' : 'Tasa guardada'
-      toast.success(`✓ ${accion} para ${fechaTasaForm}`)
-      setFechaTasaForm('')
-      setTasaForm('')
-
-      // Refrescar query de tasa
-      await queryClient.invalidateQueries({
-        queryKey: ['tasa-hoy-banner-pagos'],
-      })
-    } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo guardar la tasa')
-    } finally {
-      setIsGuardandoTasa(false)
-    }
-  }
-
-  const handleConfirmarEditarTasa = async () => {
-    if (!tasaExistenteDialogo) return
-
-    setIsGuardandoTasa(true)
-    try {
-      const { guardarTasaPorFecha } =
-        await import('../../services/tasaCambioService')
-      await guardarTasaPorFecha(
-        tasaExistenteDialogo.fecha,
-        tasaExistenteDialogo.tasaNueva
-      )
-
-      toast.success(
-        `✓ Tasa actualizada de ${tasaExistenteDialogo.tasaActual.toFixed(2)} a ${tasaExistenteDialogo.tasaNueva.toFixed(2)}`
-      )
-      setFechaTasaForm('')
-      setTasaForm('')
-      setTasaExistenteDialogo(null)
-
-      // Refrescar query de tasa
-      await queryClient.invalidateQueries({
-        queryKey: ['tasa-hoy-banner-pagos'],
-      })
-    } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo actualizar la tasa')
-    } finally {
-      setIsGuardandoTasa(false)
     }
   }
 
@@ -699,159 +596,6 @@ export function PagosList() {
 
   return (
     <div className="space-y-6">
-      <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-amber-50/50 shadow-sm">
-        <CardContent className="space-y-6 py-6">
-          {/* Header */}
-          <div>
-            <div className="mb-2 flex items-center gap-2">
-              <Plus className="h-5 w-5 text-amber-700" />
-              <h3 className="text-lg font-bold text-gray-900">
-                Agregar Tasa para Fecha de Pago
-              </h3>
-            </div>
-            <p className="text-sm text-gray-700">
-              Use la <strong>fecha de pago</strong> del reporte o comprobante.
-              Es la tasa oficial Bs./USD para convertir bolívares a dólares.
-              Ideal para días pasados o faltantes que no cuentan con tasa
-              registrada.
-            </p>
-          </div>
-
-          {/* Tasa Vigente Banner */}
-          {tasaHoyBannerLoading ? (
-            <div className="flex items-center gap-2 rounded-lg bg-white/80 p-4 text-sm text-amber-800">
-              <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
-              Consultando tasa del día...
-            </div>
-          ) : tasaHoyBanner ? (
-            <div className="flex items-center gap-3 rounded-lg bg-white/80 p-4">
-              <DollarSign className="h-6 w-6 text-amber-700" />
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-gray-600">
-                  Tasa Vigente Hoy
-                </p>
-                <p className="text-base font-semibold text-amber-900">
-                  {(tasaHoyBanner.fecha || '').slice(0, 10)}: Bs.{' '}
-                  {new Intl.NumberFormat('es-VE', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  }).format(tasaHoyBanner.tasa_oficial)}{' '}
-                  por 1 USD
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-100/60 p-4 text-sm text-amber-900">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              <span>
-                No hay tasa cargada para hoy. Ingrese la tasa en Administracion
-                para operar pagos en bolivares.
-              </span>
-            </div>
-          )}
-
-          {/* Formulario: Fecha + Tasa */}
-          <div className="rounded-lg bg-white p-5 shadow-sm">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {/* Fecha */}
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Fecha de Pago
-                </label>
-                <input
-                  type="date"
-                  value={fechaTasaForm}
-                  onChange={e => setFechaTasaForm(e.target.value)}
-                  max={new Date().toISOString().split('T')[0]}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                  placeholder="Seleccione una fecha"
-                />
-                <p className="text-xs text-gray-500">Máximo: hoy</p>
-              </div>
-
-              {/* Tasa */}
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Tasa Oficial (Bs. por 1 USD)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="999999.99"
-                  value={tasaForm}
-                  onChange={e => setTasaForm(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                  placeholder="ej. 3105.75"
-                />
-                <p className="text-xs text-gray-500">2 decimales máximo</p>
-              </div>
-
-              {/* Botón */}
-              <div className="flex flex-col justify-end gap-2">
-                <button
-                  onClick={handleGuardarTasa}
-                  disabled={isGuardandoTasa}
-                  className="rounded-lg bg-amber-700 px-6 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 focus:ring-2 focus:ring-amber-400 disabled:cursor-not-allowed disabled:bg-gray-400"
-                >
-                  {isGuardandoTasa ? 'Guardando...' : 'Guardar Tasa'}
-                </button>
-                <p className="text-center text-xs text-gray-500">
-                  Se agregará al historial
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Diálogo de confirmación para editar tasa existente */}
-      {tasaExistenteDialogo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl">
-            <h3 className="mb-2 text-lg font-bold text-gray-900">
-              Tasa ya existe para esta fecha
-            </h3>
-            <p className="mb-6 text-sm text-gray-600">
-              Ya hay una tasa registrada para {tasaExistenteDialogo.fecha}.
-              ¿Deseas actualizarla?
-            </p>
-
-            <div className="mb-6 space-y-3 rounded-lg bg-amber-50 p-4">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-700">Tasa actual:</span>
-                <span className="font-semibold text-amber-700">
-                  {tasaExistenteDialogo.tasaActual.toFixed(2)} Bs/USD
-                </span>
-              </div>
-              <div className="flex justify-between border-t border-amber-200 pt-3">
-                <span className="text-sm text-gray-700">Tasa nueva:</span>
-                <span className="font-semibold text-green-700">
-                  {tasaExistenteDialogo.tasaNueva.toFixed(2)} Bs/USD
-                </span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setTasaExistenteDialogo(null)}
-                disabled={isGuardandoTasa}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirmarEditarTasa}
-                disabled={isGuardandoTasa}
-                className="flex-1 rounded-lg bg-green-600 px-4 py-2.5 font-semibold text-white transition hover:bg-green-700 disabled:bg-gray-400"
-              >
-                {isGuardandoTasa ? 'Actualizando...' : 'Actualizar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
         <Button
           variant="outline"

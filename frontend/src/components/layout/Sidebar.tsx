@@ -35,6 +35,7 @@ import {
   Wallet,
   Building2,
   FileSpreadsheet,
+  TrendingUp,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -269,6 +270,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Pago Bs.',
           href: '/pagos/pago-bs',
           icon: FileSpreadsheet,
+        },
+
+        {
+          title: 'Tasa de cambio',
+          href: '/tasa-cambio',
+          icon: TrendingUp,
+          adminOnly: true,
         },
 
         {

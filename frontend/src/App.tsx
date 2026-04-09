@@ -175,6 +175,8 @@ import PagosPage from './pages/PagosPage'
 
 import PagoBsPage from './pages/PagoBsPage'
 
+import TasaCambioPage from './pages/TasaCambioPage'
+
 import AmortizacionPage from './pages/AmortizacionPage'
 
 import Validadores from './pages/Validadores'
@@ -417,6 +419,15 @@ function App() {
 
               <Route path=":id" element={<PagosPage />} />
             </Route>
+
+            <Route
+              path="tasa-cambio"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <TasaCambioPage />
+                </SimpleProtectedRoute>
+              }
+            />
 
             {/* Infopagos: dentro del layout con sidebar (requiere login) */}
 
