@@ -1,47 +1,22 @@
 /**
  * Instituciones para registrar/editar pago (`institucion_bancaria`).
- * Lista fija ordenada en UI; si en BD hay un valor distinto, se antepone a la lista.
+ * Lista corta fija en UI; si en BD hay un valor distinto, se antepone a la lista.
  */
 export const INSTITUCIONES_BANCARIAS_PAGO: readonly string[] = [
-  '100% Banco',
-  'Banco Activo Banco Universal',
-  'Banco Agrícola de Venezuela',
-  'Banco Bicentenario del Pueblo',
-  'Banco Caroní',
-  'Banco de Venezuela',
-  'Banco del Tesoro',
-  'Banco Digital de los Trabajadores Banco Universal',
-  'Banco Exterior',
-  'Banco Fondo Común (BFC)',
-  'Banco Mercantil',
-  'Banco Nacional de Crédito (BNC)',
-  'Banco Plaza',
-  'Banco Sofitasa',
-  'Banesco',
-  'Banesco Banco Universal',
-  'Banplus Banco Universal',
-  'BBVA Banco Provincial',
-  'BINANCE',
-  'BNC',
-  'BOD',
-  'Citibank',
-  'DelSur Banco Universal',
   'Mercantil',
-  'Mi Banco Banco Microfinanciero C.A.',
-  'Pago móvil',
-  'PayPal',
-  'Provincial',
-  'Zelle',
+  'BNC',
+  'BNV',
+  'Binance',
+  'Recibo',
 ]
 
 const SIN_ESPECIFICAR_VALUE = '__sin_especificar__'
 
 export { SIN_ESPECIFICAR_VALUE }
 
+/** Mismo orden que el catálogo (no orden alfabético). */
 export function listaInstitucionesBancariasOrdenada(): string[] {
-  return [...INSTITUCIONES_BANCARIAS_PAGO].sort((a, b) =>
-    a.localeCompare(b, 'es', { sensitivity: 'base' })
-  )
+  return [...INSTITUCIONES_BANCARIAS_PAGO]
 }
 
 /** Incluye el valor actual si no está en el catálogo (datos legacy). */

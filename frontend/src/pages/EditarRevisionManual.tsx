@@ -349,6 +349,20 @@ function fechaPagoPagoRowParaInput(pago: Pago): string {
   }
 }
 
+/** Para ordenar filas: más reciente primero; sin fecha válida al final. */
+function timestampOrdenFechaPago(
+  fp: string | Date | null | undefined
+): number {
+  if (fp == null || fp === '') return Number.NEGATIVE_INFINITY
+  if (typeof fp === 'string') {
+    const t = Date.parse(fp)
+    if (Number.isFinite(t)) return t
+    return Number.NEGATIVE_INFINITY
+  }
+  const t = fp instanceof Date ? fp.getTime() : Date.parse(String(fp))
+  return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY
+}
+
 function pagoRowAPagoCreateInicial(pago: Pago): PagoInicialRegistrar {
   const monedaBs = pago.moneda_registro === 'BS'
   const montoBs =
@@ -817,6 +831,17 @@ export function EditarRevisionManual() {
       m.set(k, (m.get(k) || 0) + 1)
     }
     return m
+  }, [pagosRealizadosData?.pagos])
+
+  /** Tabla «Pagos registrados»: siempre por fecha de pago descendente (más cercana a hoy arriba). */
+  const pagosRegistradosOrdenados = useMemo(() => {
+    const rows = pagosRealizadosData?.pagos ?? []
+    return [...rows].sort((a, b) => {
+      const tb = timestampOrdenFechaPago(b.fecha_pago)
+      const ta = timestampOrdenFechaPago(a.fecha_pago)
+      if (tb !== ta) return tb - ta
+      return (b.id ?? 0) - (a.id ?? 0)
+    })
   }, [pagosRealizadosData?.pagos])
 
   const agregadosCuotasRevision = useMemo(() => {
@@ -3189,7 +3214,7 @@ export function EditarRevisionManual() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {pagosRealizadosData.pagos.map((pago: Pago) => {
+                              {pagosRegistradosOrdenados.map((pago: Pago) => {
                                 const docKey =
                                   claveDocumentoPagoListaNormalizada(
                                     pago.numero_documento,
