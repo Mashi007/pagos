@@ -118,12 +118,13 @@ PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A ni C:
     El recibo BNC tipico usa cuenta destino con otro codigo de entidad en el patron cajero (ej. **0191**/... con slashes), no confundir con 0105 Mercantil.
 
 PASO 2a - D (imagen 4 / Banco de Venezuela BDV) si PASO 2 NO aplico (no es recibo BNC) y el papel es BDV:
-  Nucleo D = institucion **Banco de Venezuela** (texto "Banco de Venezuela", siglas **BDV**, logo triangulos/amarillo-azul-rojo, franja vertical **"TARJETAS"** / **DEPOSITOS** / **PAGOS** en algunos formatos) **y NO** es BNC (no "Banco Nacional de Credito" / marca BNC de cajero ####/####/##/######## como en imagen 2).
+  Nucleo D = institucion **Banco de Venezuela** (texto "Banco de Venezuela", siglas **BDV**, logo triangulos/amarillo-azul-rojo, franja vertical **"TARJETAS"** / **DEPOSITOS** / **DEPÓSITOS** / **PAGOS** / mezcla **DEPOSITOS / PAGOS / TARJETAS** a menudo en **barra roja o color** al margen izquierdo) **y NO** es BNC (no "Banco Nacional de Credito" / marca BNC de cajero ####/####/##/######## como en imagen 2).
     + Titular / beneficiario de la cuenta en USD (u otra linea clara en **TITULAR DE LA CUENTA** / datos cuenta): **RAPI CREDIT** o **SOFT CREDIT C.A.** u otra razon social **empresa** coherente con cuenta corporativa (no exijas la palabra "RAPI" si el resto es claramente BDV + 0102 + titular impreso).
     + Comprobante de **deposito en cuenta** o **Comprobante de Transaccion** / **Deposito en Cuenta** / **Pago** con monto en **USD** (o divisa impresa coherente).
     + Cuenta con formato tipo **0102-....** u OCR sucio (0102 es entidad BDV; no confundir con 0105 Mercantil ni 0191 BNC).
   Si el nucleo D se cumple -> **formato D**, no B (aunque sea deposito) ni A (no es ticket RECAUDACION vertical ni Mercantil 0105).
-  numero_referencia: preferir linea **SECUENCIAL NRO** / **Secuencial Nro** (a menudo **13 digitos con ceros a la izquierda**, ej. 0000000356323). Si ademas hay el **mismo** numero en **rojo** sin ceros o mas corto (ej. 159474220 junto a 0000000947420), usa el valor **completo etiquetado** o la cadena con ceros que vaya con **SECUENCIAL**; no uses solo el monto ni la cuenta 0102.
+  REGLA OBLIGATORIA — **depositante vacio NO invalida D**: Muchos comprobantes BDV traen **DATOS DEL DEPOSITANTE** / **Nombre del depositante** / **CI o RIF del depositante** **en blanco** (sin imprimir ni manuscrito). Eso es **normal**. Si hay BDV + **0102** + titular cuenta + **Total Efectivo** o **Total Deposito** o **Monto Total** + **fecha** y **hora** + un **secuencial** o numero de operacion legible -> **formato D** con JSON completo (fecha_pago, monto, numero_referencia). **Prohibido** devolver **ninguno** solo porque falte cedula o nombre del depositante en el papel.
+  numero_referencia: preferir linea **SECUENCIAL NRO** / **Secuencial Nro** (a menudo **13 digitos con ceros a la izquierda**, ej. 0000091316488, 0000000356323). Si **no** ves la etiqueta literal pero en la cabecera hay **dos** numeros de operacion (uno **largo con ceros** y otro en **rojo** mas corto), usa el **largo completo** como numero_referencia; si solo uno es legible, usa ese. Si ademas hay el **mismo** numero en **rojo** sin ceros o mas corto, prioriza la cadena **completa** con ceros que corresponda al secuencial; no uses solo el monto ni la cuenta 0102.
   fecha_pago: fecha y hora impresas en el comprobante (DD-MM-YYYY o formato legible).
   REGLA FIJA — **BNC (imagen 2) gana sobre D**: si el documento es claramente recibo **Banco Nacional de Credito** con patron BNC + cuenta ####/####/##/######## -> **B**, nunca D.
   REGLA FIJA — **Mercantil (0105) gana sobre D**: cuenta que empieza en **0105** + RAPI + RECAUDACION -> **A**, nunca D.
@@ -143,10 +144,11 @@ PASO 2a - D (imagen 4 / Banco de Venezuela BDV) si PASO 2 NO aplico (no es recib
 
   VARIANTE D2 — **Comprobante horizontal / hoja ancha BDV (imagen 4)** — mismo formato D:
     Logo **Banco de Venezuela** arriba a la izquierda; titulo centrado **COMPROBANTE DE TRANSACCION** / **DEPOSITO EN CUENTA** / **PAGO**; fuente matriz de puntos.
+    **Franja vertical roja** (u otro color fuerte) en margen izquierdo con texto **DEPOSITOS / PAGOS / TARJETAS** (con o sin tilde en Deposito) — patron **muy frecuente** en hoja ancha BDV; refuerza D junto con **0102**.
     **SECUENCIAL NRO** suele ir arriba a la derecha; a veces **duplicado**: numero largo con ceros **y** numero en **tinta roja** mas corto (mismo operativo) — preferir el valor bajo etiqueta **SECUENCIAL NRO** con todos los digitos visibles.
-    **Total Efectivo** / **Total Deposito** / **Monto Total** en bloque inferior; pie **Original: Cliente** en rojo en algunos ejemplos.
-    Sello azul cuadrado/rectangular (caja, oficina); puede haber firma boligrafo sobre el sello — sigue siendo D.
-    Misma regla **0102** + BDV + titular + secuencial + monto; no confundir con BNC (0191) ni Mercantil (0105).
+    **Total Efectivo** / **Total Deposito** / **Monto Total** en bloque inferior; pie **Original: Cliente** en rojo en algunos ejemplos; codigo de forma **CN. 030** u similar en pie — refuerzo BDV, no obligatorio.
+    Sello azul cuadrado/rectangular (caja, oficina, CAJA N°); puede haber firma boligrafo sobre el sello — sigue siendo D.
+    Misma regla **0102** + BDV + titular + secuencial + monto; **depositante en blanco** OK; no confundir con BNC (0191) ni Mercantil (0105).
 
 PASO 2b - C (imagen 3 / Binance Pay) si PASO 2 y 2a no aplicaron (no es recibo BNC ni comprobante BDV imagen 4):
   Nucleo C = evidencia de app o web Binance / Binance Pay. **Logo o marca Binance visible = indicio confirmado** de que la plataforma es Binance (formato C), no otra wallet:
@@ -186,6 +188,7 @@ PASO 4 - Desempate si queda duda entre A y B (si ya clasificaste C en 2b, no use
   Si aplica la REGLA FIJA del PASO 2 (DP + contexto BNC) -> B; no uses esta linea para forzar A.
 
 PASO 5 - Extraccion: A, B o D si fecha_pago, monto y numero_referencia son legibles (cedula en JSON siempre NA); C si monto + numero_referencia son legibles con fecha_pago, cedula y email_cliente en NA; si falta monto o referencia -> ninguno y NA.
+  En **D (BDV)**, la ausencia de datos del **depositante** en el papel **no** cuenta como "falta de dato" para fecha/monto/ref.
 
 DISCRIMINADOR SERIAL — imagen 1 (A) vs imagen 2 (B) (aplica ademas de RAPI-CREDIT/BNC):
   IMAGEN 1 / A — serial de operacion compuesto por BLOQUES separados por guiones (-) u ocasionalmente /:
@@ -302,10 +305,12 @@ Prioriza la plantilla BNC anterior (horizontal, vertical, con o sin sello azul d
 
 === DETALLE FORMATO D (imagen 4 / Banco de Venezuela BDV) ===
   Comprobante impreso de **Banco de Venezuela** (no BNC): deposito / transaccion a cuenta empresa en USD (titular impreso: **RAPI CREDIT**, **SOFT CREDIT C.A.** u otra razon en la linea de titular, siempre con **0102-...**).
-  Incluye **tira vertical** (VARIANTE D1) y **hoja horizontal** (VARIANTE D2): ambos son D si cumplen nucleo BDV + cuenta **0102** + titular + monto + secuencial legible.
+  Incluye **tira vertical** (VARIANTE D1) y **hoja horizontal** (VARIANTE D2) con **franja DEPOSITOS/PAGOS/TARJETAS**: ambos son D si cumplen nucleo BDV + cuenta **0102** + titular + monto + **numero de operacion** (secuencial) legible.
+  **Depositante en blanco**: si **Nombre del depositante** y **CI/RIF del depositante** estan vacios, **sigue siendo D**; rellena fecha_pago, monto y numero_referencia desde el comprobante.
   banco en JSON: "BDV" o "Banco de Venezuela" si se lee; si no, "NA" (el Excel usara BDV por defecto).
   monto: **Monto Total** / **Total Efectivo** / **Total Deposito** / monto en dolares segun linea impresa (coma decimal tipica); ignora linea en letras salvo para validar coherencia; si hay monto manuscrito y otro impreso, prioriza **impreso**.
-  numero_referencia: valor junto a **SECUENCIAL NRO** / **Secuencial Nro** (conserva **ceros a la izquierda** si estan impresos, ej. 0000000434854). Si hay **segundo** numero en rojo sin ceros que repite el mismo secuencial, igualmente elige la forma **completa** bajo SECUENCIAL si es legible; si solo uno es claro, usa ese.
+  numero_referencia: valor junto a **SECUENCIAL NRO** / **Secuencial Nro** (conserva **ceros a la izquierda**, ej. 0000091316488). Si no hay etiqueta clara pero hay **par** numero largo+ceros / numero rojo en cabecera BDV, el **largo** es la referencia operativa.
+    Si hay **segundo** numero en rojo mas corto, prioriza igualmente la forma **completa con ceros** del secuencial cuando sea legible; si solo uno es claro, usa ese.
     No usar: numero de cuenta 0102-..., montos, ni anotaciones manuscritas tipo "R.F-..." como unica referencia.
   fecha_pago: **Fecha** y **Hora** del comprobante (combinar en un solo texto legible DD/MM/YYYY si hay fecha; si hay hora, puede ir en el mismo campo o despues de espacio).
   cedula: siempre "NA" (incluso si **DATOS DEL DEPOSITANTE** o anotaciones manuscritas muestran CI/RIF — REGLA CEDULA).
