@@ -139,6 +139,7 @@ from app.services.tasa_cambio_service import (
 )
 
 from app.services.pago_registro_moneda import (
+    normalizar_moneda_registro,
     resolver_monto_registro_pago,
     preload_autorizados_bs,
 )
@@ -6116,6 +6117,10 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
     aplicar_conciliado = False
 
+    _put_mon_keys = ("monto_pagado", "moneda_registro", "tasa_cambio_manual", "fecha_pago")
+
+    monetario_up = {k: data.pop(k) for k in _put_mon_keys if k in data}
+
     for k, v in data.items():
 
         if k == "notas" and v is not None:
@@ -6129,20 +6134,6 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         elif k == "cedula_cliente" and v is not None:
 
             setattr(row, k, v.strip())
-
-        elif k == "monto_pagado" and v is not None:
-
-            es_valido, monto_val, err_msg = _validar_monto(v)
-
-            if not es_valido:
-
-                raise HTTPException(status_code=400, detail=err_msg)
-
-            setattr(row, k, Decimal(str(round(monto_val, 2))))
-
-        elif k == "fecha_pago" and v is not None:
-
-            setattr(row, k, datetime.combine(v, dt_time.min) if isinstance(v, date) and not isinstance(v, datetime) else v)
 
         elif k == "conciliado" and v is not None:
 
@@ -6165,6 +6156,158 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         else:
 
             setattr(row, k, v)
+
+    if monetario_up:
+
+        def _fp_row_a_date(fp):
+
+            if fp is None:
+
+                return None
+
+            return fp.date() if hasattr(fp, "date") and callable(getattr(fp, "date", None)) else fp
+
+        try:
+
+            moneda_prev = normalizar_moneda_registro(row.moneda_registro or "USD")
+
+        except HTTPException:
+
+            moneda_prev = "USD"
+
+        if "moneda_registro" in monetario_up:
+
+            moneda_target = normalizar_moneda_registro(monetario_up["moneda_registro"])
+
+        else:
+
+            moneda_target = moneda_prev
+
+        if moneda_target == "BS":
+
+            fecha_eff = monetario_up.get("fecha_pago")
+
+            if fecha_eff is None:
+
+                fecha_eff = _fp_row_a_date(row.fecha_pago)
+
+            if fecha_eff is None:
+
+                raise HTTPException(
+
+                    status_code=400,
+
+                    detail="fecha_pago es requerida para pagos en bolivares.",
+
+                )
+
+            if "monto_pagado" in monetario_up:
+
+                es_valido, monto_val, err_msg = _validar_monto(monetario_up["monto_pagado"])
+
+                if not es_valido:
+
+                    raise HTTPException(status_code=400, detail=err_msg)
+
+                monto_bs_input = Decimal(str(round(monto_val, 2)))
+
+            else:
+
+                if row.monto_bs_original is not None:
+
+                    monto_bs_input = Decimal(str(round(float(row.monto_bs_original), 2)))
+
+                else:
+
+                    raise HTTPException(
+
+                        status_code=400,
+
+                        detail="Indique el monto en bolivares; no hay monto Bs previo en este pago.",
+
+                    )
+
+            cedula_norm = (row.cedula_cliente or "").strip().upper()
+
+            if cedula_norm:
+
+                alinear_cedulas_clientes_existentes(db, [cedula_norm])
+
+            tasa_manual_put = monetario_up.get("tasa_cambio_manual")
+
+            monto_usd, moneda_fin, monto_bs_o, tasa_o, fecha_tasa_o = resolver_monto_registro_pago(
+
+                db,
+
+                cedula_normalizada=cedula_norm,
+
+                fecha_pago=fecha_eff,
+
+                monto_pagado=monto_bs_input,
+
+                moneda_registro="BS",
+
+                tasa_cambio_manual=tasa_manual_put,
+
+            )
+
+            row.monto_pagado = monto_usd
+
+            row.moneda_registro = moneda_fin
+
+            row.monto_bs_original = monto_bs_o
+
+            row.tasa_cambio_bs_usd = tasa_o
+
+            row.fecha_tasa_referencia = fecha_tasa_o
+
+            if "fecha_pago" in monetario_up:
+
+                fpv = monetario_up["fecha_pago"]
+
+                row.fecha_pago = (
+
+                    datetime.combine(fpv, dt_time.min)
+
+                    if isinstance(fpv, date) and not isinstance(fpv, datetime)
+
+                    else fpv
+
+                )
+
+        else:
+
+            if "fecha_pago" in monetario_up:
+
+                fpv = monetario_up["fecha_pago"]
+
+                row.fecha_pago = (
+
+                    datetime.combine(fpv, dt_time.min)
+
+                    if isinstance(fpv, date) and not isinstance(fpv, datetime)
+
+                    else fpv
+
+                )
+
+            if "monto_pagado" in monetario_up:
+
+                es_valido, monto_val, err_msg = _validar_monto(monetario_up["monto_pagado"])
+
+                if not es_valido:
+
+                    raise HTTPException(status_code=400, detail=err_msg)
+
+                row.monto_pagado = Decimal(str(round(monto_val, 2)))
+
+            row.moneda_registro = "USD"
+
+            row.monto_bs_original = None
+
+            row.tasa_cambio_bs_usd = None
+
+            row.fecha_tasa_referencia = None
 
     fp_row = row.fecha_pago
 

@@ -234,13 +234,20 @@
   background-color: #2563eb;
 }
 
-/* Notificaciones (toasts) más grandes, centradas y visibles */
+/* Notificaciones (toasts) más grandes, centradas en la pantalla (mitad vertical y horizontal) */
 /* Sonner */
 [data-sonner-toaster] {
-  inset: 24px 50% auto 50% !important;
-  transform: translateX(-50%) !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
   margin: 0 !important;
   z-index: 9999;
+  width: min(560px, calc(100vw - 32px)) !important;
+  max-width: min(560px, calc(100vw - 32px)) !important;
+  align-items: stretch !important;
 }
 [data-sonner-toast] {
   min-width: 380px !important;
@@ -248,12 +255,20 @@
   font-size: 1.05rem !important;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15) !important;
 }
-/* react-hot-toast: contenedor centrado */
-.toast-container-center {
-  top: 24px !important;
+/* Errores (Sonner): un poco más de énfasis en el centro */
+[data-sonner-toaster] [data-type='error'],
+[data-sonner-toaster] [data-type='error'] [data-icon] {
+  font-weight: 600;
+}
+/* react-hot-toast: mismo centro de viewport (p. ej. errores del ApiClient) */
+.toast-container-center.toast-container-viewport-center {
+  top: 50% !important;
   left: 50% !important;
-  transform: translateX(-50%) !important;
+  transform: translate(-50%, -50%) !important;
   right: auto !important;
+  bottom: auto !important;
+  width: min(560px, calc(100vw - 32px)) !important;
+  max-width: min(560px, calc(100vw - 32px)) !important;
 }
 .toast-container-center > div {
   min-width: 360px !important;

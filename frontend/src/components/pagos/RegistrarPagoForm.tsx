@@ -41,13 +41,7 @@ import {
   SelectValue,
 } from '../../components/ui/select'
 
-import { apiClient } from '../../services/api'
-
-import {
-  pagoService,
-  comprobanteImagenApiPathDesdeLink,
-  type PagoCreate,
-} from '../../services/pagoService'
+import { pagoService, type PagoCreate } from '../../services/pagoService'
 
 import { pagoConErrorService } from '../../services/pagoConErrorService'
 
@@ -192,13 +186,6 @@ export function RegistrarPagoForm({
     null
   )
 
-  const [previewComprobanteLocalUrl, setPreviewComprobanteLocalUrl] = useState<
-    string | null
-  >(null)
-
-  const [previewComprobanteServidorUrl, setPreviewComprobanteServidorUrl] =
-    useState<string | null>(null)
-
   const [vistoRevisionManualOpen, setVistoRevisionManualOpen] = useState(false)
 
   const [formData, setFormData] = useState<PagoCreate>({
@@ -233,66 +220,6 @@ export function RegistrarPagoForm({
       pagoInicial?.link_comprobante || ''
     ).trim()
   }, [pagoInicial?.link_comprobante])
-
-  useEffect(() => {
-    if (!archivoComprobante) {
-      setPreviewComprobanteLocalUrl(null)
-
-      return
-    }
-
-    const u = URL.createObjectURL(archivoComprobante)
-
-    setPreviewComprobanteLocalUrl(u)
-
-    return () => {
-      URL.revokeObjectURL(u)
-    }
-  }, [archivoComprobante])
-
-  useEffect(() => {
-    let cancelled = false
-
-    const link = (formData.link_comprobante || '').trim()
-
-    const path = link ? comprobanteImagenApiPathDesdeLink(link) : null
-
-    setPreviewComprobanteServidorUrl(prev => {
-      if (prev) URL.revokeObjectURL(prev)
-
-      return null
-    })
-
-    if (archivoComprobante || !isEditing || !path) {
-      return () => {
-        cancelled = true
-      }
-    }
-
-    ;(async () => {
-      try {
-        const blob = await apiClient.get<Blob>(path, {
-          responseType: 'blob',
-        })
-
-        if (cancelled) return
-
-        setPreviewComprobanteServidorUrl(URL.createObjectURL(blob))
-      } catch {
-        // Sin vista previa si falla la descarga autenticada
-      }
-    })()
-
-    return () => {
-      cancelled = true
-
-      setPreviewComprobanteServidorUrl(prev => {
-        if (prev) URL.revokeObjectURL(prev)
-
-        return null
-      })
-    }
-  }, [isEditing, formData.link_comprobante, archivoComprobante])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -1430,12 +1357,6 @@ export function RegistrarPagoForm({
                 </Button>
 
                 {archivoComprobante ? (
-                  <span className="text-sm text-gray-700">
-                    {archivoComprobante.name}
-                  </span>
-                ) : null}
-
-                {archivoComprobante ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -1449,12 +1370,24 @@ export function RegistrarPagoForm({
                 ) : null}
               </div>
 
+              {archivoComprobante ? (
+                <p
+                  className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900"
+                  role="status"
+                >
+                  Imagen cargada. Se subirá al guardar el pago.
+                </p>
+              ) : null}
+
               {isEditing &&
               (linkComprobanteInicialRef.current || '').trim() &&
               !archivoComprobante ? (
-                <p className="text-xs text-gray-600">
-                  Hay un comprobante guardado. Suba otra imagen solo si desea
-                  reemplazarlo.
+                <p
+                  className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+                  role="status"
+                >
+                  Comprobante ya registrado (sin vista previa). Suba otra imagen
+                  solo si desea reemplazarlo.
                 </p>
               ) : null}
 
@@ -1463,32 +1396,6 @@ export function RegistrarPagoForm({
                   {errors.link_comprobante}
                 </p>
               )}
-
-              {previewComprobanteLocalUrl ? (
-                <div className="overflow-hidden rounded border bg-muted/40 p-2">
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    Vista previa (imagen seleccionada):
-                  </p>
-                  <img
-                    src={previewComprobanteLocalUrl}
-                    alt="Vista previa del comprobante seleccionado"
-                    className="max-h-48 max-w-full rounded object-contain"
-                  />
-                </div>
-              ) : null}
-
-              {!previewComprobanteLocalUrl && previewComprobanteServidorUrl ? (
-                <div className="overflow-hidden rounded border bg-muted/40 p-2">
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    Comprobante actual (servidor):
-                  </p>
-                  <img
-                    src={previewComprobanteServidorUrl}
-                    alt="Comprobante registrado"
-                    className="max-h-48 max-w-full rounded object-contain"
-                  />
-                </div>
-              ) : null}
             </div>
 
             {/* Notas */}

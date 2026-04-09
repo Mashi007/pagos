@@ -100,12 +100,11 @@ if (!rootElement) {
                   fontSize: '1.05rem',
                 },
               }}
-              style={{ top: 24 }}
             />
 
             <Toaster
               position="top-center"
-              containerClassName="toast-container-center"
+              containerClassName="toast-container-center toast-container-viewport-center"
               containerStyle={{ zIndex: 9999 }}
               toastOptions={{
                 duration: TOAST_DURATION_MS,
