@@ -32,15 +32,22 @@ PagosGmailFormato = Literal["A", "B", "C", "D", "ninguno"]
 GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = """
 Eres un clasificador estricto. Entrada: una sola imagen o PDF extraida del mensaje (incrustada en cuerpo, adjunto con nombre,
 o comprobante dentro de un correo reenviado .eml). No uses asunto del correo ni texto del cuerpo para clasificar ni rellenar campos del JSON
-(salvo que en REGLA CEDULA se indique lo contrario para el placeholder cedula).
+salvo cuando este prompt autorice explicitamente otro criterio. La **cedula** jamas se obtiene del asunto, cuerpo, imagen ni PDF (REGLA CEDULA).
 Si hay duda -> formato "ninguno" y los cuatro campos "NA". No inventes datos.
 
-REGLA CEDULA (SISTEMA — obligatoria para imagen 1, 2, 3 y 4):
-  NO extraigas, NO copies y NO infieras la cedula desde la imagen, el PDF, el cuerpo del correo ni el asunto.
-  Usa la cedula SOLO como placeholder en JSON: en A, B, C y D el campo "cedula" en tu respuesta debe ser SIEMPRE el literal "NA".
+REGLA CEDULA (SISTEMA — obligatoria imagen 1, 2, 3 y 4 / formatos A, B, C, D):
+  NO extraigas, NO copies y NO infieras el **numero de cedula** (ni V-, E-, J-, CI, RIF, documento del depositante) desde:
+    - imagen **embebida** en el HTML del correo (inline, CID, multipart related),
+    - imagen **adjunta** (.jpg, .png, .webp, etc.),
+    - **PDF** adjunto o pagina incrustada,
+    - ningun otro **archivo binario** que te envien en esta peticion,
+    - **cuerpo** del mensaje ni **asunto**.
+  Da igual el origen Gmail (pegada en cuerpo vs adjunto vs reenvio .eml): la regla es la misma.
+  En JSON el campo "cedula" debe ser SIEMPRE el literal **"NA"** para **imagen 1 (A)**, **imagen 2 (B)**, **imagen 3 (C)** e **imagen 4 (D)**.
   El backend asigna la cedula real consultando la tabla clientes por el email del remitente (cabecera De / From).
   Si el remitente no existe en clientes, el backend escribira un texto de error en la columna Cedula del Excel (no es tu tarea).
-  Puedes usar lineas DP:, Cedula Dep., etc. SOLO para decidir si la plantilla es A o B (clasificacion), nunca para rellenar el JSON.
+  Puedes usar lineas DP:, Cedula Dep., casillas de cedula en papel, RIF depositante, etc. **solo** para **clasificar** plantilla (A vs B, etc.);
+    **nunca** escribas esos digitos en el campo "cedula" del JSON.
 
 ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
   Cada peticion te envia UN solo binario (una imagen o un PDF). Ese binario puede proceder de:
@@ -48,6 +55,7 @@ ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
     (b) imagen incrustada en el HTML del cuerpo (inline / CID / multipart related),
     (c) imagen detectada dentro del cuerpo sin filename util,
     (d) PDF adjunto o pagina de PDF, o trozo extraido de un .eml reenviado.
+  **REGLA CEDULA** aplica igual en (a)-(d): **no** copies cedula del binario aunque sea embebida o adjunta.
   No importa el origen: si el contenido visual es plantilla A, B, C (Binance Pay) o D (BDV), clasifica igual. No descartes por "parece pegado en el correo" o "no es adjunto".
   Nombres genericos del sistema (inline-0.jpg, image.png, unnamed, parte sin titulo) NO son evidencia de ninguno; solo cuenta lo que se ve en los pixeles.
   Si ves chrome de cliente de correo (cabeceras, botones, fondo gris) alrededor pero el ticket o recibo BNC/RAPI es legible en el centro, ignora el marco y lee el comprobante.
@@ -310,7 +318,9 @@ Prioriza la plantilla BNC anterior (horizontal, vertical, con o sin sello azul d
   fecha_pago: "NA". cedula: "NA".
 
 === EXTRACCION ===
-A/B/D: fecha_pago, monto y numero_referencia desde la imagen/PDF. cedula SIEMPRE "NA" (sin excepcion).
+A/B/D: fecha_pago, monto y numero_referencia desde la imagen/PDF. cedula SIEMPRE "NA" (sin excepcion): aplica a **imagen 1, 2 y 4** venga el binario **embebido o adjunto**.
+C: igual: cedula SIEMPRE "NA" (**imagen 3**); no copies documento del pagador desde la captura.
+Unificado: **ningun** formato (A/B/C/D) debe poner numero de cedula/RIF en "cedula" del JSON; el backend usa solo el remitente del correo.
   banco: nombre de la INSTITUCION del comprobante (como aparece: logo, cabecera, pie de pagina).
     Ejemplos: formato B con logo BNC -> "BNC" o "Banco Nacional de Credito"; variante Mercantil (DEPOSITO DIVISAS) -> "Mercantil" o "Banco Mercantil";
     formato D BDV -> "BDV" o "Banco de Venezuela";
