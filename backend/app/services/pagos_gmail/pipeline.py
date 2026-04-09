@@ -83,10 +83,10 @@ def _dedupe_messages_pagos_gmail(raw_messages: list[dict]) -> list[dict]:
     return out
 
 
-def _sort_messages_by_date_desc(messages: list[dict]) -> list[dict]:
+def _sort_messages_by_date_asc(messages: list[dict]) -> list[dict]:
     """
-    Orden estable: primero el correo mas actual, luego hacia el mas antiguo
-    (cabecera Date descendente; empate por id de mensaje). Gmail no garantiza orden en messages.list.
+    Orden estable: del correo mas antiguo al mas reciente (cabecera Date ascendente;
+    empate por id de mensaje). Gmail no garantiza orden en messages.list: siempre ordenar aqui.
     """
 
     def _key(m: dict) -> tuple:
@@ -94,7 +94,7 @@ def _sort_messages_by_date_desc(messages: list[dict]) -> list[dict]:
         dt = get_message_date(h)
         return (dt, m.get("id") or "")
 
-    return sorted(messages, key=_key, reverse=True)
+    return sorted(messages, key=_key, reverse=False)
 
 
 # Columna Excel "Banco" al digitalizar: imagen 1 (A) / imagen 2 (B) / imagen 3 Binance (C) / imagen 4 BDV (D).
@@ -157,10 +157,11 @@ def run_pipeline(
     """
     Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
     Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D) + estrella; cierre: leido si hubo algun OK.
-    scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = toda la bandeja).
-      pending_identification: solo correos en inbox con adjunto, sin estrella y sin etiquetas IMAGEN 1/2/3/4.
+    scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = inbox sin ya clasificados).
+      Listado Gmail excluye correos con etiquetas MERCANTIL/BNC/BINANCE/BNV/IMAGEN 5/ERROR EMAIL/MANUAL (no reescanear).
+      pending_identification: ademas sin estrella.
     Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
-    Los mensajes de cada lote se ordenan por fecha (mas actual primero) antes de procesar.
+    Los mensajes de cada lote se ordenan por fecha del correo de mas antiguo a mas reciente antes de procesar.
     Con "unread", se repite listar+procesar hasta que no queden no leidos o hasta PAGOS_GMAIL_UNREAD_MAX_PASSES.
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
@@ -223,9 +224,9 @@ def run_pipeline(
                     len(raw_messages),
                     len(messages),
                 )
-            ordered = _sort_messages_by_date_desc(messages)
+            ordered = _sort_messages_by_date_asc(messages)
             logger.info(
-                "[PAGOS_GMAIL] Correos (filtro=%s): %d (orden mas actual primero)",
+                "[PAGOS_GMAIL] Correos (filtro=%s): %d (orden mas antiguo primero -> mas reciente al final)",
                 scan_filter,
                 len(ordered),
             )
@@ -711,7 +712,7 @@ def run_pipeline(
         if scan_filter == "unread":
             for pass_n in range(1, max_unread_passes + 1):
                 logger.info(
-                    "[PAGOS_GMAIL] Pasada no leidos %d/%d (lista ordenada mas actual primero)",
+                    "[PAGOS_GMAIL] Pasada no leidos %d/%d (lista ordenada mas antiguo primero)",
                     pass_n,
                     max_unread_passes,
                 )

@@ -370,15 +370,29 @@ def test_pagos_gmail_list_q_media_parts_incluye_filename():
     assert "filename:png" in q
 
 
-def test_sort_messages_by_date_desc_mas_actual_primero():
-    from app.services.pagos_gmail.pipeline import _sort_messages_by_date_desc
+def test_sort_messages_by_date_asc_mas_antiguo_primero():
+    from app.services.pagos_gmail.pipeline import _sort_messages_by_date_asc
 
     msgs = [
         {"id": "old", "headers": {"date": "Mon, 1 Jan 2024 12:00:00 +0000"}},
         {"id": "new", "headers": {"date": "Mon, 15 Mar 2024 12:00:00 +0000"}},
         {"id": "mid", "headers": {"date": "Mon, 1 Feb 2024 12:00:00 +0000"}},
     ]
-    out = _sort_messages_by_date_desc(msgs)
-    assert [m["id"] for m in out] == ["new", "mid", "old"]
+    out = _sort_messages_by_date_asc(msgs)
+    assert [m["id"] for m in out] == ["old", "mid", "new"]
+
+
+def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
+    from app.services.pagos_gmail.gmail_service import (
+        PAGOS_GMAIL_LABEL_ERROR_EMAIL,
+        PAGOS_GMAIL_LABEL_IMAGEN_1,
+        PAGOS_GMAIL_LABEL_MANUAL,
+        pagos_gmail_label_exclusions_query,
+    )
+
+    q = pagos_gmail_label_exclusions_query()
+    assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"' in q
 
 

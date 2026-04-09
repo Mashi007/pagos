@@ -33,6 +33,22 @@ PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
 
 
+def pagos_gmail_label_exclusions_query() -> str:
+    """
+    Fragmento para el parametro q de Gmail: excluye correos ya clasificados por el pipeline
+    (no volver a escanear si tienen MERCANTIL / BNC / BINANCE / BNV / IMAGEN 5 / ERROR EMAIL / MANUAL).
+    """
+    return (
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"'
+    )
+
+
 def pagos_gmail_list_q_media_parts() -> str:
     """
     Criterio Gmail: adjunto declarado O parte con nombre de imagen/PDF (capturas en cuerpo / inline).
@@ -46,18 +62,12 @@ def pagos_gmail_list_q_media_parts() -> str:
 
 def pagos_gmail_pending_identification_query() -> str:
     """
-    Consulta Gmail (parametro q): inbox, con adjunto o imagen en cuerpo, sin estrella, sin etiquetas plantilla.
+    Consulta Gmail (parametro q): inbox, con adjunto o imagen en cuerpo, sin estrella, sin etiquetas de clasificacion.
     Asi el escaneo periodico no reprocesa correos ya marcados con MERCANTIL / BNC / BINANCE / BNV / IMAGEN 5 / ERROR EMAIL / MANUAL o destacados.
     """
     return (
         f"in:inbox -is:starred {pagos_gmail_list_q_media_parts()} "
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"'
+        f"{pagos_gmail_label_exclusions_query()}"
     )
 
 
@@ -128,7 +138,8 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
     filter_type: "unread" | "read" | "all" | "pending_identification".
-    pending_identification: sin estrella y sin etiquetas MERCANTIL / BNC / BINANCE / BNV / IMAGEN 5 / ERROR EMAIL / MANUAL (reintento sin reescanear todo).
+    Todos los filtros excluyen por q los correos con etiquetas de clasificacion del pipeline (no reescanear).
+    pending_identification: ademas sin estrella (reintento cola sin reprocesar ya clasificados).
     Misma forma que antes: id, payload, headers.
     """
     from googleapiclient.errors import HttpError
@@ -138,15 +149,16 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
         page_token: Optional[str] = None
         params_base: dict = {"userId": "me", "maxResults": 500}
         media_q = pagos_gmail_list_q_media_parts()
+        excl = pagos_gmail_label_exclusions_query()
         if filter_type == "unread":
             params_base["labelIds"] = ["UNREAD"]
-            params_base["q"] = media_q
+            params_base["q"] = f"in:inbox {media_q} {excl}"
         elif filter_type == "read":
-            params_base["q"] = f"is:read in:inbox {media_q}"
+            params_base["q"] = f"is:read in:inbox {media_q} {excl}"
         elif filter_type == "pending_identification":
             params_base["q"] = pagos_gmail_pending_identification_query()
         else:
-            params_base["q"] = f"in:inbox {media_q}"
+            params_base["q"] = f"in:inbox {media_q} {excl}"
 
         while True:
             params = dict(params_base)
@@ -205,15 +217,16 @@ def count_messages_by_filter(service: Any, filter_type: str = "unread") -> int:
         page_token: Optional[str] = None
         params_base: dict = {"userId": "me", "maxResults": 500}
         media_q = pagos_gmail_list_q_media_parts()
+        excl = pagos_gmail_label_exclusions_query()
         if filter_type == "unread":
             params_base["labelIds"] = ["UNREAD"]
-            params_base["q"] = media_q
+            params_base["q"] = f"in:inbox {media_q} {excl}"
         elif filter_type == "read":
-            params_base["q"] = f"is:read in:inbox {media_q}"
+            params_base["q"] = f"is:read in:inbox {media_q} {excl}"
         elif filter_type == "pending_identification":
             params_base["q"] = pagos_gmail_pending_identification_query()
         else:
-            params_base["q"] = f"in:inbox {media_q}"
+            params_base["q"] = f"in:inbox {media_q} {excl}"
         while True:
             params = dict(params_base)
             if page_token:
