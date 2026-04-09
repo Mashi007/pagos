@@ -5,14 +5,14 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
   Si no cumple plantillas 1/2/3 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
 Estrella Gmail + etiquetas IMAGEN 1 / 2 / 3 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
-plantilla A o B con las cuatro columnas (fecha_pago, cedula, monto, numero_referencia), o plantilla C (Binance Pay)
-con monto + referencia + email en imagen; fecha de C = fecha del correo; cedula = lookup en tabla clientes por ese email.
-Si el email de C no existe en clientes: no Drive, no fila, no etiqueta IMAGEN 3 para ese adjunto.
+plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
+fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From).
+Si no hay cliente para ese email: columna Cedula = ERROR EMAIL. Si falla la consulta a clientes: ERROR BD.
+En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
 Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas, no leido
 (en filtro unread se fuerza sin estrella + no leido para reintento). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
-Regla remitente: el campo De (From) debe existir en tabla clientes (email) para digitalizar, Drive/BD y etiquetas IMAGEN 1/2/3.
-El destinatario Para (To) no se filtra. Sin fila cliente para el De: se lista el correo pero no se llama Gemini ni se etiqueta.
+Cedula: solo desde tabla clientes por email del De (From), nunca desde la imagen. El destinatario Para (To) no se usa para cedula.
 """
 import logging
 from datetime import datetime, timezone
@@ -94,20 +94,47 @@ PAGOS_GMAIL_BANCO_IMAGEN_1 = "Mercantil"
 PAGOS_GMAIL_BANCO_IMAGEN_2 = "BNC"
 PAGOS_GMAIL_BANCO_IMAGEN_3 = "BINANCE"
 
+# Columna Cedula en Excel cuando no se puede resolver por remitente (max 50 chars en modelo).
+PAGOS_GMAIL_ERROR_CEDULA_BD = "ERROR BD"  # 3.1 fallo al consultar tabla clientes
+PAGOS_GMAIL_ERROR_CEDULA_EMAIL = "ERROR EMAIL"  # 3.2 remitente sin fila en clientes
 
-def _cedula_por_email_cliente(db: Session, email_raw: str) -> Optional[str]:
+
+def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str], Optional[str]]:
+    """
+    Devuelve (cedula_raw, motivo_fallo).
+    motivo_fallo: None si hay cedula; "EMAIL" sin coincidencia; "BD" si la consulta lanzo excepcion.
+    """
     em = (email_raw or "").strip().lower()
     if not em:
-        return None
+        return None, "EMAIL"
     try:
-        return db.execute(
+        row = db.execute(
             select(Cliente.cedula)
             .where(func.lower(func.trim(Cliente.email)) == em)
             .limit(1)
         ).scalar_one_or_none()
+        if row:
+            return row, None
+        return None, "EMAIL"
     except Exception as ex:
         logger.warning("[PAGOS_GMAIL] Lookup cedula por email clientes: %s", ex)
-        return None
+        return None, "BD"
+
+
+def _cedula_columna_desde_remitente(
+    db: Session, sender_lc: str
+) -> tuple[str, bool]:
+    """
+    Devuelve (valor columna cedula, es_cliente_valido).
+    Si hay cliente con email = remitente: cedula formateada.
+    Si no hay fila: ERROR EMAIL. Si falla la consulta: ERROR BD. (3.3 sigue generando fila Excel/Drive.)
+    """
+    c_raw, motivo = _cedula_por_email_cliente(db, sender_lc)
+    if c_raw:
+        return formatear_cedula(c_raw), True
+    if motivo == "BD":
+        return PAGOS_GMAIL_ERROR_CEDULA_BD, False
+    return PAGOS_GMAIL_ERROR_CEDULA_EMAIL, False
 
 
 def run_pipeline(
@@ -211,11 +238,9 @@ def run_pipeline(
                     not sender_lc
                     or sender_lc == "desconocido"
                     or "@" not in sender_lc
-                    or _cedula_por_email_cliente(db, sender_lc) is None
                 ):
                     logger.info(
-                        "[PAGOS_GMAIL]   Omitido: remitente (De) sin email en tabla clientes (%s) msg=%s "
-                        "- no Gemini/Drive/BD ni etiquetas (Para no filtra)",
+                        "[PAGOS_GMAIL]   Omitido: remitente (De) sin email valido (%s) msg=%s",
                         sender_lc[:72] if sender_lc else "(vacio)",
                         msg_id,
                     )
@@ -352,45 +377,29 @@ def run_pipeline(
                             f = normalizar_fecha_pago(msg_date.strftime("%d/%m/%Y"))
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
-                            email_img = (data.get("email_cliente") or "").strip()
-                            if email_img.upper() == PAGOS_NA:
-                                email_img = ""
-                            if not email_img and sender:
-                                email_img = sender.strip()
-                            c_raw = (
-                                _cedula_por_email_cliente(db, email_img) if email_img else None
-                            )
-                            sender_em = (sender or "").strip()
-                            if (
-                                not c_raw
-                                and sender_em
-                                and sender_em.lower() != (email_img or "").strip().lower()
-                            ):
-                                c_raw = _cedula_por_email_cliente(db, sender_em)
-                                if c_raw:
-                                    logger.info(
-                                        "[PAGOS_GMAIL]   Formato C: cedula por remitente del correo "
-                                        "(email en captura no en clientes: %s -> uso From: %s)",
-                                        (email_img[:72] if email_img else "(vacio)"),
-                                        sender_em[:72],
-                                    )
-                            c = formatear_cedula(c_raw) if c_raw else ""
-                            if not c_raw:
+                            c, c_ok = _cedula_columna_desde_remitente(db, sender_lc)
+                            if not c_ok:
                                 any_incomplete_or_skipped = True
                                 logger.warning(
-                                    "[PAGOS_GMAIL]   Imagen 3 (C) reconocida pero sin cedula en BD: "
-                                    "no hay cliente con email captura=%s ni remitente=%s — sin fila Excel/Drive/etiqueta IMAGEN 3. "
-                                    "Archivo: %s",
-                                    (email_img[:72] if email_img else "(vacio)"),
-                                    (sender_em[:72] if sender_em else "(vacio)"),
+                                    "[PAGOS_GMAIL]   Imagen 3 (C): columna Cedula=%s — De=%s archivo=%s",
+                                    c,
+                                    sender_lc[:72],
                                     filename,
                                 )
-                                continue
                         else:
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
-                            c = formatear_cedula(_v(data.get("cedula")))
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
+                            c, c_ok = _cedula_columna_desde_remitente(db, sender_lc)
+                            if not c_ok:
+                                any_incomplete_or_skipped = True
+                                logger.warning(
+                                    "[PAGOS_GMAIL]   Imagen 1/2 (%s): columna Cedula=%s — De=%s archivo=%s",
+                                    fmt,
+                                    c,
+                                    sender_lc[:72],
+                                    filename,
+                                )
                         if not _campos_completos(f, c, m, r):
                             any_incomplete_or_skipped = True
                             logger.warning(

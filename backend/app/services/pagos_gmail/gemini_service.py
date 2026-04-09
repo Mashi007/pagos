@@ -21,7 +21,7 @@ GEMINI_SERVER_ERROR_RETRY_DELAY = 15  # Para 503 Server Unavailable
 GEMINI_SERVER_ERROR_MAX_RETRIES = 4  # Máximo 4 reintentos para 503
 
 from app.core.config import settings
-from app.services.pagos_gmail.helpers import extract_sender_email, get_mime_type
+from app.services.pagos_gmail.helpers import get_mime_type
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,16 @@ PagosGmailFormato = Literal["A", "B", "C", "ninguno"]
 
 GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = """
 Eres un clasificador estricto. Entrada: una sola imagen o PDF extraida del mensaje (incrustada en cuerpo, adjunto con nombre,
-o comprobante dentro de un correo reenviado .eml). No uses asunto del correo ni texto del cuerpo para clasificar ni rellenar,
-salvo un bloque literal "CONTEXTO_REMITE:" que SOLO puedes usar en formato C para el campo email_cliente cuando en la captura Binance no se lea el email del destinatario.
+o comprobante dentro de un correo reenviado .eml). No uses asunto del correo ni texto del cuerpo para clasificar ni rellenar campos del JSON
+(salvo que en REGLA CEDULA se indique lo contrario para el placeholder cedula).
 Si hay duda -> formato "ninguno" y los cuatro campos "NA". No inventes datos.
+
+REGLA CEDULA (SISTEMA — obligatoria para imagen 1, 2 y 3):
+  NO extraigas, NO copies y NO infieras la cedula desde la imagen, el PDF, el cuerpo del correo ni el asunto.
+  Usa la cedula SOLO como placeholder en JSON: en A, B y C el campo "cedula" en tu respuesta debe ser SIEMPRE el literal "NA".
+  El backend asigna la cedula real consultando la tabla clientes por el email del remitente (cabecera De / From).
+  Si el remitente no existe en clientes, el backend escribira un texto de error en la columna Cedula del Excel (no es tu tarea).
+  Puedes usar lineas DP:, Cedula Dep., etc. SOLO para decidir si la plantilla es A o B (clasificacion), nunca para rellenar el JSON.
 
 ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
   Cada peticion te envia UN solo binario (una imagen o un PDF). Ese binario puede proceder de:
@@ -44,7 +51,7 @@ ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
   No importa el origen: si el contenido visual es plantilla A, B o C (Binance Pay), clasifica igual. No descartes por "parece pegado en el correo" o "no es adjunto".
   Nombres genericos del sistema (inline-0.jpg, image.png, unnamed, parte sin titulo) NO son evidencia de ninguno; solo cuenta lo que se ve en los pixeles.
   Si ves chrome de cliente de correo (cabeceras, botones, fondo gris) alrededor pero el ticket o recibo BNC/RAPI es legible en el centro, ignora el marco y lee el comprobante.
-  Si el binario es solo firma, logo, banner, avatar o recorte sin los datos de operacion, o el comprobante esta tan cortado que no puedes los cuatro campos con certeza -> ninguno.
+  Si el binario es solo firma, logo, banner, avatar o recorte sin los datos de operacion, o el comprobante esta tan cortado que no puedes fecha/monto/referencia con certeza -> ninguno.
   Las imagenes embebidas suelen tener mas compresion o menos dpi: tolera OCR sucio (guiones rotos, letras pegadas) pero si un campo sigue ilegible -> ninguno, no rellenes por contexto del correo.
 
 CORREO CON MAS DE UNA IMAGEN O MAS DE UN PDF:
@@ -60,18 +67,18 @@ OBLIGATORIO — campo "formato" en el JSON: SOLO uno de estos cuatro valores exa
   ninguno = cualquier otra cosa, duda, borroso, selfie, documento que no sea esas tres plantillas.
 Prohibido usar otro valor en "formato" (ni numeros, ni texto libre).
 
-REGLA SISTEMA A/B: Devuelve "A" o "B" solo si el comprobante coincide con imagen 1 o 2 y puedes extraer los CUATRO campos con valor real
-(fecha_pago, cedula, monto, numero_referencia). Si la plantilla parece A o B pero algun campo no es legible, formato "ninguno" y NA.
+REGLA SISTEMA A/B: Devuelve "A" o "B" solo si el comprobante coincide con imagen 1 o 2 y puedes extraer con valor real
+fecha_pago, monto y numero_referencia desde la imagen/PDF. El campo cedula en JSON debe ser siempre "NA" (ver REGLA CEDULA).
+  Si la plantilla parece A o B pero falta fecha, monto o referencia legible, formato "ninguno" y NA.
 
 REGLA SISTEMA C (imagen 3 / Binance Pay): Devuelve "C" si ves el nucleo C (PASO 2b) y con certeza: monto (USDT/USD) y numero_referencia (Id. de orden u otro id largo de la pantalla).
-  email_cliente: si se lee en la captura, copialo; si NO se lee pero en el mensaje del sistema viene CONTEXTO_REMITE con un correo, igualmente devuelve formato "C" (pon email_cliente con ese correo en minusculas, o "NA" y el backend lo completara desde CONTEXTO_REMITE).
-  Para formato C en el JSON pon siempre fecha_pago="NA" y cedula="NA" (no inventes; el sistema asigna fecha desde el correo y cedula desde tabla clientes por email del pagador).
-  Si falta monto o id de orden con certeza -> "ninguno". No uses "ninguno" solo porque el email no se lea en la imagen si hay CONTEXTO_REMITE.
+  En el JSON pon siempre fecha_pago="NA", cedula="NA" y email_cliente="NA" (el backend usa el remitente del correo para cliente y cedula).
+  Si falta monto o id de orden con certeza -> "ninguno".
 
 COLUMNAS OBLIGATORIAS Y GMAIL (estrella / etiquetas — las aplica el backend):
-  A y B: las cuatro columnas fecha_pago, cedula, monto, numero_referencia deben ser reales en tu respuesta; si falta una -> ninguno.
-  C: monto, numero_referencia, email_cliente obligatorios; fecha_pago y cedula deben ser "NA" en JSON.
-  El pipeline evalua cada imagen/PDF por separado: varias piezas validas en un correo generan varias filas (una por pieza que cumpla A, B o C). Solo estrella y etiqueta cuando TODAS las piezas del correo alcanzan estado final (ver logica del backend); en C, si el email no existe en clientes, el backend no incorpora fila ni etiqueta para esa pieza (no es tu tarea verificar la base de datos).
+  A y B: fecha_pago, monto y numero_referencia reales desde la imagen; cedula siempre "NA" en JSON.
+  C: monto y numero_referencia desde la imagen; fecha_pago, cedula y email_cliente "NA" en JSON.
+  El pipeline evalua cada imagen/PDF por separado: varias piezas validas en un correo generan varias filas. La cedula en Excel la resuelve el backend con tabla clientes por email De.
 
 === CLASIFICACION EN ORDEN (sigue el orden; no inviertas B y A) ===
 Objetivo: decidir formato en pocas comprobaciones. Cada peticion es UNA sola pieza: clasifica solo lo visible ahi; mismas reglas imagen 1 (A), imagen 2 (B) e imagen 3 (C) que si el correo tuviera un unico archivo. No cruces datos entre capturas.
@@ -135,7 +142,7 @@ PASO 4 - Desempate si queda duda entre A y B (si ya clasificaste C en 2b, no use
   Cedula+nombre misma linea (DP:... + V-/E-/J- + nombre) + ticket **vertical** RECAUDACION + serial YYYYMMDD **sin** evidencia de recibo BNC cajero -> A.
   Si aplica la REGLA FIJA del PASO 2 (DP + contexto BNC) -> B; no uses esta linea para forzar A.
 
-PASO 5 - Extraccion: A o B solo si los cuatro campos son legibles; C si monto + numero_referencia son legibles, fecha y cedula en NA, y email_cliente visible o desde CONTEXTO_REMITE o "NA" si el sistema lo completara; si falta monto o referencia -> ninguno y NA.
+PASO 5 - Extraccion: A o B si fecha_pago, monto y numero_referencia son legibles (cedula en JSON siempre NA); C si monto + numero_referencia son legibles con fecha_pago, cedula y email_cliente en NA; si falta monto o referencia -> ninguno y NA.
 
 DISCRIMINADOR SERIAL — imagen 1 (A) vs imagen 2 (B) (aplica ademas de RAPI-CREDIT/BNC):
   IMAGEN 1 / A — serial de operacion compuesto por BLOQUES separados por guiones (-) u ocasionalmente /:
@@ -250,21 +257,19 @@ Prioriza la plantilla horizontal BNC anterior. numero_referencia: si hay ristra 
   fecha_pago: "NA". cedula: "NA".
 
 === EXTRACCION ===
-A/B: fecha_pago, cedula (normaliza V/E/J + digitos; en A prioriza linea DP:...-NOMBRE),
-  monto con moneda (B: cifra tras asteriscos + USD; A: USD segun comprobante),
-  numero_referencia segun plantilla A o B. email_cliente puede ser "NA".
+A/B: fecha_pago, monto y numero_referencia desde la imagen/PDF. cedula SIEMPRE "NA" (sin excepcion).
   banco: nombre de la INSTITUCION del comprobante (como aparece: logo, cabecera, pie de pagina).
     Ejemplos: formato B con logo BNC -> "BNC" o "Banco Nacional de Credito"; variante Mercantil (DEPOSITO DIVISAS) -> "Mercantil" o "Banco Mercantil";
     ticket RECAUDACION RAPI si ves nombre de banco en el ticket usalo; si solo dice RAPI sin banco legible -> "NA".
-C: monto, numero_referencia, email_cliente obligatorios; fecha_pago="NA"; cedula="NA".
+C: monto y numero_referencia desde la imagen; fecha_pago="NA"; cedula="NA"; email_cliente="NA".
 
 Salida: solo JSON, sin markdown.
-  A/B: {"formato":"A"|"B","fecha_pago":"...","cedula":"...","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"Mercantil"|"BNC"|"..."}
-  C: {"formato":"C","fecha_pago":"NA","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"usuario@dominio.com","banco":"NA"}
+  A/B: {"formato":"A"|"B","fecha_pago":"...","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"Mercantil"|"BNC"|"..."}
+  C: {"formato":"C","fecha_pago":"NA","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"NA"}
   ninguno: {"formato":"ninguno","fecha_pago":"NA","cedula":"NA","monto":"NA","numero_referencia":"NA","email_cliente":"NA","banco":"NA"}
 """.strip()
 
-# Estos formatos pasan a Drive/BD/etiquetas IMAGEN 1 / 2 / 3 (C requiere ademas cedula por email en clientes).
+# Estos formatos pasan a Drive/BD/etiquetas IMAGEN 1 / 2 / 3 (cedula en Excel la resuelve el pipeline por remitente De en clientes).
 PAGOS_GMAIL_FORMATOS_PLANTILLA: frozenset[str] = frozenset({"A", "B", "C"})
 
 
@@ -452,20 +457,17 @@ def _pagos_gmail_four_fields_complete(fields: Dict[str, str]) -> bool:
     return True
 
 
-def _email_cliente_gemini_valido(s: str) -> bool:
-    t = (s or "").strip()
-    if not t or t.upper() == PAGOS_NA:
-        return False
-    if "@" not in t:
-        return False
-    local, _, domain = t.partition("@")
-    if not local.strip() or not domain.strip() or "." not in domain:
-        return False
+def _pagos_gmail_ab_campos_imagen_completos(fields: Dict[str, str]) -> bool:
+    """A/B: fecha, monto y referencia desde imagen; cedula la resuelve el backend (JSON con cedula NA)."""
+    for k in ("fecha_pago", "monto", "numero_referencia"):
+        s = (fields.get(k) or "").strip()
+        if not s or s.upper() == PAGOS_NA:
+            return False
     return True
 
 
 def _pagos_gmail_format_c_complete(fields: Dict[str, str]) -> bool:
-    """Formato C: monto, referencia, email_cliente reales; fecha y cedula deben NA."""
+    """Formato C: monto y referencia desde imagen; fecha, cedula y email_cliente NA (cliente/cédula por remitente en backend)."""
     fp = (fields.get("fecha_pago") or "").strip().upper()
     ce = (fields.get("cedula") or "").strip().upper()
     if fp != PAGOS_NA or ce != PAGOS_NA:
@@ -474,8 +476,6 @@ def _pagos_gmail_format_c_complete(fields: Dict[str, str]) -> bool:
         s = (fields.get(k) or "").strip()
         if not s or s.upper() == PAGOS_NA:
             return False
-    if not _email_cliente_gemini_valido((fields.get("email_cliente") or "").strip()):
-        return False
     return True
 
 
@@ -522,16 +522,14 @@ def _parse_formato_y_pagos_json(
         if fmt == "ninguno":
             return fmt, na_fields.copy()
         if fmt == "C":
-            em0 = (fields.get("email_cliente") or "").strip()
-            if not _email_cliente_gemini_valido(em0) and (remitente_from_header or "").strip():
-                cand = extract_sender_email(remitente_from_header) or remitente_from_header.strip()
-                if _email_cliente_gemini_valido(cand):
-                    fields["email_cliente"] = _normalize_email_cliente_pagos_gmail(cand)
+            fields["email_cliente"] = PAGOS_NA
             if not _pagos_gmail_format_c_complete(fields):
                 return "ninguno", na_fields.copy()
             fields["banco"] = PAGOS_NA
             return fmt, fields
-        if not _pagos_gmail_four_fields_complete(fields):
+        # A o B: ignorar cedula del modelo; solo fecha/monto/ref desde imagen
+        fields["cedula"] = PAGOS_NA
+        if not _pagos_gmail_ab_campos_imagen_completos(fields):
             return "ninguno", na_fields.copy()
         fields["email_cliente"] = PAGOS_NA
         return fmt, fields
@@ -547,8 +545,7 @@ def classify_and_extract_pagos_gmail_attachment(
 ) -> Tuple[PagosGmailFormato, Dict[str, str]]:
     """
     Clasifica el comprobante en formato A (RAPI-CREDIT terminal), B (BNC), C (Binance Pay) o ninguno,
-    y extrae campos desde el archivo. Formato C puede usar remitente_correo_header (cabecera From)
-    si el email del destinatario no aparece en la captura Binance.
+    y extrae campos desde el archivo. La cédula no sale del modelo: el pipeline la asigna por email De en clientes.
     """
     key = api_key or getattr(settings, "GEMINI_API_KEY", None)
     if not key:
@@ -558,14 +555,6 @@ def classify_and_extract_pagos_gmail_attachment(
     image_part = _build_image_part(file_content, filename, mime)
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
     contents: list = [GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION]
-    rf = (remitente_correo_header or "").strip()
-    if rf:
-        contents.append(
-            "CONTEXTO_REMITE: "
-            + rf
-            + "\n(Solo formato C / Binance Pay: si no lees el email del destinatario en la captura, "
-            "usa la direccion de correo de esta linea como email_cliente en el JSON.)\n"
-        )
     contents.append(image_part)
     try:
         from google.genai import types
