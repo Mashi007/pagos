@@ -4,13 +4,14 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
   Asi no quedan archivos en Drive sin fila; los enlaces existen en BD justo despues del segundo commit.
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
-Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **IMAGEN 5** (sin MERCANTIL / IMAGEN 2-4 ni ERROR EMAIL).
-Estrella Gmail + etiquetas MERCANTIL (A) / IMAGEN 2 / 3 / 4 solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
+Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **IMAGEN 5** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
+Estrella Gmail + etiquetas MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From).
-Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella MERCANTIL / IMAGEN 2–4). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
+Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella MERCANTIL / BNC / BINANCE / BNV). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
 En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
-Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas, no leido
+Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/IMAGEN 5/ERROR EMAIL): etiqueta Gmail **MANUAL** (con candidatos imagen/PDF).
+Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas de plantilla, no leido
 (en filtro unread se fuerza sin estrella + no leido para reintento). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
 Cedula: solo desde tabla clientes por email del De (From), nunca desde la imagen. El destinatario Para (To) no se usa para cedula.
@@ -44,6 +45,7 @@ from app.services.pagos_gmail.gmail_service import (
     mark_as_read,
     mark_unread_clear_star,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
+    PAGOS_GMAIL_LABEL_MANUAL,
     PAGOS_GMAIL_LABEL_IMAGEN_5,
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
@@ -311,6 +313,7 @@ def run_pipeline(
                 any_incomplete_or_skipped = False
                 any_cedula_lookup_failed = False
                 label_ids_for_message: list[str] = []
+                gmail_etiqueta_clasificacion_aplicada = False
                 if not attachments:
                     any_incomplete_or_skipped = True
 
@@ -395,7 +398,7 @@ def run_pipeline(
                                 any_incomplete_or_skipped = True
                                 any_cedula_lookup_failed = True
                                 logger.warning(
-                                    "[PAGOS_GMAIL]   Imagen 3 (C): columna Cedula=%s — De=%s archivo=%s",
+                                    "[PAGOS_GMAIL]   BINANCE (C): columna Cedula=%s — De=%s archivo=%s",
                                     c,
                                     sender_lc[:72],
                                     filename,
@@ -409,7 +412,7 @@ def run_pipeline(
                                 any_incomplete_or_skipped = True
                                 any_cedula_lookup_failed = True
                                 logger.warning(
-                                    "[PAGOS_GMAIL]   Imagen 1/2/4 (%s): columna Cedula=%s — De=%s archivo=%s",
+                                    "[PAGOS_GMAIL]   MERCANTIL/BNC/BNV (%s): columna Cedula=%s — De=%s archivo=%s",
                                     fmt,
                                     c,
                                     sender_lc[:72],
@@ -604,6 +607,7 @@ def run_pipeline(
                     err_lid = plantilla_label_cache.get(k_err)
                     if err_lid:
                         add_message_user_labels_only(gmail_svc, msg_id, [err_lid])
+                        gmail_etiqueta_clasificacion_aplicada = True
                         logger.info(
                             "[PAGOS_GMAIL]   Gmail: etiqueta %s aplicada (remitente sin match en clientes o ERROR BD)",
                             k_err,
@@ -626,12 +630,13 @@ def run_pipeline(
                             add_message_star_and_user_labels(
                                 gmail_svc, msg_id, [id5]
                             )
+                            gmail_etiqueta_clasificacion_aplicada = True
                             mark_as_read(gmail_svc, msg_id)
                             if scan_filter == "unread":
                                 correos_marcados_revision += 1
                             logger.info(
                                 "[PAGOS_GMAIL]   Gmail: %s — solo %s + estrella (100%% OK); "
-                                "sin MERCANTIL / IMAGEN 2-4 ni ERROR EMAIL",
+                                "sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL",
                                 PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5,
                                 k5,
                             )
@@ -639,8 +644,9 @@ def run_pipeline(
                             add_message_user_labels_only(
                                 gmail_svc, msg_id, [id5]
                             )
+                            gmail_etiqueta_clasificacion_aplicada = True
                             logger.info(
-                                "[PAGOS_GMAIL]   Gmail: %s — solo %s (sin MERCANTIL / IMAGEN 2-4 / ERROR EMAIL)",
+                                "[PAGOS_GMAIL]   Gmail: %s — solo %s (sin MERCANTIL / BNC / BINANCE / BNV / ERROR EMAIL)",
                                 PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5,
                                 k5,
                             )
@@ -656,6 +662,7 @@ def run_pipeline(
                     add_message_star_and_user_labels(
                         gmail_svc, msg_id, unique_label_ids
                     )
+                    gmail_etiqueta_clasificacion_aplicada = True
                     mark_as_read(gmail_svc, msg_id)
                     if scan_filter == "unread":
                         correos_marcados_revision += 1
@@ -673,6 +680,27 @@ def run_pipeline(
                         "(digitalizacion parcial o sin adjuntos validos).",
                         scan_filter,
                     )
+
+                if attachments and not gmail_etiqueta_clasificacion_aplicada:
+                    k_man = PAGOS_GMAIL_LABEL_MANUAL
+                    if k_man not in plantilla_label_cache:
+                        plantilla_label_cache[k_man] = ensure_user_label_id(
+                            gmail_svc, k_man
+                        )
+                    man_lid = plantilla_label_cache.get(k_man)
+                    if man_lid:
+                        add_message_user_labels_only(
+                            gmail_svc, msg_id, [man_lid]
+                        )
+                        logger.info(
+                            "[PAGOS_GMAIL]   Gmail: etiqueta %s (sin MERCANTIL/BNC/BINANCE/BNV/IMAGEN 5/ERROR EMAIL)",
+                            k_man,
+                        )
+                    else:
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
+                            k_man,
+                        )
 
                 emails_ok += 1
 

@@ -20,15 +20,17 @@ from app.services.pagos_gmail.helpers import (
 
 logger = logging.getLogger(__name__)
 
-# Etiquetas de usuario (plantilla A = Mercantil en Gmail; B/C/D = imagen 2/3/4). Se crean si no existen.
+# Etiquetas de usuario (A = MERCANTIL, B = BNC, C = BINANCE, D = BNV / BDV). Se crean si no existen.
 PAGOS_GMAIL_LABEL_IMAGEN_1 = "MERCANTIL"
-PAGOS_GMAIL_LABEL_IMAGEN_2 = "IMAGEN 2"
-PAGOS_GMAIL_LABEL_IMAGEN_3 = "IMAGEN 3"
-PAGOS_GMAIL_LABEL_IMAGEN_4 = "IMAGEN 4"
-# Remitente fijo master@rapicreditca.com: solo esta etiqueta en Gmail (no MERCANTIL / IMAGEN 2-4 ni ERROR EMAIL). Ver pipeline.
+PAGOS_GMAIL_LABEL_IMAGEN_2 = "BNC"
+PAGOS_GMAIL_LABEL_IMAGEN_3 = "BINANCE"
+PAGOS_GMAIL_LABEL_IMAGEN_4 = "BNV"
+# Remitente fijo master@rapicreditca.com: solo esta etiqueta en Gmail (no MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL). Ver pipeline.
 PAGOS_GMAIL_LABEL_IMAGEN_5 = "IMAGEN 5"
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
+# Ninguna plantilla A/B/C/D reconocida (o no se aplico otra etiqueta de clasificacion).
+PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
 
 
 def pagos_gmail_list_q_media_parts() -> str:
@@ -45,7 +47,7 @@ def pagos_gmail_list_q_media_parts() -> str:
 def pagos_gmail_pending_identification_query() -> str:
     """
     Consulta Gmail (parametro q): inbox, con adjunto o imagen en cuerpo, sin estrella, sin etiquetas plantilla.
-    Asi el escaneo periodico no reprocesa correos ya marcados con MERCANTIL / IMAGEN 2 / 3 / 4 / 5 o destacados.
+    Asi el escaneo periodico no reprocesa correos ya marcados con MERCANTIL / BNC / BINANCE / BNV / IMAGEN 5 / ERROR EMAIL / MANUAL o destacados.
     """
     return (
         f"in:inbox -is:starred {pagos_gmail_list_q_media_parts()} "
@@ -54,7 +56,8 @@ def pagos_gmail_pending_identification_query() -> str:
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"'
+        f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"'
     )
 
 
@@ -125,7 +128,7 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
     filter_type: "unread" | "read" | "all" | "pending_identification".
-    pending_identification: sin estrella y sin etiquetas IMAGEN 1 / 2 / 3 / 4 / 5 (reintento sin reescanear todo).
+    pending_identification: sin estrella y sin etiquetas MERCANTIL / BNC / BINANCE / BNV / IMAGEN 5 / ERROR EMAIL / MANUAL (reintento sin reescanear todo).
     Misma forma que antes: id, payload, headers.
     """
     from googleapiclient.errors import HttpError
@@ -892,7 +895,7 @@ def get_or_create_pagos_gmail_plantilla_label_ids(
     service: Any, cache: Optional[Dict[str, Optional[str]]] = None
 ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
-    Resuelve ids para MERCANTIL (formato A) / IMAGEN 2 / 3 / 4 con cache opcional por nombre.
+    Resuelve ids para MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) con cache opcional por nombre.
     """
     c = cache if cache is not None else {}
     k1, k2, k3, k4 = (
@@ -930,7 +933,7 @@ def add_message_star_and_user_labels(
 def add_message_user_labels_only(
     service: Any, message_id: str, user_label_ids: List[str]
 ) -> None:
-    """Anade solo etiquetas de usuario (sin estrella). Ej. ERROR EMAIL cuando cedula no resuelve por remitente."""
+    """Anade solo etiquetas de usuario (sin estrella). Ej. ERROR EMAIL o MANUAL."""
     add_ids = [x for x in user_label_ids if x]
     if not add_ids:
         return
