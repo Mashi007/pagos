@@ -48,7 +48,7 @@ CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
 # Identificador estable de la definicion de controles en este modulo (17 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "22a-control5-excluir-visto-doc-2026-04-02"
+AUDITORIA_CARTERA_REGLAS_VERSION = "23-control5-excluir-sufijo-ap-2026-04-09"
 
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
@@ -64,6 +64,23 @@ def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
       OR UPPER(COALESCE({a}.estado, '')) LIKE '%ANUL%'
       OR UPPER(COALESCE({a}.estado, '')) LIKE '%REVERS%'
       OR LOWER(COALESCE({a}.estado, '')) IN ('cancelado', 'rechazado')
+    )"""
+
+
+def _sql_fragment_pago_cuenta_para_control5_duplicado_fecha_monto(alias: str) -> str:
+    """
+    Condicion (para AND ...) de filas que cuentan en el control pagos_mismo_dia_monto.
+    Excluye: pagos no operativos, Visto (bit), y documentos con sufijo _A#### / _P#### (misma convencion
+    que aplicar_visto_control5_duplicado_fecha_monto: recibo partido en varias cuotas / carga masiva).
+    """
+    a = alias.strip()
+    if not a.replace("_", "").isalnum():
+        raise ValueError("alias SQL invalido")
+    excl_estado = _sql_fragment_pago_excluido_cartera(a)
+    return f"""(
+      NOT ({excl_estado})
+      AND NOT COALESCE({a}.excluir_control_pagos_mismo_dia_monto, false)
+      AND NOT (TRIM(COALESCE({a}.numero_documento, '')) ~* '_[ap][0-9]{{4}}$')
     )"""
 
 
@@ -360,11 +377,11 @@ def ejecutar_auditoria_cartera(
 
     excl_p = _sql_fragment_pago_excluido_cartera("p")
     excl_pg = _sql_fragment_pago_excluido_cartera("pg")
+    ctrl5_cuenta = _sql_fragment_pago_cuenta_para_control5_duplicado_fecha_monto("p")
 
-    # Pagos duplicados mismo dia y monto (posible fraude / doble registro); excluye anulados/reversados
-    # y filas con Visto control 5 (excluir_control_pagos_mismo_dia_monto).
-    # Alcance: mismo prestamo + fecha calendario + monto (no sustituye unicidad global de numero_documento
-    # ni el flujo Pagos > carga masiva Excel: ahi Visto/sufijos en tabla previa; ver auditoria UI control 5).
+    # Pagos duplicados mismo dia y monto (posible fraude / doble registro); excluye anulados/reversados,
+    # Visto (excluir_control_pagos_mismo_dia_monto) y numero_documento con sufijo _A#### / _P#### (recibo en varias cuotas).
+    # Alcance: mismo prestamo + fecha calendario + monto (no sustituye unicidad global de numero_documento).
     dup_pagos_rows = db.execute(
         text(
             f"""
@@ -372,8 +389,7 @@ def ejecutar_auditoria_cartera(
             FROM (
               SELECT p.prestamo_id, CAST(p.fecha_pago AS date) AS fd, p.monto_pagado, COUNT(*) AS cnt
               FROM pagos p
-              WHERE p.prestamo_id IS NOT NULL AND NOT {excl_p}
-                AND NOT COALESCE(p.excluir_control_pagos_mismo_dia_monto, false)
+              WHERE p.prestamo_id IS NOT NULL AND ({ctrl5_cuenta})
               GROUP BY p.prestamo_id, CAST(p.fecha_pago AS date), p.monto_pagado
               HAVING COUNT(*) > 1
             ) t

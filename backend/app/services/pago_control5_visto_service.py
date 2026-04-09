@@ -17,7 +17,9 @@ from sqlalchemy.orm import Session
 from app.models.auditoria_pago_control5_visto import AuditoriaPagoControl5Visto
 from app.models.pago import Pago
 from app.models.pago_con_error import PagoConError
-from app.services.prestamo_cartera_auditoria import _sql_fragment_pago_excluido_cartera
+from app.services.prestamo_cartera_auditoria import (
+    _sql_fragment_pago_cuenta_para_control5_duplicado_fecha_monto,
+)
 
 CODIGO_CONTROL = "pagos_mismo_dia_monto"
 _MAX_DOC_LEN = 100
@@ -27,10 +29,8 @@ _PREFIJO_OTRO_PRESTAMO = "P"
 
 
 def _fragment_excluido_control5(alias: str) -> str:
-    """Pago operativo para control 5 y no marcado con Visto previo."""
-    a = alias.strip()
-    excl_estado = _sql_fragment_pago_excluido_cartera(a)
-    return f"(NOT ({excl_estado}) AND NOT COALESCE({a}.excluir_control_pagos_mismo_dia_monto, false))"
+    """Pago que cuenta para duplicado fecha+monto (operativo, sin Visto, sin sufijo _A/_P+4 digitos)."""
+    return _sql_fragment_pago_cuenta_para_control5_duplicado_fecha_monto(alias)
 
 
 def listar_pagos_duplicados_fecha_monto_por_prestamo(
