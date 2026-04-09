@@ -25,8 +25,12 @@ PAGOS_GMAIL_LABEL_IMAGEN_1 = "MERCANTIL"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "BNC"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "BINANCE"
 PAGOS_GMAIL_LABEL_IMAGEN_4 = "BNV"
-# Remitente fijo master@rapicreditca.com: solo esta etiqueta en Gmail (no MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL). Ver pipeline.
-PAGOS_GMAIL_LABEL_IMAGEN_5 = "IMAGEN 5"
+# Remitente fijo master@rapicreditca.com: solo etiqueta MASTER en Gmail (no MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL). Ver pipeline.
+PAGOS_GMAIL_LABEL_MASTER = "MASTER"
+# Nombre antiguo en Gmail; seguir excluyendo en busquedas para no reescanear hilos ya marcados antes del cambio.
+PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY = "IMAGEN 5"
+# Retrocompatible: mismo valor que MASTER (preferir PAGOS_GMAIL_LABEL_MASTER).
+PAGOS_GMAIL_LABEL_IMAGEN_5 = PAGOS_GMAIL_LABEL_MASTER
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 # Ninguna plantilla A/B/C/D reconocida (o no se aplico otra etiqueta de clasificacion).
@@ -36,14 +40,16 @@ PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
 def pagos_gmail_label_exclusions_query() -> str:
     """
     Fragmento para el parametro q de Gmail: excluye correos ya clasificados por el pipeline
-    (no volver a escanear si tienen MERCANTIL / BNC / BINANCE / BNV / IMAGEN 5 / ERROR EMAIL / MANUAL).
+    (no volver a escanear si tienen MERCANTIL / BNC / BINANCE / BNV / MASTER / ERROR EMAIL / MANUAL;
+    tambien excluye etiqueta legada IMAGEN 5).
     """
     return (
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_MASTER}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY}" '
         f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
         f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"'
     )
@@ -63,7 +69,7 @@ def pagos_gmail_list_q_media_parts() -> str:
 def pagos_gmail_pending_identification_query() -> str:
     """
     Consulta Gmail (parametro q): inbox, con adjunto o imagen en cuerpo, sin estrella, sin etiquetas de clasificacion.
-    Asi el escaneo periodico no reprocesa correos ya marcados con MERCANTIL / BNC / BINANCE / BNV / IMAGEN 5 / ERROR EMAIL / MANUAL o destacados.
+    Asi el escaneo periodico no reprocesa correos ya marcados con MERCANTIL / BNC / BINANCE / BNV / MASTER / ERROR EMAIL / MANUAL (ni IMAGEN 5 legada) o destacados.
     """
     return (
         f"in:inbox -is:starred {pagos_gmail_list_q_media_parts()} "

@@ -79,7 +79,7 @@ def count_pending(
     El frontend puede mostrar "Se procesaran N correos. Iniciar? Si / No" y solo llamar
     POST /run-now si el usuario confirma (Si = inicia, No = no hace nada).
     scan_filter: "unread" | "read" | "all" | "pending_identification" (mismo que run-now; por defecto all).
-    Excluye correos con etiquetas de clasificacion del pipeline (MERCANTIL/BNC/BINANCE/BNV/IMAGEN 5/ERROR EMAIL/MANUAL).
+    Excluye correos con etiquetas de clasificacion del pipeline (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL/MANUAL; legado IMAGEN 5).
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
@@ -107,7 +107,7 @@ def run_now(
     Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
     scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto all).
-    Listado: inbox con imagen/PDF, sin correos ya etiquetados (MERCANTIL/BNC/BINANCE/BNV/IMAGEN 5/ERROR EMAIL/MANUAL).
+    Listado: inbox con imagen/PDF, sin correos ya etiquetados (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL/MANUAL; legado IMAGEN 5).
     Procesamiento en orden de fecha del correo: mas antiguo primero, mas reciente al final.
     pending_identification: ademas sin estrella (cola de pendientes).
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.

@@ -165,6 +165,8 @@ import Analistas from './pages/Analistas'
 
 import PagosPage from './pages/PagosPage'
 
+import PagoBsPage from './pages/PagoBsPage'
+
 import AmortizacionPage from './pages/AmortizacionPage'
 
 import Validadores from './pages/Validadores'
@@ -402,6 +404,8 @@ function App() {
 
             <Route path="pagos">
               <Route index element={<PagosPage />} />
+
+              <Route path="pago-bs" element={<PagoBsPage />} />
 
               <Route path=":id" element={<PagosPage />} />
             </Route>

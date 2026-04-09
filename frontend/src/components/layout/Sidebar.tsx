@@ -34,6 +34,7 @@ import {
   Award,
   Wallet,
   Building2,
+  FileSpreadsheet,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -263,6 +264,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         { title: 'Pagos', href: '/pagos', icon: Wallet },
+
+        {
+          title: 'Pago Bs.',
+          href: '/pagos/pago-bs',
+          icon: FileSpreadsheet,
+        },
 
         {
           title: 'Infopagos',

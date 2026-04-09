@@ -4,13 +4,13 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
   Asi no quedan archivos en Drive sin fila; los enlaces existen en BD justo despues del segundo commit.
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
-Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **IMAGEN 5** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
+Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **MASTER** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
 Estrella Gmail + etiquetas MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From).
 Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella MERCANTIL / BNC / BINANCE / BNV). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
 En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
-Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/IMAGEN 5/ERROR EMAIL): etiqueta Gmail **MANUAL** (con candidatos imagen/PDF).
+Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL): etiqueta Gmail **MANUAL** (con candidatos imagen/PDF).
 Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas de plantilla, no leido
 (en filtro unread se fuerza sin estrella + no leido para reintento). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
@@ -46,7 +46,7 @@ from app.services.pagos_gmail.gmail_service import (
     mark_unread_clear_star,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
     PAGOS_GMAIL_LABEL_MANUAL,
-    PAGOS_GMAIL_LABEL_IMAGEN_5,
+    PAGOS_GMAIL_LABEL_MASTER,
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
     PAGOS_GMAIL_LABEL_IMAGEN_3,
@@ -107,8 +107,8 @@ PAGOS_GMAIL_BANCO_IMAGEN_4 = "BDV"
 PAGOS_GMAIL_ERROR_CEDULA_BD = "ERROR BD"  # 3.1 fallo al consultar tabla clientes
 PAGOS_GMAIL_ERROR_CEDULA_EMAIL = "ERROR EMAIL"  # 3.2 remitente sin fila en clientes
 
-# De / From en minusculas: Gmail solo etiqueta IMAGEN 5 (no plantilla 1-4 ni ERROR EMAIL).
-PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5 = "master@rapicreditca.com"
+# De / From en minusculas: Gmail solo etiqueta MASTER (no plantilla 1-4 ni ERROR EMAIL).
+PAGOS_GMAIL_SENDER_MASTER = "master@rapicreditca.com"
 
 
 def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str], Optional[str]]:
@@ -158,7 +158,7 @@ def run_pipeline(
     Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
     Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D) + estrella; cierre: leido si hubo algun OK.
     scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = inbox sin ya clasificados).
-      Listado Gmail excluye correos con etiquetas MERCANTIL/BNC/BINANCE/BNV/IMAGEN 5/ERROR EMAIL/MANUAL (no reescanear).
+      Listado Gmail excluye correos con etiquetas MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL/MANUAL (no reescanear).
       pending_identification: ademas sin estrella.
     Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
     Los mensajes de cada lote se ordenan por fecha del correo de mas antiguo a mas reciente antes de procesar.
@@ -258,7 +258,7 @@ def run_pipeline(
                         msg_id,
                     )
                     continue
-                remitente_solo_imagen_5 = sender_lc == PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5
+                remitente_solo_master = sender_lc == PAGOS_GMAIL_SENDER_MASTER
                 subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
                 msg_date = get_message_date(headers)
                 sheet_name = get_sheet_name_for_date(msg_date)
@@ -313,6 +313,8 @@ def run_pipeline(
                 had_complete_digitalization = False
                 any_incomplete_or_skipped = False
                 any_cedula_lookup_failed = False
+                # True solo si un adjunto se descarta por formato/parse (no por cedula del remitente).
+                any_skipped_not_plantilla_o_campos = False
                 label_ids_for_message: list[str] = []
                 gmail_etiqueta_clasificacion_aplicada = False
                 if not attachments:
@@ -384,6 +386,7 @@ def run_pipeline(
 
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
                             any_incomplete_or_skipped = True
+                            any_skipped_not_plantilla_o_campos = True
                             logger.warning(
                                 "[PAGOS_GMAIL]   No es plantilla A/B/C/D - no Drive/BD: %s",
                                 filename,
@@ -421,6 +424,7 @@ def run_pipeline(
                                 )
                         if not _campos_completos(f, c, m, r):
                             any_incomplete_or_skipped = True
+                            any_skipped_not_plantilla_o_campos = True
                             logger.warning(
                                 "[PAGOS_GMAIL]   Plantilla %s pero columnas incompletas - no Drive/BD: %s",
                                 fmt,
@@ -452,6 +456,7 @@ def run_pipeline(
                     except Exception as e:
                         logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
                         any_incomplete_or_skipped = True
+                        any_skipped_not_plantilla_o_campos = True
 
                 rows_pairs: list[tuple[PagosGmailSyncItem, GmailTemporal, dict]] = []
                 if pending:
@@ -556,7 +561,7 @@ def run_pipeline(
                                 else:
                                     label_id = id_c
                                     etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
-                                if label_id and not remitente_solo_imagen_5:
+                                if label_id and not remitente_solo_master:
                                     label_ids_for_message.append(label_id)
                                 logger.info(
                                     "[PAGOS_GMAIL]   Digitalizado OK (%s); estrella/etiqueta solo si 100%% adjuntos: %s",
@@ -580,12 +585,33 @@ def run_pipeline(
                     and any_incomplete_or_skipped
                     and had_complete_digitalization
                 ):
-                    logger.warning(
-                        "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C/D valida "
-                        "o fallaron -> no estrella ni leido (se exige 100%% OK en todos). "
-                        "Puede haber filas BD sin link Drive si fallo la subida tras el primer commit.",
-                        n_att,
-                    )
+                    if any_skipped_not_plantilla_o_campos and any_cedula_lookup_failed:
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; mezcla: uno o mas no son plantilla A/B/C/D "
+                            "o datos incompletos, y ademas remitente sin cedula en clientes (ERROR EMAIL). "
+                            "No estrella ni leido automatico (100%% en todos + remitente valido).",
+                            n_att,
+                        )
+                    elif any_cedula_lookup_failed:
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; comprobantes reconocidos y subidos pero "
+                            "remitente sin match en clientes (columna Cedula ERROR EMAIL/BD) -> no estrella ni "
+                            "etiquetas MERCANTIL/BNC/BINANCE/BNV; se aplica etiqueta ERROR EMAIL si hubo commit.",
+                            n_att,
+                        )
+                    elif any_skipped_not_plantilla_o_campos:
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C/D valida "
+                            "o fallaron -> no estrella ni leido (se exige 100%% OK en todos). "
+                            "Puede haber filas BD sin link Drive si fallo la subida tras el primer commit.",
+                            n_att,
+                        )
+                    else:
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; incompleto por commit/subida Drive u otro fallo "
+                            "-> no estrella ni leido (100%% en todos).",
+                            n_att,
+                        )
 
                 fully_digitized_email = (
                     len(attachments) > 0
@@ -598,7 +624,7 @@ def run_pipeline(
                 if (
                     any_cedula_lookup_failed
                     and committed_comprobante_rows
-                    and not remitente_solo_imagen_5
+                    and not remitente_solo_master
                 ):
                     k_err = PAGOS_GMAIL_LABEL_ERROR_EMAIL
                     if k_err not in plantilla_label_cache:
@@ -619,17 +645,17 @@ def run_pipeline(
                             k_err,
                         )
 
-                if remitente_solo_imagen_5 and attachments:
-                    k5 = PAGOS_GMAIL_LABEL_IMAGEN_5
-                    if k5 not in plantilla_label_cache:
-                        plantilla_label_cache[k5] = ensure_user_label_id(
-                            gmail_svc, k5
+                if remitente_solo_master and attachments:
+                    k_master = PAGOS_GMAIL_LABEL_MASTER
+                    if k_master not in plantilla_label_cache:
+                        plantilla_label_cache[k_master] = ensure_user_label_id(
+                            gmail_svc, k_master
                         )
-                    id5 = plantilla_label_cache.get(k5)
-                    if id5:
+                    id_master = plantilla_label_cache.get(k_master)
+                    if id_master:
                         if fully_digitized_email:
                             add_message_star_and_user_labels(
-                                gmail_svc, msg_id, [id5]
+                                gmail_svc, msg_id, [id_master]
                             )
                             gmail_etiqueta_clasificacion_aplicada = True
                             mark_as_read(gmail_svc, msg_id)
@@ -638,23 +664,23 @@ def run_pipeline(
                             logger.info(
                                 "[PAGOS_GMAIL]   Gmail: %s — solo %s + estrella (100%% OK); "
                                 "sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL",
-                                PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5,
-                                k5,
+                                PAGOS_GMAIL_SENDER_MASTER,
+                                k_master,
                             )
                         else:
                             add_message_user_labels_only(
-                                gmail_svc, msg_id, [id5]
+                                gmail_svc, msg_id, [id_master]
                             )
                             gmail_etiqueta_clasificacion_aplicada = True
                             logger.info(
                                 "[PAGOS_GMAIL]   Gmail: %s — solo %s (sin MERCANTIL / BNC / BINANCE / BNV / ERROR EMAIL)",
-                                PAGOS_GMAIL_SENDER_SOLO_IMAGEN_5,
-                                k5,
+                                PAGOS_GMAIL_SENDER_MASTER,
+                                k_master,
                             )
                     else:
                         logger.warning(
                             "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
-                            k5,
+                            k_master,
                         )
                 elif fully_digitized_email:
                     unique_label_ids = list(
@@ -694,7 +720,7 @@ def run_pipeline(
                             gmail_svc, msg_id, [man_lid]
                         )
                         logger.info(
-                            "[PAGOS_GMAIL]   Gmail: etiqueta %s (sin MERCANTIL/BNC/BINANCE/BNV/IMAGEN 5/ERROR EMAIL)",
+                            "[PAGOS_GMAIL]   Gmail: etiqueta %s (sin MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL)",
                             k_man,
                         )
                     else:
