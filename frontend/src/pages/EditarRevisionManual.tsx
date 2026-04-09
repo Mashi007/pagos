@@ -72,6 +72,7 @@ import {
   pagoService,
   type Pago,
   type PagoCreate,
+  type PagoInicialRegistrar,
 } from '../services/pagoService'
 
 import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
@@ -348,22 +349,31 @@ function fechaPagoPagoRowParaInput(pago: Pago): string {
   }
 }
 
-function pagoRowAPagoCreateInicial(
-  pago: Pago
-): Partial<PagoCreate> & { moneda_registro?: string } {
+function pagoRowAPagoCreateInicial(pago: Pago): PagoInicialRegistrar {
+  const monedaBs = pago.moneda_registro === 'BS'
+  const montoBs =
+    monedaBs && pago.monto_bs_original != null
+      ? Number(pago.monto_bs_original)
+      : null
+  const montoUsd =
+    typeof pago.monto_pagado === 'number'
+      ? pago.monto_pagado
+      : parseFloat(String(pago.monto_pagado || 0)) || 0
   return {
     cedula_cliente: pago.cedula_cliente || '',
     prestamo_id: pago.prestamo_id ?? null,
     fecha_pago: fechaPagoPagoRowParaInput(pago),
     monto_pagado:
-      typeof pago.monto_pagado === 'number'
-        ? pago.monto_pagado
-        : parseFloat(String(pago.monto_pagado || 0)) || 0,
+      monedaBs && montoBs != null && Number.isFinite(montoBs)
+        ? montoBs
+        : montoUsd,
+    monto_bs_original:
+      monedaBs && montoBs != null && Number.isFinite(montoBs) ? montoBs : null,
     numero_documento: pago.numero_documento || '',
     codigo_documento: pago.codigo_documento ?? null,
     institucion_bancaria: pago.institucion_bancaria ?? null,
     notas: pago.notas ?? null,
-    moneda_registro: pago.moneda_registro === 'BS' ? 'BS' : 'USD',
+    moneda_registro: monedaBs ? 'BS' : 'USD',
     link_comprobante: pago.link_comprobante ?? null,
   }
 }
@@ -514,7 +524,7 @@ export function EditarRevisionManual() {
   const [pagoModalId, setPagoModalId] = useState<number | undefined>(undefined)
 
   const [pagoModalInicial, setPagoModalInicial] = useState<
-    Partial<PagoCreate> | undefined
+    PagoInicialRegistrar | undefined
   >(undefined)
 
   const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null)
@@ -3180,10 +3190,11 @@ export function EditarRevisionManual() {
                             </TableHeader>
                             <TableBody>
                               {pagosRealizadosData.pagos.map((pago: Pago) => {
-                                const docKey = claveDocumentoPagoListaNormalizada(
-                                  pago.numero_documento,
-                                  pago.codigo_documento ?? null
-                                )
+                                const docKey =
+                                  claveDocumentoPagoListaNormalizada(
+                                    pago.numero_documento,
+                                    pago.codigo_documento ?? null
+                                  )
                                 const documentoDuplicadoEnPagina =
                                   !!docKey &&
                                   (conteoDocumentoPagosRevision.get(docKey) ||

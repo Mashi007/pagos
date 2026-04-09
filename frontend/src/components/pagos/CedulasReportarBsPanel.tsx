@@ -57,10 +57,10 @@ export function CedulasReportarBsPanel() {
           Cédulas que pueden reportar en Bs (Bolívares)
         </CardTitle>
         <p className="mt-1 text-sm text-gray-600">
-          Solo las cédulas de esta lista pueden elegir «Bs» en RapiCredit Cobros e
-          Infopagos. Arriba puede consultar si una cédula está en la lista; abajo,
-          cargue un Excel con columna <strong>cedula</strong> o agregue una cédula
-          (ej. nuevo cliente que paga en bolívares).
+          Solo las cédulas de esta lista pueden elegir «Bs» en RapiCredit Cobros
+          e Infopagos. Arriba puede consultar si una cédula está en la lista;
+          abajo, cargue un Excel con columna <strong>cedula</strong> o agregue
+          una cédula (ej. nuevo cliente que paga en bolívares).
         </p>
       </CardHeader>
       <CardContent className="space-y-5">

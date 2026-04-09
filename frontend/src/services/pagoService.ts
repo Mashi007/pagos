@@ -83,6 +83,12 @@ export interface PagoCreate {
   link_comprobante?: string | null
 }
 
+/** Hidrata el modal de registro/edición (monto en Bs. al editar). */
+export type PagoInicialRegistrar = Partial<PagoCreate> & {
+  moneda_registro?: string | null
+  monto_bs_original?: number | null
+}
+
 export interface ApiResponse<T> {
   data: T
 

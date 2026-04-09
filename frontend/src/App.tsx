@@ -71,8 +71,7 @@ function RootLayoutWrapper() {
 
   const { isAuthenticated, isLoading, user } = useSimpleAuth()
 
-  const pathnameFromRouter =
-    (location.pathname || '').replace(/\/$/, '') || '/'
+  const pathnameFromRouter = (location.pathname || '').replace(/\/$/, '') || '/'
 
   let pathnameForPublic = pathnameFromRouter
 

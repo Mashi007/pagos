@@ -41,7 +41,11 @@ import {
   SelectValue,
 } from '../../components/ui/select'
 
-import { pagoService, type PagoCreate } from '../../services/pagoService'
+import {
+  pagoService,
+  type PagoCreate,
+  type PagoInicialRegistrar,
+} from '../../services/pagoService'
 
 import { pagoConErrorService } from '../../services/pagoConErrorService'
 
@@ -89,28 +93,17 @@ import { hoyYmdCaracas } from '../../utils/fechaZona'
 
 import { splitNumeroDocumentoAlmacenado } from '../../utils/documentoPago'
 
+import {
+  formatMontoBsVe,
+  parseMontoLatam,
+  sanitizeMontoInputLatam,
+} from '../../utils/montoLatam'
+
 const DUPLICADO_DOCUMENTO_UI =
   'Este comprobante ya fue registrado. Verifique el numero_documento.'
 
 const DUPLICADO_HUELLA_UI =
   'Pago duplicado detectado para este prestamo, fecha, monto y referencia.'
-
-function sanitizeMontoInputTexto(raw: string): string {
-  let v = raw.replace(/,/g, '.')
-  v = v.replace(/[^\d.]/g, '')
-  const dot = v.indexOf('.')
-  if (dot !== -1) {
-    v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '')
-  }
-  return v
-}
-
-function parseMontoDesdeTexto(s: string): number {
-  const t = s.trim()
-  if (t === '' || t === '.') return 0
-  const n = parseFloat(t.replace(',', '.'))
-  return Number.isFinite(n) ? n : 0
-}
 
 /** Texto inicial del campo monto: vacío en alta (evita 0 + dígitos → 013). */
 function montoInicialTextoDesdeNumero(
@@ -120,7 +113,36 @@ function montoInicialTextoDesdeNumero(
   const n = Number(m)
   if (!Number.isFinite(n) || n < 0) return ''
   if (n === 0) return editing ? '0' : ''
-  return String(n)
+  return n.toFixed(2)
+}
+
+type PagoInicialMonto = PagoInicialRegistrar
+
+function montoInicialNumericoDesdePago(pagoInicial?: PagoInicialMonto): number {
+  if (!pagoInicial) return 0
+  if (
+    pagoInicial.moneda_registro === 'BS' &&
+    pagoInicial.monto_bs_original != null
+  ) {
+    const n = Number(pagoInicial.monto_bs_original)
+    if (Number.isFinite(n) && n >= 0) return n
+  }
+  const m = Number(pagoInicial.monto_pagado)
+  return Number.isFinite(m) && m >= 0 ? m : 0
+}
+
+function montoInicialTextoDesdePago(
+  pagoInicial: PagoInicialMonto | undefined,
+  editing: boolean
+): string {
+  if (!pagoInicial) return ''
+  if (pagoInicial.moneda_registro === 'BS') {
+    const n = montoInicialNumericoDesdePago(pagoInicial)
+    if (!Number.isFinite(n) || n < 0) return ''
+    if (n === 0) return editing ? formatMontoBsVe(0) : ''
+    return formatMontoBsVe(n)
+  }
+  return montoInicialTextoDesdeNumero(pagoInicial.monto_pagado, editing)
 }
 
 interface RegistrarPagoFormProps {
@@ -128,7 +150,7 @@ interface RegistrarPagoFormProps {
 
   onSuccess: () => void
 
-  pagoInicial?: Partial<PagoCreate>
+  pagoInicial?: PagoInicialRegistrar
 
   pagoId?: number // Si está presente, es modo edición
 
@@ -196,7 +218,7 @@ export function RegistrarPagoForm({
     fecha_pago:
       pagoInicial?.fecha_pago || new Date().toISOString().split('T')[0],
 
-    monto_pagado: pagoInicial?.monto_pagado || 0,
+    monto_pagado: montoInicialNumericoDesdePago(pagoInicial),
 
     numero_documento: pagoInicial?.numero_documento || '',
 
@@ -212,7 +234,7 @@ export function RegistrarPagoForm({
   })
 
   const [montoStr, setMontoStr] = useState(() =>
-    montoInicialTextoDesdeNumero(pagoInicial?.monto_pagado, isEditing)
+    montoInicialTextoDesdePago(pagoInicial, isEditing)
   )
 
   useEffect(() => {
@@ -479,7 +501,7 @@ export function RegistrarPagoForm({
 
     if (!fd.monto_pagado || fd.monto_pagado <= 0) {
       newErrors.monto_pagado = 'Monto inválido. Debe ser mayor a cero'
-    } else if (fd.monto_pagado > 1000000) {
+    } else if (fd.monto_pagado > (monedaRegistro === 'BS' ? 1e15 : 1_000_000)) {
       newErrors.monto_pagado = 'Monto muy alto. Por favor verifique el valor'
     }
 
@@ -819,7 +841,7 @@ export function RegistrarPagoForm({
                       {prestamosParaSelect.length} préstamo
                       {prestamosParaSelect.length !== 1 ? 's' : ''} en la lista
                       {prestamosParaSelect.length > 1
-                        ? ' — elija cuál aplica a este pago'
+                        ? ' - elija cuál aplica a este pago'
                         : ''}
                     </p>
                   )}
@@ -978,7 +1000,20 @@ export function RegistrarPagoForm({
 
                 <Select
                   value={monedaRegistro}
-                  onValueChange={v => setMonedaRegistro(v as 'USD' | 'BS')}
+                  onValueChange={v => {
+                    const next = v as 'USD' | 'BS'
+                    setMonedaRegistro(next)
+                    const n = parseMontoLatam(montoStr)
+                    if (montoStr.trim() === '') return
+                    if (next === 'BS') {
+                      setMontoStr(formatMontoBsVe(n))
+                    } else {
+                      setMontoStr(
+                        n === 0 ? (isEditing ? '0.00' : '') : n.toFixed(2)
+                      )
+                    }
+                    setFormData(prev => ({ ...prev, monto_pagado: n }))
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Moneda" />
@@ -1052,25 +1087,37 @@ export function RegistrarPagoForm({
                     autoComplete="off"
                     value={montoStr}
                     onChange={e => {
-                      const next = sanitizeMontoInputTexto(e.target.value)
+                      const next = sanitizeMontoInputLatam(e.target.value)
                       setMontoStr(next)
                       setFormData(prev => ({
                         ...prev,
-                        monto_pagado: parseMontoDesdeTexto(next),
+                        monto_pagado: parseMontoLatam(next),
                       }))
                     }}
                     onBlur={() => {
-                      const n = parseMontoDesdeTexto(montoStr)
+                      const n = parseMontoLatam(montoStr)
                       if (montoStr.trim() === '') {
                         setMontoStr('')
                         setFormData(prev => ({ ...prev, monto_pagado: 0 }))
                         return
                       }
-                      setMontoStr(n === 0 ? (isEditing ? '0' : '') : String(n))
+                      if (monedaRegistro === 'BS') {
+                        setMontoStr(
+                          n === 0
+                            ? isEditing
+                              ? formatMontoBsVe(0)
+                              : ''
+                            : formatMontoBsVe(n)
+                        )
+                      } else {
+                        setMontoStr(
+                          n === 0 ? (isEditing ? '0.00' : '') : n.toFixed(2)
+                        )
+                      }
                       setFormData(prev => ({ ...prev, monto_pagado: n }))
                     }}
                     className={`pl-10 ${errors.monto_pagado ? 'border-red-500' : ''}`}
-                    placeholder="0.00"
+                    placeholder={monedaRegistro === 'BS' ? '0,00' : '0.00'}
                   />
                 </div>
 

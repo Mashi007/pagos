@@ -1787,7 +1787,14 @@ export function PagosList() {
                       : new Date(pagoEditando.fecha_pago)
                           .toISOString()
                           .split('T')[0],
-                  monto_pagado: pagoEditando.monto_pagado,
+                  monto_pagado:
+                    pagoEditando.moneda_registro === 'BS' &&
+                    pagoEditando.monto_bs_original != null
+                      ? Number(pagoEditando.monto_bs_original)
+                      : pagoEditando.monto_pagado,
+                  monto_bs_original: pagoEditando.monto_bs_original ?? null,
+                  moneda_registro:
+                    pagoEditando.moneda_registro === 'BS' ? 'BS' : 'USD',
                   numero_documento: pagoEditando.numero_documento,
                   codigo_documento: pagoEditando.codigo_documento ?? null,
                   institucion_bancaria: pagoEditando.institucion_bancaria,

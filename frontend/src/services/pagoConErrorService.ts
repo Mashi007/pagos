@@ -31,6 +31,11 @@ export interface PagoConError {
 
   notas: string | null
 
+  /** Presente cuando el registro se alinea con pagos en Bs. (misma semántica que Pago). */
+  moneda_registro?: string | null
+
+  monto_bs_original?: number | null
+
   documento_nombre: string | null
 
   documento_tipo: string | null

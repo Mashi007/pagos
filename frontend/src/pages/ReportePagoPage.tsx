@@ -55,6 +55,8 @@ import { Input } from '../components/ui/input'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
+import { formatMontoBsVe, parseMontoLatam } from '../utils/montoLatam'
+
 // Límites iguales al backend (cobros_publico)
 
 const MAX_MONTO = 999_999_999.99
@@ -78,6 +80,45 @@ const ALLOWED_FILE_TYPES = [
 const MAX_LENGTH_INSTITUCION = 100
 
 const MAX_LENGTH_NUMERO_OPERACION = 100
+
+function roundMontoDosDecimales(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
+/**
+ * Interpreta el texto del monto según moneda.
+ * BS: usa parseMontoLatam (miles con punto, decimales con coma).
+ * USD: miles con coma opcional; decimal con punto (estilo US).
+ */
+function parseMontoIngresado(raw: string, moneda: 'BS' | 'USD'): number | null {
+  const s = raw.trim().replace(/[\s\u00A0\u202F]/g, '')
+  if (!s) return null
+  if (!/^[\d.,]+$/.test(s)) return null
+
+  if (moneda === 'BS') {
+    const n = parseMontoLatam(s)
+    if (!Number.isFinite(n)) return null
+    return roundMontoDosDecimales(n)
+  }
+
+  const normalized = s.replace(/,/g, '')
+  const num = Number(normalized)
+  if (Number.isNaN(num) || !Number.isFinite(num)) return null
+  return roundMontoDosDecimales(num)
+}
+
+function formatoMontoParaMostrar(num: number, moneda: 'BS' | 'USD'): string {
+  if (moneda === 'BS') return formatMontoBsVe(num)
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num)
+}
+
+/** Valor enviado al backend (punto decimal, exactamente 2 decimales). */
+function montoParaApi(num: number): string {
+  return num.toFixed(2)
+}
 
 // Cédula: solo letra (V|E|G|J) + 6-11 dígitos; no puntos ni signos intermedios. Si solo dígitos, al procesar se antepone V.
 
@@ -167,12 +208,15 @@ function validarMonto(
   if (val === '' || val == null)
     return { valido: false, error: 'Ingrese el monto del pago.' }
 
-  const num = Number(val.replace(',', '.'))
+  const num = parseMontoIngresado(val, moneda)
 
-  if (Number.isNaN(num))
+  if (num == null)
     return {
       valido: false,
-      error: 'Monto no valido. Ingrese un numero (ej: 150.50).',
+      error:
+        moneda === 'BS'
+          ? 'Monto no valido. Use miles con punto y decimales con coma (ej: 1.500,50).'
+          : 'Monto no valido. Use punto para decimales (ej: 150.50) o comas de miles (ej: 1,500.50).',
     }
 
   if (moneda === 'BS') {
@@ -664,7 +708,7 @@ export default function ReportePagoPage({
 
     form.append('numero_operacion', numeroDocumento)
 
-    form.append('monto', String(monto))
+    form.append('monto', montoParaApi(vMonto.valor!))
 
     form.append('moneda', moneda)
 
@@ -1429,13 +1473,20 @@ export default function ReportePagoPage({
                 </label>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
-                    type="number"
-                    step="0.01"
-                    min={moneda === 'BS' ? MIN_MONTO_BS_REPORTAR : MIN_MONTO}
-                    placeholder={moneda === 'BS' ? 'Ej: 1500.00' : 'Ej: 150.50'}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    placeholder={
+                      moneda === 'BS' ? 'Ej: 1.500,50' : 'Ej: 1,500.50'
+                    }
                     className="min-h-[48px] min-w-0 flex-1 touch-manipulation border-slate-200 bg-slate-50"
                     value={monto}
                     onChange={e => setMonto(e.target.value)}
+                    aria-label={
+                      moneda === 'BS'
+                        ? 'Monto en bolivares, miles con punto y decimales con coma'
+                        : 'Monto en dólares'
+                    }
                   />
                   {isInfopagos ? (
                     <select
@@ -1462,8 +1513,8 @@ export default function ReportePagoPage({
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
                   {moneda === 'BS'
-                    ? 'Entre 1 y 10.000.000 Bs.'
-                    : 'Ingresa el monto en USD (sin límite máximo)'}
+                    ? 'Entre 1 y 10.000.000 Bs. Miles con punto (.), decimales con coma (,); siempre 2 decimales al guardar.'
+                    : 'Ingresa el monto en USD (sin límite máximo). Miles con coma, decimales con punto.'}
                 </p>
               </div>
 
@@ -1810,7 +1861,12 @@ export default function ReportePagoPage({
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Monto:</span>
                   <span className="font-semibold text-slate-900">
-                    {monto} {moneda === 'BS' ? 'Bs.' : 'USD'}
+                    {(() => {
+                      const n = parseMontoIngresado(monto, moneda)
+                      return n != null
+                        ? `${formatoMontoParaMostrar(n, moneda)} ${moneda === 'BS' ? 'Bs.' : 'USD'}`
+                        : `${monto} ${moneda === 'BS' ? 'Bs.' : 'USD'}`
+                    })()}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
