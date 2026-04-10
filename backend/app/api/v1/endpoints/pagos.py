@@ -49,7 +49,7 @@ from fastapi.responses import StreamingResponse, Response
 
 from pydantic import BaseModel, field_validator
 
-from sqlalchemy import and_, case, delete, exists, func, not_, or_, select, text
+from sqlalchemy import and_, case, delete, desc, exists, func, not_, or_, select, text
 
 from sqlalchemy.orm import Session
 
@@ -7507,13 +7507,63 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
 
 @router.get("/cedulas-reportar-bs", response_model=dict)
 
-def get_cedulas_reportar_bs(db: Session = Depends(get_db)):
+def get_cedulas_reportar_bs(
 
-    """Devuelve el total de cédulas en la lista (quienes pueden reportar en Bs en cobros/infopagos)."""
+    page: int = Query(1, ge=1, description="Página (1-based)"),
+
+    page_size: int = Query(10, ge=1, le=100, description="Filas por página"),
+
+    db: Session = Depends(get_db),
+
+):
+
+    """
+
+    Total de cédulas en la lista y página ordenada del más reciente al más antiguo (creado_en DESC).
+
+    """
 
     total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
 
-    return {"total": total}
+    q = (
+
+        db.query(CedulaReportarBs)
+
+        .order_by(desc(CedulaReportarBs.creado_en), CedulaReportarBs.cedula.asc())
+
+        .offset((page - 1) * page_size)
+
+        .limit(page_size)
+
+    )
+
+    rows = q.all()
+
+    items = [
+
+        {
+
+            "cedula": r.cedula,
+
+            "creado_en": r.creado_en.isoformat() if r.creado_en else None,
+
+        }
+
+        for r in rows
+
+    ]
+
+    return {
+
+        "total": int(total),
+
+        "page": page,
+
+        "page_size": page_size,
+
+        "items": items,
+
+    }
 
 
 

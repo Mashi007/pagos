@@ -25,6 +25,7 @@ import {
   Eye,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
+import { ListPaginationBar } from '../../components/ui/ListPaginationBar'
 import { Input } from '../../components/ui/input'
 import {
   Card,
@@ -1735,40 +1736,19 @@ export function PagosList() {
                       </span>
                     </div>
                   )}
-                  {/* Paginación: máximo 10 por página (API + estado local) */}
+                  {/* Paginación (formato: ← Anterior · 1…5 · Siguiente → + pie) */}
                   {data.total > 0 && (
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                      <div className="text-sm text-gray-600">
-                        Página {data.page} de {Math.max(1, data.total_pages)} (
-                        {data.total} total
-                        {typeof data.per_page === 'number'
-                          ? ` · ${data.per_page} por página`
-                          : ''}
-                        )
-                      </div>
-                      {data.total_pages > 1 && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={page === 1}
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                          >
-                            Anterior
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={page >= data.total_pages}
-                            onClick={() =>
-                              setPage(p => Math.min(data.total_pages, p + 1))
-                            }
-                          >
-                            Siguiente
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+                    <ListPaginationBar
+                      className="mt-4"
+                      page={page}
+                      totalPages={Math.max(1, data.total_pages)}
+                      onPageChange={p => setPage(p)}
+                      subtitle={
+                        typeof data.per_page === 'number'
+                          ? `${data.total} registros · ${data.per_page} por página`
+                          : `${data.total} registros`
+                      }
+                    />
                   )}
                 </>
               )}

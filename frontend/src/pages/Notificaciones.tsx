@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import { motion } from 'framer-motion'
 
@@ -14,8 +14,6 @@ import {
   Bell,
   ChevronUp,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   CheckCircle2,
   X,
 } from 'lucide-react'
@@ -76,6 +74,9 @@ import { getErrorMessage, isAxiosTimeoutError } from '../types/errors'
 
 /** Máximo de filas (clientes / casos) por página en cada pestaña de listado de notificaciones. */
 const NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA = 10
+
+/** Botones numéricos mostrados en la barra de paginación (ventana deslizante). */
+const NOTIFICACIONES_VENTANA_NUMEROS_PAGINA = 5
 
 /** Fecha calendario actual en America/Caracas como YYYY-MM-DD (para max en input date). */
 function fechaHoyCaracasISO(): string {
@@ -1145,6 +1146,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setPaginaPorTab(prev => ({ ...prev, [activeTab]: next }))
   }
 
+  const numerosPaginaVisibles = useMemo(() => {
+    const total = totalPaginasListado
+    const current = paginaListaActual
+    const max = NOTIFICACIONES_VENTANA_NUMEROS_PAGINA
+    if (total <= max) {
+      return Array.from({ length: total }, (_, i) => i + 1)
+    }
+    const half = Math.floor(max / 2)
+    const start = Math.max(1, Math.min(current - half, total - max + 1))
+    return Array.from({ length: max }, (_, i) => start + i)
+  }, [totalPaginasListado, paginaListaActual])
+
   const aplicarOrdenAsc = (c: NotificacionesCuotasSortCol) => {
     setSortCol(c)
     setSortDir('asc')
@@ -1609,7 +1622,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               </div>
             )}
 
-            <>
+            <Fragment>
               {mostrarTablaCuotas ? (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[640px] text-sm">
@@ -1866,54 +1879,74 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               )}
 
               {totalFilasListado > 0 ? (
-                <div className="mt-4 flex flex-col gap-2 border-t border-gray-100 pt-4 text-sm text-gray-600 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs sm:text-sm">
-                    <span className="font-medium text-gray-800">
-                      Mostrando {indiceInicioPagina + 1}-
-                      {indiceInicioPagina + filasPagina.length} de{' '}
-                      {totalFilasListado}
-                    </span>
-                    <span className="text-gray-500">
-                      {' '}
-                      (máx. {NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA} por página;
-                      cada pestaña conserva su página)
-                    </span>
-                  </p>
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                  <nav
+                    className="flex flex-col items-center gap-3"
+                    aria-label="Paginación del listado"
+                  >
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                      <button
+                        type="button"
+                        disabled={paginaListaActual <= 1}
+                        onClick={() => irPaginaLista(paginaListaActual - 1)}
+                        aria-label="Página anterior"
+                        className="inline-flex h-9 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-40"
+                      >
+                        <span aria-hidden className="mr-1.5 text-gray-600">
+                          &larr;
+                        </span>
+                        Anterior
+                      </button>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-gray-500">
+                      {numerosPaginaVisibles.map(n => {
+                        const activa = n === paginaListaActual
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => irPaginaLista(n)}
+                            aria-label={`Ir a página ${n}`}
+                            aria-current={activa ? 'page' : undefined}
+                            className={
+                              activa
+                                ? 'inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-md border border-blue-600 bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1'
+                                : 'inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1'
+                            }
+                          >
+                            {n}
+                          </button>
+                        )
+                      })}
+
+                      <button
+                        type="button"
+                        disabled={paginaListaActual >= totalPaginasListado}
+                        onClick={() => irPaginaLista(paginaListaActual + 1)}
+                        aria-label="Página siguiente"
+                        className="inline-flex h-9 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-40"
+                      >
+                        Siguiente
+                        <span aria-hidden className="ml-1.5 text-gray-600">
+                          &rarr;
+                        </span>
+                      </button>
+                    </div>
+
+                    <p className="text-center text-xs text-gray-500 sm:text-sm">
                       Página {paginaListaActual} de {totalPaginasListado}
-                    </span>
+                    </p>
 
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      disabled={paginaListaActual <= 1}
-                      onClick={() => irPaginaLista(paginaListaActual - 1)}
-                      aria-label="Página anterior"
-                    >
-                      <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
-                      Anterior
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      disabled={paginaListaActual >= totalPaginasListado}
-                      onClick={() => irPaginaLista(paginaListaActual + 1)}
-                      aria-label="Página siguiente"
-                    >
-                      Siguiente
-                      <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
-                    </Button>
-                  </div>
+                    <p className="text-center text-[11px] leading-snug text-gray-400 sm:text-xs">
+                      Casos {indiceInicioPagina + 1}-
+                      {indiceInicioPagina + filasPagina.length} de{' '}
+                      {totalFilasListado} (
+                      {NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA} por página; cada
+                      pestaña guarda su página)
+                    </p>
+                  </nav>
                 </div>
               ) : null}
-            </>
+            </Fragment>
           </CardContent>
         </Card>
       </motion.div>

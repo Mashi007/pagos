@@ -77,6 +77,97 @@ import { useQuery } from '@tanstack/react-query'
 /** Listado principal /pagos/clientes: máximo 10 filas por página (paginación en servidor). */
 const CLIENTES_PAGE_SIZE = 10
 
+const PAGINATION_NUMBER_SLOTS = 5
+
+function getVisiblePageNumbers(
+  currentPage: number,
+  totalPages: number,
+  maxButtons: number = PAGINATION_NUMBER_SLOTS
+): number[] {
+  if (totalPages <= 0) return []
+  if (totalPages <= maxButtons) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1)
+  }
+  const half = Math.floor(maxButtons / 2)
+  let start = Math.max(1, currentPage - half)
+  let end = start + maxButtons - 1
+  if (end > totalPages) {
+    end = totalPages
+    start = Math.max(1, end - maxButtons + 1)
+  }
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+}
+
+type PaginationBarProps = {
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+  className?: string
+}
+
+/**
+ * Paginación estilo referencia: ← Anterior, números (activo en azul), Siguiente →,
+ * y texto centrado "Página X de Y" debajo.
+ */
+function PaginationBar({
+  currentPage,
+  totalPages,
+  onPageChange,
+  className = '',
+}: PaginationBarProps) {
+  const pages = getVisiblePageNumbers(currentPage, totalPages)
+  const navClass =
+    'inline-flex min-h-9 items-center justify-center rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50 disabled:pointer-events-none disabled:text-gray-400 disabled:opacity-70'
+  const pageBase =
+    'inline-flex h-9 min-w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1'
+  const pageActive = 'border-blue-600 bg-blue-600 text-white hover:bg-blue-600'
+  const pageIdle = 'border-gray-200 bg-white text-gray-900 hover:bg-gray-50'
+
+  if (totalPages <= 1) return null
+
+  return (
+    <div className={`flex flex-col items-center gap-2 ${className}`}>
+      <div
+        className="flex flex-wrap items-center justify-center gap-2"
+        role="navigation"
+        aria-label="Paginación"
+      >
+        <button
+          type="button"
+          className={navClass}
+          disabled={currentPage <= 1}
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+        >
+          ← Anterior
+        </button>
+        {pages.map(p => (
+          <button
+            key={p}
+            type="button"
+            className={`${pageBase} ${p === currentPage ? pageActive : pageIdle}`}
+            onClick={() => onPageChange(p)}
+            aria-label={`Ir a la página ${p}`}
+            aria-current={p === currentPage ? 'page' : undefined}
+          >
+            {p}
+          </button>
+        ))}
+        <button
+          type="button"
+          className={navClass}
+          disabled={currentPage >= totalPages}
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+        >
+          Siguiente →
+        </button>
+      </div>
+      <p className="text-center text-sm text-gray-500">
+        Página {currentPage} de {totalPages}
+      </p>
+    </div>
+  )
+}
+
 export function ClientesList() {
   const navigate = useNavigate()
 
@@ -654,37 +745,20 @@ export function ClientesList() {
                 </div>
 
                 {revisarData.total > perPageRevisar && (
-                  <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
-                    <span>
-                      {(pageRevisar - 1) * perPageRevisar + 1} -{' '}
+                  <div className="mt-4 border-t border-gray-100 pt-4">
+                    <p className="mb-3 text-center text-sm text-gray-600">
+                      Mostrando {(pageRevisar - 1) * perPageRevisar + 1} -{' '}
                       {Math.min(
                         pageRevisar * perPageRevisar,
                         revisarData.total
                       )}{' '}
                       de {revisarData.total}
-                    </span>
-
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={pageRevisar <= 1}
-                        onClick={() => setPageRevisar(p => Math.max(1, p - 1))}
-                      >
-                        Anterior
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={
-                          pageRevisar * perPageRevisar >= revisarData.total
-                        }
-                        onClick={() => setPageRevisar(p => p + 1)}
-                      >
-                        Siguiente
-                      </Button>
-                    </div>
+                    </p>
+                    <PaginationBar
+                      currentPage={pageRevisar}
+                      totalPages={Math.ceil(revisarData.total / perPageRevisar)}
+                      onPageChange={setPageRevisar}
+                    />
                   </div>
                 )}
               </>
@@ -1158,49 +1232,21 @@ export function ClientesList() {
         </CardContent>
       </Card>
 
-      {/* Paginacin */}
+      {/* Paginación (formato: Anterior, números, Siguiente; texto debajo) */}
 
-      {(totalPages > 1 || clientesResponse?.total) && (
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-gray-700">
-              Mostrando {(currentPage - 1) * CLIENTES_PAGE_SIZE + 1} -{' '}
-              {Math.min(
-                currentPage * CLIENTES_PAGE_SIZE,
-                clientesResponse?.total || 0
-              )}{' '}
-              de {clientesResponse?.total || 0} clientes ({CLIENTES_PAGE_SIZE}{' '}
-              por página)
-            </div>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="flex items-center gap-2">
-              <div className="mr-2 text-sm text-gray-700">
-                Pgina {currentPage} de {totalPages}
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                Anterior
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage(prev => Math.min(totalPages, prev + 1))
-                }
-                disabled={currentPage === totalPages}
-              >
-                Siguiente
-              </Button>
-            </div>
-          )}
+      {!!clientesResponse?.total && (
+        <div className="border-t border-gray-100 pt-4">
+          <p className="mb-3 text-center text-sm text-gray-600">
+            Mostrando {(currentPage - 1) * CLIENTES_PAGE_SIZE + 1} -{' '}
+            {Math.min(currentPage * CLIENTES_PAGE_SIZE, clientesResponse.total)}{' '}
+            de {clientesResponse.total} clientes ({CLIENTES_PAGE_SIZE} por
+            página)
+          </p>
+          <PaginationBar
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 

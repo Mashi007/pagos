@@ -26,7 +26,6 @@ const MANAGER_PREFIXES = [
 ]
 
 const OPERATOR_PREFIXES = [
-  '/clientes',
   '/prestamos',
   '/revision-manual',
   '/infopagos',
@@ -77,7 +76,7 @@ export function isDelegatedPathForRol(
 /** Redirección cuando intentan una ruta no delegada */
 export function defaultHomePathForRol(rol: string | null | undefined): string {
   const r = canonicalRol(rol)
-  if (r === 'operator') return '/clientes'
+  if (r === 'operator') return '/prestamos'
   return '/dashboard/menu'
 }
 

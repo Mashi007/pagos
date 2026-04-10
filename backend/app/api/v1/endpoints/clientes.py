@@ -13,7 +13,8 @@ from typing import Optional, Any
 
 from fastapi import APIRouter, Query, Depends, HTTPException, Body
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, forbid_operator_clientes_gestion
+from app.core.rol_normalization import canonical_rol
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select, func, or_, delete, text
 from sqlalchemy.orm import Session
@@ -23,10 +24,16 @@ from app.core.database import get_db, BUSINESS_TIMEZONE
 from app.models.cliente import Cliente
 from app.models.estado_cliente import EstadoCliente
 from app.models.prestamo import Prestamo
+from app.schemas.auth import UserResponse
 from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _operator_clientes_search_allowed(search: Optional[str]) -> bool:
+    """Operador: solo búsqueda acotada (p. ej. formulario de préstamos), no listado CRM."""
+    return len((search or "").strip()) >= 2
 
 
 def _row_to_cliente_response(row: Any) -> ClienteResponse:
@@ -84,11 +91,20 @@ def get_clientes(
     search: Optional[str] = Query(None),
     estado: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    current: UserResponse = Depends(get_current_user),
 ):
     """
     Listado paginado de clientes desde la BD.
     Filtros: search (cedula, nombres, email, telefono), estado (ACTIVO, INACTIVO, MORA, FINALIZADO).
+    Rol operator: no puede usar el listado CRM; solo consultas con search de al menos 2 caracteres
+    (uso desde préstamos y búsquedas similares).
     """
+    if canonical_rol(current.rol) == "operator" and not _operator_clientes_search_allowed(search):
+        raise HTTPException(
+            status_code=403,
+            detail="Su rol no tiene acceso al listado de clientes. Use la búsqueda desde préstamos "
+            "(mínimo 2 caracteres).",
+        )
     # Columnas que existen en la tabla clientes (sin total_financiamiento ni dias_mora).
     _cols = (
         Cliente.id,
@@ -174,7 +190,10 @@ def get_clientes(
 
 
 @router.get("/stats")
-def get_clientes_stats(db: Session = Depends(get_db)):
+def get_clientes_stats(
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
+):
     """
     Estadísticas de clientes: total, activos, inactivos, finalizados, nuevos_este_mes.
     finalizados = clientes distintos con estado FINALIZADO o con al menos un préstamo en LIQUIDADO.
@@ -241,7 +260,10 @@ def get_clientes_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/stats/diagnostico", summary="Diagnóstico KPIs (nuevos_este_mes)")
-def get_clientes_stats_diagnostico(db: Session = Depends(get_db)):
+def get_clientes_stats_diagnostico(
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
+):
     """
     Devuelve datos para auditar por qué nuevos_este_mes puede estar en 0:
     mes_actual_bd, total_con_fecha_registro, nuevos_este_mes, ejemplo_fecha_registro.
@@ -310,6 +332,7 @@ def get_casos_a_revisar(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
 ):
     """
     Clientes que no cumplen validadores: tienen valores placeholder
@@ -386,6 +409,7 @@ class ActualizarLoteResponse(BaseModel):
 def actualizar_clientes_lote(
     items: list[ActualizarLoteItem],
     db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
 ):
     """
     Actualizar múltiples clientes. Cada item debe tener id y los campos a actualizar.
@@ -420,7 +444,11 @@ def actualizar_clientes_lote(
 
 
 @router.post("/check-cedulas", response_model=CheckCedulasResponse)
-def check_cedulas(payload: CheckCedulasRequest, db: Session = Depends(get_db)):
+def check_cedulas(
+    payload: CheckCedulasRequest,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
+):
     """
     Comprobar qué cédulas ya están registradas en tabla clientes (carga masiva).
     Duplicado = 100% igual (comparación exacta con BD). Las que ya existen no se pueden guardar.
@@ -439,7 +467,11 @@ def check_cedulas(payload: CheckCedulasRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/check-emails", response_model=CheckEmailsResponse)
-def check_emails(payload: CheckEmailsRequest, db: Session = Depends(get_db)):
+def check_emails(
+    payload: CheckEmailsRequest,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
+):
     """
     Comprobar qué emails ya están registrados en la tabla clientes (carga masiva).
     Recibe una lista de emails y devuelve los que ya existen en la BD (comparación sin distinguir mayúsculas).
@@ -464,6 +496,7 @@ def cambiar_estado_cliente(
     cliente_id: int,
     payload: EstadoPayload,
     db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
 ):
     """Cambiar estado del cliente (PATCH /clientes/{id}/estado)."""
     row = db.get(Cliente, cliente_id)
@@ -498,7 +531,11 @@ def _digits_telefono(s: str) -> str:
 
 
 @router.post("", response_model=ClienteResponse, status_code=201)
-def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
+def create_cliente(
+    payload: ClienteCreate,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
+):
     """
     Crear cliente en la BD.
     No permitido duplicados: misma cédula, mismo nombre, mismo email o mismo teléfono â†’ 409.
@@ -645,7 +682,12 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
 
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)
-def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depends(get_db)):
+def update_cliente(
+    cliente_id: int,
+    payload: ClienteUpdate,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
+):
     """
     Actualizar cliente (endpoint HTTP).
     No se permite dejar cédula+nombres o email duplicados con otro cliente (distinto id) â†’ 409.
@@ -654,7 +696,11 @@ def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depend
 
 
 @router.delete("/{cliente_id}", status_code=204)
-def delete_cliente(cliente_id: int, db: Session = Depends(get_db)):
+def delete_cliente(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
+):
     """Eliminar cliente. No se puede si tiene préstamos asociados."""
     row = db.get(Cliente, cliente_id)
     if not row:
@@ -738,7 +784,7 @@ def _parse_fecha(fecha_val: any) -> date:
 async def upload_clientes_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user: UserResponse = Depends(forbid_operator_clientes_gestion),
 ):
     """
     Carga masiva de clientes desde Excel.
@@ -920,6 +966,7 @@ def get_clientes_con_errores(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
 ):
     """
     Listado de clientes con errores de validación (pendientes de revisión).
@@ -970,7 +1017,7 @@ class RevisarClienteAgregarBody(BaseModel):
 def agregar_cliente_a_revisar(
     body: RevisarClienteAgregarBody,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user: UserResponse = Depends(forbid_operator_clientes_gestion),
 ):
     """
     Envía una fila a la tabla clientes_con_errores (revisar clientes).
@@ -997,7 +1044,11 @@ def agregar_cliente_a_revisar(
 
 
 @router.delete("/revisar/{error_id}", status_code=204)
-def resolver_cliente_error(error_id: int, db: Session = Depends(get_db)):
+def resolver_cliente_error(
+    error_id: int,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
+):
     """Marcar cliente con error como resuelto (eliminar de la lista)."""
     row = db.get(ClienteConError, error_id)
     if not row:
@@ -1011,6 +1062,7 @@ def resolver_cliente_error(error_id: int, db: Session = Depends(get_db)):
 def eliminar_clientes_por_descarga(
     ids: list[int] = Body(...),
     db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
 ):
     """Elimina registros de clientes_con_errores tras su descarga en Excel."""
     if not ids:

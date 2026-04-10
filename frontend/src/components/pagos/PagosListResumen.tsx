@@ -6,6 +6,8 @@ import { FileText, Filter, Eye, X } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
 
+import { ListPaginationBar } from '../../components/ui/ListPaginationBar'
+
 import { Input } from '../../components/ui/input'
 
 import {
@@ -352,43 +354,18 @@ export function PagosListResumen() {
                 </table>
               </div>
 
-              {/* Paginación: máximo 10 clientes por página */}
-
               {data && data.total > 0 && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-sm text-gray-600">
-                    Página {data.page} de {Math.max(1, data.total_pages)} (
-                    {data.total} registros
-                    {typeof data.per_page === 'number'
-                      ? ` · ${data.per_page} por página`
-                      : ''}
-                    )
-                  </div>
-
-                  {data.total_pages > 1 && (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                      >
-                        Anterior
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setPage(p => Math.min(data.total_pages, p + 1))
-                        }
-                        disabled={page >= data.total_pages}
-                      >
-                        Siguiente
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                <ListPaginationBar
+                  className="mt-4"
+                  page={page}
+                  totalPages={Math.max(1, data.total_pages)}
+                  onPageChange={p => setPage(p)}
+                  subtitle={
+                    typeof data.per_page === 'number'
+                      ? `${data.total} clientes · ${data.per_page} por página`
+                      : `${data.total} clientes`
+                  }
+                />
               )}
             </>
           )}
@@ -487,43 +464,17 @@ export function PagosListResumen() {
               </div>
 
               {detalleData.total > 0 && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-sm text-gray-600">
-                    Página {detalleData.page} de{' '}
-                    {Math.max(1, detalleData.total_pages)} ({detalleData.total}{' '}
-                    pagos
-                    {typeof detalleData.per_page === 'number'
-                      ? ` · ${detalleData.per_page} por página`
-                      : ''}
-                    )
-                  </div>
-
-                  {detalleData.total_pages > 1 && (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={pageDetalle === 1}
-                        onClick={() => setPageDetalle(p => Math.max(1, p - 1))}
-                      >
-                        Anterior
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={pageDetalle >= detalleData.total_pages}
-                        onClick={() =>
-                          setPageDetalle(p =>
-                            Math.min(detalleData.total_pages, p + 1)
-                          )
-                        }
-                      >
-                        Siguiente
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                <ListPaginationBar
+                  className="mt-4"
+                  page={pageDetalle}
+                  totalPages={Math.max(1, detalleData.total_pages)}
+                  onPageChange={p => setPageDetalle(p)}
+                  subtitle={
+                    typeof detalleData.per_page === 'number'
+                      ? `${detalleData.total} pagos · ${detalleData.per_page} por página`
+                      : `${detalleData.total} pagos`
+                  }
+                />
               )}
             </>
           )}

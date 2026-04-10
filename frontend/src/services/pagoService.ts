@@ -590,10 +590,24 @@ class PagoService {
     )
   }
 
-  /** Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos). */
+  /** Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos). Paginado: más reciente primero. */
 
-  async getCedulasReportarBs(): Promise<{ total: number }> {
-    return await apiClient.get(`${this.baseUrl}/cedulas-reportar-bs`)
+  async getCedulasReportarBs(params?: {
+    page?: number
+    page_size?: number
+  }): Promise<{
+    total: number
+    page: number
+    page_size: number
+    items: { cedula: string; creado_en: string | null }[]
+  }> {
+    const sp = new URLSearchParams()
+    if (params?.page != null) sp.set('page', String(params.page))
+    if (params?.page_size != null) sp.set('page_size', String(params.page_size))
+    const qs = sp.toString()
+    return await apiClient.get(
+      `${this.baseUrl}/cedulas-reportar-bs${qs ? `?${qs}` : ''}`
+    )
   }
 
   async consultarCedulaReportarBs(cedula: string): Promise<{
