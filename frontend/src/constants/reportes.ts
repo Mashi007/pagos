@@ -17,7 +17,7 @@ export const REPORTES_TOAST = {
   cedula: 'Reporte por Cédula descargado exitosamente',
   contableOk: 'Reporte Contable descargado exitosamente',
 
-  fechas: 'Reporte Fechas (prestamos) descargado exitosamente',
+  fechas: 'Reporte Fechas préstamos (solo sistema, 8 columnas) descargado',
 
-  fechaDrive: 'Reporte Fecha Drive descargado exitosamente',
+  fechaDrive: 'Reporte Fecha Drive (hoja vs sistema, 5 columnas) descargado',
 } as const

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ComponentType, type SVGProps } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -21,6 +21,7 @@ import {
   Search,
   Copy,
   Calendar,
+  FileSpreadsheet,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -88,7 +89,20 @@ function getLinkParaCompartir(path: string): string {
 
 /** Cada icono = un reporte. Click = abre diálogo años/meses, luego descarga Excel. */
 
-const tiposReporte = [
+type TipoReporteItem = {
+  value: string
+  label: string
+  icon: ComponentType<SVGProps<SVGSVGElement>>
+  /** Tooltip opcional para no confundir reportes parecidos (p. ej. Fechas vs Fecha Drive). */
+  titleExtra?: string
+}
+
+function tituloDescargaReporte(tipo: TipoReporteItem): string {
+  const base = `Descargar ${tipo.label} en Excel`
+  return tipo.titleExtra ? `${base}. ${tipo.titleExtra}` : base
+}
+
+const tiposReporte: TipoReporteItem[] = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
 
   { value: 'MOROSIDAD', label: 'Morosidad', icon: TrendingUp },
@@ -97,7 +111,14 @@ const tiposReporte = [
 
   { value: 'PAGOS', label: 'Pagos', icon: Users },
 
-  { value: 'FECHAS', label: 'Fechas', icon: Calendar },
+  {
+    value: 'FECHAS',
+    label: 'Fechas préstamos',
+    icon: Calendar,
+    /** Texto largo para tooltip: evitar confundir con Fecha Drive. */
+    titleExtra:
+      'Solo sistema: ID, cédula, estado, fechas y total (8 columnas). No incluye la hoja Drive.',
+  },
 
   { value: 'ASESORES', label: 'Pago vencido', icon: UserCheck },
 
@@ -107,7 +128,13 @@ const tiposReporte = [
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
 
-  { value: 'FECHA_DRIVE', label: 'Fecha Drive', icon: Calendar },
+  {
+    value: 'FECHA_DRIVE',
+    label: 'Fecha Drive',
+    icon: FileSpreadsheet,
+    titleExtra:
+      'Comparación hoja CONCILIACIÓN (Drive) vs préstamos: 5 columnas; NE si falta dato en un lado.',
+  },
 ]
 
 const REPORTES_COBRANZA = [
@@ -883,14 +910,18 @@ export function Reportes() {
                         title={
                           !tieneAcceso
                             ? 'No tienes permisos para este reporte'
-                            : `Descargar ${tipo.label} en Excel`
+                            : tituloDescargaReporte(tipo)
                         }
                         className={`flex min-h-[110px] select-none flex-col items-center justify-center gap-2 rounded-xl border-2 bg-white p-5 transition-all ${
                           isDisponible && tieneAcceso
                             ? 'cursor-pointer hover:scale-[1.02] hover:border-blue-200 hover:bg-blue-50 active:scale-100'
                             : 'cursor-not-allowed opacity-50'
                         }`}
-                        aria-label={`Descargar reporte ${tipo.label} en Excel`}
+                        aria-label={
+                          !tieneAcceso
+                            ? 'No tienes permisos para este reporte'
+                            : tituloDescargaReporte(tipo)
+                        }
                       >
                         {isGenerando ? (
                           <Loader2
@@ -975,14 +1006,18 @@ export function Reportes() {
                         title={
                           !tieneAcceso
                             ? 'No tienes permisos para este reporte'
-                            : `Descargar ${tipo.label} en Excel`
+                            : tituloDescargaReporte(tipo)
                         }
                         className={`flex min-h-[110px] select-none flex-col items-center justify-center gap-2 rounded-xl border-2 bg-white p-5 transition-all ${
                           isDisponible && tieneAcceso
                             ? 'cursor-pointer hover:scale-[1.02] hover:border-blue-200 hover:bg-blue-50 active:scale-100'
                             : 'cursor-not-allowed opacity-50'
                         }`}
-                        aria-label={`Descargar reporte ${tipo.label} en Excel`}
+                        aria-label={
+                          !tieneAcceso
+                            ? 'No tienes permisos para este reporte'
+                            : tituloDescargaReporte(tipo)
+                        }
                       >
                         {isGenerando ? (
                           <Loader2
