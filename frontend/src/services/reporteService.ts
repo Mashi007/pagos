@@ -1,4 +1,48 @@
+import * as XLSX from 'xlsx'
+
 import { apiClient } from './api'
+
+/** Evita guardar un .xlsx equivocado (p. ej. informe FECHAS de 8 columnas) cuando el API o la caché devuelven otra cosa. */
+async function assertBlobEsFechaDriveConciliacion(blob: Blob): Promise<void> {
+  const buf = await blob.arrayBuffer()
+
+  const head = new Uint8Array(buf.slice(0, 2))
+
+  if (head[0] !== 0x50 || head[1] !== 0x4b) {
+    throw new Error(
+      'La respuesta no es un Excel valido (.xlsx). Revise la sesion o el enlace del API.'
+    )
+  }
+
+  const wb = XLSX.read(buf, { type: 'array', sheetRows: 2 })
+
+  const name0 = wb.SheetNames[0]
+
+  if (name0 !== 'Fecha Drive') {
+    throw new Error(
+      `Se recibio otro informe (primera hoja: "${name0 ?? '?'}"). ` +
+        'El cruce Drive vs sistema debe mostrar la hoja "Fecha Drive" (5 columnas). ' +
+        'Use el boton Fecha Drive en Contable y actualice la pagina (Ctrl+F5). ' +
+        'Si persiste, el backend desplegado puede estar desactualizado.'
+    )
+  }
+
+  const ws = wb.Sheets[name0]
+
+  const c1Raw = ws['C1']?.w ?? ws['C1']?.v
+
+  const c1 = String(c1Raw ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s/g, '')
+
+  if (!c1.includes('cedula') || !c1.includes('sistema')) {
+    throw new Error(
+      'El Excel no tiene el encabezado esperado de Fecha Drive (columna C: Cédula Sistema).'
+    )
+  }
+}
 
 export interface ReporteCartera {
   fecha_corte: string
@@ -1252,12 +1296,42 @@ class ReporteService {
   async exportarReporteFechaDrive(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
 
+    const cacheBust = `_cb=${Date.now()}`
+
     const response = await axiosInstance.get(
-      `${this.baseUrl}/exportar/fecha-drive`,
+      `${this.baseUrl}/exportar/fecha-drive?${cacheBust}`,
       { responseType: 'blob', timeout: 180000 }
     )
 
-    return response.data as Blob
+    if (response.status !== 200) {
+      let detail = `Error ${response.status}`
+
+      try {
+        const t = await (response.data as Blob).text()
+
+        if (t && t.trim().startsWith('{')) {
+          try {
+            const j = JSON.parse(t) as { detail?: string; message?: string }
+
+            detail = j.detail || j.message || detail
+          } catch {
+            detail = t.slice(0, 400)
+          }
+        } else if (t) {
+          detail = t.slice(0, 400)
+        }
+      } catch {
+        /* usar detail por defecto */
+      }
+
+      throw new Error(detail)
+    }
+
+    const blob = response.data as Blob
+
+    await assertBlobEsFechaDriveConciliacion(blob)
+
+    return blob
   }
 
   /**
