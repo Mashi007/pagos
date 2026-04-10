@@ -12,6 +12,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.env_admin_auth import is_configured_env_admin_email
 from app.core.rol_normalization import canonical_rol
 from app.core.security import decode_token
 from app.core.user_utils import user_to_response
@@ -91,7 +92,12 @@ def get_current_user(
         )
     if u and u.is_active:
         return user_to_response(u)
-    return _fake_user_response(email)
+    if is_configured_env_admin_email(email):
+        return _fake_user_response(email)
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Usuario no encontrado o inactivo",
+    )
 
 
 def require_admin(

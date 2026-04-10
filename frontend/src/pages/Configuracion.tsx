@@ -4,19 +4,17 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 
 import { motion } from 'framer-motion'
 
-import { Settings, Save, RefreshCw } from 'lucide-react'
+import { Settings } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-
-import { Badge } from '../components/ui/badge'
-
-import { Button } from '../components/ui/button'
 
 import {
   SECCIONES_CONFIGURACION,
   NOMBRES_SECCION_ESPECIAL,
   findSeccionById as findSeccionByIdHelper,
 } from '../constants/configuracionSecciones'
+
+import { KeepAliveConfigSection } from '../components/configuracion/KeepAliveConfigSection'
 
 import {
   ConfigGeneralTab,
@@ -25,7 +23,6 @@ import {
   ConfigWhatsAppTab,
   ConfigAITab,
   ConfigValidadoresTab,
-  ConfigOCRTab,
   ConfigInformePagosTab,
   ConfigAnalistasTab,
   ConfigConcesionariosTab,
@@ -73,21 +70,78 @@ function tabToSeccion(tab: string | null): string {
   return (tab && map[tab]) || 'general'
 }
 
-const SECTIONS_WITH_OWN_SAVE = [
+/** Identificadores de panel: cada uno montado con keep-alive (independiente del resto). */
+const CONFIG_SECTION_IDS = [
+  'general',
+  'notificaciones',
+  'plantillas',
   'emailConfig',
   'whatsappConfig',
   'aiConfig',
   'informePagosConfig',
-  'plantillas',
-]
+  'auditoria',
+  'baseDatos',
+  'facturacion',
+  'validadores',
+  'concesionarios',
+  'analistas',
+  'modelosVehiculos',
+  'usuarios',
+] as const
 
-const SECTIONS_SELF_LOADING = [
-  'plantillas',
-  'emailConfig',
-  'whatsappConfig',
-  'aiConfig',
-  'informePagosConfig',
-]
+type ConfigSectionId = (typeof CONFIG_SECTION_IDS)[number]
+
+function renderSeccionPanel(id: ConfigSectionId) {
+  switch (id) {
+    case 'general':
+      return <ConfigGeneralTab />
+
+    case 'notificaciones':
+      return <ConfigNotificacionesTab />
+
+    case 'plantillas':
+      return <ConfigPlantillasTab />
+
+    case 'emailConfig':
+      return <ConfigEmailTab />
+
+    case 'whatsappConfig':
+      return <ConfigWhatsAppTab />
+
+    case 'aiConfig':
+      return <ConfigAITab />
+
+    case 'informePagosConfig':
+      return <ConfigInformePagosTab />
+
+    case 'auditoria':
+      return <ConfigAuditoriaTab />
+
+    case 'baseDatos':
+      return <ConfigBaseDatosTab />
+
+    case 'facturacion':
+      return <ConfigFacturacionTab />
+
+    case 'validadores':
+      return <ConfigValidadoresTab />
+
+    case 'concesionarios':
+      return <ConfigConcesionariosTab />
+
+    case 'analistas':
+      return <ConfigAnalistasTab />
+
+    case 'modelosVehiculos':
+      return <ConfigModelosTab />
+
+    case 'usuarios':
+      return <ConfigUsuariosTab />
+
+    default:
+      return <ConfigGeneralTab />
+  }
+}
 
 const Configuracion = () => {
   const [searchParams] = useSearchParams()
@@ -97,10 +151,6 @@ const Configuracion = () => {
   const [seccionActiva, setSeccionActiva] = useState(() =>
     tabToSeccion(searchParams.get('tab'))
   )
-
-  const [loading, setLoading] = useState(false)
-
-  const [cambiosPendientes, setCambiosPendientes] = useState(false)
 
   useEffect(() => {
     const tab = searchParams.get('tab')
@@ -118,59 +168,14 @@ const Configuracion = () => {
 
   const nombresSeccionEspecial = NOMBRES_SECCION_ESPECIAL
 
-  const renderContenidoSeccion = () => {
-    switch (seccionActiva) {
-      case 'general':
-        return <ConfigGeneralTab />
+  const seccionActivaNormalizada =
+    seccionActiva === 'inteligenciaArtificial' ? 'aiConfig' : seccionActiva
 
-      case 'notificaciones':
-        return <ConfigNotificacionesTab />
-
-      case 'plantillas':
-        return <ConfigPlantillasTab />
-
-      case 'emailConfig':
-        return <ConfigEmailTab />
-
-      case 'whatsappConfig':
-        return <ConfigWhatsAppTab />
-
-      case 'aiConfig':
-
-      case 'inteligenciaArtificial':
-        return <ConfigAITab />
-
-      case 'informePagosConfig':
-        return <ConfigInformePagosTab />
-
-      case 'auditoria':
-        return <ConfigAuditoriaTab />
-
-      case 'baseDatos':
-        return <ConfigBaseDatosTab />
-
-      case 'facturacion':
-        return <ConfigFacturacionTab />
-
-      case 'validadores':
-        return <ConfigValidadoresTab />
-
-      case 'concesionarios':
-        return <ConfigConcesionariosTab />
-
-      case 'analistas':
-        return <ConfigAnalistasTab />
-
-      case 'modelosVehiculos':
-        return <ConfigModelosTab />
-
-      case 'usuarios':
-        return <ConfigUsuariosTab />
-
-      default:
-        return <ConfigGeneralTab />
-    }
-  }
+  const activePanel: ConfigSectionId = (
+    CONFIG_SECTION_IDS as readonly string[]
+  ).includes(seccionActivaNormalizada)
+    ? (seccionActivaNormalizada as ConfigSectionId)
+    : 'general'
 
   const seccionEncontrada = findSeccionById(seccionActiva)
 
@@ -186,11 +191,6 @@ const Configuracion = () => {
 
   const IconComponent = (seccion && seccion.icono) || Settings
 
-  const showGuardar =
-    cambiosPendientes && !SECTIONS_WITH_OWN_SAVE.includes(seccionActiva)
-
-  const showLoading = loading && !SECTIONS_SELF_LOADING.includes(seccionActiva)
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -201,45 +201,32 @@ const Configuracion = () => {
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center">
-                  <IconComponent className="mr-2 h-5 w-5" />
+            <div className="flex flex-col gap-1">
+              <CardTitle className="flex items-center">
+                <IconComponent className="mr-2 h-5 w-5" />
 
-                  {seccion?.nombre ?? 'Configuracion'}
-                </CardTitle>
-              </div>
+                {seccion?.nombre ?? 'Configuracion'}
+              </CardTitle>
 
-              <div className="flex space-x-2">
-                {showGuardar && (
-                  <>
-                    <Badge variant="secondary" className="animate-pulse">
-                      Cambios pendientes
-                    </Badge>
-
-                    <Button
-                      disabled
-                      className={cambiosPendientes ? 'animate-pulse' : ''}
-                    >
-                      <Save className="mr-2 h-4 w-4" /> Guardar
-                    </Button>
-                  </>
-                )}
-              </div>
+              <p className="text-sm text-gray-500">
+                Cada submenú conserva su propio estado al cambiar de pestaña.
+                Guardar ajustes no inicia procesos automáticos en el servidor;
+                use las acciones manuales de cada módulo (Programador,
+                notificaciones, Gmail, etc.).
+              </p>
             </div>
           </CardHeader>
 
           <CardContent>
-            {showLoading && (
-              <div className="flex items-center justify-center py-8">
-                <RefreshCw className="mr-2 h-6 w-6 animate-spin text-blue-600" />
-
-                <span className="text-gray-600">Cargando configuracion...</span>
-              </div>
-            )}
-
-            {(!loading || SECTIONS_SELF_LOADING.includes(seccionActiva)) &&
-              renderContenidoSeccion()}
+            {CONFIG_SECTION_IDS.map(id => (
+              <KeepAliveConfigSection
+                key={id}
+                sectionId={id}
+                active={activePanel === id}
+              >
+                {renderSeccionPanel(id)}
+              </KeepAliveConfigSection>
+            ))}
           </CardContent>
         </Card>
       </div>

@@ -88,12 +88,15 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
 
         return response
 
-# Crear aplicacion FastAPI
+# Crear aplicacion FastAPI (documentacion OpenAPI solo si DEBUG o ENABLE_OPENAPI_DOCS)
+_show_api_docs = bool(getattr(settings, "DEBUG", False) or getattr(settings, "ENABLE_OPENAPI_DOCS", False))
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url="/docs" if _show_api_docs else None,
+    redoc_url="/redoc" if _show_api_docs else None,
+    openapi_url="/openapi.json" if _show_api_docs else None,
 )
 
 def _cors_headers_for_request(request: Request):
@@ -337,10 +340,9 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
 
 @app.on_event("startup")
 def on_startup():
-    """Crear tablas en la BD si no existen. Inicializar config de email desde .env. Iniciar scheduler de reportes cobranzas."""
+    """Crear tablas en la BD si no existen. Inicializar email desde .env. Jobs programados solo si ENABLE_AUTOMATIC_SCHEDULED_JOBS."""
     from app.core.database import engine
     from app.core.email_config_holder import init_from_settings as init_email_config
-    from app.core.scheduler import start_scheduler
 
     init_email_config()
     logger.info("Configuracion de email (SMTP/tickets) inicializada desde variables de entorno.")
@@ -358,46 +360,58 @@ def on_startup():
         logger.exception("Startup BD fallo tras reintentos: %s", e)
         raise
 
-    # Scheduler: un proceso lider ejecuta APScheduler (con varios workers, solo uno es lider en BD).
-    # Watcher en todos los workers: si el lider muere, otro reclama tras heartbeat obsoleto en BD.
-    try:
-        from app.core.database import SessionLocal
-        from app.core.scheduler_leader import (
-            start_scheduler_leader_heartbeat_if_needed,
-            try_claim_scheduler_leader,
-        )
-        db = SessionLocal()
+    _auto_jobs = bool(getattr(settings, "ENABLE_AUTOMATIC_SCHEDULED_JOBS", False))
+    if _auto_jobs:
+        from app.core.scheduler import start_scheduler
+
+        # Scheduler: un proceso lider ejecuta APScheduler (con varios workers, solo uno es lider en BD).
         try:
-            if try_claim_scheduler_leader(db):
-                start_scheduler()
-                start_scheduler_leader_heartbeat_if_needed()
-                app.state._scheduler_leader = True
-            else:
-                app.state._scheduler_leader = False
-        finally:
-            db.close()
-    except Exception as e:
-        logger.exception("No se pudo iniciar el scheduler de reportes cobranzas: %s", e)
-    try:
-        from app.core.scheduler_leader import start_scheduler_leader_watcher
+            from app.core.database import SessionLocal
+            from app.core.scheduler_leader import (
+                start_scheduler_leader_heartbeat_if_needed,
+                try_claim_scheduler_leader,
+            )
+            db = SessionLocal()
+            try:
+                if try_claim_scheduler_leader(db):
+                    start_scheduler()
+                    start_scheduler_leader_heartbeat_if_needed()
+                    app.state._scheduler_leader = True
+                else:
+                    app.state._scheduler_leader = False
+            finally:
+                db.close()
+        except Exception as e:
+            logger.exception("No se pudo iniciar el scheduler (APScheduler): %s", e)
+        try:
+            from app.core.scheduler_leader import start_scheduler_leader_watcher
 
-        start_scheduler_leader_watcher()
-    except Exception as e:
-        logger.exception("No se pudo iniciar scheduler leader watcher: %s", e)
+            start_scheduler_leader_watcher()
+        except Exception as e:
+            logger.exception("No se pudo iniciar scheduler leader watcher: %s", e)
 
-    # Cache dashboard: actualizacion a las 1:00 y 13:00 (hora local) para cargas rapidas
-    try:
-        from app.api.v1.endpoints.dashboard import start_dashboard_cache_refresh
-        start_dashboard_cache_refresh()
-    except Exception as e:
-        logger.exception("No se pudo iniciar el worker de cache dashboard: %s", e)
+        # Cache dashboard: actualizacion a las 1:00 y 13:00 (hora local)
+        try:
+            from app.api.v1.endpoints.dashboard import start_dashboard_cache_refresh
 
-# Scheduler automatico de LIQUIDADO: ejecutar a las 21:00 (9 PM) diariamente
-    try:
-        liquidado_scheduler.iniciar_scheduler()
-        logger.info('Scheduler de actualizacion a LIQUIDADO iniciado (9 PM diariamente)')
-    except Exception as e:
-        logger.warning('No se pudo iniciar el scheduler de LIQUIDADO: %s', e)
+            start_dashboard_cache_refresh()
+        except Exception as e:
+            logger.exception("No se pudo iniciar el worker de cache dashboard: %s", e)
+
+        # LIQUIDADO: 21:00 (9 PM) diariamente
+        try:
+            liquidado_scheduler.iniciar_scheduler()
+            logger.info("Scheduler de actualizacion a LIQUIDADO iniciado (9 PM diariamente)")
+        except Exception as e:
+            logger.warning("No se pudo iniciar el scheduler de LIQUIDADO: %s", e)
+    else:
+        logger.info(
+            "Tareas programadas en segundo plano deshabilitadas (ENABLE_AUTOMATIC_SCHEDULED_JOBS=false). "
+            "No se inician APScheduler, liquidado automatico ni refresco de cache del dashboard. "
+            "Guarde configuracion sin disparar procesos; ejecute acciones manualmente desde la aplicacion. "
+            "Para activar cron de servidor, ponga ENABLE_AUTOMATIC_SCHEDULED_JOBS=true en el entorno."
+        )
+        app.state._scheduler_leader = False
 
     # Limpiar syncs de Gmail que quedaron en estado "running" tras un reinicio inesperado (SIGTERM/deploy).
     # Si no se limpian, _is_pipeline_running bloquea nuevas ejecuciones.
@@ -455,10 +469,15 @@ def on_shutdown():
 @app.get("/")
 async def root():
     """Endpoint raiz"""
+    _docs = (
+        "/docs"
+        if bool(getattr(settings, "DEBUG", False) or getattr(settings, "ENABLE_OPENAPI_DOCS", False))
+        else None
+    )
     return {
         "message": f"Bienvenido a {settings.PROJECT_NAME}",
         "version": settings.VERSION,
-        "docs": "/docs"
+        "docs": _docs,
     }
 
 

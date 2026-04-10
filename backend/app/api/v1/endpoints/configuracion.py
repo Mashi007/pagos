@@ -318,7 +318,10 @@ def put_notificaciones_envios(
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_admin),
 ):
-    """Actualizar configuración de envíos. Se fusiona con la BD: un PUT parcial no borra otros tipos de caso ni otras filas."""
+    """
+    Actualizar configuración de envíos. Se fusiona con la BD: un PUT parcial no borra otros tipos de caso ni otras filas.
+    No inicia envíos ni jobs programados: los correos siguen siendo manuales (POST desde UI) salvo cron del servidor si está habilitado en .env.
+    """
     if not isinstance(payload, dict):
         raise HTTPException(status_code=422, detail="El cuerpo debe ser un objeto JSON")
     try:

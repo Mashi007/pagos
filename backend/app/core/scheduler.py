@@ -1,12 +1,16 @@
 """
 Scheduler para tareas programadas (zona America/Caracas).
 
+Solo se registra e inicia si en el arranque ENABLE_AUTOMATIC_SCHEDULED_JOBS=true en settings (.env).
+Por defecto esta desactivado: ningun cron en servidor; la pantalla Configuracion no dispara estos jobs.
+
+Cuando esta activo:
 - 02:00  Finiquito: refrescar tabla finiquito_casos.
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 04:00  Limpieza codigos estado de cuenta.
-- 04:00, 11:00, 20:00  Gmail pagos pendientes (si esta habilitado; America/Caracas).
+- 04:00, 11:00, 20:00  Gmail (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
 
-Reportes cobranzas, informe de pagos por email y campanas CRM programadas ya no se disparan por scheduler; bajo demanda o manual.
+Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
 """
 import logging
 from typing import Optional

@@ -17,6 +17,22 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
+
+    # Si True, expone /docs, /redoc y /openapi.json. En produccion dejar False salvo necesidad explicita.
+    ENABLE_OPENAPI_DOCS: bool = Field(
+        default=False,
+        description="Expone documentacion OpenAPI en /docs y /redoc. Produccion: False. Desarrollo: True o DEBUG=True.",
+    )
+    # Por defecto False: ningun job programado al arrancar (APScheduler, liquidado 21:00, cache dashboard).
+    # Poner True en .env solo si se desean tareas automaticas en segundo plano (no disparadas al guardar Configuracion).
+    ENABLE_AUTOMATIC_SCHEDULED_JOBS: bool = Field(
+        default=False,
+        description=(
+            "Si True, el proceso lider puede iniciar APScheduler (finiquito, auditoria cartera, limpieza codigos, "
+            "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard "
+            "y watcher de lider. Por defecto False: ejecucion manual desde la aplicacion."
+        ),
+    )
     
     # ============================================
     # Base de Datos
@@ -277,10 +293,10 @@ class Settings(BaseSettings):
         description="Máximo de filas al descargar Excel sin fecha (evita memoria/timeout). Con ?fecha= no aplica límite por día.",
     )
     PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED: bool = Field(
-        default=True,
+        default=False,
         description=(
-            "Si True, el scheduler ejecuta el pipeline (pending_identification = mismo listado que all) "
-            "a las 4:00, 11:00 y 20:00 (America/Caracas): inbox con imagen/PDF, sin filtrar por leido, estrella ni etiquetas."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler ejecuta el pipeline Gmail "
+            "a las 4:00, 11:00 y 20:00 (America/Caracas). Por defecto False: solo ejecucion manual."
         ),
     )
     PAGOS_GMAIL_UNREAD_MAX_PASSES: int = Field(

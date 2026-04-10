@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.env_admin_auth import is_configured_env_admin_email
 from app.core.email import send_email
 from app.core.email_config_holder import get_tickets_notify_emails
 from app.core.security import (
@@ -294,8 +295,13 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     u = db.query(User).filter(User.email == email).first()
     if u and u.is_active:
         user = user_to_response(u)
-    else:
+    elif is_configured_env_admin_email(email):
         user = _fake_user(email)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de refresco invalido o usuario inexistente",
+        )
     access_token = create_access_token(subject=user.email, extra={"email": user.email})
     new_refresh = create_refresh_token(subject=user.email)
     return {
@@ -339,7 +345,12 @@ def me(
     u = db.query(User).filter(User.email == email).first()
     if u and u.is_active:
         return user_to_response(u)
-    return _fake_user(email)
+    if is_configured_env_admin_email(email):
+        return _fake_user(email)
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Usuario no encontrado o inactivo",
+    )
 
 
 @router.post("/clear-rate-limits")
