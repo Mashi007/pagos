@@ -7,7 +7,7 @@ import { FiniquitoPanelPage } from './FiniquitoPanelPage'
 import { getFiniquitoAccessToken } from '../services/finiquitoService'
 
 import { useSimpleAuth } from '../store/simpleAuthStore'
-import { isAdminRole, isOperatorRole } from '../utils/rol'
+import { isAdminRole, isManagerRole, isOperatorRole } from '../utils/rol'
 
 function GateSpinner() {
   return (
@@ -23,7 +23,7 @@ function GateSpinner() {
 
 /**
  * Una sola URL canónica /finiquitos/gestion:
- * - Usuario con rol admin u operario (panel) → bandeja gestión (FiniquitoGestionPage).
+ * - Usuario con rol admin, operario o gerente (panel) → bandeja gestión (FiniquitoGestionPage).
  * - Colaborador con JWT OTP (sessionStorage) → mismo enlace, contenido de portal (FiniquitoPanelPage).
  * - Sin admin ni token OTP → /finiquitos/acceso (no al login del sistema).
  */
@@ -33,7 +33,10 @@ export function FiniquitoGestionGatePage() {
   const finiToken = getFiniquitoAccessToken()?.trim()
 
   const esPanelGestionFiniquito =
-    isAuthenticated && (isAdminRole(user?.rol) || isOperatorRole(user?.rol))
+    isAuthenticated &&
+    (isAdminRole(user?.rol) ||
+      isOperatorRole(user?.rol) ||
+      isManagerRole(user?.rol))
 
   if (finiToken) {
     if (isLoading && isAuthenticated) {

@@ -12,8 +12,6 @@ import { Layout } from './components/layout/Layout'
 
 import { SimpleProtectedRoute } from './components/auth/SimpleProtectedRoute'
 
-import { FiniquitadorGuard } from './components/auth/FiniquitadorGuard'
-
 import { useSimpleAuth } from './store/simpleAuthStore'
 
 import { getFiniquitoAccessToken } from './services/finiquitoService'
@@ -22,7 +20,7 @@ import { BASE_PATH, PUBLIC_FLOW_SESSION_KEY } from './config/env'
 
 import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
-import { isAdminRole, isOperatorRole } from './utils/rol'
+import { isAdminRole, isManagerRole, isOperatorRole } from './utils/rol'
 import {
   defaultHomePathForRol,
   isDelegatedPathForRol,
@@ -113,7 +111,12 @@ function RootLayoutWrapper() {
 
   const esOperatorPanel = isAuthenticated && isOperatorRole(user?.rol)
 
-  if (esGestionFiniquito && !esAdminPanel && !esOperatorPanel) {
+  const esManagerPanel = isAuthenticated && isManagerRole(user?.rol)
+
+  const esPanelGestionFiniquitoInterno =
+    esAdminPanel || esOperatorPanel || esManagerPanel
+
+  if (esGestionFiniquito && !esPanelGestionFiniquitoInterno) {
     if (tokenPortalFiniquito) {
       return <Outlet />
     }
@@ -135,9 +138,7 @@ function RootLayoutWrapper() {
 
   return (
     <SimpleProtectedRoute>
-      <FiniquitadorGuard>
-        <Layout />
-      </FiniquitadorGuard>
+      <Layout />
     </SimpleProtectedRoute>
   )
 }

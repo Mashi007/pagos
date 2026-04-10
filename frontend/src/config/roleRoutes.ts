@@ -60,12 +60,6 @@ export function isDelegatedPathForRol(
   const r = canonicalRol(rol) as UserRol
   if (r === 'admin') return true
   if (r === 'manager') {
-    if (
-      pathname === '/finiquitos/gestion' ||
-      pathname.startsWith('/finiquitos/gestion/')
-    ) {
-      return false
-    }
     return matchesDelegatedPath(pathname, MANAGER_PREFIXES)
   }
   if (r === 'operator') return matchesDelegatedPath(pathname, OPERATOR_PREFIXES)

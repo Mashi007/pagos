@@ -57,15 +57,11 @@ export function usePermissions() {
    */
 
   const isFiniquitador = (): boolean => {
-    return isAdminRole(user?.rol) || isOperatorRole(user?.rol)
-  }
-
-  /**
-   * Verifica si el usuario SOLO tiene acceso a finiquito (sin acceso general)
-   */
-
-  const isPuroFiniquitador = (): boolean => {
-    return false // Rol finiquitador eliminado; solo admin/manager acceden a gestion
+    return (
+      isAdminRole(user?.rol) ||
+      isOperatorRole(user?.rol) ||
+      isManagerRole(user?.rol)
+    )
   }
 
   /**
@@ -378,8 +374,6 @@ export function usePermissions() {
     revisionManualFullEdit,
 
     isFiniquitador: isFiniquitador(),
-
-    isPuroFiniquitador: isPuroFiniquitador(),
 
     canAccessPath,
 

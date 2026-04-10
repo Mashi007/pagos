@@ -115,12 +115,12 @@ def require_admin(
 def require_admin_or_operator(
     current: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
-    """Panel de gestión Finiquito (bandejas, mismo alcance que admin en UI)."""
+    """Panel de gestión Finiquito (bandejas): admin, operario o gerente (rutas /finiquito/admin)."""
     rol = canonical_rol(current.rol)
-    if rol not in ("admin", "operator"):
+    if rol not in ("admin", "operator", "manager"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requiere rol de administrador u operario.",
+            detail="Se requiere rol de administrador, operario o gerente.",
         )
     return current
 

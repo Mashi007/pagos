@@ -978,7 +978,9 @@ export function DashboardMenu() {
 
       // Eje Y: arriba mayor banda, abajo "Menos de $500" (Recharts: primera fila = arriba)
 
-      const ordenPrioridadMayorArriba = [...FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS]
+      const ordenPrioridadMayorArriba = [
+        ...FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS,
+      ]
 
       return [...datosFinanciamientoRangos.rangos]
 

@@ -14,7 +14,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func, literal
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import false as sql_false
 
@@ -145,7 +145,7 @@ def _query_casos_solo_cedula_portal(q: Any, fu: FiniquitoUsuarioAcceso) -> Any:
     ced = _cedula_portal_token_normalizada(fu)
     if not ced:
         return q.filter(sql_false())
-    col_doc = func.upper(func.trim(func.coalesce(FiniquitoCaso.cedula, literal(""))))
+    col_doc = func.upper(func.trim(FiniquitoCaso.cedula))
     return q.filter(col_doc == ced)
 
 
@@ -891,7 +891,7 @@ def finiquito_public_patch_estado(
             error="Solo puede aceptar o rechazar desde la bandeja de entrada (REVISION).",
         )
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
-    if not caso:
+    if not caso or not _caso_pertenece_a_portal(fu, caso):
         raise HTTPException(status_code=404, detail="Caso no encontrado")
     if caso.estado != "REVISION":
         return FiniquitoPatchEstadoResponse(
@@ -1048,7 +1048,7 @@ def finiquito_admin_patch_estado(
     db: Session = Depends(get_db),
     panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
-    """Panel interno (admin u operario): bandejas y area de trabajo (REVISION desde area, EN_PROCESO, TERMINADO)."""
+    """Panel interno (admin, operario o gerente): bandejas y area de trabajo (REVISION desde area, EN_PROCESO, TERMINADO)."""
     nuevo = (body.estado or "").upper().strip()
     if nuevo not in ESTADOS_VALIDOS:
         return FiniquitoPatchEstadoResponse(ok=False, error="Estado invalido")
