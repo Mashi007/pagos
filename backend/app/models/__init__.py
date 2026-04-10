@@ -51,6 +51,11 @@ from app.models.finiquito import (
     FiniquitoLoginCodigo,
     FiniquitoUsuarioAcceso,
 )
+from app.models.conciliacion_sheet import (
+    ConciliacionSheetMeta,
+    ConciliacionSheetRow,
+    ConciliacionSheetSyncRun,
+)
 
 __all__ = [
     "Base",
@@ -104,4 +109,7 @@ __all__ = [
     "FiniquitoEstadoHistorial",
     "FiniquitoLoginCodigo",
     "FiniquitoUsuarioAcceso",
+    "ConciliacionSheetMeta",
+    "ConciliacionSheetRow",
+    "ConciliacionSheetSyncRun",
 ]

@@ -1,6 +1,7 @@
 """
 Modelo SQLAlchemy para Cliente.
-Columnas exactas de la tabla public.clientes en la BD (sin columnas que no existan).
+Columnas alineadas con public.clientes. Si falta alguna columna en la BD, aplicar el SQL correspondiente
+en backend/scripts/ (p. ej. migracion_clientes_email_secundario.sql para email_secundario).
 La tabla clientes NO tiene total_financiamiento ni dias_mora (eso está en prestamos / se calcula desde cuotas).
 """
 from sqlalchemy import Column, Integer, String, Date, DateTime, Text, text

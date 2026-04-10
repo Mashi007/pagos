@@ -309,6 +309,28 @@ class Settings(BaseSettings):
             "Se conserva por compatibilidad en .env; el codigo no lo usa."
         ),
     )
+
+    # Google Sheet CONCILIACIÓN → BD (snapshot diario vía cron, ej. 03:00 America/Caracas)
+    CONCILIACION_SHEET_SPREADSHEET_ID: Optional[str] = Field(
+        default=None,
+        description="ID del documento (segmento entre /d/ e /edit en la URL de Google Sheets).",
+    )
+    CONCILIACION_SHEET_TAB_NAME: str = Field(
+        default="CONCILIACIÓN",
+        description="Nombre exacto de la pestaña a sincronizar.",
+    )
+    CONCILIACION_SHEET_HEADER_MARKER: str = Field(
+        default="LOTE",
+        description="Texto de la primera columna de la fila cabecera (búsqueda en las primeras filas).",
+    )
+    CONCILIACION_SHEET_SYNC_SECRET: Optional[str] = Field(
+        default=None,
+        description="Secreto para POST /api/v1/conciliacion-sheet/sync (header X-Conciliacion-Sheet-Sync-Secret).",
+    )
+    CONCILIACION_SHEET_COLUMNS_RANGE: str = Field(
+        default="A:S",
+        description="Rango de columnas a sincronizar dentro de la pestaña (ej. A:S = columnas A hasta S inclusive).",
+    )
     # Tasa USD/Bs Venezuela (reporte contable)
     # ============================================
     TASA_USD_BS_DEFAULT: Optional[float] = Field(
