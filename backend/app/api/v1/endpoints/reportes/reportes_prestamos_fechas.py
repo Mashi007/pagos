@@ -109,6 +109,8 @@ def exportar_prestamos_fechas_excel(db: Session = Depends(get_db)):
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": f"attachment; filename=FECHAS_{hoy_str}.xlsx"
+            "Content-Disposition": (
+                f"attachment; filename=FECHAS_solo_sistema_8cols_{hoy_str}.xlsx"
+            )
         },
     )

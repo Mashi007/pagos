@@ -95,6 +95,8 @@ type TipoReporteItem = {
   icon: ComponentType<SVGProps<SVGSVGElement>>
   /** Tooltip opcional para no confundir reportes parecidos (p. ej. Fechas vs Fecha Drive). */
   titleExtra?: string
+  /** Texto corto bajo la etiqueta (visible sin pasar el mouse). */
+  subtitle?: string
 }
 
 function tituloDescargaReporte(tipo: TipoReporteItem): string {
@@ -115,6 +117,7 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'FECHAS',
     label: 'Fechas préstamos',
     icon: Calendar,
+    subtitle: '8 columnas · solo base de datos',
     /** Texto largo para tooltip: evitar confundir con Fecha Drive. */
     titleExtra:
       'Solo sistema: ID, cédula, estado, fechas y total (8 columnas). No incluye la hoja Drive.',
@@ -132,6 +135,7 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'FECHA_DRIVE',
     label: 'Fecha Drive',
     icon: FileSpreadsheet,
+    subtitle: '5 columnas · hoja vs sistema',
     titleExtra:
       'Comparación hoja CONCILIACIÓN (Drive) vs préstamos: 5 columnas; NE si falta dato en un lado.',
   },
@@ -629,7 +633,7 @@ export function Reportes() {
       } else if (tipo === 'FECHAS') {
         const blob = await reporteService.exportarReporteFechasPrestamos()
 
-        descargarBlob(blob, `FECHAS_${fechaCorte}.${ext}`)
+        descargarBlob(blob, `FECHAS_solo_sistema_8cols_${fechaCorte}.${ext}`)
 
         toast.dismiss(toastId)
 
@@ -639,7 +643,10 @@ export function Reportes() {
       } else if (tipo === 'FECHA_DRIVE') {
         const blob = await reporteService.exportarReporteFechaDrive()
 
-        descargarBlob(blob, `FechaDrive_${fechaCorte}.${ext}`)
+        descargarBlob(
+          blob,
+          `FechaDrive_vs_hoja_CONCILIACION_5cols_${fechaCorte}.${ext}`
+        )
 
         toast.dismiss(toastId)
 
@@ -944,6 +951,12 @@ export function Reportes() {
                           {tipo.label}
                         </span>
 
+                        {tipo.subtitle && (
+                          <span className="max-w-[140px] text-center text-[10px] leading-tight text-gray-400">
+                            {tipo.subtitle}
+                          </span>
+                        )}
+
                         {!tieneAcceso && (
                           <span className="text-xs text-red-600">
                             Restringido
@@ -958,9 +971,22 @@ export function Reportes() {
             {/* Contable y por cliente */}
 
             <div className="border-t border-gray-100 pt-4">
-              <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+              <h3 className="mb-2 text-sm font-medium uppercase tracking-wider text-gray-500">
                 Contable y por cliente
               </h3>
+
+              <p className="mb-4 text-xs text-gray-500">
+                <strong className="font-medium text-gray-600">
+                  Fecha Drive
+                </strong>{' '}
+                no es el mismo informe que Fechas préstamos (sección Cobranza):
+                compara la hoja CONCILIACIÓN sincronizada con la BD (solo
+                admin). El archivo descargado incluye en el nombre{' '}
+                <code className="rounded bg-gray-100 px-1 text-[11px]">
+                  FechaDrive_vs_hoja_CONCILIACION_5cols
+                </code>
+                .
+              </p>
 
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 {tiposReporte
@@ -1039,6 +1065,12 @@ export function Reportes() {
                         <span className="text-center text-xs font-medium text-gray-600">
                           {tipo.label}
                         </span>
+
+                        {tipo.subtitle && (
+                          <span className="max-w-[140px] text-center text-[10px] leading-tight text-gray-400">
+                            {tipo.subtitle}
+                          </span>
+                        )}
 
                         {!tieneAcceso && (
                           <span className="text-xs text-red-600">
