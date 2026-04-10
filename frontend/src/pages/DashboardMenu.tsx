@@ -1920,13 +1920,13 @@ export function DashboardMenu() {
 
                     <CardDescription className="text-sm text-gray-600">
                       Por cada día: barras apiladas{' '}
-                      <strong>Pagos conciliados</strong> (vencimiento = ese día y
-                      pago ese día) y{' '}
-                      <strong>Pagos días anteriores</strong> (vencimiento
-                      anterior, pago ese día), como el análisis mensual pero en
-                      escala diaria. <strong>Monto programado</strong>: suma de
-                      monto_cuota con vencimiento <strong>solo en hoy</strong>{' '}
-                      (barra aparte, resto de días en cero).
+                      <strong>Pagos conciliados</strong> (vencimiento = ese día
+                      y pago ese día) y <strong>Pagos días anteriores</strong>{' '}
+                      (vencimiento anterior, pago ese día), como el análisis
+                      mensual pero en escala diaria.{' '}
+                      <strong>Monto programado</strong>: suma de monto_cuota con
+                      vencimiento <strong>solo en hoy</strong> (barra aparte,
+                      resto de días en cero).
                     </CardDescription>
                   </CardHeader>
 

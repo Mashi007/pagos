@@ -3,9 +3,10 @@
  * (mismo archivo vs otro préstamo en BD). Se elige un código libre: primero
  * al azar (varios intentos), luego barrido secuencial 0000-9999 si hace falta.
  *
- * Tras validar contra BD (`validar-filas-batch`), `autoAplicarSufijosVistoFilasCargaMasiva`
- * aplica estos sufijos solo en filas que siguen siendo duplicadas (archivo o BD), salvo
- * claves marcadas como «justificadas sin sufijo» por el admin.
+ * En carga masiva el sufijo no se aplica al validar: el usuario lo genera fila a fila
+ * con el botón (ícono ojo) en la columna Acción. `aplicarSufijoVistoUnaFila` hace esa
+ * asignación; `autoAplicarSufijosVistoFilasCargaMasiva` se mantiene por si hiciera falta
+ * en pruebas o herramientas, pero el flujo de producto es manual por fila.
  */
 
 import {
@@ -127,12 +128,12 @@ export function letterSufijoVistoDesdeMensajeDuplicado(
 
 /** Texto fijo: no incluir _A####/_P#### en celdas Excel (origen humano). */
 export const MENSAJE_EXCEL_NO_INCLUIR_SUFIJO_VISTO_ADMIN =
-  'No incluya en el archivo el sufijo _A#### ni _P#### en el comprobante. El sistema lo asigna solo al validar la carga contra la base de datos.'
+  'No incluya en el archivo el sufijo _A#### ni _P#### en el comprobante. En la tabla de carga use el ícono de ojo en Acción para generarlo cuando haya duplicado.'
 
 /**
  * Bloquea que un humano escriba o pegue el sufijo admin en el comprobante.
- * La asignación permitida es solo la automática (carga masiva) o, en registro
- * unitario, el token en el campo Código vía botón Visto (no _ en documento).
+ * En carga masiva el sufijo lo aplica el botón (ícono ojo); en registro unitario,
+ * el token en el campo Código vía botón Visto (no _ en documento).
  */
 export function mensajeEdicionManualSufijoVistoProhibida(
   valorAnterior: string | null | undefined,
@@ -143,7 +144,7 @@ export function mensajeEdicionManualSufijoVistoProhibida(
   const oldHad = SUFIJO_VISTO_ARCHIVO_RE.test(oldT)
   const newHas = SUFIJO_VISTO_ARCHIVO_RE.test(newT)
   if (newHas && !oldHad) {
-    return 'No escriba ni pegue manualmente _A#### ni _P#### en el comprobante. En carga masiva el sistema los asigna al validar; al registrar un pago use el botón Visto (campo Código).'
+    return 'No escriba ni pegue manualmente _A#### ni _P#### en el comprobante. En carga masiva use el ícono de ojo en Acción para generar el sufijo; al registrar un pago unitario use el botón Visto (campo Código).'
   }
   if (newHas && oldHad) {
     const mo = oldT.match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)
@@ -228,4 +229,63 @@ export function autoAplicarSufijosVistoFilasCargaMasiva<
   }
 
   return out
+}
+
+/**
+ * Asigna _A#### / _P#### solo a la fila indicada (misma heurística A/P que la función automática).
+ * No modifica filas que ya tienen sufijo admin, claves «justificadas sin sufijo» o filas sin conflicto.
+ */
+export function aplicarSufijoVistoUnaFila<T extends FilaDocumentoPagoMasiva>(
+  rows: T[],
+  targetRowIndex: number,
+  prestamoPorDocDupBD: Map<string, number | null>,
+  documentosDuplicadosBD: Set<string>,
+  documentosRepetidosArchivoJustificados: Set<string>
+): T[] | null {
+  const idx = rows.findIndex(r => r._rowIndex === targetRowIndex)
+  if (idx < 0) return null
+
+  const snap = rows[idx]
+  const clave = claveDocumentoExcelCompuesta(
+    snap.numero_documento,
+    snap.codigo_documento ?? null
+  )
+  if (!clave) return null
+  if (documentosRepetidosArchivoJustificados.has(clave)) return null
+
+  const raw = String(snap.numero_documento ?? '').trim()
+  if (SUFIJO_VISTO_ARCHIVO_RE.test(raw)) return null
+
+  const freq = new Map<string, number>()
+  for (const r of rows) {
+    const cl = claveDocumentoExcelCompuesta(
+      r.numero_documento,
+      r.codigo_documento ?? null
+    )
+    if (cl) freq.set(cl, (freq.get(cl) || 0) + 1)
+  }
+  const dupArchivo = (freq.get(clave) || 0) > 1
+  const dupBD = documentosDuplicadosBD.has(clave)
+  if (!dupArchivo && !dupBD) return null
+
+  const usados = collectTokensSufijoVistoArchivoDesdeFilas(rows)
+  const dupPrestamoBd = prestamoPorDocDupBD.get(clave) ?? null
+  const rowPid = snap.prestamo_id ?? null
+  const letter: 'A' | 'P' =
+    dupPrestamoBd != null &&
+    rowPid != null &&
+    Number(dupPrestamoBd) !== Number(rowPid)
+      ? 'P'
+      : 'A'
+
+  const nuevo = aplicarSufijoVistoADocumento(
+    snap.numero_documento,
+    letter,
+    usados
+  )
+  if (nuevo === raw) return null
+
+  return rows.map((r, i) =>
+    i === idx ? { ...r, numero_documento: nuevo } : { ...r }
+  )
 }

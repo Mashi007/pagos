@@ -26,7 +26,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { Save, Loader2, Search, Check } from 'lucide-react'
+import { Save, Loader2, Search, Check, Eye, Trash2 } from 'lucide-react'
 
 import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
 
@@ -49,6 +49,8 @@ import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
 
 import { getTasaPorFecha } from '../../services/tasaCambioService'
+
+import { SUFIJO_VISTO_ARCHIVO_RE } from '../../utils/documentoSufijoVisto'
 
 import {
   Select,
@@ -106,6 +108,12 @@ export interface FilaEditableProps {
   onMarcarDocumentoRepetidoArchivoJustificado?: (
     claveDocumentoCompuesta: string
   ) => void
+
+  /** Duplicado en archivo o BD: asigna _A####/_P#### al comprobante de esta fila (no automático). */
+  onAplicarSufijoVistoManual?: (row: PagoExcelRow) => void
+
+  /** Quita la fila del preview de carga (solo listado local). */
+  onEliminarFila?: (row: PagoExcelRow) => void
 }
 
 function CeldaEditable({
@@ -488,6 +496,10 @@ export function TablaEditablePagos({
   documentosRepetidosArchivoJustificados = [],
 
   onMarcarDocumentoRepetidoArchivoJustificado,
+
+  onAplicarSufijoVistoManual,
+
+  onEliminarFila,
 }: FilaEditableProps) {
   const { isAdmin } = usePermissions()
 
@@ -1044,8 +1056,23 @@ export function TablaEditablePagos({
 
                       const puedeVistoControl5Bd = pagoIdParaVisto != null
 
-                      /** Solo control 5 (auditoría): el sufijo _A####/_P#### en comprobante lo asigna el sistema al validar la carga, no manualmente. */
+                      /** Solo control 5 (auditoría): duplicado en BD con pago existente. */
                       const mostrarBotonVisto = puedeVistoControl5Bd
+
+                      const docRawAccion = String(
+                        row.numero_documento ?? ''
+                      ).trim()
+                      const yaTieneSufijoAdmin =
+                        SUFIJO_VISTO_ARCHIVO_RE.test(docRawAccion)
+                      const msgDocLower = (msgDoc || '').toLowerCase()
+                      const esDupBDAccion =
+                        row._pagoIdExistenteDuplicadoBD != null ||
+                        msgDocLower.includes('ya existe en la base')
+                      const puedeAplicarSufijoManual =
+                        !!onAplicarSufijoVistoManual &&
+                        !yaTieneSufijoAdmin &&
+                        ((!archivoDupJustificado && esDupArchivoFila) ||
+                          esDupBDAccion)
 
                       const mostrarAutorizarDupArchivoSinSufijo =
                         isAdmin &&
@@ -1103,6 +1130,22 @@ export function TablaEditablePagos({
                             )}
                           </button>
 
+                          {puedeAplicarSufijoManual && (
+                            <button
+                              type="button"
+                              onClick={() => onAplicarSufijoVistoManual?.(row)}
+                              disabled={
+                                isSaving(row._rowIndex) ||
+                                serviceStatus === 'offline'
+                              }
+                              title="Asignar sufijo único (_A#### o _P####) al comprobante de esta fila"
+                              className="inline-flex items-center justify-center rounded border border-sky-400 bg-sky-100 p-1.5 text-sky-950 hover:bg-sky-200 disabled:opacity-60"
+                            >
+                              <Eye className="h-3.5 w-3.5" aria-hidden />
+                              <span className="sr-only">Sufijo único</span>
+                            </button>
+                          )}
+
                           {mostrarBotonVisto && (
                             <button
                               type="button"
@@ -1129,7 +1172,7 @@ export function TablaEditablePagos({
                               }
                               title={
                                 isAdmin
-                                  ? 'Control 5 (auditoría): marcar Visto en el pago existente en BD. El sufijo en comprobante solo lo asigna el sistema al validar la carga.'
+                                  ? 'Control 5 (auditoría): marcar Visto en el pago existente en BD. Alternativa: ícono de ojo para sufijo único en el comprobante.'
                                   : 'Visto: solo administradores.'
                               }
                               className={`inline-flex items-center justify-center gap-0.5 rounded border p-1.5 text-[10px] font-semibold disabled:opacity-60 ${
@@ -1208,6 +1251,21 @@ export function TablaEditablePagos({
                               )}
                             </button>
                           )}
+
+                          {onEliminarFila && (
+                            <button
+                              type="button"
+                              onClick={() => onEliminarFila(row)}
+                              disabled={
+                                isSaving(row._rowIndex) || isSendingRevisar
+                              }
+                              title="Quitar esta fila del listado (no elimina pagos ya guardados en la base de datos)"
+                              className="inline-flex items-center justify-center rounded border border-red-300 bg-red-50 p-1.5 text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                              <span className="sr-only">Eliminar fila</span>
+                            </button>
+                          )}
                         </div>
                       )
                     })()
@@ -1246,12 +1304,11 @@ export function TablaEditablePagos({
             <li>
               <strong>Documento</strong>: la clave comprobante + código (columna
               Código opcional) no puede repetirse en este archivo ni en la BD.
-              Tras validar contra la BD, el sistema asigna solo él{' '}
-              <code className="rounded bg-red-100 px-1">_A####</code> /{' '}
-              <code className="rounded bg-red-100 px-1">_P####</code> en el
-              comprobante cuando aplica; no los escriba en Excel ni en la celda.
-              Si necesita el mismo texto en varias filas sin ese código, use{' '}
-              <strong>Sin sufijo</strong> (admin).
+              Si hay duplicado, pulse el ícono de ojo en Acción para generar{' '}
+              <code className="rounded bg-red-100 px-1">_A####</code> o{' '}
+              <code className="rounded bg-red-100 px-1">_P####</code>; no lo
+              escriba en Excel ni en la celda. Si debe repetir el mismo texto en
+              varias filas sin sufijo, use <strong>Sin sufijo</strong> (admin).
             </li>
           </ul>
         </div>

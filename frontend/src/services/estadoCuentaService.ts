@@ -24,8 +24,14 @@ const API = env.API_URL || ''
 
 const BASE = `${API}/api/v1/estado-cuenta/public`
 
-/** Timeout (ms) para peticiones públicas. Sin timeout pueden quedar colgadas. */
+/** Timeout (ms) para peticiones públicas ligeras (validar cédula). */
 const FETCH_TIMEOUT_MS = 30000
+
+/**
+ * SMTP y generación de PDF pueden superar 30s (red, proveedor, carga).
+ * Mismo criterio que SLOW_ENDPOINT_TIMEOUT_MS en api.ts.
+ */
+const FETCH_TIMEOUT_SLOW_MS = 60000
 
 export interface ValidarCedulaEstadoCuentaResponse {
   ok: boolean
@@ -103,10 +109,11 @@ export interface VerificarCodigoResponse {
 /** Helper: fetch con timeout y mejor manejo de errores */
 async function fetchWithTimeout(
   url: string,
-  options?: RequestInit
+  options?: RequestInit,
+  timeoutMs: number = FETCH_TIMEOUT_MS
 ): Promise<Response> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const res = await fetch(url, {
@@ -117,7 +124,7 @@ async function fetchWithTimeout(
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') {
       throw new Error(
-        `Timeout después de ${FETCH_TIMEOUT_MS / 1000}s. El servidor no responde.`
+        `Timeout después de ${timeoutMs / 1000}s. El servidor no responde.`
       )
     }
     throw err
@@ -170,15 +177,19 @@ export async function solicitarCodigo(
   const url = `${BASE}/solicitar-codigo`
 
   try {
-    const res = await fetchWithTimeout(url, {
-      method: 'POST',
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
 
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
 
-      body: JSON.stringify({ cedula: cedula.slice(0, 20).trim() }),
+        body: JSON.stringify({ cedula: cedula.slice(0, 20).trim() }),
 
-      credentials: 'same-origin',
-    })
+        credentials: 'same-origin',
+      },
+      FETCH_TIMEOUT_SLOW_MS
+    )
 
     if (res.status === 429) {
       return {
@@ -214,18 +225,22 @@ export async function verificarCodigo(
   const url = `${BASE}/verificar-codigo`
 
   try {
-    const res = await fetchWithTimeout(url, {
-      method: 'POST',
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
 
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
 
-      body: JSON.stringify({
-        cedula: cedula.slice(0, 20).trim(),
-        codigo: (codigo || '').trim(),
-      }),
+        body: JSON.stringify({
+          cedula: cedula.slice(0, 20).trim(),
+          codigo: (codigo || '').trim(),
+        }),
 
-      credentials: 'same-origin',
-    })
+        credentials: 'same-origin',
+      },
+      FETCH_TIMEOUT_SLOW_MS
+    )
 
     if (res.status === 429) {
       return {
@@ -260,19 +275,23 @@ export async function solicitarEstadoCuenta(
   const url = `${BASE}/solicitar-estado-cuenta`
 
   try {
-    const res = await fetchWithTimeout(url, {
-      method: 'POST',
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
 
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
 
-      body: JSON.stringify(
-        opts?.origen
-          ? { cedula: cedula.slice(0, 20).trim(), origen: opts.origen }
-          : { cedula: cedula.slice(0, 20).trim() }
-      ),
+        body: JSON.stringify(
+          opts?.origen
+            ? { cedula: cedula.slice(0, 20).trim(), origen: opts.origen }
+            : { cedula: cedula.slice(0, 20).trim() }
+        ),
 
-      credentials: 'same-origin',
-    })
+        credentials: 'same-origin',
+      },
+      FETCH_TIMEOUT_SLOW_MS
+    )
 
     if (res.status === 429) {
       return {

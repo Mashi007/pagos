@@ -72,7 +72,7 @@ import {
 import {
   SUFIJO_VISTO_ARCHIVO_RE,
   MENSAJE_EXCEL_NO_INCLUIR_SUFIJO_VISTO_ADMIN,
-  autoAplicarSufijosVistoFilasCargaMasiva,
+  aplicarSufijoVistoUnaFila,
   mensajeEdicionManualSufijoVistoProhibida,
 } from '../utils/documentoSufijoVisto'
 
@@ -392,13 +392,7 @@ export function useExcelUploadPagos({
       pagoPorDocDupBD: pagoPorDocDupBDRef.current,
     }
     const justSet = new Set(documentosRepetidosArchivoJustificados)
-    const conSufijos = autoAplicarSufijosVistoFilasCargaMasiva(
-      filas,
-      prestamoPorDocDupBDRef.current,
-      documentosDuplicadosBDRef.current,
-      justSet
-    )
-    setExcelData(applyRowValidationsSync(conSufijos, maps, justSet))
+    setExcelData(applyRowValidationsSync(filas, maps, justSet))
   }, [documentosRepetidosArchivoJustificados])
 
   const debounceRevalidarBatchBdRef = useRef<ReturnType<
@@ -2196,15 +2190,8 @@ export function useExcelUploadPagos({
         pagoPorDocDupBD,
       }
 
-      const conSufijosAuto = autoAplicarSufijosVistoFilasCargaMasiva(
-        processed,
-        prestamoPorDocDupBD,
-        documentosDuplicadosBD,
-        documentosRepetidosArchivoJustificadosRef.current
-      )
-
       return applyRowValidationsSync(
-        conSufijosAuto,
+        processed,
         maps,
         documentosRepetidosArchivoJustificadosRef.current
       )
@@ -3120,6 +3107,81 @@ export function useExcelUploadPagos({
     [scheduleRevalidarBatchBd, addToast]
   )
 
+  const aplicarSufijoVistoManual = useCallback(
+    (row: PagoExcelRow) => {
+      const prev = excelDataRef.current
+      const nextRows = aplicarSufijoVistoUnaFila(
+        prev,
+        row._rowIndex,
+        prestamoPorDocDupBDRef.current,
+        documentosDuplicadosBDRef.current,
+        documentosRepetidosArchivoJustificadosRef.current
+      )
+      if (!nextRows) {
+        addToast(
+          'warning',
+          'No se pudo asignar sufijo (documento vacío, ya tiene sufijo, duplicado autorizado sin sufijo o sin conflicto).'
+        )
+        return
+      }
+      const maps: MapsValidacionBatchPagos = {
+        cedulasExistentesBD: cedulasExistentesBDRef.current,
+        documentosDuplicadosBD: documentosDuplicadosBDRef.current,
+        detalleDuplicadosBD: detalleDuplicadosBDRef.current,
+        prestamoPorDocDupBD: prestamoPorDocDupBDRef.current,
+        pagoPorDocDupBD: pagoPorDocDupBDRef.current,
+      }
+      const justSet = new Set(documentosRepetidosArchivoJustificadosRef.current)
+      setExcelData(applyRowValidationsSync(nextRows, maps, justSet))
+      addToast('success', 'Sufijo único asignado al comprobante.')
+      scheduleRevalidarBatchBd()
+    },
+    [addToast, scheduleRevalidarBatchBd]
+  )
+
+  /** Quita la fila del preview (no borra pagos ya guardados en BD). */
+  const eliminarFilaPreview = useCallback(
+    (row: PagoExcelRow) => {
+      setExcelData(prev => {
+        const next = prev.filter(r => r._rowIndex !== row._rowIndex)
+        if (next.length === prev.length) return prev
+        const maps: MapsValidacionBatchPagos = {
+          cedulasExistentesBD: cedulasExistentesBDRef.current,
+          documentosDuplicadosBD: documentosDuplicadosBDRef.current,
+          detalleDuplicadosBD: detalleDuplicadosBDRef.current,
+          prestamoPorDocDupBD: prestamoPorDocDupBDRef.current,
+          pagoPorDocDupBD: pagoPorDocDupBDRef.current,
+        }
+        const justSet = new Set(
+          documentosRepetidosArchivoJustificadosRef.current
+        )
+        return applyRowValidationsSync(next, maps, justSet)
+      })
+      setSavedRows(prev => {
+        const n = new Set(prev)
+        n.delete(row._rowIndex)
+        return n
+      })
+      setEnviadosRevisar(prev => {
+        const n = new Set(prev)
+        n.delete(row._rowIndex)
+        return n
+      })
+      setDuplicadosPendientesRevisar(prev => {
+        const n = new Set(prev)
+        n.delete(row._rowIndex)
+        return n
+      })
+      setSavingProgress(prev => {
+        if (!(row._rowIndex in prev)) return prev
+        const { [row._rowIndex]: _, ...rest } = prev
+        return rest
+      })
+      scheduleRevalidarBatchBd()
+    },
+    [scheduleRevalidarBatchBd]
+  )
+
   const moveErrorToReviewPagos = useCallback(
     async (id: number) => {
       try {
@@ -3323,5 +3385,9 @@ export function useExcelUploadPagos({
     documentosRepetidosArchivoJustificados,
 
     marcarJustificadoDocumentoRepetidoEnArchivo,
+
+    aplicarSufijoVistoManual,
+
+    eliminarFilaPreview,
   }
 }
