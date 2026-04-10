@@ -383,6 +383,30 @@ GEMINI_PROMPT = (
 )
 
 
+# Una sola ejecución: registra opener HEIC/HEIF si pillow-heif está instalado (Render/Linux suele tener wheel).
+_PAGOS_GMAIL_HEIF_INIT_DONE = False
+
+
+def _ensure_pillow_heif_opener() -> None:
+    """Registra pillow-heif para que PIL abra .heic/.heif; si no hay paquete o falla, no se reintenta."""
+    global _PAGOS_GMAIL_HEIF_INIT_DONE
+    if _PAGOS_GMAIL_HEIF_INIT_DONE:
+        return
+    _PAGOS_GMAIL_HEIF_INIT_DONE = True
+    try:
+        from pillow_heif import register_heif_opener
+
+        register_heif_opener()
+        logger.info(
+            "[PAGOS_GMAIL] HEIC/HEIF: pillow-heif registrado; PIL puede normalizar .heic/.heif a JPEG"
+        )
+    except Exception as exc:
+        logger.debug(
+            "[PAGOS_GMAIL] pillow-heif no disponible (%s); HEIC seguirá con fallback a bytes crudos",
+            exc,
+        )
+
+
 def _build_image_part(file_content: bytes, filename: str, mime: str):
     """
     Convierte bytes en un Part de google.genai.
@@ -392,12 +416,13 @@ def _build_image_part(file_content: bytes, filename: str, mime: str):
     is_pdf = mime == "application/pdf" or filename.lower().endswith(".pdf")
     if is_pdf:
         return _gtypes.Part.from_bytes(data=file_content, mime_type=mime)
+    _ensure_pillow_heif_opener()
     try:
         from PIL import Image as _PIL
         img = _PIL.open(io.BytesIO(file_content))
         buf = io.BytesIO()
         img.save(buf, format="JPEG")
-        logger.warning("[PAGOS_GMAIL] Gemini usando PIL→JPEG para %s", filename)
+        logger.debug("[PAGOS_GMAIL] Gemini PIL→JPEG OK: %s", filename)
         return _gtypes.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
     except Exception as pil_err:
         logger.warning("[PAGOS_GMAIL] PIL falló (%s), bytes crudos para %s", pil_err, filename)

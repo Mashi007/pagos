@@ -126,3 +126,5 @@ gunicorn==23.0.0
 # google-generativeai deprecado — migrado a google-genai (google.genai)
 google-genai>=1.0.0
 Pillow>=10.0.0
+# HEIC/HEIF (iPhone): permite que PIL abra .heic y normalice a JPEG antes de Gemini (fallback a bytes si falla).
+pillow-heif>=0.16.0
