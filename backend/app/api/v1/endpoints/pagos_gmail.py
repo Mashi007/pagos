@@ -31,12 +31,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
-def _is_pipeline_running(db: Session) -> bool:
-    """True si hay una sync en estado running. Solo se ignora si lleva >2h (huérfano por crash)."""
-    # Ventana larga (2 h): evita que un pipeline legítimo deje de contar como "running"
-    # y permita lanzar otro (doble ejecución). Huérfanos por crash se ignoran tras 2 h.
+def _get_blocking_running_sync(db: Session) -> Optional[PagosGmailSync]:
+    """
+    Si hay una sync en estado running reciente (últimas 2 h), devuelve esa fila; si no, None.
+    Ventana 2 h: evita doble ejecución mientras un pipeline legítimo corre; huérfanos por crash
+    dejan de bloquear tras 2 h.
+    """
     cutoff = datetime.utcnow() - timedelta(hours=2)
-    row = db.execute(
+    return db.execute(
         select(PagosGmailSync).where(
             and_(
                 PagosGmailSync.status == "running",
@@ -44,7 +46,11 @@ def _is_pipeline_running(db: Session) -> bool:
             )
         ).limit(1)
     ).scalars().first()
-    return row is not None
+
+
+def _is_pipeline_running(db: Session) -> bool:
+    """True si hay una sync en estado running (misma ventana que _get_blocking_running_sync)."""
+    return _get_blocking_running_sync(db) is not None
 
 
 def _run_pipeline_background(sync_id: int, scan_filter: str = "all") -> None:
@@ -113,10 +119,16 @@ def run_now(
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """
     _ = force
-    if _is_pipeline_running(db):
+    blocking = _get_blocking_running_sync(db)
+    if blocking is not None:
+        started = blocking.started_at.isoformat() if blocking.started_at else "?"
         raise HTTPException(
             status_code=409,
-            detail="Ya hay una sincronización en curso. Espere unos minutos.",
+            detail=(
+                f"Ya hay una sincronización en curso (sync_id={blocking.id}, iniciada={started}). "
+                "Espere a que termine (consulte estado arriba) o, si quedó colgada más de 2 h, podrá iniciar otra. "
+                "Borrar el acumulado (confirmar día) no detiene el proceso en segundo plano."
+            ),
         )
     # Verificar credenciales de forma síncrona (respuesta inmediata si fallan)
     creds = get_pagos_gmail_credentials()
@@ -214,10 +226,20 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
         db.commit()
         deleted = result.rowcount if hasattr(result, "rowcount") else 0
         logger.info("Pagos Gmail confirmar-dia: borrados %d ítems de sheet_name=%s", deleted, sheet_name)
+        run = _get_blocking_running_sync(db)
+        if run is not None:
+            logger.warning(
+                "Pagos Gmail confirmar-dia: datos de fecha borrados pero sigue sync en running "
+                "(sync_id=%s iniciada=%s). run-now puede devolver 409 hasta que termine o pasen 2 h.",
+                run.id,
+                run.started_at.isoformat() if run.started_at else "?",
+            )
         return {
             "confirmado": True,
             "borrados": deleted,
             "mensaje": f"Datos de {sheet_date.strftime('%Y-%m-%d')} borrados ({deleted} filas)." if deleted else f"No había datos para {sheet_date.strftime('%Y-%m-%d')}.",
+            "pipeline_running": run is not None,
+            "blocking_sync_id": run.id if run is not None else None,
         }
     else:
         # Sin fecha: borrar todo el acumulado
@@ -226,10 +248,20 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
         db.commit()
         deleted = result.rowcount if hasattr(result, "rowcount") else 0
         logger.info("Pagos Gmail confirmar-dia: borrados TODOS los ítems (%d)", deleted)
+        run = _get_blocking_running_sync(db)
+        if run is not None:
+            logger.warning(
+                "Pagos Gmail confirmar-dia: acumulado borrado pero sigue sync en running "
+                "(sync_id=%s iniciada=%s). run-now devolverá 409 hasta que termine o pasen 2 h.",
+                run.id,
+                run.started_at.isoformat() if run.started_at else "?",
+            )
         return {
             "confirmado": True,
             "borrados": deleted,
             "mensaje": f"Acumulado completo borrado ({deleted} filas). Listo para el próximo ciclo.",
+            "pipeline_running": run is not None,
+            "blocking_sync_id": run.id if run is not None else None,
         }
 
 

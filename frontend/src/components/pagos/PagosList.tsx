@@ -203,6 +203,12 @@ export function PagosList() {
     try {
       const result = await pagoService.confirmarDiaGmail(true)
       toast.success('Tabla vaciada')
+      if (result.pipeline_running) {
+        toast(
+          'Sigue un proceso Gmail en curso en el servidor. Espere a que termine antes de generar de nuevo o recibirá "sincronización en curso" (409).',
+          { duration: 10000 }
+        )
+      }
       setGmailStatus(null)
       await pagoService.getGmailStatus().then(setGmailStatus)
       setShowVaciarTablaGmail(false)

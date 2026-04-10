@@ -172,6 +172,12 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
 
           if (result.confirmado) {
             toast.success(result.mensaje || 'Información del día borrada.')
+            if (result.pipeline_running) {
+              toast(
+                'Sigue un proceso Gmail en curso. Espere a que termine antes de iniciar otro o verá error 409.',
+                { duration: 10000 }
+              )
+            }
           } else {
             toast(result.mensaje || 'Información del día se mantiene en BD.')
           }

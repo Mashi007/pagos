@@ -948,11 +948,20 @@ class PagoService {
   async confirmarDiaGmail(
     confirmado: boolean,
     fecha?: string
-  ): Promise<{ confirmado: boolean; mensaje: string; borrados?: number }> {
+  ): Promise<{
+    confirmado: boolean
+    mensaje: string
+    borrados?: number
+    /** True si aún hay un pipeline Gmail en BD en estado running (run-now puede dar 409). */
+    pipeline_running?: boolean
+    blocking_sync_id?: number | null
+  }> {
     const res = await apiClient.post<{
       confirmado: boolean
       mensaje: string
       borrados?: number
+      pipeline_running?: boolean
+      blocking_sync_id?: number | null
     }>(
       `${this.baseUrl}/gmail/confirmar-dia`,
 
