@@ -187,8 +187,8 @@ export function CedulasReportarBsPanel({
         </div>
         <CardDescription className="text-sm leading-relaxed text-slate-600">
           Solo las cédulas de esta lista pueden elegir «Bs» en Cobros e
-          Infopagos. Consulte una cédula, revise el registro paginado y, si
-          aplica,{' '}
+          Infopagos. Consulte una cédula, agregue o elimine si corresponde,
+          revise el registro paginado y, si aplica,{' '}
           {showExcelUpload ? (
             <>
               cargue un Excel con columna <strong>cedula</strong> o agregue
@@ -301,109 +301,6 @@ export function CedulasReportarBsPanel({
                 </p>
               ) : null}
             </div>
-          ) : null}
-        </section>
-
-        <section className={sectionClass} aria-labelledby="cedulas-bs-lista">
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                <FileSpreadsheet className="h-4 w-4" strokeWidth={2} />
-              </div>
-              <div>
-                <h2
-                  id="cedulas-bs-lista"
-                  className="text-base font-semibold text-slate-900"
-                >
-                  Registros en el sistema
-                </h2>
-                <p className="mt-0.5 text-sm text-slate-500">
-                  Orden: más reciente primero · {PAGE_SIZE} por página
-                </p>
-              </div>
-            </div>
-          </div>
-          {listaError ? (
-            <div
-              className="rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-800"
-              role="alert"
-            >
-              {listaError}
-            </div>
-          ) : null}
-          {!listaLoading && totalLista === 0 && !listaError ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-12 text-center">
-              <Plus
-                className="mb-3 h-10 w-10 text-slate-300"
-                strokeWidth={1.5}
-                aria-hidden
-              />
-              <p className="text-sm font-medium text-slate-700">
-                No hay cédulas en la lista
-              </p>
-              <p className="mt-1 max-w-sm text-xs text-slate-500">
-                {showExcelUpload
-                  ? 'Agregue una cédula o cargue un Excel para comenzar.'
-                  : 'Agregue una cédula con el formulario de abajo para comenzar.'}
-              </p>
-            </div>
-          ) : null}
-          {listaLoading ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50/40 py-14">
-              <Loader2
-                className="h-8 w-8 animate-spin text-[#1e67eb]"
-                aria-hidden
-              />
-              <p className="mt-3 text-sm font-medium text-slate-600">
-                Cargando lista…
-              </p>
-            </div>
-          ) : null}
-          {!listaLoading && totalLista > 0 ? (
-            <>
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-200 hover:bg-transparent">
-                      <TableHead className="h-11 w-[42%] bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Cédula
-                      </TableHead>
-                      <TableHead className="h-11 bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Fecha de alta
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {listaItems.map((row, idx) => (
-                      <TableRow
-                        key={row.cedula}
-                        className={cn(
-                          'border-slate-100 transition-colors',
-                          idx % 2 === 1 ? 'bg-slate-50/35' : 'bg-white',
-                          'hover:bg-[#1e67eb]/[0.04]'
-                        )}
-                      >
-                        <TableCell className="py-3 font-mono text-sm font-semibold text-slate-900">
-                          {row.cedula}
-                        </TableCell>
-                        <TableCell className="py-3 text-sm text-slate-600">
-                          {formatCreadoEn(row.creado_en)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {totalPagesLista > 0 ? (
-                <ListPaginationBar
-                  className="mt-5"
-                  page={listaPage}
-                  totalPages={totalPagesLista}
-                  onPageChange={setListaPage}
-                  subtitle={`${totalLista} cédula(s) en total`}
-                />
-              ) : null}
-            </>
           ) : null}
         </section>
 
@@ -586,6 +483,109 @@ export function CedulasReportarBsPanel({
                 </Button>
               </div>
             </div>
+          ) : null}
+        </section>
+
+        <section className={sectionClass} aria-labelledby="cedulas-bs-lista">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                <FileSpreadsheet className="h-4 w-4" strokeWidth={2} />
+              </div>
+              <div>
+                <h2
+                  id="cedulas-bs-lista"
+                  className="text-base font-semibold text-slate-900"
+                >
+                  Registros en el sistema
+                </h2>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  Orden: más reciente primero · {PAGE_SIZE} por página
+                </p>
+              </div>
+            </div>
+          </div>
+          {listaError ? (
+            <div
+              className="rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-800"
+              role="alert"
+            >
+              {listaError}
+            </div>
+          ) : null}
+          {!listaLoading && totalLista === 0 && !listaError ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-12 text-center">
+              <Plus
+                className="mb-3 h-10 w-10 text-slate-300"
+                strokeWidth={1.5}
+                aria-hidden
+              />
+              <p className="text-sm font-medium text-slate-700">
+                No hay cédulas en la lista
+              </p>
+              <p className="mt-1 max-w-sm text-xs text-slate-500">
+                {showExcelUpload
+                  ? 'Use «Agregar o eliminar»: Alta o importación Excel.'
+                  : 'Use «Agregar o eliminar» (Alta).'}
+              </p>
+            </div>
+          ) : null}
+          {listaLoading ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50/40 py-14">
+              <Loader2
+                className="h-8 w-8 animate-spin text-[#1e67eb]"
+                aria-hidden
+              />
+              <p className="mt-3 text-sm font-medium text-slate-600">
+                Cargando lista…
+              </p>
+            </div>
+          ) : null}
+          {!listaLoading && totalLista > 0 ? (
+            <>
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-slate-200 hover:bg-transparent">
+                      <TableHead className="h-11 w-[42%] bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        Cédula
+                      </TableHead>
+                      <TableHead className="h-11 bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        Fecha de alta
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {listaItems.map((row, idx) => (
+                      <TableRow
+                        key={row.cedula}
+                        className={cn(
+                          'border-slate-100 transition-colors',
+                          idx % 2 === 1 ? 'bg-slate-50/35' : 'bg-white',
+                          'hover:bg-[#1e67eb]/[0.04]'
+                        )}
+                      >
+                        <TableCell className="py-3 font-mono text-sm font-semibold text-slate-900">
+                          {row.cedula}
+                        </TableCell>
+                        <TableCell className="py-3 text-sm text-slate-600">
+                          {formatCreadoEn(row.creado_en)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {totalPagesLista > 0 ? (
+                <ListPaginationBar
+                  className="mt-5"
+                  page={listaPage}
+                  totalPages={totalPagesLista}
+                  onPageChange={setListaPage}
+                  subtitle={`${totalLista} cédula(s) en total`}
+                />
+              ) : null}
+            </>
           ) : null}
         </section>
       </CardContent>

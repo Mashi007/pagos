@@ -14,8 +14,9 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func
+from sqlalchemy import func, literal
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.expression import false as sql_false
 
 from app.core.config import settings
 from app.core.cobros_public_rate_limit import (
@@ -132,6 +133,28 @@ ESTADOS_VALIDOS = frozenset(
 FECHA_CORTE_ANTIGUO = date(2026, 1, 1)
 MIN_NOTA_ANTIGUO = 15
 CODIGO_EXPIRA_MINUTES = 120
+
+
+def _cedula_portal_token_normalizada(fu: FiniquitoUsuarioAcceso) -> str:
+    """Cedula canonica del colaborador portal (mayusculas, trim). Vacio si no aplica."""
+    return (normalizar_cedula_almacenamiento(fu.cedula) or "").strip()
+
+
+def _query_casos_solo_cedula_portal(q: Any, fu: FiniquitoUsuarioAcceso) -> Any:
+    """Restringe un query de FiniquitoCaso al documento del usuario portal."""
+    ced = _cedula_portal_token_normalizada(fu)
+    if not ced:
+        return q.filter(sql_false())
+    col_doc = func.upper(func.trim(func.coalesce(FiniquitoCaso.cedula, literal(""))))
+    return q.filter(col_doc == ced)
+
+
+def _caso_pertenece_a_portal(fu: FiniquitoUsuarioAcceso, caso: FiniquitoCaso) -> bool:
+    u = _cedula_portal_token_normalizada(fu)
+    if not u:
+        return False
+    c = (normalizar_cedula_almacenamiento(caso.cedula) or "").strip()
+    return c == u
 
 
 def _mask_smtp_user_for_log(user: str) -> str:
@@ -763,7 +786,7 @@ def finiquito_public_listar_casos(
         ),
     ),
     db: Session = Depends(get_db),
-    _: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
+    fu: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
 ):
     b = (bandeja or "").lower().strip()
     if b in ("", "todos", "todas", "all"):
@@ -781,6 +804,7 @@ def finiquito_public_listar_casos(
             status_code=400,
             detail="bandeja debe ser entrada, desk, todos u omitirse",
         )
+    q = _query_casos_solo_cedula_portal(q, fu)
     casos = q.all()
     mp = _map_ultima_fecha_pago_por_prestamo(db, [c.prestamo_id for c in casos])
     flmap = _map_finiquito_tramite_fecha_limite_por_prestamo(
@@ -803,10 +827,10 @@ def finiquito_public_listar_casos(
 def finiquito_public_detalle(
     caso_id: int,
     db: Session = Depends(get_db),
-    _: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
+    fu: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
 ):
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
-    if not caso:
+    if not caso or not _caso_pertenece_a_portal(fu, caso):
         raise HTTPException(status_code=404, detail="Caso no encontrado")
     prestamo = db.query(Prestamo).filter(Prestamo.id == caso.prestamo_id).first()
     cuotas = (
@@ -837,14 +861,14 @@ def finiquito_public_detalle(
 def finiquito_public_revision_datos(
     caso_id: int,
     db: Session = Depends(get_db),
-    _: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
+    fu: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
 ):
     """
     Detalle del caso: préstamo vinculado (campos ampliados), plan de cuotas,
     listado /prestamos por cédula y /pagos por cédula (todos los pagos, tope 100 por API).
     """
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
-    if not caso:
+    if not caso or not _caso_pertenece_a_portal(fu, caso):
         raise HTTPException(status_code=404, detail="Caso no encontrado")
     cedula = (caso.cedula or "").strip()
     if not cedula:

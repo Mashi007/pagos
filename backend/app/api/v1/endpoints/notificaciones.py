@@ -1228,6 +1228,7 @@ def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
     Inicia el envio de todas las notificaciones en segundo plano.
     Responde 202 de inmediato para evitar timeout (el envio puede tardar muchos minutos).
     Respeta la configuracion guardada (modo_pruebas, email_pruebas, habilitado por tipo).
+    No existe cron ni tarea oculta que llame a este endpoint: solo se ejecuta cuando alguien hace POST explicito.
     """
     background_tasks.add_task(_tarea_envio_todas_notificaciones)
     return JSONResponse(

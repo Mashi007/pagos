@@ -466,48 +466,18 @@ def eliminar_campana(campana_id: int, db: Session = Depends(get_db)):
 def programar_campana(
     campana_id: int,
     payload: CampanaProgramarBody,
-    db: Session = Depends(get_db),
 ):
     """
-    Programa envíos recurrentes: cada X días y/o cada X horas.
-    Solo permitido si la campaña está en borrador. La primera ejecución la dispara el scheduler.
+    Deshabilitado a propósito: no hay envíos CRM recurrentes por reloj en el producto.
+    Los correos de campaña solo se disparan con POST /{id}/iniciar-envio (manual).
     """
-    row = db.get(CampanaCrm, campana_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Campaña no encontrada")
-    if row.estado != "borrador":
-        raise HTTPException(
-            status_code=400,
-            detail="Solo se puede programar una campaña en borrador",
-        )
-    if row.total_destinatarios == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="No hay destinatarios. Añade destinatarios antes de programar.",
-        )
-    dias = (payload.cada_dias or 0) if payload.cada_dias is not None else 0
-    horas = (payload.cada_horas or 0) if payload.cada_horas is not None else 0
-    if not dias and not horas:
-        raise HTTPException(
-            status_code=400,
-            detail="Indica al menos cada cuántos días o cada cuántas horas se enviará",
-        )
-    row.programado_cada_dias = dias if dias else None
-    row.programado_cada_horas = horas if horas else None
-    delta = timedelta(days=dias, hours=horas)
-    row.programado_proxima_ejecucion = datetime.utcnow() + delta
-    row.estado = "programada"
-    db.commit()
-    desc = []
-    if dias:
-        desc.append(f"cada {dias} día(s)")
-    if horas:
-        desc.append(f"cada {horas} hora(s)")
-    return {
-        "success": True,
-        "mensaje": f"Campaña programada para enviar {' y '.join(desc)}. La próxima ejecución será en el momento indicado.",
-        "programado_proxima_ejecucion": row.programado_proxima_ejecucion.isoformat() if row.programado_proxima_ejecucion else None,
-    }
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "La programación automática por fecha u hora está deshabilitada. "
+            "No existe proceso oculto que envíe campañas solas; use «iniciar envío» manualmente cuando corresponda."
+        ),
+    )
 
 
 @router.post("/{campana_id}/iniciar-envio", response_model=dict)
@@ -546,8 +516,8 @@ def iniciar_envio(
 
 def ejecutar_campanas_programadas() -> None:
     """
-    Llamado por el scheduler cada minuto. Ejecuta campañas en estado programada
-    cuya programado_proxima_ejecucion ya llegó.
+    No utilizado: el producto no registra ningún job que llame a esta función.
+    Las campañas no se envían por horario; POST /programar responde 501.
     """
     db = SessionLocal()
     try:

@@ -56,3 +56,28 @@ export const PERIODOS_ETIQUETAS: Record<string, string> = {
 export function getPeriodoEtiqueta(periodo: string): string {
   return PERIODOS_ETIQUETAS[periodo] ?? 'Ultimos 12 meses'
 }
+
+/** Título del gráfico de bandas de financiamiento (menú dashboard). */
+export const FINANCIAMIENTO_BANDAS_GRAFICO_TITULO =
+  'Distribuci\u00F3n por bandas ($300, desde $500 hasta $4.000)'
+
+/**
+ * Orden del eje Y (arriba mayor banda). Debe coincidir con `categoria` de
+ * GET /api/v1/dashboard/financiamiento-por-rangos (backend `utils._rangos_financiamiento`).
+ */
+export const FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS: readonly string[] = [
+  'M\u00E1s de $4,000',
+  '$3,800 - $4,000',
+  '$3,500 - $3,800',
+  '$3,200 - $3,500',
+  '$2,900 - $3,200',
+  '$2,600 - $2,900',
+  '$2,300 - $2,600',
+  '$2,000 - $2,300',
+  '$1,700 - $2,000',
+  '$1,400 - $1,700',
+  '$1,100 - $1,400',
+  '$800 - $1,100',
+  '$500 - $800',
+  'Menos de $500',
+]

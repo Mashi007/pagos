@@ -29,8 +29,9 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Si True, el proceso lider puede iniciar APScheduler (finiquito, auditoria cartera, limpieza codigos, "
-            "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard "
-            "y watcher de lider. Por defecto False: ejecucion manual desde la aplicacion."
+            "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
+            "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
+            "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
     )
     

@@ -70,7 +70,12 @@ import {
   type DashboardFiltros,
 } from '../hooks/useDashboardFiltros'
 
-import { getPeriodoEtiqueta, PERIODOS_VALORES } from '../constants/dashboard'
+import {
+  FINANCIAMIENTO_BANDAS_GRAFICO_TITULO,
+  FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS,
+  getPeriodoEtiqueta,
+  PERIODOS_VALORES,
+} from '../constants/dashboard'
 
 import type {
   KpisPrincipalesResponse,
@@ -973,22 +978,7 @@ export function DashboardMenu() {
 
       // Eje Y: arriba mayor banda, abajo "Menos de $500" (Recharts: primera fila = arriba)
 
-      const ordenPrioridadMayorArriba = [
-        'Más de $4,000',
-        '$3,800 - $4,000',
-        '$3,500 - $3,800',
-        '$3,200 - $3,500',
-        '$2,900 - $3,200',
-        '$2,600 - $2,900',
-        '$2,300 - $2,600',
-        '$2,000 - $2,300',
-        '$1,700 - $2,000',
-        '$1,400 - $1,700',
-        '$1,100 - $1,400',
-        '$800 - $1,100',
-        '$500 - $800',
-        'Menos de $500',
-      ]
+      const ordenPrioridadMayorArriba = [...FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS]
 
       return [...datosFinanciamientoRangos.rangos]
 
@@ -2021,9 +2011,7 @@ export function DashboardMenu() {
                   <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                     <BarChart3 className="h-5 w-5 text-indigo-600" />
 
-                    <span>
-                      Distribución por bandas ($300, desde $500 hasta $4.000)
-                    </span>
+                    <span>{FINANCIAMIENTO_BANDAS_GRAFICO_TITULO}</span>
                   </CardTitle>
 
                   <div className="flex items-center gap-2">
@@ -2037,6 +2025,17 @@ export function DashboardMenu() {
                     </Badge>
                   </div>
                 </div>
+
+                <CardDescription className="px-6 pb-1 pt-0 text-xs text-gray-600">
+                  Clasificación en el gráfico: tramos de{' '}
+                  <strong>USD 300</strong> desde <strong>500</strong> hasta{' '}
+                  <strong>4.000</strong>, más categorías Menos de $500 y Más de
+                  $4.000 (misma lógica que el endpoint{' '}
+                  <code className="rounded bg-gray-100 px-1 py-0.5 text-[10px]">
+                    /api/v1/dashboard/financiamiento-por-rangos
+                  </code>
+                  ).
+                </CardDescription>
               </CardHeader>
 
               <CardContent className="flex-1 p-6">

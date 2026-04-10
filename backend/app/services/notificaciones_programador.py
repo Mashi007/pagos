@@ -2,8 +2,9 @@
 """
 Campos legacy `programador` en notificaciones_envios: parseo y normalizacion al guardar (PUT).
 
-Los envios son solo manuales (POST desde la UI/API). No hay ejecucion periodica ni por hora
-asociada a este modulo. Zona horaria de referencia en datos: America/Caracas (donde aplique).
+El valor `programador` (hora en JSON) es solo metadato / compatibilidad con la UI: ningun job del
+servidor lee esa hora para enviar correos. Los envios de mora son solo manuales (POST desde la UI).
+No hay ejecucion periodica de notificaciones por hora en este modulo. Zona America/Caracas donde aplique.
 """
 from __future__ import annotations
 

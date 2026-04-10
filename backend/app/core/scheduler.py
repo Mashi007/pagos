@@ -117,7 +117,7 @@ def _job_pagos_gmail_pending_scan() -> None:
 
     from sqlalchemy import and_, select
 
-    if not getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", True):
+    if not getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
         return
     db = SessionLocal()
     try:
@@ -172,7 +172,7 @@ def start_scheduler() -> None:
         name="Limpiar cÃ³digos estado de cuenta 4:00",
     )
     _gmail_log = ""
-    if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", True):
+    if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
         for _h, _jid, _label in (
             (4, "pagos_gmail_pending_scan_0400", "4:00"),
             (11, "pagos_gmail_pending_scan_1100", "11:00"),
@@ -191,7 +191,7 @@ def start_scheduler() -> None:
         _gmail_log,
         SCHEDULER_TZ,
     )
-    if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", True):
+    if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
         for _gjid in (
             "pagos_gmail_pending_scan_0400",
             "pagos_gmail_pending_scan_1100",

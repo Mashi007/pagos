@@ -1,6 +1,7 @@
 """
 Endpoints y lógica de cobranzas (reportes de cuotas vencidas, clientes atrasados).
-Usado por el scheduler a las 1:00 y 13:00 para actualizar resumen de reportes.
+Solo se refresca en automatico si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true (worker de cache dashboard 1:00/13:00).
+Sin ese flag, no hay actualizacion programada desde el servidor.
 """
 from datetime import date
 
@@ -14,7 +15,8 @@ from app.models.prestamo import Prestamo
 def ejecutar_actualizacion_reportes(db: Session) -> dict:
     """
     Actualiza resumen de cobranzas: cuotas vencidas, monto adeudado, clientes atrasados.
-    Usado por el scheduler a las 1:00 y 13:00. Datos reales desde BD.
+    Invocado solo por el worker de cache del dashboard si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true (1:00/13:00).
+    Datos reales desde BD.
     """
     hoy = date.today()
     # Cuotas impagas con vencimiento <= hoy

@@ -404,6 +404,35 @@ def on_startup():
             logger.info("Scheduler de actualizacion a LIQUIDADO iniciado (9 PM diariamente)")
         except Exception as e:
             logger.warning("No se pudo iniciar el scheduler de LIQUIDADO: %s", e)
+
+        # Limpiar syncs de Gmail en "running" tras SIGTERM/deploy (desbloquea run-now manual).
+        # Mismo flag que el resto de tareas en segundo plano: sin el, no se toca la BD al arrancar.
+        try:
+            from app.core.database import SessionLocal
+            from app.models.pagos_gmail_sync import PagosGmailSync
+            from sqlalchemy import update as sa_update
+
+            db_startup = SessionLocal()
+            try:
+                result = db_startup.execute(
+                    sa_update(PagosGmailSync)
+                    .where(PagosGmailSync.status == "running")
+                    .values(
+                        status="error",
+                        finished_at=datetime.now(timezone.utc),
+                        error_message="Reinicio del servidor (SIGTERM) mientras el pipeline estaba en curso.",
+                    )
+                )
+                if result.rowcount:
+                    logger.warning(
+                        "[PAGOS_GMAIL] %d sync(s) en estado 'running' marcadas como 'error' al reiniciar (SIGTERM durante despliegue).",
+                        result.rowcount,
+                    )
+                db_startup.commit()
+            finally:
+                db_startup.close()
+        except Exception as e:
+            logger.warning("[PAGOS_GMAIL] No se pudieron limpiar syncs huerfanas al iniciar: %s", e)
     else:
         logger.info(
             "Tareas programadas en segundo plano deshabilitadas (ENABLE_AUTOMATIC_SCHEDULED_JOBS=false). "
@@ -412,34 +441,10 @@ def on_startup():
             "Para activar cron de servidor, ponga ENABLE_AUTOMATIC_SCHEDULED_JOBS=true en el entorno."
         )
         app.state._scheduler_leader = False
-
-    # Limpiar syncs de Gmail que quedaron en estado "running" tras un reinicio inesperado (SIGTERM/deploy).
-    # Si no se limpian, _is_pipeline_running bloquea nuevas ejecuciones.
-    try:
-        from app.core.database import SessionLocal
-        from app.models.pagos_gmail_sync import PagosGmailSync
-        from sqlalchemy import update as sa_update
-        db_startup = SessionLocal()
-        try:
-            result = db_startup.execute(
-                sa_update(PagosGmailSync)
-                .where(PagosGmailSync.status == "running")
-                .values(
-                    status="error",
-                    finished_at=datetime.now(timezone.utc),
-                    error_message="Reinicio del servidor (SIGTERM) mientras el pipeline estaba en curso.",
-                )
-            )
-            if result.rowcount:
-                logger.warning(
-                    "[PAGOS_GMAIL] %d sync(s) en estado 'running' marcadas como 'error' al reiniciar (SIGTERM durante despliegue).",
-                    result.rowcount,
-                )
-            db_startup.commit()
-        finally:
-            db_startup.close()
-    except Exception as e:
-        logger.warning("[PAGOS_GMAIL] No se pudieron limpiar syncs huerfanas al iniciar: %s", e)
+        logger.info(
+            "[PAGOS_GMAIL] Limpieza de syncs 'running' al arranque omitida (ENABLE_AUTOMATIC_SCHEDULED_JOBS=false). "
+            "Si un deploy dejo el pipeline bloqueado, active el flag temporalmente y reinicie, o corrija el registro en BD."
+        )
 
 
 @app.on_event("shutdown")

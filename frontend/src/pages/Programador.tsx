@@ -160,7 +160,8 @@ export function Programador() {
 
     staleTime: 30 * 1000, // 30 segundos
 
-    refetchInterval: 15 * 60 * 1000, // Alineado con envío notificaciones cada 15 min
+    // Solo refresco manual o al volver a la pestaña; no implica envio de notificaciones.
+    refetchOnWindowFocus: true,
   })
 
   const tareas = tareasData?.tareas || []
