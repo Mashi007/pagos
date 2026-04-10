@@ -279,8 +279,8 @@ class Settings(BaseSettings):
     PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED: bool = Field(
         default=True,
         description=(
-            "Si True, el scheduler ejecuta el pipeline pending_identification a las 4:00, 11:00 y 20:00 "
-            "(America/Caracas): inbox con adjunto, sin estrella, sin etiquetas IMAGEN 1/2/3."
+            "Si True, el scheduler ejecuta el pipeline (pending_identification = mismo listado que all) "
+            "a las 4:00, 11:00 y 20:00 (America/Caracas): inbox con imagen/PDF, sin filtrar por leido, estrella ni etiquetas."
         ),
     )
     PAGOS_GMAIL_UNREAD_MAX_PASSES: int = Field(

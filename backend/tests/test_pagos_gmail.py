@@ -370,6 +370,16 @@ def test_pagos_gmail_list_q_media_parts_incluye_filename():
     assert "filename:png" in q
 
 
+def test_pagos_gmail_inbox_media_query_incluye_todo_sin_filtrar_estrella_ni_etiquetas():
+    from app.services.pagos_gmail.gmail_service import pagos_gmail_inbox_media_query
+
+    q = pagos_gmail_inbox_media_query()
+    assert "in:inbox" in q
+    assert "has:attachment" in q or "filename:png" in q
+    assert "-is:starred" not in q
+    assert "-label:" not in q
+
+
 def test_sort_messages_by_date_asc_mas_antiguo_primero():
     from app.services.pagos_gmail.pipeline import _sort_messages_by_date_asc
 

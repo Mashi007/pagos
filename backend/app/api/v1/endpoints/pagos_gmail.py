@@ -2,7 +2,7 @@
 Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
 Solo correos con adjuntos (has:attachment); imagen/PDF desde cuerpo incrustado, adjuntos o .eml rfc822 (deduplicado).
 Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD/Drive; por cada OK: etiqueta IMAGEN 1/2/3 + estrella.
-Si ningun adjunto OK: sin estrella + no leido (solo con filtro unread).
+Si ningun adjunto OK: sin estrella + no leido cuando hay candidatos imagen/PDF.
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD)
 - GET /pagos/gmail/status: ultima ejecucion; escaneo automatico cada N h (solo pending_identification) si esta habilitado en settings
@@ -79,8 +79,7 @@ def count_pending(
     El frontend puede mostrar "Se procesaran N correos. Iniciar? Si / No" y solo llamar
     POST /run-now si el usuario confirma (Si = inicia, No = no hace nada).
     scan_filter: "unread" | "read" | "all" | "pending_identification" (mismo que run-now; por defecto all).
-    unread/read/all listan los mismos hilos (inbox + imagen/PDF, leidos y no leidos).
-    Excluye correos con etiquetas de clasificacion del pipeline (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL/MANUAL; legado IMAGEN 5).
+    unread/read/all/pending_identification listan los mismos hilos: inbox + imagen/PDF (leidos y no leidos, estrella o no, cualquier etiqueta).
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
@@ -108,9 +107,8 @@ def run_now(
     Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
     scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto all).
-    Listado: inbox con imagen/PDF, leidos y no leidos (unread/read/all equivalentes); sin ya etiquetados (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL/MANUAL; legado IMAGEN 5).
+    Listado: inbox con imagen/PDF — leidos y no leidos, con o sin estrella, con cualquier etiqueta (todos los valores de scan_filter usan el mismo criterio q).
     Procesamiento en orden de fecha del correo: mas antiguo primero, mas reciente al final.
-    pending_identification: ademas sin estrella (cola de pendientes).
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """

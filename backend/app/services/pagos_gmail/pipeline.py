@@ -157,9 +157,8 @@ def run_pipeline(
     Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
     Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D) + estrella; cierre: leido si hubo algun OK.
     scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto API/UI: all).
-      "unread", "read" y "all" listan lo mismo: inbox con imagen/PDF, leidos y no leidos (sin distincion).
-      Listado excluye correos ya etiquetados MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL/MANUAL (no reescanear).
-      pending_identification: ademas sin estrella.
+      Todos listan lo mismo en Gmail (q): inbox con imagen/PDF — leidos y no leidos, con o sin estrella, con cualquier etiqueta.
+      pending_identification es alias del mismo listado (nombre conservado para scheduler/API).
     Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
     Los mensajes de cada lote se ordenan por fecha del correo de mas antiguo a mas reciente antes de procesar.
     Una sola pasada de listado+proceso por ejecucion (salvo reintentos manuales).
