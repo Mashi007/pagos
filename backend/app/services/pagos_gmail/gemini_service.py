@@ -407,6 +407,38 @@ def _ensure_pillow_heif_opener() -> None:
         )
 
 
+def _pil_image_to_rgb_for_jpeg(img):
+    """
+    JPEG no admite canal alpha. RGBA/LA o paleta con transparencia se componen sobre blanco.
+    CMYK y otros modos se llevan a RGB para evitar errores al guardar.
+    """
+    from PIL import Image as _PIL
+
+    if img.mode == "RGBA":
+        bg = _PIL.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[3])
+        return bg
+    if img.mode == "LA":
+        img = img.convert("RGBA")
+        bg = _PIL.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[3])
+        return bg
+    if img.mode == "P":
+        if "transparency" in img.info:
+            img = img.convert("RGBA")
+            bg = _PIL.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img, mask=img.split()[3])
+            return bg
+        return img.convert("RGB")
+    if img.mode == "CMYK":
+        return img.convert("RGB")
+    if img.mode == "L":
+        return img
+    if img.mode != "RGB":
+        return img.convert("RGB")
+    return img
+
+
 def _build_image_part(file_content: bytes, filename: str, mime: str):
     """
     Convierte bytes en un Part de google.genai.
@@ -419,9 +451,16 @@ def _build_image_part(file_content: bytes, filename: str, mime: str):
     _ensure_pillow_heif_opener()
     try:
         from PIL import Image as _PIL
+        from PIL import ImageOps
+
         img = _PIL.open(io.BytesIO(file_content))
+        try:
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+        img = _pil_image_to_rgb_for_jpeg(img)
         buf = io.BytesIO()
-        img.save(buf, format="JPEG")
+        img.save(buf, format="JPEG", quality=92, optimize=True)
         logger.debug("[PAGOS_GMAIL] Gemini PIL→JPEG OK: %s", filename)
         return _gtypes.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
     except Exception as pil_err:

@@ -74,11 +74,14 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         request_id = response.headers.get("X-Request-ID") or request_id
         msg = "request method=%s path=%s status=%s elapsed_ms=%s request_id=%s client_ip=%s"
 
-        # run-now puede tardar 20-120 s; no marcar como slow
-        is_run_now = "gmail/run-now" in path
+        # run-now y cobros público (Gemini + SMTP) suelen superar 5 s; no marcar como slow
+        is_long_job_path = (
+            "gmail/run-now" in path
+            or "cobros/public/enviar-reporte" in path
+        )
         if status >= 500:
             logger.warning(msg + " (error)", request.method, path, status, elapsed_ms, request_id, client_ip)
-        elif not is_run_now and elapsed_ms >= 5000:
+        elif not is_long_job_path and elapsed_ms >= 5000:
             logger.warning(msg + " (slow)", request.method, path, status, elapsed_ms, request_id, client_ip)
         elif request.method == "POST" and path.rstrip("/").endswith("/api/v1/pagos") and status == 409:
             # 409 documento duplicado en carga masiva: muchos por lote; solo DEBUG para no saturar logs
