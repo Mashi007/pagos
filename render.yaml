@@ -29,7 +29,8 @@
     # graceful-timeout: tiempo para que los workers terminen peticiones al recibir SIGTERM
     # (reduce "Error while closing socket [Errno 9] Bad file descriptor" en shutdown)
     # 1 worker: menos RAM y un solo startup BD (workers>1 duplican import ML + on_startup; deploy Render suele timeout ~15m).
-    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 180 --graceful-timeout 45 --worker-class uvicorn.workers.UvicornWorker
+    # timeout: envíos masivos de notificaciones (p. ej. «2 días antes») superan fácil 180s; el frontend usa 15 min en axios/proxy.
+    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-timeout 60 --worker-class uvicorn.workers.UvicornWorker
     rootDir: backend
     # /health responde sin BD; /health/db puede marcar 503 si Postgres aun no acepta conexiones.
     healthCheckPath: /health

@@ -201,9 +201,20 @@ if (API_URL) {
         proxyReq.setHeader('Cookie', req.headers.cookie);
       }
 
-      // Configurar timeout: 3 min para exportar reportes (morosidad, cartera, etc. con mucho dato), 60s resto
-      const isExportReport = (proxyReq.path || '').includes('/exportar/');
-      proxyReq.setTimeout(isExportReport ? 180000 : 60000);
+      // Timeout saliente hacia el backend: envíos masivos de notificaciones y exportaciones pueden superar 1–3 min.
+      // Debe alinearse con TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL (15 min) en notificacionService.ts.
+      const p = proxyReq.path || '';
+      const isExportReport = p.includes('/exportar/');
+      const isNotificacionesLote =
+        p.includes('/notificaciones/enviar-caso-manual') ||
+        p.includes('/notificaciones/enviar-todas');
+      let proxyTimeoutMs = 60000;
+      if (isExportReport) {
+        proxyTimeoutMs = 180000;
+      } else if (isNotificacionesLote) {
+        proxyTimeoutMs = 900000;
+      }
+      proxyReq.setTimeout(proxyTimeoutMs);
     },
     onProxyRes: (proxyRes, req, res) => {
       const status = proxyRes.statusCode;
