@@ -960,7 +960,7 @@ export function DashboardMenu() {
     iconSize: 12,
   }
 
-  // Bandas desde backend: cada $400 hasta $2.000 + cola (cantidad de préstamos por banda)
+  // Bandas desde backend: pasos de $300 desde $500 hasta $4.000 + colas (alineado con API)
 
   const datosBandasFinanciamiento = useMemo(() => {
     try {
@@ -971,24 +971,38 @@ export function DashboardMenu() {
         return []
       }
 
-      // Eje Y: arriba mayor banda, abajo $0-$400 (Recharts: primera fila del data = arriba)
+      // Eje Y: arriba mayor banda, abajo "Menos de $500" (Recharts: primera fila = arriba)
 
       const ordenPrioridadMayorArriba = [
-        'Más de $2,000',
-        '$1,600 - $2,000',
-        '$1,200 - $1,600',
-        '$800 - $1,200',
-        '$400 - $800',
-        '$0 - $400',
+        'Más de $4,000',
+        '$3,800 - $4,000',
+        '$3,500 - $3,800',
+        '$3,200 - $3,500',
+        '$2,900 - $3,200',
+        '$2,600 - $2,900',
+        '$2,300 - $2,600',
+        '$2,000 - $2,300',
+        '$1,700 - $2,000',
+        '$1,400 - $1,700',
+        '$1,100 - $1,400',
+        '$800 - $1,100',
+        '$500 - $800',
+        'Menos de $500',
       ]
 
       return [...datosFinanciamientoRangos.rangos]
 
-        .sort(
-          (a, b) =>
-            ordenPrioridadMayorArriba.indexOf(a.categoria) -
-            ordenPrioridadMayorArriba.indexOf(b.categoria)
-        )
+        .sort((a, b) => {
+          const ia = ordenPrioridadMayorArriba.indexOf(a.categoria)
+
+          const ib = ordenPrioridadMayorArriba.indexOf(b.categoria)
+
+          const sa = ia === -1 ? 999 : ia
+
+          const sb = ib === -1 ? 999 : ib
+
+          return sa - sb
+        })
 
         .map(r => ({
           ...r,
@@ -1994,7 +2008,7 @@ export function DashboardMenu() {
             </>
           ) : null}
 
-          {/* GRÁFICO DE BANDAS DE $400 USD */}
+          {/* GRÁFICO DE BANDAS (financiamiento, pasos $300 desde $500 hasta $4.000) */}
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -2007,7 +2021,9 @@ export function DashboardMenu() {
                   <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                     <BarChart3 className="h-5 w-5 text-indigo-600" />
 
-                    <span>Distribución por Bandas de $400 USD</span>
+                    <span>
+                      Distribución por bandas ($300, desde $500 hasta $4.000)
+                    </span>
                   </CardTitle>
 
                   <div className="flex items-center gap-2">
@@ -2029,14 +2045,14 @@ export function DashboardMenu() {
                   <ChartWithDateRangeSlider
                     data={datosBandasFinanciamiento}
                     dataKey="categoriaFormateada"
-                    chartHeight={450}
+                    chartHeight={560}
                   >
                     {filteredData => (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                           data={filteredData}
                           layout="vertical"
-                          margin={{ top: 14, right: 24, left: 120, bottom: 24 }}
+                          margin={{ top: 14, right: 24, left: 132, bottom: 24 }}
                         >
                           <CartesianGrid {...chartCartesianGrid} />
 
@@ -2064,9 +2080,9 @@ export function DashboardMenu() {
                           <YAxis
                             type="category"
                             dataKey="categoriaFormateada"
-                            width={115}
+                            width={128}
                             tick={{
-                              fontSize: 11,
+                              fontSize: 10,
                               fill: '#4b5563',
                               fontWeight: 500,
                             }}

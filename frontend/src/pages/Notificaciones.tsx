@@ -74,8 +74,8 @@ import { isRequestCanceled } from '../utils/requestCanceled'
 
 import { getErrorMessage, isAxiosTimeoutError } from '../types/errors'
 
-/** Máximo de filas (clientes) por página en cada pestaña de listado de notificaciones. */
-const NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA = 50
+/** Máximo de filas (clientes / casos) por página en cada pestaña de listado de notificaciones. */
+const NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA = 10
 
 /** Fecha calendario actual en America/Caracas como YYYY-MM-DD (para max en input date). */
 function fechaHoyCaracasISO(): string {
@@ -1932,24 +1932,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               {confirmEnvio?.kind === 'prejudicial' ? (
                 <p>
                   {confirmEnvio.n === 0
-                    ? 'No hay filas en pantalla. El servidor procesará la lista prejudicial actual (puede estar vacía).'
-                    : `Envío al caso PREJUDICIAL (${confirmEnvio.n} filas visibles; el servidor usa la misma regla). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                    ? 'No hay casos en la lista cargada. El servidor procesará la lista prejudicial actual (puede estar vacía).'
+                    : `Envío al caso PREJUDICIAL (${confirmEnvio.n} casos en la lista completa; el servidor usa la misma regla, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
                 </p>
               ) : null}
 
               {confirmEnvio?.kind === 'd2antes' ? (
                 <p>
                   {confirmEnvio.n === 0
-                    ? 'No hay filas en pantalla. El servidor procesará PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía).'
-                    : `Envío para 2 días antes (${confirmEnvio.n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                    ? 'No hay casos en la lista cargada. El servidor procesará PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía).'
+                    : `Envío para 2 días antes (${confirmEnvio.n} casos en la lista completa; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
                 </p>
               ) : null}
 
               {confirmEnvio?.kind === 'pago1dia' ? (
                 <p>
                   {confirmEnvio.n === 0
-                    ? 'No hay filas en pantalla. El servidor procesará el criterio «día siguiente al vencimiento» (puede estar vacía).'
-                    : `Envío para día siguiente al vencimiento (${confirmEnvio.n} filas visibles; mismo criterio en servidor). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                    ? 'No hay casos en la lista cargada. El servidor procesará el criterio «día siguiente al vencimiento» (puede estar vacía).'
+                    : `Envío para día siguiente al vencimiento (${confirmEnvio.n} casos en la lista completa; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
                 </p>
               ) : null}
 

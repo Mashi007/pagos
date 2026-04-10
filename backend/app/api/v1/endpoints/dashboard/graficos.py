@@ -57,6 +57,7 @@ from .utils import (
     _meses_desde_rango,
     _ultimo_dia_del_mes,
     _parse_fechas_concesionario,
+    _case_total_financiamiento_rango_idx,
     _rangos_financiamiento,
 )
 
@@ -145,16 +146,8 @@ def _compute_financiamiento_por_rangos(
                 pass
 
         rangos_def = _rangos_financiamiento()
-        # Una consulta: cuenta por rango con CASE (rango 0..5, bandas de $400)
         tf = Prestamo.total_financiamiento
-        case_rango = case(
-            (tf < 400, 0),
-            (tf < 800, 1),
-            (tf < 1200, 2),
-            (tf < 1600, 3),
-            (tf < 2000, 4),
-            else_=5,
-        )
+        case_rango = _case_total_financiamiento_rango_idx(tf)
         q = (
             select(case_rango.label("rango_idx"), func.count().label("n"))
             .select_from(Prestamo)
@@ -188,14 +181,8 @@ def _compute_financiamiento_por_rangos(
         }
     except Exception as e:
         logger.exception("Error en financiamiento-por-rangos: %s", e)
-        rangos = [
-            ("$0 - $400", 0),
-            ("$400 - $800", 0),
-            ("$800 - $1,200", 0),
-            ("$1,200 - $1,600", 0),
-            ("$1,600 - $2,000", 0),
-            ("Más de $2,000", 0),
-        ]
+        rangos_def_fb = _rangos_financiamiento()
+        rangos = [(t[2], 0) for t in rangos_def_fb]
         total_p = max(1, sum(r[1] for r in rangos))
         return {
             "rangos": [

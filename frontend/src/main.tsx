@@ -90,22 +90,30 @@ if (!rootElement) {
             <App />
 
             <SonnerToaster
-              position="top-center"
+              position="top-right"
               richColors
               closeButton
+              expand={false}
+              gap={10}
+              offset={16}
               toastOptions={{
+                duration: TOAST_DURATION_MS,
                 style: {
-                  minWidth: 380,
-                  padding: '18px 22px',
-                  fontSize: '1.05rem',
+                  minWidth: 0,
+                  width: '100%',
+                  padding: '14px 16px',
+                  fontSize: '0.9375rem',
+                  lineHeight: 1.45,
+                  borderRadius: 14,
                 },
               }}
             />
 
             <Toaster
-              position="top-center"
-              containerClassName="toast-container-center toast-container-viewport-center"
+              position="top-right"
+              containerClassName="toast-container-top-right"
               containerStyle={{ zIndex: 9999 }}
+              gutter={10}
               toastOptions={{
                 duration: TOAST_DURATION_MS,
 
@@ -116,18 +124,33 @@ if (!rootElement) {
 
                   border: '1px solid hsl(var(--border))',
 
-                  boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                  boxShadow:
+                    '0 10px 38px -10px rgba(0, 0, 0, 0.12), 0 4px 14px -4px rgba(0, 0, 0, 0.08)',
 
-                  minWidth: 360,
+                  minWidth: 0,
 
-                  maxWidth: 560,
+                  maxWidth: 420,
 
-                  padding: '18px 22px',
+                  width: 'min(420px, calc(100vw - 24px))',
 
-                  fontSize: '1.05rem',
+                  padding: '14px 16px',
+
+                  fontSize: '0.9375rem',
+
+                  lineHeight: 1.45,
+
+                  borderRadius: 14,
                 },
 
                 success: {
+                  style: {
+                    background: '#f0fdf4',
+
+                    color: '#14532d',
+
+                    border: '1px solid #bbf7d0',
+                  },
+
                   iconTheme: {
                     primary: `hsl(${SUCCESS_COLOR_HUE} ${SUCCESS_COLOR_SATURATION}% ${SUCCESS_COLOR_LIGHTNESS}%)`,
 
@@ -136,6 +159,14 @@ if (!rootElement) {
                 },
 
                 error: {
+                  style: {
+                    background: '#fef2f2',
+
+                    color: '#7f1d1d',
+
+                    border: '1px solid #fecaca',
+                  },
+
                   iconTheme: {
                     primary: `hsl(${ERROR_COLOR_HUE} ${ERROR_COLOR_SATURATION}% ${ERROR_COLOR_LIGHTNESS}%)`,
 

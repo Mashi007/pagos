@@ -7,7 +7,7 @@ import threading
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import aliased
 
 from app.models.modelo_vehiculo import ModeloVehiculo
@@ -293,13 +293,35 @@ def _modelo_label_dashboard_expr(producto_expr, *, incluir_sin_modelo: bool = Fa
     return func.coalesce(*parts)
 
 
+def _label_rango_financiamiento_usd(lo: int, hi: int) -> str:
+    """Etiqueta tipo $1,100 - $1,400 (separador miles con coma, coherente con el dashboard)."""
+    return f"${lo:,} - ${hi:,}"
+
+
 def _rangos_financiamiento():
-    """Bandas por total_financiamiento (tabla prestamos), cada $400 hasta $2,000 y cola abierta."""
-    return [
-        (0, 400, "$0 - $400"),
-        (400, 800, "$400 - $800"),
-        (800, 1200, "$800 - $1,200"),
-        (1200, 1600, "$1,200 - $1,600"),
-        (1600, 2000, "$1,600 - $2,000"),
-        (2000, 999999999, "Más de $2,000"),
-    ]
+    """
+    Bandas por total_financiamiento (préstamos APROBADO): pasos de $300 desde $500 hasta $4.000,
+    más 'Menos de $500' y 'Más de $4,000'. El tramo $3,800 - $4,000 cierra hasta 4.000 (ancho 200).
+    """
+    rows: list[tuple[int, int, str]] = []
+    rows.append((0, 500, "Menos de $500"))
+    for lo in range(500, 3800, 300):
+        hi = lo + 300
+        rows.append((lo, hi, _label_rango_financiamiento_usd(lo, hi)))
+    rows.append((3800, 4000, _label_rango_financiamiento_usd(3800, 4000)))
+    rows.append((4000, 999999999, "Más de $4,000"))
+    return rows
+
+
+def _case_total_financiamiento_rango_idx(tf):
+    """
+    CASE alineado con el orden de _rangos_financiamiento() (índices 0..n-1).
+    Primera condición que cumpla gana (equivalente a intervalos [lo, hi) encadenados).
+    """
+    whens: list = [(tf < 500, 0)]
+    idx = 1
+    for _hi in range(800, 3801, 300):
+        whens.append((tf < _hi, idx))
+        idx += 1
+    whens.append((tf < 4000, idx))
+    return case(*whens, else_=idx + 1)

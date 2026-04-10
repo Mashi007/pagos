@@ -234,43 +234,42 @@
   background-color: #2563eb;
 }
 
-/* Notificaciones (toasts) más grandes, centradas en la pantalla (mitad vertical y horizontal) */
-/* Sonner */
+/* Toasts: esquina superior derecha (no bloquean el centro de la vista) */
 [data-sonner-toaster] {
   position: fixed !important;
-  top: 50% !important;
-  left: 50% !important;
-  right: auto !important;
+  top: max(1rem, env(safe-area-inset-top, 0px)) !important;
+  right: max(1rem, env(safe-area-inset-right, 0px)) !important;
+  left: auto !important;
   bottom: auto !important;
-  transform: translate(-50%, -50%) !important;
+  transform: none !important;
   margin: 0 !important;
   z-index: 9999;
-  width: min(560px, calc(100vw - 32px)) !important;
-  max-width: min(560px, calc(100vw - 32px)) !important;
-  align-items: stretch !important;
+  width: min(420px, calc(100vw - 24px)) !important;
+  max-width: min(420px, calc(100vw - 24px)) !important;
+  align-items: flex-end !important;
 }
 [data-sonner-toast] {
-  min-width: 380px !important;
-  padding: 18px 22px !important;
-  font-size: 1.05rem !important;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15) !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-shadow:
+    0 10px 38px -10px rgba(0, 0, 0, 0.12),
+    0 4px 14px -4px rgba(0, 0, 0, 0.08) !important;
 }
-/* Errores (Sonner): un poco más de énfasis en el centro */
 [data-sonner-toaster] [data-type='error'],
 [data-sonner-toaster] [data-type='error'] [data-icon] {
   font-weight: 600;
 }
-/* react-hot-toast: mismo centro de viewport (p. ej. errores del ApiClient) */
-.toast-container-center.toast-container-viewport-center {
-  top: 50% !important;
-  left: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  right: auto !important;
+/* react-hot-toast (p. ej. mensajes del ApiClient) */
+.toast-container-top-right {
+  top: max(12px, env(safe-area-inset-top, 0px)) !important;
+  right: max(12px, env(safe-area-inset-right, 0px)) !important;
+  left: auto !important;
   bottom: auto !important;
-  width: min(560px, calc(100vw - 32px)) !important;
-  max-width: min(560px, calc(100vw - 32px)) !important;
+  transform: none !important;
+  width: min(420px, calc(100vw - 24px)) !important;
+  max-width: min(420px, calc(100vw - 24px)) !important;
 }
-.toast-container-center > div {
-  min-width: 360px !important;
-  max-width: 560px !important;
+.toast-container-top-right > div {
+  min-width: 0 !important;
+  max-width: 100% !important;
 }
