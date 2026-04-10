@@ -11,8 +11,8 @@ fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (F
 Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella MERCANTIL / BNC / BINANCE / BNV). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
 En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
 Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL): etiqueta Gmail **MANUAL** (con candidatos imagen/PDF).
-Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas de plantilla, no leido
-(en filtro unread se fuerza sin estrella + no leido para reintento). No inventar datos: Gemini ya devuelve NA si no hay certeza.
+Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas de plantilla; con candidatos imagen/PDF
+se fuerza sin estrella + no leido en Gmail para reintento. No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
 Cedula: solo desde tabla clientes por email del De (From), nunca desde la imagen. El destinatario Para (To) no se usa para cedula.
 """
@@ -57,7 +57,6 @@ from app.services.pagos_gmail.gemini_service import (
     PAGOS_GMAIL_FORMATOS_PLANTILLA,
     PAGOS_NA,
 )
-from app.core.config import settings
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
     formatear_cedula,
@@ -157,12 +156,13 @@ def run_pipeline(
     """
     Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
     Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D) + estrella; cierre: leido si hubo algun OK.
-    scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto en API/UI: all = inbox sin ya clasificados).
-      Listado Gmail excluye correos con etiquetas MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL/MANUAL (no reescanear).
+    scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto API/UI: all).
+      "unread", "read" y "all" listan lo mismo: inbox con imagen/PDF, leidos y no leidos (sin distincion).
+      Listado excluye correos ya etiquetados MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL/MANUAL (no reescanear).
       pending_identification: ademas sin estrella.
     Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
     Los mensajes de cada lote se ordenan por fecha del correo de mas antiguo a mas reciente antes de procesar.
-    Con "unread", se repite listar+procesar hasta que no queden no leidos o hasta PAGOS_GMAIL_UNREAD_MAX_PASSES.
+    Una sola pasada de listado+proceso por ejecucion (salvo reintentos manuales).
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
     logger.info("[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s)", existing_sync_id, scan_filter)
@@ -210,11 +210,6 @@ def run_pipeline(
     plantilla_label_cache: Dict[str, Optional[str]] = {}
 
     try:
-        max_unread_passes = int(
-            getattr(settings, "PAGOS_GMAIL_UNREAD_MAX_PASSES", 30) or 30
-        )
-        max_unread_passes = max(1, min(100, max_unread_passes))
-
         def fetch_sorted_batch() -> list[dict]:
             raw_messages = list_messages_by_filter(gmail_svc, scan_filter)
             messages = _dedupe_messages_pagos_gmail(raw_messages)
@@ -659,8 +654,7 @@ def run_pipeline(
                             )
                             gmail_etiqueta_clasificacion_aplicada = True
                             mark_as_read(gmail_svc, msg_id)
-                            if scan_filter == "unread":
-                                correos_marcados_revision += 1
+                            correos_marcados_revision += 1
                             logger.info(
                                 "[PAGOS_GMAIL]   Gmail: %s — solo %s + estrella (100%% OK); "
                                 "sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL",
@@ -691,20 +685,19 @@ def run_pipeline(
                     )
                     gmail_etiqueta_clasificacion_aplicada = True
                     mark_as_read(gmail_svc, msg_id)
-                    if scan_filter == "unread":
-                        correos_marcados_revision += 1
+                    correos_marcados_revision += 1
                     logger.info(
                         "[PAGOS_GMAIL]   Gmail: 100%% adjuntos OK - estrella + etiqueta(s) + leido"
                     )
-                elif scan_filter == "unread":
+                elif attachments:
                     mark_unread_clear_star(gmail_svc, msg_id)
                     logger.info(
                         "[PAGOS_GMAIL]   Gmail: sin estrella + no leido (no 100%% digitalizacion o sin adjuntos validos)"
                     )
-                elif attachments:
+                else:
                     logger.info(
-                        "[PAGOS_GMAIL]   Gmail: filtro=%s — correo no marcado estrella/leido automatico "
-                        "(digitalizacion parcial o sin adjuntos validos).",
+                        "[PAGOS_GMAIL]   Gmail: filtro=%s — sin candidatos imagen/PDF utiles; "
+                        "no estrella/leido automatico.",
                         scan_filter,
                     )
 
@@ -735,39 +728,11 @@ def run_pipeline(
                 sync.files_processed = files_ok
                 db.commit()
 
-        if scan_filter == "unread":
-            for pass_n in range(1, max_unread_passes + 1):
-                logger.info(
-                    "[PAGOS_GMAIL] Pasada no leidos %d/%d (lista ordenada mas antiguo primero)",
-                    pass_n,
-                    max_unread_passes,
-                )
-                messages = fetch_sorted_batch()
-                if not messages:
-                    if pass_n == 1:
-                        logger.info("[PAGOS_GMAIL] No hay correos con filtro unread")
-                    else:
-                        logger.info(
-                            "[PAGOS_GMAIL] Fin: no quedan no leidos tras pasada %d",
-                            pass_n - 1,
-                        )
-                    break
-                process_message_batch(messages, f"vuelta_{pass_n}")
-            else:
-                remaining = fetch_sorted_batch()
-                if remaining:
-                    logger.warning(
-                        "[PAGOS_GMAIL] Tras %d pasada(s) siguen %d no leido(s). "
-                        "Aumente PAGOS_GMAIL_UNREAD_MAX_PASSES o ejecute de nuevo.",
-                        max_unread_passes,
-                        len(remaining),
-                    )
+        messages = fetch_sorted_batch()
+        if not messages:
+            logger.info("[PAGOS_GMAIL] No hay correos con filtro %s", scan_filter)
         else:
-            messages = fetch_sorted_batch()
-            if not messages:
-                logger.info("[PAGOS_GMAIL] No hay correos con filtro %s", scan_filter)
-            else:
-                process_message_batch(messages, "run")
+            process_message_batch(messages, "run")
 
         sync.finished_at = datetime.now(timezone.utc)
         sync.emails_processed = emails_ok

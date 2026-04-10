@@ -140,11 +140,12 @@ def _parse_gmail_retry_after_seconds(exc: Exception) -> Optional[int]:
         return None
 
 
-def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[dict]:
+def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict]:
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
     filter_type: "unread" | "read" | "all" | "pending_identification".
-    Todos los filtros excluyen por q los correos con etiquetas de clasificacion del pipeline (no reescanear).
+    "unread", "read" y "all" usan el mismo criterio: inbox + imagen/PDF (leidos y no leidos, sin distincion).
+    Todos excluyen por q los correos con etiquetas de clasificacion del pipeline (no reescanear).
     pending_identification: ademas sin estrella (reintento cola sin reprocesar ya clasificados).
     Misma forma que antes: id, payload, headers.
     """
@@ -156,12 +157,7 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
         params_base: dict = {"userId": "me", "maxResults": 500}
         media_q = pagos_gmail_list_q_media_parts()
         excl = pagos_gmail_label_exclusions_query()
-        if filter_type == "unread":
-            params_base["labelIds"] = ["UNREAD"]
-            params_base["q"] = f"in:inbox {media_q} {excl}"
-        elif filter_type == "read":
-            params_base["q"] = f"is:read in:inbox {media_q} {excl}"
-        elif filter_type == "pending_identification":
+        if filter_type == "pending_identification":
             params_base["q"] = pagos_gmail_pending_identification_query()
         else:
             params_base["q"] = f"in:inbox {media_q} {excl}"
@@ -211,10 +207,10 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
 
 
 
-def count_messages_by_filter(service: Any, filter_type: str = "unread") -> int:
+def count_messages_by_filter(service: Any, filter_type: str = "all") -> int:
     """
     Cuenta mensajes segun el filtro sin obtener metadata (solo list paginado).
-    Mismo criterio que list_messages_by_filter (incluye pending_identification).
+    Mismo criterio que list_messages_by_filter (unread/read/all = inbox sin distincion leido).
     """
     from googleapiclient.errors import HttpError
 
@@ -224,12 +220,7 @@ def count_messages_by_filter(service: Any, filter_type: str = "unread") -> int:
         params_base: dict = {"userId": "me", "maxResults": 500}
         media_q = pagos_gmail_list_q_media_parts()
         excl = pagos_gmail_label_exclusions_query()
-        if filter_type == "unread":
-            params_base["labelIds"] = ["UNREAD"]
-            params_base["q"] = f"in:inbox {media_q} {excl}"
-        elif filter_type == "read":
-            params_base["q"] = f"is:read in:inbox {media_q} {excl}"
-        elif filter_type == "pending_identification":
+        if filter_type == "pending_identification":
             params_base["q"] = pagos_gmail_pending_identification_query()
         else:
             params_base["q"] = f"in:inbox {media_q} {excl}"
@@ -266,10 +257,10 @@ def count_messages_by_filter(service: Any, filter_type: str = "unread") -> int:
 
 def list_unread_with_attachments(service: Any) -> List[dict]:
     """
-    Lista TODOS los mensajes NO LEÍDOS (equivalente a list_messages_by_filter(service, "unread")).
-    Mantenido por compatibilidad; el pipeline puede usar list_messages_by_filter con scan_filter.
+    Lista correos en inbox con criterio imagen/PDF (leidos y no leidos; mismo listado que "all").
+    Nombre historico; equivale a list_messages_by_filter(service, "all").
     """
-    return list_messages_by_filter(service, "unread")
+    return list_messages_by_filter(service, "all")
 
 
 def get_message_date(headers: dict) -> datetime:

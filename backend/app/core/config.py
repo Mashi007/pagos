@@ -288,8 +288,8 @@ class Settings(BaseSettings):
         ge=1,
         le=100,
         description=(
-            "Con filtro unread: maximo de listados+procesados por ejecucion. Cada pasada ordena del mas actual al mas "
-            "antiguo y procesa todos los no leidos devueltos por Gmail; se repite hasta que no queden o se alcance este tope."
+            "Obsoleto: el pipeline ya no hace pasadas multiples por no leidos (unread/read/all listan inbox completo). "
+            "Se conserva por compatibilidad en .env; el codigo no lo usa."
         ),
     )
     # Tasa USD/Bs Venezuela (reporte contable)
