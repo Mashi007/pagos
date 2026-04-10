@@ -330,11 +330,8 @@ export function usePermissions() {
 
 
 
-   * - OPERATIVO: Solo acceso a reportes no financieros (Pagos, Morosidad)
-
-
-
-
+   * - OPERATIVO: reportes operativos (Pagos, Morosidad, Vencimiento, Cédula, Fechas préstamos,
+   *   Fecha Drive hoja vs BD). Contable / Conciliación masiva siguen solo admin.
 
    */
 
@@ -343,14 +340,14 @@ export function usePermissions() {
       return true // Admin tiene acceso a todos
     }
 
-    // Operativos pueden ver: Pagos, Morosidad, Vencimiento, Por cédula. Contable solo admin.
-
     const allowedForOperativos = [
       'PAGOS',
       'MOROSIDAD',
       'VENCIMIENTO',
       'CEDULA',
       'FECHAS',
+      // Mismo uso operativo que FECHAS; distinto Excel (5 cols Drive vs sistema). Ver Reportes.tsx.
+      'FECHA_DRIVE',
     ]
 
     return allowedForOperativos.includes(reportType)
