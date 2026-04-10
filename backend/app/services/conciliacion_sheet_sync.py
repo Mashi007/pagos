@@ -30,6 +30,16 @@ SCOPES_SHEETS_FALLBACK = ["https://www.googleapis.com/auth/spreadsheets"]
 MAX_SCAN_ROWS_FOR_HEADER = 80
 
 
+def _mask_spreadsheet_id(spreadsheet_id: str) -> str:
+    """Evita volcar el ID completo en logs; basta para correlacionar en soporte."""
+    s = (spreadsheet_id or "").strip()
+    if not s:
+        return "(vacío)"
+    if len(s) <= 10:
+        return f"{s[:3]}…(len={len(s)})"
+    return f"{s[:4]}…{s[-4:]}(len={len(s)})"
+
+
 def _col_letter_to_index1(col: str) -> int:
     """Índice 1-based de columna tipo Excel (A=1, Z=26, AA=27)."""
     n = 0
@@ -136,6 +146,12 @@ def _resolve_sheet_title(service: Any, spreadsheet_id: str, expected_tab: str) -
         if _titles_match(title, expected_tab):
             return title
     titles = [(s.get("properties") or {}).get("title") for s in sheets]
+    logger.warning(
+        "[conciliacion_sheet] pestaña no encontrada: buscada=%r disponibles=%r spreadsheet=%s",
+        expected_tab,
+        titles,
+        _mask_spreadsheet_id(spreadsheet_id),
+    )
     raise ValueError(
         f"No se encontró la pestaña {expected_tab!r}. Pestañas disponibles: {titles!r}"
     )
@@ -147,23 +163,45 @@ def _get_sheets_credentials():
 
     creds = get_google_credentials(SCOPES_SHEETS)
     if creds is not None:
+        logger.info(
+            "[conciliacion_sheet] credenciales Google: ruta principal (spreadsheets.readonly)"
+        )
         return creds
     creds = get_google_credentials(SCOPES_SHEETS_FALLBACK)
     if creds is not None:
+        logger.info(
+            "[conciliacion_sheet] credenciales Google: alcance spreadsheets (fallback)"
+        )
         return creds
     try:
         from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
 
-        return get_pagos_gmail_credentials()
-    except Exception:
+        creds = get_pagos_gmail_credentials()
+        if creds is not None:
+            logger.info("[conciliacion_sheet] credenciales Google: fallback pagos_gmail")
+        return creds
+    except Exception as ex:
+        logger.warning(
+            "[conciliacion_sheet] credenciales Gmail no disponibles: %s",
+            type(ex).__name__,
+        )
         return None
 
 
 def fetch_sheet_values(
     spreadsheet_id: str, tab_name: str, columns_range: str
 ) -> Tuple[str, List[List[Any]], int]:
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_values inicio spreadsheet=%s tab_solicitada=%r cols=%r",
+        _mask_spreadsheet_id(spreadsheet_id),
+        tab_name,
+        columns_range,
+    )
     creds = _get_sheets_credentials()
     if creds is None:
+        logger.error(
+            "[conciliacion_sheet] fetch_sheet_values abortado: sin credenciales Google"
+        )
         raise RuntimeError(
             "Sin credenciales Google (Sheets). Configure Informe de pagos / cuenta de servicio "
             "o tokens Gmail (GOOGLE_CLIENT_ID, GMAIL_TOKENS_PATH, etc.)."
@@ -174,6 +212,12 @@ def fetch_sheet_values(
     service = build("sheets", "v4", credentials=creds, cache_discovery=False)
     exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
     rng = f"'{_escape_sheet_title_for_range(exact_title)}'!{col_a}:{col_b}"
+    logger.info(
+        "[conciliacion_sheet] Sheets API values.get rango=%r pestaña_resuelta=%r ncols=%s",
+        rng,
+        exact_title,
+        ncols,
+    )
     resp = (
         service.spreadsheets()
         .values()
@@ -187,6 +231,11 @@ def fetch_sheet_values(
     )
     values = resp.get("values") or []
     trimmed = [_trim_row_width(row, ncols) for row in values]
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_values ok filas_brutas=%s filas_trim=%s",
+        len(values),
+        len(trimmed),
+    )
     return exact_title, trimmed, ncols
 
 
@@ -206,21 +255,45 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
     t0 = time.perf_counter()
     started = datetime.now(timezone.utc)
 
+    logger.info(
+        "[conciliacion_sheet] run_sync_to_db inicio spreadsheet=%s tab=%r marker=%r cols=%r",
+        _mask_spreadsheet_id(spreadsheet_id),
+        tab_name,
+        marker,
+        columns_range,
+    )
+
     try:
         sheet_title, values, ncols_expected = fetch_sheet_values(
             spreadsheet_id, tab_name, columns_range
         )
         if not values:
+            logger.warning("[conciliacion_sheet] run_sync_to_db: API devolvió 0 filas")
             raise ValueError("La hoja devolvió 0 filas.")
 
         h_idx = _find_header_row(values, marker)
+        logger.info(
+            "[conciliacion_sheet] cabecera: fila_marcador_idx_0based=%s (marker=%r) filas_totales=%s",
+            h_idx,
+            marker,
+            len(values),
+        )
         raw_header = _trim_row_width(values[h_idx], ncols_expected)
         headers = _build_headers(raw_header)
         col_count = len(headers)
+        logger.info(
+            "[conciliacion_sheet] cabeceras parseadas: n=%s primeras=%r",
+            col_count,
+            headers[:8],
+        )
 
         data_rows = values[h_idx + 1 :]
         while data_rows and all(_cell_str(c) == "" for c in (data_rows[-1] or [])):
             data_rows.pop()
+        logger.info(
+            "[conciliacion_sheet] filas_datos_tras_trim_final=%s",
+            len(data_rows),
+        )
 
         now = datetime.now(timezone.utc)
         meta = db.get(ConciliacionSheetMeta, 1)
@@ -263,6 +336,13 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
         db.add(run)
         db.commit()
         db.refresh(run)
+        logger.info(
+            "[conciliacion_sheet] run_sync_to_db OK run_id=%s filas=%s cols=%s duracion_ms=%s",
+            run.id,
+            len(data_rows),
+            col_count,
+            run.duration_ms,
+        )
         return {
             "ok": True,
             "sheet_title": sheet_title,
@@ -275,7 +355,11 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             "run_id": run.id,
         }
     except Exception as e:
-        logger.exception("conciliacion_sheet sync: %s", e)
+        logger.exception(
+            "[conciliacion_sheet] run_sync_to_db ERROR tras_ms=%s err=%s",
+            int((time.perf_counter() - t0) * 1000),
+            e,
+        )
         db.rollback()
         finished = datetime.now(timezone.utc)
         run = ConciliacionSheetSyncRun(

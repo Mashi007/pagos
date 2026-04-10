@@ -1,4 +1,4 @@
-import { useState, type ComponentType, type SVGProps } from 'react'
+import { useState, useCallback, type ComponentType, type SVGProps } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -34,7 +34,10 @@ import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
 import { formatCurrency } from '../utils'
 
-import { reporteService } from '../services/reporteService'
+import {
+  reporteService,
+  type ConciliacionSheetStatusResponse,
+} from '../services/reporteService'
 
 import {
   notificacionService,
@@ -166,12 +169,28 @@ export function Reportes() {
 
   const [isRefreshingManual, setIsRefreshingManual] = useState(false)
 
+  const [syncingConciliacionSheet, setSyncingConciliacionSheet] =
+    useState(false)
+
   const queryClient = useQueryClient()
 
-  const { canViewReports, canDownloadReports, canAccessReport } =
-    usePermissions()
+  const {
+    canViewReports,
+    canDownloadReports,
+    canAccessReport,
+    revisionManualFullEdit,
+  } = usePermissions()
 
   const puedeVerReportes = canViewReports()
+
+  const { data: conciliacionSheetStatus, refetch: refetchConciliacionSheet } =
+    useQuery({
+      queryKey: ['conciliacion-sheet-status'],
+      queryFn: (): Promise<ConciliacionSheetStatusResponse> =>
+        reporteService.getConciliacionSheetStatus(),
+      enabled: puedeVerReportes,
+      staleTime: 20_000,
+    })
 
   // Historial de notificaciones por cédula (reportes / legales)
 
@@ -190,6 +209,40 @@ export function Reportes() {
   const [loadingHistorialDescarga, setLoadingHistorialDescarga] = useState<
     string | null
   >(null)
+
+  const sincronizarHojaConciliacionDrive = useCallback(async () => {
+    if (!revisionManualFullEdit) {
+      toast.error('Solo personal autorizado puede sincronizar la hoja.')
+
+      return
+    }
+
+    try {
+      setSyncingConciliacionSheet(true)
+
+      const r = await reporteService.syncConciliacionSheetDesdeDrive()
+
+      await refetchConciliacionSheet()
+
+      const n = (r as { row_count?: number }).row_count
+
+      toast.success(
+        `Hoja CONCILIACIÓN actualizada desde Drive${
+          typeof n === 'number' ? ` (${n} filas)` : ''
+        }.`
+      )
+    } catch (e: unknown) {
+      console.error(e)
+
+      toast.error(
+        getErrorDetail(e) ||
+          getErrorMessage(e) ||
+          'No se pudo sincronizar. Revise CONCILIACION_SHEET_SPREADSHEET_ID y credenciales Google en el servidor.'
+      )
+    } finally {
+      setSyncingConciliacionSheet(false)
+    }
+  }, [revisionManualFullEdit, refetchConciliacionSheet])
 
   // Bloque mostrado si canViewReports() restringe por rol (ej. solo admin). Restriccion por tipo de reporte: canAccessReport().
 
@@ -975,18 +1028,76 @@ export function Reportes() {
                 Contable y por cliente
               </h3>
 
-              <p className="mb-4 text-xs text-gray-500">
+              <p className="mb-2 text-xs text-gray-500">
                 <strong className="font-medium text-gray-600">
                   Fecha Drive
                 </strong>{' '}
                 no es el mismo informe que Fechas préstamos (sección Cobranza):
-                compara la hoja CONCILIACIÓN sincronizada con la BD (solo
-                admin). El archivo descargado incluye en el nombre{' '}
+                compara la hoja CONCILIACIÓN (snapshot en base de datos) con los
+                préstamos. El archivo descargado incluye en el nombre{' '}
                 <code className="rounded bg-gray-100 px-1 text-[11px]">
                   FechaDrive_vs_hoja_CONCILIACION_5cols
                 </code>
                 .
               </p>
+
+              {conciliacionSheetStatus && (
+                <div className="mb-3 rounded-md border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+                  <p className="font-medium text-amber-900">
+                    Conexión hoja Drive → servidor
+                  </p>
+                  <p className="mt-1 text-amber-900/90">
+                    Spreadsheet:{' '}
+                    {conciliacionSheetStatus.spreadsheet_configured
+                      ? 'ID configurado'
+                      : 'Falta CONCILIACION_SHEET_SPREADSHEET_ID en el backend'}
+                    . Pestaña esperada:{' '}
+                    <span className="font-mono">
+                      {conciliacionSheetStatus.expected_tab_name}
+                    </span>
+                    . Filas en BD:{' '}
+                    <strong>
+                      {conciliacionSheetStatus.snapshot_row_count}
+                    </strong>
+                    . Informe Fecha Drive:{' '}
+                    <strong>
+                      {conciliacionSheetStatus.fecha_drive_ready
+                        ? 'listo para descargar'
+                        : 'no listo'}
+                    </strong>
+                    {conciliacionSheetStatus.fecha_drive_hint ? (
+                      <> — {conciliacionSheetStatus.fecha_drive_hint}</>
+                    ) : null}
+                  </p>
+                  {revisionManualFullEdit && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={syncingConciliacionSheet}
+                        onClick={() => void sincronizarHojaConciliacionDrive()}
+                      >
+                        {syncingConciliacionSheet ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Sincronizando con Google…
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            Traer hoja desde Drive ahora
+                          </>
+                        )}
+                      </Button>
+                      <span className="text-[11px] text-amber-800/80">
+                        Usa las credenciales del servidor (Informe pagos /
+                        Gmail).
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 {tiposReporte

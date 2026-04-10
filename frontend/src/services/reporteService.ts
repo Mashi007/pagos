@@ -448,6 +448,27 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
+/** GET /api/v1/conciliacion-sheet/status — snapshot hoja Drive vs BD (Fecha Drive). */
+export interface ConciliacionSheetStatusResponse {
+  timezone: string
+
+  columns_range: string
+
+  spreadsheet_configured: boolean
+
+  expected_tab_name: string
+
+  snapshot_row_count: number
+
+  fecha_drive_ready: boolean
+
+  fecha_drive_hint: string | null
+
+  meta: Record<string, unknown> | null
+
+  last_run: Record<string, unknown> | null
+}
+
 /** GET /reportes/morosidad/auditoria/mora-por-cliente - cuotas.estado = MORA en BD (como el Excel). */
 export interface AuditoriaMoraPorCliente {
   alcance: 'reporte_morosidad_cedulas'
@@ -502,6 +523,8 @@ export interface AuditoriaMoraPorPrestamo {
 
 class ReporteService {
   private baseUrl = '/api/v1/reportes'
+
+  private conciliacionSheetBaseUrl = '/api/v1/conciliacion-sheet'
 
   // API expects query param 'anos' (no n-tilde); use 'meses_list' for months in cartera/pagos/morosidad/asesores.
 
@@ -1497,6 +1520,25 @@ class ReporteService {
 
       throw error
     }
+  }
+
+  /** Estado del snapshot Google Sheets CONCILIACIÓN → BD (diagnóstico Fecha Drive). */
+  async getConciliacionSheetStatus(): Promise<ConciliacionSheetStatusResponse> {
+    return await apiClient.get<ConciliacionSheetStatusResponse>(
+      `${this.conciliacionSheetBaseUrl}/status`
+    )
+  }
+
+  /**
+   * Ejecuta la misma sincronización que el cron (Sheets → conciliacion_sheet_*),
+   * usando credenciales del servidor. Requiere rol admin, operador o gerente.
+   */
+  async syncConciliacionSheetDesdeDrive(): Promise<Record<string, unknown>> {
+    return await apiClient.post<Record<string, unknown>>(
+      `${this.conciliacionSheetBaseUrl}/sync-now`,
+      undefined,
+      { timeout: 120000 }
+    )
   }
 }
 

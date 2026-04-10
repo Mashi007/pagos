@@ -6,6 +6,7 @@ Valor ausente en un lado: NE (como el ejemplo operativo).
 from __future__ import annotations
 
 import io
+import logging
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,6 +17,8 @@ from sqlalchemy.orm import Session
 from app.models.conciliacion_sheet import ConciliacionSheetMeta, ConciliacionSheetRow
 from app.models.prestamo import Prestamo
 from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
+
+logger = logging.getLogger(__name__)
 
 COL_SHEET_Q_INDEX = 16
 
@@ -134,13 +137,24 @@ def build_fecha_drive_excel(db: Session) -> Tuple[bytes, int]:
     """
     import openpyxl
 
+    logger.info("[fecha_drive] build_fecha_drive_excel inicio")
+
     meta = db.get(ConciliacionSheetMeta, 1)
     headers = list(meta.headers) if meta and meta.headers else []
     if not headers:
+        logger.warning(
+            "[fecha_drive] abort: sin cabeceras en conciliacion_sheet_meta (sync Drive pendiente?)"
+        )
         raise ValueError(
-            "No hay cabeceras de la hoja sincronizada. Ejecute POST /conciliacion-sheet/sync primero."
+            "No hay cabeceras de la hoja sincronizada. Sincronice desde Drive: "
+            "POST /api/v1/conciliacion-sheet/sync-now (sesión staff) o POST /api/v1/conciliacion-sheet/sync (cron con secreto)."
         )
     if len(headers) <= COL_SHEET_Q_INDEX:
+        logger.warning(
+            "[fecha_drive] abort: solo %s columnas en cabecera; se requiere índice Q (%s)",
+            len(headers),
+            COL_SHEET_Q_INDEX,
+        )
         raise ValueError(
             "La hoja sincronizada no incluye la columna Q (se requiere rango hasta S). "
             "Verifique CONCILIACION_SHEET_COLUMNS_RANGE y vuelva a sincronizar."
@@ -148,19 +162,38 @@ def build_fecha_drive_excel(db: Session) -> Tuple[bytes, int]:
 
     cedula_key = _pick_cedula_header(headers)
     if not cedula_key:
+        logger.warning(
+            "[fecha_drive] abort: no se detectó columna cédula entre cabeceras=%r",
+            headers[:12],
+        )
         raise ValueError("No se pudo determinar la columna de cédula en la hoja.")
 
     key_q = headers[COL_SHEET_Q_INDEX]
+    logger.info(
+        "[fecha_drive] columnas clave: cedula_key=%r col_q=%r n_headers=%s",
+        cedula_key,
+        key_q,
+        len(headers),
+    )
 
     sheet_rows = db.execute(
         select(ConciliacionSheetRow).order_by(ConciliacionSheetRow.row_index)
     ).scalars().all()
     if not sheet_rows:
+        logger.warning(
+            "[fecha_drive] abort: conciliacion_sheet_rows vacío (filas=%s)",
+            len(sheet_rows),
+        )
         raise ValueError(
-            "No hay filas en conciliacion_sheet_rows. Sincronice la hoja CONCILIACIÓN primero."
+            "No hay filas en conciliacion_sheet_rows. Ejecute sincronización desde Drive "
+            "(POST /api/v1/conciliacion-sheet/sync-now o sync con secreto) y verifique CONCILIACION_SHEET_SPREADSHEET_ID."
         )
 
     latest = _latest_prestamo_por_cedula_norm(db)
+    logger.info(
+        "[fecha_drive] préstamos indexados por cédula normalizada: %s",
+        len(latest),
+    )
 
     drive_norm_cedulas: set[str] = set()
     for sr in sheet_rows:
@@ -171,6 +204,12 @@ def build_fecha_drive_excel(db: Session) -> Tuple[bytes, int]:
         nk = _norm_cedula_lookup(raw)
         if nk:
             drive_norm_cedulas.add(nk)
+
+    logger.info(
+        "[fecha_drive] filas hoja snapshot=%s cédulas_distintas_en_hoja=%s",
+        len(sheet_rows),
+        len(drive_norm_cedulas),
+    )
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -242,4 +281,12 @@ def build_fecha_drive_excel(db: Session) -> Tuple[bytes, int]:
     n = len(pending) + solo_count
     buf = io.BytesIO()
     wb.save(buf)
-    return buf.getvalue(), n
+    out_bytes = buf.getvalue()
+    logger.info(
+        "[fecha_drive] build_fecha_drive_excel OK filas_excel=%s (drive=%s solo_sistema=%s) bytes=%s",
+        n,
+        len(pending),
+        solo_count,
+        len(out_bytes),
+    )
+    return out_bytes, n
