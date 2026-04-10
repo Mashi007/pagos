@@ -245,12 +245,9 @@ def aplicar_visto_control5_duplicado_fecha_monto(
         nuevo = anterior or ""
         sufijo = token_existente
     else:
-        if not pago_en_grupo_duplicado_fecha_monto(db, pago):
-            raise HTTPException(
-                status_code=400,
-                detail="El pago no esta en un grupo duplicado (misma fecha y monto) con otro operativo, "
-                "o ya no aplica tras cambios en la base.",
-            )
+        # Admin: siempre puede aplicar Visto. Antes se exigia `pago_en_grupo_duplicado_fecha_monto`;
+        # eso fallaba tras correcciones en BD, Visto en el par, o alertas desactualizadas. El sufijo
+        # distingue comprobantes y la bitacora deja trazabilidad.
         nuevo, sufijo = _elegir_nuevo_numero_documento(db, pago)
         pago.numero_documento = nuevo
 
