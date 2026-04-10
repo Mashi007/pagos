@@ -22,6 +22,7 @@ import {
   Copy,
   Calendar,
   FileSpreadsheet,
+  Activity,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -38,6 +39,8 @@ import {
   reporteService,
   type ConciliacionSheetStatusResponse,
 } from '../services/reporteService'
+
+import { API_BASE_URL } from '../services/api'
 
 import {
   notificacionService,
@@ -172,6 +175,12 @@ export function Reportes() {
   const [syncingConciliacionSheet, setSyncingConciliacionSheet] =
     useState(false)
 
+  const [diagnosticoConciliacionJson, setDiagnosticoConciliacionJson] =
+    useState<string | null>(null)
+
+  const [loadingDiagnosticoConciliacion, setLoadingDiagnosticoConciliacion] =
+    useState(false)
+
   const queryClient = useQueryClient()
 
   const {
@@ -243,6 +252,44 @@ export function Reportes() {
       setSyncingConciliacionSheet(false)
     }
   }, [revisionManualFullEdit, refetchConciliacionSheet])
+
+  const cargarDiagnosticoConciliacionSheet = useCallback(async () => {
+    setLoadingDiagnosticoConciliacion(true)
+
+    setDiagnosticoConciliacionJson(null)
+
+    try {
+      const server = await reporteService.getConciliacionSheetDiagnostico()
+
+      const envelope = {
+        client: {
+          origin: typeof window !== 'undefined' ? window.location.origin : '',
+
+          api_base_url:
+            API_BASE_URL ||
+            '(vacío: mismo origen o sin VITE_API_URL; las peticiones van al host de esta página)',
+
+          base_path: BASE_PATH || '/',
+        },
+
+        server,
+      }
+
+      setDiagnosticoConciliacionJson(JSON.stringify(envelope, null, 2))
+
+      toast.success('Diagnóstico listo (copie el JSON si lo pide soporte).')
+    } catch (e: unknown) {
+      console.error(e)
+
+      toast.error(
+        getErrorDetail(e) ||
+          getErrorMessage(e) ||
+          'No se pudo cargar el diagnóstico. Revise sesión y URL del API.'
+      )
+    } finally {
+      setLoadingDiagnosticoConciliacion(false)
+    }
+  }, [])
 
   // Bloque mostrado si canViewReports() restringe por rol (ej. solo admin). Restriccion por tipo de reporte: canAccessReport().
 
@@ -1066,9 +1113,50 @@ export function Reportes() {
                         : 'no listo'}
                     </strong>
                     {conciliacionSheetStatus.fecha_drive_hint ? (
-                      <> — {conciliacionSheetStatus.fecha_drive_hint}</>
+                      <> - {conciliacionSheetStatus.fecha_drive_hint}</>
+                    ) : null}
+                    {conciliacionSheetStatus.fecha_drive_blocker ? (
+                      <>
+                        {' '}
+                        <span className="font-mono text-[10px] text-amber-900/70">
+                          [{conciliacionSheetStatus.fecha_drive_blocker}]
+                        </span>
+                      </>
                     ) : null}
                   </p>
+                  <p className="mt-2 font-mono text-[10px] leading-snug text-amber-900/85">
+                    Origen:{' '}
+                    {typeof window !== 'undefined'
+                      ? window.location.origin
+                      : ''}
+                    <br />
+                    API_BASE_URL: {API_BASE_URL || '(vacío)'}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-300/80 bg-white/90 text-amber-950 hover:bg-white"
+                      disabled={loadingDiagnosticoConciliacion}
+                      onClick={() => void cargarDiagnosticoConciliacionSheet()}
+                    >
+                      {loadingDiagnosticoConciliacion ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Consultando…
+                        </>
+                      ) : (
+                        <>
+                          <Activity className="mr-2 h-4 w-4" />
+                          Diagnóstico técnico (JSON)
+                        </>
+                      )}
+                    </Button>
+                    <span className="text-[11px] text-amber-800/80">
+                      BD + ping a Google (metadatos); no modifica datos.
+                    </span>
+                  </div>
                   {revisionManualFullEdit && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Button
@@ -1096,6 +1184,11 @@ export function Reportes() {
                       </span>
                     </div>
                   )}
+                  {diagnosticoConciliacionJson ? (
+                    <pre className="mt-3 max-h-72 overflow-auto rounded border border-amber-200/90 bg-white/95 p-2 text-[10px] leading-tight text-slate-800">
+                      {diagnosticoConciliacionJson}
+                    </pre>
+                  ) : null}
                 </div>
               )}
 

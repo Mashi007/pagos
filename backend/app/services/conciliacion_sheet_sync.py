@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
-from sqlalchemy import delete
+from sqlalchemy import delete, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -385,3 +385,189 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
         except Exception:
             db.rollback()
         raise
+
+
+# Mínimo de columnas A..Q (índice 16) para el reporte Fecha Drive.
+_MIN_HEADERS_FECHA_DRIVE = 17
+
+
+def ping_google_spreadsheet_metadata(spreadsheet_id: str) -> Dict[str, Any]:
+    """
+    Una sola llamada a la API de Sheets (metadatos del libro). No lee celdas.
+    Sirve para verificar ID + credenciales sin ejecutar sync completo.
+    """
+    sid = (spreadsheet_id or "").strip()
+    if not sid:
+        return {"ok": False, "step": "no_spreadsheet_id"}
+
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+
+    try:
+        creds = _get_sheets_credentials()
+        if creds is None:
+            return {"ok": False, "step": "no_credentials"}
+
+        service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+        meta = (
+            service.spreadsheets()
+            .get(spreadsheetId=sid, fields="properties(title,locale,timeZone)")
+            .execute()
+        )
+        props = meta.get("properties") or {}
+        logger.info(
+            "[conciliacion_sheet] ping_google ok spreadsheet=%s title=%r",
+            _mask_spreadsheet_id(sid),
+            props.get("title"),
+        )
+        return {
+            "ok": True,
+            "step": "metadata_ok",
+            "spreadsheet_title": props.get("title"),
+            "locale": props.get("locale"),
+            "time_zone": props.get("timeZone"),
+        }
+    except HttpError as e:
+        st = getattr(getattr(e, "resp", None), "status", None)
+        logger.warning(
+            "[conciliacion_sheet] ping_google HttpError status=%s spreadsheet=%s",
+            st,
+            _mask_spreadsheet_id(sid),
+        )
+        return {
+            "ok": False,
+            "step": "google_http_error",
+            "status": st,
+            "message": str(e)[:400],
+        }
+    except Exception as e:
+        logger.warning(
+            "[conciliacion_sheet] ping_google error spreadsheet=%s err=%s",
+            _mask_spreadsheet_id(sid),
+            type(e).__name__,
+        )
+        return {
+            "ok": False,
+            "step": "exception",
+            "error_type": type(e).__name__,
+            "message": str(e)[:400],
+        }
+
+
+def build_conciliacion_sheet_diagnostico(db: Session) -> Dict[str, Any]:
+    """
+    Resumen agregado para soporte: variables de entorno, filas en BD y ping a Google.
+    No modifica datos.
+    """
+    checks: List[Dict[str, Any]] = []
+    next_steps: List[str] = []
+
+    sid = (getattr(settings, "CONCILIACION_SHEET_SPREADSHEET_ID", None) or "").strip()
+    tab_cfg = (getattr(settings, "CONCILIACION_SHEET_TAB_NAME", None) or "CONCILIACIÓN").strip()
+    cols_cfg = (getattr(settings, "CONCILIACION_SHEET_COLUMNS_RANGE", None) or "A:S").strip()
+
+    ok_id = bool(sid)
+    checks.append(
+        {
+            "id": "env_CONCILIACION_SHEET_SPREADSHEET_ID",
+            "ok": ok_id,
+            "detail": _mask_spreadsheet_id(sid) if sid else "no configurado",
+        }
+    )
+    if not ok_id:
+        next_steps.append("Defina CONCILIACION_SHEET_SPREADSHEET_ID en el backend (.env / Render).")
+
+    meta = db.get(ConciliacionSheetMeta, 1)
+    checks.append(
+        {
+            "id": "db_conciliacion_sheet_meta",
+            "ok": meta is not None,
+            "detail": "fila id=1 presente" if meta else "sin meta (nunca hubo sync exitoso)",
+        }
+    )
+
+    hdrs: List[str] = list(meta.headers) if meta and meta.headers else []
+    ok_hdr = len(hdrs) >= _MIN_HEADERS_FECHA_DRIVE
+    checks.append(
+        {
+            "id": "headers_reach_column_Q",
+            "ok": ok_hdr,
+            "detail": f"cabeceras={len(hdrs)} (minimo {_MIN_HEADERS_FECHA_DRIVE} para columna Q)",
+        }
+    )
+    if meta and hdrs and not ok_hdr:
+        next_steps.append(
+            f"Aumente CONCILIACION_SHEET_COLUMNS_RANGE (ahora {cols_cfg!r}) para incluir hasta la columna Q."
+        )
+
+    n_rows = int(
+        db.execute(select(func.count()).select_from(ConciliacionSheetRow)).scalar_one() or 0
+    )
+    ok_rows = n_rows > 0
+    checks.append(
+        {
+            "id": "db_conciliacion_sheet_rows",
+            "ok": ok_rows,
+            "detail": f"filas={n_rows}",
+        }
+    )
+    if not ok_rows:
+        next_steps.append(
+            "Ejecute POST /api/v1/conciliacion-sheet/sync-now (sesión) o /sync (cron) tras configurar credenciales."
+        )
+
+    last_run = db.execute(
+        select(ConciliacionSheetSyncRun).order_by(desc(ConciliacionSheetSyncRun.id)).limit(1)
+    ).scalars().first()
+    checks.append(
+        {
+            "id": "last_sync_run",
+            "ok": last_run is not None and bool(last_run.success),
+            "detail": None
+            if last_run is None
+            else {
+                "id": last_run.id,
+                "success": last_run.success,
+                "message": (last_run.message or "")[:200],
+                "row_count": last_run.row_count,
+            },
+        }
+    )
+
+    google_ping: Dict[str, Any] = {"skipped": True, "reason": "sin spreadsheet_id"}
+    if sid:
+        google_ping = ping_google_spreadsheet_metadata(sid)
+        if not google_ping.get("ok"):
+            next_steps.append(
+                "Revise credenciales Google (Informe de pagos / Gmail) y que la cuenta tenga acceso al documento."
+            )
+
+    fecha_drive_ready = ok_id and ok_hdr and ok_rows and bool(meta) and bool(hdrs)
+    if sid and not google_ping.get("ok"):
+        fecha_drive_ready = False
+
+    return {
+        "component": "conciliacion_sheet",
+        "settings": {
+            "tab_name": tab_cfg,
+            "columns_range": cols_cfg,
+            "header_marker": (getattr(settings, "CONCILIACION_SHEET_HEADER_MARKER", None) or "LOTE").strip(),
+            "sync_secret_configured": bool(
+                (getattr(settings, "CONCILIACION_SHEET_SYNC_SECRET", None) or "").strip()
+            ),
+        },
+        "checks": checks,
+        "google_ping": google_ping,
+        "meta_snapshot": None
+        if meta is None
+        else {
+            "sheet_title": meta.sheet_title,
+            "header_row_index": meta.header_row_index,
+            "row_count_meta": meta.row_count,
+            "col_count": meta.col_count,
+            "synced_at": meta.synced_at.isoformat() if meta.synced_at else None,
+            "last_error_preview": (meta.last_error or "")[:300] if meta.last_error else None,
+        },
+        "fecha_drive_ready": fecha_drive_ready,
+        "next_steps": next_steps,
+    }

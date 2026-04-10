@@ -11,7 +11,7 @@ En Render u otro hosting: programar HTTP POST diario a la hora equivalente en UT
 Por defecto solo se importan columnas A:S (variable CONCILIACION_SHEET_COLUMNS_RANGE).
 """
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import desc, func, select
@@ -27,7 +27,10 @@ from app.models.conciliacion_sheet import (
     ConciliacionSheetSyncRun,
 )
 from app.schemas.auth import UserResponse
-from app.services.conciliacion_sheet_sync import run_sync_to_db
+from app.services.conciliacion_sheet_sync import (
+    build_conciliacion_sheet_diagnostico,
+    run_sync_to_db,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +98,98 @@ def post_sync_conciliacion_sheet_now(
 _MIN_HEADERS_FOR_FECHA_DRIVE = 17
 
 
+def _fecha_drive_hint_and_blocker(
+    *,
+    fecha_drive_ready: bool,
+    spreadsheet_configured: bool,
+    cols_range: str,
+    hdrs: List[str],
+    headers_ok: bool,
+    snapshot_row_count: int,
+    last_run: Optional[ConciliacionSheetSyncRun],
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Texto para operadores (fecha_drive_hint) y código estable (fecha_drive_blocker)
+    cuando Fecha Drive aún no está listo.
+    """
+    if fecha_drive_ready:
+        return None, None
+
+    min_h = _MIN_HEADERS_FOR_FECHA_DRIVE
+    n_headers = len(hdrs)
+
+    if not spreadsheet_configured:
+        return (
+            "Falta CONCILIACION_SHEET_SPREADSHEET_ID en el servidor (Render / .env).",
+            "no_spreadsheet_id",
+        )
+
+    if last_run is None:
+        return (
+            "No hay ninguna corrida de sincronización registrada en la base de datos. "
+            "Ejecute POST /api/v1/conciliacion-sheet/sync-now (personal autorizado) "
+            "o programe POST /api/v1/conciliacion-sheet/sync con el secreto del cron.",
+            "never_synced",
+        )
+
+    if not last_run.success:
+        msg = (last_run.message or "").strip().replace("\n", " ")
+        if len(msg) > 220:
+            msg = msg[:217] + "..."
+        tail = f" Detalle: {msg}" if msg else ""
+        return (
+            "La última sincronización desde Google Sheets falló. Revise credenciales "
+            "(Informe de pagos / Gmail), nombre de la pestaña, ID del documento y permisos "
+            f"de la cuenta ante el spreadsheet.{tail}",
+            "last_sync_failed",
+        )
+
+    if (last_run.row_count or 0) == 0:
+        return (
+            "La última sincronización terminó en OK pero importó 0 filas de datos. Revise que "
+            "la pestaña sea la esperada, que exista la fila de cabecera (marcador LOTE), el "
+            "rango de columnas y que haya filas debajo de la cabecera.",
+            "sync_ok_zero_rows",
+        )
+
+    if not headers_ok:
+        return (
+            f"Las cabeceras guardadas ({n_headers}) no alcanzan la columna Q (se necesitan al "
+            f"menos {min_h}). Amplíe CONCILIACION_SHEET_COLUMNS_RANGE (ahora {cols_range!r}).",
+            "headers_below_Q",
+        )
+
+    if snapshot_row_count == 0:
+        if (last_run.row_count or 0) > 0:
+            return (
+                "La última sync reportó filas importadas pero el snapshot en BD está vacío; "
+                "reintente sync-now o revise integridad de datos.",
+                "snapshot_inconsistent",
+            )
+        return (
+            "No hay filas en el snapshot (tabla conciliacion_sheet_rows). Ejecute sync-now o el cron.",
+            "empty_snapshot",
+        )
+
+    return (
+        "Aún no es posible generar Fecha Drive. Ejecute sync-now o revise la configuración.",
+        "unknown",
+    )
+
+
+@router.get("/diagnostico")
+def get_conciliacion_sheet_diagnostico(
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    JSON agregado: variables de entorno (enmascaradas), filas en BD, última corrida y
+    ping ligero a la API de Google (solo metadatos del libro). No escribe en Drive ni en BD.
+    """
+    logger.info("[conciliacion_sheet] GET /diagnostico")
+    return build_conciliacion_sheet_diagnostico(db)
+
+
 @router.get("/status")
 def get_conciliacion_sheet_status(
     db: Session = Depends(get_db),
@@ -119,11 +214,25 @@ def get_conciliacion_sheet_status(
         and headers_ok
         and snapshot_row_count > 0
     )
+    hint, blocker = _fecha_drive_hint_and_blocker(
+        fecha_drive_ready=fecha_drive_ready,
+        spreadsheet_configured=spreadsheet_configured,
+        cols_range=cols_range,
+        hdrs=hdrs,
+        headers_ok=headers_ok,
+        snapshot_row_count=snapshot_row_count,
+        last_run=last_run,
+    )
     logger.info(
-        "[conciliacion_sheet] GET /status fecha_drive_ready=%s filas_snapshot=%s n_headers=%s",
+        "[conciliacion_sheet] GET /status fecha_drive_ready=%s filas_snapshot=%s n_headers=%s "
+        "blocker=%s last_run_id=%s last_run_ok=%s last_run_rows=%s",
         fecha_drive_ready,
         snapshot_row_count,
         len(hdrs),
+        blocker,
+        getattr(last_run, "id", None),
+        getattr(last_run, "success", None),
+        getattr(last_run, "row_count", None),
     )
     return {
         "timezone": BUSINESS_TIMEZONE,
@@ -132,17 +241,8 @@ def get_conciliacion_sheet_status(
         "expected_tab_name": (getattr(settings, "CONCILIACION_SHEET_TAB_NAME", None) or "CONCILIACIÓN").strip(),
         "snapshot_row_count": snapshot_row_count,
         "fecha_drive_ready": fecha_drive_ready,
-        "fecha_drive_hint": (
-            None
-            if fecha_drive_ready
-            else (
-                "Configure CONCILIACION_SHEET_SPREADSHEET_ID y credenciales Google; "
-                "luego use POST /conciliacion-sheet/sync-now o el cron con /sync. "
-                "Se requiere pestaña con cabecera hasta columna Q y filas de datos."
-                if spreadsheet_configured
-                else "Falta CONCILIACION_SHEET_SPREADSHEET_ID en el servidor."
-            )
-        ),
+        "fecha_drive_blocker": blocker,
+        "fecha_drive_hint": hint,
         "meta": None
         if meta is None
         else {

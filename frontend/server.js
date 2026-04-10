@@ -126,6 +126,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Si algo pide /pagos/api/... (base path + API), redirigir a /api/... (el proxy solo escucha en /api).
+app.all(/^\/pagos\/api(\/.*)?$/i, (req, res) => {
+  const target = req.originalUrl.replace(/^\/pagos\/api/i, '/api') || '/api';
+  res.redirect(307, target);
+});
+
 // ============================================
 // PROXY /api -> Backend (Render o local)
 // ============================================

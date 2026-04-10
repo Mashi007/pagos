@@ -819,6 +819,7 @@ class ApiClient {
       url.includes('/pagos/kpis') ||
       url.includes('/pagos/stats') ||
       url.includes('/revision-manual/') || // Render cold start + consulta pesada
+      url.includes('/conciliacion-sheet/diagnostico') || // Ping Google + lecturas BD
       url.includes('listado-y-kpis') || // Cobros: listado + KPIs en un request (dos consultas BD)
       url.includes('/notificaciones/clientes-retrasados') ||
       url.includes('/notificaciones-prejudicial')

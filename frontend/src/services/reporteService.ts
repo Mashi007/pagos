@@ -448,7 +448,7 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
-/** GET /api/v1/conciliacion-sheet/status — snapshot hoja Drive vs BD (Fecha Drive). */
+/** GET /api/v1/conciliacion-sheet/status - snapshot hoja Drive vs BD (Fecha Drive). */
 export interface ConciliacionSheetStatusResponse {
   timezone: string
 
@@ -461,6 +461,9 @@ export interface ConciliacionSheetStatusResponse {
   snapshot_row_count: number
 
   fecha_drive_ready: boolean
+
+  /** Código estable cuando no está listo (p. ej. never_synced, last_sync_failed). Opcional si el API es anterior. */
+  fecha_drive_blocker?: string | null
 
   fecha_drive_hint: string | null
 
@@ -1538,6 +1541,14 @@ class ReporteService {
       `${this.conciliacionSheetBaseUrl}/sync-now`,
       undefined,
       { timeout: 120000 }
+    )
+  }
+
+  /** Diagnóstico agregado (BD + ping metadatos Google); no modifica datos. */
+  async getConciliacionSheetDiagnostico(): Promise<Record<string, unknown>> {
+    return await apiClient.get<Record<string, unknown>>(
+      `${this.conciliacionSheetBaseUrl}/diagnostico`,
+      { timeout: 60000 }
     )
   }
 }
