@@ -930,6 +930,7 @@ def enviar_con_plantilla(
     """
     from app.core.email import send_email
     from app.core.email_config_holder import get_email_activo_servicio
+    from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
     p = db.get(PlantillaNotificacion, plantilla_id)
     if not p or not p.activa:
         raise HTTPException(status_code=404, detail="Plantilla no encontrada o inactiva")
@@ -946,11 +947,11 @@ def enviar_con_plantilla(
     }
     asunto = _sustituir_variables(p.asunto, item)
     cuerpo = _sustituir_variables(p.cuerpo, item)
-    correo = (cliente.email or "").strip()
-    if not correo or "@" not in correo:
-        raise HTTPException(status_code=400, detail="El cliente no tiene email vÃƒÂ¡lido")
+    destinos = emails_destino_desde_objeto(cliente)
+    if not destinos:
+        raise HTTPException(status_code=400, detail="El cliente no tiene email valido")
     if cliente_bloqueado_por_desistimiento(
-        db, cliente_id=cliente.id, cedula=cliente.cedula, email=correo
+        db, cliente_id=cliente.id, cedula=cliente.cedula, email=destinos[0]
     ):
         raise HTTPException(
             status_code=400,
@@ -959,10 +960,10 @@ def enviar_con_plantilla(
     if not get_email_activo_servicio("notificaciones"):
         raise HTTPException(status_code=400, detail="El envio de email para notificaciones esta desactivado. Activalo en Configuracion > Email.")
     tipo_tab = (getattr(p, "tipo", None) or "").strip() or None
-    ok, msg = send_email([correo], asunto, cuerpo, servicio="notificaciones", tipo_tab=tipo_tab)
+    ok, msg = send_email(destinos, asunto, cuerpo, servicio="notificaciones", tipo_tab=tipo_tab)
     if not ok:
         raise HTTPException(status_code=502, detail=msg or "Error al enviar el correo")
-    return {"message": "Correo enviado", "destinatario": correo}
+    return {"message": "Correo enviado", "destinatario": unir_destinatarios_log(destinos), "destinatarios": destinos}
 
 
 # --- Variables personalizadas (CRUD + inicializar precargadas) ---

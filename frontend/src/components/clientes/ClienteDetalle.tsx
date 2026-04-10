@@ -218,8 +218,20 @@ export function ClienteDetalle() {
           />
 
           <InfoItem
-            label="Correo electrónico"
+            label="Correo 1 (prioridad)"
             value={cédulaiente.email?.trim() || '-'}
+          />
+
+          <InfoItem
+            label="Correo 2 (opcional)"
+            value={(() => {
+              const s =
+                cédulaiente.email_secundario ?? cédulaiente.correo_2 ?? ''
+
+              const t = String(s).trim()
+
+              return t || '-'
+            })()}
           />
 
           <InfoItem

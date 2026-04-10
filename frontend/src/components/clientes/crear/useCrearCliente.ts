@@ -27,6 +27,9 @@ export interface FormData {
 
   email: string
 
+  /** Correo 2 (opcional). Vacio = sin segundo correo. */
+  emailSecundario: string
+
   callePrincipal: string
 
   calleTransversal: string
@@ -66,6 +69,10 @@ export interface CrearClienteFormProps {
     apellido?: string
     telefono?: string
     email?: string
+
+    email_secundario?: string | null
+
+    correo_2?: string | null
     [key: string]: unknown
   }
 
@@ -179,6 +186,8 @@ export function useCrearCliente({
     telefono: '',
 
     email: '',
+
+    emailSecundario: '',
 
     callePrincipal: '',
 
@@ -609,6 +618,73 @@ export function useCrearCliente({
     return { field: 'email', isValid: true, message: 'Email válido' }
   }
 
+  const validateEmailSecundario = (
+    emailPrincipal: string,
+    emailSec: string
+  ): ValidationResult => {
+    if (isNN(emailSec))
+      return {
+        field: 'emailSecundario',
+        isValid: true,
+        message: 'Valor omitido por NN',
+      }
+
+    const secTrim = (emailSec || '').trim()
+
+    if (!secTrim)
+      return {
+        field: 'emailSecundario',
+        isValid: true,
+        message: 'Opcional',
+      }
+
+    const primTrim = (emailPrincipal || '').trim()
+
+    if (primTrim && secTrim.toLowerCase() === primTrim.toLowerCase())
+      return {
+        field: 'emailSecundario',
+        isValid: false,
+        message: 'El correo 2 no puede repetir el correo 1',
+      }
+
+    if (secTrim.includes(' '))
+      return {
+        field: 'emailSecundario',
+        isValid: false,
+        message: 'El correo no puede contener espacios',
+      }
+
+    if (secTrim.includes(','))
+      return {
+        field: 'emailSecundario',
+        isValid: false,
+        message: 'El correo no puede contener comas',
+      }
+
+    if (!secTrim.includes('@'))
+      return {
+        field: 'emailSecundario',
+        isValid: false,
+        message: 'El correo debe contener un @',
+      }
+
+    const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+
+    if (!emailPattern.test(secTrim))
+      return {
+        field: 'emailSecundario',
+        isValid: false,
+        message:
+          'El correo debe tener una extensión válida (.com, .edu, .gob, etc.)',
+      }
+
+    return {
+      field: 'emailSecundario',
+      isValid: true,
+      message: 'Correo 2 válido',
+    }
+  }
+
   const validateFieldWithBackend = async (
     field: string,
     value: string
@@ -679,6 +755,7 @@ export function useCrearCliente({
     else if (field === 'nombres') formattedValue = formatNombres(value)
     else if (field === 'ocupacion') formattedValue = formatOcupacion(value)
     else if (field === 'email') formattedValue = formatEmail(value)
+    else if (field === 'emailSecundario') formattedValue = formatEmail(value)
 
     setFormData(prev => ({ ...prev, [field]: formattedValue }))
 
@@ -691,6 +768,8 @@ export function useCrearCliente({
       validation = validateFechaNacimiento(formattedValue)
     else if (field === 'telefono') validation = validateTelefono(formattedValue)
     else if (field === 'email') validation = validateEmail(formattedValue)
+    else if (field === 'emailSecundario')
+      validation = validateEmailSecundario(formData.email, formattedValue)
     else if (field === 'descripcion')
       validation = validateDescripcion(formattedValue)
     else if (
@@ -719,7 +798,25 @@ export function useCrearCliente({
         : { field, isValid: true, message: '' }
     }
 
-    setValidations(prev => [...prev.filter(v => v.field !== field), validation])
+    if (field === 'email') {
+      const secVal = validateEmailSecundario(
+        formattedValue,
+        formData.emailSecundario
+      )
+
+      setValidations(prev => [
+        ...prev.filter(
+          v => v.field !== 'email' && v.field !== 'emailSecundario'
+        ),
+        validation,
+        secVal,
+      ])
+    } else {
+      setValidations(prev => [
+        ...prev.filter(v => v.field !== field),
+        validation,
+      ])
+    }
   }
 
   const isFormValid = () => {
@@ -755,6 +852,11 @@ export function useCrearCliente({
 
     const emailValidation = validateEmail(formData.email)
 
+    const emailSecundarioValidation = validateEmailSecundario(
+      formData.email,
+      formData.emailSecundario
+    )
+
     const direccionValida =
       direccionValidation.isValid &&
       formData.callePrincipal &&
@@ -762,6 +864,8 @@ export function useCrearCliente({
       formData.municipio &&
       formData.ciudad &&
       formData.estadoDireccion
+
+    if (!emailSecundarioValidation.isValid) return false
 
     return requiredFields.every(field => {
       if (field === 'nombres')
@@ -908,6 +1012,9 @@ export function useCrearCliente({
         estado: toTitleCase(blankIfNN(formData.estadoDireccion)),
       })
 
+      const emailSecPayload =
+        (blankIfNN(formData.emailSecundario) || '').trim() || null
+
       const todosLosDatos = {
         cedula: formatCedula(blankIfNN(formData.cedula)) || 'Z999999999',
 
@@ -916,6 +1023,8 @@ export function useCrearCliente({
         telefono: telefonoCompleto,
 
         email: blankIfNN(formData.email),
+
+        email_secundario: emailSecPayload,
 
         direccion: direccionCompleta,
 
@@ -1008,6 +1117,14 @@ export function useCrearCliente({
 
           if (!valoresIguales(todosLosDatos.email, datosOriginales.email))
             clienteData.email = todosLosDatos.email
+
+          const secOriginal =
+            (datosOriginales.emailSecundario || '').trim() || null
+
+          if (
+            !valoresIguales(todosLosDatos.email_secundario ?? null, secOriginal)
+          )
+            clienteData.email_secundario = todosLosDatos.email_secundario
 
           if (!valoresIguales(todosLosDatos.direccion, direccionOriginal))
             clienteData.direccion = todosLosDatos.direccion
@@ -1117,10 +1234,14 @@ export function useCrearCliente({
             tipoDuplicado = 'nombre'
             _errorMessageUser =
               errorDetail || 'Ya existe un cliente con ese nombre.'
-          } else if (detailText.includes('mismo email')) {
+          } else if (
+            detailText.includes('mismo email') ||
+            detailText.includes('correo 1') ||
+            detailText.includes('correo 2')
+          ) {
             tipoDuplicado = 'email'
             _errorMessageUser =
-              errorDetail || 'Ya existe un cliente con ese email.'
+              errorDetail || 'Ya existe un cliente con ese correo.'
           } else if (detailText.includes('mismo teléfono')) {
             tipoDuplicado = 'telefono'
             _errorMessageUser =
@@ -1129,12 +1250,13 @@ export function useCrearCliente({
             detailText.includes('cédula') ||
             detailText.includes('nombre') ||
             detailText.includes('email') ||
+            detailText.includes('correo') ||
             detailText.includes('teléfono')
           ) {
             tipoDuplicado = 'datos'
             _errorMessageUser =
               errorDetail ||
-              'Cédula, nombre, email o teléfono ya pertenecen a otro cliente.'
+              'Cédula, nombre, correo(s) o teléfono ya pertenecen a otro cliente.'
           } else {
             _errorMessageUser =
               errorDetail ||
@@ -1159,13 +1281,14 @@ export function useCrearCliente({
         const mensajes: Record<string, string> = {
           cedula: 'la misma cédula',
           nombre: 'el mismo nombre completo',
-          email: 'el mismo email',
+          email: 'el mismo correo (1 o 2)',
           telefono: 'el mismo teléfono',
-          datos: 'la misma cédula, nombre, email o teléfono',
+          datos: 'la misma cédula, nombre, correo(s) o teléfono',
         }
 
         const mensajeDuplicado =
-          mensajes[tipoDuplicado] || 'la misma cédula, nombre, email o teléfono'
+          mensajes[tipoDuplicado] ||
+          'la misma cédula, nombre, correo(s) o teléfono'
 
         const friendly = existingId
           ? `ADVERTENCIA: Ya existe un cliente con ${mensajeDuplicado}.\n\nCliente existente ID: ${existingId}\n\n¿Deseas abrir el cliente existente para editarlo?`
@@ -1365,6 +1488,13 @@ export function useCrearCliente({
 
         email: typeof cliente.email === 'string' ? cliente.email : '',
 
+        emailSecundario:
+          typeof cliente.email_secundario === 'string'
+            ? cliente.email_secundario
+            : typeof cliente.correo_2 === 'string'
+              ? cliente.correo_2
+              : '',
+
         ...direccionData,
 
         fechaNacimiento: convertirFechaLocal(
@@ -1398,6 +1528,8 @@ export function useCrearCliente({
         nombres: '',
         telefono: '',
         email: '',
+
+        emailSecundario: '',
 
         callePrincipal: '',
         calleTransversal: '',

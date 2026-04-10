@@ -7,14 +7,14 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
 Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **MASTER** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
 Estrella Gmail + etiquetas MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
-fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From).
+fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From): primero `email`, luego `email_secundario`.
 Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella MERCANTIL / BNC / BINANCE / BNV). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
 En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
 Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL): etiqueta Gmail **MANUAL** (con candidatos imagen/PDF).
 Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas de plantilla; con candidatos imagen/PDF
 se fuerza sin estrella + no leido en Gmail para reintento. No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
-Cedula: solo desde tabla clientes por email del De (From), nunca desde la imagen. El destinatario Para (To) no se usa para cedula.
+Cedula: solo desde tabla clientes por email del De (From): columna `email` y si no coincide `email_secundario`; nunca desde la imagen. El destinatario Para (To) no se usa para cedula.
 """
 import logging
 from datetime import datetime, timezone
@@ -115,6 +115,7 @@ def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str
     """
     Devuelve (cedula_raw, motivo_fallo).
     motivo_fallo: None si hay cedula; "EMAIL" sin coincidencia; "BD" si la consulta lanzo excepcion.
+    Orden fijo: primero `clientes.email` (correo principal), si no hay fila entonces `clientes.email_secundario`.
     """
     em = (email_raw or "").strip().lower()
     if not em:
@@ -127,6 +128,15 @@ def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str
         ).scalar_one_or_none()
         if row:
             return row, None
+        row_sec = db.execute(
+            select(Cliente.cedula)
+            .where(Cliente.email_secundario.isnot(None))
+            .where(func.trim(Cliente.email_secundario) != "")
+            .where(func.lower(func.trim(Cliente.email_secundario)) == em)
+            .limit(1)
+        ).scalar_one_or_none()
+        if row_sec:
+            return row_sec, None
         return None, "EMAIL"
     except Exception as ex:
         logger.warning("[PAGOS_GMAIL] Lookup cedula por email clientes: %s", ex)
@@ -138,7 +148,7 @@ def _cedula_columna_desde_remitente(
 ) -> tuple[str, bool]:
     """
     Devuelve (valor columna cedula, es_cliente_valido).
-    Si hay cliente con email = remitente: cedula formateada.
+    Si hay cliente con `email` o `email_secundario` = remitente (tras normalizar): cedula formateada.
     Si no hay fila: ERROR EMAIL. Si falla la consulta: ERROR BD. (3.3 sigue generando fila Excel/Drive.)
     """
     c_raw, motivo = _cedula_por_email_cliente(db, sender_lc)

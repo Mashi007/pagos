@@ -26,6 +26,7 @@ from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_gmail,
 )
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
+from app.utils.cliente_emails import emails_destino_desde_objeto
 
 logger = logging.getLogger(__name__)
 
@@ -403,6 +404,10 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
 
     email = (getattr(cliente, "email", None) or "").strip()
 
+    email_sec = (getattr(cliente, "email_secundario", None) or "").strip()
+
+    correos_cliente = emails_destino_desde_objeto(cliente)
+
     
 
     if sincronizar:
@@ -588,7 +593,15 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
 
         "nombre": nombre,
 
+        "correo_1": email,
+
+        "correo_2": email_sec or None,
+
         "email": email,
+
+        "email_secundario": email_sec or None,
+
+        "emails": correos_cliente,
 
         "prestamos_list": prestamos_list,
 
@@ -635,6 +648,8 @@ def obtener_datos_estado_cuenta_cliente(db, cedula_lookup: str):
 
     nombre = (getattr(cliente, "nombres", None) or "").strip()
     email = (getattr(cliente, "email", None) or "").strip()
+    email_sec = (getattr(cliente, "email_secundario", None) or "").strip()
+    correos_cliente = emails_destino_desde_objeto(cliente)
     cedula_display = (getattr(cliente, "cedula", None) or "").strip()
 
     prestamos_rows = db.execute(
@@ -660,7 +675,11 @@ def obtener_datos_estado_cuenta_cliente(db, cedula_lookup: str):
     merged = {
         "cedula_display": cedula_display,
         "nombre": nombre,
+        "correo_1": email,
+        "correo_2": email_sec or None,
         "email": email,
+        "email_secundario": email_sec or None,
+        "emails": correos_cliente,
         "prestamos_list": [],
         "cuotas_pendientes": [],
         "total_pendiente": 0.0,

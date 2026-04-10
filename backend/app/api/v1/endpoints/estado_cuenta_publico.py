@@ -81,6 +81,7 @@ from app.core.email_config_holder import get_email_activo_servicio
 from app.services.notificaciones_exclusion_desistimiento import (
     cliente_bloqueado_por_desistimiento,
 )
+from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 
 
 
@@ -259,11 +260,13 @@ def _cliente_nombre_email_por_cedula_lookup(
 
     cedula_lookup: str,
 
-) -> Optional[Tuple[str, str]]:
+) -> Optional[Tuple[str, List[str]]]:
 
     """
 
     Solo lectura en clientes; no sincroniza pagos ni reaplica cascada.
+
+    Devuelve (nombre, lista de correos validos del cliente, hasta 2).
 
     Usar en solicitar-codigo; el armado completo del estado (sync/cascada) queda en verificar/PDF.
 
@@ -293,9 +296,7 @@ def _cliente_nombre_email_por_cedula_lookup(
 
     nombre = (getattr(cliente, "nombres", None) or "").strip()
 
-    email = (getattr(cliente, "email", None) or "").strip()
-
-    return (nombre, email)
+    return (nombre, emails_destino_desde_objeto(cliente))
 
 
 
@@ -709,7 +710,9 @@ def validar_cedula_estado_cuenta(
 
         )
 
-    nombre, email = contacto
+    nombre, emails = contacto
+
+    email_prim = emails[0] if emails else None
 
     return ValidarCedulaEstadoCuentaResponse(
 
@@ -717,7 +720,7 @@ def validar_cedula_estado_cuenta(
 
         nombre=nombre,
 
-        email=email or None,
+        email=email_prim,
 
     )
 
@@ -807,9 +810,11 @@ def solicitar_codigo_estado_cuenta(
 
         )
 
-    nombre_raw, email = cliente_contacto
+    nombre_raw, emails_dest = cliente_contacto
 
     nombre = (nombre_raw or "").strip() or "Cliente"
+
+    email = emails_dest[0]
 
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -907,7 +912,13 @@ def solicitar_codigo_estado_cuenta(
 
         try:
 
-            ok_send, err_send = send_email([email], asunto, cuerpo, servicio="estado_cuenta", respetar_destinos_manuales=True)
+            ok_send, err_send = send_email(
+                emails_dest,
+                asunto,
+                cuerpo,
+                servicio="estado_cuenta",
+                respetar_destinos_manuales=True,
+            )
 
             if ok_send:
 
@@ -929,7 +940,7 @@ def solicitar_codigo_estado_cuenta(
 
                     "estado_cuenta solicitar: codigo NO enviado por correo a %s: %s",
 
-                    email,
+                    unir_destinatarios_log(emails_dest),
 
                     err_send or "send_email devolvio False",
 
@@ -939,7 +950,7 @@ def solicitar_codigo_estado_cuenta(
 
         except Exception as e:
 
-            logger.warning("No se pudo enviar codigo por email a %s: %s", email, e)
+            logger.warning("No se pudo enviar codigo por email a %s: %s", unir_destinatarios_log(emails_dest), e)
 
             logger.info("estado_cuenta solicitar ip=%s outcome=ok_email_fail cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
 
@@ -1275,6 +1286,10 @@ def solicitar_estado_cuenta(
 
     email = (datos.get("email") or "").strip()
 
+    emails_pdf = datos.get("emails")
+    if not isinstance(emails_pdf, list) or not emails_pdf:
+        emails_pdf = [email] if email and "@" in email else []
+
     prestamos_list = datos.get("prestamos_list") or []
 
     fecha_corte = datos.get("fecha_corte") or date.today()
@@ -1311,11 +1326,11 @@ def solicitar_estado_cuenta(
 
 
     bloquear_email = cliente_bloqueado_por_desistimiento(
-        db, cedula=cedula_lookup, email=email
+        db, cedula=cedula_lookup, email=(emails_pdf[0] if emails_pdf else email)
     )
     # No enviar email si origen es 'informes' (solo devolver PDF)
     enviar_por_email = (
-        email and not bloquear_email and origen != "informes"
+        bool(emails_pdf) and not bloquear_email and origen != "informes"
     )
 
     if enviar_por_email:
@@ -1330,7 +1345,7 @@ def solicitar_estado_cuenta(
 
                 send_email(
 
-                    [email],
+                    emails_pdf,
 
                     f"Estado de cuenta - {fecha_corte.isoformat()}",
 
@@ -1346,7 +1361,11 @@ def solicitar_estado_cuenta(
 
         except Exception as e:
 
-            logger.warning("No se pudo enviar estado de cuenta por email a %s: %s", email, e)
+            logger.warning(
+                "No se pudo enviar estado de cuenta por email a %s: %s",
+                unir_destinatarios_log(emails_pdf),
+                e,
+            )
 
             # No fallar la petición: el PDF se devuelve igual
 

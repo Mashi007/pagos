@@ -1,45 +1,12 @@
 /**
-
-
-
-
-
- * Tipos para Cliente
-
-
-
-
-
- * Evita el uso de 'any' en componentes que manejan clientes
-
-
-
-
-
+ * Tipos de cliente alineados con `Cliente` / `ClienteForm` en `./index`.
+ * Importar desde `../types` en código nuevo; este archivo evita modelos duplicados (nombre/apellido legacy).
  */
 
-export interface Cliente {
-  id: number
+import type { Cliente as ClienteCanonico } from './index'
 
-  cedula: string
+export type Cliente = ClienteCanonico
 
-  nombre: string
-
-  apellido: string
-
-  email?: string
-
-  telefono?: string
-
-  direccion?: string
-
-  fecha_registro?: string
-
-  estado?: string
-
-  [key: string]: unknown // Para campos adicionales
-}
-
-export interface ClienteListItem extends Cliente {
-  // Campos específicos para listas
+export interface ClienteListItem extends ClienteCanonico {
+  // Campos extra de listados (si en el futuro el API los agrega)
 }

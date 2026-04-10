@@ -1,6 +1,11 @@
 import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
 
-import { Cliente, ClienteForm, ClienteFilters } from '../types'
+import {
+  Cliente,
+  ClienteForm,
+  ClienteFilters,
+  ActualizarClienteLoteItem,
+} from '../types'
 
 import { logger } from '../utils/logger'
 
@@ -86,7 +91,7 @@ class ClienteService {
     return response
   }
 
-  // Comprobar qué emails ya existen en la tabla clientes (carga masiva: nunca repetido)
+  // Comprobar qué emails ya existen en clientes (correo 1 o correo 2; carga masiva)
 
   async checkEmails(emails: string[]): Promise<{ existing_emails: string[] }> {
     if (!emails.length) return { existing_emails: [] }
@@ -454,7 +459,7 @@ class ClienteService {
   // Actualizar múltiples clientes en lote
 
   async actualizarClientesLote(
-    actualizaciones: Array<{ id: number; [key: string]: any }>
+    actualizaciones: ActualizarClienteLoteItem[]
   ): Promise<{
     actualizados: number
 

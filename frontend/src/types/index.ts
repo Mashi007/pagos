@@ -51,7 +51,15 @@ export interface Cliente {
 
   telefono?: string
 
+  /** Correo 1 (prioridad). */
   email?: string
+
+  /** Correo 2 (opcional). */
+  email_secundario?: string | null
+
+  correo_1?: string
+
+  correo_2?: string | null
 
   direccion?: string
 
@@ -117,6 +125,8 @@ export interface ClienteForm {
 
   email?: string
 
+  email_secundario?: string | null
+
   direccion?: string
 
   fecha_nacimiento?: string
@@ -137,6 +147,21 @@ export interface ClienteForm {
 
   // Notas
 
+  notas?: string
+}
+
+/** Payload de POST /api/v1/clientes/actualizar-lote (alineado con ActualizarLoteItem en backend). */
+export interface ActualizarClienteLoteItem {
+  id: number
+  cedula?: string
+  nombres?: string
+  telefono?: string
+  email?: string
+  email_secundario?: string | null
+  correo_1?: string
+  correo_2?: string | null
+  direccion?: string
+  ocupacion?: string
   notas?: string
 }
 

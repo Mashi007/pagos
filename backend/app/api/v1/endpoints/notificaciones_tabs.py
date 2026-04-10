@@ -49,6 +49,7 @@ from app.services.notificaciones_exclusion_desistimiento import (
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
 from app.services.notificacion_service import build_cuotas_pendiente_2_dias_antes_items
+from app.utils.cliente_emails import emails_destino_cliente, emails_destino_desde_objeto, unir_destinatarios_log
 from app.services.notificacion_logging import (
     log_envio_inicio,
     log_envio_config,
@@ -454,11 +455,25 @@ def _enviar_correos_items(
             to_email = []  # Modo prueba activo pero sin correo de pruebas: no enviar a nadie
             bcc_list = None
         else:
-            correo = (item.get("correo") or "").strip()
-            if not correo or "@" not in correo:
-                to_email = []
+            correos_item = item.get("correos")
+            if isinstance(correos_item, list) and correos_item:
+                to_email = [
+                    c.strip()
+                    for c in correos_item
+                    if c and isinstance(c, str) and "@" in c.strip()
+                ]
             else:
-                to_email = [correo]
+                c1 = (item.get("correo_1") or item.get("correo") or "").strip()
+                c2_raw = item.get("correo_2")
+                c2 = (str(c2_raw).strip() if c2_raw is not None else "") or None
+                if c2 is not None and not c2:
+                    c2 = None
+                if c1 and "@" in c1:
+                    to_email = emails_destino_cliente(c1, c2)
+                elif c2 and "@" in c2:
+                    to_email = emails_destino_cliente(None, c2)
+                else:
+                    to_email = []
             cco = tipo_cfg.get("cco") or []
             bcc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()] if isinstance(cco, list) else []
 
@@ -498,7 +513,7 @@ def _enviar_correos_items(
                         EnvioNotificacion(
                             tipo_tab=tipo_tab,
                             asunto=(asunto or "")[:500] if asunto else None,
-                            email=to_email[0],
+                            email=unir_destinatarios_log(to_email, max_len=255),
                             nombre=(item.get("nombre") or "")[:255],
                             cedula=(item.get("cedula") or "")[:50],
                             exito=ok,
@@ -845,22 +860,28 @@ def get_items_masivos(db: Session) -> List[dict]:
         rows = db.execute(
             text(
                 """
-                SELECT id, cliente_id, cedula, nombre, email, telefono, updated_at
+                SELECT id, cliente_id, cedula, nombre, email, email_secundario, telefono, updated_at
                 FROM vw_notificaciones_masivos_contactos
                 ORDER BY nombre ASC, id ASC
                 """
             )
         ).mappings().all()
         for r in rows:
-            email = str(r.get("email") or "").strip()
-            if not email:
+            em = str(r.get("email") or "").strip() or None
+            sec_raw = r.get("email_secundario")
+            sec = str(sec_raw).strip() if sec_raw is not None else ""
+            correos = emails_destino_cliente(em, sec or None)
+            if not correos:
                 continue
             items.append(
                 {
                     "cliente_id": r.get("cliente_id"),
                     "nombre": r.get("nombre") or "",
                     "cedula": r.get("cedula") or "",
-                    "correo": email,
+                    "correo_1": correos[0],
+                    "correo_2": correos[1] if len(correos) > 1 else None,
+                    "correo": correos[0],
+                    "correos": correos,
                     "telefono": str(r.get("telefono") or "").strip(),
                     "estado": "COMUNICACION_GENERAL",
                 }
@@ -885,15 +906,18 @@ def get_items_masivos(db: Session) -> List[dict]:
         .scalars().all()
     )
     for c in rows:
-        email = (getattr(c, "email", None) or "").strip()
-        if not email:
+        correos = emails_destino_desde_objeto(c)
+        if not correos:
             continue
         items.append(
             {
                 "cliente_id": c.id,
                 "nombre": c.nombres or "",
                 "cedula": c.cedula or "",
-                "correo": email,
+                "correo_1": correos[0],
+                "correo_2": correos[1] if len(correos) > 1 else None,
+                "correo": correos[0],
+                "correos": correos,
                 "telefono": (getattr(c, "telefono", None) or "").strip(),
                 "estado": "COMUNICACION_GENERAL",
             }

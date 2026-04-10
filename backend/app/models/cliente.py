@@ -18,6 +18,7 @@ class Cliente(Base):
     nombres = Column(String(100), nullable=False)
     telefono = Column(String(100), nullable=False)
     email = Column(String(100), nullable=False)
+    email_secundario = Column(String(100), nullable=True)
     direccion = Column(Text, nullable=False)
     fecha_nacimiento = Column(Date, nullable=False)
     ocupacion = Column(String(100), nullable=False)

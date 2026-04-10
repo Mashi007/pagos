@@ -99,6 +99,8 @@ from app.core.config import settings
 
 from app.core.email_config_holder import get_email_activo_servicio
 
+from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
+
 
 
 logger = logging.getLogger(__name__)
@@ -848,9 +850,9 @@ def cobros_public_solicitar_codigo_reporte(
 
         )
 
-    email_reg = _norm_email_reporte_pub(cliente.email or "")
+    destinos_reg = emails_destino_desde_objeto(cliente)
 
-    if not email_reg:
+    if not destinos_reg:
 
         logger.info(
 
@@ -868,7 +870,7 @@ def cobros_public_solicitar_codigo_reporte(
 
         )
 
-    if email_in != email_reg:
+    if email_in.lower() not in {d.lower() for d in destinos_reg}:
 
         logger.info("cobros_public solicitar-codigo: email no coincide con BD")
 
@@ -944,7 +946,7 @@ def cobros_public_solicitar_codigo_reporte(
 
         cedula_normalizada=cedula_lookup,
 
-        email=email_reg,
+        email=email_in,
 
         codigo=codigo,
 
@@ -996,7 +998,7 @@ def cobros_public_solicitar_codigo_reporte(
 
         )
 
-    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_lookup, email=email_reg):
+    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_lookup, email=email_in):
 
         logger.info("cobros_public solicitar-codigo: bloqueo desistimiento")
 
@@ -1012,7 +1014,7 @@ def cobros_public_solicitar_codigo_reporte(
 
     ok_send, err_send = send_email(
 
-        [cliente.email.strip()],
+        [email_in],
 
         asunto,
 
@@ -1149,7 +1151,7 @@ def cobros_public_verificar_codigo_reporte(
 
     nombre = (cliente.nombres or "").strip()
 
-    email_raw = (cliente.email or "").strip()
+    email_raw = ((fila.email or "").strip() or (cliente.email or "").strip())
 
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
 
@@ -1552,7 +1554,7 @@ async def enviar_reporte_publico(
 
                     observacion=observacion[:300] if observacion else None,
 
-                    correo_enviado_a=cliente.email,
+                    correo_enviado_a=unir_destinatarios_log(emails_destino_desde_objeto(cliente)),
 
                     estado="pendiente",
 
@@ -1664,18 +1666,18 @@ async def enviar_reporte_publico(
 
             pr.recibo_pdf = pdf_bytes
 
-            to_email = (cliente.email or "").strip()
+            to_emails = emails_destino_desde_objeto(cliente)
             if cliente_bloqueado_por_desistimiento(
-                db, cliente_id=cliente.id, cedula=cliente.cedula, email=to_email
+                db, cliente_id=cliente.id, cedula=cliente.cedula, email=(to_emails[0] if to_emails else "")
             ):
                 logger.info(
                     "[COBROS_PUBLIC] Bloqueo recibo ref=%s: cliente_id=%s con prestamo DESISTIMIENTO",
                     referencia,
                     cliente.id,
                 )
-                to_email = ""
+                to_emails = []
 
-            if to_email:
+            if to_emails:
 
                 body = (
 
@@ -1691,7 +1693,7 @@ async def enviar_reporte_publico(
 
                 ok_mail, err_mail = send_email(
 
-                    [to_email],
+                    to_emails,
 
                     f"Recibo de reporte de pago {_referencia_display(referencia)}",
 
@@ -1711,7 +1713,7 @@ async def enviar_reporte_publico(
 
                         "[COBROS_PUBLIC] Recibo aprobado ref=%s: correo NO enviado a %s. Error: %s.",
 
-                        referencia, to_email, err_mail or "desconocido",
+                        referencia, unir_destinatarios_log(to_emails), err_mail or "desconocido",
 
                     )
 
@@ -2057,7 +2059,7 @@ async def enviar_reporte_infopagos(
 
                     observacion=observacion[:300] if observacion else None,
 
-                    correo_enviado_a=cliente.email,
+                    correo_enviado_a=unir_destinatarios_log(emails_destino_desde_objeto(cliente)),
 
                     estado="pendiente",
 
@@ -2169,18 +2171,18 @@ async def enviar_reporte_infopagos(
 
             pr.recibo_pdf = pdf_bytes
 
-            to_email = (cliente.email or "").strip()
+            to_emails = emails_destino_desde_objeto(cliente)
             if cliente_bloqueado_por_desistimiento(
-                db, cliente_id=cliente.id, cedula=cliente.cedula, email=to_email
+                db, cliente_id=cliente.id, cedula=cliente.cedula, email=(to_emails[0] if to_emails else "")
             ):
                 logger.info(
                     "[INFOPAGOS] Bloqueo recibo ref=%s: cliente_id=%s con prestamo DESISTIMIENTO",
                     referencia,
                     cliente.id,
                 )
-                to_email = ""
+                to_emails = []
 
-            if to_email:
+            if to_emails:
 
                 body = (
 
@@ -2196,7 +2198,7 @@ async def enviar_reporte_infopagos(
 
                 ok_mail, err_mail = send_email(
 
-                    [to_email],
+                    to_emails,
 
                     f"Recibo de pago {_referencia_display(referencia)}",
 
@@ -2218,7 +2220,7 @@ async def enviar_reporte_infopagos(
 
                         referencia,
 
-                        to_email,
+                        unir_destinatarios_log(to_emails),
 
                         err_mail or "desconocido",
 
@@ -2232,7 +2234,7 @@ async def enviar_reporte_infopagos(
 
                         referencia,
 
-                        to_email,
+                        unir_destinatarios_log(to_emails),
 
                     )
 

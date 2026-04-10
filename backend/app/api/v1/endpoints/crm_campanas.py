@@ -29,6 +29,7 @@ from app.schemas.crm_campana import (
     CampanaDestinatarioResponse,
 )
 from app.schemas.auth import UserResponse
+from app.utils.cliente_emails import emails_destino_cliente, unir_destinatarios_log
 
 logger = logging.getLogger(__name__)
 
@@ -40,35 +41,39 @@ def _valid_email(s: str) -> bool:
     return bool(s and "@" in s and "." in s.split("@")[-1])
 
 
-def _get_destinatarios_clientes(db: Session) -> List[Tuple[int, str, Optional[str]]]:
+def _get_destinatarios_clientes(db: Session) -> List[Tuple[int, List[str], Optional[str]]]:
     """
-    Devuelve lista (cliente_id, email, nombres) de clientes con email válido.
-    Un solo registro por email (primer cliente que tenga ese email).
+    Devuelve (cliente_id, lista de correos a enviar en un mismo envío, nombres).
+    Hasta 2 correos por cliente (principal + secundario). Dedupe global por dirección:
+    si una dirección ya se asignó a un cliente anterior, no se repite en clientes posteriores.
     """
     rows = (
         db.execute(
-            select(Cliente.id, Cliente.email, Cliente.nombres)
+            select(Cliente.id, Cliente.email, Cliente.email_secundario, Cliente.nombres)
             .where(Cliente.email.isnot(None))
             .order_by(Cliente.id)
         )
         .all()
     )
     seen: set = set()
-    out: List[Tuple[int, str, Optional[str]]] = []
-    for cliente_id, email, nombres in rows:
-        if not email or not _valid_email(email):
+    out: List[Tuple[int, List[str], Optional[str]]] = []
+    for cliente_id, email, email_sec, nombres in rows:
+        if not email or not _valid_email((email or "").strip()):
             continue
-        e = email.strip().lower()
-        if e in seen:
+        tos_all = emails_destino_cliente(email, email_sec)
+        tos_all = [e for e in tos_all if _valid_email(e)]
+        tos = [e for e in tos_all if e.strip().lower() not in seen]
+        if not tos:
             continue
-        seen.add(e)
-        out.append((cliente_id, email.strip(), (nombres or "").strip() or None))
+        for e in tos:
+            seen.add(e.strip().lower())
+        out.append((cliente_id, tos, (nombres or "").strip() or None))
     return out
 
 
 def _get_destinatarios_para_campana(
     db: Session, campana: CampanaCrm
-) -> List[Tuple[int, str, Optional[str]]]:
+) -> List[Tuple[int, List[str], Optional[str]]]:
     """
     Si la campaña tiene filas en crm_campana_destinatario: solo esos clientes (con email válido).
     Si no tiene: todos los de tabla clientes (comportamiento anterior).
@@ -83,52 +88,58 @@ def _get_destinatarios_para_campana(
         return _get_destinatarios_clientes(db)
     rows = (
         db.execute(
-            select(Cliente.id, Cliente.email, Cliente.nombres)
+            select(Cliente.id, Cliente.email, Cliente.email_secundario, Cliente.nombres)
             .where(Cliente.id.in_(dest_ids))
             .where(Cliente.email.isnot(None))
             .order_by(Cliente.id)
         )
         .all()
     )
-    out: List[Tuple[int, str, Optional[str]]] = []
+    out: List[Tuple[int, List[str], Optional[str]]] = []
     seen: set = set()
-    for cliente_id, email, nombres in rows:
-        if not email or not _valid_email(email):
+    for cliente_id, email, email_sec, nombres in rows:
+        if not email or not _valid_email((email or "").strip()):
             continue
-        e = email.strip().lower()
-        if e in seen:
+        tos_all = emails_destino_cliente(email, email_sec)
+        tos_all = [e for e in tos_all if _valid_email(e)]
+        tos = [e for e in tos_all if e.strip().lower() not in seen]
+        if not tos:
             continue
-        seen.add(e)
-        out.append((cliente_id, email.strip(), (nombres or "").strip() or None))
+        for e in tos:
+            seen.add(e.strip().lower())
+        out.append((cliente_id, tos, (nombres or "").strip() or None))
     return out
 
 
 def _get_destinatarios_by_ids(
     db: Session, ids: List[int]
-) -> List[Tuple[int, str, Optional[str]]]:
-    """Devuelve (cliente_id, email, nombres) solo para los IDs indicados (con email válido)."""
+) -> List[Tuple[int, List[str], Optional[str]]]:
+    """Devuelve (cliente_id, correos destino, nombres) solo para los IDs indicados (con email válido)."""
     if not ids:
         return []
     ids_unicos = list(dict.fromkeys(ids))
     rows = (
         db.execute(
-            select(Cliente.id, Cliente.email, Cliente.nombres)
+            select(Cliente.id, Cliente.email, Cliente.email_secundario, Cliente.nombres)
             .where(Cliente.id.in_(ids_unicos))
             .where(Cliente.email.isnot(None))
             .order_by(Cliente.id)
         )
         .all()
     )
-    out: List[Tuple[int, str, Optional[str]]] = []
+    out: List[Tuple[int, List[str], Optional[str]]] = []
     seen: set = set()
-    for cliente_id, email, nombres in rows:
-        if not email or not _valid_email(email):
+    for cliente_id, email, email_sec, nombres in rows:
+        if not email or not _valid_email((email or "").strip()):
             continue
-        e = email.strip().lower()
-        if e in seen:
+        tos_all = emails_destino_cliente(email, email_sec)
+        tos_all = [e for e in tos_all if _valid_email(e)]
+        tos = [e for e in tos_all if e.strip().lower() not in seen]
+        if not tos:
             continue
-        seen.add(e)
-        out.append((cliente_id, email.strip(), (nombres or "").strip() or None))
+        for e in tos:
+            seen.add(e.strip().lower())
+        out.append((cliente_id, tos, (nombres or "").strip() or None))
     return out
 
 
@@ -149,8 +160,12 @@ def preview_destinatarios(
         destinatarios = _get_destinatarios_clientes(db)
     total = len(destinatarios)
     muestra = [
-        DestinatarioPreview(email=e, cliente_id=cid, nombres=nombres)
-        for cid, e, nombres in destinatarios[:limit]
+        DestinatarioPreview(
+            email=unir_destinatarios_log(emails) if len(emails) > 1 else emails[0],
+            cliente_id=cid,
+            nombres=nombres,
+        )
+        for cid, emails, nombres in destinatarios[:limit]
     ]
     return {
         "total": total,
@@ -196,20 +211,25 @@ def crear_campana(
     ids_a_guardar: List[int] = []
     if payload.destinatarios_cliente_ids and len(payload.destinatarios_cliente_ids) > 0:
         ids_unicos = list(dict.fromkeys(payload.destinatarios_cliente_ids))
-        clientes_con_email = (
+        clientes_rows = (
             db.execute(
-                select(Cliente.id, Cliente.email)
+                select(Cliente.id, Cliente.email, Cliente.email_secundario)
                 .where(Cliente.id.in_(ids_unicos))
                 .where(Cliente.email.isnot(None))
             )
         ).all()
-        validos = [(r[0], r[1]) for r in clientes_con_email if r[1] and _valid_email((r[1] or "").strip())]
         seen_emails: set = set()
-        for cid, email in validos:
-            e = (email or "").strip().lower()
-            if e not in seen_emails:
-                seen_emails.add(e)
-                ids_a_guardar.append(cid)
+        for cid, email, email_sec in clientes_rows:
+            if not email or not _valid_email((email or "").strip()):
+                continue
+            tos_all = emails_destino_cliente(email, email_sec)
+            tos_all = [e for e in tos_all if _valid_email(e)]
+            tos = [e for e in tos_all if e.strip().lower() not in seen_emails]
+            if not tos:
+                continue
+            for e in tos:
+                seen_emails.add(e.strip().lower())
+            ids_a_guardar.append(cid)
         total = len(ids_a_guardar)
     else:
         total = len(_get_destinatarios_clientes(db))
@@ -342,9 +362,12 @@ def _run_envio_lotes(campana_id: int) -> None:
             lote = destinatarios[i : i + batch_size]
             if not get_email_activo_servicio("campanas"):
                 continue
-            for cliente_id, email, _ in lote:
+            for cliente_id, emails, _ in lote:
+                if not emails:
+                    continue
+                email_log = unir_destinatarios_log(emails)
                 if cliente_bloqueado_por_desistimiento(
-                    db, cliente_id=cliente_id, email=email
+                    db, cliente_id=cliente_id, email=emails[0]
                 ):
                     logger.info(
                         "Campaña %s: omitir cliente_id=%s por DESISTIMIENTO",
@@ -354,7 +377,7 @@ def _run_envio_lotes(campana_id: int) -> None:
                     registro = CampanaEnvioCrm(
                         campana_id=campana_id,
                         cliente_id=cliente_id,
-                        email=email,
+                        email=email_log or emails[0],
                         estado="fallido",
                         fecha_envio=datetime.utcnow(),
                         error_mensaje="Bloqueado por regla DESISTIMIENTO",
@@ -364,7 +387,7 @@ def _run_envio_lotes(campana_id: int) -> None:
                     db.commit()
                     continue
                 ok, err = send_email(
-                    [email],
+                    emails,
                     campana.asunto,
                     campana.cuerpo_texto or "",
                     body_html=campana.cuerpo_html or None,
@@ -375,7 +398,7 @@ def _run_envio_lotes(campana_id: int) -> None:
                 registro = CampanaEnvioCrm(
                     campana_id=campana_id,
                     cliente_id=cliente_id,
-                    email=email,
+                    email=email_log or emails[0],
                     estado="enviado" if ok else "fallido",
                     fecha_envio=datetime.utcnow(),
                     error_mensaje=None if ok else (err or "Error desconocido"),

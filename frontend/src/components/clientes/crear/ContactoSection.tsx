@@ -86,7 +86,7 @@ export function ContactoSection({
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">
-            Email <span className="text-red-500">*</span>
+            Correo 1 (prioridad) <span className="text-red-500">*</span>
           </label>
 
           <div className="relative">
@@ -112,6 +112,38 @@ export function ContactoSection({
               )}
 
               {getFieldValidation('email')?.message}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            Correo 2 (opcional)
+          </label>
+
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+
+            <Input
+              type="email"
+              value={formData.emailSecundario}
+              onChange={e => onInputChange('emailSecundario', e.target.value)}
+              className={`pl-10 ${getFieldValidation('emailSecundario')?.isValid === false ? 'border-red-500' : ''}`}
+              placeholder="Otro correo (máx. 2 por cliente)"
+            />
+          </div>
+
+          {getFieldValidation('emailSecundario') && (
+            <div
+              className={`flex items-center gap-1 text-xs ${getFieldValidation('emailSecundario')?.isValid ? 'text-green-600' : 'text-red-600'}`}
+            >
+              {getFieldValidation('emailSecundario')?.isValid ? (
+                <CheckCircle className="h-3 w-3" />
+              ) : (
+                <XCircle className="h-3 w-3" />
+              )}
+
+              {getFieldValidation('emailSecundario')?.message}
             </div>
           )}
         </div>

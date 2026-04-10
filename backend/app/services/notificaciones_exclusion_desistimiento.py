@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
@@ -60,7 +60,12 @@ def cliente_bloqueado_por_desistimiento(
     em = (email or "").strip().lower()
     if em:
         rows = db.execute(
-            select(Cliente.id).where(func.lower(func.trim(Cliente.email)) == em)
+            select(Cliente.id).where(
+                or_(
+                    func.lower(func.trim(Cliente.email)) == em,
+                    func.lower(func.trim(func.coalesce(Cliente.email_secundario, ""))) == em,
+                )
+            )
         ).all()
         for r in rows:
             if r and r[0]:

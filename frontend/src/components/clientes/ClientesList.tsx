@@ -1106,18 +1106,39 @@ export function ClientesList() {
                           <div className="flex items-center text-sm text-gray-600">
                             <Mail className="mr-2 h-3 w-3" />
 
-                            {String(cliente.email ?? '')}
+                            <span className="min-w-0 break-all">
+                              {String(cliente.email ?? '')}
+                            </span>
 
-                            {cliente.email && (
+                            {(cliente.email ||
+                              cliente.email_secundario ||
+                              (cliente as { correo_2?: string }).correo_2) && (
                               <Link
                                 to={`/comunicaciones?cliente_id=${cliente.id}&tipo=email`}
-                                className="ml-2 inline-flex text-green-600 hover:text-green-800"
+                                className="ml-2 inline-flex shrink-0 text-green-600 hover:text-green-800"
                                 title="Ver comunicaciones de Email"
                               >
                                 <MessageSquare className="h-4 w-4" />
                               </Link>
                             )}
                           </div>
+
+                          {(cliente.email_secundario ||
+                            (cliente as { correo_2?: string }).correo_2) && (
+                            <div className="flex items-center text-xs text-gray-500">
+                              <span className="mr-1 font-medium text-gray-400">
+                                2:
+                              </span>
+                              <span className="min-w-0 break-all">
+                                {String(
+                                  cliente.email_secundario ??
+                                    (cliente as { correo_2?: string })
+                                      .correo_2 ??
+                                    ''
+                                )}
+                              </span>
+                            </div>
+                          )}
 
                           <div className="flex items-center text-sm text-gray-600">
                             <Phone className="mr-2 h-3 w-3" />

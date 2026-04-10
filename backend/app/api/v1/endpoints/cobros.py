@@ -3,6 +3,7 @@ Endpoints de administración del módulo Cobros (requieren autenticación).
 Listado de pagos reportados, detalle, aprobar, rechazar, histórico por cédula.
 """
 import logging
+import re
 import threading
 import time
 from collections import Counter
@@ -30,6 +31,7 @@ from app.models.pago import Pago
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK, WHATSAPP_DISPLAY
 from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
 from app.core.email import send_email
+from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.services.notificaciones_exclusion_desistimiento import (
     cliente_bloqueado_por_desistimiento,
 )
@@ -1041,23 +1043,35 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
     )
 
 
-def _email_cliente_pago_reportado(db: Session, pr: PagoReportado) -> str:
-    """Email del cliente para enviar recibo: pr.correo_enviado_a o, si falta, busqueda por cedula en clientes."""
-    to = (pr.correo_enviado_a or "").strip()
-    if to and "@" in to:
-        return to
+def _emails_cliente_pago_reportado(db: Session, pr: PagoReportado) -> List[str]:
+    """
+    Correos del cliente para enviar recibo (hasta 2: principal + secundario).
+    Usa pr.correo_enviado_a si existe (admite varios separados por ; o ,); si no, busca por cédula en clientes.
+    """
+    to_raw = (pr.correo_enviado_a or "").strip()
+    if to_raw and "@" in to_raw:
+        parts = [p.strip() for p in re.split(r"[;,]", to_raw) if p.strip() and "@" in p.strip()]
+        if parts:
+            out: List[str] = []
+            seen: set[str] = set()
+            for p in parts:
+                k = p.lower()
+                if k not in seen:
+                    seen.add(k)
+                    out.append(p)
+            return out[:2]
     cedula_raw = (f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}").replace("-", "").replace(" ", "").strip().upper()
     if not cedula_raw:
-        return ""
+        return []
     cedula_norm = _normalize_cedula_for_client_lookup(cedula_raw)
     variants = _cedula_lookup_variants(cedula_norm)
     if not variants:
-        return ""
+        return []
     cedula_lookup = func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", ""))
     cliente = db.execute(select(Cliente).where(cedula_lookup.in_(variants))).scalars().first()
-    if cliente and (cliente.email or "").strip():
-        return (cliente.email or "").strip()
-    return ""
+    if cliente:
+        return emails_destino_desde_objeto(cliente)
+    return []
 
 
 def _registrar_historial(db: Session, pago_id: int, estado_anterior: str, estado_nuevo: str, usuario_email: Optional[str], motivo: Optional[str]):
@@ -1237,38 +1251,48 @@ def aprobar_pago_reportado(
         logger.exception("[COBROS] Aprobar ref=%s: error generando recibo PDF: %s", pr.referencia_interna, e)
         raise HTTPException(status_code=500, detail=f"Error al generar el recibo PDF: {e!s}")
     pr.recibo_pdf = pdf_bytes
-    to_email = _email_cliente_pago_reportado(db, pr)
+    to_emails = _emails_cliente_pago_reportado(db, pr)
     cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
-    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+    if cliente_bloqueado_por_desistimiento(
+        db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
+    ):
         logger.info(
             "[COBROS] Bloqueo correo ref=%s: cliente con prestamo DESISTIMIENTO",
             pr.referencia_interna,
         )
-        to_email = ""
-    if not pr.correo_enviado_a and to_email:
-        pr.correo_enviado_a = to_email
+        to_emails = []
+    if not pr.correo_enviado_a and to_emails:
+        pr.correo_enviado_a = unir_destinatarios_log(to_emails)
+    dest_log = unir_destinatarios_log(to_emails)
     mensaje_final = (
         "Pago aprobado. No hay correo del cliente registrado; no se envió recibo."
-        if not to_email
+        if not to_emails
         else "Pago aprobado y recibo enviado por correo."
     )
     cobros_correo_activo = get_email_activo_servicio("cobros")
-    if to_email and cobros_correo_activo:
+    if to_emails and cobros_correo_activo:
         body = f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
-        ok_mail, err_mail = send_email([to_email], f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)], servicio="cobros", respetar_destinos_manuales=True)
+        ok_mail, err_mail = send_email(
+            to_emails,
+            f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}",
+            body,
+            attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)],
+            servicio="cobros",
+            respetar_destinos_manuales=True,
+        )
         if ok_mail:
-            logger.info("[COBROS] Aprobar ref=%s: recibo enviado por correo a %s.", pr.referencia_interna, to_email)
+            logger.info("[COBROS] Aprobar ref=%s: recibo enviado por correo a %s.", pr.referencia_interna, dest_log)
         else:
             logger.error(
                 "[COBROS] Aprobar ref=%s: correo NO enviado a %s. Error: %s.",
-                pr.referencia_interna, to_email, err_mail or "desconocido",
+                pr.referencia_interna, dest_log, err_mail or "desconocido",
             )
             mensaje_final = "Pago aprobado. El recibo no pudo enviarse por correo; use 'Enviar recibo por correo' desde el detalle."
-    elif to_email and not cobros_correo_activo:
+    elif to_emails and not cobros_correo_activo:
         logger.warning(
             "[COBROS] Aprobar ref=%s: servicio correo Cobros desactivado, no se envió recibo a %s.",
             pr.referencia_interna,
-            to_email,
+            dest_log,
         )
         mensaje_final = (
             "Pago aprobado. El envío de correo para Cobros está desactivado en Configuración > Email; "
@@ -1300,23 +1324,26 @@ def rechazar_pago_reportado(
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    to_email = _email_cliente_pago_reportado(db, pr)
+    to_emails = _emails_cliente_pago_reportado(db, pr)
     cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
-    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+    if cliente_bloqueado_por_desistimiento(
+        db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
+    ):
         logger.info(
             "[COBROS] Bloqueo correo rechazo ref=%s: cliente con prestamo DESISTIMIENTO",
             pr.referencia_interna,
         )
-        to_email = ""
+        to_emails = []
+    dest_log = unir_destinatarios_log(to_emails)
     notif_activo = get_email_activo_servicio("notificaciones")
     rechazo_correo_enviado: Optional[bool] = None
     rechazo_correo_error: Optional[str] = None
     mensaje_final = "Pago rechazado."
     logger.info(
         "[COBROS] Rechazar ref=%s: destino=%s servicio_notificaciones_activo=%s.",
-        pr.referencia_interna, to_email or "sin correo", notif_activo,
+        pr.referencia_interna, dest_log or "sin correo", notif_activo,
     )
-    if to_email and notif_activo:
+    if to_emails and notif_activo:
         body_text = (
             f"Referencia: {pr.referencia_interna}\n\n"
             f"Su reporte de pago no ha sido aprobado.\n\n"
@@ -1332,7 +1359,7 @@ def rechazar_pago_reportado(
                 nombre_adj = f"comprobante_{pr.referencia_interna}.{ext}"
             attachments.append((nombre_adj, bytes(pr.comprobante)))
         ok_mail, err_mail = send_email(
-            [to_email],
+            to_emails,
             f"Reporte de pago no aprobado #{pr.referencia_interna}",
             body_text,
             attachments=attachments if attachments else None,
@@ -1345,19 +1372,29 @@ def rechazar_pago_reportado(
                 "Pago rechazado. Correo enviado al cliente desde notificaciones@rapicreditca.com "
                 "(motivo y comprobante si aplica)."
             )
-            logger.info("[COBROS] Rechazar ref=%s: correo enviado a %s (servicio notificaciones OK).", pr.referencia_interna, to_email)
+            logger.info(
+                "[COBROS] Rechazar ref=%s: correo enviado a %s (servicio notificaciones OK).",
+                pr.referencia_interna,
+                dest_log,
+            )
         else:
             rechazo_correo_enviado = False
             rechazo_correo_error = (err_mail or "desconocido")[:500]
             mensaje_final = "Pago rechazado. El correo al cliente no pudo enviarse; revise logs o configuración SMTP."
             logger.error(
                 "[COBROS] Rechazar ref=%s: correo NO enviado a %s. Error: %s.",
-                pr.referencia_interna, to_email, err_mail or "desconocido",
+                pr.referencia_interna,
+                dest_log,
+                err_mail or "desconocido",
             )
-    elif to_email and not notif_activo:
-        logger.warning("[COBROS] Rechazar ref=%s: servicio notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
+    elif to_emails and not notif_activo:
+        logger.warning(
+            "[COBROS] Rechazar ref=%s: servicio notificaciones desactivado, no se envió correo a %s.",
+            pr.referencia_interna,
+            dest_log,
+        )
         mensaje_final = "Pago rechazado. Servicio de correo notificaciones desactivado; no se envió correo."
-    elif not to_email:
+    elif not to_emails:
         logger.info("[COBROS] Rechazar ref=%s: no hay correo del cliente, no se envió notificación.", pr.referencia_interna)
         mensaje_final = "Pago rechazado. No hay correo del cliente en el sistema; no se envió notificación."
     _registrar_historial(db, pago_id, estado_anterior, "rechazado", usuario_email, pr.motivo_rechazo)
@@ -1460,15 +1497,17 @@ def enviar_recibo_manual(
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
-    to_email = _email_cliente_pago_reportado(db, pr)
+    to_emails = _emails_cliente_pago_reportado(db, pr)
     cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
-    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+    if cliente_bloqueado_por_desistimiento(
+        db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
+    ):
         logger.info(
             "[COBROS] Bloqueo enviar-recibo ref=%s: cliente con prestamo DESISTIMIENTO",
             pr.referencia_interna,
         )
-        to_email = ""
-    if not to_email:
+        to_emails = []
+    if not to_emails:
         raise HTTPException(status_code=400, detail="No hay correo del cliente para este pago. Registre el correo en el detalle del pago o en la ficha del cliente.")
     if not get_email_activo_servicio("cobros"):
         raise HTTPException(
@@ -1486,7 +1525,7 @@ def enviar_recibo_manual(
         "Adjunto encontrará el recibo.\n\nRapiCredit C.A."
     )
     ok_mail, err_mail = send_email(
-        [to_email],
+        to_emails,
         f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}",
         body,
         attachments=[(f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes))],
@@ -1497,14 +1536,18 @@ def enviar_recibo_manual(
         logger.error(
             "[COBROS] enviar-recibo ref=%s: correo NO enviado a %s. Error: %s.",
             pr.referencia_interna,
-            to_email,
+            unir_destinatarios_log(to_emails),
             err_mail or "desconocido",
         )
         raise HTTPException(
             status_code=502,
             detail=(err_mail or "No se pudo enviar el correo. Revise SMTP de la Cuenta 1 (Cobros) en Configuración > Email.")[:500],
         )
-    logger.info("[COBROS] enviar-recibo ref=%s: recibo enviado a %s.", pr.referencia_interna, to_email)
+    logger.info(
+        "[COBROS] enviar-recibo ref=%s: recibo enviado a %s.",
+        pr.referencia_interna,
+        unir_destinatarios_log(to_emails),
+    )
     return {"ok": True, "mensaje": "Recibo enviado por correo."}
 
 
@@ -1759,21 +1802,24 @@ def cambiar_estado_pago(
         db.refresh(pr)
         pdf_bytes = _generar_recibo_desde_pago(db, pr)
         pr.recibo_pdf = pdf_bytes
-        to_email = _email_cliente_pago_reportado(db, pr)
+        to_emails = _emails_cliente_pago_reportado(db, pr)
         cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
-        if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+        if cliente_bloqueado_por_desistimiento(
+            db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
+        ):
             logger.info(
                 "[COBROS] Bloqueo PATCH aprobado ref=%s: cliente con prestamo DESISTIMIENTO",
                 pr.referencia_interna,
             )
-            to_email = ""
-        if not pr.correo_enviado_a and to_email:
-            pr.correo_enviado_a = to_email
+            to_emails = []
+        if not pr.correo_enviado_a and to_emails:
+            pr.correo_enviado_a = unir_destinatarios_log(to_emails)
+        dest_log_ap = unir_destinatarios_log(to_emails)
         cobros_correo_activo = get_email_activo_servicio("cobros")
-        if to_email and cobros_correo_activo:
+        if to_emails and cobros_correo_activo:
             body_mail = f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
             ok_mail, err_mail = send_email(
-                [to_email],
+                to_emails,
                 f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}",
                 body_mail,
                 attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)],
@@ -1781,19 +1827,25 @@ def cambiar_estado_pago(
                 respetar_destinos_manuales=True,
             )
             if ok_mail:
-                logger.info("[COBROS] Cambiar a aprobado ref=%s: recibo enviado por correo a %s.", pr.referencia_interna, to_email)
+                logger.info(
+                    "[COBROS] Cambiar a aprobado ref=%s: recibo enviado por correo a %s.",
+                    pr.referencia_interna,
+                    dest_log_ap,
+                )
                 mensaje = "Estado actualizado a aprobado. Recibo enviado por correo."
             else:
                 logger.error(
                     "[COBROS] Cambiar a aprobado ref=%s: correo NO enviado a %s. Error: %s.",
-                    pr.referencia_interna, to_email, err_mail or "desconocido",
+                    pr.referencia_interna,
+                    dest_log_ap,
+                    err_mail or "desconocido",
                 )
                 mensaje = "Estado actualizado a aprobado. El recibo no pudo enviarse por correo."
-        elif to_email and not cobros_correo_activo:
+        elif to_emails and not cobros_correo_activo:
             logger.warning(
                 "[COBROS] PATCH estado=aprobado ref=%s: servicio correo Cobros desactivado, no se envió recibo a %s.",
                 pr.referencia_interna,
-                to_email,
+                dest_log_ap,
             )
             mensaje = (
                 "Estado actualizado a aprobado. El envío de correo para Cobros está desactivado en Configuración > Email; "
@@ -1803,20 +1855,25 @@ def cambiar_estado_pago(
             mensaje = "Estado actualizado a aprobado. No hay correo registrado para este pago (no se envió recibo)."
 
     elif body.estado == "rechazado":
-        to_email = _email_cliente_pago_reportado(db, pr)
+        to_emails = _emails_cliente_pago_reportado(db, pr)
         cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
-        if cliente_bloqueado_por_desistimiento(db, cedula=cedula_cli, email=to_email):
+        if cliente_bloqueado_por_desistimiento(
+            db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
+        ):
             logger.info(
                 "[COBROS] Bloqueo PATCH rechazado ref=%s: cliente con prestamo DESISTIMIENTO",
                 pr.referencia_interna,
             )
-            to_email = ""
+            to_emails = []
+        dest_log_rj = unir_destinatarios_log(to_emails)
         notif_activo = get_email_activo_servicio("notificaciones")
         logger.info(
             "[COBROS] PATCH estado=rechazado ref=%s: destino=%s servicio_notificaciones_activo=%s.",
-            pr.referencia_interna, to_email or "sin correo", notif_activo,
+            pr.referencia_interna,
+            dest_log_rj or "sin correo",
+            notif_activo,
         )
-        if to_email and notif_activo:
+        if to_emails and notif_activo:
             body_text = (
                 f"Referencia: {pr.referencia_interna}\n\n"
                 f"Su reporte de pago no ha sido aprobado.\n\n"
@@ -1832,7 +1889,7 @@ def cambiar_estado_pago(
                     nombre_adj = f"comprobante_{pr.referencia_interna}.{ext}"
                 attachments_rech.append((nombre_adj, bytes(pr.comprobante)))
             ok_mail, err_mail = send_email(
-                [to_email],
+                to_emails,
                 f"Reporte de pago no aprobado #{pr.referencia_interna}",
                 body_text,
                 attachments=attachments_rech if attachments_rech else None,
@@ -1841,18 +1898,28 @@ def cambiar_estado_pago(
             )
             if ok_mail:
                 rechazo_correo_enviado = True
-                logger.info("[COBROS] PATCH estado=rechazado ref=%s: correo enviado a %s (servicio notificaciones OK).", pr.referencia_interna, to_email)
+                logger.info(
+                    "[COBROS] PATCH estado=rechazado ref=%s: correo enviado a %s (servicio notificaciones OK).",
+                    pr.referencia_interna,
+                    dest_log_rj,
+                )
                 mensaje = "Estado actualizado a rechazado. Cliente notificado por correo (notificaciones@rapicreditca.com)."
             else:
                 rechazo_correo_enviado = False
                 rechazo_correo_error = (err_mail or "desconocido")[:500]
                 logger.error(
                     "[COBROS] PATCH estado=rechazado ref=%s: correo NO enviado a %s. Error: %s.",
-                    pr.referencia_interna, to_email, err_mail or "desconocido",
+                    pr.referencia_interna,
+                    dest_log_rj,
+                    err_mail or "desconocido",
                 )
                 mensaje = "Estado actualizado a rechazado. El correo al cliente no pudo enviarse; revise logs o configuración SMTP."
-        elif to_email and not notif_activo:
-            logger.warning("[COBROS] PATCH estado=rechazado ref=%s: servicio notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
+        elif to_emails and not notif_activo:
+            logger.warning(
+                "[COBROS] PATCH estado=rechazado ref=%s: servicio notificaciones desactivado, no se envió correo a %s.",
+                pr.referencia_interna,
+                dest_log_rj,
+            )
             mensaje = "Estado actualizado a rechazado. Servicio de correo desactivado; no se envió correo."
         else:
             logger.info("[COBROS] PATCH estado=rechazado ref=%s: no hay correo del cliente, no se envió notificación.", pr.referencia_interna)

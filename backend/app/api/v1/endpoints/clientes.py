@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query, Depends, HTTPException, Body
 
 from app.core.deps import get_current_user, forbid_operator_clientes_gestion
 from app.core.rol_normalization import canonical_rol
-from pydantic import BaseModel, ValidationError
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select, func, or_, delete, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
@@ -26,6 +26,7 @@ from app.models.estado_cliente import EstadoCliente
 from app.models.prestamo import Prestamo
 from app.schemas.auth import UserResponse
 from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
+from app.utils.cliente_emails import secundario_distinto_del_principal
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -40,8 +41,22 @@ def _row_to_cliente_response(row: Any) -> ClienteResponse:
     """Convierte una fila ORM a ClienteResponse tolerando NULLs y tipos de BD."""
     date_keys = {"fecha_nacimiento", "fecha_registro", "fecha_actualizacion"}
     d: dict[str, Any] = {}
-    for key in ("id", "cedula", "nombres", "telefono", "email", "direccion", "fecha_nacimiento",
-                "ocupacion", "estado", "fecha_registro", "fecha_actualizacion", "usuario_registro", "notas"):
+    for key in (
+        "id",
+        "cedula",
+        "nombres",
+        "telefono",
+        "email",
+        "email_secundario",
+        "direccion",
+        "fecha_nacimiento",
+        "ocupacion",
+        "estado",
+        "fecha_registro",
+        "fecha_actualizacion",
+        "usuario_registro",
+        "notas",
+    ):
         try:
             v = getattr(row, key, None)
             if v is None:
@@ -49,12 +64,27 @@ def _row_to_cliente_response(row: Any) -> ClienteResponse:
                     v = 0
                 elif key in date_keys:
                     pass
+                elif key == "email_secundario":
+                    v = None
                 else:
                     v = ""
             d[key] = v
         except Exception:
-            d[key] = None if key in date_keys else ("" if key != "id" else 0)
+            d[key] = None if key in date_keys or key == "email_secundario" else ("" if key != "id" else 0)
     return ClienteResponse.model_validate(d)
+
+
+def _cliente_id_conflicto_email(db: Session, email_norm: str, exclude_id: Optional[int] = None):
+    """Otro cliente (distinto exclude_id) usa este email en email o email_secundario."""
+    if not (email_norm or "").strip():
+        return None
+    en = (email_norm or "").strip()
+    q = select(Cliente.id).where(
+        or_(Cliente.email == en, Cliente.email_secundario == en)
+    )
+    if exclude_id is not None:
+        q = q.where(Cliente.id != exclude_id)
+    return db.execute(q).first()
 
 
 # Estados de cliente desde BD (tabla estados_cliente) - usado en formularios
@@ -112,6 +142,7 @@ def get_clientes(
         Cliente.nombres,
         Cliente.telefono,
         Cliente.email,
+        Cliente.email_secundario,
         Cliente.direccion,
         Cliente.fecha_nacimiento,
         Cliente.ocupacion,
@@ -131,6 +162,7 @@ def get_clientes(
                 Cliente.cedula.ilike(t),
                 Cliente.nombres.ilike(t),
                 Cliente.email.ilike(t),
+                Cliente.email_secundario.ilike(t),
                 Cliente.telefono.ilike(t),
             )
             q = q.select_from(Cliente).where(filtro)
@@ -172,7 +204,11 @@ def get_clientes(
         }
     except (ProgrammingError, OperationalError) as e:
         logger.exception("Error de BD en listado de clientes: %s", e)
-        hint = " Revisa que la tabla clientes tenga las columnas: id, cedula, nombres, telefono, email, direccion, fecha_nacimiento, ocupacion, estado, fecha_registro, fecha_actualizacion, usuario_registro, notas."
+        hint = (
+            " Revisa que la tabla clientes tenga las columnas: id, cedula, nombres, telefono, email, "
+            "email_secundario, direccion, fecha_nacimiento, ocupacion, estado, fecha_registro, "
+            "fecha_actualizacion, usuario_registro, notas."
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Error al cargar el listado de clientes: {e!s}.{hint}",
@@ -344,6 +380,7 @@ def get_casos_a_revisar(
         Cliente.nombres,
         Cliente.telefono,
         Cliente.email,
+        Cliente.email_secundario,
         Cliente.direccion,
         Cliente.fecha_nacimiento,
         Cliente.ocupacion,
@@ -387,12 +424,19 @@ def get_casos_a_revisar(
 
 
 class ActualizarLoteItem(BaseModel):
-    """Item para actualización en lote."""
+    """Item para actualización en lote (mismos nombres de campo que ClienteUpdate; correo_2 = email_secundario)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     id: int
     cedula: Optional[str] = None
     nombres: Optional[str] = None
     telefono: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[str] = Field(None, validation_alias=AliasChoices("email", "correo_1"))
+    email_secundario: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("email_secundario", "correo_2"),
+    )
     direccion: Optional[str] = None
     ocupacion: Optional[str] = None
     notas: Optional[str] = None
@@ -481,13 +525,16 @@ def check_emails(
     emails_norm = list({(e or "").strip().lower() for e in payload.emails if (e or "").strip()})
     if not emails_norm:
         return CheckEmailsResponse(existing_emails=[])
-    # Una sola consulta: emails (en minuscula) que existan en la BD
-    rows = db.execute(
-        select(func.lower(Cliente.email)).where(
-            func.lower(Cliente.email).in_(emails_norm)
-        ).distinct()
+    r1 = db.execute(
+        select(func.lower(Cliente.email)).where(func.lower(Cliente.email).in_(emails_norm))
     ).scalars().all()
-    existing = list(rows) if rows else []
+    r2 = db.execute(
+        select(func.lower(Cliente.email_secundario)).where(
+            Cliente.email_secundario.isnot(None),
+            func.lower(Cliente.email_secundario).in_(emails_norm),
+        )
+    ).scalars().all()
+    existing = sorted({str(x) for x in (list(r1) + list(r2)) if x})
     return CheckEmailsResponse(existing_emails=existing)
 
 
@@ -538,8 +585,8 @@ def create_cliente(
 ):
     """
     Crear cliente en la BD.
-    No permitido duplicados: misma cédula, mismo nombre, mismo email o mismo teléfono â†’ 409.
-    Aplica a Nuevo Cliente y Carga masiva.
+    No permitido duplicados: misma cédula, mismo nombre, mismo correo 1/correo 2 o mismo teléfono -> 409.
+    Aplica a Nuevo Cliente y Carga masiva. JSON: email/email_secundario o correo_1/correo_2.
     """
     cedula_norm = (_normalize_for_duplicate(payload.cedula) or "Z999999999").upper()  # Uppercase para consistency
     nombres_norm = _normalize_for_duplicate(payload.nombres)
@@ -567,15 +614,22 @@ def create_cliente(
                 detail=f"Ya existe un cliente con el mismo nombre completo. Cliente existente ID: {existing_nombres[0]}",
             )
 
-    # Prohibir duplicado por email (si no vacío)
+    # Prohibir duplicado por correo 1 o correo 2 (cualquier columna; misma regla de normalización)
     if email_norm:
-        existing_email = db.execute(
-            select(Cliente.id).where(Cliente.email == email_norm)
-        ).first()
-        if existing_email:
+        ex = _cliente_id_conflicto_email(db, email_norm, None)
+        if ex:
             raise HTTPException(
                 status_code=409,
-                detail=f"Ya existe un cliente con el mismo email. Cliente existente ID: {existing_email[0]}",
+                detail=f"Ya existe un cliente con el mismo correo 1. Cliente existente ID: {ex[0]}",
+            )
+    sec_raw = _normalize_for_duplicate(getattr(payload, "email_secundario", None) or "")
+    _, sec_norm = secundario_distinto_del_principal(email_norm or payload.email, sec_raw or None)
+    if sec_norm:
+        ex2 = _cliente_id_conflicto_email(db, sec_norm, None)
+        if ex2:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ya existe un cliente con el mismo correo 2. Cliente existente ID: {ex2[0]}",
             )
 
     # Si teléfono duplicado (2 números exactamente iguales) â†’ reemplazar por +589999999999
@@ -595,6 +649,7 @@ def create_cliente(
         nombres=payload.nombres,
         telefono=telefono_final,
         email=payload.email,
+        email_secundario=sec_norm,
         direccion=payload.direccion,
         fecha_nacimiento=payload.fecha_nacimiento,
         ocupacion=payload.ocupacion,
@@ -648,17 +703,37 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
                     status_code=409,
                     detail=f"Ya existe otro cliente con el mismo nombre completo. Cliente existente ID: {existing[0]}",
                 )
-    if "email" in data:
-        email_norm = _normalize_for_duplicate(data.get("email") or "")
-        if email_norm:
-            existing = db.execute(
-                select(Cliente.id).where(Cliente.email == email_norm, Cliente.id != cliente_id)
-            ).first()
-            if existing:
+    if "email" in data or "email_secundario" in data:
+        prim_actual = str(getattr(row, "email", "") or "")
+        sec_actual = str(getattr(row, "email_secundario", "") or "").strip() or None
+        prim_nuevo = _normalize_for_duplicate(data.get("email", prim_actual) if "email" in data else prim_actual)
+        if "email_secundario" in data:
+            sec_nuevo_raw = data.get("email_secundario")
+            if sec_nuevo_raw is None:
+                sec_nuevo = None
+            else:
+                sec_nuevo = _normalize_for_duplicate(sec_nuevo_raw) or None
+        else:
+            sec_nuevo = sec_actual
+        _, sec_coherente = secundario_distinto_del_principal(prim_nuevo or prim_actual, sec_nuevo)
+        if "email_secundario" in data:
+            data["email_secundario"] = sec_coherente
+        if prim_nuevo:
+            ex = _cliente_id_conflicto_email(db, prim_nuevo, cliente_id)
+            if ex:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Ya existe otro cliente con el mismo email. Cliente existente ID: {existing[0]}",
+                    detail=f"Ya existe otro cliente con el mismo correo 1. Cliente existente ID: {ex[0]}",
                 )
+        if sec_coherente:
+            exs = _cliente_id_conflicto_email(db, sec_coherente, cliente_id)
+            if exs:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Ya existe otro cliente con el mismo correo 2. Cliente existente ID: {exs[0]}",
+                )
+        if prim_nuevo and sec_coherente and prim_nuevo.strip().lower() == sec_coherente.strip().lower():
+            raise HTTPException(status_code=400, detail="El correo 2 no puede repetir el correo 1")
     if "telefono" in data:
         telefono_dig = _digits_telefono(data.get("telefono") or getattr(row, "telefono") or "")
         tel_10 = telefono_dig[-10:] if len(telefono_dig) >= 10 else telefono_dig
@@ -788,14 +863,16 @@ async def upload_clientes_excel(
 ):
     """
     Carga masiva de clientes desde Excel.
-    Formato esperado: Cédula | Nombres | Dirección | Fecha Nacimiento | Ocupación | Correo | Teléfono
-    
+    Formato esperado: Cédula | Nombres | Dirección | Fecha Nacimiento | Ocupación | Correo 1 | Teléfono
+    Columna opcional 8: Correo 2 (email_secundario), misma regla de unicidad que en API (no repetir en BD ni
+    entre correo 1 y 2 del mismo cliente).
+
     Validaciones:
     - Cédula: V|E|J|Z + 6-11 dígitos, única en BD
-    - Email: formato válido, único en BD
+    - Email: formato válido, único en BD (correo 1 y 2 cuentan como direcciones ocupadas)
     - Teléfono: requerido
     - Nombres: requerido
-    
+
     Respuesta: {registros_creados, registros_con_error, clientes_con_errores}
     """
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
@@ -824,9 +901,17 @@ async def upload_clientes_excel(
         cedulas_existentes = set(
             db.execute(select(Cliente.cedula)).scalars().all()
         )
-        emails_existentes = set(
-            db.execute(select(Cliente.email)).scalars().all()
-        )
+        emails_existentes: set[str] = set()
+        for em in db.execute(select(Cliente.email)).scalars().all():
+            if em is not None and str(em).strip():
+                emails_existentes.add(str(em).strip())
+        for em in (
+            db.execute(select(Cliente.email_secundario).where(Cliente.email_secundario.isnot(None)))
+            .scalars()
+            .all()
+        ):
+            if em is not None and str(em).strip():
+                emails_existentes.add(str(em).strip())
         cedulas_en_lote = set()
         emails_en_lote = set()
         
@@ -845,7 +930,8 @@ async def upload_clientes_excel(
                 ocupacion_raw = row[4] if len(row) > 4 else None
                 email_raw = row[5] if len(row) > 5 else None
                 telefono_raw = row[6] if len(row) > 6 else None
-                
+                email_secundario_raw = row[7] if len(row) > 7 else None
+
                 errores = []
                 
                 # Validar cédula
@@ -879,8 +965,9 @@ async def upload_clientes_excel(
                 if not ocupacion:
                     errores.append("Ocupación es requerida")
                 
-                # Validar email
+                # Validar correo 1 (prioridad) y correo 2 opcional (columna 8)
                 email = str(email_raw or "").strip()
+                email_valid = False
                 if not email:
                     errores.append("Email es requerido")
                 elif not _validate_email(email):
@@ -889,7 +976,26 @@ async def upload_clientes_excel(
                     errores.append("Email duplicado (existe en BD o en este lote)")
                 else:
                     emails_en_lote.add(email)
-                
+                    email_valid = True
+
+                email_secundario_in = str(email_secundario_raw or "").strip()
+                _, sec_norm = secundario_distinto_del_principal(
+                    email if email_valid else None,
+                    email_secundario_in or None,
+                )
+                if email_secundario_in and not email_valid:
+                    errores.append("Correo 2 requiere un correo 1 válido en la misma fila")
+                elif email_valid:
+                    if email_secundario_in and not sec_norm:
+                        errores.append("Correo 2 vacío o igual al correo 1")
+                    elif sec_norm:
+                        if not _validate_email(sec_norm):
+                            errores.append("Correo 2 no tiene formato válido")
+                        elif sec_norm in emails_existentes or sec_norm in emails_en_lote:
+                            errores.append("Correo 2 duplicado (existe en BD o en este lote)")
+                        else:
+                            emails_en_lote.add(sec_norm)
+
                 # Validar teléfono
                 telefono = str(telefono_raw or "").strip()
                 if not telefono:
@@ -920,16 +1026,17 @@ async def upload_clientes_excel(
                     nombres=nombres,
                     telefono=telefono,
                     email=email,
+                    email_secundario=sec_norm,
                     direccion=direccion,
                     fecha_nacimiento=fecha_nac,
                     ocupacion=ocupacion,
                     estado="ACTIVO",
                     usuario_registro=usuario_email,
-                    notas="Cargado desde Excel"
+                    notas="Cargado desde Excel",
                 )
                 db.add(cliente)
                 registros_creados += 1
-                
+
             except Exception as e:
                 logger.error(f"Error procesando fila {idx}: {e}")
                 cliente_error = ClienteConError(
