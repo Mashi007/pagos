@@ -998,6 +998,20 @@ export function EditarRevisionManual() {
     })
   }, [pagosRealizadosData?.pagos])
 
+  /** Claves comprobante+código en la página actual; excluye la fila abierta en el modal de edición. */
+  const claveDocumentoPagosTablaRevision = useMemo(() => {
+    const s = new Set<string>()
+    for (const p of pagosRegistradosOrdenados) {
+      if (pagoModalId != null && p.id === pagoModalId) continue
+      const k = claveDocumentoPagoListaNormalizada(
+        p.numero_documento,
+        p.codigo_documento ?? null
+      )
+      if (k) s.add(k)
+    }
+    return s
+  }, [pagosRegistradosOrdenados, pagoModalId])
+
   const agregadosCuotasRevision = useMemo(() => {
     let sumMonto = 0
     let sumPagado = 0
@@ -3097,7 +3111,7 @@ export function EditarRevisionManual() {
 
                   {/* Valor Activo - OCULTO */}
 
-                  {/* Fecha de requerimiento + aprobación: valores desde BD, editables; sin orden forzado en servidor */}
+                  {/* Fecha de requerimiento editable; fecha de aprobación no se muestra (sigue en BD y en recálculo). */}
                   <div className="rounded-lg border border-gray-200 bg-slate-50/80 p-3 md:col-span-2">
                     <label className="mb-2 block text-sm font-medium">
                       Fecha de requerimiento
@@ -3108,70 +3122,28 @@ export function EditarRevisionManual() {
                         prestamos.fecha_requerimiento
                       </code>
                       ). Se muestra el valor cargado desde la base; puede
-                      corregirla aquí si debe alinearse con la fecha de
-                      aprobación u otros datos.
+                      corregirla aquí si debe alinearse con otros datos del
+                      expediente.
                     </p>
-                    <div className="relative mb-4 max-w-md">
-                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                      <Input
-                        type="date"
-                        disabled={soloLectura}
-                        value={formatDateForInput(
-                          prestamoData.fecha_requerimiento
-                        )}
-                        onChange={e => {
-                          formDirtyRef.current = true
-                          const v = e.target.value || null
-                          setPrestamoData({
-                            ...prestamoData,
-                            fecha_requerimiento: v,
-                          })
-                          setCambios({ ...cambios, prestamo: true })
-                        }}
-                        className="pl-10"
-                      />
-                    </div>
-
-                    <label className="mb-2 block text-sm font-medium">
-                      Fecha de Aprobación
-                    </label>
-                    <p className="mb-2 text-xs text-gray-600">
-                      Obligatoria para préstamos aprobados/liquidados: debe
-                      ingresarla usted (no se infiere de otras fechas). No hay
-                      restricción de orden respecto a la fecha de requerimiento
-                      en revisión manual. La base de cálculo es la misma fecha.
-                      El botón guarda en servidor los datos de préstamo del
-                      formulario (total, plazo, cuota por período, modalidad,
-                      tasa) y reconstruye la tabla de cuotas (cantidad, montos y
-                      fechas de vencimiento); luego reaplica pagos pendientes.
-                      &quot;Guardar cambios&quot; y &quot;Guardar y cerrar&quot;
-                      persisten el resto en la base.
-                    </p>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                      <div className="relative min-w-0 flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                      <div className="relative min-w-0 max-w-md flex-1">
                         <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                         <Input
                           type="date"
                           disabled={soloLectura}
                           value={formatDateForInput(
-                            prestamoData.fecha_aprobacion
+                            prestamoData.fecha_requerimiento
                           )}
                           onChange={e => {
                             formDirtyRef.current = true
                             const v = e.target.value || null
                             setPrestamoData({
                               ...prestamoData,
-                              fecha_aprobacion: v,
-                              fecha_base_calculo: v,
+                              fecha_requerimiento: v,
                             })
                             setCambios({ ...cambios, prestamo: true })
-                            if (errores['fecha_aprobacion'])
-                              setErrores({
-                                ...errores,
-                                fecha_aprobacion: '',
-                              })
                           }}
-                          className={`pl-10 ${errores['fecha_aprobacion'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
+                          className="pl-10"
                         />
                       </div>
                       <Button
@@ -3180,7 +3152,7 @@ export function EditarRevisionManual() {
                         className="shrink-0 sm:max-w-[220px]"
                         disabled={soloLectura || recalculandoFechasCuotas}
                         onClick={handleGuardarFechaYRecalcularVencimientos}
-                        title="Guarda fecha y datos de amortización del formulario y reconstruye la tabla de cuotas (montos y vencimientos)"
+                        title="Usa la fecha de aprobación ya registrada en el sistema junto con total, plazo, cuota por período y modalidad; guarda y reconstruye vencimientos de cuotas."
                       >
                         {recalculandoFechasCuotas ? (
                           <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
@@ -3191,7 +3163,7 @@ export function EditarRevisionManual() {
                       </Button>
                     </div>
                     {errores['fecha_aprobacion'] && (
-                      <p className="mt-1 text-xs text-red-600">
+                      <p className="mt-2 text-xs text-red-600">
                         {errores['fecha_aprobacion']}
                       </p>
                     )}
@@ -3855,49 +3827,6 @@ export function EditarRevisionManual() {
                           )}
                           Cascada
                         </Button>
-                        <Button
-                          type="button"
-                          variant="default"
-                          size="sm"
-                          className="gap-1.5"
-                          disabled={soloLectura}
-                          onClick={abrirAgregarPagoRevision}
-                        >
-                          <Plus className="h-4 w-4" />
-                          Agregar pago
-                        </Button>
-                        <div
-                          className="hidden h-8 w-px self-center bg-border sm:block"
-                          aria-hidden
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className={`gap-1.5 ${claseResaltarGuardarRevision}`}
-                          disabled={
-                            soloLectura || guardandoParcial || guardandoFinal
-                          }
-                          onClick={handleGuardarParciales}
-                        >
-                          <Save className="h-4 w-4" />
-                          Guardar
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className={`gap-1.5 bg-green-600 text-white hover:bg-green-700 ${claseResaltarGuardarRevision}`}
-                          disabled={deshabilitarGuardarYCerrar}
-                          title={tituloGuardarYCerrarBoton}
-                          onClick={handleGuardarYCerrar}
-                        >
-                          {guardandoFinal ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Check className="h-4 w-4" />
-                          )}
-                          Guardar y cerrar
-                        </Button>
                       </div>
                     </div>
                   </CardHeader>
@@ -3915,8 +3844,8 @@ export function EditarRevisionManual() {
                             <span className="font-semibold">
                               {estadoPrestamoNorm || '-'}
                             </span>
-                            . Use los botones de arriba para registrar pagos o
-                            guardar el formulario.
+                            . Registre pagos en la tabla de pagos y guarde con
+                            los botones al final del formulario.
                           </span>
                         </span>
                       </div>
@@ -4495,6 +4424,7 @@ export function EditarRevisionManual() {
               ? Number(prestamoData.prestamo_id)
               : undefined
           }
+          claveDocumentoPagosTablaRevision={claveDocumentoPagosTablaRevision}
         />
       )}
     </motion.div>

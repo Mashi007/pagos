@@ -74,6 +74,9 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 
 import { useQuery } from '@tanstack/react-query'
 
+/** Listado principal /pagos/clientes: máximo 10 filas por página (paginación en servidor). */
+const CLIENTES_PAGE_SIZE = 10
+
 export function ClientesList() {
   const navigate = useNavigate()
 
@@ -88,8 +91,6 @@ export function ClientesList() {
   const [filters, setFilters] = useState<ClienteFilters>({})
 
   const [currentPage, setCurrentPage] = useState(1)
-
-  const [perPage, setPerPage] = useState(20) // Tamao de pgina configurable
 
   const [showFilters, setShowFilters] = useState(false)
 
@@ -112,7 +113,7 @@ export function ClientesList() {
 
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
 
-  const perPageRevisar = 20
+  const perPageRevisar = CLIENTES_PAGE_SIZE
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message })
@@ -124,10 +125,7 @@ export function ClientesList() {
 
   // Funciones para manejar acciones
 
-  const handleEditarCliente = async (cliente: {
-    id: number
-    [key: string]: unknown
-  }) => {
+  const handleEditarCliente = async (cliente: Cliente) => {
     try {
       // ? Obtener cliente completo desde la API para asegurar todos los campos
 
@@ -153,12 +151,7 @@ export function ClientesList() {
     }
   }
 
-  const handleEliminarCliente = (cliente: {
-    id: number
-    nombre?: string
-    cedula?: string
-    [key: string]: unknown
-  }) => {
+  const handleEliminarCliente = (cliente: Cliente) => {
     setClienteSeleccionado(cliente)
 
     setShowEliminarCliente(true)
@@ -229,7 +222,7 @@ export function ClientesList() {
 
     currentPage,
 
-    perPage
+    CLIENTES_PAGE_SIZE
   )
 
   const clientesResponse = clientesData as
@@ -352,50 +345,12 @@ export function ClientesList() {
     }
   }
 
-  const mockClientes = [
-    {
-      id: '1',
-
-      nombre: 'Juan Prez',
-
-      email: 'juan@example.com',
-
-      telefono: '+1234567890',
-
-      estado: 'ACTIVO',
-
-      saldo_pendiente: 5000,
-
-      fecha_ultimo_pago: '2024-01-15',
-    },
-
-    {
-      id: '2',
-
-      nombre: 'Mar\u00EDa Garca',
-
-      email: 'maria@example.com',
-
-      telefono: '+1234567891',
-
-      estado: 'MORA',
-
-      saldo_pendiente: 3000,
-
-      fecha_ultimo_pago: '2024-01-10',
-    },
-  ]
-
-  // ? CORRECCIN: Usar datos reales si existen, sino usar mock solo si no hay respuesta del servidor
-
-  // Si clientesResponse existe (incluso si data es un array vaco), usar los datos reales
-
   const clientes =
     clientesResponse?.data !== undefined
       ? Array.isArray(clientesResponse.data)
         ? clientesResponse.data
         : []
-      : mockClientes // Solo usar mock si no hay respuesta del servidor (clientesResponse es undefined)
+      : []
 
   const totalPages = clientesResponse?.total_pages || 1
 
@@ -422,12 +377,6 @@ export function ClientesList() {
     setSearchTerm('')
 
     setCurrentPage(1)
-  }
-
-  const handlePerPageChange = (newPerPage: number) => {
-    setPerPage(newPerPage)
-
-    setCurrentPage(1) // Resetear a pgina 1 cuando cambia el tamao
   }
 
   if (isLoading) {
@@ -707,7 +656,7 @@ export function ClientesList() {
                 {revisarData.total > perPageRevisar && (
                   <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
                     <span>
-                      {(pageRevisar - 1) * perPageRevisar + 1}
+                      {(pageRevisar - 1) * perPageRevisar + 1} -{' '}
                       {Math.min(
                         pageRevisar * perPageRevisar,
                         revisarData.total
@@ -1215,37 +1164,13 @@ export function ClientesList() {
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-4">
             <div className="text-sm text-gray-700">
-              Mostrando {(currentPage - 1) * perPage + 1} -{' '}
-              {Math.min(currentPage * perPage, clientesResponse?.total || 0)} de{' '}
-              {clientesResponse?.total || 0} clientes
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="whitespace-nowrap text-sm text-gray-700">
-                Por pgina:
-              </label>
-
-              <select
-                value={perPage}
-                onChange={e => handlePerPageChange(Number(e.target.value))}
-                className="rounded-md border border-gray-300 p-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={20}>20</option>
-
-                <option value={50}>50</option>
-
-                <option value={100}>100</option>
-
-                <option value={200}>200</option>
-
-                <option value={500}>500</option>
-
-                <option value={1000}>1000</option>
-
-                <option value={2000}>2000</option>
-
-                <option value={5000}>5000</option>
-              </select>
+              Mostrando {(currentPage - 1) * CLIENTES_PAGE_SIZE + 1} -{' '}
+              {Math.min(
+                currentPage * CLIENTES_PAGE_SIZE,
+                clientesResponse?.total || 0
+              )}{' '}
+              de {clientesResponse?.total || 0} clientes ({CLIENTES_PAGE_SIZE}{' '}
+              por página)
             </div>
           </div>
 

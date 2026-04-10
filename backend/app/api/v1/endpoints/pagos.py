@@ -4090,7 +4090,13 @@ def guardar_fila_editable(
 
                 status_code=409,
 
-                detail="Ya existe un pago con la misma combinación comprobante + código.",
+                detail=(
+
+                    "Conflicto numero_documento: ya existe un pago con la misma combinación "
+
+                    "comprobante + código."
+
+                ),
 
             )
 
@@ -5770,7 +5776,9 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             detail=(
 
-                "Ya existe un pago con la misma combinación comprobante + código. "
+                "Conflicto numero_documento: ya existe un pago con la misma combinación "
+
+                "comprobante + código (incluye misma referencia con distinto uso de mayúsculas). "
 
                 "Use un código distinto en el campo «Código» o verifique duplicados."
 

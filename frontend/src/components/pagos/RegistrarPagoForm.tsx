@@ -74,6 +74,7 @@ import {
 import type { Prestamo } from '../../types'
 
 import {
+  claveDocumentoPagoListaNormalizada,
   normalizarNumeroDocumento,
   NUMERO_DOCUMENTO_MAX_LEN,
   pareceCedulaEnCampoDocumento,
@@ -177,6 +178,12 @@ interface RegistrarPagoFormProps {
    * Solo revisión manual debe activarlo; el modal del listado general de pagos lo deja en false.
    */
   mostrarCampoCodigoDocumento?: boolean
+
+  /**
+   * Revisión manual: claves `claveDocumentoPagoListaNormalizada` ya presentes en la tabla de pagos
+   * de la página actual (excluir la fila en edición en el padre). Evita guardar duplicado obvio antes del POST.
+   */
+  claveDocumentoPagosTablaRevision?: ReadonlySet<string>
 }
 
 export function RegistrarPagoForm({
@@ -189,6 +196,7 @@ export function RegistrarPagoForm({
   requiereLinkComprobante,
   prestamoContextoRevisionManualId,
   mostrarCampoCodigoDocumento = false,
+  claveDocumentoPagosTablaRevision,
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
 
@@ -514,6 +522,18 @@ export function RegistrarPagoForm({
         'No ingrese la cédula aquí. Use el campo de cédula del cliente; en documento va la referencia o comprobante del banco (regla alineada con carga masiva).'
     } else if (numeroDocumentoNormalizado.length > NUMERO_DOCUMENTO_MAX_LEN) {
       newErrors.numero_documento = `El número de documento no puede superar ${NUMERO_DOCUMENTO_MAX_LEN} caracteres.`
+    } else if (
+      claveDocumentoPagosTablaRevision &&
+      claveDocumentoPagosTablaRevision.size > 0
+    ) {
+      const claveNueva = claveDocumentoPagoListaNormalizada(
+        numeroDocumentoNormalizado,
+        fd.codigo_documento ?? null
+      )
+      if (claveNueva && claveDocumentoPagosTablaRevision.has(claveNueva)) {
+        newErrors.numero_documento =
+          'Ya hay un pago con la misma clave comprobante + código entre los listados en esta página. Use «Código» para distinguir o corrija el duplicado.'
+      }
     }
 
     if (!fd.fecha_pago) {

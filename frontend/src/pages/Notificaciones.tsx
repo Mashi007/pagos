@@ -14,6 +14,8 @@ import {
   Bell,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   X,
 } from 'lucide-react'
@@ -71,6 +73,9 @@ import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 import { isRequestCanceled } from '../utils/requestCanceled'
 
 import { getErrorMessage, isAxiosTimeoutError } from '../types/errors'
+
+/** Máximo de filas (clientes) por página en cada pestaña de listado de notificaciones. */
+const NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA = 50
 
 /** Fecha calendario actual en America/Caracas como YYYY-MM-DD (para max en input date). */
 function fechaHoyCaracasISO(): string {
@@ -1024,6 +1029,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
+  const [paginaPorTab, setPaginaPorTab] = useState<
+    Partial<Record<TabId, number>>
+  >({})
+
   useEffect(() => {
     setSortCol(null)
 
@@ -1083,6 +1092,58 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     return out
   }, [list, sortCol, sortDir])
+
+  const mostrarTablaCuotas = list.some(
+    row =>
+      row.numero_cuota != null ||
+      row.fecha_vencimiento != null ||
+      row.dias_atraso != null ||
+      row.cuotas_atrasadas != null ||
+      row.total_cuotas_atrasadas != null ||
+      row.monto != null ||
+      row.total_pendiente_pagar != null
+  )
+
+  const totalFilasListado = mostrarTablaCuotas ? sortedList.length : list.length
+
+  const totalPaginasListado = Math.max(
+    1,
+    Math.ceil(totalFilasListado / NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA)
+  )
+
+  useEffect(() => {
+    setPaginaPorTab({})
+  }, [fechaCaracasApi, modulo])
+
+  useEffect(() => {
+    setPaginaPorTab(prev => {
+      const raw = prev[activeTab] ?? 1
+      const clamped = Math.min(Math.max(1, raw), totalPaginasListado)
+      if (clamped === raw) return prev
+      return { ...prev, [activeTab]: clamped }
+    })
+  }, [activeTab, totalPaginasListado])
+
+  const paginaListaActual = Math.min(
+    paginaPorTab[activeTab] ?? 1,
+    totalPaginasListado
+  )
+
+  const indiceInicioPagina =
+    (paginaListaActual - 1) * NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA
+
+  const filasPagina = useMemo(() => {
+    const src = mostrarTablaCuotas ? sortedList : list
+    return src.slice(
+      indiceInicioPagina,
+      indiceInicioPagina + NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA
+    )
+  }, [mostrarTablaCuotas, sortedList, list, indiceInicioPagina])
+
+  const irPaginaLista = (p: number) => {
+    const next = Math.min(Math.max(1, p), totalPaginasListado)
+    setPaginaPorTab(prev => ({ ...prev, [activeTab]: next }))
+  }
 
   const aplicarOrdenAsc = (c: NotificacionesCuotasSortCol) => {
     setSortCol(c)
@@ -1149,19 +1210,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     !isErrorLista && !isLoadingLista && isFetchedLista && list.length === 0
 
   const statTabKey = tipoParaKpiYRebotados(activeTab)
-
-  const hasColumnasCuota = list.some(
-    row =>
-      row.numero_cuota != null ||
-      row.fecha_vencimiento != null ||
-      row.dias_atraso != null ||
-      row.cuotas_atrasadas != null ||
-      row.total_cuotas_atrasadas != null ||
-      row.monto != null ||
-      row.total_pendiente_pagar != null
-  )
-
-  const mostrarTablaCuotas = hasColumnasCuota
 
   const controlFechaReferenciaCaracas = (
     <div className="flex max-w-full flex-col gap-1 rounded-md border border-gray-200 bg-gray-50/90 px-2 py-1.5 sm:flex-row sm:items-center sm:gap-2">
@@ -1561,256 +1609,311 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               </div>
             )}
 
-            {mostrarTablaCuotas ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        #
-                      </th>
+            <>
+              {mostrarTablaCuotas ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                          #
+                        </th>
 
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        Nombre
-                      </th>
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                          Nombre
+                        </th>
 
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        Cédula
-                      </th>
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                          Cédula
+                        </th>
 
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        <div className="inline-flex items-center gap-1">
-                          <span>Nº cuota</span>
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                          <div className="inline-flex items-center gap-1">
+                            <span>Nº cuota</span>
 
-                          <SortArrowsCuotas
-                            column="numero_cuota"
-                            labelAsc="Orden ascendente: Nº cuota"
-                            labelDesc="Orden descendente: Nº cuota"
-                            sortCol={sortCol}
-                            sortDir={sortDir}
-                            onAsc={aplicarOrdenAsc}
-                            onDesc={aplicarOrdenDesc}
-                          />
-                        </div>
-                      </th>
+                            <SortArrowsCuotas
+                              column="numero_cuota"
+                              labelAsc="Orden ascendente: Nº cuota"
+                              labelDesc="Orden descendente: Nº cuota"
+                              sortCol={sortCol}
+                              sortDir={sortDir}
+                              onAsc={aplicarOrdenAsc}
+                              onDesc={aplicarOrdenDesc}
+                            />
+                          </div>
+                        </th>
 
-                      <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                        <div className="inline-flex items-center gap-1">
-                          <span>Fecha venc.</span>
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                          <div className="inline-flex items-center gap-1">
+                            <span>Fecha venc.</span>
 
-                          <SortArrowsCuotas
-                            column="fecha_vencimiento"
-                            labelAsc="Orden ascendente: fecha de vencimiento"
-                            labelDesc="Orden descendente: fecha de vencimiento"
-                            sortCol={sortCol}
-                            sortDir={sortDir}
-                            onAsc={aplicarOrdenAsc}
-                            onDesc={aplicarOrdenDesc}
-                          />
-                        </div>
-                      </th>
+                            <SortArrowsCuotas
+                              column="fecha_vencimiento"
+                              labelAsc="Orden ascendente: fecha de vencimiento"
+                              labelDesc="Orden descendente: fecha de vencimiento"
+                              sortCol={sortCol}
+                              sortDir={sortDir}
+                              onAsc={aplicarOrdenAsc}
+                              onDesc={aplicarOrdenDesc}
+                            />
+                          </div>
+                        </th>
 
-                      <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
-                        <div className="inline-flex w-full items-center justify-end gap-1">
-                          <span>Cuotas atrasadas</span>
+                        <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
+                          <div className="inline-flex w-full items-center justify-end gap-1">
+                            <span>Cuotas atrasadas</span>
 
-                          <SortArrowsCuotas
-                            column="cuotas_atrasadas"
-                            labelAsc="Orden ascendente: cuotas atrasadas"
-                            labelDesc="Orden descendente: cuotas atrasadas"
-                            sortCol={sortCol}
-                            sortDir={sortDir}
-                            onAsc={aplicarOrdenAsc}
-                            onDesc={aplicarOrdenDesc}
-                          />
-                        </div>
-                      </th>
+                            <SortArrowsCuotas
+                              column="cuotas_atrasadas"
+                              labelAsc="Orden ascendente: cuotas atrasadas"
+                              labelDesc="Orden descendente: cuotas atrasadas"
+                              sortCol={sortCol}
+                              sortDir={sortDir}
+                              onAsc={aplicarOrdenAsc}
+                              onDesc={aplicarOrdenDesc}
+                            />
+                          </div>
+                        </th>
 
-                      <th className="max-w-[12rem] whitespace-normal px-3 py-2 text-right font-semibold leading-tight">
-                        <div className="inline-flex items-start justify-end gap-1">
-                          <span>
-                            TOTAL PENDIENTE
-                            <br />A PAGAR
-                          </span>
-
-                          <SortArrowsCuotas
-                            column="total_pendiente"
-                            labelAsc="Orden ascendente: total pendiente"
-                            labelDesc="Orden descendente: total pendiente"
-                            sortCol={sortCol}
-                            sortDir={sortDir}
-                            onAsc={aplicarOrdenAsc}
-                            onDesc={aplicarOrdenDesc}
-                          />
-                        </div>
-                      </th>
-
-                      <th
-                        className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
-                        scope="col"
-                        title="Revisión manual: triángulo marca visto con nota genérica; visto solo admin puede reabrir."
-                      >
-                        Revisión
-                        <br />
-                        manual
-                      </th>
-
-                      <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
-                        <span title="Descargar PDF de estado de cuenta">
-                          Estado de cuenta
-                        </span>
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {list.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={9}
-                          className="py-8 text-center text-gray-500"
-                        >
-                          <span className="block font-medium text-gray-600">
-                            Ningún registro en este criterio.
-                          </span>
-                          {listaCargadaSinFilas ? (
-                            <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                              {modulo === 'a3cuotas'
-                                ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
-                                : modulo === 'd2antes'
-                                  ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
-                                  : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
+                        <th className="max-w-[12rem] whitespace-normal px-3 py-2 text-right font-semibold leading-tight">
+                          <div className="inline-flex items-start justify-end gap-1">
+                            <span>
+                              TOTAL PENDIENTE
+                              <br />A PAGAR
                             </span>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ) : (
-                      sortedList.map((row, idx) => (
-                        <tr
-                          key={`${row.cliente_id}-${row.prestamo_id ?? 'np'}-${row.numero_cuota ?? 'nc'}`}
-                          className="border-b hover:bg-gray-50"
+
+                            <SortArrowsCuotas
+                              column="total_pendiente"
+                              labelAsc="Orden ascendente: total pendiente"
+                              labelDesc="Orden descendente: total pendiente"
+                              sortCol={sortCol}
+                              sortDir={sortDir}
+                              onAsc={aplicarOrdenAsc}
+                              onDesc={aplicarOrdenDesc}
+                            />
+                          </div>
+                        </th>
+
+                        <th
+                          className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                          scope="col"
+                          title="Revisión manual: triángulo marca visto con nota genérica; visto solo admin puede reabrir."
                         >
-                          <td className="px-3 py-2">{idx + 1}</td>
+                          Revisión
+                          <br />
+                          manual
+                        </th>
 
-                          <td className="px-3 py-2 font-medium">
-                            {row.nombre}
-                          </td>
+                        <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
+                          <span title="Descargar PDF de estado de cuenta">
+                            Estado de cuenta
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
 
-                          <td className="px-3 py-2">{row.cedula}</td>
-
-                          <td className="px-3 py-2">
-                            {row.numero_cuota ?? '-'}
-                          </td>
-
-                          <td className="px-3 py-2">
-                            {row.fecha_vencimiento ?? '-'}
-                          </td>
-
-                          <td className="px-3 py-2 text-right font-medium text-red-600">
-                            {row.cuotas_atrasadas ??
-                              row.total_cuotas_atrasadas ??
-                              '-'}
-                          </td>
-
-                          <td className="px-3 py-2 text-right">
-                            {textoTotalPendientePagar(row)}
-                          </td>
-
-                          <td className="px-1 py-2 text-center align-middle">
-                            <RevisionManualNotifCell row={row} />
-                          </td>
-
-                          <td className="px-2 py-2 text-center align-middle">
-                            {estadoCuentaPdfCell(row.prestamo_id)}
+                    <tbody>
+                      {list.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={9}
+                            className="py-8 text-center text-gray-500"
+                          >
+                            <span className="block font-medium text-gray-600">
+                              Ningún registro en este criterio.
+                            </span>
+                            {listaCargadaSinFilas ? (
+                              <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
+                                {modulo === 'a3cuotas'
+                                  ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
+                                  : modulo === 'd2antes'
+                                    ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
+                                    : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
+                              </span>
+                            ) : null}
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="px-3 py-2 text-left font-semibold">#</th>
+                      ) : (
+                        filasPagina.map((row, idx) => (
+                          <tr
+                            key={`${row.cliente_id}-${row.prestamo_id ?? 'np'}-${row.numero_cuota ?? 'nc'}`}
+                            className="border-b hover:bg-gray-50"
+                          >
+                            <td className="px-3 py-2">
+                              {indiceInicioPagina + idx + 1}
+                            </td>
 
-                      <th className="px-3 py-2 text-left font-semibold">
-                        Nombre
-                      </th>
+                            <td className="px-3 py-2 font-medium">
+                              {row.nombre}
+                            </td>
 
-                      <th className="px-3 py-2 text-left font-semibold">
-                        Cédula
-                      </th>
+                            <td className="px-3 py-2">{row.cedula}</td>
 
-                      <th
-                        className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
-                        scope="col"
-                        title="Revisión manual: triángulo marca visto con nota genérica; visto solo admin puede reabrir."
-                      >
-                        Revisión
-                        <br />
-                        manual
-                      </th>
+                            <td className="px-3 py-2">
+                              {row.numero_cuota ?? '-'}
+                            </td>
 
-                      <th className="w-14 px-2 py-2 text-center font-semibold">
-                        <span title="Descargar PDF de estado de cuenta">
-                          Estado de cuenta
-                        </span>
-                      </th>
-                    </tr>
-                  </thead>
+                            <td className="px-3 py-2">
+                              {row.fecha_vencimiento ?? '-'}
+                            </td>
 
-                  <tbody>
-                    {list.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="py-8 text-center text-gray-500"
+                            <td className="px-3 py-2 text-right font-medium text-red-600">
+                              {row.cuotas_atrasadas ??
+                                row.total_cuotas_atrasadas ??
+                                '-'}
+                            </td>
+
+                            <td className="px-3 py-2 text-right">
+                              {textoTotalPendientePagar(row)}
+                            </td>
+
+                            <td className="px-1 py-2 text-center align-middle">
+                              <RevisionManualNotifCell row={row} />
+                            </td>
+
+                            <td className="px-2 py-2 text-center align-middle">
+                              {estadoCuentaPdfCell(row.prestamo_id)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="px-3 py-2 text-left font-semibold">#</th>
+
+                        <th className="px-3 py-2 text-left font-semibold">
+                          Nombre
+                        </th>
+
+                        <th className="px-3 py-2 text-left font-semibold">
+                          Cédula
+                        </th>
+
+                        <th
+                          className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                          scope="col"
+                          title="Revisión manual: triángulo marca visto con nota genérica; visto solo admin puede reabrir."
                         >
-                          <span className="block font-medium text-gray-600">
-                            Ningún cliente en este criterio.
+                          Revisión
+                          <br />
+                          manual
+                        </th>
+
+                        <th className="w-14 px-2 py-2 text-center font-semibold">
+                          <span title="Descargar PDF de estado de cuenta">
+                            Estado de cuenta
                           </span>
-                          {listaCargadaSinFilas ? (
-                            <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                              {modulo === 'a3cuotas'
-                                ? 'Lista ya cargada: 5+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
-                                : modulo === 'd2antes'
-                                  ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
-                                  : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
-                            </span>
-                          ) : null}
-                        </td>
+                        </th>
                       </tr>
-                    ) : (
-                      list.map((row, idx) => (
-                        <tr
-                          key={`${row.cliente_id}-${row.numero_cuota ?? idx}`}
-                          className="border-b hover:bg-gray-50"
-                        >
-                          <td className="px-3 py-2">{idx + 1}</td>
+                    </thead>
 
-                          <td className="px-3 py-2 font-medium">
-                            {row.nombre}
-                          </td>
-
-                          <td className="px-3 py-2">{row.cedula}</td>
-
-                          <td className="px-1 py-2 text-center align-middle">
-                            <RevisionManualNotifCell row={row} />
-                          </td>
-
-                          <td className="px-2 py-2 text-center align-middle">
-                            {estadoCuentaPdfCell(row.prestamo_id)}
+                    <tbody>
+                      {list.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="py-8 text-center text-gray-500"
+                          >
+                            <span className="block font-medium text-gray-600">
+                              Ningún cliente en este criterio.
+                            </span>
+                            {listaCargadaSinFilas ? (
+                              <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
+                                {modulo === 'a3cuotas'
+                                  ? 'Lista ya cargada: 5+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
+                                  : modulo === 'd2antes'
+                                    ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
+                                    : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
+                              </span>
+                            ) : null}
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                      ) : (
+                        filasPagina.map((row, idx) => (
+                          <tr
+                            key={`${row.cliente_id}-${row.numero_cuota ?? idx}`}
+                            className="border-b hover:bg-gray-50"
+                          >
+                            <td className="px-3 py-2">
+                              {indiceInicioPagina + idx + 1}
+                            </td>
+
+                            <td className="px-3 py-2 font-medium">
+                              {row.nombre}
+                            </td>
+
+                            <td className="px-3 py-2">{row.cedula}</td>
+
+                            <td className="px-1 py-2 text-center align-middle">
+                              <RevisionManualNotifCell row={row} />
+                            </td>
+
+                            <td className="px-2 py-2 text-center align-middle">
+                              {estadoCuentaPdfCell(row.prestamo_id)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {totalFilasListado > 0 ? (
+                <div className="mt-4 flex flex-col gap-2 border-t border-gray-100 pt-4 text-sm text-gray-600 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs sm:text-sm">
+                    <span className="font-medium text-gray-800">
+                      Mostrando {indiceInicioPagina + 1}-
+                      {indiceInicioPagina + filasPagina.length} de{' '}
+                      {totalFilasListado}
+                    </span>
+                    <span className="text-gray-500">
+                      {' '}
+                      (máx. {NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA} por página;
+                      cada pestaña conserva su página)
+                    </span>
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-gray-500">
+                      Página {paginaListaActual} de {totalPaginasListado}
+                    </span>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      disabled={paginaListaActual <= 1}
+                      onClick={() => irPaginaLista(paginaListaActual - 1)}
+                      aria-label="Página anterior"
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
+                      Anterior
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      disabled={paginaListaActual >= totalPaginasListado}
+                      onClick={() => irPaginaLista(paginaListaActual + 1)}
+                      aria-label="Página siguiente"
+                    >
+                      Siguiente
+                      <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </>
           </CardContent>
         </Card>
       </motion.div>

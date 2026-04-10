@@ -70,7 +70,7 @@ interface UltimoPago {
 export function PagosListResumen() {
   const [page, setPage] = useState(1)
 
-  const [perPage] = useState(20)
+  const [perPage] = useState(10)
 
   const [filters, setFilters] = useState({
     cedula: '',
@@ -352,36 +352,42 @@ export function PagosListResumen() {
                 </table>
               </div>
 
-              {/* Paginación */}
+              {/* Paginación: máximo 10 clientes por página */}
 
-              {data && data.total_pages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
+              {data && data.total > 0 && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                   <div className="text-sm text-gray-600">
-                    Página {data.page} de {data.total_pages} ({data.total}{' '}
-                    registros)
+                    Página {data.page} de {Math.max(1, data.total_pages)} (
+                    {data.total} registros
+                    {typeof data.per_page === 'number'
+                      ? ` · ${data.per_page} por página`
+                      : ''}
+                    )
                   </div>
 
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                    >
-                      Anterior
-                    </Button>
+                  {data.total_pages > 1 && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                      >
+                        Anterior
+                      </Button>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPage(p => Math.min(data.total_pages, p + 1))
-                      }
-                      disabled={page >= data.total_pages}
-                    >
-                      Siguiente
-                    </Button>
-                  </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setPage(p => Math.min(data.total_pages, p + 1))
+                        }
+                        disabled={page >= data.total_pages}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -480,36 +486,43 @@ export function PagosListResumen() {
                 </Table>
               </div>
 
-              {detalleData.total_pages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
+              {detalleData.total > 0 && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                   <div className="text-sm text-gray-600">
-                    Página {detalleData.page} de {detalleData.total_pages} (
-                    {detalleData.total} pagos)
+                    Página {detalleData.page} de{' '}
+                    {Math.max(1, detalleData.total_pages)} ({detalleData.total}{' '}
+                    pagos
+                    {typeof detalleData.per_page === 'number'
+                      ? ` · ${detalleData.per_page} por página`
+                      : ''}
+                    )
                   </div>
 
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pageDetalle === 1}
-                      onClick={() => setPageDetalle(p => Math.max(1, p - 1))}
-                    >
-                      Anterior
-                    </Button>
+                  {detalleData.total_pages > 1 && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pageDetalle === 1}
+                        onClick={() => setPageDetalle(p => Math.max(1, p - 1))}
+                      >
+                        Anterior
+                      </Button>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pageDetalle >= detalleData.total_pages}
-                      onClick={() =>
-                        setPageDetalle(p =>
-                          Math.min(detalleData.total_pages, p + 1)
-                        )
-                      }
-                    >
-                      Siguiente
-                    </Button>
-                  </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pageDetalle >= detalleData.total_pages}
+                        onClick={() =>
+                          setPageDetalle(p =>
+                            Math.min(detalleData.total_pages, p + 1)
+                          )
+                        }
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </>
