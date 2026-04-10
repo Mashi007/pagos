@@ -3,9 +3,15 @@ Control 5 (pagos_mismo_dia_monto): listar candidatos y aplicar Visto (admin).
 Anexa sufijo _A#### o _P#### (4 digitos aleatorios) a numero_documento:
 - P: el mismo documento ya figura en pagos (u otro registro relevante) de otro prestamo.
 - A: solo repeticion en el mismo prestamo / contexto de varias cuotas o mismo archivo de carga.
+
+Excepcion (criterio humano): si `numero_documento` ya termina en sufijo admin (_A#### / _P####), igual
+que en carga masiva / desambiguacion, el pago ya no cuenta en el grupo fecha+monto del control. Aun asi
+el administrador puede aplicar Visto para marcar `excluir_control_pagos_mismo_dia_monto` y dejar bitacora
+sin exigir que exista otro operativo en el mismo grupo (no se reescribe el documento).
 """
 from __future__ import annotations
 
+import re
 import secrets
 from decimal import Decimal
 from typing import Any
@@ -26,6 +32,25 @@ _MAX_DOC_LEN = 100
 _MAX_TRIES_SUFFIX = 40
 _PREFIJO_MISMO_CONTEXTO = "A"
 _PREFIJO_OTRO_PRESTAMO = "P"
+
+# Alineado con `prestamo_cartera_auditoria._sql_fragment_pago_cuenta_para_control5_duplicado_fecha_monto`:
+# TRIM(numero_documento) ~* '_[ap][0-9]{4}$'
+_SUFIJO_VISTO_ADMIN_DOC_RE = re.compile(r"_([AP])(\d{4})$", re.IGNORECASE)
+
+
+def numero_documento_tiene_sufijo_visto_admin(doc: str | None) -> bool:
+    """True si el comprobante ya tiene sufijo _A#### / _P#### (misma convencion que carga masiva y el control 5)."""
+    s = (doc or "").strip()
+    return bool(_SUFIJO_VISTO_ADMIN_DOC_RE.search(s))
+
+
+def extraer_token_sufijo_visto_desde_documento(doc: str | None) -> str | None:
+    """Devuelve token tipo 'A7392' o 'P0451' si el documento termina en _[AP]####; si no, None."""
+    s = (doc or "").strip()
+    m = _SUFIJO_VISTO_ADMIN_DOC_RE.search(s)
+    if not m:
+        return None
+    return f"{m.group(1).upper()}{m.group(2)}"
 
 
 def _fragment_excluido_control5(alias: str) -> str:
@@ -211,22 +236,31 @@ def aplicar_visto_control5_duplicado_fecha_monto(
             status_code=400,
             detail="Este pago ya tiene Visto (excluido del control duplicado fecha/monto).",
         )
-    if not pago_en_grupo_duplicado_fecha_monto(db, pago):
-        raise HTTPException(
-            status_code=400,
-            detail="El pago no esta en un grupo duplicado (misma fecha y monto) con otro operativo, "
-            "o ya no aplica tras cambios en la base.",
-        )
     anterior = (pago.numero_documento or "").strip() or None
-    nuevo, sufijo = _elegir_nuevo_numero_documento(db, pago)
-    pago.numero_documento = nuevo
+    token_existente = extraer_token_sufijo_visto_desde_documento(pago.numero_documento)
+
+    if token_existente:
+        # Sufijo admin ya aplicado (p. ej. carga masiva): el pago no entra en el grupo fecha+monto del SQL.
+        # Visto a criterio humano: solo marca exclusion y bitacora; no se altera numero_documento.
+        nuevo = anterior or ""
+        sufijo = token_existente
+    else:
+        if not pago_en_grupo_duplicado_fecha_monto(db, pago):
+            raise HTTPException(
+                status_code=400,
+                detail="El pago no esta en un grupo duplicado (misma fecha y monto) con otro operativo, "
+                "o ya no aplica tras cambios en la base.",
+            )
+        nuevo, sufijo = _elegir_nuevo_numero_documento(db, pago)
+        pago.numero_documento = nuevo
+
     pago.excluir_control_pagos_mismo_dia_monto = True
     bit = AuditoriaPagoControl5Visto(
         pago_id=int(pago.id),
         prestamo_id=int(pago.prestamo_id) if pago.prestamo_id is not None else None,
         usuario_id=int(usuario_id),
         numero_documento_anterior=anterior,
-        numero_documento_nuevo=nuevo,
+        numero_documento_nuevo=(nuevo or anterior or ""),
         sufijo_cuatro_digitos=sufijo,
         codigo_control=CODIGO_CONTROL,
     )

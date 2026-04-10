@@ -1172,7 +1172,7 @@ export function TablaEditablePagos({
                               }
                               title={
                                 isAdmin
-                                  ? 'Control 5 (auditoría): marcar Visto en el pago existente en BD. Alternativa: ícono de ojo para sufijo único en el comprobante.'
+                                  ? 'Control 5 (auditoría): si el comprobante ya termina en _A####/_P#### (carga masiva), Visto marca exclusión sin exigir duplicado fecha+monto. Si no hay sufijo, aplica el flujo clásico (grupo misma fecha y monto) o use el ícono de ojo para desambiguar.'
                                   : 'Visto: solo administradores.'
                               }
                               className={`inline-flex items-center justify-center gap-0.5 rounded border p-1.5 text-[10px] font-semibold disabled:opacity-60 ${

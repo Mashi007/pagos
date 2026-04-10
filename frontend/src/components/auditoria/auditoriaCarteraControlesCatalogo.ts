@@ -45,6 +45,7 @@ export const AUDITORIA_CARTERA_CONTROLES_CATALOGO: ReadonlyArray<{
     excepcionesReglas:
       'Alcance de ESTE control (motor cartera): dos o mas pagos operativos del mismo prestamo con la misma fecha de pago (calendario) y el mismo monto. No es el control de unicidad global de numero_documento ni el de "mismo comprobante en varias filas" del Excel.\n\n' +
       'Excepcion autorizada aqui: Visto admin (dialogo Control 5 en esta pestaña o POST control-5-pagos-duplicados-fecha-monto/{pago_id}/visto). El sistema elige A o P + 4 digitos; bitacora en auditoria_pago_control5_visto; columna pagos.excluir_control_pagos_mismo_dia_monto.\n\n' +
+      'Si el comprobante ya termina en sufijo admin _A#### / _P#### (p. ej. carga masiva), ese pago ya no cuenta en el grupo fecha+monto del SQL; el admin puede aplicar Visto igual para marcar exclusion y bitacora sin exigir otro operativo en el mismo grupo (no se reescribe el documento).\n\n' +
       'Flujo distinto (Pagos > Carga masiva Excel): si el bloqueo es documento repetido en el archivo o "documento ya existe en BD" sin cumplir fecha+monto duplicado en cartera, NO use este Visto primero. En la tabla previa: Visto abre dialogo; la accion principal es anadir codigo (_A#### / _P####) en la carga; la decision de modificar o solo autorizar sin texto es humana. Control 5 de auditoria solo si ademas aplica el criterio fecha+monto entre pagos ya en BD.\n\n' +
       'Referencia codigo: backend/app/services/pago_control5_visto_service.py, frontend TablaEditablePagos + AuditoriaCarteraTab.',
   },
