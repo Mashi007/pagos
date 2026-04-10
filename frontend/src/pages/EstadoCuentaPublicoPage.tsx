@@ -37,6 +37,7 @@ import {
   validarCedulaEstadoCuenta,
   solicitarCodigo,
   verificarCodigo,
+  type ComprobantePagoItem,
   type ReciboCuotaItem,
 } from '../services/estadoCuentaService'
 
@@ -245,6 +246,38 @@ function base64ToBlobUrl(b64: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
 }
 
+/** Si la URL parece imagen directa (no Drive), se puede intentar miniatura en la página. */
+function comprobantePuedeMostrarMiniatura(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (/drive\.google\.com$/i.test(u.hostname)) return false
+    return /\.(jpe?g|png|gif|webp)(\?|$)/i.test(u.pathname)
+  } catch {
+    return false
+  }
+}
+
+function ComprobanteMiniatura({ url }: { url: string }) {
+  const [ocultar, setOcultar] = useState(false)
+  if (ocultar || !comprobantePuedeMostrarMiniatura(url)) return null
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mb-2 block overflow-hidden rounded-lg border border-slate-200 bg-white"
+    >
+      <img
+        src={url}
+        alt="Vista previa del comprobante"
+        className="mx-auto max-h-48 w-full object-contain"
+        loading="lazy"
+        onError={() => setOcultar(true)}
+      />
+    </a>
+  )
+}
+
 function EstadoCuentaPublicoPage() {
   const [step, setStep] = useState(0)
 
@@ -275,6 +308,10 @@ function EstadoCuentaPublicoPage() {
   const [recibosCuotas, setRecibosCuotas] = useState<ReciboCuotaItem[] | null>(
     null
   )
+
+  const [comprobantesPagos, setComprobantesPagos] = useState<
+    ComprobantePagoItem[] | null
+  >(null)
 
   const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -319,6 +356,8 @@ function EstadoCuentaPublicoPage() {
     setReenviarCooldown(0)
 
     setRecibosCuotas(null)
+
+    setComprobantesPagos(null)
 
     if (pdfBlobUrl) {
       URL.revokeObjectURL(pdfBlobUrl)
@@ -510,6 +549,8 @@ function EstadoCuentaPublicoPage() {
         setPdfDataUrl(`data:application/pdf;base64,${res.pdf_base64}`)
 
         setRecibosCuotas(res.recibos_cuotas ?? null)
+
+        setComprobantesPagos(res.comprobantes_pagos ?? null)
 
         try {
           setPdfBlobUrl(base64ToBlobUrl(res.pdf_base64))
@@ -1020,6 +1061,46 @@ function EstadoCuentaPublicoPage() {
                 </a>
               )}
             </div>
+
+            {comprobantesPagos && comprobantesPagos.length > 0 && (
+              <div className="border-t border-slate-200 pt-4">
+                <p className="mb-2 text-sm font-semibold text-[#1e3a5f]">
+                  Comprobantes de pagos
+                </p>
+                <p className="mb-3 text-xs text-slate-500">
+                  Mismos enlaces que en la sección &quot;Pagos realizados&quot;
+                  del PDF. Si no ves miniatura, abre el enlace (p. ej. Google
+                  Drive).
+                </p>
+                <ul className="space-y-4">
+                  {comprobantesPagos.map((c, i) => (
+                    <li
+                      key={`${c.pago_id ?? 'p'}-${i}`}
+                      className="rounded-xl border border-slate-200 bg-slate-50/80 p-3"
+                    >
+                      <p className="mb-1 text-xs text-slate-600">
+                        {[
+                          c.fecha_pago_display,
+                          c.monto_display,
+                          c.referencia_tabla,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                      <ComprobanteMiniatura url={c.url} />
+                      <a
+                        href={c.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex text-sm font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800"
+                      >
+                        Ver comprobante
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {recibosCuotas && recibosCuotas.length > 0 && (
               <div className="border-t border-slate-200 pt-4">

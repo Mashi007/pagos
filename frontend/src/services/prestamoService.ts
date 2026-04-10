@@ -6,7 +6,7 @@ import { logger } from '../utils/logger'
 
 // Constantes de configuración
 
-const DEFAULT_PER_PAGE = 20
+const DEFAULT_PER_PAGE = 10
 
 // Tipo para el resumen de préstamos
 

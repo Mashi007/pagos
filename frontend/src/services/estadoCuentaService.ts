@@ -71,6 +71,19 @@ export interface ReciboCuotaItem {
   url: string
 }
 
+/** Comprobante (foto/archivo) asociado a un pago PAGADO en cartera (misma fuente que el PDF). */
+export interface ComprobantePagoItem {
+  pago_id?: number
+
+  url: string
+
+  fecha_pago_display?: string
+
+  monto_display?: string
+
+  referencia_tabla?: string
+}
+
 export interface VerificarCodigoResponse {
   ok: boolean
 
@@ -83,6 +96,8 @@ export interface VerificarCodigoResponse {
   recibo_token?: string
 
   recibos_cuotas?: ReciboCuotaItem[]
+
+  comprobantes_pagos?: ComprobantePagoItem[]
 }
 
 /** Helper: fetch con timeout y mejor manejo de errores */

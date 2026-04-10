@@ -71,8 +71,9 @@ import {
 
 import {
   SUFIJO_VISTO_ARCHIVO_RE,
-  aplicarSufijoVistoADocumento,
-  collectTokensSufijoVistoArchivoDesdeFilas,
+  MENSAJE_EXCEL_NO_INCLUIR_SUFIJO_VISTO_ADMIN,
+  autoAplicarSufijosVistoFilasCargaMasiva,
+  mensajeEdicionManualSufijoVistoProhibida,
 } from '../utils/documentoSufijoVisto'
 
 import { readExcelToJSON } from '../types/exceljs'
@@ -390,13 +391,14 @@ export function useExcelUploadPagos({
       prestamoPorDocDupBD: prestamoPorDocDupBDRef.current,
       pagoPorDocDupBD: pagoPorDocDupBDRef.current,
     }
-    setExcelData(
-      applyRowValidationsSync(
-        filas,
-        maps,
-        new Set(documentosRepetidosArchivoJustificados)
-      )
+    const justSet = new Set(documentosRepetidosArchivoJustificados)
+    const conSufijos = autoAplicarSufijosVistoFilasCargaMasiva(
+      filas,
+      prestamoPorDocDupBDRef.current,
+      documentosDuplicadosBDRef.current,
+      justSet
     )
+    setExcelData(applyRowValidationsSync(conSufijos, maps, justSet))
   }, [documentosRepetidosArchivoJustificados])
 
   const debounceRevalidarBatchBdRef = useRef<ReturnType<
@@ -2194,8 +2196,15 @@ export function useExcelUploadPagos({
         pagoPorDocDupBD,
       }
 
-      return applyRowValidationsSync(
+      const conSufijosAuto = autoAplicarSufijosVistoFilasCargaMasiva(
         processed,
+        prestamoPorDocDupBD,
+        documentosDuplicadosBD,
+        documentosRepetidosArchivoJustificadosRef.current
+      )
+
+      return applyRowValidationsSync(
+        conSufijosAuto,
         maps,
         documentosRepetidosArchivoJustificadosRef.current
       )
@@ -2621,6 +2630,18 @@ export function useExcelUploadPagos({
           rowData._hasErrors =
             !vCedula.isValid || !vFecha.isValid || !vMonto.isValid
 
+          const ndOrigen = String(rowData.numero_documento ?? '').trim()
+          if (SUFIJO_VISTO_ARCHIVO_RE.test(ndOrigen)) {
+            rowData._validation = {
+              ...rowData._validation,
+              numero_documento: {
+                isValid: false,
+                message: MENSAJE_EXCEL_NO_INCLUIR_SUFIJO_VISTO_ADMIN,
+              },
+            }
+            rowData._hasErrors = true
+          }
+
           processed.push(rowData)
         }
 
@@ -2864,6 +2885,17 @@ export function useExcelUploadPagos({
         prev.map(r => {
           if (r._rowIndex !== row._rowIndex) return r
 
+          if (field === 'numero_documento') {
+            const msg = mensajeEdicionManualSufijoVistoProhibida(
+              r.numero_documento,
+              String(value)
+            )
+            if (msg) {
+              addToast('error', msg)
+              return r
+            }
+          }
+
           const updated = { ...r }
 
           if (field === 'prestamo_id') {
@@ -3085,7 +3117,7 @@ export function useExcelUploadPagos({
         scheduleRevalidarBatchBd()
       }
     },
-    [scheduleRevalidarBatchBd]
+    [scheduleRevalidarBatchBd, addToast]
   )
 
   const moveErrorToReviewPagos = useCallback(
@@ -3186,63 +3218,6 @@ export function useExcelUploadPagos({
 
     setShowPreview(false)
   }, [])
-
-  const justificarDocumentoRepetidoEnArchivo = useCallback(
-    (claveDocRaw: string) => {
-      const claveCompuesta = (claveDocRaw || '').trim()
-      if (!claveCompuesta) return
-
-      const maps: MapsValidacionBatchPagos = {
-        cedulasExistentesBD: cedulasExistentesBDRef.current,
-        documentosDuplicadosBD: documentosDuplicadosBDRef.current,
-        detalleDuplicadosBD: detalleDuplicadosBDRef.current,
-        prestamoPorDocDupBD: prestamoPorDocDupBDRef.current,
-        pagoPorDocDupBD: pagoPorDocDupBDRef.current,
-      }
-
-      const dupPrestamoBd =
-        prestamoPorDocDupBDRef.current.get(claveCompuesta) ?? null
-
-      setExcelData(prev => {
-        const usados = collectTokensSufijoVistoArchivoDesdeFilas(prev)
-        const mapped = prev.map(r => {
-          const clave = claveDocumentoExcelCompuesta(
-            r.numero_documento,
-            r.codigo_documento ?? null
-          )
-          if (clave !== claveCompuesta) return r
-
-          const raw = String(r.numero_documento ?? '').trim()
-          if (SUFIJO_VISTO_ARCHIVO_RE.test(raw)) return r
-
-          const rowPid = r.prestamo_id ?? null
-          const letter: 'A' | 'P' =
-            dupPrestamoBd != null &&
-            rowPid != null &&
-            Number(dupPrestamoBd) !== Number(rowPid)
-              ? 'P'
-              : 'A'
-
-          const nuevo = aplicarSufijoVistoADocumento(
-            r.numero_documento,
-            letter,
-            usados
-          )
-
-          return { ...r, numero_documento: nuevo }
-        })
-
-        return applyRowValidationsSync(
-          mapped,
-          maps,
-          new Set(documentosRepetidosArchivoJustificadosRef.current)
-        )
-      })
-
-      scheduleRevalidarBatchBd()
-    },
-    [scheduleRevalidarBatchBd]
-  )
 
   /** Admin: permite duplicado en archivo sin tocar el texto del documento (decisión humana distinta a añadir sufijos). */
   const marcarJustificadoDocumentoRepetidoEnArchivo = useCallback(
@@ -3346,8 +3321,6 @@ export function useExcelUploadPagos({
     refrescarValidacionFilasBd,
 
     documentosRepetidosArchivoJustificados,
-
-    justificarDocumentoRepetidoEnArchivo,
 
     marcarJustificadoDocumentoRepetidoEnArchivo,
   }

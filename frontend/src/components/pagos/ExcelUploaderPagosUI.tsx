@@ -201,8 +201,6 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
 
     documentosRepetidosArchivoJustificados,
 
-    justificarDocumentoRepetidoEnArchivo,
-
     marcarJustificadoDocumentoRepetidoEnArchivo,
   } = useExcelUploadPagos(props)
 
@@ -483,9 +481,6 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 onRefrescarValidacionDocumentosBd={refrescarValidacionFilasBd}
                 documentosRepetidosArchivoJustificados={
                   documentosRepetidosArchivoJustificados
-                }
-                onJustificarDocumentoRepetidoArchivo={
-                  justificarDocumentoRepetidoEnArchivo
                 }
                 onMarcarDocumentoRepetidoArchivoJustificado={
                   marcarJustificadoDocumentoRepetidoEnArchivo

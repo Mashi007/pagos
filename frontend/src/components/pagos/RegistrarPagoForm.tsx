@@ -14,7 +14,6 @@ import {
   CheckCircle,
   AlertCircle,
   Info,
-  Check,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -81,10 +80,9 @@ import {
 } from '../../utils/pagoExcelValidation'
 
 import {
-  aplicarSufijoVistoADocumento,
   allocarTokenSufijoVistoArchivo,
-  collectTokensSufijoVistoArchivoDesdeFilas,
   letterSufijoVistoDesdeMensajeDuplicado,
+  mensajeEdicionManualSufijoVistoProhibida,
   SUFIJO_VISTO_ARCHIVO_RE,
   TOKEN_SUFIJO_VISTO_ARCHIVO_RE,
 } from '../../utils/documentoSufijoVisto'
@@ -1250,23 +1248,40 @@ export function RegistrarPagoForm({
                   <Input
                     type="text"
                     value={formData.numero_documento}
-                    onChange={e =>
+                    onChange={e => {
+                      const v = e.target.value
+                      const msg = mensajeEdicionManualSufijoVistoProhibida(
+                        formData.numero_documento,
+                        v
+                      )
+                      if (msg) {
+                        toast.error(msg)
+                        return
+                      }
                       setFormData({
                         ...formData,
-                        numero_documento: e.target.value,
+                        numero_documento: v,
                       })
-                    }
+                    }}
                     onBlur={() => {
-                      const n = normalizarNumeroDocumento(
-                        formData.numero_documento
-                      )
-                      const raw = String(formData.numero_documento ?? '').trim()
-                      if (n !== raw) {
-                        setFormData(prev => ({
-                          ...prev,
-                          numero_documento: n,
-                        }))
-                      }
+                      setFormData(prev => {
+                        const raw = String(prev.numero_documento ?? '').trim()
+                        const n =
+                          normalizarNumeroDocumento(prev.numero_documento) ||
+                          raw
+                        const msg = mensajeEdicionManualSufijoVistoProhibida(
+                          raw,
+                          n
+                        )
+                        if (msg) {
+                          toast.error(msg)
+                          return prev
+                        }
+                        if (n !== raw) {
+                          return { ...prev, numero_documento: n }
+                        }
+                        return prev
+                      })
                     }}
                     className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
                     placeholder="Ej. BS. BNC/16622222"
@@ -1285,29 +1300,28 @@ export function RegistrarPagoForm({
                   <label className="text-sm font-medium text-gray-700">
                     Código{' '}
                     <span className="text-xs font-normal text-gray-500">
-                      (opcional)
+                      (solo lectura; lo asigna Visto)
                     </span>
                   </label>
 
                   <Input
                     ref={codigoDocumentoInputRef}
                     type="text"
+                    readOnly
+                    aria-readonly="true"
+                    title="Este campo no se escribe a mano. Un administrador lo rellena con el botón Visto."
                     value={String(formData.codigo_documento ?? '')}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        codigo_documento: e.target.value || null,
-                      })
-                    }
                     maxLength={24}
-                    className={errors.codigo_documento ? 'border-red-500' : ''}
-                    placeholder="Ej. C1, lote, cuota"
+                    className={`cursor-default bg-slate-50 text-slate-800 ${
+                      errors.codigo_documento ? 'border-red-500' : ''
+                    }`}
+                    placeholder="Pendiente: use Visto (admin)"
                   />
 
                   <p className="text-xs text-gray-600">
-                    Si varios pagos comparten el mismo comprobante del banco,
-                    indique un código distinto por fila. Sin código, no puede
-                    repetirse el mismo Nº de documento.
+                    No se puede teclear aquí. El token (formato A#### / P####)
+                    lo genera y guarda el sistema al pulsar{' '}
+                    <strong>Visto</strong> (admin), igual que en carga masiva.
                   </p>
 
                   {errors.codigo_documento && (
@@ -1320,36 +1334,26 @@ export function RegistrarPagoForm({
             </div>
 
             {mostrarCampoCodigoDocumento && isAdmin ? (
-              <div className="rounded-md border border-violet-200 bg-violet-50/90 px-3 py-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-xs text-violet-950">
-                      <span className="font-semibold">Visto (admin):</span>{' '}
-                      rellena el campo <strong>Código</strong> con un token
-                      único{' '}
-                      <span className="whitespace-nowrap">
-                        (A#### / P####, misma regla que carga masiva)
-                      </span>{' '}
-                      y <strong>guarda</strong>. El comprobante del banco puede
-                      quedar igual; en BD se guarda la clave compuesta.
-                    </p>
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-violet-800 underline decoration-violet-400 hover:text-violet-950"
-                      onClick={() => setVistoRevisionManualOpen(true)}
-                    >
-                      Opciones: sufijo en Nº documento o autorizar sin código…
-                    </button>
-                  </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200/70 bg-violet-50 px-3 py-2">
+                <p className="min-w-0 flex-1 text-xs text-violet-900">
+                  <span className="font-medium">Admin:</span> Visto pone el
+                  código y guarda.
+                </p>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-[11px] font-medium text-violet-700 underline underline-offset-2 hover:text-violet-950"
+                    onClick={() => setVistoRevisionManualOpen(true)}
+                  >
+                    Sin cambiar doc.
+                  </button>
                   <Button
                     type="button"
-                    variant="outline"
                     size="sm"
                     disabled={isSubmitting}
-                    className="shrink-0 border-violet-400 bg-violet-100 text-violet-950 hover:bg-violet-200 disabled:opacity-60"
+                    className="h-8 min-w-[4.5rem] bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
                     onClick={() => void handleVistoRellenarCodigoYGuardar()}
                   >
-                    <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />
                     Visto
                   </Button>
                 </div>
@@ -1525,68 +1529,26 @@ export function RegistrarPagoForm({
                 </DialogTitle>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p>
-                    El botón principal <strong>Visto</strong> ya rellena{' '}
-                    <strong>Código</strong> y guarda. Use esta ventana solo si
-                    necesita el comprobante visible con{' '}
-                    <code className="rounded bg-gray-100 px-1">_A####</code>/
-                    <code className="rounded bg-gray-100 px-1">_P####</code> o
-                    marcar revisión sin código.
+                    El botón principal <strong>Visto</strong> rellena el campo{' '}
+                    <strong>Código</strong> con un token <strong>A####</strong>{' '}
+                    / <strong>P####</strong> y guarda: el comprobante del banco
+                    puede quedar igual. No está permitido escribir{' '}
+                    <code className="rounded bg-gray-100 px-1">_A####</code> ni{' '}
+                    <code className="rounded bg-gray-100 px-1">_P####</code> a
+                    mano en el Nº de documento.
                   </p>
                   <ul className="list-inside list-disc space-y-1 text-xs">
                     <li>
-                      <strong>Añadir sufijos al Nº documento</strong>: agrega o
-                      sustituye{' '}
-                      <code className="rounded bg-gray-100 px-1">_A####</code> o{' '}
-                      <code className="rounded bg-gray-100 px-1">_P####</code>{' '}
-                      en el campo comprobante (no en Código).
-                    </li>
-                    <li>
                       <strong>Autorizar sin cambiar</strong>: quita avisos de
-                      duplicado en pantalla; use el campo{' '}
-                      <strong>Código</strong> a mano si aplica.
+                      duplicado en pantalla. Si al guardar sigue fallando la
+                      unicidad, use <strong>Visto</strong> para asignar{' '}
+                      <strong>Código</strong> automáticamente (no se escribe en
+                      la caja).
                     </li>
                   </ul>
                 </div>
               </DialogHeader>
               <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
-                <button
-                  type="button"
-                  className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
-                  onClick={() => {
-                    const msg = [errors.general, errors.numero_documento]
-                      .filter(Boolean)
-                      .join(' ')
-                    const letter = letterSufijoVistoDesdeMensajeDuplicado(msg)
-                    const usados = collectTokensSufijoVistoArchivoDesdeFilas([
-                      { numero_documento: formData.numero_documento },
-                    ])
-                    const nuevo = aplicarSufijoVistoADocumento(
-                      formData.numero_documento,
-                      letter,
-                      usados,
-                      { reemplazarSufijoAdmin: true }
-                    )
-                    setFormData(prev => ({ ...prev, numero_documento: nuevo }))
-                    setErrors(prev => {
-                      const next = { ...prev }
-                      delete next.numero_documento
-                      const g = next.general
-                      if (
-                        g === DUPLICADO_DOCUMENTO_UI ||
-                        (g && g.toLowerCase().includes('documento'))
-                      ) {
-                        delete next.general
-                      }
-                      return next
-                    })
-                    toast.success(
-                      'Sufijo admin actualizado en el documento. Revise y guarde.'
-                    )
-                    setVistoRevisionManualOpen(false)
-                  }}
-                >
-                  Añadir sufijos al documento
-                </button>
                 <button
                   type="button"
                   className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
@@ -1607,13 +1569,9 @@ export function RegistrarPagoForm({
                       return next
                     })
                     toast.success(
-                      'Autorizado sin modificar el documento. Use «Código» si aplica.'
+                      'Autorizado sin modificar el comprobante. Si persiste duplicado al guardar, use Visto para asignar Código.'
                     )
                     setVistoRevisionManualOpen(false)
-                    setTimeout(
-                      () => codigoDocumentoInputRef.current?.focus(),
-                      0
-                    )
                   }}
                 >
                   Autorizar sin cambiar el documento

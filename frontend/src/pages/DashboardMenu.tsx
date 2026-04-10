@@ -136,9 +136,9 @@ function parseIsoDateLocal(s: string): Date | null {
  * Deja solo puntos con fecha >= 2 de abril del año del último dato (calendario local).
  * Si no quedara ninguno, devuelve la serie original (evita gráfico vacío fuera de temporada).
  */
-function serieNotificacionesEjeDesde2Abril<T extends { fecha: string }>(
-  serie: T[]
-): T[] {
+function serieNotificacionesEjeDesde2Abril<
+  T extends { fecha: string; enviados: number },
+>(serie: T[]): T[] {
   if (!serie.length) return serie
 
   let max: Date | null = null
@@ -160,6 +160,64 @@ function serieNotificacionesEjeDesde2Abril<T extends { fecha: string }>(
   })
 
   return out.length > 0 ? out : serie
+}
+
+/**
+ * Añade `tendencia`: regresión lineal por índice (0..n-1) sobre `enviados`.
+ * Valores mostrados no negativos (conteo de correos). Con menos de 2 puntos, coincide con el dato.
+ */
+function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
+  serie: T[]
+): Array<T & { tendencia: number }> {
+  const n = serie.length
+
+  if (n === 0) return []
+
+  if (n === 1) {
+    const y0 = Math.max(0, Number(serie[0].enviados) || 0)
+
+    return [{ ...serie[0], tendencia: y0 }]
+  }
+
+  let sumX = 0
+
+  let sumY = 0
+
+  let sumXY = 0
+
+  let sumXX = 0
+
+  for (let i = 0; i < n; i++) {
+    const x = i
+
+    const y = Math.max(0, Number(serie[i].enviados) || 0)
+
+    sumX += x
+
+    sumY += y
+
+    sumXY += x * y
+
+    sumXX += x * x
+  }
+
+  const denom = n * sumXX - sumX * sumX
+
+  let b = 0
+
+  let a = sumY / n
+
+  if (Math.abs(denom) > 1e-9) {
+    b = (n * sumXY - sumX * sumY) / denom
+
+    a = (sumY - b * sumX) / n
+  }
+
+  return serie.map((row, i) => ({
+    ...row,
+
+    tendencia: Math.max(0, a + b * i),
+  }))
 }
 
 export function DashboardMenu() {
@@ -629,6 +687,11 @@ export function DashboardMenu() {
     () =>
       serieNotificacionesEjeDesde2Abril(datosNotificacionesPorDia?.serie ?? []),
     [datosNotificacionesPorDia?.serie]
+  )
+
+  const serieNotificacionesConTendencia = useMemo(
+    () => notificacionesSerieConTendenciaLineal(serieNotificacionesGrafico),
+    [serieNotificacionesGrafico]
   )
 
   const etiquetaRangoNotificacionesEjeX = useMemo(() => {
@@ -1704,6 +1767,8 @@ export function DashboardMenu() {
                 : correos aceptados por SMTP (enviados) por día. Eje X desde el{' '}
                 <strong>2 de abril</strong> del año del último día con datos
                 (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada).
+                Línea gris discontinua: <strong>tendencia</strong> (regresión
+                lineal sobre la serie mostrada).
               </CardDescription>
             </CardHeader>
 
@@ -1728,7 +1793,7 @@ export function DashboardMenu() {
                 <div className="h-[320px] w-full">
                   <ResponsiveContainer width="100%" height={320}>
                     <RechartsLineChart
-                      data={serieNotificacionesGrafico}
+                      data={serieNotificacionesConTendencia}
                       margin={{
                         top: 12,
                         right: 20,
@@ -1760,10 +1825,21 @@ export function DashboardMenu() {
                       <Tooltip
                         contentStyle={chartTooltipStyle.contentStyle}
                         labelStyle={chartTooltipStyle.labelStyle}
-                        formatter={(value: number) => [
-                          value,
-                          'Enviados (éxito SMTP)',
-                        ]}
+                        formatter={(value: number, name: string) => {
+                          const rounded =
+                            typeof value === 'number'
+                              ? Math.round(value * 100) / 100
+                              : value
+
+                          if (
+                            name === 'Tendencia (regresión lineal)' ||
+                            name === 'tendencia'
+                          ) {
+                            return [rounded, name]
+                          }
+
+                          return [rounded, 'Enviados (éxito SMTP)']
+                        }}
                         labelFormatter={(_, payload) =>
                           payload?.[0]?.payload?.fecha
                             ? String(payload[0].payload.fecha)
@@ -1782,6 +1858,17 @@ export function DashboardMenu() {
                         dot={{ r: 4 }}
                         activeDot={{ r: 6 }}
                       />
+
+                      <Line
+                        type="linear"
+                        dataKey="tendencia"
+                        name="Tendencia (regresión lineal)"
+                        stroke="#64748b"
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                        dot={false}
+                        isAnimationActive={false}
+                      />
                     </RechartsLineChart>
                   </ResponsiveContainer>
                 </div>
@@ -1795,7 +1882,7 @@ export function DashboardMenu() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {datosDashboard ? (
             <>
-              {/* Monto programado por día: ventana D+4 a D+7 (4 días en el futuro) */}
+              {/* Monto programado por día: desde hoy (Caracas), 4 días corridos */}
 
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1815,13 +1902,14 @@ export function DashboardMenu() {
                         variant="secondary"
                         className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
                       >
-                        D+4 a D+7 (4 días)
+                        Hoy + 3 días (4 días)
                       </Badge>
                     </div>
 
                     <CardDescription className="text-sm text-gray-600">
-                      Suma de monto_cuota por fecha de vencimiento entre hoy +4
-                      y hoy +7 (cuatro días corridos en el futuro).
+                      Suma de monto_cuota por fecha de vencimiento desde hoy
+                      (America/Caracas) hasta dentro de tres días: cuatro días
+                      corridos en total.
                     </CardDescription>
                   </CardHeader>
 
@@ -1834,30 +1922,38 @@ export function DashboardMenu() {
                       datosMontoProgramadoSemana.length > 0 ? (
                       <ResponsiveContainer width="100%" height={340}>
                         <BarChart
+                          layout="vertical"
                           data={datosMontoProgramadoSemana}
-                          margin={{ top: 14, right: 24, left: 12, bottom: 14 }}
+                          margin={{ top: 14, right: 24, left: 8, bottom: 36 }}
                         >
                           <CartesianGrid {...chartCartesianGrid} />
 
                           <XAxis
-                            dataKey="dia"
-                            angle={-35}
-                            textAnchor="end"
-                            tick={chartAxisTick}
-                            height={72}
-                          />
-
-                          <YAxis
+                            type="number"
                             tick={chartAxisTick}
                             tickFormatter={value =>
                               `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`
                             }
                             label={{
                               value: 'Monto (USD)',
-                              angle: -90,
-                              position: 'insideLeft',
-                              style: { fill: '#374151', fontSize: 13 },
+                              position: 'insideBottom',
+                              offset: -8,
+                              style: {
+                                textAnchor: 'middle',
+                                fill: '#374151',
+                                fontSize: 13,
+                                fontWeight: 600,
+                              },
                             }}
+                          />
+
+                          <YAxis
+                            type="category"
+                            dataKey="dia"
+                            width={76}
+                            tick={chartAxisTick}
+                            tickLine={false}
+                            interval={0}
                           />
 
                           <Tooltip
@@ -1872,6 +1968,7 @@ export function DashboardMenu() {
                                 ? `Fecha: ${payload[0].payload.fecha}`
                                 : ''
                             }
+                            cursor={{ fill: 'rgba(16, 185, 129, 0.08)' }}
                           />
 
                           <Legend {...chartLegendStyle} />
@@ -1880,14 +1977,15 @@ export function DashboardMenu() {
                             dataKey="monto_programado"
                             name="Monto programado"
                             fill="#10b981"
-                            radius={[4, 4, 0, 0]}
-                            maxBarSize={56}
+                            radius={[0, 4, 4, 0]}
+                            maxBarSize={36}
                           />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="flex items-center justify-center py-16 text-gray-500">
-                        No hay datos de monto programado para el rango D+4 a D+7
+                        No hay datos de monto programado en los próximos cuatro
+                        días (desde hoy, Caracas)
                       </div>
                     )}
                   </CardContent>

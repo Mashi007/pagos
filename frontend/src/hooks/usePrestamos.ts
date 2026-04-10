@@ -8,7 +8,7 @@ import { Prestamo, PrestamoForm } from '../types'
 
 // Constantes de configuraciión
 
-const DEFAULT_PER_PAGE = 20
+const DEFAULT_PER_PAGE = 10
 
 const STALE_TIME_SHORT = 2 * 60 * 1000 // 2 minutos
 

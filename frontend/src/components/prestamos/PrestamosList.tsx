@@ -130,7 +130,8 @@ export function PrestamosList() {
 
   const [page, setPage] = useState(1)
 
-  const [perPage, setPerPage] = useState(20)
+  /** Listado principal: como máximo 10 filas por página (paginación en el servidor). */
+  const perPage = 10
 
   // Vista "Revisar préstamos" (enviados desde carga masiva), misma lógica que Clientes/Pagos
 
@@ -310,7 +311,7 @@ export function PrestamosList() {
 
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
 
-  const perPageRevisar = 20
+  const perPageRevisar = 10
 
   const queryClient = useQueryClient()
 
@@ -1953,30 +1954,9 @@ export function PrestamosList() {
                       préstamos
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">
-                        Filas por página:
-                      </span>
-
-                      <Select
-                        value={String(perPage)}
-                        onValueChange={v => {
-                          setPerPage(Number(v))
-                          setPage(1)
-                        }}
-                      >
-                        <SelectTrigger className="w-[80px]">
-                          <SelectValue />
-                        </SelectTrigger>
-
-                        <SelectContent>
-                          <SelectItem value="10">10</SelectItem>
-
-                          <SelectItem value="20">20</SelectItem>
-
-                          <SelectItem value="50">50</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="text-sm text-gray-600">
+                      <span className="font-medium text-gray-800">10</span> por
+                      página
                     </div>
                   </div>
 

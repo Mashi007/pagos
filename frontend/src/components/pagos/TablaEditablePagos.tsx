@@ -101,12 +101,6 @@ export interface FilaEditableProps {
 
   documentosRepetidosArchivoJustificados?: string[]
 
-  /** Añade sufijos _A#### / _P#### al comprobante en cada fila con la misma clave compuesta. */
-
-  onJustificarDocumentoRepetidoArchivo?: (
-    claveDocumentoCompuesta: string
-  ) => void
-
   /** Marca la clave compuesta duplicada como revisada sin modificar el texto del comprobante. */
 
   onMarcarDocumentoRepetidoArchivoJustificado?: (
@@ -493,8 +487,6 @@ export function TablaEditablePagos({
 
   documentosRepetidosArchivoJustificados = [],
 
-  onJustificarDocumentoRepetidoArchivo,
-
   onMarcarDocumentoRepetidoArchivoJustificado,
 }: FilaEditableProps) {
   const { isAdmin } = usePermissions()
@@ -503,17 +495,9 @@ export function TablaEditablePagos({
     null
   )
 
-  const [vistoArchivoDialogOpen, setVistoArchivoDialogOpen] = useState(false)
-
-  const [vistoArchivoDocNorm, setVistoArchivoDocNorm] = useState<string | null>(
-    null
-  )
-
   const [vistoBdDialogOpen, setVistoBdDialogOpen] = useState(false)
 
   const [vistoBdPagoId, setVistoBdPagoId] = useState<number | null>(null)
-
-  const [vistoBdDocNorm, setVistoBdDocNorm] = useState<string | null>(null)
 
   const cedulaBsCacheRef = useRef<Map<string, boolean>>(new Map())
 
@@ -1060,25 +1044,15 @@ export function TablaEditablePagos({
 
                       const puedeVistoControl5Bd = pagoIdParaVisto != null
 
-                      const puedeVistoJustificarArchivo =
+                      /** Solo control 5 (auditoría): el sufijo _A####/_P#### en comprobante lo asigna el sistema al validar la carga, no manualmente. */
+                      const mostrarBotonVisto = puedeVistoControl5Bd
+
+                      const mostrarAutorizarDupArchivoSinSufijo =
+                        isAdmin &&
                         esDupArchivoFila &&
                         !archivoDupJustificado &&
-                        !!onJustificarDocumentoRepetidoArchivo
-
-                      /** Duplicado en BD (pagos o cola errores): aunque no haya pago_id para control 5, debe poder añadirse sufijo. */
-                      const mensajeIndicaDupDocumentoBd =
-                        /ya existe en la base de datos/i.test(msgDoc)
-
-                      const puedeVistoSufijoPorDupBd =
-                        !!claveDocAccion &&
-                        !!onJustificarDocumentoRepetidoArchivo &&
-                        !row._validation?.numero_documento?.isValid &&
-                        mensajeIndicaDupDocumentoBd
-
-                      const mostrarBotonVisto =
-                        puedeVistoJustificarArchivo ||
-                        puedeVistoControl5Bd ||
-                        puedeVistoSufijoPorDupBd
+                        !!onMarcarDocumentoRepetidoArchivoJustificado &&
+                        !!claveDocAccion
 
                       return (
                         <div className="flex flex-col gap-1">
@@ -1139,28 +1113,11 @@ export function TablaEditablePagos({
                                   )
                                   return
                                 }
-                                // Duplicado en Excel: la decisión (sufijos o solo autorizar) es humana → diálogo.
                                 if (
-                                  puedeVistoJustificarArchivo &&
-                                  claveDocAccion
+                                  puedeVistoControl5Bd &&
+                                  pagoIdParaVisto != null
                                 ) {
-                                  setVistoArchivoDocNorm(claveDocAccion)
-                                  setVistoArchivoDialogOpen(true)
-                                  return
-                                }
-                                // Duplicado en BD: siempre ofrecer sufijo; control 5 solo si hay pago_id operativo.
-                                if (
-                                  claveDocAccion &&
-                                  onJustificarDocumentoRepetidoArchivo &&
-                                  puedeVistoSufijoPorDupBd
-                                ) {
-                                  setVistoBdPagoId(
-                                    puedeVistoControl5Bd &&
-                                      pagoIdParaVisto != null
-                                      ? pagoIdParaVisto
-                                      : null
-                                  )
-                                  setVistoBdDocNorm(claveDocAccion)
+                                  setVistoBdPagoId(pagoIdParaVisto)
                                   setVistoBdDialogOpen(true)
                                 }
                               }}
@@ -1172,11 +1129,7 @@ export function TablaEditablePagos({
                               }
                               title={
                                 isAdmin
-                                  ? puedeVistoJustificarArchivo
-                                    ? 'Visto: elige si añadir sufijos o autorizar sin cambiar el documento.'
-                                    : puedeVistoSufijoPorDupBd
-                                      ? 'Visto: documento ya en BD - añadir código (sufijo) o, si aplica, control 5.'
-                                      : 'Visto: solo administradores.'
+                                  ? 'Control 5 (auditoría): marcar Visto en el pago existente en BD. El sufijo en comprobante solo lo asigna el sistema al validar la carga.'
                                   : 'Visto: solo administradores.'
                               }
                               className={`inline-flex items-center justify-center gap-0.5 rounded border p-1.5 text-[10px] font-semibold disabled:opacity-60 ${
@@ -1195,6 +1148,29 @@ export function TablaEditablePagos({
                                 <Check className="h-3.5 w-3.5" aria-hidden />
                               )}
                               Visto
+                            </button>
+                          )}
+
+                          {mostrarAutorizarDupArchivoSinSufijo && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!claveDocAccion) return
+                                onMarcarDocumentoRepetidoArchivoJustificado?.(
+                                  claveDocAccion
+                                )
+                                toast.success(
+                                  'Autorizado sin modificar el documento (mismo comprobante en varias filas).'
+                                )
+                              }}
+                              disabled={
+                                isSaving(row._rowIndex) ||
+                                serviceStatus === 'offline'
+                              }
+                              title="Permite el mismo comprobante en varias filas sin añadir _A#### / _P#### (riesgo al guardar si la BD exige unicidad)."
+                              className="rounded border border-gray-300 bg-white px-1.5 py-1 text-[9px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                            >
+                              Sin sufijo
                             </button>
                           )}
 
@@ -1270,91 +1246,16 @@ export function TablaEditablePagos({
             <li>
               <strong>Documento</strong>: la clave comprobante + código (columna
               Código opcional) no puede repetirse en este archivo ni en la BD.
+              Tras validar contra la BD, el sistema asigna solo él{' '}
+              <code className="rounded bg-red-100 px-1">_A####</code> /{' '}
+              <code className="rounded bg-red-100 px-1">_P####</code> en el
+              comprobante cuando aplica; no los escriba en Excel ni en la celda.
+              Si necesita el mismo texto en varias filas sin ese código, use{' '}
+              <strong>Sin sufijo</strong> (admin).
             </li>
           </ul>
         </div>
       )}
-
-      <Dialog
-        open={vistoArchivoDialogOpen}
-        onOpenChange={open => {
-          setVistoArchivoDialogOpen(open)
-          if (!open) setVistoArchivoDocNorm(null)
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Documento repetido en este archivo</DialogTitle>
-            <div className="space-y-2 text-sm text-gray-600">
-              <p>
-                Usted decide si se modifica el número de documento o solo se
-                marca como revisado.
-              </p>
-              <ul className="list-inside list-disc space-y-1 text-xs">
-                <li>
-                  <strong>Añadir sufijos</strong>: agrega{' '}
-                  <code className="rounded bg-gray-100 px-1">_A####</code> o{' '}
-                  <code className="rounded bg-gray-100 px-1">_P####</code> en
-                  cada fila afectada (únicos para la base de datos).
-                </li>
-                <li>
-                  <strong>Sin cambiar el texto</strong>: el documento queda
-                  igual; la fila pasa validación local, pero al guardar puede
-                  fallar si la regla de unicidad en BD no lo permite.
-                </li>
-              </ul>
-            </div>
-          </DialogHeader>
-          <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
-            <button
-              type="button"
-              className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
-              onClick={() => {
-                const d = vistoArchivoDocNorm
-                if (d && onJustificarDocumentoRepetidoArchivo) {
-                  onJustificarDocumentoRepetidoArchivo(d)
-                  toast.success(
-                    'Se añadió _A#### o _P#### a cada fila con este documento. Puede guardar cada fila.'
-                  )
-                }
-                setVistoArchivoDialogOpen(false)
-                setVistoArchivoDocNorm(null)
-              }}
-            >
-              Añadir sufijos al documento
-            </button>
-            {onMarcarDocumentoRepetidoArchivoJustificado ? (
-              <button
-                type="button"
-                className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                onClick={() => {
-                  const d = vistoArchivoDocNorm
-                  if (d) {
-                    onMarcarDocumentoRepetidoArchivoJustificado(d)
-                    toast.success(
-                      'Autorizado sin modificar el documento (revisión humana).'
-                    )
-                  }
-                  setVistoArchivoDialogOpen(false)
-                  setVistoArchivoDocNorm(null)
-                }}
-              >
-                Autorizar sin cambiar el documento
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="w-full rounded-md px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
-              onClick={() => {
-                setVistoArchivoDialogOpen(false)
-                setVistoArchivoDocNorm(null)
-              }}
-            >
-              Cancelar
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={vistoBdDialogOpen}
@@ -1362,65 +1263,25 @@ export function TablaEditablePagos({
           setVistoBdDialogOpen(open)
           if (!open) {
             setVistoBdPagoId(null)
-            setVistoBdDocNorm(null)
           }
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              Documento ya existente en la base de datos
-            </DialogTitle>
+            <DialogTitle>Control 5 (auditoría)</DialogTitle>
             <div className="space-y-2 text-sm text-gray-600">
               <p>
-                Lo habitual con el mismo comprobante en otra cuota es{' '}
-                <strong>añadir el código</strong> (
+                Marca <strong>Visto</strong> en el pago que ya existe en la base
+                de datos cuando aplica la regla de control 5 (duplicado fecha +
+                monto). El comprobante con{' '}
                 <code className="rounded bg-gray-100 px-1">_A####</code> /{' '}
-                <code className="rounded bg-gray-100 px-1">_P####</code>) al
-                documento en esta carga. El control 5 solo aplica en casos
-                concretos de auditoría (misma fecha y monto entre pagos en BD).
+                <code className="rounded bg-gray-100 px-1">_P####</code> no se
+                escribe a mano: en esta carga lo asigna solo el sistema al
+                validar contra la BD.
               </p>
-              <ul className="list-inside list-disc space-y-1 text-xs">
-                <li>
-                  <strong>Añadir código</strong>: nuevo Nº documento único en
-                  las filas de este archivo con el mismo valor.
-                </li>
-                <li>
-                  <strong>Control 5</strong>: solo si el pago en BD cumple
-                  duplicado fecha+monto; si el servidor rechaza, use sufijo.
-                </li>
-              </ul>
             </div>
           </DialogHeader>
           <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
-            <button
-              type="button"
-              className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={
-                !vistoBdDocNorm ||
-                !onJustificarDocumentoRepetidoArchivo ||
-                serviceStatus === 'offline'
-              }
-              title={
-                !onJustificarDocumentoRepetidoArchivo
-                  ? 'No disponible en este contexto'
-                  : undefined
-              }
-              onClick={() => {
-                const d = vistoBdDocNorm
-                if (d && onJustificarDocumentoRepetidoArchivo) {
-                  onJustificarDocumentoRepetidoArchivo(d)
-                  toast.success(
-                    'Se añadió _A#### o _P#### a cada fila con este documento en la carga.'
-                  )
-                }
-                setVistoBdDialogOpen(false)
-                setVistoBdPagoId(null)
-                setVistoBdDocNorm(null)
-              }}
-            >
-              Añadir código (sufijo) en esta carga
-            </button>
             {vistoBdPagoId != null ? (
               <button
                 type="button"
@@ -1440,11 +1301,8 @@ export function TablaEditablePagos({
                     await onRefrescarValidacionDocumentosBd?.()
                     setVistoBdDialogOpen(false)
                     setVistoBdPagoId(null)
-                    setVistoBdDocNorm(null)
                   } catch (e) {
-                    toast.error(
-                      `${getErrorMessage(e)} Si no aplica control 5, use «Añadir código (sufijo)».`
-                    )
+                    toast.error(getErrorMessage(e))
                   } finally {
                     setVistoPagoIdCargando(null)
                   }
@@ -1462,7 +1320,6 @@ export function TablaEditablePagos({
               onClick={() => {
                 setVistoBdDialogOpen(false)
                 setVistoBdPagoId(null)
-                setVistoBdDocNorm(null)
               }}
             >
               Cancelar

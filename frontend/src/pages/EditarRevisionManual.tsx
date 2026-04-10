@@ -7,6 +7,8 @@ import {
   useMemo,
 } from 'react'
 
+import { flushSync } from 'react-dom'
+
 import { useParams, useNavigate } from 'react-router-dom'
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
@@ -47,6 +49,8 @@ import {
   Plus,
   Edit,
   Trash2,
+  BarChart3,
+  CheckSquare,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -86,6 +90,8 @@ import {
 
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 
+import { useDebounce } from '../hooks/useDebounce'
+
 import { usePermissions } from '../hooks/usePermissions'
 
 import { useConcesionariosActivos } from '../hooks/useConcesionarios'
@@ -96,12 +102,14 @@ import { useModelosVehiculosActivos } from '../hooks/useModelosVehiculos'
 
 import { codigoEstadoCuotaParaUi } from '../utils/cuotaEstadoDisplay'
 
-import { getErrorMessage } from '../types/errors'
+import { getErrorMessage, isAxiosError } from '../types/errors'
 
 import {
   claveDocumentoPagoListaNormalizada,
   textoDocumentoPagoParaListado,
 } from '../utils/pagoExcelValidation'
+
+import { validadoresService } from '../services/validadoresService'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
 const OPCIONES_ESTADO_PRESTAMO_REVISION: { value: string; label: string }[] = [
@@ -334,6 +342,22 @@ const PER_PAGE_PAGOS_REGISTRADOS = 20
 /** Tolerancia USD para comparar totales (redondeos / centavos). */
 const COHERENCIA_USD_TOL = 0.02
 
+type EstadoValidadorCierreContacto = {
+  listo: boolean
+  validando: boolean
+  mensaje?: string
+}
+
+function mensajeValidacionServidor(
+  v: { error?: string; mensaje?: string } | undefined
+): string | undefined {
+  const e = v?.error
+  const m = v?.mensaje
+  if (typeof e === 'string' && e.trim()) return e.trim()
+  if (typeof m === 'string' && m.trim()) return m.trim()
+  return undefined
+}
+
 function fechaPagoPagoRowParaInput(pago: Pago): string {
   const fp = pago.fecha_pago
   if (fp == null || fp === '') {
@@ -350,9 +374,7 @@ function fechaPagoPagoRowParaInput(pago: Pago): string {
 }
 
 /** Para ordenar filas: más reciente primero; sin fecha válida al final. */
-function timestampOrdenFechaPago(
-  fp: string | Date | null | undefined
-): number {
+function timestampOrdenFechaPago(fp: string | Date | null | undefined): number {
   if (fp == null || fp === '') return Number.NEGATIVE_INFINITY
   if (typeof fp === 'string') {
     const t = Date.parse(fp)
@@ -563,7 +585,127 @@ export function EditarRevisionManual() {
     cuotas: false,
   })
 
+  /**
+   * Pagos, cascada, conciliación o recálculo de vencimientos ya persistidos en BD pero
+   * aún no «reconocidos» con Guardar / Guardar y cerrar (sincroniza línea base y aviso al salir).
+   */
+  const [revisionOperativaSucia, setRevisionOperativaSucia] = useState(false)
+
   const [errores, setErrores] = useState<Record<string, string>>({})
+
+  const telefonoDebouncCierre = useDebounce(clienteData.telefono ?? '', 400)
+
+  const emailDebouncCierre = useDebounce(clienteData.email ?? '', 400)
+
+  const [telValidadorCierre, setTelValidadorCierre] =
+    useState<EstadoValidadorCierreContacto>({ listo: true, validando: false })
+
+  const [emailValidadorCierre, setEmailValidadorCierre] =
+    useState<EstadoValidadorCierreContacto>({ listo: true, validando: false })
+
+  useEffect(() => {
+    let cancelled = false
+    const raw = telefonoDebouncCierre.trim()
+    if (!raw) {
+      setTelValidadorCierre({ listo: true, validando: false })
+      return () => {
+        cancelled = true
+      }
+    }
+    setTelValidadorCierre({ listo: false, validando: true })
+    void validadoresService
+      .validarCampo('telefono_venezuela', raw, 'VENEZUELA')
+      .then(res => {
+        if (cancelled) return
+        const v = res?.validacion
+        const ok = Boolean(v?.valido)
+        setTelValidadorCierre({
+          listo: ok,
+          validando: false,
+          mensaje: ok ? undefined : mensajeValidacionServidor(v),
+        })
+      })
+      .catch(err => {
+        if (cancelled) return
+        setTelValidadorCierre({
+          listo: false,
+          validando: false,
+          mensaje:
+            getErrorMessage(err) ||
+            'No se pudo validar el teléfono con el sistema',
+        })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [telefonoDebouncCierre])
+
+  useEffect(() => {
+    let cancelled = false
+    const raw = emailDebouncCierre.trim()
+    if (!raw) {
+      setEmailValidadorCierre({ listo: true, validando: false })
+      return () => {
+        cancelled = true
+      }
+    }
+    setEmailValidadorCierre({ listo: false, validando: true })
+    void validadoresService
+      .validarCampo('email', raw, 'VENEZUELA')
+      .then(res => {
+        if (cancelled) return
+        const v = res?.validacion
+        const ok = Boolean(v?.valido)
+        setEmailValidadorCierre({
+          listo: ok,
+          validando: false,
+          mensaje: ok ? undefined : mensajeValidacionServidor(v),
+        })
+      })
+      .catch(err => {
+        if (cancelled) return
+        setEmailValidadorCierre({
+          listo: false,
+          validando: false,
+          mensaje:
+            getErrorMessage(err) ||
+            'No se pudo validar el correo con el sistema',
+        })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [emailDebouncCierre])
+
+  const bloqueoGuardarYCerrarPorContacto = useMemo(() => {
+    if (telValidadorCierre.validando || emailValidadorCierre.validando) {
+      return {
+        bloqueado: true,
+        motivo:
+          'Validando teléfono o correo con los validadores del sistema. Espere un momento.',
+      }
+    }
+    if (!telValidadorCierre.listo) {
+      return {
+        bloqueado: true,
+        motivo:
+          telValidadorCierre.mensaje ||
+          'El teléfono no cumple los validadores. Use «Guardar cambios» para seguir corrigiendo; «Guardar y cerrar» se habilitará cuando sea válido.',
+      }
+    }
+    if (!emailValidadorCierre.listo) {
+      return {
+        bloqueado: true,
+        motivo:
+          emailValidadorCierre.mensaje ||
+          'El correo no cumple los validadores. Use «Guardar cambios» para seguir corrigiendo; «Guardar y cerrar» se habilitará cuando sea válido.',
+      }
+    }
+    return {
+      bloqueado: false as const,
+      motivo: undefined as string | undefined,
+    }
+  }, [telValidadorCierre, emailValidadorCierre])
 
   /**
    * Si el queryFn del detalle vuelve a correr (refetch al enfocar ventana, invalidación,
@@ -576,8 +718,17 @@ export function EditarRevisionManual() {
   const firmaCargaInicialRef = useRef<FirmaCargaRevision | null>(null)
 
   useLayoutEffect(() => {
-    formDirtyRef.current = cambios.cliente || cambios.prestamo || cambios.cuotas
-  }, [cambios.cliente, cambios.prestamo, cambios.cuotas])
+    formDirtyRef.current =
+      cambios.cliente ||
+      cambios.prestamo ||
+      cambios.cuotas ||
+      revisionOperativaSucia
+  }, [
+    cambios.cliente,
+    cambios.prestamo,
+    cambios.cuotas,
+    revisionOperativaSucia,
+  ])
 
   const validarFormulario = (): boolean => {
     const e: Record<string, string> = {}
@@ -704,6 +855,9 @@ export function EditarRevisionManual() {
       if (!prestamoId) throw new Error('ID de préstamo requerido')
 
       const pid = parseInt(prestamoId, 10)
+      if (!Number.isFinite(pid) || pid <= 0) {
+        throw new Error('ID de préstamo inválido')
+      }
 
       let data = await revisionManualService.getDetallePrestamoRevision(pid)
 
@@ -919,6 +1073,7 @@ export function EditarRevisionManual() {
           }
         }
       }
+      setRevisionOperativaSucia(true)
     },
     onError: (err: unknown) => {
       const msg =
@@ -949,6 +1104,7 @@ export function EditarRevisionManual() {
       await pagoService.deletePago(pago.id)
       toast.success('Pago eliminado')
       await refrescarTrasCambioPagosRevision()
+      setRevisionOperativaSucia(true)
     } catch (err: unknown) {
       const msg =
         err &&
@@ -993,6 +1149,7 @@ export function EditarRevisionManual() {
           : 'Validación de cartera quitada (conciliado no, verificado NO).'
       )
       await refrescarTrasCambioPagosRevision()
+      setRevisionOperativaSucia(true)
     } catch (err: unknown) {
       toast.error(getErrorMessage(err) || 'No se pudo actualizar conciliación')
     } finally {
@@ -1036,6 +1193,7 @@ export function EditarRevisionManual() {
     cerrarModalPagoRevision()
     toast.success(fueEdicion ? 'Pago actualizado' : 'Pago registrado')
     await refrescarTrasCambioPagosRevision()
+    setRevisionOperativaSucia(true)
   }
 
   useEffect(() => {
@@ -1064,6 +1222,9 @@ export function EditarRevisionManual() {
       firmaSoloCuotas(cuotasData) !== s.cuotas
     )
   }
+
+  const hayCambiosPendientesRevision = (): boolean =>
+    hayDiferenciaVsCargaInicial() || revisionOperativaSucia
 
   /**
    * Guarda en BD observaciones del préstamo y notas del cliente.
@@ -1228,6 +1389,8 @@ export function EditarRevisionManual() {
           `pagos con nueva aplicación a cuotas: ${pagosAplic}. Los cambios quedan en la base.`
       )
 
+      setRevisionOperativaSucia(true)
+
       await refrescarOrigenDatosTrasRevisionManual({ skipRevisionEditar: true })
     } catch (err: any) {
       const msg =
@@ -1283,8 +1446,8 @@ export function EditarRevisionManual() {
       return
     }
 
-    // Sin cambios reales vs datos cargados: no operar (no es validación de negocio)
-    if (!hayDiferenciaVsCargaInicial()) {
+    // Sin cambios de formulario ni operaciones (pagos/cascada/etc.) pendientes de reconocer
+    if (!hayDiferenciaVsCargaInicial() && !revisionOperativaSucia) {
       toast.info('ℹ️ No hay cambios para guardar')
       return
     }
@@ -1319,6 +1482,8 @@ export function EditarRevisionManual() {
 
       let errorOccurred = false
 
+      let huboSoloSincOperativaBd = false
+
       const snap = firmaCargaInicialRef.current
       const needGuardarCliente =
         !!clienteData.cliente_id &&
@@ -1329,9 +1494,37 @@ export function EditarRevisionManual() {
       const needGuardarCuotas =
         !snap || firmaSoloCuotas(cuotasData) !== snap.cuotas
 
-      // Guardar cliente si el formulario difiere de la carga inicial
+      const soloSincOperativaBd =
+        revisionOperativaSucia &&
+        !needGuardarCliente &&
+        !needGuardarPrestamo &&
+        !needGuardarCuotas
 
-      if (needGuardarCliente) {
+      if (soloSincOperativaBd) {
+        try {
+          const pidSync = parseInt(prestamoId, 10)
+          if (!Number.isFinite(pidSync) || pidSync <= 0) {
+            errorOccurred = true
+            toast.error('ID de préstamo inválido')
+          } else {
+            flushSync(() => setRevisionOperativaSucia(false))
+            await refetchDetalle()
+            toast.success(
+              'Cambios de pagos/cuotas ya están en la base; revisión sincronizada con la última información.'
+            )
+            savedSomething = true
+            huboSoloSincOperativaBd = true
+          }
+        } catch (soloErr: unknown) {
+          errorOccurred = true
+          setRevisionOperativaSucia(true)
+          toast.error(
+            getErrorMessage(soloErr) ||
+              'No se pudo sincronizar después de pagos o cascada'
+          )
+          console.error(soloErr)
+        }
+      } else if (needGuardarCliente) {
         const clienteUpdate: Record<string, any> = {}
 
         if (clienteData.nombres) clienteUpdate.nombres = clienteData.nombres
@@ -1578,9 +1771,13 @@ export function EditarRevisionManual() {
       }
 
       if (!errorOccurred && savedSomething) {
-        toast.success('✅ Cambios parciales guardados en BD')
+        if (!huboSoloSincOperativaBd) {
+          toast.success('✅ Cambios parciales guardados en BD')
+        }
 
         setCambios({ cliente: false, prestamo: false, cuotas: false })
+
+        setRevisionOperativaSucia(false)
 
         await refrescarOrigenDatosTrasRevisionManual()
 
@@ -1613,6 +1810,56 @@ export function EditarRevisionManual() {
       return
     }
 
+    if (bloqueoGuardarYCerrarPorContacto.bloqueado) {
+      toast.error(
+        bloqueoGuardarYCerrarPorContacto.motivo ||
+          'Teléfono o correo no cumplen validadores; use «Guardar cambios» para corregir.'
+      )
+      return
+    }
+
+    const tLive = (clienteData.telefono || '').trim()
+    if (tLive) {
+      try {
+        const rt = await validadoresService.validarCampo(
+          'telefono_venezuela',
+          tLive,
+          'VENEZUELA'
+        )
+        if (!rt?.validacion?.valido) {
+          toast.error(
+            mensajeValidacionServidor(rt.validacion) ||
+              'El teléfono no es válido para cerrar la revisión.'
+          )
+          return
+        }
+      } catch (e) {
+        toast.error(getErrorMessage(e) || 'Error al validar el teléfono')
+        return
+      }
+    }
+
+    const eLive = (clienteData.email || '').trim()
+    if (eLive) {
+      try {
+        const re = await validadoresService.validarCampo(
+          'email',
+          eLive,
+          'VENEZUELA'
+        )
+        if (!re?.validacion?.valido) {
+          toast.error(
+            mensajeValidacionServidor(re.validacion) ||
+              'El correo no es válido para cerrar la revisión.'
+          )
+          return
+        }
+      } catch (e) {
+        toast.error(getErrorMessage(e) || 'Error al validar el correo')
+        return
+      }
+    }
+
     if (!validarFormulario()) {
       toast.error('Corrige los errores marcados en rojo antes de guardar')
       return
@@ -1620,7 +1867,8 @@ export function EditarRevisionManual() {
 
     // «Guardar y Cerrar» también debe poder marcar la revisión como revisada (Visto)
     // aunque el formulario coincida con la carga inicial (revisión sin ediciones).
-    // «Guardar Cambios» sigue exigiendo diferencias reales.
+    // «Guardar cambios» acepta además operaciones ya persistidas (pagos, cascada, etc.)
+    // vía revisionOperativaSucia hasta que el usuario confirme.
 
     // Confirmar si cambió la fecha de aprobación y hay cuotas
     const nuevaFechaFinalCheck = formatDateForInput(
@@ -1891,6 +2139,8 @@ export function EditarRevisionManual() {
 
         toast.success(res.mensaje)
 
+        setRevisionOperativaSucia(false)
+
         await refrescarOrigenDatosTrasRevisionManual()
 
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
@@ -1939,11 +2189,12 @@ export function EditarRevisionManual() {
   const handleCerrar = () => {
     // Si hay cambios sin guardar, advertir
 
-    if (hayDiferenciaVsCargaInicial()) {
+    if (hayCambiosPendientesRevision()) {
       const confirmar = window.confirm(
-        '⚠️ Tienes cambios sin guardar.\n\n' +
-          'Si cierras ahora, se perderán todos los cambios realizados.\n' +
-          '¿Estás seguro de que deseas cerrar sin guardar?'
+        '⚠️ Hay cambios pendientes de reconocer.\n\n' +
+          'Incluye ediciones del formulario y operaciones ya hechas en pagos, conciliación o cascada ' +
+          'que aún no confirmaste con «Guardar cambios» o «Guardar y cerrar».\n\n' +
+          '¿Seguro que deseas salir sin confirmar?'
       )
 
       if (!confirmar) return
@@ -1954,6 +2205,23 @@ export function EditarRevisionManual() {
     navigate('/revision-manual')
   }
 
+  const hayPendienteRevision = hayCambiosPendientesRevision()
+
+  const claseResaltarGuardarRevision =
+    hayPendienteRevision && !soloLectura
+      ? 'ring-2 ring-amber-400 ring-offset-2 rounded-md'
+      : ''
+
+  const deshabilitarGuardarYCerrar =
+    soloLectura ||
+    guardandoParcial ||
+    guardandoFinal ||
+    bloqueoGuardarYCerrarPorContacto.bloqueado
+
+  const tituloGuardarYCerrarBoton = bloqueoGuardarYCerrarPorContacto.bloqueado
+    ? bloqueoGuardarYCerrarPorContacto.motivo
+    : 'Guarda todos los cambios y finaliza la revisión - aparece ✓ en Acciones'
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -1963,25 +2231,42 @@ export function EditarRevisionManual() {
   }
 
   if (error) {
+    const detalleErrorMsg = getErrorMessage(error)
+    const httpStatus = isAxiosError(error) ? error.response?.status : undefined
+
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="max-w-lg text-center">
           <h2 className="mb-2 text-2xl font-bold text-red-600">Error</h2>
 
-          <p className="mb-4 text-gray-600">
+          <p className="mb-2 text-gray-600">
             No se pudieron cargar los datos del préstamo
+            {httpStatus != null ? ` (${httpStatus})` : ''}.
           </p>
 
-          <Button
-            type="button"
-            onClick={() =>
-              navigate(RUTA_LISTA_PRESTAMOS, {
-                state: { focusPrestamosSearch: true },
-              })
-            }
-          >
-            Volver a lista de préstamos
-          </Button>
+          <p className="mb-6 break-words text-sm text-gray-700">
+            {detalleErrorMsg}
+          </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void refetchDetalle()}
+            >
+              Reintentar
+            </Button>
+            <Button
+              type="button"
+              onClick={() =>
+                navigate(RUTA_LISTA_PRESTAMOS, {
+                  state: { focusPrestamosSearch: true },
+                })
+              }
+            >
+              Volver a lista de préstamos
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -2080,6 +2365,13 @@ export function EditarRevisionManual() {
                     ? 'Revisión cerrada (Visto); puede editar, guardar y cambiar el estado desde la lista (icono de revisión manual).'
                     : 'Edita los detalles del préstamo (cambios parciales permitidos)'}
               </p>
+              {!soloLectura && hayPendienteRevision ? (
+                <p className="mt-1 text-sm font-medium text-amber-800">
+                  Pendiente: confirme con «Guardar cambios» o «Guardar y cerrar»
+                  (incluye nombre u otros campos, pagos, conciliación, cascada o
+                  recálculo de vencimientos ya aplicados en base).
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -2089,7 +2381,7 @@ export function EditarRevisionManual() {
               variant="outline"
               onClick={handleGuardarParciales}
               disabled={soloLectura || guardandoParcial || guardandoFinal}
-              className="gap-2"
+              className={`gap-2 ${claseResaltarGuardarRevision}`}
               title="Guarda los cambios y continúa revisando - estado cambia a ?"
             >
               <Save className="h-4 w-4" />
@@ -2110,10 +2402,10 @@ export function EditarRevisionManual() {
 
             <Button
               type="button"
-              className="gap-2 bg-green-600 text-white hover:bg-green-700"
+              className={`gap-2 bg-green-600 text-white hover:bg-green-700 ${claseResaltarGuardarRevision}`}
               onClick={handleGuardarYCerrar}
-              disabled={soloLectura || guardandoParcial || guardandoFinal}
-              title="Guarda todos los cambios y finaliza la revisión - aparece ✓ en Acciones"
+              disabled={deshabilitarGuardarYCerrar}
+              title={tituloGuardarYCerrarBoton}
             >
               {guardandoFinal ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -2272,7 +2564,14 @@ export function EditarRevisionManual() {
                       className={
                         errores['telefono']
                           ? 'border-red-500 focus-visible:ring-red-400'
-                          : ''
+                          : (clienteData.telefono || '').trim() &&
+                              telValidadorCierre.validando
+                            ? 'border-slate-300 ring-1 ring-slate-200'
+                            : (clienteData.telefono || '').trim() &&
+                                !telValidadorCierre.validando &&
+                                !telValidadorCierre.listo
+                              ? 'border-amber-500 focus-visible:ring-amber-400'
+                              : ''
                       }
                     />
                   </div>
@@ -2281,6 +2580,26 @@ export function EditarRevisionManual() {
                       {errores['telefono']}
                     </p>
                   )}
+                  {(clienteData.telefono || '').trim() &&
+                    telValidadorCierre.validando && (
+                      <p className="text-xs text-muted-foreground">
+                        Validando teléfono con el sistema…
+                      </p>
+                    )}
+                  {(clienteData.telefono || '').trim() &&
+                    !telValidadorCierre.validando &&
+                    !telValidadorCierre.listo && (
+                      <p className="text-xs text-amber-800">
+                        <span className="font-medium">
+                          No se puede «Guardar y cerrar»
+                        </span>{' '}
+                        hasta que el teléfono cumpla los validadores. Puede usar
+                        «Guardar cambios» para seguir editando.
+                        {telValidadorCierre.mensaje
+                          ? ` Detalle: ${telValidadorCierre.mensaje}`
+                          : ''}
+                      </p>
+                    )}
                 </div>
 
                 {/* Email */}
@@ -2303,12 +2622,43 @@ export function EditarRevisionManual() {
                           setErrores({ ...errores, email: '' })
                       }}
                       placeholder="juan@email.com"
-                      className={`pl-10 ${errores['email'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
+                      className={`pl-10 ${
+                        errores['email']
+                          ? 'border-red-500 focus-visible:ring-red-400'
+                          : (clienteData.email || '').trim() &&
+                              emailValidadorCierre.validando
+                            ? 'border-slate-300 ring-1 ring-slate-200'
+                            : (clienteData.email || '').trim() &&
+                                !emailValidadorCierre.validando &&
+                                !emailValidadorCierre.listo
+                              ? 'border-amber-500 focus-visible:ring-amber-400'
+                              : ''
+                      }`}
                     />
                   </div>
                   {errores['email'] && (
                     <p className="text-xs text-red-600">{errores['email']}</p>
                   )}
+                  {(clienteData.email || '').trim() &&
+                    emailValidadorCierre.validando && (
+                      <p className="text-xs text-muted-foreground">
+                        Validando correo con el sistema…
+                      </p>
+                    )}
+                  {(clienteData.email || '').trim() &&
+                    !emailValidadorCierre.validando &&
+                    !emailValidadorCierre.listo && (
+                      <p className="text-xs text-amber-800">
+                        <span className="font-medium">
+                          No se puede «Guardar y cerrar»
+                        </span>{' '}
+                        hasta que el correo cumpla los validadores. Puede usar
+                        «Guardar cambios» para seguir editando.
+                        {emailValidadorCierre.mensaje
+                          ? ` Detalle: ${emailValidadorCierre.mensaje}`
+                          : ''}
+                      </p>
+                    )}
                 </div>
 
                 {/* Fecha Nacimiento */}
@@ -3422,52 +3772,169 @@ export function EditarRevisionManual() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <FileText className="h-5 w-5" />
-                      Resumen: pagos del crédito vs cuotas
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Cifras del crédito en revisión (no solo la página visible
-                      de la tabla). Sirve para contrastar montos registrados en{' '}
-                      <span className="font-medium">pagos</span> con lo aplicado
-                      en el <span className="font-medium">plan de cuotas</span>.
-                    </p>
+                <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+                  <CardHeader className="space-y-4 border-b border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-slate-50/90 pb-4">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+                        <div
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-sm ring-1 ring-primary/10"
+                          aria-hidden
+                        >
+                          <BarChart3 className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CardTitle className="text-lg font-semibold tracking-tight">
+                              Resumen: pagos del crédito vs cuotas
+                            </CardTitle>
+                            {hayPendienteRevision && !soloLectura ? (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-400/80 bg-amber-50 text-amber-950"
+                              >
+                                Cambios sin confirmar
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <p className="max-w-prose text-sm text-muted-foreground">
+                            Cifras del crédito en revisión (no solo la página
+                            visible de la tabla). Contrasta montos en{' '}
+                            <span className="font-medium text-foreground">
+                              pagos
+                            </span>{' '}
+                            con lo aplicado en el{' '}
+                            <span className="font-medium text-foreground">
+                              plan de cuotas
+                            </span>
+                            .
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        className="flex flex-wrap gap-2 xl:max-w-[min(100%,36rem)] xl:justify-end"
+                        role="toolbar"
+                        aria-label="Acciones desde el resumen"
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          disabled={
+                            loadingPagosRealizados || fetchingPagosRealizados
+                          }
+                          onClick={() => void refetchPagosRealizados()}
+                        >
+                          <RefreshCw
+                            className={`h-4 w-4 ${fetchingPagosRealizados ? 'animate-spin' : ''}`}
+                          />
+                          Actualizar datos
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="gap-1.5"
+                          disabled={
+                            soloLectura ||
+                            aplicarCascadaPagosMutation.isPending ||
+                            !prestamoData.prestamo_id ||
+                            Number(prestamoData.prestamo_id) <= 0
+                          }
+                          onClick={() => aplicarCascadaPagosMutation.mutate()}
+                          title={
+                            soloLectura
+                              ? 'Revisión cerrada: solo lectura'
+                              : 'Aplicar pagos elegibles a cuotas de este crédito'
+                          }
+                        >
+                          {aplicarCascadaPagosMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <DollarSign className="h-4 w-4" />
+                          )}
+                          Cascada
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="sm"
+                          className="gap-1.5"
+                          disabled={soloLectura}
+                          onClick={abrirAgregarPagoRevision}
+                        >
+                          <Plus className="h-4 w-4" />
+                          Agregar pago
+                        </Button>
+                        <div
+                          className="hidden h-8 w-px self-center bg-border sm:block"
+                          aria-hidden
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={`gap-1.5 ${claseResaltarGuardarRevision}`}
+                          disabled={
+                            soloLectura || guardandoParcial || guardandoFinal
+                          }
+                          onClick={handleGuardarParciales}
+                        >
+                          <Save className="h-4 w-4" />
+                          Guardar
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className={`gap-1.5 bg-green-600 text-white hover:bg-green-700 ${claseResaltarGuardarRevision}`}
+                          disabled={deshabilitarGuardarYCerrar}
+                          title={tituloGuardarYCerrarBoton}
+                          onClick={handleGuardarYCerrar}
+                        >
+                          {guardandoFinal ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Check className="h-4 w-4" />
+                          )}
+                          Guardar y cerrar
+                        </Button>
+                      </div>
+                    </div>
                   </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
+                  <CardContent className="space-y-4 pt-5 text-sm">
                     {!auditoriaCoherenciaActiva ? (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
-                        <span className="flex items-start gap-2">
-                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 text-amber-950 shadow-sm">
+                        <span className="flex items-start gap-3">
+                          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                           <span>
-                            El cuadro de coherencia con cuotas y financiamiento
-                            se activa cuando el préstamo está en estado{' '}
+                            El panel de coherencia (cuotas vs financiamiento y
+                            pagos) se activa cuando el préstamo está en{' '}
                             <span className="font-semibold">Aprobado</span> o{' '}
                             <span className="font-semibold">Liquidado</span>.
                             Estado actual:{' '}
                             <span className="font-semibold">
                               {estadoPrestamoNorm || '-'}
                             </span>
-                            .
+                            . Use los botones de arriba para registrar pagos o
+                            guardar el formulario.
                           </span>
                         </span>
                       </div>
                     ) : loadingPagosRealizados &&
                       !pagosRealizadosData?.resumen_prestamo ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                      <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-4 py-6 text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin" />
                         Cargando resumen del crédito…
                       </div>
                     ) : !pagosRealizadosData?.resumen_prestamo ? (
-                      <p className="text-muted-foreground">
+                      <div className="rounded-lg border border-dashed bg-muted/10 px-4 py-4 text-muted-foreground">
                         No se recibió el agregado{' '}
-                        <span className="rounded bg-muted px-1 font-mono text-xs">
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
                           resumen_prestamo
                         </span>{' '}
-                        del servidor. Actualice el backend o use «Actualizar» en
-                        pagos.
-                      </p>
+                        del servidor. Pulse «Actualizar datos» o revise el
+                        backend.
+                      </div>
                     ) : (
                       (() => {
                         const rp = pagosRealizadosData.resumen_prestamo
@@ -3495,129 +3962,298 @@ export function EditarRevisionManual() {
                         const pendSum = Number(rp.suma_monto_pendiente) || 0
                         const pagN = Number(rp.cantidad_pagado) || 0
                         const pagSum = Number(rp.suma_monto_estado_pagado) || 0
+                        const todoOk = planAlineadoFin && pagosAlineadosCuotas
+                        const pctCoberturaPlan =
+                          sumCuotasMonto > 0
+                            ? Math.min(
+                                100,
+                                Math.round(
+                                  (sumCuotasPagado / sumCuotasMonto) * 1000
+                                ) / 10
+                              )
+                            : 0
+
+                        const sugerencias: string[] = []
+                        if (!planAlineadoFin) {
+                          sugerencias.push(
+                            `Cuotas vs financiamiento: la suma de montos de cuotas (${sumCuotasMonto.toFixed(2)} USD) no coincide con el total declarado (${tf.toFixed(2)} USD); diferencia ${diffPlanVsFin.toFixed(2)}. Revise montos de cuotas o el total del préstamo y guarde.`
+                          )
+                        }
+                        if (!pagosAlineadosCuotas) {
+                          if (diffPagosVsCuotas > COHERENCIA_USD_TOL) {
+                            sugerencias.push(
+                              `Pagos vs aplicado: hay ${diffPagosVsCuotas.toFixed(2)} USD más en pagos del crédito que en total aplicado en cuotas. Pruebe «Cascada», revise pagos sin aplicar o duplicados.`
+                            )
+                          } else {
+                            sugerencias.push(
+                              `Pagos vs aplicado: faltan ${Math.abs(diffPagosVsCuotas).toFixed(2)} USD en pagos del crédito respecto a lo aplicado en cuotas. Revise registros en la tabla de pagos o aplicaciones.`
+                            )
+                          }
+                        }
+                        if (pendN > 0 && estadoPrestamoNorm === 'APROBADO') {
+                          sugerencias.push(
+                            `Hay ${pendN} pago(s) en estado Pendiente por ${pendSum.toFixed(2)} USD; valide cartera y luego cascada si corresponde.`
+                          )
+                        }
+                        if (
+                          estadoPrestamoNorm === 'LIQUIDADO' &&
+                          faltaCubrirPlan > COHERENCIA_USD_TOL
+                        ) {
+                          sugerencias.push(
+                            'Crédito liquidado pero el cronograma muestra saldo pendiente: conviene revisar cuotas y pagos antes de cerrar la revisión.'
+                          )
+                        }
 
                         return (
-                          <div className="space-y-3">
-                            <div className="grid gap-2 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
-                              <div>
-                                <p className="text-xs font-medium uppercase text-muted-foreground">
-                                  Pagos cargados (este crédito, BD)
+                          <div className="space-y-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className={
+                                  todoOk
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-950'
+                                    : 'border-amber-400 bg-amber-50 text-amber-950'
+                                }
+                              >
+                                {todoOk
+                                  ? 'Cuadre: coherente'
+                                  : 'Cuadre: revisar'}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                Tolerancia numérica:{' '}
+                                {COHERENCIA_USD_TOL.toFixed(2)} USD
+                              </span>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Pagos (este crédito, BD)
                                 </p>
-                                <p className="text-base font-semibold">
-                                  {cantPagosCredito}{' '}
-                                  {cantPagosCredito === 1 ? 'pago' : 'pagos'} ·
-                                  ${sumPagosCredito.toFixed(2)} USD
+                                <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">
+                                  ${sumPagosCredito.toFixed(2)}{' '}
+                                  <span className="text-base font-semibold text-muted-foreground">
+                                    USD
+                                  </span>
                                 </p>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                  Pendientes (estado): {pendN} · $
-                                  {pendSum.toFixed(2)} · Pagado (estado): {pagN}{' '}
-                                  · ${pagSum.toFixed(2)}
+                                  {cantPagosCredito}{' '}
+                                  {cantPagosCredito === 1
+                                    ? 'registro'
+                                    : 'registros'}{' '}
+                                  en base
                                 </p>
+                                <dl className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
+                                  <div className="flex justify-between gap-2">
+                                    <dt className="text-muted-foreground">
+                                      Pendiente (estado)
+                                    </dt>
+                                    <dd className="font-medium tabular-nums">
+                                      {pendN} · ${pendSum.toFixed(2)}
+                                    </dd>
+                                  </div>
+                                  <div className="flex justify-between gap-2">
+                                    <dt className="text-muted-foreground">
+                                      Pagado (estado)
+                                    </dt>
+                                    <dd className="font-medium tabular-nums">
+                                      {pagN} · ${pagSum.toFixed(2)}
+                                    </dd>
+                                  </div>
+                                </dl>
                               </div>
-                              <div>
-                                <p className="text-xs font-medium uppercase text-muted-foreground">
+
+                              <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                   Plan de cuotas (formulario / BD)
                                 </p>
-                                <p className="text-base font-semibold">
-                                  Suma montos: ${sumCuotasMonto.toFixed(2)} ·
-                                  Aplicado: ${sumCuotasPagado.toFixed(2)}
+                                <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">
+                                  ${sumCuotasMonto.toFixed(2)}{' '}
+                                  <span className="text-base font-semibold text-muted-foreground">
+                                    USD
+                                  </span>
                                 </p>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                  Financiamiento declarado: ${tf.toFixed(2)}
+                                  Aplicado en cuotas:{' '}
+                                  <span className="font-semibold text-foreground">
+                                    ${sumCuotasPagado.toFixed(2)} USD
+                                  </span>
                                 </p>
+                                <dl className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
+                                  <div className="flex justify-between gap-2">
+                                    <dt className="text-muted-foreground">
+                                      Financiamiento declarado
+                                    </dt>
+                                    <dd className="font-medium tabular-nums">
+                                      ${tf.toFixed(2)}
+                                    </dd>
+                                  </div>
+                                  <div className="flex justify-between gap-2">
+                                    <dt className="text-muted-foreground">
+                                      Delta cuotas - financiamiento
+                                    </dt>
+                                    <dd
+                                      className={`font-semibold tabular-nums ${planAlineadoFin ? 'text-emerald-700' : 'text-amber-800'}`}
+                                    >
+                                      {diffPlanVsFin >= 0 ? '+' : ''}
+                                      {diffPlanVsFin.toFixed(2)}
+                                    </dd>
+                                  </div>
+                                </dl>
+                              </div>
+
+                              <div
+                                className={`rounded-xl border p-4 shadow-sm ring-1 sm:col-span-2 xl:col-span-1 ${
+                                  pagosAlineadosCuotas
+                                    ? 'border-emerald-200/90 bg-emerald-50/40 ring-emerald-100'
+                                    : diffPagosVsCuotas > COHERENCIA_USD_TOL
+                                      ? 'border-sky-200/90 bg-sky-50/50 ring-sky-100'
+                                      : 'border-orange-200/90 bg-orange-50/50 ring-orange-100'
+                                }`}
+                              >
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Pagos del crédito - aplicado en cuotas
+                                </p>
+                                <p
+                                  className={`mt-2 text-2xl font-bold tabular-nums ${
+                                    pagosAlineadosCuotas
+                                      ? 'text-emerald-800'
+                                      : diffPagosVsCuotas > COHERENCIA_USD_TOL
+                                        ? 'text-sky-900'
+                                        : 'text-orange-900'
+                                  }`}
+                                >
+                                  {diffPagosVsCuotas >= 0 ? '+' : '-'}$
+                                  {Math.abs(diffPagosVsCuotas).toFixed(2)} USD
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {pagosAlineadosCuotas
+                                    ? 'Dentro de tolerancia: cartera alineada al plan.'
+                                    : diffPagosVsCuotas > COHERENCIA_USD_TOL
+                                      ? 'Sobrante en cartera vs cuotas.'
+                                      : 'Falta monto en pagos vs lo aplicado.'}
+                                </p>
+                                <div className="mt-4 space-y-1.5">
+                                  <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>Cobertura del cronograma</span>
+                                    <span className="font-medium tabular-nums text-foreground">
+                                      {pctCoberturaPlan}%
+                                    </span>
+                                  </div>
+                                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/80 ring-1 ring-slate-200/80">
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-[width] duration-300"
+                                      style={{
+                                        width: `${pctCoberturaPlan}%`,
+                                      }}
+                                    />
+                                  </div>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    Aplicado sobre suma de montos de cuotas (
+                                    {sumCuotasMonto > 0
+                                      ? 'proporción cubierta'
+                                      : 'sin cuotas para medir'}
+                                    ).
+                                  </p>
+                                </div>
                               </div>
                             </div>
 
                             {!planAlineadoFin && (
-                              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                                <span>
-                                  La suma de montos de cuotas ($
-                                  {sumCuotasMonto.toFixed(2)}) no coincide con
-                                  el financiamiento (${tf.toFixed(2)});
-                                  diferencia ${diffPlanVsFin.toFixed(2)}. Revise
-                                  cuotas o el total del préstamo.
-                                </span>
+                              <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 text-amber-950 shadow-sm">
+                                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                                <div>
+                                  <p className="font-semibold">
+                                    Financiamiento vs suma de cuotas
+                                  </p>
+                                  <p className="mt-1 text-sm">
+                                    La suma de montos de cuotas ($
+                                    {sumCuotasMonto.toFixed(2)}) no coincide con
+                                    el financiamiento (${tf.toFixed(2)});
+                                    diferencia {diffPlanVsFin.toFixed(2)} USD.
+                                  </p>
+                                </div>
                               </div>
                             )}
 
                             <div
-                              className={`flex items-start gap-2 rounded-md border px-3 py-2 ${
+                              className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-sm ${
                                 pagosAlineadosCuotas
-                                  ? 'border-green-200 bg-green-50 text-green-950'
+                                  ? 'border-emerald-200 bg-emerald-50/90 text-emerald-950'
                                   : diffPagosVsCuotas > COHERENCIA_USD_TOL
-                                    ? 'border-sky-200 bg-sky-50 text-sky-950'
-                                    : 'border-orange-200 bg-orange-50 text-orange-950'
+                                    ? 'border-sky-200 bg-sky-50/90 text-sky-950'
+                                    : 'border-orange-200 bg-orange-50/90 text-orange-950'
                               }`}
                             >
                               {pagosAlineadosCuotas ? (
-                                <Check className="mt-0.5 h-4 w-4 shrink-0" />
+                                <Check className="mt-0.5 h-5 w-5 shrink-0" />
                               ) : (
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                               )}
-                              <div className="space-y-1">
-                                <p className="font-medium">
+                              <div className="min-w-0 space-y-1">
+                                <p className="font-semibold">
                                   Pagos del crédito vs total aplicado en cuotas
                                 </p>
                                 {pagosAlineadosCuotas ? (
-                                  <p>
+                                  <p className="text-sm">
                                     Coherente: la suma de pagos del crédito
                                     coincide con lo aplicado en cuotas
-                                    (tolerancia ${COHERENCIA_USD_TOL.toFixed(2)}
-                                    ).
+                                    (tolerancia {COHERENCIA_USD_TOL.toFixed(2)}{' '}
+                                    USD).
                                   </p>
                                 ) : diffPagosVsCuotas > COHERENCIA_USD_TOL ? (
-                                  <p>
+                                  <p className="text-sm">
                                     <span className="font-semibold">
                                       Sobrante en cartera
                                     </span>{' '}
-                                    respecto a lo aplicado en cuotas: $
-                                    {diffPagosVsCuotas.toFixed(2)} USD. Puede
-                                    haber pagos sin cascada o cuotas
-                                    desactualizadas; use «Aplicar a cuotas
-                                    (cascada)» si corresponde.
+                                    respecto a lo aplicado:{' '}
+                                    {diffPagosVsCuotas.toFixed(2)} USD. Suele
+                                    deberse a pagos sin cascada o cuotas
+                                    desactualizadas.
                                   </p>
                                 ) : (
-                                  <p>
+                                  <p className="text-sm">
                                     <span className="font-semibold">
                                       Falta en pagos
                                     </span>{' '}
-                                    respecto a lo aplicado en cuotas: $
+                                    respecto a lo aplicado:{' '}
                                     {Math.abs(diffPagosVsCuotas).toFixed(2)}{' '}
-                                    USD. Revise aplicaciones o registros en
-                                    tabla pagos.
+                                    USD. Revise registros y aplicaciones.
                                   </p>
                                 )}
                               </div>
                             </div>
 
-                            <div className="rounded-md border bg-background px-3 py-2">
-                              <p className="font-medium">
+                            <div className="rounded-xl border border-slate-200/90 bg-slate-50/50 p-4 shadow-sm">
+                              <p className="text-sm font-semibold text-foreground">
                                 Falta por cubrir en el plan de cuotas
                               </p>
-                              <p className="text-muted-foreground">
-                                Saldo pendiente del cronograma (suma montos −
-                                aplicado):{' '}
-                                <span className="font-semibold text-foreground">
-                                  ${faltaCubrirPlan.toFixed(2)} USD
+                              <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-foreground">
+                                ${faltaCubrirPlan.toFixed(2)}{' '}
+                                <span className="text-lg font-semibold text-muted-foreground">
+                                  USD
                                 </span>
-                                {estadoPrestamoNorm === 'LIQUIDADO' &&
-                                faltaCubrirPlan > COHERENCIA_USD_TOL ? (
-                                  <span className="mt-1 block text-orange-700">
-                                    Crédito liquidado pero el plan aún muestra
-                                    saldo; conviene validar cuotas y pagos.
-                                  </span>
-                                ) : null}
+                              </p>
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                Saldo pendiente del cronograma (suma montos de
+                                cuotas menos total aplicado).
                               </p>
                             </div>
 
-                            {pendN > 0 && estadoPrestamoNorm === 'APROBADO' ? (
-                              <p className="text-xs text-muted-foreground">
-                                Hay {pendN} {pendN === 1 ? 'pago' : 'pagos'} en
-                                estado Pendiente por ${pendSum.toFixed(2)}; si
-                                ya ingresaron a caja, use «Aplicar a cuotas
-                                (cascada)» para alinear cuotas.
-                              </p>
+                            {sugerencias.length > 0 ? (
+                              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                                <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+                                  <CheckSquare className="h-4 w-4 shrink-0 text-primary" />
+                                  Qué revisar (priorizado)
+                                </p>
+                                <ul className="list-inside list-decimal space-y-2 text-sm text-muted-foreground marker:text-primary">
+                                  {sugerencias.map((t, i) => (
+                                    <li key={i} className="pl-0.5">
+                                      {t}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
                             ) : null}
                           </div>
                         )
@@ -3810,7 +4446,7 @@ export function EditarRevisionManual() {
             variant="outline"
             onClick={handleGuardarParciales}
             disabled={soloLectura || guardandoParcial || guardandoFinal}
-            className="gap-2"
+            className={`gap-2 ${claseResaltarGuardarRevision}`}
             title="Guarda los cambios y continúa revisando - estado cambia a ?"
           >
             <Save className="h-4 w-4" />
@@ -3831,10 +4467,10 @@ export function EditarRevisionManual() {
 
           <Button
             type="button"
-            className="gap-2 bg-green-600 text-white hover:bg-green-700"
+            className={`gap-2 bg-green-600 text-white hover:bg-green-700 ${claseResaltarGuardarRevision}`}
             onClick={handleGuardarYCerrar}
-            disabled={soloLectura || guardandoParcial || guardandoFinal}
-            title="Guarda todos los cambios y finaliza la revisión - aparece ✓ en Acciones"
+            disabled={deshabilitarGuardarYCerrar}
+            title={tituloGuardarYCerrarBoton}
           >
             {guardandoFinal ? (
               <Loader2 className="h-4 w-4 animate-spin" />

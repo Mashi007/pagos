@@ -26,7 +26,7 @@ import string
 
 from datetime import date, datetime, timedelta, timezone
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 
@@ -93,6 +93,10 @@ from app.services.cobros.recibo_pago_cartera_pdf import generar_recibo_pago_cart
 from app.services.estado_cuenta_pdf import (
     generar_pdf_estado_cuenta,
     obtener_datos_estado_cuenta_cliente,
+)
+
+from app.services.pagos.comprobante_link_desde_gmail import (
+    comprobante_url_para_enlace_publico,
 )
 
 
@@ -217,6 +221,8 @@ class VerificarCodigoResponse(BaseModel):
 
     recibos_cuotas: Optional[List[dict]] = None  # lista { prestamo_id, producto, cuota_id, numero_cuota, url } para interfaz
 
+    comprobantes_pagos: Optional[List[dict]] = None  # pago_id, url, fecha/monto/referencia
+
 
 
 
@@ -242,6 +248,54 @@ def _cedula_lookup(cedula_input: str) -> str:
     valor = result.get("valor_formateado", "")
 
     return valor.replace("-", "") if valor else ""
+
+
+
+
+
+def _cliente_nombre_email_por_cedula_lookup(
+
+    db: Session,
+
+    cedula_lookup: str,
+
+) -> Optional[Tuple[str, str]]:
+
+    """
+
+    Solo lectura en clientes; no sincroniza pagos ni reaplica cascada.
+
+    Usar en solicitar-codigo; el armado completo del estado (sync/cascada) queda en verificar/PDF.
+
+    """
+
+    lu = (cedula_lookup or "").strip()
+
+    if not lu:
+
+        return None
+
+    cliente_row = db.execute(
+
+        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == lu)
+
+    ).scalars().first()
+
+    if not cliente_row:
+
+        return None
+
+    cliente = cliente_row[0] if hasattr(cliente_row, "__getitem__") else cliente_row
+
+    if not getattr(cliente, "id", None):
+
+        return None
+
+    nombre = (getattr(cliente, "nombres", None) or "").strip()
+
+    email = (getattr(cliente, "email", None) or "").strip()
+
+    return (nombre, email)
 
 
 
@@ -643,13 +697,9 @@ def validar_cedula_estado_cuenta(
 
 
 
-    cliente_row = db.execute(
+    contacto = _cliente_nombre_email_por_cedula_lookup(db, cedula_lookup)
 
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
-
-    ).scalars().first()
-
-    if not cliente_row:
+    if not contacto:
 
         return ValidarCedulaEstadoCuentaResponse(
 
@@ -659,11 +709,7 @@ def validar_cedula_estado_cuenta(
 
         )
 
-    cliente = cliente_row[0] if hasattr(cliente_row, "__getitem__") else cliente_row
-
-    nombre = (getattr(cliente, "nombres", None) or "").strip()
-
-    email = (getattr(cliente, "email", None) or "").strip()
+    nombre, email = contacto
 
     return ValidarCedulaEstadoCuentaResponse(
 
@@ -747,9 +793,9 @@ def solicitar_codigo_estado_cuenta(
 
         return SolicitarCodigoResponse(ok=False, error="Formato de cedula no reconocido.")
 
-    datos = _obtener_datos_pdf(db, cedula_lookup)
+    cliente_contacto = _cliente_nombre_email_por_cedula_lookup(db, cedula_lookup)
 
-    if not datos or not (datos.get("email") or "").strip():
+    if not cliente_contacto or not cliente_contacto[1]:
 
         logger.info("estado_cuenta solicitar ip=%s outcome=ok_sin_email (sin cliente/email)", ip)
 
@@ -761,9 +807,9 @@ def solicitar_codigo_estado_cuenta(
 
         )
 
-    email = (datos.get("email") or "").strip()
+    nombre_raw, email = cliente_contacto
 
-    nombre = datos.get("nombre") or "Cliente"
+    nombre = (nombre_raw or "").strip() or "Cliente"
 
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -1087,6 +1133,42 @@ def verificar_codigo_estado_cuenta(
 
             })
 
+    comprobantes_pagos_list: List[dict] = []
+
+    for pr in datos.get("pagos_realizados") or []:
+
+        link_foto = comprobante_url_para_enlace_publico(
+
+            str(pr.get("link_comprobante") or ""),
+
+            base_url=base_url,
+
+        ).strip()
+
+        low = link_foto.lower()
+
+        if not low.startswith(("http://", "https://")):
+
+            continue
+
+        comprobantes_pagos_list.append(
+
+            {
+
+                "pago_id": pr.get("pago_id"),
+
+                "url": link_foto,
+
+                "fecha_pago_display": pr.get("fecha_pago_display") or "",
+
+                "monto_display": pr.get("monto_display") or "",
+
+                "referencia_tabla": pr.get("referencia_tabla") or "",
+
+            }
+
+        )
+
     logger.info("estado_cuenta verificar ip=%s outcome=ok cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
 
     return VerificarCodigoResponse(
@@ -1100,6 +1182,8 @@ def verificar_codigo_estado_cuenta(
         recibo_token=recibo_token,
 
         recibos_cuotas=recibos_cuotas if recibos_cuotas else None,
+
+        comprobantes_pagos=comprobantes_pagos_list if comprobantes_pagos_list else None,
 
     )
 
