@@ -110,7 +110,21 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
           {gmailStatus && (
             <p className="mb-1 border-t border-gray-100 px-2 py-1 text-xs text-gray-600">
               {gmailStatus.last_status === 'error' ? (
-                <span className="text-amber-600">Última sync falló</span>
+                <span className="block text-amber-600">
+                  <span className="font-medium text-amber-700">
+                    Última sync Gmail falló
+                  </span>
+                  {gmailStatus.last_error ? (
+                    <span className="mt-1 block max-h-24 overflow-y-auto whitespace-pre-wrap break-words font-normal text-amber-900/85">
+                      {gmailStatus.last_error.length > 280
+                        ? `${gmailStatus.last_error.slice(0, 280)}…`
+                        : gmailStatus.last_error}
+                    </span>
+                  ) : null}
+                  <span className="mt-1 block font-normal text-gray-600">
+                    Reintente desde Pagos → Agregar pago → Procesar correos.
+                  </span>
+                </span>
               ) : gmailStatus.last_run ? (
                 <>
                   Última sync: {formatLastSyncDate(gmailStatus.last_run)} -{' '}

@@ -20,6 +20,14 @@ from app.services.pagos_gmail.helpers import (
 
 logger = logging.getLogger(__name__)
 
+
+class PagosGmailGmailListError(RuntimeError):
+    """
+    Fallo al listar o enriquecer metadatos desde la API de Gmail.
+    No debe confundirse con inbox vacio (lista vacia legitima).
+    """
+
+
 # Etiquetas de usuario (A = MERCANTIL, B = BNC, C = BINANCE, D = BNV / BDV). Se crean si no existen.
 PAGOS_GMAIL_LABEL_IMAGEN_1 = "MERCANTIL"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "BNC"
@@ -184,7 +192,9 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
     except HttpError as e:
         if e.resp.status != 429:
             logger.exception("Gmail list_messages_by_filter(%s): %s", filter_type, e)
-            return []
+            raise PagosGmailGmailListError(
+                f"No se pudo listar Gmail (HTTP {e.resp.status}, filtro={filter_type})."
+            ) from e
         wait_sec = _parse_gmail_retry_after_seconds(e)
         logger.warning("[PAGOS_GMAIL] Gmail 429 (filtro=%s), esperando %ds, 1 reintento.", filter_type, wait_sec or 0)
         if wait_sec is not None and 0 < wait_sec <= _GMAIL_429_MAX_WAIT_SECONDS:
@@ -193,13 +203,28 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
                 return _fetch()
             except HttpError as e2:
                 if e2.resp.status == 429:
-                    return []
+                    logger.warning(
+                        "[PAGOS_GMAIL] Gmail 429 persistente tras reintento (filtro=%s)",
+                        filter_type,
+                    )
+                    raise PagosGmailGmailListError(
+                        f"Gmail sigue en rate limit (429) tras reintento (filtro={filter_type})."
+                    ) from e2
                 logger.exception("Gmail list_messages_by_filter (reintento): %s", e2)
-                return []
-        return []
+                raise PagosGmailGmailListError(
+                    f"Gmail HTTP {e2.resp.status} en reintento al listar (filtro={filter_type})."
+                ) from e2
+        raise PagosGmailGmailListError(
+            f"Gmail 429 (filtro={filter_type}): retry_after={wait_sec!s}s no aplicable "
+            f"(max {_GMAIL_429_MAX_WAIT_SECONDS}s) o no parseable."
+        ) from e
+    except PagosGmailGmailListError:
+        raise
     except Exception as e:
         logger.exception("Gmail list_messages_by_filter(%s): %s", filter_type, e)
-        return []
+        raise PagosGmailGmailListError(
+            f"Error inesperado listando Gmail (filtro={filter_type}): {e!s}"
+        ) from e
 
 
 
@@ -230,20 +255,33 @@ def count_messages_by_filter(service: Any, filter_type: str = "all") -> int:
     try:
         return _count()
     except HttpError as e:
-        if e.resp.status == 429:
-            wait_sec = _parse_gmail_retry_after_seconds(e)
-            logger.warning("[PAGOS_GMAIL] Gmail 429 (count, filtro=%s), esperando %ds", filter_type, wait_sec or 0)
-            if wait_sec and 0 < wait_sec <= _GMAIL_429_MAX_WAIT_SECONDS:
-                time.sleep(wait_sec)
-                try:
-                    return _count()
-                except HttpError:
-                    return 0
-        logger.warning("Gmail count_messages_by_filter(%s): %s", filter_type, e)
-        return 0
+        if e.resp.status != 429:
+            logger.warning("Gmail count_messages_by_filter(%s): %s", filter_type, e)
+            raise PagosGmailGmailListError(
+                f"No se pudo contar en Gmail (HTTP {e.resp.status}, filtro={filter_type})."
+            ) from e
+        wait_sec = _parse_gmail_retry_after_seconds(e)
+        logger.warning("[PAGOS_GMAIL] Gmail 429 (count, filtro=%s), esperando %ds", filter_type, wait_sec or 0)
+        if wait_sec is not None and 0 < wait_sec <= _GMAIL_429_MAX_WAIT_SECONDS:
+            time.sleep(wait_sec)
+            try:
+                return _count()
+            except HttpError as e2:
+                logger.warning("Gmail count 429/HTTP tras reintento (%s): %s", filter_type, e2)
+                raise PagosGmailGmailListError(
+                    f"No se pudo contar en Gmail tras 429 (HTTP {e2.resp.status}, filtro={filter_type})."
+                ) from e2
+        raise PagosGmailGmailListError(
+            f"Gmail 429 al contar (filtro={filter_type}): retry_after={wait_sec!s}s no aplicable "
+            f"(max {_GMAIL_429_MAX_WAIT_SECONDS}s) o no parseable."
+        ) from e
+    except PagosGmailGmailListError:
+        raise
     except Exception as e:
         logger.warning("Gmail count_messages_by_filter(%s): %s", filter_type, e)
-        return 0
+        raise PagosGmailGmailListError(
+            f"Error inesperado contando Gmail (filtro={filter_type}): {e!s}"
+        ) from e
 
 
 def list_unread_with_attachments(service: Any) -> List[dict]:

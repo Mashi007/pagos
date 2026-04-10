@@ -44,6 +44,7 @@ from app.services.pagos_gmail.gmail_service import (
     list_messages_by_filter,
     mark_as_read,
     mark_unread_clear_star,
+    PagosGmailGmailListError,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
     PAGOS_GMAIL_LABEL_MANUAL,
     PAGOS_GMAIL_LABEL_MASTER,
@@ -691,7 +692,9 @@ def run_pipeline(
                 elif attachments:
                     mark_unread_clear_star(gmail_svc, msg_id)
                     logger.info(
-                        "[PAGOS_GMAIL]   Gmail: sin estrella + no leido (no 100%% digitalizacion o sin adjuntos validos)"
+                        "[PAGOS_GMAIL]   Gmail: sin estrella; hilo dejado NO LEIDO en Gmail "
+                        "(no 100%% digitalizacion o sin adjuntos validos — para revision humana; "
+                        "el listado del pipeline ya incluye leidos y no leidos)"
                     )
                 else:
                     logger.info(
@@ -752,6 +755,20 @@ def run_pipeline(
                 logger.warning("[PAGOS_GMAIL] %d correos omitidos por fallo Drive; %d procesados OK", drive_errors, emails_ok)
         db.commit()
         return sync_id, sync.status
+
+    except PagosGmailGmailListError as e:
+        logger.error(
+            "[PAGOS_GMAIL] Fallo API Gmail al listar metadatos (sync=error; no es inbox vacio): %s",
+            e,
+        )
+        sync.finished_at = datetime.now(timezone.utc)
+        sync.status = "error"
+        sync.error_message = str(e)[:2000]
+        sync.emails_processed = emails_ok
+        sync.files_processed = files_ok
+        sync.correos_marcados_revision = correos_marcados_revision
+        db.commit()
+        return sync_id, "error"
 
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Pipeline error inesperado: %s", e)

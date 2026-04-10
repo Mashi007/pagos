@@ -654,12 +654,25 @@ export function PagosList() {
               <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-3" align="end">
+          <PopoverContent className="w-80 max-w-[90vw] p-3" align="end">
             {gmailStatus && (
               <p className="mb-2 border-b border-gray-100 px-2 py-1.5 text-xs text-gray-600">
                 {gmailStatus.last_status === 'error' ? (
-                  <span className="text-amber-600">
-                    Última sync Gmail falló
+                  <span className="block text-amber-600">
+                    <span className="font-medium text-amber-700">
+                      Última sync Gmail falló
+                    </span>
+                    {gmailStatus.last_error ? (
+                      <span className="mt-1 block max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-normal text-amber-900/85 dark:text-amber-200/90">
+                        {gmailStatus.last_error.length > 400
+                          ? `${gmailStatus.last_error.slice(0, 400)}…`
+                          : gmailStatus.last_error}
+                      </span>
+                    ) : null}
+                    <span className="mt-1.5 block font-normal text-gray-600 dark:text-gray-400">
+                      Reintente con &quot;Procesar correos&quot; o revise OAuth
+                      en Configuración → Informe de pagos.
+                    </span>
                   </span>
                 ) : gmailStatus.last_status === 'running' ? (
                   <>

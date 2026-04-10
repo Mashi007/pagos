@@ -557,13 +557,13 @@ def diagnostico(db: Session = Depends(get_db)):
         result["paso_1_credenciales"] = {"ok": False, "error": str(e), "trace": traceback.format_exc()[-500:]}
         return result
 
-    # PASO 2: Listar correos no leídos
+    # PASO 2: Listar inbox + media (mismo criterio que el pipeline; leídos y no leídos)
     try:
         gmail_svc = build_gmail_service(creds)
         messages = list_messages_by_filter(gmail_svc, "unread")
         result["paso_2_gmail_list"] = {
             "ok": True,
-            "total_no_leidos": len(messages),
+            "total_en_inbox_media": len(messages),
             "primeros_3": [
                 {"id": m["id"], "from": m["headers"].get("from", "")[:60],
                  "subject": m["headers"].get("subject", "")[:60]}
@@ -571,7 +571,9 @@ def diagnostico(db: Session = Depends(get_db)):
             ]
         }
         if not messages:
-            result["paso_2_gmail_list"]["advertencia"] = "No hay correos no leídos — nada que procesar"
+            result["paso_2_gmail_list"]["advertencia"] = (
+                "No hay mensajes en inbox que cumplan criterio imagen/PDF (listado incluye leídos y no leídos)"
+            )
             return result
     except Exception as e:
         result["paso_2_gmail_list"] = {"ok": False, "error": str(e), "trace": traceback.format_exc()[-500:]}
