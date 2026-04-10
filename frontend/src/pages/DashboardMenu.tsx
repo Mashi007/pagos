@@ -138,10 +138,10 @@ function parseIsoDateLocal(s: string): Date | null {
 }
 
 /**
- * Deja solo puntos con fecha >= 2 de abril del año del último dato (calendario local).
+ * Deja solo puntos con fecha >= 5 de abril del año del último dato (calendario local).
  * Si no quedara ninguno, devuelve la serie original (evita gráfico vacío fuera de temporada).
  */
-function serieNotificacionesEjeDesde2Abril<
+function serieNotificacionesEjeDesde5Abril<
   T extends { fecha: string; enviados: number },
 >(serie: T[]): T[] {
   if (!serie.length) return serie
@@ -156,7 +156,7 @@ function serieNotificacionesEjeDesde2Abril<
 
   if (!max) return serie
 
-  const cutoff = new Date(max.getFullYear(), 3, 2)
+  const cutoff = new Date(max.getFullYear(), 3, 5)
 
   const out = serie.filter(row => {
     const dt = parseIsoDateLocal(row.fecha)
@@ -563,7 +563,13 @@ export function DashboardMenu() {
 
     queryFn: async () => {
       const response = await apiClient.get<{
-        dias: { fecha: string; dia: string; monto_programado: number }[]
+        dias: {
+          fecha: string
+          dia: string
+          monto_programado: number
+          pagos_conciliados_dia: number
+          pagos_dias_anteriores_dia: number
+        }[]
       }>('/api/v1/dashboard/monto-programado-proxima-semana')
 
       return response.dias ?? []
@@ -690,7 +696,7 @@ export function DashboardMenu() {
 
   const serieNotificacionesGrafico = useMemo(
     () =>
-      serieNotificacionesEjeDesde2Abril(datosNotificacionesPorDia?.serie ?? []),
+      serieNotificacionesEjeDesde5Abril(datosNotificacionesPorDia?.serie ?? []),
     [datosNotificacionesPorDia?.serie]
   )
 
@@ -965,7 +971,7 @@ export function DashboardMenu() {
     iconSize: 12,
   }
 
-  // Bandas desde backend: pasos de $300 desde $500 hasta $4.000 + colas (alineado con API)
+  // Bandas desde backend: pasos de $300 desde $800 hasta $4.000 + colas (alineado con API)
 
   const datosBandasFinanciamiento = useMemo(() => {
     try {
@@ -976,7 +982,7 @@ export function DashboardMenu() {
         return []
       }
 
-      // Eje Y: arriba mayor banda, abajo "Menos de $500" (Recharts: primera fila = arriba)
+      // Eje Y: arriba mayor banda, abajo "Menos de $800" (Recharts: primera fila = arriba)
 
       const ordenPrioridadMayorArriba = [
         ...FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS,
@@ -1771,7 +1777,7 @@ export function DashboardMenu() {
                   dias_1_retraso
                 </code>
                 : correos aceptados por SMTP (enviados) por día. Eje X desde el{' '}
-                <strong>2 de abril</strong> del año del último día con datos
+                <strong>5 de abril</strong> del año del último día con datos
                 (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada).
                 Línea gris discontinua: <strong>tendencia</strong> (regresión
                 lineal sobre la serie mostrada).
@@ -1888,7 +1894,7 @@ export function DashboardMenu() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {datosDashboard ? (
             <>
-              {/* Monto programado por día: desde hoy (Caracas), 4 días corridos */}
+              {/* Cobranza diaria + monto programado solo hoy (hoy-10 .. hoy, Caracas) */}
 
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1901,21 +1907,26 @@ export function DashboardMenu() {
                       <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                         <DollarSign className="h-5 w-5 text-emerald-600" />
 
-                        <span>Monto programado por día</span>
+                        <span>Cobranza diaria y monto programado (hoy)</span>
                       </CardTitle>
 
                       <Badge
                         variant="secondary"
                         className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
                       >
-                        Hoy + 3 días (4 días)
+                        11 días · hoy-10 → hoy · Caracas
                       </Badge>
                     </div>
 
                     <CardDescription className="text-sm text-gray-600">
-                      Suma de monto_cuota por fecha de vencimiento desde hoy
-                      (America/Caracas) hasta dentro de tres días: cuatro días
-                      corridos en total.
+                      Por cada día: barras apiladas{' '}
+                      <strong>Pagos conciliados</strong> (vencimiento = ese día y
+                      pago ese día) y{' '}
+                      <strong>Pagos días anteriores</strong> (vencimiento
+                      anterior, pago ese día), como el análisis mensual pero en
+                      escala diaria. <strong>Monto programado</strong>: suma de
+                      monto_cuota con vencimiento <strong>solo en hoy</strong>{' '}
+                      (barra aparte, resto de días en cero).
                     </CardDescription>
                   </CardHeader>
 
@@ -1926,72 +1937,83 @@ export function DashboardMenu() {
                       </div>
                     ) : datosMontoProgramadoSemana &&
                       datosMontoProgramadoSemana.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={340}>
+                      <ResponsiveContainer width="100%" height={420}>
                         <BarChart
-                          layout="vertical"
                           data={datosMontoProgramadoSemana}
-                          margin={{ top: 14, right: 24, left: 8, bottom: 36 }}
+                          margin={{ top: 14, right: 24, left: 8, bottom: 56 }}
                         >
                           <CartesianGrid {...chartCartesianGrid} />
 
                           <XAxis
-                            type="number"
+                            dataKey="dia"
+                            tick={chartAxisTick}
+                            interval={0}
+                            angle={-32}
+                            textAnchor="end"
+                            height={68}
+                            minTickGap={4}
+                          />
+
+                          <YAxis
                             tick={chartAxisTick}
                             tickFormatter={value =>
                               `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`
                             }
                             label={{
                               value: 'Monto (USD)',
-                              position: 'insideBottom',
-                              offset: -8,
-                              style: {
-                                textAnchor: 'middle',
-                                fill: '#374151',
-                                fontSize: 13,
-                                fontWeight: 600,
-                              },
+                              angle: -90,
+                              position: 'insideLeft',
+                              style: { fill: '#374151', fontSize: 13 },
                             }}
-                          />
-
-                          <YAxis
-                            type="category"
-                            dataKey="dia"
-                            width={76}
-                            tick={chartAxisTick}
-                            tickLine={false}
-                            interval={0}
                           />
 
                           <Tooltip
                             contentStyle={chartTooltipStyle.contentStyle}
                             labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number) => [
+                            formatter={(value: number, name: string) => [
                               formatCurrency(value),
-                              'Monto programado',
+                              name,
                             ]}
                             labelFormatter={(_, payload) =>
                               payload?.[0]?.payload?.fecha
                                 ? `Fecha: ${payload[0].payload.fecha}`
                                 : ''
                             }
-                            cursor={{ fill: 'rgba(16, 185, 129, 0.08)' }}
                           />
 
                           <Legend {...chartLegendStyle} />
 
                           <Bar
-                            dataKey="monto_programado"
-                            name="Monto programado"
+                            stackId="cobranza"
+                            dataKey="pagos_conciliados_dia"
+                            name="Pagos conciliados (venc. = día, pago = día)"
                             fill="#10b981"
-                            radius={[0, 4, 4, 0]}
+                            radius={[0, 0, 0, 0]}
+                            maxBarSize={44}
+                          />
+
+                          <Bar
+                            stackId="cobranza"
+                            dataKey="pagos_dias_anteriores_dia"
+                            name="Pagos días anteriores (pago = día)"
+                            fill="#f97316"
+                            radius={[4, 4, 0, 0]}
+                            maxBarSize={44}
+                          />
+
+                          <Bar
+                            stackId="programado"
+                            dataKey="monto_programado"
+                            name="Monto programado (solo hoy)"
+                            fill="#06b6d4"
+                            radius={[4, 4, 0, 0]}
                             maxBarSize={36}
                           />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="flex items-center justify-center py-16 text-gray-500">
-                        No hay datos de monto programado en los próximos cuatro
-                        días (desde hoy, Caracas)
+                        No hay datos en la ventana de 11 días (Caracas).
                       </div>
                     )}
                   </CardContent>
@@ -2000,7 +2022,7 @@ export function DashboardMenu() {
             </>
           ) : null}
 
-          {/* GRÁFICO DE BANDAS (financiamiento, pasos $300 desde $500 hasta $4.000) */}
+          {/* GRÁFICO DE BANDAS (financiamiento, pasos $300 desde $800 hasta $4.000) */}
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -2030,9 +2052,9 @@ export function DashboardMenu() {
 
                 <CardDescription className="px-6 pb-1 pt-0 text-xs text-gray-600">
                   Clasificación en el gráfico: tramos de{' '}
-                  <strong>USD 300</strong> desde <strong>500</strong> hasta{' '}
-                  <strong>4.000</strong>, más categorías Menos de $500 y Más de
-                  $4.000 (misma lógica que el endpoint{' '}
+                  <strong>USD 300</strong> desde <strong>800</strong> hasta{' '}
+                  <strong>4.000</strong>, más Menos de $800 (todo lo inferior) y
+                  Más de $4.000 (misma lógica que el endpoint{' '}
                   <code className="rounded bg-gray-100 px-1 py-0.5 text-[10px]">
                     /api/v1/dashboard/financiamiento-por-rangos
                   </code>

@@ -300,12 +300,12 @@ def _label_rango_financiamiento_usd(lo: int, hi: int) -> str:
 
 def _rangos_financiamiento():
     """
-    Bandas por total_financiamiento (préstamos APROBADO): pasos de $300 desde $500 hasta $4.000,
-    más 'Menos de $500' y 'Más de $4,000'. El tramo $3,800 - $4,000 cierra hasta 4.000 (ancho 200).
+    Bandas por total_financiamiento (préstamos APROBADO): pasos de $300 desde $800 hasta $4.000,
+    más 'Menos de $800' (todo lo inferior) y 'Más de $4,000'. Tramo $3,800 - $4,000 cierra en 4.000.
     """
     rows: list[tuple[int, int, str]] = []
-    rows.append((0, 500, "Menos de $500"))
-    for lo in range(500, 3800, 300):
+    rows.append((0, 800, "Menos de $800"))
+    for lo in range(800, 3800, 300):
         hi = lo + 300
         rows.append((lo, hi, _label_rango_financiamiento_usd(lo, hi)))
     rows.append((3800, 4000, _label_rango_financiamiento_usd(3800, 4000)))
@@ -318,9 +318,9 @@ def _case_total_financiamiento_rango_idx(tf):
     CASE alineado con el orden de _rangos_financiamiento() (índices 0..n-1).
     Primera condición que cumpla gana (equivalente a intervalos [lo, hi) encadenados).
     """
-    whens: list = [(tf < 500, 0)]
+    whens: list = [(tf < 800, 0)]
     idx = 1
-    for _hi in range(800, 3801, 300):
+    for _hi in range(1100, 3801, 300):
         whens.append((tf < _hi, idx))
         idx += 1
     whens.append((tf < 4000, idx))

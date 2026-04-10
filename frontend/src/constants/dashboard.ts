@@ -59,7 +59,7 @@ export function getPeriodoEtiqueta(periodo: string): string {
 
 /** Título del gráfico de bandas de financiamiento (menú dashboard). */
 export const FINANCIAMIENTO_BANDAS_GRAFICO_TITULO =
-  'Distribuci\u00F3n por bandas ($300, desde $500 hasta $4.000)'
+  'Distribuci\u00F3n por bandas ($300, desde $800 hasta $4.000)'
 
 /**
  * Orden del eje Y (arriba mayor banda). Debe coincidir con `categoria` de
@@ -78,6 +78,5 @@ export const FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS: readonly string[] = [
   '$1,400 - $1,700',
   '$1,100 - $1,400',
   '$800 - $1,100',
-  '$500 - $800',
-  'Menos de $500',
+  'Menos de $800',
 ]

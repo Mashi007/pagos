@@ -103,8 +103,6 @@ import {
 
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
-import { TEXTO_AVISO_PAGOS_REPORTADOS_ADMIN } from '../constants/reporteCobrosDocumento'
-
 import {
   Dialog,
   DialogContent,
@@ -510,12 +508,8 @@ export default function CobrosPagosReportadosPage() {
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold">Pagos Reportados</h1>
-
-          <p className="max-w-3xl text-xs leading-relaxed text-slate-600">
-            {TEXTO_AVISO_PAGOS_REPORTADOS_ADMIN}
-          </p>
         </div>
 
         <a

@@ -549,26 +549,60 @@ def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
 
 @router.get("/monto-programado-proxima-semana")
 def get_monto_programado_proxima_semana(db: Session = Depends(get_db)):
-    """Monto programado por día: vencimientos desde hoy (Caracas) hasta hoy+3 (4 días corridos)."""
+    """
+    Ventana diaria: desde hoy-10 hasta hoy (Caracas), 11 puntos.
+    - monto_programado: solo en el día hoy (suma monto_cuota con vencimiento hoy).
+    - pagos_conciliados_dia: cuotas con vencimiento = día d y fecha_pago = d.
+    - pagos_dias_anteriores_dia: cuotas con vencimiento < d y fecha_pago = d
+      (análogo diario a pagos de meses anteriores del análisis de cuentas por cobrar).
+    """
     try:
         hoy_date = hoy_negocio()
-        inicio_date = hoy_date
-        fin_date = hoy_date + timedelta(days=3)
+        inicio_date = hoy_date - timedelta(days=10)
         resultado = []
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
         d = inicio_date
-        while d <= fin_date:
-            programado = db.scalar(
+        while d <= hoy_date:
+            pagos_conciliados = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(Prestamo.estado == "APROBADO", Cuota.fecha_vencimiento == d)
+                .where(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento == d,
+                    Cuota.fecha_pago == d,
+                )
             ) or 0
+            pagos_dias_anteriores = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < d,
+                    Cuota.fecha_pago == d,
+                )
+            ) or 0
+            programado = 0.0
+            if d == hoy_date:
+                programado = (
+                    db.scalar(
+                        select(func.coalesce(func.sum(Cuota.monto), 0))
+                        .select_from(Cuota)
+                        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                        .where(Prestamo.estado == "APROBADO", Cuota.fecha_vencimiento == d)
+                    )
+                    or 0
+                )
             resultado.append({
                 "fecha": d.isoformat(),
                 "dia": f"{d.day} {nombres_mes[d.month - 1]}",
                 "monto_programado": round(_safe_float(programado), 2),
+                "pagos_conciliados_dia": round(_safe_float(pagos_conciliados), 2),
+                "pagos_dias_anteriores_dia": round(_safe_float(pagos_dias_anteriores), 2),
             })
             d += timedelta(days=1)
         return {"dias": resultado}
