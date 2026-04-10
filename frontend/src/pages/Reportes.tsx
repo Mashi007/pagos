@@ -21,6 +21,7 @@ import {
   Search,
   Copy,
   Calendar,
+  Cloud,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -106,6 +107,8 @@ const tiposReporte = [
   { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
+
+  { value: 'FECHA_DRIVE', label: 'Fecha Drive', icon: Cloud },
 ]
 
 const REPORTES_COBRANZA = [
@@ -117,7 +120,7 @@ const REPORTES_COBRANZA = [
   'ASESORES',
 ]
 
-const REPORTES_CONTABLE = ['CONTABLE', 'CEDULA', 'CONCILIACION']
+const REPORTES_CONTABLE = ['CONTABLE', 'CEDULA', 'CONCILIACION', 'FECHA_DRIVE']
 
 export function Reportes() {
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
@@ -227,7 +230,12 @@ export function Reportes() {
       return
     }
 
-    if (tipo === 'CEDULA' || tipo === 'MOROSIDAD' || tipo === 'FECHAS') {
+    if (
+      tipo === 'CEDULA' ||
+      tipo === 'MOROSIDAD' ||
+      tipo === 'FECHAS' ||
+      tipo === 'FECHA_DRIVE'
+    ) {
       generarReporte(tipo, {
         ['a\u00f1os']: [],
         meses: [],
@@ -490,7 +498,12 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      if (tipo !== 'CEDULA' && tipo !== 'MOROSIDAD' && tipo !== 'FECHAS') {
+      if (
+        tipo !== 'CEDULA' &&
+        tipo !== 'MOROSIDAD' &&
+        tipo !== 'FECHAS' &&
+        tipo !== 'FECHA_DRIVE'
+      ) {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
           toast.error(errFiltros)
@@ -597,6 +610,14 @@ export function Reportes() {
         toast.success(REPORTES_TOAST.fechas)
 
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
+      } else if (tipo === 'FECHA_DRIVE') {
+        const blob = await reporteService.exportarReporteFechaDrive()
+
+        descargarBlob(blob, `FechaDrive_${fechaCorte}.${ext}`)
+
+        toast.dismiss(toastId)
+
+        toast.success(REPORTES_TOAST.fechaDrive)
       } else {
         toast.dismiss(toastId)
 
@@ -928,6 +949,7 @@ export function Reportes() {
                       'CONTABLE',
                       'CEDULA',
                       'CONCILIACION',
+                      'FECHA_DRIVE',
                     ].includes(tipo.value)
 
                     const tieneAcceso = canAccessReport(tipo.value)

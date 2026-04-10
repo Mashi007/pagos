@@ -18,4 +18,6 @@ export const REPORTES_TOAST = {
   contableOk: 'Reporte Contable descargado exitosamente',
 
   fechas: 'Reporte Fechas (prestamos) descargado exitosamente',
+
+  fechaDrive: 'Reporte Fecha Drive descargado exitosamente',
 } as const

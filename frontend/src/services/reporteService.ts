@@ -1248,6 +1248,18 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /** Excel Fecha Drive: hoja CONCILIACIÓN sincronizada vs préstamos (cedula, fechas aprobación). */
+  async exportarReporteFechaDrive(): Promise<Blob> {
+    const axiosInstance = apiClient.getAxiosInstance()
+
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/fecha-drive`,
+      { responseType: 'blob', timeout: 180000 }
+    )
+
+    return response.data as Blob
+  }
+
   /**
 
 
