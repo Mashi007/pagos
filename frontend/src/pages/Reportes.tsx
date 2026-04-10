@@ -21,7 +21,6 @@ import {
   Search,
   Copy,
   Calendar,
-  Cloud,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -108,7 +107,7 @@ const tiposReporte = [
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
 
-  { value: 'FECHA_DRIVE', label: 'Fecha Drive', icon: Cloud },
+  { value: 'FECHA_DRIVE', label: 'Fecha Drive', icon: Calendar },
 ]
 
 const REPORTES_COBRANZA = [
