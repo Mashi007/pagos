@@ -470,6 +470,15 @@ export interface ConciliacionSheetStatusResponse {
 
   fecha_drive_hint: string | null
 
+  /** True si CONCILIACION_SHEET_SYNC_SECRET está definido (cron POST /sync). */
+  sync_secret_configured?: boolean
+
+  /** True si ENABLE_AUTOMATIC_SCHEDULED_JOBS (job 04:01 Caracas, etc.). */
+  scheduled_jobs_enabled?: boolean
+
+  /** Pasos para quien despliega; vacío cuando fecha_drive_ready. */
+  operator_checklist?: string[]
+
   meta: Record<string, unknown> | null
 
   last_run: Record<string, unknown> | null

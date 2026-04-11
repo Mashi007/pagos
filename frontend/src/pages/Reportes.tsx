@@ -1128,6 +1128,32 @@ export function Reportes() {
                       </>
                     ) : null}
                   </p>
+                  {conciliacionSheetStatus.operator_checklist &&
+                  conciliacionSheetStatus.operator_checklist.length > 0 ? (
+                    <div className="mt-2 rounded border border-amber-200/80 bg-white/70 px-2 py-2">
+                      <p className="text-[11px] font-semibold text-amber-950">
+                        Qué debe hacer quien despliega (Render / .env)
+                      </p>
+                      <ol className="mt-1 list-decimal space-y-1 pl-4 text-[11px] leading-snug text-amber-950/95">
+                        {conciliacionSheetStatus.operator_checklist.map(
+                          (line, idx) => (
+                            <li key={idx}>{line}</li>
+                          )
+                        )}
+                      </ol>
+                      <p className="mt-2 text-[10px] text-amber-900/80">
+                        Secreto sync:{' '}
+                        {conciliacionSheetStatus.sync_secret_configured
+                          ? 'configurado'
+                          : 'no configurado'}
+                        . Jobs programados en API:{' '}
+                        {conciliacionSheetStatus.scheduled_jobs_enabled
+                          ? 'activos (ENABLE_AUTOMATIC_SCHEDULED_JOBS)'
+                          : 'desactivados'}
+                        .
+                      </p>
+                    </div>
+                  ) : null}
                   <p className="mt-2 font-mono text-[10px] leading-snug text-amber-900/85">
                     Origen:{' '}
                     {typeof window !== 'undefined'

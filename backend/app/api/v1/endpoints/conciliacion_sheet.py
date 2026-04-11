@@ -180,6 +180,58 @@ def _fecha_drive_hint_and_blocker(
     )
 
 
+def _build_operator_checklist(
+    *,
+    fecha_drive_ready: bool,
+    spreadsheet_configured: bool,
+    sync_secret_configured: bool,
+    scheduled_jobs_enabled: bool,
+    blocker: Optional[str],
+) -> List[str]:
+    """Pasos concretos para quien despliega (Render / .env). Vacío si ya está listo."""
+    if fecha_drive_ready:
+        return []
+
+    out: List[str] = [
+        "En el servicio de API (backend), defina CONCILIACION_SHEET_SPREADSHEET_ID con el ID del Google Sheet "
+        "(fragmento entre /d/ y /edit en la URL). Sin esto no hay lectura de la hoja.",
+        "Confirme que la cuenta usada por Informe de pagos / Gmail en el servidor tenga permiso de lectura sobre ese documento.",
+        "Guarde variables en Render (o .env) y reinicie o redeploy del backend.",
+        "Con personal autorizado: use el botón «Traer hoja desde Drive ahora» o POST /api/v1/conciliacion-sheet/sync-now.",
+    ]
+    if not sync_secret_configured:
+        out.append(
+            "Opcional — cron sin sesión: defina CONCILIACION_SHEET_SYNC_SECRET y llame "
+            "POST /api/v1/conciliacion-sheet/sync con el header X-Conciliacion-Sheet-Sync-Secret."
+        )
+    else:
+        out.append(
+            "Cron: programe POST /api/v1/conciliacion-sheet/sync con el secreto, o deje activo el job interno (ver siguiente punto)."
+        )
+    if not scheduled_jobs_enabled:
+        out.append(
+            "Si ENABLE_AUTOMATIC_SCHEDULED_JOBS=false, el job diario 04:01 (America/Caracas) no arranca en el servidor; "
+            "use cron externo (Render Cron, etc.) o sync manual."
+        )
+    else:
+        out.append(
+            "Con ENABLE_AUTOMATIC_SCHEDULED_JOBS=true el scheduler ejecuta la sync de la hoja a las 04:01 (America/Caracas)."
+        )
+    if blocker == "headers_below_Q":
+        out.append(
+            "Amplíe CONCILIACION_SHEET_COLUMNS_RANGE para incluir al menos hasta la columna Q y vuelva a sincronizar."
+        )
+    elif blocker == "last_sync_failed":
+        out.append("Revise el detalle de la última corrida (last_run.message) y corrija credenciales, pestaña o permisos.")
+    elif blocker == "sync_ok_zero_rows":
+        out.append(
+            "La hoja devolvió 0 filas de datos: verifique pestaña CONCILIACIÓN, fila de cabecera con marcador LOTE y datos debajo."
+        )
+    elif blocker == "never_synced" and spreadsheet_configured:
+        out.append("Aún no hay corridas en BD: ejecute al menos una vez sync-now o POST /sync con secreto.")
+    return out
+
+
 @router.get("/diagnostico")
 def get_conciliacion_sheet_diagnostico(
     db: Session = Depends(get_db),
@@ -227,6 +279,17 @@ def get_conciliacion_sheet_status(
         snapshot_row_count=snapshot_row_count,
         last_run=last_run,
     )
+    sync_secret_configured = bool(
+        (getattr(settings, "CONCILIACION_SHEET_SYNC_SECRET", None) or "").strip()
+    )
+    scheduled_jobs_enabled = bool(getattr(settings, "ENABLE_AUTOMATIC_SCHEDULED_JOBS", False))
+    operator_checklist = _build_operator_checklist(
+        fecha_drive_ready=fecha_drive_ready,
+        spreadsheet_configured=spreadsheet_configured,
+        sync_secret_configured=sync_secret_configured,
+        scheduled_jobs_enabled=scheduled_jobs_enabled,
+        blocker=blocker,
+    )
     logger.info(
         "[conciliacion_sheet] GET /status fecha_drive_ready=%s filas_snapshot=%s filas_drive=%s n_headers=%s "
         "blocker=%s last_run_id=%s last_run_ok=%s last_run_rows=%s",
@@ -249,6 +312,9 @@ def get_conciliacion_sheet_status(
         "fecha_drive_ready": fecha_drive_ready,
         "fecha_drive_blocker": blocker,
         "fecha_drive_hint": hint,
+        "sync_secret_configured": sync_secret_configured,
+        "scheduled_jobs_enabled": scheduled_jobs_enabled,
+        "operator_checklist": operator_checklist,
         "meta": None
         if meta is None
         else {
