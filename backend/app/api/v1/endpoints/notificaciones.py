@@ -930,7 +930,10 @@ def enviar_con_plantilla(
     """
     from app.core.email import send_email
     from app.core.email_config_holder import get_email_activo_servicio
-    from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
+    from app.utils.cliente_emails import (
+        lista_correo_principal_notificaciones_desde_objeto,
+        unir_destinatarios_log,
+    )
     p = db.get(PlantillaNotificacion, plantilla_id)
     if not p or not p.activa:
         raise HTTPException(status_code=404, detail="Plantilla no encontrada o inactiva")
@@ -947,7 +950,7 @@ def enviar_con_plantilla(
     }
     asunto = _sustituir_variables(p.asunto, item)
     cuerpo = _sustituir_variables(p.cuerpo, item)
-    destinos = emails_destino_desde_objeto(cliente)
+    destinos = lista_correo_principal_notificaciones_desde_objeto(cliente)
     if not destinos:
         raise HTTPException(status_code=400, detail="El cliente no tiene email valido")
     if cliente_bloqueado_por_desistimiento(

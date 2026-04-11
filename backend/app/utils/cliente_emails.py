@@ -46,6 +46,24 @@ def emails_destino_desde_objeto(cliente: object, *, max_destinos: int = 2) -> Li
     )
 
 
+def lista_correo_principal_para_notificaciones(email: Optional[str]) -> List[str]:
+    """
+    Lista con 0 o 1 dirección válida: solo la columna principal `email` del cliente.
+    No usa `email_secundario` (envíos de notificaciones: un solo destino, sin confusiones).
+    """
+    e = _norm_email(email)
+    if not e or "@" not in e:
+        return []
+    return [e]
+
+
+def lista_correo_principal_notificaciones_desde_objeto(cliente: object) -> List[str]:
+    """Igual que lista_correo_principal_para_notificaciones leyendo `email` del ORM o dict-like."""
+    em = getattr(cliente, "email", None)
+    s = em if isinstance(em, (str, type(None))) else str(em) if em is not None else None
+    return lista_correo_principal_para_notificaciones(s)
+
+
 def secundario_distinto_del_principal(
     email: Optional[str], email_secundario: Optional[str]
 ) -> tuple[Optional[str], Optional[str]]:

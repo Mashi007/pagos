@@ -17,7 +17,7 @@ from app.core.serializers import to_finite_float
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
-from app.utils.cliente_emails import emails_destino_desde_objeto
+from app.utils.cliente_emails import lista_correo_principal_notificaciones_desde_objeto
 from app.services.cuota_estado import (
     clasificar_estado_cuota,
     dias_retraso_desde_vencimiento,
@@ -494,12 +494,13 @@ def format_cuota_item(
 
     # Si es para pestañas, agregar campos adicionales
     if for_tab:
-        correos = emails_destino_desde_objeto(cliente)
+        # Notificaciones: solo correo principal (columna email); no secundario en destino ni en listados API.
+        correos = lista_correo_principal_notificaciones_desde_objeto(cliente)
         correo_prim = correos[0] if correos else (cliente.email or "").strip()
         base_item.update({
-            "correo_1": correo_prim,
-            "correo_2": correos[1] if len(correos) > 1 else None,
-            "correo": correo_prim,
+            "correo_1": correo_prim if correo_prim and "@" in correo_prim else None,
+            "correo_2": None,
+            "correo": correo_prim if correo_prim and "@" in correo_prim else "",
             "correos": correos,
             "telefono": (cliente.telefono or "").strip(),
             "modelo_vehiculo": None,
