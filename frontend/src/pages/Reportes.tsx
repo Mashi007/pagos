@@ -1102,9 +1102,13 @@ export function Reportes() {
                     <span className="font-mono">
                       {conciliacionSheetStatus.expected_tab_name}
                     </span>
-                    . Filas en BD:{' '}
+                    . Filas snapshot (JSON):{' '}
                     <strong>
                       {conciliacionSheetStatus.snapshot_row_count}
+                    </strong>
+                    . Tabla drive (A-S):{' '}
+                    <strong>
+                      {conciliacionSheetStatus.drive_row_count ?? '-'}
                     </strong>
                     . Informe Fecha Drive:{' '}
                     <strong>

@@ -56,6 +56,7 @@ from app.models.conciliacion_sheet import (
     ConciliacionSheetRow,
     ConciliacionSheetSyncRun,
 )
+from app.models.drive import DriveRow
 
 __all__ = [
     "Base",
@@ -112,4 +113,5 @@ __all__ = [
     "ConciliacionSheetMeta",
     "ConciliacionSheetRow",
     "ConciliacionSheetSyncRun",
+    "DriveRow",
 ]

@@ -20,6 +20,7 @@ from app.models.conciliacion_sheet import (
     ConciliacionSheetRow,
     ConciliacionSheetSyncRun,
 )
+from app.models.drive import DRIVE_COL_COUNT, DRIVE_COLUMN_NAMES, DriveRow
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,19 @@ def _cell_str(v: Any) -> str:
     if isinstance(v, str):
         return v.strip()
     return str(v).strip()
+
+
+def _drive_kwargs_from_row(row: List[Any], source_ncols: int) -> Dict[str, Any]:
+    """Primeras A..S (19) celdas de la fila de la hoja como col_a..col_s (TEXT o NULL)."""
+    trimmed = _trim_row_width(row or [], min(int(source_ncols or 0), DRIVE_COL_COUNT))
+    out: Dict[str, Any] = {}
+    for i, colname in enumerate(DRIVE_COLUMN_NAMES):
+        if i < len(trimmed):
+            s = _cell_str(trimmed[i])
+            out[colname] = s if s else None
+        else:
+            out[colname] = None
+    return out
 
 
 def _titles_match(found: str, expected: str) -> bool:
@@ -302,17 +316,30 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             db.add(meta)
 
         db.execute(delete(ConciliacionSheetRow))
+        db.execute(delete(DriveRow))
         batch: List[ConciliacionSheetRow] = []
+        batch_drive: List[DriveRow] = []
         for offset, row in enumerate(data_rows):
             sheet_row_number = h_idx + 2 + offset
             cells = _row_to_cells(headers, _trim_row_width(row or [], ncols_expected))
             batch.append(ConciliacionSheetRow(row_index=sheet_row_number, cells=cells))
+            batch_drive.append(
+                DriveRow(
+                    sheet_row_number=sheet_row_number,
+                    synced_at=now,
+                    **_drive_kwargs_from_row(row, ncols_expected),
+                )
+            )
             if len(batch) >= 400:
                 db.add_all(batch)
+                db.add_all(batch_drive)
                 db.flush()
                 batch.clear()
+                batch_drive.clear()
         if batch:
             db.add_all(batch)
+        if batch_drive:
+            db.add_all(batch_drive)
 
         meta.spreadsheet_id = spreadsheet_id
         meta.sheet_title = sheet_title
@@ -337,10 +364,11 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
         db.commit()
         db.refresh(run)
         logger.info(
-            "[conciliacion_sheet] run_sync_to_db OK run_id=%s filas=%s cols=%s duracion_ms=%s",
+            "[conciliacion_sheet] run_sync_to_db OK run_id=%s filas=%s cols=%s drive_filas=%s duracion_ms=%s",
             run.id,
             len(data_rows),
             col_count,
+            len(data_rows),
             run.duration_ms,
         )
         return {
@@ -350,6 +378,7 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             "header_row_index": h_idx + 1,
             "row_count": len(data_rows),
             "col_count": col_count,
+            "drive_rows": len(data_rows),
             "synced_at": now.isoformat(),
             "timezone": BUSINESS_TIMEZONE,
             "run_id": run.id,
@@ -514,6 +543,20 @@ def build_conciliacion_sheet_diagnostico(db: Session) -> Dict[str, Any]:
     if not ok_rows:
         next_steps.append(
             "Ejecute POST /api/v1/conciliacion-sheet/sync-now (sesión) o /sync (cron) tras configurar credenciales."
+        )
+
+    n_drive = int(db.execute(select(func.count()).select_from(DriveRow)).scalar_one() or 0)
+    ok_drive = n_drive == n_rows
+    checks.append(
+        {
+            "id": "db_drive_rows",
+            "ok": ok_drive,
+            "detail": f"filas_tabla_drive={n_drive} (columnas A..S; debe igualar filas snapshot={n_rows})",
+        }
+    )
+    if n_rows > 0 and not ok_drive:
+        next_steps.append(
+            "La tabla drive no coincide con conciliacion_sheet_rows; ejecute sync-now o revise errores en la última corrida."
         )
 
     last_run = db.execute(

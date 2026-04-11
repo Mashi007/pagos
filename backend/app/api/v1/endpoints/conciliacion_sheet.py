@@ -9,6 +9,8 @@ En Render u otro hosting: programar HTTP POST diario a la hora equivalente en UT
 (03:00 Caracas ≈ 07:00 UTC, sin DST en Venezuela).
 
 Por defecto solo se importan columnas A:S (variable CONCILIACION_SHEET_COLUMNS_RANGE).
+Cada sync exitoso también rellena la tabla drive (columnas col_a..col_s). Con ENABLE_AUTOMATIC_SCHEDULED_JOBS=true,
+el scheduler ejecuta ese sync a las 04:01 (America/Caracas); si no, use POST /sync (cron externo) o sync-now.
 """
 import logging
 from typing import Any, Dict, List, Optional, Tuple
@@ -26,6 +28,7 @@ from app.models.conciliacion_sheet import (
     ConciliacionSheetRow,
     ConciliacionSheetSyncRun,
 )
+from app.models.drive import DriveRow
 from app.schemas.auth import UserResponse
 from app.services.conciliacion_sheet_sync import (
     build_conciliacion_sheet_diagnostico,
@@ -206,6 +209,7 @@ def get_conciliacion_sheet_status(
     snapshot_row_count = int(
         db.execute(select(func.count()).select_from(ConciliacionSheetRow)).scalar_one() or 0
     )
+    drive_row_count = int(db.execute(select(func.count()).select_from(DriveRow)).scalar_one() or 0)
     hdrs = list(meta.headers) if meta and meta.headers else []
     headers_ok = len(hdrs) >= _MIN_HEADERS_FOR_FECHA_DRIVE
     fecha_drive_ready = (
@@ -224,10 +228,11 @@ def get_conciliacion_sheet_status(
         last_run=last_run,
     )
     logger.info(
-        "[conciliacion_sheet] GET /status fecha_drive_ready=%s filas_snapshot=%s n_headers=%s "
+        "[conciliacion_sheet] GET /status fecha_drive_ready=%s filas_snapshot=%s filas_drive=%s n_headers=%s "
         "blocker=%s last_run_id=%s last_run_ok=%s last_run_rows=%s",
         fecha_drive_ready,
         snapshot_row_count,
+        drive_row_count,
         len(hdrs),
         blocker,
         getattr(last_run, "id", None),
@@ -240,6 +245,7 @@ def get_conciliacion_sheet_status(
         "spreadsheet_configured": spreadsheet_configured,
         "expected_tab_name": (getattr(settings, "CONCILIACION_SHEET_TAB_NAME", None) or "CONCILIACIÓN").strip(),
         "snapshot_row_count": snapshot_row_count,
+        "drive_row_count": drive_row_count,
         "fecha_drive_ready": fecha_drive_ready,
         "fecha_drive_blocker": blocker,
         "fecha_drive_hint": hint,

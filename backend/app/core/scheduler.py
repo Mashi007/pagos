@@ -8,6 +8,7 @@ Cuando esta activo:
 - 02:00  Finiquito: refrescar tabla finiquito_casos.
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 04:00  Limpieza codigos estado de cuenta.
+- 04:01  Hoja CONCILIACION (Google Sheets) -> BD: conciliacion_sheet_* y tabla drive (columnas A..S).
 - 04:00, 11:00, 20:00  Gmail (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
 
 Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
@@ -98,6 +99,30 @@ def _job_auditoria_cartera_prestamos() -> None:
         db.close()
 
 
+def _job_hoja_drive_conciliacion_sync() -> None:
+    """04:01 (America/Caracas): descarga pestaña CONCILIACIÓN A:S y rellena conciliacion_sheet_* + drive."""
+    db = SessionLocal()
+    try:
+        from app.services.conciliacion_sheet_sync import run_sync_to_db
+
+        res = run_sync_to_db(db)
+        logger.info(
+            "[drive/conciliacion_sheet] Sync programado OK filas=%s drive_filas=%s run_id=%s",
+            res.get("row_count"),
+            res.get("drive_rows"),
+            res.get("run_id"),
+        )
+    except ValueError as e:
+        logger.warning(
+            "[drive/conciliacion_sheet] Sync programado omitido o no configurado: %s",
+            e,
+        )
+    except Exception as e:
+        logger.exception("[drive/conciliacion_sheet] Sync programado error: %s", e)
+    finally:
+        db.close()
+
+
 def _job_limpiar_estado_cuenta_codigos() -> None:
     """Job 4:00. Borra cÃ³digos de estado de cuenta expirados o usados hace mÃ¡s de 24 h."""
     db = SessionLocal()
@@ -145,7 +170,7 @@ def _job_pagos_gmail_pending_scan() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: finiquito 02:00; auditoria 03:00; limpieza 04:00; Gmail 04/11/20 opcional."""
+    """Inicia el scheduler: finiquito 02:00; auditoria 03:00; hoja Drive 04:01; limpieza 04:00; Gmail 04/11/20 opcional."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
@@ -163,6 +188,13 @@ def start_scheduler() -> None:
         CronTrigger(hour=3, minute=0, timezone=SCHEDULER_TZ),
         id="auditoria_cartera_prestamos_0300",
         name="Auditoria cartera prestamos 03:00",
+    )
+    # 04:01 - Snapshot Google CONCILIACIÓN -> conciliacion_sheet_* + tabla drive (A..S)
+    _scheduler.add_job(
+        _job_hoja_drive_conciliacion_sync,
+        CronTrigger(hour=4, minute=1, timezone=SCHEDULER_TZ),
+        id="hoja_drive_conciliacion_0401",
+        name="Hoja Drive CONCILIACION (A:S) 04:01",
     )
     # 4:00 - Limpieza de cÃ³digos de estado de cuenta (expirados o usados > 24 h)
     _scheduler.add_job(
@@ -187,7 +219,8 @@ def start_scheduler() -> None:
         _gmail_log = "; Gmail pagos pendientes 4:00, 11:00 y 20:00"
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: finiquito 02:00; auditoria 03:00; limpieza estado_cuenta_codigos 4:00%s (%s).",
+        "Scheduler iniciado: finiquito 02:00; auditoria 03:00; hoja Drive CONCILIACION 04:01; "
+        "limpieza estado_cuenta_codigos 4:00%s (%s).",
         _gmail_log,
         SCHEDULER_TZ,
     )

@@ -460,6 +460,9 @@ export interface ConciliacionSheetStatusResponse {
 
   snapshot_row_count: number
 
+  /** Filas en tabla drive (A..S plano); misma corrida que el snapshot JSON. */
+  drive_row_count?: number
+
   fecha_drive_ready: boolean
 
   /** Código estable cuando no está listo (p. ej. never_synced, last_sync_failed). Opcional si el API es anterior. */
