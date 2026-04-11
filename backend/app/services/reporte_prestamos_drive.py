@@ -46,6 +46,8 @@ def _pick_modalidad_pago_header(headers: List[str]) -> Optional[str]:
         hl = _norm_header_cell(h)
         if "modalidad" in hl and "pago" in hl:
             return h
+        if "modalidad" in hl and "financiam" in hl:
+            return h
     for h in headers:
         hl = _norm_header_cell(h)
         if hl == "modalidad" or "forma de pago" in hl or "forma pago" in hl:
@@ -59,6 +61,8 @@ def _pick_fecha_requerimiento_header(headers: List[str]) -> Optional[str]:
         if "requerimiento" in hl:
             return h
         if "fecha" in hl and "req" in hl and "aprob" not in hl:
+            return h
+        if "entrega" in hl and "aprob" not in hl:
             return h
     for h in headers:
         hl = _norm_header_cell(h)
@@ -82,6 +86,10 @@ def _pick_fecha_aprobacion_header(headers: List[str]) -> Optional[str]:
             or " fec " in hl
         ):
             return h
+    for h in headers:
+        hl = _norm_header_cell(h)
+        if "entrega" in hl and "aprob" not in hl and "requerimiento" not in hl:
+            return h
     return None
 
 
@@ -89,6 +97,10 @@ def _pick_producto_header(headers: List[str]) -> Optional[str]:
     for h in headers:
         hl = _norm_header_cell(h)
         if hl == "producto" or "tipo producto" in hl:
+            return h
+    for h in headers:
+        hl = _norm_header_cell(h)
+        if "financiam" in hl and ("para" in hl or "todas" in hl):
             return h
     return None
 
@@ -131,6 +143,8 @@ def _pick_numero_cuotas_header(headers: List[str]) -> Optional[str]:
             or "#" in (h or "")
             or "cantidad" in hl
         ):
+            return h
+        if hl == "cuotas":
             return h
     for h in headers:
         hl = _norm_header_cell(h)
