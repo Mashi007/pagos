@@ -1,6 +1,6 @@
-import { useState, useCallback, type ComponentType, type SVGProps } from 'react'
+import { useState, type ComponentType, type SVGProps } from 'react'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
 
@@ -10,7 +10,6 @@ import {
   TrendingUp,
   Users,
   DollarSign,
-  RefreshCw,
   Loader2,
   UserCheck,
   CreditCard,
@@ -22,7 +21,6 @@ import {
   Copy,
   Calendar,
   FileSpreadsheet,
-  Activity,
   Wallet,
   Database,
   Car,
@@ -38,12 +36,7 @@ import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
 import { formatCurrency } from '../utils'
 
-import {
-  reporteService,
-  type ConciliacionSheetStatusResponse,
-} from '../services/reporteService'
-
-import { API_BASE_URL } from '../services/api'
+import { reporteService } from '../services/reporteService'
 
 import {
   notificacionService,
@@ -76,6 +69,7 @@ import {
 import {
   validateFiltrosReporte,
   validateFiltrosReporteContable,
+  validateLotesClientesHoja,
 } from '../utils/reportesFiltros'
 
 import { BASE_PATH, PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
@@ -162,18 +156,18 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'CLIENTES_HOJA',
     label: 'Clientes (hoja)',
     icon: Mail,
-    subtitle: '4 columnas · filtro año/mes (MES)',
+    subtitle: '4 columnas · filtro por lote (LOTE)',
     titleExtra:
-      'Cédula, nombres, teléfono y email desde la hoja CONCILIACIÓN; solo filas cuya columna MES cae en los años y meses elegidos.',
+      'Cédula, nombres, teléfono y email desde la hoja CONCILIACIÓN; solo filas cuya columna LOTE coincide con el o los números indicados (ej. 70).',
   },
 
   {
     value: 'PRESTAMOS_DRIVE',
     label: 'Préstamos Drive',
     icon: Car,
-    subtitle: '10 columnas · filtro año/mes (MES)',
+    subtitle: '10 columnas · filtro por lote (LOTE)',
     titleExtra:
-      'Desde la hoja CONCILIACIÓN: cédula, total financiamiento, modalidad, fechas, producto, concesionario, analista, modelo y número de cuotas; filtro por columna MES.',
+      'Desde la hoja CONCILIACIÓN: cédula, total financiamiento, modalidad, fechas, producto, concesionario, analista, modelo y número de cuotas; solo filas cuya columna LOTE coincide con el o los números indicados (ej. 70).',
   },
 ]
 
@@ -215,34 +209,12 @@ export function Reportes() {
 
   const [isRefreshingManual, setIsRefreshingManual] = useState(false)
 
-  const [syncingConciliacionSheet, setSyncingConciliacionSheet] =
-    useState(false)
-
-  const [diagnosticoConciliacionJson, setDiagnosticoConciliacionJson] =
-    useState<string | null>(null)
-
-  const [loadingDiagnosticoConciliacion, setLoadingDiagnosticoConciliacion] =
-    useState(false)
-
   const queryClient = useQueryClient()
 
-  const {
-    canViewReports,
-    canDownloadReports,
-    canAccessReport,
-    revisionManualFullEdit,
-  } = usePermissions()
+  const { canViewReports, canDownloadReports, canAccessReport } =
+    usePermissions()
 
   const puedeVerReportes = canViewReports()
-
-  const { data: conciliacionSheetStatus, refetch: refetchConciliacionSheet } =
-    useQuery({
-      queryKey: ['conciliacion-sheet-status'],
-      queryFn: (): Promise<ConciliacionSheetStatusResponse> =>
-        reporteService.getConciliacionSheetStatus(),
-      enabled: puedeVerReportes,
-      staleTime: 20_000,
-    })
 
   // Historial de notificaciones por cédula (reportes / legales)
 
@@ -261,78 +233,6 @@ export function Reportes() {
   const [loadingHistorialDescarga, setLoadingHistorialDescarga] = useState<
     string | null
   >(null)
-
-  const sincronizarHojaConciliacionDrive = useCallback(async () => {
-    if (!revisionManualFullEdit) {
-      toast.error('Solo personal autorizado puede sincronizar la hoja.')
-
-      return
-    }
-
-    try {
-      setSyncingConciliacionSheet(true)
-
-      const r = await reporteService.syncConciliacionSheetDesdeDrive()
-
-      await refetchConciliacionSheet()
-
-      const n = (r as { row_count?: number }).row_count
-
-      toast.success(
-        `Hoja CONCILIACIÓN actualizada desde Drive${
-          typeof n === 'number' ? ` (${n} filas)` : ''
-        }.`
-      )
-    } catch (e: unknown) {
-      console.error(e)
-
-      toast.error(
-        getErrorDetail(e) ||
-          getErrorMessage(e) ||
-          'No se pudo sincronizar. Revise CONCILIACION_SHEET_SPREADSHEET_ID y credenciales Google en el servidor.'
-      )
-    } finally {
-      setSyncingConciliacionSheet(false)
-    }
-  }, [revisionManualFullEdit, refetchConciliacionSheet])
-
-  const cargarDiagnosticoConciliacionSheet = useCallback(async () => {
-    setLoadingDiagnosticoConciliacion(true)
-
-    setDiagnosticoConciliacionJson(null)
-
-    try {
-      const server = await reporteService.getConciliacionSheetDiagnostico()
-
-      const envelope = {
-        client: {
-          origin: typeof window !== 'undefined' ? window.location.origin : '',
-
-          api_base_url:
-            API_BASE_URL ||
-            '(vacío: mismo origen o sin VITE_API_URL; las peticiones van al host de esta página)',
-
-          base_path: BASE_PATH || '/',
-        },
-
-        server,
-      }
-
-      setDiagnosticoConciliacionJson(JSON.stringify(envelope, null, 2))
-
-      toast.success('Diagnóstico listo (copie el JSON si lo pide soporte).')
-    } catch (e: unknown) {
-      console.error(e)
-
-      toast.error(
-        getErrorDetail(e) ||
-          getErrorMessage(e) ||
-          'No se pudo cargar el diagnóstico. Revise sesión y URL del API.'
-      )
-    } finally {
-      setLoadingDiagnosticoConciliacion(false)
-    }
-  }, [])
 
   // Bloque mostrado si canViewReports() restringe por rol (ej. solo admin). Restriccion por tipo de reporte: canAccessReport().
 
@@ -672,7 +572,13 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      if (
+      if (tipo === 'CLIENTES_HOJA' || tipo === 'PRESTAMOS_DRIVE') {
+        const errL = validateLotesClientesHoja(filtros.lotes)
+        if (errL) {
+          toast.error(errL)
+          return
+        }
+      } else if (
         tipo !== 'CEDULA' &&
         tipo !== 'MOROSIDAD' &&
         tipo !== 'FECHAS' &&
@@ -810,16 +716,14 @@ export function Reportes() {
         toast.success(REPORTES_TOAST.analisisFinanciamiento)
       } else if (tipo === 'CLIENTES_HOJA') {
         const blob = await reporteService.exportarReporteClientesHoja({
-          años: filtros.años,
-          meses: filtros.meses,
+          lotes: filtros.lotes ?? [],
         })
 
-        const aPart = filtros.años.join('-')
-        const mPart = filtros.meses.join('-')
+        const lPart = (filtros.lotes ?? []).join('-')
 
         descargarBlob(
           blob,
-          `Clientes_hoja_CONCILIACION_a${aPart}_m${mPart}_${fechaCorte}.${ext}`
+          `Clientes_hoja_CONCILIACION_lotes_${lPart}_${fechaCorte}.${ext}`
         )
 
         toast.dismiss(toastId)
@@ -827,16 +731,14 @@ export function Reportes() {
         toast.success(REPORTES_TOAST.clientesHoja)
       } else if (tipo === 'PRESTAMOS_DRIVE') {
         const blob = await reporteService.exportarReportePrestamosDrive({
-          años: filtros.años,
-          meses: filtros.meses,
+          lotes: filtros.lotes ?? [],
         })
 
-        const aPart = filtros.años.join('-')
-        const mPart = filtros.meses.join('-')
+        const lPart = (filtros.lotes ?? []).join('-')
 
         descargarBlob(
           blob,
-          `Prestamos_drive_CONCILIACION_a${aPart}_m${mPart}_${fechaCorte}.${ext}`
+          `Prestamos_drive_CONCILIACION_lotes_${lPart}_${fechaCorte}.${ext}`
         )
 
         toast.dismiss(toastId)
@@ -1021,8 +923,11 @@ export function Reportes() {
           <span className="font-medium text-gray-800">
             contable y otros listados
           </span>
-          . Muchos informes abren un asistente de año/mes antes de generar el
-          Excel.
+          . Varios informes abren un asistente (año/mes o, en{' '}
+          <span className="font-medium text-gray-800">Clientes (hoja)</span> y{' '}
+          <span className="font-medium text-gray-800">Préstamos Drive</span>,
+          números de <span className="font-medium text-gray-800">LOTE</span>)
+          antes de generar el Excel.
         </p>
 
         <Card className="overflow-hidden border border-gray-200/90 shadow-md ring-1 ring-gray-100/80">
@@ -1166,10 +1071,11 @@ export function Reportes() {
                     </p>
                     <p className="mt-2 max-w-2xl text-xs leading-relaxed text-violet-950/85">
                       Los botones de abajo leen el mismo snapshot en base de
-                      datos (no abren el Google Sheet aquí). Actualice datos con
-                      &quot;Traer hoja desde Drive ahora&quot; o el cron con
-                      secreto. Si el estado en ámbar indica que falta algo,
-                      corrija antes de descargar.
+                      datos (no abren el Google Sheet aquí). La copia en
+                      servidor la actualiza quien opera el despliegue (cron o
+                      proceso con credenciales Google). Si los datos no
+                      coinciden con la hoja actual, contacte a soporte o
+                      administración.
                     </p>
                   </div>
                 </div>
@@ -1193,8 +1099,8 @@ export function Reportes() {
                     Clientes (hoja)
                   </span>
                   : cédula, nombre, teléfono y correo filtrados por columna{' '}
-                  <span className="font-medium">MES</span> (año/mes en el
-                  asistente).
+                  <span className="font-medium">LOTE</span> (número(s) en el
+                  asistente, ej. 70).
                 </li>
                 <li className="rounded-lg border border-violet-100/90 bg-white/85 px-3 py-2 text-[11px] leading-snug text-violet-950 shadow-sm">
                   <span className="font-semibold text-violet-900">
@@ -1202,149 +1108,9 @@ export function Reportes() {
                   </span>
                   : diez campos de la hoja (financiamiento, modalidad, fechas,
                   producto, concesionario, analista, modelo, cuotas) filtrados
-                  por <span className="font-medium">MES</span>.
+                  por <span className="font-medium">LOTE</span>.
                 </li>
               </ul>
-
-              {conciliacionSheetStatus && (
-                <div className="mb-3 rounded-md border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
-                  <p className="font-medium text-amber-900">
-                    Conexión hoja Drive → servidor
-                  </p>
-                  <p className="mt-1 text-amber-900/90">
-                    Spreadsheet:{' '}
-                    {conciliacionSheetStatus.spreadsheet_configured
-                      ? 'ID configurado'
-                      : 'Falta CONCILIACION_SHEET_SPREADSHEET_ID en el backend'}
-                    . Pestaña esperada:{' '}
-                    <span className="font-mono">
-                      {conciliacionSheetStatus.expected_tab_name}
-                    </span>
-                    . Filas snapshot (JSON):{' '}
-                    <strong>
-                      {conciliacionSheetStatus.snapshot_row_count}
-                    </strong>
-                    . Tabla drive (A-S):{' '}
-                    <strong>
-                      {conciliacionSheetStatus.drive_row_count ?? '-'}
-                    </strong>
-                    . Informe Fecha Drive:{' '}
-                    <strong>
-                      {conciliacionSheetStatus.fecha_drive_ready
-                        ? 'listo para descargar'
-                        : 'no listo'}
-                    </strong>
-                    {conciliacionSheetStatus.fecha_drive_hint ? (
-                      <> - {conciliacionSheetStatus.fecha_drive_hint}</>
-                    ) : null}
-                    {conciliacionSheetStatus.fecha_drive_blocker ? (
-                      <>
-                        {' '}
-                        <span className="font-mono text-[10px] text-amber-900/70">
-                          [{conciliacionSheetStatus.fecha_drive_blocker}]
-                        </span>
-                      </>
-                    ) : null}
-                  </p>
-                  {conciliacionSheetStatus.operator_checklist &&
-                  conciliacionSheetStatus.operator_checklist.length > 0 ? (
-                    <div className="mt-2 rounded border border-amber-200/80 bg-white/70 px-2 py-2">
-                      <p className="text-[11px] font-semibold text-amber-950">
-                        Qué debe hacer quien despliega (Render / .env)
-                      </p>
-                      <ol className="mt-1 list-decimal space-y-1 pl-4 text-[11px] leading-snug text-amber-950/95">
-                        {conciliacionSheetStatus.operator_checklist.map(
-                          (line, idx) => (
-                            <li key={idx}>{line}</li>
-                          )
-                        )}
-                      </ol>
-                      <p className="mt-2 text-[10px] text-amber-900/80">
-                        Secreto sync:{' '}
-                        {conciliacionSheetStatus.sync_secret_configured
-                          ? 'configurado'
-                          : 'no configurado'}
-                        . Jobs programados en API:{' '}
-                        {conciliacionSheetStatus.scheduled_jobs_enabled
-                          ? 'activos (ENABLE_AUTOMATIC_SCHEDULED_JOBS)'
-                          : 'desactivados'}
-                        .
-                      </p>
-                    </div>
-                  ) : null}
-                  <p className="mt-2 font-mono text-[10px] leading-snug text-amber-900/85">
-                    Origen:{' '}
-                    {typeof window !== 'undefined'
-                      ? window.location.origin
-                      : ''}
-                    <br />
-                    API_BASE_URL: {API_BASE_URL || '(vacío)'}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="border-amber-300/80 bg-white/90 text-amber-950 hover:bg-white"
-                      disabled={loadingDiagnosticoConciliacion}
-                      onClick={() => void cargarDiagnosticoConciliacionSheet()}
-                    >
-                      {loadingDiagnosticoConciliacion ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Consultando…
-                        </>
-                      ) : (
-                        <>
-                          <Activity className="mr-2 h-4 w-4" />
-                          Diagnóstico técnico (JSON)
-                        </>
-                      )}
-                    </Button>
-                    <span className="text-[11px] text-amber-800/80">
-                      BD + ping a Google (metadatos); no modifica datos. El JSON
-                      queda oculto hasta expandirlo.
-                    </span>
-                  </div>
-                  {revisionManualFullEdit && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={syncingConciliacionSheet}
-                        onClick={() => void sincronizarHojaConciliacionDrive()}
-                      >
-                        {syncingConciliacionSheet ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Sincronizando con Google…
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            Traer hoja desde Drive ahora
-                          </>
-                        )}
-                      </Button>
-                      <span className="text-[11px] text-amber-800/80">
-                        Usa las credenciales del servidor (Informe pagos /
-                        Gmail).
-                      </span>
-                    </div>
-                  )}
-                  {diagnosticoConciliacionJson ? (
-                    <details className="mt-3 rounded border border-amber-200/90 bg-white/95 text-amber-950">
-                      <summary className="cursor-pointer list-none px-2 py-2 text-[11px] font-medium marker:content-none hover:bg-amber-50/80 [&::-webkit-details-marker]:hidden">
-                        Mostrar respuesta técnica (JSON)
-                      </summary>
-                      <pre className="max-h-72 overflow-auto border-t border-amber-200/80 p-2 text-[10px] leading-tight text-slate-800">
-                        {diagnosticoConciliacionJson}
-                      </pre>
-                    </details>
-                  ) : null}
-                </div>
-              )}
 
               <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
                 {tiposReporte
@@ -1847,6 +1613,12 @@ export function Reportes() {
         key={reporteSeleccionado ?? 'filtros'}
         open={dialogAbierto && reporteSeleccionado !== 'CONTABLE'}
         onOpenChange={setDialogAbierto}
+        variant={
+          reporteSeleccionado === 'CLIENTES_HOJA' ||
+          reporteSeleccionado === 'PRESTAMOS_DRIVE'
+            ? 'lotes'
+            : 'periodo'
+        }
         tituloReporte={
           reporteSeleccionado && reporteSeleccionado !== 'CONTABLE'
             ? (tiposReporte.find(t => t.value === reporteSeleccionado)?.label ??

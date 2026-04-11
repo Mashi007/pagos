@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   Dialog,
@@ -10,6 +10,8 @@ import {
 } from '../ui/dialog'
 
 import { Button } from '../ui/button'
+
+import { Input } from '../ui/input'
 
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 
@@ -33,6 +35,9 @@ export interface FiltrosReporte {
   años: number[]
 
   meses: number[]
+
+  /** Clientes (hoja): filtro por columna LOTE en la hoja sincronizada. */
+  lotes?: number[]
 }
 
 interface DialogReporteFiltrosProps {
@@ -43,6 +48,9 @@ interface DialogReporteFiltrosProps {
   onConfirm: (filtros: FiltrosReporte) => void
 
   tituloReporte: string
+
+  /** `lotes`: un paso, números de lote separados por coma (columna LOTE). */
+  variant?: 'periodo' | 'lotes'
 }
 
 export function DialogReporteFiltros({
@@ -53,6 +61,8 @@ export function DialogReporteFiltros({
   onConfirm,
 
   tituloReporte,
+
+  variant = 'periodo',
 }: DialogReporteFiltrosProps) {
   const [paso, setPaso] = useState<1 | 2>(1)
 
@@ -63,6 +73,14 @@ export function DialogReporteFiltros({
   const [mesesSeleccionados, setMesesSeleccionados] = useState<Set<number>>(
     new Set()
   )
+
+  const [lotesTexto, setLotesTexto] = useState('')
+
+  useEffect(() => {
+    if (open && variant === 'lotes') {
+      setLotesTexto('')
+    }
+  }, [open, variant])
 
   const añoActual = new Date().getFullYear()
 
@@ -111,6 +129,8 @@ export function DialogReporteFiltros({
       setAñosSeleccionados(new Set())
 
       setMesesSeleccionados(new Set())
+
+      setLotesTexto('')
     }
 
     onOpenChange(isOpen)
@@ -146,6 +166,99 @@ export function DialogReporteFiltros({
 
   const puedeContinuar =
     paso === 1 ? añosSeleccionados.size > 0 : mesesSeleccionados.size > 0
+
+  const parseLotesDesdeTexto = (text: string): number[] => {
+    const out: number[] = []
+    const seen = new Set<number>()
+    for (const raw of text.split(/[,;\s]+/)) {
+      const t = raw.trim()
+      if (!t || !/^\d+$/.test(t)) continue
+      const n = Number.parseInt(t, 10)
+      if (!Number.isFinite(n) || !Number.isInteger(n)) continue
+      if (!seen.has(n)) {
+        seen.add(n)
+        out.push(n)
+      }
+    }
+    return out
+  }
+
+  const handleDescargarLotes = () => {
+    const lotes = parseLotesDesdeTexto(lotesTexto)
+    if (!lotes.length) return
+    onConfirm({ años: [], meses: [], lotes })
+    handleAbrir(false)
+  }
+
+  const lotesPreview = parseLotesDesdeTexto(lotesTexto)
+
+  if (variant === 'lotes') {
+    return (
+      <Dialog open={open} onOpenChange={handleAbrir}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tituloReporte}</DialogTitle>
+
+            <DialogDescription>
+              Indique el número de lote de la columna{' '}
+              <span className="font-mono">LOTE</span> en la hoja CONCILIACIÓN
+              (sincronizada en el servidor). Puede escribir varios separados por
+              coma; se exportan las filas cuyo lote coincida con el informe que
+              eligió (Clientes: cédula, nombre, teléfono, correo; Préstamos
+              Drive: diez columnas de préstamo).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <label
+              className="text-sm font-medium text-gray-800"
+              htmlFor="lotes-hoja-input"
+            >
+              Lotes
+            </label>
+            <Input
+              id="lotes-hoja-input"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="Ej. 70 o 70, 71"
+              value={lotesTexto}
+              onChange={e => setLotesTexto(e.target.value)}
+            />
+            {lotesPreview.length > 0 ? (
+              <p className="text-xs text-gray-600">
+                Se descargarán filas con LOTE:{' '}
+                <span className="font-mono font-medium">
+                  {lotesPreview.join(', ')}
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs text-amber-800/90">
+                Escriba al menos un entero (solo números, separados por coma).
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <div className="flex-1" />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleAbrir(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDescargarLotes}
+              disabled={lotesPreview.length === 0}
+            >
+              Descargar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleAbrir}>

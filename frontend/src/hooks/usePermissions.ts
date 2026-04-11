@@ -331,7 +331,7 @@ export function usePermissions() {
 
 
    * - OPERATIVO: reportes operativos (Pagos, Morosidad, Vencimiento, Cédula, Fechas préstamos,
-   *   Fecha Drive, Análisis financiamiento, Clientes hoja vs BD). Contable / Conciliación masiva siguen solo admin.
+   *   Fecha Drive, Análisis financiamiento, Clientes hoja por LOTE, Préstamos Drive). Contable / Conciliación masiva siguen solo admin.
 
    */
 

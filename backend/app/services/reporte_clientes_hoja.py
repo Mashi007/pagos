@@ -1,8 +1,8 @@
 """
 Excel "Clientes" desde el snapshot de la hoja CONCILIACIÓN (conciliacion_sheet_rows).
 Columnas de salida: Cédula | Nombres | Teléfono | Email.
-Filtro: la celda de la columna MES (fecha en hoja) debe tener año en `años` y mes en `meses`
-(misma convención que otros reportes: año ∈ años y mes ∈ meses).
+Filtro: la celda de la columna LOTE (p. ej. columna B en la hoja) debe coincidir con uno de
+los enteros en `lotes` (ej. 70 → todas las filas con LOTE 70).
 """
 from __future__ import annotations
 
@@ -65,6 +65,18 @@ def _pick_mes_header(headers: List[str]) -> Optional[str]:
     for h in headers:
         hl = (h or "").strip().casefold()
         if hl.startswith("mes") and len(hl) <= 6:
+            return h
+    return None
+
+
+def _pick_lote_header(headers: List[str]) -> Optional[str]:
+    for h in headers:
+        hl = (h or "").strip().casefold()
+        if hl == "lote":
+            return h
+    for h in headers:
+        hl = (h or "").strip().casefold()
+        if "lote" in hl:
             return h
     return None
 
@@ -133,23 +145,35 @@ def _parse_mes_to_year_month(raw: str) -> Optional[Tuple[int, int]]:
     return None
 
 
+def _norm_lote_celda(v: Any) -> Optional[str]:
+    """Valor de celda LOTE comparable con los enteros del filtro (70, '70', '70.0' → '70')."""
+    s = _as_text(v)
+    if not s:
+        return None
+    t = s.replace(" ", "").replace(",", ".")
+    try:
+        if "." in t:
+            return str(int(float(t)))
+        return str(int(t))
+    except ValueError:
+        u = s.strip()
+        return u if u else None
+
+
 def build_clientes_hoja_excel(
     db: Session,
-    años: List[int],
-    meses: List[int],
+    lotes: List[int],
 ) -> Tuple[bytes, int]:
     import openpyxl
 
-    if not años or not meses:
-        raise ValueError("Indique al menos un año y un mes para el filtro.")
+    if not lotes:
+        raise ValueError("Indique al menos un número de lote para el filtro.")
 
-    años_set: Set[int] = set(int(x) for x in años)
-    meses_set: Set[int] = set(int(x) for x in meses)
+    lotes_set: Set[str] = {str(int(x)) for x in lotes}
 
     logger.info(
-        "[clientes_hoja] build_clientes_hoja_excel años=%s meses=%s",
-        sorted(años_set),
-        sorted(meses_set),
+        "[clientes_hoja] build_clientes_hoja_excel lotes=%s",
+        sorted(int(x) for x in lotes_set),
     )
 
     meta = db.get(ConciliacionSheetMeta, 1)
@@ -160,7 +184,7 @@ def build_clientes_hoja_excel(
             "(POST /api/v1/conciliacion-sheet/sync-now o sync con secreto)."
         )
 
-    mes_key = _pick_mes_header(headers)
+    lote_key = _pick_lote_header(headers)
     ced_key = _pick_cedula_header(headers)
     nom_key = _pick_nombres_header(headers)
     tel_key = _pick_telefono_header(headers)
@@ -169,7 +193,7 @@ def build_clientes_hoja_excel(
     missing = [
         name
         for name, key in [
-            ("MES", mes_key),
+            ("LOTE", lote_key),
             ("cédula", ced_key),
             ("nombres/cliente", nom_key),
             ("teléfono/móvil", tel_key),
@@ -181,12 +205,12 @@ def build_clientes_hoja_excel(
         raise ValueError(
             "No se pudieron detectar columnas en la hoja para: "
             + ", ".join(missing)
-            + ". Revise cabeceras (MES, cédula, cliente, móvil, correo) y vuelva a sincronizar."
+            + ". Revise cabeceras (LOTE, cédula, cliente, móvil, correo) y vuelva a sincronizar."
         )
 
     logger.info(
-        "[clientes_hoja] columnas: mes=%r cedula=%r nombres=%r tel=%r email=%r",
-        mes_key,
+        "[clientes_hoja] columnas: lote=%r cedula=%r nombres=%r tel=%r email=%r",
+        lote_key,
         ced_key,
         nom_key,
         tel_key,
@@ -212,12 +236,8 @@ def build_clientes_hoja_excel(
         if not isinstance(cells, dict):
             continue
 
-        raw_mes = _as_text(cells.get(mes_key or ""))
-        ym = _parse_mes_to_year_month(raw_mes)
-        if ym is None:
-            continue
-        y, m = ym
-        if y not in años_set or m not in meses_set:
+        raw_lote_norm = _norm_lote_celda(cells.get(lote_key or ""))
+        if raw_lote_norm is None or raw_lote_norm not in lotes_set:
             continue
 
         ced = _as_text(cells.get(ced_key or ""))
@@ -255,3 +275,14 @@ def parse_anos_meses_query(anos: str, meses: str) -> Tuple[List[int], List[int]]
             continue
         mo.append(int(part))
     return ya, mo
+
+
+def parse_lotes_query(lotes: str) -> List[int]:
+    """Parsea query tipo lotes=70 o lotes=70,71,72."""
+    out: List[int] = []
+    for part in (lotes or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        out.append(int(part))
+    return out

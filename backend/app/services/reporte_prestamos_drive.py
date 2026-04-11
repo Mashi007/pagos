@@ -1,6 +1,6 @@
 """
 Excel "Prestamos Drive" desde el snapshot de la hoja CONCILIACIÓN (conciliacion_sheet_rows).
-Misma regla de filtro que Clientes (hoja): columna MES → año ∈ años y mes ∈ meses.
+Misma regla de filtro que Clientes (hoja): columna LOTE (p. ej. columna B) ∈ lista `lotes`.
 Cabeceras de salida (fila 1): snake_case como en la hoja de referencia operativa.
 """
 from __future__ import annotations
@@ -17,9 +17,9 @@ from sqlalchemy.orm import Session
 from app.models.conciliacion_sheet import ConciliacionSheetMeta, ConciliacionSheetRow
 from app.services.reporte_clientes_hoja import (
     _as_text,
-    _parse_mes_to_year_month,
+    _norm_lote_celda,
     _pick_cedula_header,
-    _pick_mes_header,
+    _pick_lote_header,
 )
 
 logger = logging.getLogger(__name__)
@@ -147,21 +147,18 @@ def _pick_numero_cuotas_header(headers: List[str]) -> Optional[str]:
 
 def build_prestamos_drive_excel(
     db: Session,
-    años: List[int],
-    meses: List[int],
+    lotes: List[int],
 ) -> Tuple[bytes, int]:
     import openpyxl
 
-    if not años or not meses:
-        raise ValueError("Indique al menos un año y un mes para el filtro.")
+    if not lotes:
+        raise ValueError("Indique al menos un número de lote para el filtro.")
 
-    años_set: Set[int] = set(int(x) for x in años)
-    meses_set: Set[int] = set(int(x) for x in meses)
+    lotes_set: Set[str] = {str(int(x)) for x in lotes}
 
     logger.info(
-        "[prestamos_drive] build_prestamos_drive_excel años=%s meses=%s",
-        sorted(años_set),
-        sorted(meses_set),
+        "[prestamos_drive] build_prestamos_drive_excel lotes=%s",
+        sorted(int(x) for x in lotes_set),
     )
 
     meta = db.get(ConciliacionSheetMeta, 1)
@@ -172,9 +169,9 @@ def build_prestamos_drive_excel(
             "(POST /api/v1/conciliacion-sheet/sync-now o sync con secreto)."
         )
 
-    mes_key = _pick_mes_header(headers)
+    lote_key = _pick_lote_header(headers)
     keys = {
-        "MES": mes_key,
+        "LOTE": lote_key,
         "cédula": _pick_cedula_header(headers),
         "total financiamiento": _pick_total_financiamiento_header(headers),
         "modalidad pago": _pick_modalidad_pago_header(headers),
@@ -192,7 +189,7 @@ def build_prestamos_drive_excel(
         raise ValueError(
             "No se pudieron detectar columnas en la hoja para: "
             + ", ".join(missing)
-            + ". Revise cabeceras en CONCILIACIÓN y vuelva a sincronizar."
+            + ". Revise cabeceras en CONCILIACIÓN (incl. LOTE) y vuelva a sincronizar."
         )
 
     ced_key = keys["cédula"]
@@ -207,9 +204,9 @@ def build_prestamos_drive_excel(
     ncu_key = keys["número cuotas"]
 
     logger.info(
-        "[prestamos_drive] columnas: mes=%r ced=%r tf=%r mod=%r frq=%r fap=%r "
+        "[prestamos_drive] columnas: lote=%r ced=%r tf=%r mod=%r frq=%r fap=%r "
         "prod=%r conc=%r ana=%r mv=%r ncu=%r",
-        mes_key,
+        lote_key,
         ced_key,
         tf_key,
         mod_key,
@@ -254,12 +251,8 @@ def build_prestamos_drive_excel(
         if not isinstance(cells, dict):
             continue
 
-        raw_mes = _as_text(cells.get(mes_key or ""))
-        ym = _parse_mes_to_year_month(raw_mes)
-        if ym is None:
-            continue
-        y, m = ym
-        if y not in años_set or m not in meses_set:
+        raw_lote_norm = _norm_lote_celda(cells.get(lote_key or ""))
+        if raw_lote_norm is None or raw_lote_norm not in lotes_set:
             continue
 
         row_out = [

@@ -1,5 +1,5 @@
 """
-Excel Clientes: snapshot hoja CONCILIACIÓN filtrado por año/mes de la columna MES.
+Excel Clientes: snapshot hoja CONCILIACIÓN filtrado por columna LOTE.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.services.reporte_clientes_hoja import build_clientes_hoja_excel, parse_anos_meses_query
+from app.services.reporte_clientes_hoja import build_clientes_hoja_excel, parse_lotes_query
 
 logger = logging.getLogger(__name__)
 
@@ -22,18 +22,17 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 @router.get("/exportar/clientes-hoja")
 def exportar_clientes_hoja_excel(
     db: Session = Depends(get_db),
-    anos: str = Query("", description="Años separados por coma, ej. 2024,2025"),
-    meses: str = Query("", description="Meses 1-12 separados por coma, ej. 10,11"),
+    lotes: str = Query("", description="Lotes separados por coma (columna LOTE en la hoja), ej. 70 o 70,71"),
 ):
     """
     Descarga Excel (hoja Clientes) desde conciliacion_sheet_rows.
     Columnas: Cédula, Nombres, Teléfono, Email.
-    Solo filas cuya columna MES parsea a una fecha con año ∈ anos y mes ∈ meses.
+    Solo filas cuyo LOTE (cabecera detectada, p. ej. columna B) coincide con uno de los valores en `lotes`.
     """
-    logger.info("[clientes_hoja] GET /exportar/clientes-hoja anos=%r meses=%r", anos, meses)
+    logger.info("[clientes_hoja] GET /exportar/clientes-hoja lotes=%r", lotes)
     try:
-        ya, mo = parse_anos_meses_query(anos, meses)
-        content, n = build_clientes_hoja_excel(db, ya, mo)
+        lo = parse_lotes_query(lotes)
+        content, n = build_clientes_hoja_excel(db, lo)
     except ValueError as e:
         logger.warning("[clientes_hoja] GET 400/404: %s", e)
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -45,7 +44,8 @@ def exportar_clientes_hoja_excel(
         ) from e
 
     hoy_str = date.today().isoformat()
-    fname = f"Clientes_hoja_CONCILIACION_{hoy_str}.xlsx"
+    lpart = "-".join(str(x) for x in sorted(set(lo)))
+    fname = f"Clientes_hoja_CONCILIACION_lotes_{lpart}_{hoy_str}.xlsx"
     logger.info("[clientes_hoja] GET OK filas=%s bytes=%s", n, len(content))
     return Response(
         content=content,

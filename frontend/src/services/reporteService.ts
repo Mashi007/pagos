@@ -1460,22 +1460,15 @@ class ReporteService {
   }
 
   /**
-   * Excel Clientes: columnas Cédula, Nombres, Teléfono, Email desde la hoja sincronizada,
-   * filtradas por año y mes de la columna MES.
-   */
-  /**
    * Excel Préstamos Drive: 10 columnas snake_case desde la hoja sincronizada,
-   * filtradas por año y mes de la columna MES (igual que Clientes hoja).
+   * filtradas por columna LOTE (query `lotes=70` o `lotes=70,71`).
    */
   async exportarReportePrestamosDrive(filtros: {
-    años: number[]
-    meses: number[]
+    lotes: number[]
   }): Promise<Blob> {
     const params = new URLSearchParams()
 
-    if (filtros.años?.length) params.set('anos', filtros.años.join(','))
-
-    if (filtros.meses?.length) params.set('meses', filtros.meses.join(','))
+    if (filtros.lotes?.length) params.set('lotes', filtros.lotes.join(','))
 
     const axiosInstance = apiClient.getAxiosInstance()
 
@@ -1511,15 +1504,16 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /**
+   * Excel Clientes: Cédula, Nombres, Teléfono, Email desde la hoja sincronizada,
+   * filtradas por columna LOTE (query `lotes=70` o `lotes=70,71`).
+   */
   async exportarReporteClientesHoja(filtros: {
-    años: number[]
-    meses: number[]
+    lotes: number[]
   }): Promise<Blob> {
     const params = new URLSearchParams()
 
-    if (filtros.años?.length) params.set('anos', filtros.años.join(','))
-
-    if (filtros.meses?.length) params.set('meses', filtros.meses.join(','))
+    if (filtros.lotes?.length) params.set('lotes', filtros.lotes.join(','))
 
     const axiosInstance = apiClient.getAxiosInstance()
 

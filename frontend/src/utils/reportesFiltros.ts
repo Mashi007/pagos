@@ -33,6 +33,28 @@ export function validateFiltrosReporte(filtros: FiltrosReporte): string | null {
   return validarAniosMeses(filtros.años, filtros.meses)
 }
 
+const LOTE_MIN = 0
+
+const LOTE_MAX = 999_999
+
+/** Filtro por columna LOTE: Clientes (hoja) y Préstamos Drive. */
+export function validateLotesClientesHoja(
+  lotes: number[] | undefined
+): string | null {
+  if (!lotes?.length) {
+    return 'Indique al menos un número de lote.'
+  }
+  for (const n of lotes) {
+    if (!Number.isFinite(n) || !Number.isInteger(n)) {
+      return 'Cada lote debe ser un número entero.'
+    }
+    if (n < LOTE_MIN || n > LOTE_MAX) {
+      return `Los lotes deben estar entre ${LOTE_MIN} y ${LOTE_MAX}.`
+    }
+  }
+  return null
+}
+
 export function validateFiltrosReporteContable(
   filtros: FiltrosReporteContable
 ): string | null {
