@@ -42,6 +42,8 @@ import {
 
 import { LoadingSpinner } from '../../components/ui/loading-spinner'
 
+import { CLIENTE_EMAIL_MAX_LENGTH } from '../../utils/excelValidation'
+
 import { AlertWithIcon } from '../../components/ui/alert'
 
 import { CrearClienteForm } from './CrearClienteForm'
@@ -887,10 +889,11 @@ export function ClientesList() {
                       type="email"
                       placeholder="Email"
                       value={filters.email || ''}
+                      maxLength={CLIENTE_EMAIL_MAX_LENGTH}
                       onChange={e =>
                         handleFilterChange('email', e.target.value || undefined)
                       }
-                      className="w-full"
+                      className="w-full min-w-[50ch]"
                     />
                   </div>
 

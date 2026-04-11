@@ -3111,66 +3111,112 @@ export function EditarRevisionManual() {
 
                   {/* Valor Activo - OCULTO */}
 
-                  {/* Fecha de requerimiento editable; fecha de aprobación no se muestra (sigue en BD y en recálculo). */}
+                  {/* Fechas de expediente: requerimiento y aprobación (ambas en BD; la de aprobación alimenta recálculo de vencimientos). */}
                   <div className="rounded-lg border border-gray-200 bg-slate-50/80 p-3 md:col-span-2">
-                    <label className="mb-2 block text-sm font-medium">
-                      Fecha de requerimiento
-                    </label>
-                    <p className="mb-2 text-xs text-gray-600">
-                      Fecha de solicitud/requerimiento del expediente (tabla{' '}
-                      <code className="rounded bg-white px-1">
-                        prestamos.fecha_requerimiento
-                      </code>
-                      ). Se muestra el valor cargado desde la base; puede
-                      corregirla aquí si debe alinearse con otros datos del
-                      expediente.
-                    </p>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                      <div className="relative min-w-0 max-w-md flex-1">
-                        <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                        <Input
-                          type="date"
-                          disabled={soloLectura}
-                          value={formatDateForInput(
-                            prestamoData.fecha_requerimiento
-                          )}
-                          onChange={e => {
-                            formDirtyRef.current = true
-                            const v = e.target.value || null
-                            setPrestamoData({
-                              ...prestamoData,
-                              fecha_requerimiento: v,
-                            })
-                            setCambios({ ...cambios, prestamo: true })
-                          }}
-                          className="pl-10"
-                        />
+                    <div className="grid gap-6 md:grid-cols-2 md:items-start">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium">
+                          Fecha de requerimiento
+                        </label>
+                        <p className="mb-2 text-xs text-gray-600">
+                          Fecha de solicitud/requerimiento del expediente (tabla{' '}
+                          <code className="rounded bg-white px-1">
+                            prestamos.fecha_requerimiento
+                          </code>
+                          ). Se muestra el valor cargado desde la base; puede
+                          corregirla aquí si debe alinearse con otros datos del
+                          expediente.
+                        </p>
+                        <div className="relative min-w-0 max-w-md">
+                          <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                          <Input
+                            type="date"
+                            disabled={soloLectura}
+                            value={formatDateForInput(
+                              prestamoData.fecha_requerimiento
+                            )}
+                            onChange={e => {
+                              formDirtyRef.current = true
+                              const v = e.target.value || null
+                              setPrestamoData({
+                                ...prestamoData,
+                                fecha_requerimiento: v,
+                              })
+                              setCambios({ ...cambios, prestamo: true })
+                            }}
+                            className="pl-10"
+                          />
+                        </div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="shrink-0 sm:max-w-[220px]"
-                        disabled={soloLectura || recalculandoFechasCuotas}
-                        onClick={handleGuardarFechaYRecalcularVencimientos}
-                        title="Usa la fecha de aprobación ya registrada en el sistema junto con total, plazo, cuota por período y modalidad; guarda y reconstruye vencimientos de cuotas."
-                      >
-                        {recalculandoFechasCuotas ? (
-                          <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
-                        ) : (
-                          <RefreshCw className="mr-2 h-4 w-4 shrink-0" />
+                      <div>
+                        <label className="mb-2 block text-sm font-medium">
+                          Fecha de aprobación
+                        </label>
+                        <p className="mb-2 text-xs text-gray-600">
+                          Columna{' '}
+                          <code className="rounded bg-white px-1">
+                            prestamos.fecha_aprobacion
+                          </code>
+                          . Al guardar el formulario o al usar «Recalcular
+                          vencimientos», la fecha de alta del préstamo en base de
+                          datos se iguala exactamente a esta misma fecha (inicio
+                          del día); ese dato no se edita en pantalla. Es
+                          obligatoria si el estado es Aprobado, Desembolsado o
+                          Liquidado. «Recalcular vencimientos» usa esta fecha
+                          junto con plazo, cuota por período y modalidad.
+                        </p>
+                        <div className="relative min-w-0 max-w-md">
+                          <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                          <Input
+                            type="date"
+                            disabled={soloLectura}
+                            value={formatDateForInput(
+                              prestamoData.fecha_aprobacion
+                            )}
+                            onChange={e => {
+                              formDirtyRef.current = true
+                              const v = e.target.value || null
+                              setPrestamoData({
+                                ...prestamoData,
+                                fecha_aprobacion: v,
+                              })
+                              setCambios({ ...cambios, prestamo: true })
+                              if (errores['fecha_aprobacion']) {
+                                setErrores({
+                                  ...errores,
+                                  fecha_aprobacion: '',
+                                })
+                              }
+                            }}
+                            className={`pl-10 ${errores['fecha_aprobacion'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
+                          />
+                        </div>
+                        {errores['fecha_aprobacion'] && (
+                          <p className="mt-2 text-xs text-red-600">
+                            {errores['fecha_aprobacion']}
+                          </p>
                         )}
-                        Recalcular vencimientos
-                      </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="mt-3 w-full max-w-md shrink-0 sm:w-auto"
+                          disabled={soloLectura || recalculandoFechasCuotas}
+                          onClick={handleGuardarFechaYRecalcularVencimientos}
+                          title="Usa la fecha de aprobación indicada arriba junto con total, plazo, cuota por período y modalidad; guarda y reconstruye vencimientos de cuotas."
+                        >
+                          {recalculandoFechasCuotas ? (
+                            <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+                          ) : (
+                            <RefreshCw className="mr-2 h-4 w-4 shrink-0" />
+                          )}
+                          Recalcular vencimientos
+                        </Button>
+                      </div>
                     </div>
-                    {errores['fecha_aprobacion'] && (
-                      <p className="mt-2 text-xs text-red-600">
-                        {errores['fecha_aprobacion']}
-                      </p>
-                    )}
                   </div>
 
                   {/* Fecha Base Cálculo - OCULTO */}
-                  {/* Este campo se sincroniza automáticamente con fecha_aprobacion, no necesita edición manual */}
+                  {/* Sincronizada en servidor/BD con fecha_aprobacion cuando aplica; no se edita aquí. */}
 
                   {/* Producto - OCULTO */}
                   {/* Este campo se maneja en el módulo de gestión de préstamos, no en revisión manual */}

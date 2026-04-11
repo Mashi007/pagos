@@ -28,6 +28,8 @@ import { Badge } from '../../components/ui/badge'
 
 import { LoadingSpinner } from '../../components/ui/loading-spinner'
 
+import { CLIENTE_EMAIL_MAX_LENGTH } from '../../utils/excelValidation'
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { clienteService } from '../../services/clienteService'
@@ -359,10 +361,11 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
                       {editingId === Cliente.Cliente_id ? (
                         <Input
                           value={editedData.email || ''}
+                          maxLength={CLIENTE_EMAIL_MAX_LENGTH}
                           onChange={e =>
                             handleFieldChange('email', e.target.value)
                           }
-                          className="w-full"
+                          className="w-full min-w-[50ch]"
                           type="email"
                           placeholder="email@ejemplo.com"
                         />

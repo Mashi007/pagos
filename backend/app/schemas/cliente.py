@@ -53,11 +53,13 @@ class ClienteBase(BaseModel):
 
     email: str = Field(
         ...,
+        max_length=150,
         description="Correo 1 (prioridad). En JSON tambien se acepta la clave correo_1.",
         validation_alias=AliasChoices("email", "correo_1"),
     )
     email_secundario: Optional[str] = Field(
         None,
+        max_length=150,
         description="Correo 2 (opcional). En JSON tambien se acepta la clave correo_2.",
         validation_alias=AliasChoices("email_secundario", "correo_2"),
     )
@@ -124,11 +126,13 @@ class ClienteUpdate(BaseModel):
 
     email: Optional[str] = Field(
         None,
+        max_length=150,
         description="Correo 1 (prioridad). Alias JSON: correo_1.",
         validation_alias=AliasChoices("email", "correo_1"),
     )
     email_secundario: Optional[str] = Field(
         None,
+        max_length=150,
         description="Correo 2 (opcional). Alias JSON: correo_2.",
         validation_alias=AliasChoices("email_secundario", "correo_2"),
     )

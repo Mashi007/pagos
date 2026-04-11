@@ -45,7 +45,10 @@ import {
   type ExcelUploaderProps,
 } from '../../hooks/useExcelUpload'
 
-import { CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO } from '../../utils/excelValidation'
+import {
+  CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO,
+  CLIENTE_EMAIL_MAX_LENGTH,
+} from '../../utils/excelValidation'
 
 export function ExcelUploaderUI(props: ExcelUploaderProps) {
   const {
@@ -544,6 +547,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                 <input
                                   type="email"
                                   value={row.email}
+                                  maxLength={CLIENTE_EMAIL_MAX_LENGTH}
                                   onChange={e =>
                                     updateCellValue(
                                       row,
@@ -551,7 +555,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                       e.target.value
                                     )
                                   }
-                                  className={`w-full min-w-[80px] rounded border p-2 text-sm ${
+                                  className={`w-full min-w-[50ch] rounded border p-2 text-sm ${
                                     row._validation.email?.isValid
                                       ? 'border-gray-300 bg-white text-black'
                                       : 'border-red-800 bg-red-800 text-white'

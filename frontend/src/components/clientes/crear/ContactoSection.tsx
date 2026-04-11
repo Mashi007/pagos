@@ -11,6 +11,8 @@ import { Input } from '../../../components/ui/input'
 
 import { Textarea } from '../../../components/ui/textarea'
 
+import { CLIENTE_EMAIL_MAX_LENGTH } from '../../../utils/excelValidation'
+
 import type { FormData, ValidationResult } from './useCrearCliente'
 
 interface ContactoSectionProps {
@@ -95,8 +97,9 @@ export function ContactoSection({
             <Input
               type="email"
               value={formData.email}
+              maxLength={CLIENTE_EMAIL_MAX_LENGTH}
               onChange={e => onInputChange('email', e.target.value)}
-              className={`pl-10 ${getFieldValidation('email')?.isValid === false ? 'border-red-500' : ''}`}
+              className={`min-w-[50ch] pl-10 ${getFieldValidation('email')?.isValid === false ? 'border-red-500' : ''}`}
               placeholder="juan@email.com"
             />
           </div>
@@ -127,8 +130,9 @@ export function ContactoSection({
             <Input
               type="email"
               value={formData.emailSecundario}
+              maxLength={CLIENTE_EMAIL_MAX_LENGTH}
               onChange={e => onInputChange('emailSecundario', e.target.value)}
-              className={`pl-10 ${getFieldValidation('emailSecundario')?.isValid === false ? 'border-red-500' : ''}`}
+              className={`min-w-[50ch] pl-10 ${getFieldValidation('emailSecundario')?.isValid === false ? 'border-red-500' : ''}`}
               placeholder="Otro correo (máx. 2 por cliente)"
             />
           </div>

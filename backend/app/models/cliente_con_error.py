@@ -14,7 +14,7 @@ class ClienteConError(Base):
     cedula = Column(String(20), nullable=True, index=True)
     nombres = Column(String(100), nullable=True)
     telefono = Column(String(100), nullable=True)
-    email = Column(String(100), nullable=True)
+    email = Column(String(150), nullable=True)
     direccion = Column(Text, nullable=True)
     fecha_nacimiento = Column(String(50), nullable=True)  # String para mantener formato original si es inválida
     ocupacion = Column(String(100), nullable=True)

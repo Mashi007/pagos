@@ -719,6 +719,24 @@ def editar_cliente_revision(
     }
 
 
+def _sync_fecha_registro_con_aprobacion_en_revision(prestamo: Prestamo, cambios_dict: dict) -> None:
+    """Si hay fecha_aprobacion, fecha_registro debe ser el mismo datetime (inicio del día)."""
+    fa = prestamo.fecha_aprobacion
+    if fa is None:
+        return
+    if isinstance(fa, datetime):
+        target = fa
+    elif isinstance(fa, date):
+        target = datetime.combine(fa, datetime.min.time())
+    else:
+        return
+    old_fr = prestamo.fecha_registro
+    if old_fr == target:
+        return
+    prestamo.fecha_registro = target
+    cambios_dict["fecha_registro"] = (str(old_fr), str(target))
+
+
 def _mutar_prestamo_desde_update_data_revision(
     db: Session,
     prestamo: Prestamo,
@@ -876,6 +894,7 @@ def editar_prestamo_revision(
 
     rellenar_fecha_aprobacion_desde_base_si_falta(prestamo)
     alinear_fecha_aprobacion_y_base_calculo(prestamo)
+    _sync_fecha_registro_con_aprobacion_en_revision(prestamo, cambios_dict)
 
     if prestamo_estado_exige_fecha_aprobacion(prestamo.estado) and prestamo.fecha_aprobacion is None:
         raise HTTPException(
@@ -1004,6 +1023,7 @@ def guardar_prestamo_y_reconstruir_cuotas(
     else:
         rellenar_fecha_aprobacion_desde_base_si_falta(prestamo)
         alinear_fecha_aprobacion_y_base_calculo(prestamo)
+        _sync_fecha_registro_con_aprobacion_en_revision(prestamo, cambios_dict)
 
         if prestamo_estado_exige_fecha_aprobacion(prestamo.estado) and prestamo.fecha_aprobacion is None:
             raise HTTPException(

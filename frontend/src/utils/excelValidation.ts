@@ -420,6 +420,9 @@ export function sanitizeCellValue(value: any): string {
   return str.trim()
 }
 
+/** Coincide con VARCHAR de `clientes.email` / `email_secundario` en BD (100 + 50). */
+export const CLIENTE_EMAIL_MAX_LENGTH = 150
+
 /** Carga masiva clientes: dirección, fecha y ocupación fijas (se ignoran columnas del Excel y edición). */
 export const CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION = 'Venezuela'
 export const CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO = '01/01/1999'
@@ -602,6 +605,11 @@ export function validateField(
     case 'email':
       if (!value.trim()) return { isValid: false, message: 'Email requerido' }
       const t = value.trim()
+      if (t.length > CLIENTE_EMAIL_MAX_LENGTH)
+        return {
+          isValid: false,
+          message: `Máximo ${CLIENTE_EMAIL_MAX_LENGTH} caracteres`,
+        }
       if (t.includes(' ')) return { isValid: false, message: 'Sin espacios' }
       if (t.includes(',')) return { isValid: false, message: 'Sin comas' }
       if (!t.includes('@')) return { isValid: false, message: 'Debe tener @' }
