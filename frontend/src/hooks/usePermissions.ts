@@ -331,7 +331,7 @@ export function usePermissions() {
 
 
    * - OPERATIVO: reportes operativos (Pagos, Morosidad, Vencimiento, Cédula, Fechas préstamos,
-   *   Fecha Drive hoja vs BD). Contable / Conciliación masiva siguen solo admin.
+   *   Fecha Drive, Análisis financiamiento, Clientes hoja vs BD). Contable / Conciliación masiva siguen solo admin.
 
    */
 
@@ -348,6 +348,9 @@ export function usePermissions() {
       'FECHAS',
       // Mismo uso operativo que FECHAS; distinto Excel (5 cols Drive vs sistema). Ver Reportes.tsx.
       'FECHA_DRIVE',
+      'ANALISIS_FINANCIAMIENTO',
+      'CLIENTES_HOJA',
+      'PRESTAMOS_DRIVE',
     ]
 
     return allowedForOperativos.includes(reportType)

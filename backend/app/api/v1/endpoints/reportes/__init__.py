@@ -21,6 +21,15 @@ from app.api.v1.endpoints.reportes.reportes_prestamos_fechas import (
 from app.api.v1.endpoints.reportes.reportes_fecha_drive import (
     router as router_fecha_drive,
 )
+from app.api.v1.endpoints.reportes.reportes_analisis_financiamiento import (
+    router as router_analisis_financiamiento,
+)
+from app.api.v1.endpoints.reportes.reportes_clientes_hoja import (
+    router as router_clientes_hoja,
+)
+from app.api.v1.endpoints.reportes.reportes_prestamos_drive import (
+    router as router_prestamos_drive,
+)
 
 router = APIRouter()
 
@@ -37,4 +46,7 @@ router.include_router(router_contable, tags=["reportes"])
 router.include_router(router_conciliacion, tags=["reportes"])
 router.include_router(router_prestamos_fechas, tags=["reportes"])
 router.include_router(router_fecha_drive, tags=["reportes"])
+router.include_router(router_analisis_financiamiento, tags=["reportes"])
+router.include_router(router_clientes_hoja, tags=["reportes"])
+router.include_router(router_prestamos_drive, tags=["reportes"])
 

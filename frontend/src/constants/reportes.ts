@@ -20,4 +20,13 @@ export const REPORTES_TOAST = {
   fechas: 'Reporte Fechas préstamos (solo sistema, 8 columnas) descargado',
 
   fechaDrive: 'Reporte Fecha Drive (hoja vs sistema, 5 columnas) descargado',
+
+  analisisFinanciamiento:
+    'Reporte Análisis financiamiento (hoja vs sistema, 5 columnas) descargado',
+
+  clientesHoja:
+    'Reporte Clientes (hoja CONCILIACIÓN filtrada por MES) descargado',
+
+  prestamosDrive:
+    'Reporte Préstamos Drive (10 columnas, filtro por MES) descargado',
 } as const

@@ -23,6 +23,9 @@ import {
   Calendar,
   FileSpreadsheet,
   Activity,
+  Wallet,
+  Database,
+  Car,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -145,6 +148,33 @@ const tiposReporte: TipoReporteItem[] = [
     titleExtra:
       'Comparación hoja CONCILIACIÓN (Drive) vs préstamos: 5 columnas; NE si falta dato en un lado.',
   },
+
+  {
+    value: 'ANALISIS_FINANCIAMIENTO',
+    label: 'Análisis financiamiento',
+    icon: Wallet,
+    subtitle: '5 columnas · total hoja vs BD',
+    titleExtra:
+      'Misma lógica que Fecha Drive por cédula, pero compara total financiamiento en la hoja vs préstamos.',
+  },
+
+  {
+    value: 'CLIENTES_HOJA',
+    label: 'Clientes (hoja)',
+    icon: Mail,
+    subtitle: '4 columnas · filtro año/mes (MES)',
+    titleExtra:
+      'Cédula, nombres, teléfono y email desde la hoja CONCILIACIÓN; solo filas cuya columna MES cae en los años y meses elegidos.',
+  },
+
+  {
+    value: 'PRESTAMOS_DRIVE',
+    label: 'Préstamos Drive',
+    icon: Car,
+    subtitle: '10 columnas · filtro año/mes (MES)',
+    titleExtra:
+      'Desde la hoja CONCILIACIÓN: cédula, total financiamiento, modalidad, fechas, producto, concesionario, analista, modelo y número de cuotas; filtro por columna MES.',
+  },
 ]
 
 const REPORTES_COBRANZA = [
@@ -156,7 +186,20 @@ const REPORTES_COBRANZA = [
   'ASESORES',
 ]
 
-const REPORTES_CONTABLE = ['CONTABLE', 'CEDULA', 'CONCILIACION', 'FECHA_DRIVE']
+/** Excel desde snapshot de la pestaña CONCILIACIÓN (sync Drive → BD). */
+const REPORTES_DESDE_DRIVE_SHEET = [
+  'FECHA_DRIVE',
+  'ANALISIS_FINANCIAMIENTO',
+  'CLIENTES_HOJA',
+  'PRESTAMOS_DRIVE',
+] as const
+
+const REPORTES_CONTABLE_CORE = ['CONTABLE', 'CEDULA', 'CONCILIACION'] as const
+
+const REPORTES_CONTABLE = [
+  ...REPORTES_CONTABLE_CORE,
+  ...REPORTES_DESDE_DRIVE_SHEET,
+] as const
 
 export function Reportes() {
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
@@ -364,7 +407,8 @@ export function Reportes() {
       tipo === 'CEDULA' ||
       tipo === 'MOROSIDAD' ||
       tipo === 'FECHAS' ||
-      tipo === 'FECHA_DRIVE'
+      tipo === 'FECHA_DRIVE' ||
+      tipo === 'ANALISIS_FINANCIAMIENTO'
     ) {
       generarReporte(tipo, {
         ['a\u00f1os']: [],
@@ -632,7 +676,8 @@ export function Reportes() {
         tipo !== 'CEDULA' &&
         tipo !== 'MOROSIDAD' &&
         tipo !== 'FECHAS' &&
-        tipo !== 'FECHA_DRIVE'
+        tipo !== 'FECHA_DRIVE' &&
+        tipo !== 'ANALISIS_FINANCIAMIENTO'
       ) {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
@@ -751,6 +796,52 @@ export function Reportes() {
         toast.dismiss(toastId)
 
         toast.success(REPORTES_TOAST.fechaDrive)
+      } else if (tipo === 'ANALISIS_FINANCIAMIENTO') {
+        const blob =
+          await reporteService.exportarReporteAnalisisFinanciamiento()
+
+        descargarBlob(
+          blob,
+          `Analisis_financiamiento_vs_hoja_CONCILIACION_5cols_${fechaCorte}.${ext}`
+        )
+
+        toast.dismiss(toastId)
+
+        toast.success(REPORTES_TOAST.analisisFinanciamiento)
+      } else if (tipo === 'CLIENTES_HOJA') {
+        const blob = await reporteService.exportarReporteClientesHoja({
+          años: filtros.años,
+          meses: filtros.meses,
+        })
+
+        const aPart = filtros.años.join('-')
+        const mPart = filtros.meses.join('-')
+
+        descargarBlob(
+          blob,
+          `Clientes_hoja_CONCILIACION_a${aPart}_m${mPart}_${fechaCorte}.${ext}`
+        )
+
+        toast.dismiss(toastId)
+
+        toast.success(REPORTES_TOAST.clientesHoja)
+      } else if (tipo === 'PRESTAMOS_DRIVE') {
+        const blob = await reporteService.exportarReportePrestamosDrive({
+          años: filtros.años,
+          meses: filtros.meses,
+        })
+
+        const aPart = filtros.años.join('-')
+        const mPart = filtros.meses.join('-')
+
+        descargarBlob(
+          blob,
+          `Prestamos_drive_CONCILIACION_a${aPart}_m${mPart}_${fechaCorte}.${ext}`
+        )
+
+        toast.dismiss(toastId)
+
+        toast.success(REPORTES_TOAST.prestamosDrive)
       } else {
         toast.dismiss(toastId)
 
@@ -823,51 +914,6 @@ export function Reportes() {
           </Button>
         }
       />
-
-      <Card className="border-slate-200 bg-slate-50/80 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-900">
-            <Calendar className="h-4 w-4 text-slate-600" aria-hidden />
-            Glosario de fechas (reportes y cuadros)
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-2 pb-4 pt-0 text-sm leading-relaxed text-slate-700">
-          <p>
-            <strong className="font-medium text-slate-900">
-              Fecha de requerimiento:
-            </strong>{' '}
-            dia en que se registró la solicitud o necesidad del credito.
-          </p>
-
-          <p>
-            <strong className="font-medium text-slate-900">
-              Fecha de aprobacion / desembolso:
-            </strong>{' '}
-            dia administrativo en que se aprueba o desembolsa; en flujos
-            actuales alinea la base de la tabla de amortizacion.
-          </p>
-
-          <p>
-            <strong className="font-medium text-slate-900">
-              Fecha de calculo (base):
-            </strong>{' '}
-            inicio para vencimientos de cuotas; debe coincidir con el dia de la
-            fecha de aprobacion en altas recientes. En datos antiguos puede
-            diferir.
-          </p>
-
-          <p>
-            <strong className="font-medium text-slate-900">
-              Dashboard y Excel Fechas:
-            </strong>{' '}
-            muchos totales por periodo usan primero la base de calculo, luego la
-            aprobacion y luego el requerimiento, para cuadrar con cuotas ya
-            generadas; conteos por &quot;mes de aprobacion&quot; pueden
-            priorizar la fecha de aprobacion.
-          </p>
-        </CardContent>
-      </Card>
 
       {/* --- Sección: Enlaces para compartir --- */}
 
@@ -954,37 +1000,54 @@ export function Reportes() {
       {/* --- Sección: Reportes para descargar --- */}
 
       <section className="space-y-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-800">
-          <span className="flex h-1 w-1 rounded-full bg-blue-500" aria-hidden />
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm"
+            aria-hidden
+          >
+            <Download className="h-4 w-4" />
+          </span>
           Reportes para descargar
         </h2>
 
-        <p className="text-sm text-gray-500">
-          Seleccione un reporte para elegir período (año/mes) y descargar en
+        <p className="max-w-3xl text-sm leading-relaxed text-gray-600">
+          Elija un bloque:{' '}
+          <span className="font-medium text-gray-800">Cobranza</span> (cartera,
+          morosidad, pagos, etc.),{' '}
+          <span className="font-medium text-violet-900">
+            informes desde Drive
+          </span>{' '}
+          (hoja CONCILIACIÓN ya sincronizada en el servidor) o{' '}
+          <span className="font-medium text-gray-800">
+            contable y otros listados
+          </span>
+          . Muchos informes abren un asistente de año/mes antes de generar el
           Excel.
         </p>
 
-        <Card className="border-gray-200/80 shadow-sm">
-          <CardContent className="space-y-8 pb-6 pt-6">
+        <Card className="overflow-hidden border border-gray-200/90 shadow-md ring-1 ring-gray-100/80">
+          <CardContent className="space-y-10 pb-8 pt-8">
             {/* Cobranza y operativos */}
 
             <div>
-              <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+              <h3 className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <span className="h-px max-w-[3rem] flex-1 rounded-full bg-slate-200" />
                 Cobranza y operativos
+                <span className="h-px flex-1 rounded-full bg-slate-200" />
               </h3>
-
-              <p className="mb-3 text-xs text-gray-500">
-                Las fechas tomadas de la hoja Google{' '}
-                <span className="font-medium text-gray-600">CONCILIACIÓN</span>{' '}
-                (Drive) están en la sección{' '}
-                <span className="font-medium text-gray-600">
-                  Contable y por cliente
+              <p className="mb-4 text-xs text-slate-500">
+                Datos del sistema (y en{' '}
+                <span className="font-medium text-slate-700">
+                  Fechas préstamos
                 </span>{' '}
-                → <span className="font-medium text-gray-600">Fecha Drive</span>
-                . {'"Fechas préstamos" de esta sección es solo base de datos.'}
+                solo BD). Los cruces con la hoja de Drive están en el apartado{' '}
+                <span className="font-medium text-violet-800">
+                  Informes desde la hoja (Drive)
+                </span>{' '}
+                más abajo.
               </p>
 
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5 md:gap-4">
                 {tiposReporte
                   .filter(t => REPORTES_COBRANZA.includes(t.value))
                   .map(tipo => {
@@ -1079,25 +1142,69 @@ export function Reportes() {
               </div>
             </div>
 
-            {/* Contable y por cliente */}
+            {/* Informes desde snapshot de Drive (pestaña CONCILIACIÓN) */}
 
-            <div className="border-t border-gray-100 pt-4">
-              <h3 className="mb-2 text-sm font-medium uppercase tracking-wider text-gray-500">
-                Contable y por cliente
-              </h3>
+            <div className="rounded-2xl border border-violet-200/90 bg-gradient-to-br from-violet-50/95 via-white to-sky-50/40 p-5 shadow-md ring-1 ring-violet-100/60 sm:p-6">
+              <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 gap-3">
+                  <div
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-md"
+                    aria-hidden
+                  >
+                    <Database className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-violet-900/90">
+                      Informes desde la hoja (Drive)
+                    </h3>
+                    <p className="mt-1 text-sm font-semibold leading-snug text-violet-950">
+                      Pestaña{' '}
+                      <span className="font-mono text-[13px]">
+                        CONCILIACIÓN
+                      </span>{' '}
+                      sincronizada en el servidor
+                    </p>
+                    <p className="mt-2 max-w-2xl text-xs leading-relaxed text-violet-950/85">
+                      Los botones de abajo leen el mismo snapshot en base de
+                      datos (no abren el Google Sheet aquí). Actualice datos con
+                      &quot;Traer hoja desde Drive ahora&quot; o el cron con
+                      secreto. Si el estado en ámbar indica que falta algo,
+                      corrija antes de descargar.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-              <p className="mb-2 text-xs text-gray-500">
-                <strong className="font-medium text-gray-600">
-                  Fecha Drive
-                </strong>{' '}
-                no es el mismo informe que Fechas préstamos (sección Cobranza):
-                compara la hoja CONCILIACIÓN (snapshot en base de datos) con los
-                préstamos. El archivo descargado incluye en el nombre{' '}
-                <code className="rounded bg-gray-100 px-1 text-[11px]">
-                  FechaDrive_vs_hoja_CONCILIACION_5cols
-                </code>
-                .
-              </p>
+              <ul className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <li className="rounded-lg border border-violet-100/90 bg-white/85 px-3 py-2 text-[11px] leading-snug text-violet-950 shadow-sm">
+                  <span className="font-semibold text-violet-900">
+                    Fecha Drive
+                  </span>
+                  : cédulas y fecha de aprobación hoja (col. Q) vs sistema.
+                </li>
+                <li className="rounded-lg border border-violet-100/90 bg-white/85 px-3 py-2 text-[11px] leading-snug text-violet-950 shadow-sm">
+                  <span className="font-semibold text-violet-900">
+                    Análisis financiamiento
+                  </span>
+                  : mismo cruce por cédula con montos de financiamiento.
+                </li>
+                <li className="rounded-lg border border-violet-100/90 bg-white/85 px-3 py-2 text-[11px] leading-snug text-violet-950 shadow-sm">
+                  <span className="font-semibold text-violet-900">
+                    Clientes (hoja)
+                  </span>
+                  : cédula, nombre, teléfono y correo filtrados por columna{' '}
+                  <span className="font-medium">MES</span> (año/mes en el
+                  asistente).
+                </li>
+                <li className="rounded-lg border border-violet-100/90 bg-white/85 px-3 py-2 text-[11px] leading-snug text-violet-950 shadow-sm">
+                  <span className="font-semibold text-violet-900">
+                    Préstamos Drive
+                  </span>
+                  : diez campos de la hoja (financiamiento, modalidad, fechas,
+                  producto, concesionario, analista, modelo, cuotas) filtrados
+                  por <span className="font-medium">MES</span>.
+                </li>
+              </ul>
 
               {conciliacionSheetStatus && (
                 <div className="mb-3 rounded-md border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
@@ -1195,7 +1302,8 @@ export function Reportes() {
                       )}
                     </Button>
                     <span className="text-[11px] text-amber-800/80">
-                      BD + ping a Google (metadatos); no modifica datos.
+                      BD + ping a Google (metadatos); no modifica datos. El JSON
+                      queda oculto hasta expandirlo.
                     </span>
                   </div>
                   {revisionManualFullEdit && (
@@ -1226,32 +1334,33 @@ export function Reportes() {
                     </div>
                   )}
                   {diagnosticoConciliacionJson ? (
-                    <pre className="mt-3 max-h-72 overflow-auto rounded border border-amber-200/90 bg-white/95 p-2 text-[10px] leading-tight text-slate-800">
-                      {diagnosticoConciliacionJson}
-                    </pre>
+                    <details className="mt-3 rounded border border-amber-200/90 bg-white/95 text-amber-950">
+                      <summary className="cursor-pointer list-none px-2 py-2 text-[11px] font-medium marker:content-none hover:bg-amber-50/80 [&::-webkit-details-marker]:hidden">
+                        Mostrar respuesta técnica (JSON)
+                      </summary>
+                      <pre className="max-h-72 overflow-auto border-t border-amber-200/80 p-2 text-[10px] leading-tight text-slate-800">
+                        {diagnosticoConciliacionJson}
+                      </pre>
+                    </details>
                   ) : null}
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
                 {tiposReporte
-                  .filter(t => REPORTES_CONTABLE.includes(t.value))
+                  .filter(t =>
+                    (REPORTES_DESDE_DRIVE_SHEET as readonly string[]).includes(
+                      t.value
+                    )
+                  )
                   .map(tipo => {
                     const IconComponent = tipo.icon
 
                     const isGenerando = generandoReporte === tipo.value
 
-                    const isDisponible = [
-                      'CARTERA',
-                      'PAGOS',
-                      'MOROSIDAD',
-                      'VENCIMIENTO',
-                      'ASESORES',
-                      'CONTABLE',
-                      'CEDULA',
-                      'CONCILIACION',
-                      'FECHA_DRIVE',
-                    ].includes(tipo.value)
+                    const isDisponible = (
+                      REPORTES_DESDE_DRIVE_SHEET as readonly string[]
+                    ).includes(tipo.value)
 
                     const tieneAcceso = canAccessReport(tipo.value)
 
@@ -1279,9 +1388,119 @@ export function Reportes() {
                             ? 'No tienes permisos para este reporte'
                             : tituloDescargaReporte(tipo)
                         }
-                        className={`flex min-h-[110px] select-none flex-col items-center justify-center gap-2 rounded-xl border-2 bg-white p-5 transition-all ${
+                        className={`flex min-h-[118px] select-none flex-col items-center justify-center gap-2 rounded-xl border-2 border-violet-200/90 bg-white/95 p-4 shadow-sm transition-all ${
                           isDisponible && tieneAcceso
-                            ? 'cursor-pointer hover:scale-[1.02] hover:border-blue-200 hover:bg-blue-50 active:scale-100'
+                            ? 'cursor-pointer hover:scale-[1.02] hover:border-violet-400 hover:bg-violet-50/90 active:scale-100'
+                            : 'cursor-not-allowed opacity-50'
+                        }`}
+                        aria-label={
+                          !tieneAcceso
+                            ? 'No tienes permisos para este reporte'
+                            : tituloDescargaReporte(tipo)
+                        }
+                      >
+                        {isGenerando ? (
+                          <Loader2
+                            className="h-12 w-12 animate-spin text-violet-600"
+                            aria-hidden
+                          />
+                        ) : !tieneAcceso ? (
+                          <Lock
+                            className="h-12 w-12 text-gray-400"
+                            aria-hidden
+                          />
+                        ) : (
+                          <IconComponent
+                            className="h-12 w-12 text-violet-600"
+                            aria-hidden
+                          />
+                        )}
+
+                        <span className="text-center text-xs font-medium text-violet-950">
+                          {tipo.label}
+                        </span>
+
+                        {tipo.subtitle && (
+                          <span className="max-w-[160px] text-center text-[10px] leading-tight text-violet-800/80">
+                            {tipo.subtitle}
+                          </span>
+                        )}
+
+                        {!tieneAcceso && (
+                          <span className="text-xs text-red-600">
+                            Restringido
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+              </div>
+            </div>
+
+            {/* Contable, cédula y conciliación (sin hoja Drive) */}
+
+            <div className="border-t border-slate-200/90 pt-8">
+              <h3 className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <span className="h-px max-w-[3rem] flex-1 rounded-full bg-slate-200" />
+                Contable y por cliente
+                <span className="h-px flex-1 rounded-full bg-slate-200" />
+              </h3>
+              <p className="mb-4 max-w-2xl text-xs leading-relaxed text-slate-600">
+                Reportes que salen de la base de datos y procesos internos:{' '}
+                <span className="font-medium text-slate-800">Contable</span>{' '}
+                (cuotas y cierre),{' '}
+                <span className="font-medium text-slate-800">Por cédula</span> y
+                la carga asistida de{' '}
+                <span className="font-medium text-slate-800">Conciliación</span>{' '}
+                (Excel hacia tablas temporales, distinto al snapshot de Drive de
+                arriba).
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4">
+                {tiposReporte
+                  .filter(t =>
+                    (REPORTES_CONTABLE_CORE as readonly string[]).includes(
+                      t.value
+                    )
+                  )
+                  .map(tipo => {
+                    const IconComponent = tipo.icon
+
+                    const isGenerando = generandoReporte === tipo.value
+
+                    const isDisponible = (
+                      REPORTES_CONTABLE_CORE as readonly string[]
+                    ).includes(tipo.value)
+
+                    const tieneAcceso = canAccessReport(tipo.value)
+
+                    return (
+                      <button
+                        key={tipo.value}
+                        type="button"
+                        disabled={!isDisponible || !tieneAcceso || isGenerando}
+                        onClick={e => {
+                          e.preventDefault()
+
+                          e.stopPropagation()
+
+                          if (!tieneAcceso) {
+                            toast.error(
+                              'No tienes permisos para acceder a este reporte'
+                            )
+                            return
+                          }
+
+                          abrirDialogoReporte(tipo.value)
+                        }}
+                        title={
+                          !tieneAcceso
+                            ? 'No tienes permisos para este reporte'
+                            : tituloDescargaReporte(tipo)
+                        }
+                        className={`flex min-h-[118px] select-none flex-col items-center justify-center gap-2 rounded-xl border-2 bg-white p-4 shadow-sm transition-all ${
+                          isDisponible && tieneAcceso
+                            ? 'cursor-pointer hover:scale-[1.02] hover:border-blue-300 hover:bg-blue-50/90 active:scale-100'
                             : 'cursor-not-allowed opacity-50'
                         }`}
                         aria-label={
@@ -1307,12 +1526,12 @@ export function Reportes() {
                           />
                         )}
 
-                        <span className="text-center text-xs font-medium text-gray-600">
+                        <span className="text-center text-xs font-medium text-slate-700">
                           {tipo.label}
                         </span>
 
                         {tipo.subtitle && (
-                          <span className="max-w-[140px] text-center text-[10px] leading-tight text-gray-400">
+                          <span className="max-w-[160px] text-center text-[10px] leading-tight text-slate-500">
                             {tipo.subtitle}
                           </span>
                         )}

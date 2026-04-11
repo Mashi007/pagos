@@ -44,6 +44,51 @@ async function assertBlobEsFechaDriveConciliacion(blob: Blob): Promise<void> {
   }
 }
 
+/** Valida que el blob sea el Excel "Análisis financiamiento" (5 columnas, hoja vs sistema). */
+async function assertBlobEsAnalisisFinanciamiento(blob: Blob): Promise<void> {
+  const buf = await blob.arrayBuffer()
+
+  const head = new Uint8Array(buf.slice(0, 2))
+
+  if (head[0] !== 0x50 || head[1] !== 0x4b) {
+    throw new Error(
+      'La respuesta no es un Excel valido (.xlsx). Revise la sesion o el enlace del API.'
+    )
+  }
+
+  const wb = XLSX.read(buf, { type: 'array', sheetRows: 2 })
+
+  const name0 = wb.SheetNames[0]
+
+  if (name0 !== 'Análisis financiamiento') {
+    throw new Error(
+      `Se recibio otro informe (primera hoja: "${name0 ?? '?'}"). ` +
+        'Use el boton Analisis financiamiento en Contable y actualice la pagina (Ctrl+F5). ' +
+        'Si persiste, el backend desplegado puede estar desactualizado.'
+    )
+  }
+
+  const ws = wb.Sheets[name0]
+
+  const e1Raw = ws['E1']?.w ?? ws['E1']?.v
+
+  const e1 = String(e1Raw ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s/g, '')
+
+  if (
+    !e1.includes('total') ||
+    !e1.includes('financiamiento') ||
+    !e1.includes('sistema')
+  ) {
+    throw new Error(
+      'El Excel no tiene el encabezado esperado (columna E: Total financiamiento sistema).'
+    )
+  }
+}
+
 export interface ReporteCartera {
   fecha_corte: string
 
@@ -1370,6 +1415,144 @@ class ReporteService {
     await assertBlobEsFechaDriveConciliacion(blob)
 
     return blob
+  }
+
+  /** Excel Análisis financiamiento: hoja CONCILIACIÓN vs total_financiamiento en préstamos (5 columnas). */
+  async exportarReporteAnalisisFinanciamiento(): Promise<Blob> {
+    const axiosInstance = apiClient.getAxiosInstance()
+
+    const cacheBust = `_cb=${Date.now()}`
+
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/analisis-financiamiento?${cacheBust}`,
+      { responseType: 'blob', timeout: 180000 }
+    )
+
+    if (response.status !== 200) {
+      let detail = `Error ${response.status}`
+
+      try {
+        const t = await (response.data as Blob).text()
+
+        if (t && t.trim().startsWith('{')) {
+          try {
+            const j = JSON.parse(t) as { detail?: string; message?: string }
+
+            detail = j.detail || j.message || detail
+          } catch {
+            detail = t.slice(0, 400)
+          }
+        } else if (t) {
+          detail = t.slice(0, 400)
+        }
+      } catch {
+        /* usar detail por defecto */
+      }
+
+      throw new Error(detail)
+    }
+
+    const blob = response.data as Blob
+
+    await assertBlobEsAnalisisFinanciamiento(blob)
+
+    return blob
+  }
+
+  /**
+   * Excel Clientes: columnas Cédula, Nombres, Teléfono, Email desde la hoja sincronizada,
+   * filtradas por año y mes de la columna MES.
+   */
+  /**
+   * Excel Préstamos Drive: 10 columnas snake_case desde la hoja sincronizada,
+   * filtradas por año y mes de la columna MES (igual que Clientes hoja).
+   */
+  async exportarReportePrestamosDrive(filtros: {
+    años: number[]
+    meses: number[]
+  }): Promise<Blob> {
+    const params = new URLSearchParams()
+
+    if (filtros.años?.length) params.set('anos', filtros.años.join(','))
+
+    if (filtros.meses?.length) params.set('meses', filtros.meses.join(','))
+
+    const axiosInstance = apiClient.getAxiosInstance()
+
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/prestamos-drive?${params.toString()}`,
+      { responseType: 'blob', timeout: 180000 }
+    )
+
+    if (response.status !== 200) {
+      let detail = `Error ${response.status}`
+
+      try {
+        const t = await (response.data as Blob).text()
+
+        if (t && t.trim().startsWith('{')) {
+          try {
+            const j = JSON.parse(t) as { detail?: string; message?: string }
+
+            detail = j.detail || j.message || detail
+          } catch {
+            detail = t.slice(0, 400)
+          }
+        } else if (t) {
+          detail = t.slice(0, 400)
+        }
+      } catch {
+        /* usar detail por defecto */
+      }
+
+      throw new Error(detail)
+    }
+
+    return response.data as Blob
+  }
+
+  async exportarReporteClientesHoja(filtros: {
+    años: number[]
+    meses: number[]
+  }): Promise<Blob> {
+    const params = new URLSearchParams()
+
+    if (filtros.años?.length) params.set('anos', filtros.años.join(','))
+
+    if (filtros.meses?.length) params.set('meses', filtros.meses.join(','))
+
+    const axiosInstance = apiClient.getAxiosInstance()
+
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/clientes-hoja?${params.toString()}`,
+      { responseType: 'blob', timeout: 180000 }
+    )
+
+    if (response.status !== 200) {
+      let detail = `Error ${response.status}`
+
+      try {
+        const t = await (response.data as Blob).text()
+
+        if (t && t.trim().startsWith('{')) {
+          try {
+            const j = JSON.parse(t) as { detail?: string; message?: string }
+
+            detail = j.detail || j.message || detail
+          } catch {
+            detail = t.slice(0, 400)
+          }
+        } else if (t) {
+          detail = t.slice(0, 400)
+        }
+      } catch {
+        /* usar detail por defecto */
+      }
+
+      throw new Error(detail)
+    }
+
+    return response.data as Blob
   }
 
   /**
