@@ -123,10 +123,10 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'FECHAS',
     label: 'Fechas préstamos',
     icon: Calendar,
-    subtitle: '8 columnas · solo base de datos',
+    subtitle: '8 columnas · solo BD (sin hoja Drive)',
     /** Texto largo para tooltip: evitar confundir con Fecha Drive. */
     titleExtra:
-      'Solo sistema: ID, cédula, estado, fechas y total (8 columnas). No incluye la hoja Drive.',
+      'Solo sistema: ID, cédula, estado, fechas y total (8 columnas). Para cruce con la hoja CONCILIACIÓN use "Fecha Drive" en Contable.',
   },
 
   { value: 'ASESORES', label: 'Pago vencido', icon: UserCheck },
@@ -972,6 +972,17 @@ export function Reportes() {
               <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
                 Cobranza y operativos
               </h3>
+
+              <p className="mb-3 text-xs text-gray-500">
+                Las fechas tomadas de la hoja Google{' '}
+                <span className="font-medium text-gray-600">CONCILIACIÓN</span>{' '}
+                (Drive) están en la sección{' '}
+                <span className="font-medium text-gray-600">
+                  Contable y por cliente
+                </span>{' '}
+                → <span className="font-medium text-gray-600">Fecha Drive</span>
+                . {'"Fechas préstamos" de esta sección es solo base de datos.'}
+              </p>
 
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
                 {tiposReporte
