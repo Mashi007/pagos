@@ -49,7 +49,6 @@ import {
   type ExcelRow,
   blankIfNN,
   formatNombres,
-  convertirFechaExcel,
   convertirFechaParaBackend,
   validateField,
   validateExcelFile,
@@ -57,6 +56,9 @@ import {
   sanitizeFileName,
   normalizeTelefonoFromExcel,
   normalizeCedulaInput,
+  CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION,
+  CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO,
+  CARGA_MASIVA_CLIENTES_DEFAULT_OCUPACION,
 } from '../utils/excelValidation'
 
 export interface ExcelUploaderProps {
@@ -626,13 +628,13 @@ export function useExcelUpload({
 
           email: blankIfNN(row.email).toLowerCase(),
 
-          direccion: blankIfNN(row.direccion),
+          direccion: CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION,
 
           fecha_nacimiento: convertirFechaParaBackend(
-            blankIfNN(row.fecha_nacimiento)
+            CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO
           ),
 
-          ocupacion: blankIfNN(row.ocupacion),
+          ocupacion: CARGA_MASIVA_CLIENTES_DEFAULT_OCUPACION,
 
           estado: (blankIfNN(row.estado) || 'ACTIVO').toUpperCase(),
 
@@ -1060,13 +1062,11 @@ export function useExcelUpload({
 
           nombres: blankIfNN(row.nombres) || null,
 
-          direccion: blankIfNN(row.direccion) || null,
+          direccion: CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION,
 
-          fecha_nacimiento: row.fecha_nacimiento
-            ? String(row.fecha_nacimiento)
-            : null,
+          fecha_nacimiento: CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO,
 
-          ocupacion: blankIfNN(row.ocupacion) || null,
+          ocupacion: CARGA_MASIVA_CLIENTES_DEFAULT_OCUPACION,
 
           email: blankIfNN(row.email) || null,
 
@@ -1342,6 +1342,7 @@ export function useExcelUpload({
           if (!row || row.every(cell => !cell)) continue
 
           // Columnas Estado y Activo ocultas en UI: siempre ACTIVO y TRUE para cumplir validadores
+          // Dirección, fecha nac. y ocupación: fijas (no se leen columnas 4–6 del Excel)
 
           const rowData: ExcelRow = {
             _rowIndex: i + 1,
@@ -1359,11 +1360,11 @@ export function useExcelUpload({
 
             email: row[3]?.toString() || '',
 
-            direccion: row[4]?.toString() || '',
+            direccion: CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION,
 
-            fecha_nacimiento: convertirFechaExcel(row[5]),
+            fecha_nacimiento: CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO,
 
-            ocupacion: row[6]?.toString() || '',
+            ocupacion: CARGA_MASIVA_CLIENTES_DEFAULT_OCUPACION,
 
             estado: 'ACTIVO',
 
@@ -1577,6 +1578,18 @@ export function useExcelUpload({
 
       if (field === 'email' && formattedValue) {
         formattedValue = formattedValue.trim().toLowerCase()
+      }
+
+      if (field === 'direccion') {
+        formattedValue = CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION
+      }
+
+      if (field === 'fecha_nacimiento') {
+        formattedValue = CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO
+      }
+
+      if (field === 'ocupacion') {
+        formattedValue = CARGA_MASIVA_CLIENTES_DEFAULT_OCUPACION
       }
 
       if (

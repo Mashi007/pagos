@@ -45,6 +45,8 @@ import {
   type ExcelUploaderProps,
 } from '../../hooks/useExcelUpload'
 
+import { CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO } from '../../utils/excelValidation'
+
 export function ExcelUploaderUI(props: ExcelUploaderProps) {
   const {
     handleCambiarArchivo,
@@ -560,17 +562,12 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                               <td className="border p-2">
                                 <input
                                   type="text"
+                                  readOnly
+                                  title="Valor fijo en carga masiva (no se usa la columna del Excel)"
                                   value={row.direccion}
-                                  onChange={e =>
-                                    updateCellValue(
-                                      row,
-                                      'direccion',
-                                      e.target.value
-                                    )
-                                  }
-                                  className={`w-full min-w-[80px] rounded border p-2 text-sm ${
+                                  className={`w-full min-w-[80px] cursor-not-allowed rounded border p-2 text-sm ${
                                     row._validation.direccion?.isValid
-                                      ? 'border-gray-300 bg-white text-black'
+                                      ? 'border-gray-200 bg-gray-50 text-gray-800'
                                       : 'border-red-800 bg-red-800 text-white'
                                   }`}
                                 />
@@ -579,90 +576,14 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                               <td className="border p-2">
                                 <input
                                   type="text"
+                                  readOnly
+                                  title="Valor fijo en carga masiva (no se usa la columna del Excel)"
                                   value={row.fecha_nacimiento}
-                                  onChange={e => {
-                                    const value = e.target.value
-
-                                    const onlyDigits = value.replace(/\D/g, '')
-
-                                    if (onlyDigits.length === 0) {
-                                      updateCellValue(
-                                        row,
-                                        'fecha_nacimiento',
-                                        ''
-                                      )
-
-                                      return
-                                    }
-
-                                    let formatted = ''
-
-                                    const digits = onlyDigits.substring(0, 8)
-
-                                    if (digits.length === 1) formatted = digits
-                                    else if (digits.length === 2)
-                                      formatted = digits.substring(0, 2)
-                                    else if (digits.length === 3)
-                                      formatted =
-                                        digits.substring(0, 2) +
-                                        '/' +
-                                        digits.substring(2, 3)
-                                    else if (digits.length === 4)
-                                      formatted =
-                                        digits.substring(0, 2) +
-                                        '/' +
-                                        digits.substring(2, 4)
-                                    else if (digits.length >= 5) {
-                                      const dia = digits.substring(0, 2)
-
-                                      const mes = digits.substring(2, 4)
-
-                                      const ano = digits.substring(4, 8)
-
-                                      formatted = dia + '/' + mes + '/' + ano
-                                    }
-
-                                    updateCellValue(
-                                      row,
-                                      'fecha_nacimiento',
-                                      formatted
-                                    )
-                                  }}
-                                  onBlur={e => {
-                                    const value = e.target.value
-
-                                    if (!value || !value.includes('/')) return
-
-                                    const parts = value.split('/')
-
-                                    if (parts.length === 3) {
-                                      if (
-                                        parts[0].length === 1 &&
-                                        parseInt(parts[0]) <= 3
-                                      ) {
-                                        parts[0] = '0' + parts[0]
-                                      }
-
-                                      if (parts[1].length === 1) {
-                                        parts[1] = '0' + parts[1]
-                                      }
-
-                                      if (parts[2].length < 4) {
-                                        parts[2] = parts[2].padStart(4, '0')
-                                      }
-
-                                      updateCellValue(
-                                        row,
-                                        'fecha_nacimiento',
-                                        parts.join('/')
-                                      )
-                                    }
-                                  }}
-                                  placeholder="DD/MM/YYYY"
+                                  placeholder={CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO}
                                   maxLength={10}
-                                  className={`w-full min-w-[80px] rounded border p-2 text-sm ${
+                                  className={`w-full min-w-[80px] cursor-not-allowed rounded border p-2 text-sm ${
                                     row._validation.fecha_nacimiento?.isValid
-                                      ? 'border-gray-300 bg-white text-black'
+                                      ? 'border-gray-200 bg-gray-50 text-gray-800'
                                       : 'border-red-800 bg-red-800 text-white'
                                   }`}
                                 />
@@ -671,17 +592,12 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                               <td className="border p-2">
                                 <input
                                   type="text"
+                                  readOnly
+                                  title="Valor fijo en carga masiva (no se usa la columna del Excel)"
                                   value={row.ocupacion}
-                                  onChange={e =>
-                                    updateCellValue(
-                                      row,
-                                      'ocupacion',
-                                      e.target.value
-                                    )
-                                  }
-                                  className={`w-full min-w-[80px] rounded border p-2 text-sm ${
+                                  className={`w-full min-w-[80px] cursor-not-allowed rounded border p-2 text-sm ${
                                     row._validation.ocupacion?.isValid
-                                      ? 'border-gray-300 bg-white text-black'
+                                      ? 'border-gray-200 bg-gray-50 text-gray-800'
                                       : 'border-red-800 bg-red-800 text-white'
                                   }`}
                                 />

@@ -420,6 +420,11 @@ export function sanitizeCellValue(value: any): string {
   return str.trim()
 }
 
+/** Carga masiva clientes: dirección, fecha y ocupación fijas (se ignoran columnas del Excel y edición). */
+export const CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION = 'Venezuela'
+export const CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO = '01/01/1999'
+export const CARGA_MASIVA_CLIENTES_DEFAULT_OCUPACION = 'NA'
+
 export interface ExcelData {
   cedula: string
   nombres: string
