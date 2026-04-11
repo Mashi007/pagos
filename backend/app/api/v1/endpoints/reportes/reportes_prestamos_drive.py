@@ -3,11 +3,12 @@ Excel Prestamos Drive: snapshot hoja CONCILIACIÓN filtrado por columna LOTE.
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -32,11 +33,22 @@ def debug_prestamos_drive_headers(
     meta = db.get(ConciliacionSheetMeta, 1)
     headers = list(meta.headers) if meta and meta.headers else []
     
-    return {
+    normalized_headers = {}
+    for i, h in enumerate(headers, 1):
+        from app.services.reporte_prestamos_drive import _norm_header_cell
+        normalized = _norm_header_cell(h)
+        normalized_headers[f"Col_{i}"] = {
+            "original": h,
+            "normalized": normalized,
+            "length": len(h) if h else 0,
+        }
+    
+    return JSONResponse({
         "total_headers": len(headers),
-        "headers": headers,
-        "mensaje": "Usa esta información para ajustar los nombres de las columnas en la hoja CONCILIACIÓN",
-    }
+        "headers_raw": headers,
+        "headers_normalized": normalized_headers,
+        "mensaje": "Copia los valores 'original' para ver exactamente el nombre de cada columna en la hoja",
+    })
 
 
 @router.get("/exportar/prestamos-drive")

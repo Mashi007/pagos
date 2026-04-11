@@ -26,7 +26,20 @@ logger = logging.getLogger(__name__)
 
 
 def _norm_header_cell(h: str) -> str:
-    return re.sub(r"\s+", " ", (h or "").strip().casefold())
+    """Normaliza encabezado: minúsculas, sin acentos, espacios simples."""
+    if not h:
+        return ""
+    normalized = (h or "").strip().casefold()
+    normalized = re.sub(r"\s+", " ", normalized)
+    normalized = (
+        normalized.replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ñ", "n")
+    )
+    return normalized
 
 
 def _pick_total_financiamiento_header(headers: List[str]) -> Optional[str]:
@@ -194,6 +207,12 @@ def build_prestamos_drive_excel(
             "(POST /api/v1/conciliacion-sheet/sync-now o sync con secreto)."
         )
 
+    logger.info(
+        "[prestamos_drive] HEADERS DETECTADAS (totales=%d): %s",
+        len(headers),
+        headers,
+    )
+
     lote_key = _pick_lote_header(headers)
     keys = {
         "LOTE": lote_key,
@@ -209,8 +228,18 @@ def build_prestamos_drive_excel(
         "número cuotas": _pick_numero_cuotas_header(headers),
     }
 
+    logger.info(
+        "[prestamos_drive] KEYS MAPEADAS: %s",
+        {k: v for k, v in keys.items()},
+    )
+
     missing = [label for label, key in keys.items() if not key]
     if missing:
+        logger.error(
+            "[prestamos_drive] COLUMNAS FALTANTES: %s. Headers disponibles: %s",
+            missing,
+            headers,
+        )
         raise ValueError(
             "No se pudieron detectar columnas en la hoja para: "
             + ", ".join(missing)
