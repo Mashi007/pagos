@@ -108,8 +108,12 @@ def _escape_sheet_title_for_range(title: str) -> str:
     return (title or "").replace("'", "''")
 
 
-def _find_header_row(values: List[List[Any]], marker: str) -> int:
-    """Índice 0-based de la fila cuya primera columna coincide con marker (casefold)."""
+def _find_header_row(values: List[List[Any]], marker: str) -> Tuple[int, bool]:
+    """
+    Índice 0-based de la fila cuya primera columna coincide con marker (casefold).
+    Devuelve (índice, True) si hubo coincidencia; si no, (0, False) y se asume fila 0 como cabecera
+    (registrar advertencia en el caller).
+    """
     want = (marker or "LOTE").strip().casefold()
     limit = min(len(values), MAX_SCAN_ROWS_FOR_HEADER)
     for i in range(limit):
@@ -117,8 +121,8 @@ def _find_header_row(values: List[List[Any]], marker: str) -> int:
         if not row:
             continue
         if _cell_str(row[0]).casefold() == want:
-            return i
-    return 0
+            return i, True
+    return 0, False
 
 
 def _build_headers(raw_header: List[Any]) -> List[str]:
@@ -285,10 +289,19 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             logger.warning("[conciliacion_sheet] run_sync_to_db: API devolvió 0 filas")
             raise ValueError("La hoja devolvió 0 filas.")
 
-        h_idx = _find_header_row(values, marker)
+        h_idx, marker_hit = _find_header_row(values, marker)
+        if not marker_hit:
+            logger.warning(
+                "[conciliacion_sheet] No se encontró %r en columna A en las primeras %s filas; "
+                "se usa la fila 1 (índice 0) como cabecera. Si las cabeceras quedan vacías o mal, "
+                "defina CONCILIACION_SHEET_HEADER_MARKER con el texto exacto de la columna A de la fila de títulos.",
+                marker,
+                min(len(values), MAX_SCAN_ROWS_FOR_HEADER),
+            )
         logger.info(
-            "[conciliacion_sheet] cabecera: fila_marcador_idx_0based=%s (marker=%r) filas_totales=%s",
+            "[conciliacion_sheet] cabecera: fila_marcador_idx_0based=%s marker_hit=%s (marker=%r) filas_totales=%s",
             h_idx,
+            marker_hit,
             marker,
             len(values),
         )
@@ -300,6 +313,13 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             col_count,
             headers[:8],
         )
+        if col_count == 0:
+            raise ValueError(
+                f"La fila de cabecera (fila {h_idx + 1} en la pestaña) no tiene celdas en el rango {columns_range!r}. "
+                f"Confirme que la primera columna de la fila de títulos sea exactamente {marker!r} "
+                "(o ajuste CONCILIACION_SHEET_HEADER_MARKER al valor de la columna A de esa fila) "
+                f"en las primeras {min(len(values), MAX_SCAN_ROWS_FOR_HEADER)} filas, y que el rango incluya las columnas con texto."
+            )
 
         data_rows = values[h_idx + 1 :]
         while data_rows and all(_cell_str(c) == "" for c in (data_rows[-1] or [])):
