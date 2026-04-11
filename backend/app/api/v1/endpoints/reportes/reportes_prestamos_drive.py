@@ -12,12 +12,31 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.services.reporte_clientes_hoja import parse_lotes_query
 from app.services.reporte_prestamos_drive import build_prestamos_drive_excel
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+@router.get("/exportar/prestamos-drive/debug-headers")
+def debug_prestamos_drive_headers(
+    db: Session = Depends(get_db),
+):
+    """
+    DEBUG: Muestra las cabeceras detectadas en la hoja CONCILIACIÓN.
+    Útil para diagnóstico cuando falla la detección de columnas.
+    """
+    meta = db.get(ConciliacionSheetMeta, 1)
+    headers = list(meta.headers) if meta and meta.headers else []
+    
+    return {
+        "total_headers": len(headers),
+        "headers": headers,
+        "mensaje": "Usa esta información para ajustar los nombres de las columnas en la hoja CONCILIACIÓN",
+    }
 
 
 @router.get("/exportar/prestamos-drive")
