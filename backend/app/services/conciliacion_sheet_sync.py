@@ -1,6 +1,7 @@
 """
 Sincroniza la pestaña CONCILIACIÓN de un Google Spreadsheet hacia PostgreSQL (último snapshot).
-Solo lee el rango de columnas configurado (por defecto A:S); el resto de la hoja se ignora.
+Solo lee el rango de columnas configurado (por defecto A:S, anclado a fila 1); el resto de la hoja se ignora.
+La fila de cabecera se detecta buscando CONCILIACION_SHEET_HEADER_MARKER en las primeras columnas del rango (no solo A).
 Credenciales: get_google_credentials (OAuth / cuenta de servicio desde Informe de pagos) o pipeline Gmail.
 """
 from __future__ import annotations
@@ -29,6 +30,8 @@ SCOPES_SHEETS = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 SCOPES_SHEETS_FALLBACK = ["https://www.googleapis.com/auth/spreadsheets"]
 
 MAX_SCAN_ROWS_FOR_HEADER = 80
+# Columnas del rango leído (índice 0 = primera letra del rango, p. ej. A) donde se busca el marcador de cabecera.
+MAX_HEADER_MARKER_COL_SCAN = 26
 
 
 def _mask_spreadsheet_id(spreadsheet_id: str) -> str:
@@ -110,9 +113,13 @@ def _escape_sheet_title_for_range(title: str) -> str:
 
 def _find_header_row(values: List[List[Any]], marker: str) -> Tuple[int, bool]:
     """
-    Índice 0-based de la fila cuya primera columna coincide con marker (casefold).
-    Devuelve (índice, True) si hubo coincidencia; si no, (0, False) y se asume fila 0 como cabecera
-    (registrar advertencia en el caller).
+    Índice 0-based de la primera fila (entre las primeras MAX_SCAN_ROWS_FOR_HEADER) donde alguna de las
+    primeras MAX_HEADER_MARKER_COL_SCAN celdas del rango leído coincide con marker (casefold).
+
+    Algunas hojas dejan la columna A para numeración manual y ponen «LOTE» en B; antes solo se miraba A.
+
+    Devuelve (índice, True) si hubo coincidencia; si no, (0, False) y el caller asume fila 0 como cabecera
+    (advertencia).
     """
     want = (marker or "LOTE").strip().casefold()
     limit = min(len(values), MAX_SCAN_ROWS_FOR_HEADER)
@@ -120,8 +127,10 @@ def _find_header_row(values: List[List[Any]], marker: str) -> Tuple[int, bool]:
         row = values[i] if i < len(values) else []
         if not row:
             continue
-        if _cell_str(row[0]).casefold() == want:
-            return i, True
+        n = min(len(row), MAX_HEADER_MARKER_COL_SCAN)
+        for j in range(n):
+            if _cell_str(row[j]).casefold() == want:
+                return i, True
     return 0, False
 
 
@@ -229,7 +238,10 @@ def fetch_sheet_values(
     col_a, col_b, ncols = _parse_columns_range(columns_range)
     service = build("sheets", "v4", credentials=creds, cache_discovery=False)
     exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
-    rng = f"'{_escape_sheet_title_for_range(exact_title)}'!{col_a}:{col_b}"
+    # Anclar fila 1 del sheet: usar A1:S (no A:S). Con A:S la API puede omitir filas iniciales sin
+    # datos en A–S y el primer elemento deja de ser la fila 1 real; la cabecera con LOTE (p. ej. fila 11)
+    # no coincide con los índices y puede leerse una fila vacía como "cabecera".
+    rng = f"'{_escape_sheet_title_for_range(exact_title)}'!{col_a}1:{col_b}"
     logger.info(
         "[conciliacion_sheet] Sheets API values.get rango=%r pestaña_resuelta=%r ncols=%s",
         rng,
@@ -292,10 +304,11 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
         h_idx, marker_hit = _find_header_row(values, marker)
         if not marker_hit:
             logger.warning(
-                "[conciliacion_sheet] No se encontró %r en columna A en las primeras %s filas; "
+                "[conciliacion_sheet] No se encontró %r en las primeras %s columnas del rango ni en las primeras %s filas; "
                 "se usa la fila 1 (índice 0) como cabecera. Si las cabeceras quedan vacías o mal, "
-                "defina CONCILIACION_SHEET_HEADER_MARKER con el texto exacto de la columna A de la fila de títulos.",
+                "ajuste CONCILIACION_SHEET_HEADER_MARKER al texto exacto de la celda de título (p. ej. LOTE) en esa fila.",
                 marker,
+                MAX_HEADER_MARKER_COL_SCAN,
                 min(len(values), MAX_SCAN_ROWS_FOR_HEADER),
             )
         logger.info(
@@ -316,8 +329,8 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
         if col_count == 0:
             raise ValueError(
                 f"La fila de cabecera (fila {h_idx + 1} en la pestaña) no tiene celdas en el rango {columns_range!r}. "
-                f"Confirme que la primera columna de la fila de títulos sea exactamente {marker!r} "
-                "(o ajuste CONCILIACION_SHEET_HEADER_MARKER al valor de la columna A de esa fila) "
+                f"Confirme que alguna de las primeras {MAX_HEADER_MARKER_COL_SCAN} columnas de la fila de títulos sea exactamente {marker!r} "
+                "(o ajuste CONCILIACION_SHEET_HEADER_MARKER) "
                 f"en las primeras {min(len(values), MAX_SCAN_ROWS_FOR_HEADER)} filas, y que el rango incluya las columnas con texto."
             )
 

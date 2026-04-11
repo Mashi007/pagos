@@ -321,7 +321,10 @@ class Settings(BaseSettings):
     )
     CONCILIACION_SHEET_HEADER_MARKER: str = Field(
         default="LOTE",
-        description="Texto de la primera columna de la fila cabecera (búsqueda en las primeras filas).",
+        description=(
+            "Texto exacto (sin distinguir mayúsculas) de la celda de título que marca la fila de cabecera. "
+            "Se busca en las primeras 26 columnas del rango leído y en las primeras 80 filas (p. ej. LOTE en B si A es numerador)."
+        ),
     )
     CONCILIACION_SHEET_SYNC_SECRET: Optional[str] = Field(
         default=None,
@@ -329,7 +332,10 @@ class Settings(BaseSettings):
     )
     CONCILIACION_SHEET_COLUMNS_RANGE: str = Field(
         default="A:S",
-        description="Rango de columnas a sincronizar dentro de la pestaña (ej. A:S = columnas A hasta S inclusive).",
+        description=(
+            "Solo letras de columnas (ej. A:S). La lectura se ancla a fila 1 del sheet (A1:S en la API) "
+            "para no omitir filas iniciales vacías y alinear la fila del marcador LOTE."
+        ),
     )
     # Tasa USD/Bs Venezuela (reporte contable)
     # ============================================
