@@ -102,6 +102,10 @@ def _pick_producto_header(headers: List[str]) -> Optional[str]:
         hl = _norm_header_cell(h)
         if "financiam" in hl and ("para" in hl or "todas" in hl):
             return h
+    for h in headers:
+        hl = _norm_header_cell(h)
+        if hl.startswith("financiam") and len(hl) > 10:
+            return h
     return None
 
 
@@ -156,6 +160,13 @@ def _pick_numero_cuotas_header(headers: List[str]) -> Optional[str]:
             "# cuotas",
         ):
             return h
+    for h in headers:
+        hl = _norm_header_cell(h)
+        if hl == "r" or hl == "col r" or hl.endswith("r"):
+            if "cuota" in (headers[headers.index(h)-1] if headers.index(h) > 0 else "").lower():
+                continue
+            if any("cuota" in headers[i].lower() for i in range(max(0, headers.index(h)-2), min(len(headers), headers.index(h)+1))):
+                return h
     return None
 
 
