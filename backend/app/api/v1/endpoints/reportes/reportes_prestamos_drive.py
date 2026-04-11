@@ -8,7 +8,7 @@ import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response, JSONResponse
+from fastapi.responses import Response, JSONResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
-@router.get("/exportar/prestamos-drive/debug-headers")
+@router.get("/exportar/prestamos-drive/debug-headers", include_in_schema=False)
 def debug_prestamos_drive_headers(
     db: Session = Depends(get_db),
 ):
@@ -33,22 +33,77 @@ def debug_prestamos_drive_headers(
     meta = db.get(ConciliacionSheetMeta, 1)
     headers = list(meta.headers) if meta and meta.headers else []
     
-    normalized_headers = {}
-    for i, h in enumerate(headers, 1):
-        from app.services.reporte_prestamos_drive import _norm_header_cell
-        normalized = _norm_header_cell(h)
-        normalized_headers[f"Col_{i}"] = {
-            "original": h,
-            "normalized": normalized,
-            "length": len(h) if h else 0,
-        }
+    logger.warning(
+        "=== DEBUG HEADERS CONCILIACIÓN ===\n"
+        "Total de cabeceras: %d\n"
+        "Headers:\n%s",
+        len(headers),
+        json.dumps(headers, ensure_ascii=False, indent=2),
+    )
     
-    return JSONResponse({
-        "total_headers": len(headers),
-        "headers_raw": headers,
-        "headers_normalized": normalized_headers,
-        "mensaje": "Copia los valores 'original' para ver exactamente el nombre de cada columna en la hoja",
-    })
+    html_content = f"""
+    <html>
+    <head>
+        <title>Debug - Headers CONCILIACIÓN</title>
+        <style>
+            body {{ font-family: monospace; padding: 20px; background: #f5f5f5; }}
+            h1 {{ color: #333; }}
+            .container {{ background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+            table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+            th, td {{ border: 1px solid #ddd; padding: 10px; text-align: left; }}
+            th {{ background-color: #4CAF50; color: white; }}
+            tr:nth-child(even) {{ background-color: #f2f2f2; }}
+            .warning {{ background-color: #fff3cd; padding: 10px; border-radius: 3px; margin-bottom: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🔍 Debug: Headers de la Hoja CONCILIACIÓN</h1>
+            
+            <div class="warning">
+                <strong>⚠️ Información de diagnóstico:</strong> Copia estos valores exactos para reportar el problema.
+            </div>
+            
+            <h2>Total de columnas: {len(headers)}</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Índice</th>
+                        <th>Nombre Original</th>
+                        <th>Longitud</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+    
+    for i, h in enumerate(headers, 1):
+        html_content += f"""
+                    <tr>
+                        <td>{i}</td>
+                        <td><code>{h or '(vacío)'}</code></td>
+                        <td>{len(h) if h else 0}</td>
+                    </tr>
+        """
+    
+    html_content += """
+                </tbody>
+            </table>
+            
+            <h2>JSON para copiar:</h2>
+            <pre>
+    """
+    
+    html_content += json.dumps(headers, ensure_ascii=False, indent=2)
+    
+    html_content += """
+            </pre>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(content=html_content)
 
 
 @router.get("/exportar/prestamos-drive")
