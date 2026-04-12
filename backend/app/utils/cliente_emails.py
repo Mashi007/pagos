@@ -1,5 +1,24 @@
 # -*- coding: utf-8 -*-
-"""Correos de cliente: hasta 2 direcciones — correo 1 (prioridad) y correo 2 (opcional) — para envíos y validación."""
+"""
+Política de dos correos por cliente.
+
+Cada cliente puede tener:
+  - correo_1  / email            (campo `email` en tabla clientes, NOT NULL, predeterminado)
+  - correo_2  / email_secundario (campo `email_secundario` en tabla clientes, nullable)
+
+Reglas de envío para notificaciones automáticas (mora, vencimientos, previas):
+  - El correo que recibe el email es SIEMPRE correo_1 (el predeterminado).
+  - correo_2 se expone en los ítems del listado / API para referencia del operador y el UI;
+    no se usa como destino de envío salvo que la función de despacho lo incluya explícitamente.
+
+Funciones de este módulo:
+  - emails_destino_cliente / emails_destino_desde_objeto
+      → devuelven [correo_1, correo_2] (hasta 2) para casos que requieren ambos destinos.
+  - lista_correo_principal_para_notificaciones / lista_correo_principal_notificaciones_desde_objeto
+      → devuelven [correo_1] solamente; usar para el campo `To:` en notificaciones automáticas.
+  - secundario_distinto_del_principal
+      → normaliza y verifica que correo_2 no sea idéntico a correo_1 antes de guardarlo o mostrarlo.
+"""
 from __future__ import annotations
 
 from typing import Iterable, List, Optional, Sequence

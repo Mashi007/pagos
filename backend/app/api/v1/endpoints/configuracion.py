@@ -319,8 +319,12 @@ def put_notificaciones_envios(
     _: UserResponse = Depends(require_admin),
 ):
     """
-    Actualizar configuración de envíos. Se fusiona con la BD: un PUT parcial no borra otros tipos de caso ni otras filas.
-    No inicia envíos ni jobs programados: los correos siguen siendo manuales (POST desde UI) salvo cron del servidor si está habilitado en .env.
+    Actualizar configuración de envíos. Se fusiona con la BD (`merge_notificaciones_envios`):
+    un PUT parcial (p. ej. solo PAGO_2_DIAS_ANTES_PENDIENTE) no borra ni reescribe otros
+    tipos de caso ni campañas masivas si esas claves no vienen en el cuerpo.
+
+    No inicia envíos ni jobs programados: los correos siguen siendo manuales (POST desde UI)
+    salvo cron del servidor si está habilitado en .env.
     """
     if not isinstance(payload, dict):
         raise HTTPException(status_code=422, detail="El cuerpo debe ser un objeto JSON")

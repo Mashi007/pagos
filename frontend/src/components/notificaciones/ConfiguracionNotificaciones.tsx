@@ -422,6 +422,22 @@ export type ConfiguracionNotificacionesAlcance =
   | 'solo_pago_2_dias_antes_pendiente'
   | 'solo_prejudicial'
 
+/** Tipos de caso cuyas filas de envío pertenecen a un submódulo de Notificaciones (guardado parcial). */
+function tiposCasoNotificacionParaAlcance(
+  alcance: ConfiguracionNotificacionesAlcance
+): string[] {
+  switch (alcance) {
+    case 'solo_pago_1_dia':
+      return ['PAGO_1_DIA_ATRASADO']
+    case 'solo_pago_2_dias_antes_pendiente':
+      return ['PAGO_2_DIAS_ANTES_PENDIENTE']
+    case 'solo_prejudicial':
+      return ['PREJUDICIAL']
+    default:
+      return CRITERIOS_ENVIO_TABLA.map(r => r.tipo)
+  }
+}
+
 type ConfiguracionNotificacionesProps = {
   alcance?: ConfiguracionNotificacionesAlcance
 }
@@ -840,40 +856,59 @@ export function ConfiguracionNotificaciones({
     setGuardandoEnvios(true)
 
     try {
-      const payload: ConfigEnvioCompleta = {
-        ...configEnvios,
+      const tiposPersistir = tiposCasoNotificacionParaAlcance(alcance)
+      const payload: ConfigEnvioCompleta = {} as ConfigEnvioCompleta
 
-        modo_pruebas: modoPruebas,
+      if (alcanceReducido) {
+        // PUT parcial: solo filas de este submódulo + modo prueba (global en BD).
+        // No se envían otros criterios ni masivos_campanas: el servidor hace merge y no los pisa.
+        ;(payload as Record<string, unknown>).modo_pruebas = modoPruebas
+        ;(payload as Record<string, unknown>).emails_pruebas =
+          emailsPruebas.filter(e => e?.trim())
+        ;(payload as Record<string, unknown>).email_pruebas =
+          emailsPruebas[0]?.trim() || ''
 
-        emails_pruebas: emailsPruebas.filter(e => e?.trim()),
-
-        email_pruebas: emailsPruebas[0]?.trim() || '',
-
-        masivos_campanas: campanasMasivos.map(c => ({
-          id: c.id,
-          nombre: c.nombre,
-          habilitado: c.habilitado,
-          plantilla_id: c.plantilla_id ?? null,
-          programador: c.programador || HORA_DEFAULT_MASIVOS,
-          dias_semana: Array.from(new Set(c.dias_semana || [])).sort(
-            (a, b) => a - b
-          ),
-          cco: (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
-        })),
-      }
-
-      CRITERIOS_ENVIO_TABLA.forEach(({ tipo }) => {
-        const c = getConfig(tipo)
-
-        ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
-          ...c,
-
-          incluir_pdf_anexo:
-            tipo === 'MASIVOS' ? false : c.incluir_pdf_anexo !== false,
-
-          incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
+        for (const tipo of tiposPersistir) {
+          const c = getConfig(tipo)
+          ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
+            ...c,
+            incluir_pdf_anexo:
+              tipo === 'MASIVOS' ? false : c.incluir_pdf_anexo !== false,
+            incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
+          }
         }
-      })
+      } else {
+        Object.assign(payload, {
+          ...configEnvios,
+          modo_pruebas: modoPruebas,
+          emails_pruebas: emailsPruebas.filter(e => e?.trim()),
+          email_pruebas: emailsPruebas[0]?.trim() || '',
+          masivos_campanas: campanasMasivos.map(c => ({
+            id: c.id,
+            nombre: c.nombre,
+            habilitado: c.habilitado,
+            plantilla_id: c.plantilla_id ?? null,
+            programador: c.programador || HORA_DEFAULT_MASIVOS,
+            dias_semana: Array.from(new Set(c.dias_semana || [])).sort(
+              (a, b) => a - b
+            ),
+            cco: (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
+          })),
+        } as ConfigEnvioCompleta)
+
+        CRITERIOS_ENVIO_TABLA.forEach(({ tipo }) => {
+          const c = getConfig(tipo)
+
+          ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
+            ...c,
+
+            incluir_pdf_anexo:
+              tipo === 'MASIVOS' ? false : c.incluir_pdf_anexo !== false,
+
+            incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
+          }
+        })
+      }
 
       await emailConfigService.actualizarConfiguracionEnvios(payload)
 
@@ -885,7 +920,11 @@ export function ConfiguracionNotificaciones({
 
       setUltimoGuardado(new Date())
 
-      toast.success('Configuración de envíos guardada')
+      toast.success(
+        alcanceReducido
+          ? `Guardado: solo ${tiposPersistir.join(', ')} y modo prueba (global). Otros criterios y campañas masivas no se modificaron.`
+          : 'Configuración de envíos guardada'
+      )
     } catch {
       toast.error('Error al guardar la configuración de envíos')
     } finally {
@@ -1337,6 +1376,18 @@ export function ConfiguracionNotificaciones({
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {alcanceReducido && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-900">
+              <strong className="font-semibold">Alcance de esta pantalla:</strong>{' '}
+              al pulsar Guardar solo se persisten las filas de este criterio (
+              {tiposCasoNotificacionParaAlcance(alcance).join(', ')}). El modo
+              prueba/producción y los correos de prueba son{' '}
+              <em>globales</em> en la base de datos (afectan a todos los
+              criterios al enviar). Las campañas masivas y el resto de casos no
+              se modifican desde aquí.
+            </div>
+          )}
+
           {modoPruebas && smtpConfigurado === false && (
             <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
               <TestTube className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />

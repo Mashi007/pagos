@@ -1,7 +1,14 @@
 """
 Modelo SQLAlchemy para Cliente.
-Columnas alineadas con public.clientes. Si falta alguna columna en la BD, aplicar el SQL correspondiente
-en backend/scripts/ (p. ej. migracion_clientes_email_secundario.sql para email_secundario).
+
+Dos campos de correo electrónico por cliente:
+  - email            (NOT NULL) — correo predeterminado; destino de todos los envíos automáticos.
+  - email_secundario (nullable) — correo alternativo; se expone en el listado/UI para referencia
+                                   del operador pero no se usa como destino de envío automático.
+
+Si falta la columna email_secundario en la BD, aplicar:
+  backend/scripts/migracion_clientes_email_secundario.sql
+
 La tabla clientes NO tiene total_financiamiento ni dias_mora (eso está en prestamos / se calcula desde cuotas).
 """
 from sqlalchemy import Column, Integer, String, Date, DateTime, Text, text

@@ -52,6 +52,7 @@ from app.services.notificacion_service import build_cuotas_pendiente_2_dias_ante
 from app.utils.cliente_emails import (
     lista_correo_principal_para_notificaciones,
     lista_correo_principal_notificaciones_desde_objeto,
+    secundario_distinto_del_principal,
     unir_destinatarios_log,
 )
 from app.services.notificacion_logging import (
@@ -863,13 +864,14 @@ def get_items_masivos(db: Session) -> List[dict]:
             correos = lista_correo_principal_para_notificaciones(em)
             if not correos:
                 continue
+            _, correo_sec = secundario_distinto_del_principal(em, str(r.get("email_secundario") or "").strip() or None)
             items.append(
                 {
                     "cliente_id": r.get("cliente_id"),
                     "nombre": r.get("nombre") or "",
                     "cedula": r.get("cedula") or "",
                     "correo_1": correos[0],
-                    "correo_2": None,
+                    "correo_2": correo_sec if correo_sec and "@" in correo_sec else None,
                     "correo": correos[0],
                     "correos": correos,
                     "telefono": str(r.get("telefono") or "").strip(),
@@ -899,13 +901,17 @@ def get_items_masivos(db: Session) -> List[dict]:
         correos = lista_correo_principal_notificaciones_desde_objeto(c)
         if not correos:
             continue
+        _, correo_sec = secundario_distinto_del_principal(
+            getattr(c, "email", None),
+            getattr(c, "email_secundario", None),
+        )
         items.append(
             {
                 "cliente_id": c.id,
                 "nombre": c.nombres or "",
                 "cedula": c.cedula or "",
                 "correo_1": correos[0],
-                "correo_2": None,
+                "correo_2": correo_sec if correo_sec and "@" in correo_sec else None,
                 "correo": correos[0],
                 "correos": correos,
                 "telefono": (getattr(c, "telefono", None) or "").strip(),

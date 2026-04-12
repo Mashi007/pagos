@@ -24,13 +24,15 @@ def merge_notificaciones_envios(existing: Any, incoming: Dict[str, Any]) -> Dict
     """
     Fusiona el cuerpo del PUT sobre la config ya persistida.
 
-    Los tipos de caso (PAGO_*, PREJUDICIAL, MASIVOS, etc.) se fusionan por clave:
-    solo se actualizan campos enviados; no se borra un caso completo si el cliente
-    omite su clave. Así un guardado parcial (p. ej. solo modo_pruebas desde Email)
-    no elimina el resto de submódulos.
+    Independencia entre criterios: cada clave de tipo (PAGO_*, PREJUDICIAL, MASIVOS, …)
+    se fusiona por separado. Un PUT que solo incluye, p. ej., PAGO_2_DIAS_ANTES_PENDIENTE
+    no modifica plantillas, CCO ni toggles de otros casos; tampoco borra claves omitidas.
 
-    modo_pruebas / emails_pruebas: si vienen en incoming, sustituyen el valor en raíz.
-    masivos_campanas: si viene en incoming, sustituye el array completo.
+    Claves globales (modo_pruebas, email_pruebas, emails_pruebas): si vienen en incoming,
+    sustituyen el valor en raíz y aplican a todos los envíos (comportamiento compartido).
+
+    masivos_campanas: si la clave viene en incoming, sustituye el array completo; si se omite,
+    se conserva el array ya persistido (permite guardar solo mora/prejudicial sin tocar masivos).
     """
     base: Dict[str, Any] = {}
     if isinstance(existing, dict):

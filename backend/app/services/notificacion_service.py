@@ -17,7 +17,10 @@ from app.core.serializers import to_finite_float
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
-from app.utils.cliente_emails import lista_correo_principal_notificaciones_desde_objeto
+from app.utils.cliente_emails import (
+    lista_correo_principal_notificaciones_desde_objeto,
+    secundario_distinto_del_principal,
+)
 from app.services.cuota_estado import (
     clasificar_estado_cuota,
     dias_retraso_desde_vencimiento,
@@ -494,12 +497,21 @@ def format_cuota_item(
 
     # Si es para pestañas, agregar campos adicionales
     if for_tab:
-        # Notificaciones: solo correo principal (columna email); no secundario en destino ni en listados API.
+        # Política de dos emails:
+        #   correo_1 / correo = email principal (campo `email` del cliente, NOT NULL). Es el destino
+        #   del envío. El campo `correos` lo expone en lista para la lógica de despacho.
+        #   correo_2 = email secundario (campo `email_secundario`, nullable). Solo para referencia
+        #   en el listado y el UI; el envío de notificaciones usa únicamente correo_1.
+        #   Si correo_2 coincide con correo_1 o está vacío, se retorna None.
         correos = lista_correo_principal_notificaciones_desde_objeto(cliente)
         correo_prim = correos[0] if correos else (cliente.email or "").strip()
+        _, correo_sec = secundario_distinto_del_principal(
+            getattr(cliente, "email", None),
+            getattr(cliente, "email_secundario", None),
+        )
         base_item.update({
             "correo_1": correo_prim if correo_prim and "@" in correo_prim else None,
-            "correo_2": None,
+            "correo_2": correo_sec if correo_sec and "@" in correo_sec else None,
             "correo": correo_prim if correo_prim and "@" in correo_prim else "",
             "correos": correos,
             "telefono": (cliente.telefono or "").strip(),
