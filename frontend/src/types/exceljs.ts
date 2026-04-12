@@ -1,4 +1,10 @@
-import * as exceljsModule from 'exceljs'
+import * as exceljsNs from 'exceljs'
+
+/** Raíz real del módulo (UMD/min suele exponer API en `default`). */
+function excelJsRoot(): any {
+  const mod: any = exceljsNs
+  return mod?.default ?? mod
+}
 
 /**
 
@@ -48,7 +54,7 @@ export async function importExcelJS(): Promise<ExcelJSModule> {
   try {
     // ✓ Proteger la carga dinámica con try-catch para evitar errores NS_ERROR_FAILURE
 
-    const module = exceljsModule
+    const module = excelJsRoot()
 
     if (!module || !module.Workbook) {
       throw new Error('ExcelJS module loaded but Workbook is not available')
