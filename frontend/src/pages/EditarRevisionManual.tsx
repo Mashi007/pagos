@@ -9,7 +9,7 @@ import {
 
 import { flushSync } from 'react-dom'
 
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 
@@ -337,6 +337,18 @@ async function ejecutarEnLotes<T>(
 /** Lista de préstamos (en producción: /pagos/prestamos vía basename). */
 const RUTA_LISTA_PRESTAMOS = '/prestamos'
 
+/**
+ * Ruta SPA interna para volver tras revisión (p. ej. desde notificaciones).
+ * Evita open redirect (solo path relativo a la app).
+ */
+function normalizarReturnToRevision(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const t = raw.trim()
+  if (!t.startsWith('/') || t.startsWith('//') || t.includes('\\')) return null
+  if (t.length > 512) return null
+  return t
+}
+
 const PER_PAGE_PAGOS_REGISTRADOS = 20
 
 /** Tolerancia USD para comparar totales (redondeos / centavos). */
@@ -519,6 +531,12 @@ export function EditarRevisionManual() {
 
   const navigate = useNavigate()
 
+  const location = useLocation()
+
+  const returnToRevision = normalizarReturnToRevision(
+    (location.state as { returnTo?: unknown } | null)?.returnTo
+  )
+
   const queryClient = useQueryClient()
 
   const irAListaPrestamos = () => {
@@ -532,6 +550,24 @@ export function EditarRevisionManual() {
         sessionStorage.removeItem('prestamoScrollPosition')
       }
     }, 100)
+  }
+
+  /** Tras guardar/cerrar/rechazo: vuelve a la pantalla de origen si vino con `state.returnTo`. */
+  const navegarTrasGuardarRevision = () => {
+    if (returnToRevision) {
+      navigate(returnToRevision, { replace: true })
+      return
+    }
+    irAListaPrestamos()
+  }
+
+  /** Cerrar sin finalizar: misma regla que lista, salvo que sin `returnTo` va a la cola de revisión. */
+  const navegarTrasCerrarRevision = () => {
+    if (returnToRevision) {
+      navigate(returnToRevision, { replace: true })
+      return
+    }
+    navigate('/revision-manual')
   }
 
   const [clienteData, setClienteData] = useState<Partial<ClienteData>>({})
@@ -1795,7 +1831,7 @@ export function EditarRevisionManual() {
 
         await refrescarOrigenDatosTrasRevisionManual()
 
-        setTimeout(() => irAListaPrestamos(), 400)
+        setTimeout(() => navegarTrasGuardarRevision(), 400)
       } else if (errorOccurred) {
         toast.warning(
           '⚠️ Algunos cambios no se guardaron. Revisa los errores arriba'
@@ -2158,7 +2194,7 @@ export function EditarRevisionManual() {
         await refrescarOrigenDatosTrasRevisionManual()
 
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
-        setTimeout(() => irAListaPrestamos(), 1500)
+        setTimeout(() => navegarTrasGuardarRevision(), 1500)
       } catch (err: any) {
         throw new Error(
           `Error al finalizar: ${err?.response?.data?.detail || 'Error desconocido'}`
@@ -2191,7 +2227,7 @@ export function EditarRevisionManual() {
       setShowRechazarModal(false)
       setMotivoRechazo('')
       await refrescarOrigenDatosTrasRevisionManual()
-      irAListaPrestamos()
+      navegarTrasGuardarRevision()
     } catch (err: any) {
       const msg = err?.response?.data?.detail || 'Error al rechazar'
       toast.error(msg)
@@ -2216,7 +2252,7 @@ export function EditarRevisionManual() {
 
     void refrescarOrigenDatosTrasRevisionManual()
 
-    navigate('/revision-manual')
+    navegarTrasCerrarRevision()
   }
 
   const hayPendienteRevision = hayCambiosPendientesRevision()

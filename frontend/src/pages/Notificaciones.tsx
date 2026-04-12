@@ -668,6 +668,9 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <Link
                   to={`/revision-manual/editar/${pid}`}
+                  state={{
+                    returnTo: `${location.pathname}${location.search || ''}`,
+                  }}
                   className="font-medium text-blue-600 hover:underline"
                 >
                   Abrir en revisión manual
