@@ -197,6 +197,16 @@ export default defineConfig({
               return 'react-core'
             }
 
+            // Dependencias internas de react-dom / react 18: si quedan en `vendor` rompen el enlace
+            // entre chunks (p. ej. "can't access property 'Children', … is undefined").
+            if (/[/\\]scheduler[/\\]/.test(id) || id.includes('use-sync-external-store')) {
+              return 'react-core'
+            }
+
+            if (id.includes('react-is')) {
+              return 'react-core'
+            }
+
             // React core - chunk separado (se carga primero por dependencia del entry)
             // Reduce el tamaÃÂÃÂ±o del chunk principal index.js
             if ((id.includes('/react/') || id.includes('/react-dom/') ||
