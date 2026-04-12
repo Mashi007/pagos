@@ -419,4 +419,100 @@ export function validatePrestamoField(
   }
 }
 
+/**
+ * Revalida toda la fila antes de guardar (carga masiva).
+ * Evita guardar si el estado UI quedó desincronizado respecto a las reglas de negocio.
+ */
+export function validarFilaPrestamoExcelParaGuardar(row: PrestamoExcelRow): {
+  ok: boolean
+  validation: PrestamoExcelRow['_validation']
+  messages: string[]
+} {
+  const validation: PrestamoExcelRow['_validation'] = { ...row._validation }
+  const messages: string[] = []
+
+  const required = [
+    'cedula',
+    'total_financiamiento',
+    'modalidad_pago',
+    'fecha_requerimiento',
+    'fecha_aprobacion',
+    'producto',
+    'analista',
+    'numero_cuotas',
+  ] as const
+
+  let hasErrors = false
+
+  for (const field of required) {
+    const raw = row[field as keyof PrestamoExcelRow]
+    const v = validatePrestamoField(
+      field,
+      field === 'numero_cuotas' || field === 'total_financiamiento'
+        ? (raw as string | number)
+        : (String(raw ?? '') as string | number)
+    )
+    validation[field] = v
+    if (!v.isValid) {
+      hasErrors = true
+      if (v.message) messages.push(`${field}: ${v.message}`)
+    }
+  }
+
+  const reqB = convertirFechaParaBackendPrestamo(
+    String(row.fecha_requerimiento ?? '')
+  )
+  const apB = convertirFechaParaBackendPrestamo(String(row.fecha_aprobacion ?? ''))
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(reqB)) {
+    validation.fecha_requerimiento = {
+      isValid: false,
+      message: 'fecha_requerimiento inválida o vacía',
+    }
+    hasErrors = true
+    messages.push('fecha_requerimiento: inválida o vacía')
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(apB)) {
+    validation.fecha_aprobacion = {
+      isValid: false,
+      message: 'fecha_aprobacion inválida o vacía',
+    }
+    hasErrors = true
+    messages.push('fecha_aprobacion: inválida o vacía')
+  }
+
+  if (!hasErrors && apB < reqB) {
+    validation.fecha_aprobacion = {
+      isValid: false,
+      message: 'fecha_aprobacion debe ser >= fecha_requerimiento',
+    }
+    hasErrors = true
+    messages.push('fecha_aprobacion debe ser >= fecha_requerimiento')
+  }
+
+  validation.cuota_periodo = validatePrestamoField(
+    'cuota_periodo',
+    row.cuota_periodo
+  )
+  if (!validation.cuota_periodo.isValid) {
+    hasErrors = true
+    if (validation.cuota_periodo.message)
+      messages.push(`cuota_periodo: ${validation.cuota_periodo.message}`)
+  }
+
+  validation.tasa_interes = validatePrestamoField('tasa_interes', row.tasa_interes)
+  if (!validation.tasa_interes.isValid) {
+    hasErrors = true
+    if (validation.tasa_interes.message)
+      messages.push(`tasa_interes: ${validation.tasa_interes.message}`)
+  }
+
+  validation.concesionario = { isValid: true }
+  validation.modelo_vehiculo = { isValid: true }
+  validation.observaciones = { isValid: true }
+
+  return { ok: !hasErrors, validation, messages }
+}
+
 export { validateExcelFile, validateExcelData, sanitizeFileName }

@@ -35,6 +35,7 @@ import {
   convertirFechaExcelPrestamo,
   convertirFechaParaBackendPrestamo,
   validatePrestamoField,
+  validarFilaPrestamoExcelParaGuardar,
   validateExcelFile,
   validateExcelData,
   sanitizeFileName,
@@ -402,10 +403,69 @@ export function useExcelUploadPrestamos({
         return false
       }
 
+      const persistCheck = validarFilaPrestamoExcelParaGuardar(row)
+      if (!persistCheck.ok) {
+        setExcelData(prev =>
+          prev.map(r =>
+            r._rowIndex === row._rowIndex
+              ? {
+                  ...r,
+                  _validation: persistCheck.validation,
+                  _hasErrors: true,
+                }
+              : r
+          )
+        )
+        addToast(
+          'error',
+          `Fila ${row._rowIndex}: no cumple validadores (${persistCheck.messages.slice(0, 3).join('; ')})`
+        )
+        return false
+      }
+
       setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
 
       try {
-        const cedulaNorm = (row.cedula || '').trim() || 'Z999999999'
+        const cedulaNorm = (row.cedula || '').trim()
+        if (!cedulaNorm) {
+          addToast('error', `Fila ${row._rowIndex}: cédula vacía`)
+          return false
+        }
+
+        const cupoRes = await prestamoService.checkCupoCedulas([cedulaNorm])
+        const claveRow = cedulaNorm
+          .toUpperCase()
+          .replace(/-/g, '')
+          .replace(/\s/g, '')
+        const cupoItem = (cupoRes.cedulas || []).find(
+          c =>
+            (c.cedula_normalizada || '').trim() === claveRow ||
+            (c.cedula || '').trim().toUpperCase() === cedulaNorm.toUpperCase()
+        )
+        if (
+          cupoItem &&
+          (Boolean(cupoItem.error) || cupoItem.puede_agregar === false)
+        ) {
+          const msg =
+            cupoItem.error ||
+            'Cupo de préstamos APROBADO excedido para esta cédula'
+          setExcelData(prev =>
+            prev.map(r =>
+              r._rowIndex === row._rowIndex
+                ? {
+                    ...r,
+                    _validation: {
+                      ...r._validation,
+                      cedula: { isValid: false, message: msg },
+                    },
+                    _hasErrors: true,
+                  }
+                : r
+            )
+          )
+          addToast('error', `Fila ${row._rowIndex}: ${msg}`)
+          return false
+        }
 
         const cliente = await clienteService.getClienteByCedula(cedulaNorm)
 
@@ -523,8 +583,6 @@ export function useExcelUploadPrestamos({
           tasa_interes: row.tasa_interes != null ? Number(row.tasa_interes) : 0,
 
           observaciones: (row.observaciones || '').trim() || undefined,
-
-          aprobado_por_carga_masiva: true,
         }
 
         await prestamoService.createPrestamo(prestamoData as any)
