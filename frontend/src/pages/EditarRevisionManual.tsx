@@ -1320,18 +1320,43 @@ export function EditarRevisionManual() {
     return ''
   }
 
+  /**
+   * Revisión manual: al persistir, la BD recibe el calendario del selector **menos un día**
+   * (aprobación y base de cálculo). El valor en pantalla sigue siendo el día elegido hasta el refetch.
+   */
+  const fechaYmdRestarUnDia = (ymd: string): string | null => {
+    const t = ymd.trim()
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t)
+    if (!m) return null
+    const y = Number(m[1])
+    const mo = Number(m[2])
+    const d = Number(m[3])
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) {
+      return null
+    }
+    const dt = new Date(Date.UTC(y, mo - 1, d))
+    if (Number.isNaN(dt.getTime())) return null
+    dt.setUTCDate(dt.getUTCDate() - 1)
+    const yy = dt.getUTCFullYear()
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+    const dd = String(dt.getUTCDate()).padStart(2, '0')
+    return `${yy}-${mm}-${dd}`
+  }
+
   /** Incluye fechas en el PUT sin enviar solo fecha_base (el backend responde 400). */
   const applyFechaAprobacionAlPayload = (out: Record<string, unknown>) => {
     const faNorm = formatDateForInput(prestamoData.fecha_aprobacion)
     const fbNorm = formatDateForInput(prestamoData.fecha_base_calculo)
     if (faNorm) {
-      out.fecha_aprobacion = faNorm
-      out.fecha_base_calculo = faNorm
+      const persisted = fechaYmdRestarUnDia(faNorm) ?? faNorm
+      out.fecha_aprobacion = persisted
+      out.fecha_base_calculo = persisted
       return
     }
     if (fbNorm) {
-      out.fecha_aprobacion = fbNorm
-      out.fecha_base_calculo = fbNorm
+      const persisted = fechaYmdRestarUnDia(fbNorm) ?? fbNorm
+      out.fecha_aprobacion = persisted
+      out.fecha_base_calculo = persisted
     }
   }
 
@@ -1372,11 +1397,13 @@ export function EditarRevisionManual() {
       return
     }
 
+    const faPersist = fechaYmdRestarUnDia(fa) ?? fa
+
     setRecalculandoFechasCuotas(true)
     try {
       const prestamoPatch: Record<string, unknown> = {
-        fecha_aprobacion: fa,
-        fecha_base_calculo: fa,
+        fecha_aprobacion: faPersist,
+        fecha_base_calculo: faPersist,
         observaciones: String(prestamoData.observaciones ?? ''),
       }
 
@@ -1426,11 +1453,13 @@ export function EditarRevisionManual() {
       const creadas = stats?.cuotas_creadas ?? '?'
       const pagosAplic = stats?.pagos_con_aplicacion ?? '?'
 
-      setFechaAprobacionOriginal(fa)
-
       const datos = await revisionManualService.getDetallePrestamoRevision(pid)
       if (datos?.prestamo) {
         setPrestamoData(datos.prestamo)
+        const faGuardada = formatDateForInput(datos.prestamo.fecha_aprobacion)
+        if (faGuardada) setFechaAprobacionOriginal(faGuardada)
+      } else {
+        setFechaAprobacionOriginal(faPersist)
       }
       if (datos?.cuotas) {
         setCuotasData(datos.cuotas)
@@ -3149,108 +3178,120 @@ export function EditarRevisionManual() {
 
                   {/* Valor Activo - OCULTO */}
 
-                  {/* Fechas de expediente: requerimiento y aprobación (ambas en BD; la de aprobación alimenta recálculo de vencimientos). */}
+                  {/* Bloque: fecha de requerimiento (actualización manual en BD). */}
                   <div className="rounded-lg border border-gray-200 bg-slate-50/80 p-3 md:col-span-2">
-                    <div className="grid gap-6 md:grid-cols-2 md:items-start">
-                      <div>
-                        <label className="mb-2 block text-sm font-medium">
-                          Fecha de requerimiento
-                        </label>
-                        <p className="mb-2 text-xs text-gray-600">
-                          Fecha de solicitud/requerimiento del expediente (tabla{' '}
-                          <code className="rounded bg-white px-1">
-                            prestamos.fecha_requerimiento
-                          </code>
-                          ). Se muestra el valor cargado desde la base; puede
-                          corregirla aquí si debe alinearse con otros datos del
-                          expediente.
-                        </p>
-                        <div className="relative min-w-0 max-w-md">
-                          <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                          <Input
-                            type="date"
-                            disabled={soloLectura}
-                            value={formatDateForInput(
-                              prestamoData.fecha_requerimiento
-                            )}
-                            onChange={e => {
-                              formDirtyRef.current = true
-                              const v = e.target.value || null
-                              setPrestamoData({
-                                ...prestamoData,
-                                fecha_requerimiento: v,
-                              })
-                              setCambios({ ...cambios, prestamo: true })
-                            }}
-                            className="pl-10"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-2 block text-sm font-medium">
-                          Fecha de aprobación
-                        </label>
-                        <p className="mb-2 text-xs text-gray-600">
-                          Columna{' '}
-                          <code className="rounded bg-white px-1">
-                            prestamos.fecha_aprobacion
-                          </code>
-                          . Al guardar el formulario o al usar «Recalcular
-                          vencimientos», la fecha de alta del préstamo en base de
-                          datos se iguala exactamente a esta misma fecha (inicio
-                          del día); ese dato no se edita en pantalla. Es
-                          obligatoria si el estado es Aprobado, Desembolsado o
-                          Liquidado. «Recalcular vencimientos» usa esta fecha
-                          junto con plazo, cuota por período y modalidad.
-                        </p>
-                        <div className="relative min-w-0 max-w-md">
-                          <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                          <Input
-                            type="date"
-                            disabled={soloLectura}
-                            value={formatDateForInput(
-                              prestamoData.fecha_aprobacion
-                            )}
-                            onChange={e => {
-                              formDirtyRef.current = true
-                              const v = e.target.value || null
-                              setPrestamoData({
-                                ...prestamoData,
-                                fecha_aprobacion: v,
-                              })
-                              setCambios({ ...cambios, prestamo: true })
-                              if (errores['fecha_aprobacion']) {
-                                setErrores({
-                                  ...errores,
-                                  fecha_aprobacion: '',
-                                })
-                              }
-                            }}
-                            className={`pl-10 ${errores['fecha_aprobacion'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
-                          />
-                        </div>
-                        {errores['fecha_aprobacion'] && (
-                          <p className="mt-2 text-xs text-red-600">
-                            {errores['fecha_aprobacion']}
-                          </p>
-                        )}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="mt-3 w-full max-w-md shrink-0 sm:w-auto"
-                          disabled={soloLectura || recalculandoFechasCuotas}
-                          onClick={handleGuardarFechaYRecalcularVencimientos}
-                          title="Usa la fecha de aprobación indicada arriba junto con total, plazo, cuota por período y modalidad; guarda y reconstruye vencimientos de cuotas."
-                        >
-                          {recalculandoFechasCuotas ? (
-                            <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
-                          ) : (
-                            <RefreshCw className="mr-2 h-4 w-4 shrink-0" />
-                          )}
-                          Recalcular vencimientos
-                        </Button>
-                      </div>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">
+                        Fecha de requerimiento
+                      </span>
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                        Actualización manual
+                      </span>
                     </div>
+                    <p className="mb-2 text-xs text-gray-600">
+                      Fecha de solicitud/requerimiento del expediente (tabla{' '}
+                      <code className="rounded bg-white px-1">
+                        prestamos.fecha_requerimiento
+                      </code>
+                      ). Se muestra el valor cargado desde la base; corríjala
+                      aquí si debe alinearse con otros datos del expediente. No
+                      altera la tabla de cuotas por sí sola.
+                    </p>
+                    <div className="relative min-w-0 max-w-md">
+                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="date"
+                        disabled={soloLectura}
+                        value={formatDateForInput(
+                          prestamoData.fecha_requerimiento
+                        )}
+                        onChange={e => {
+                          formDirtyRef.current = true
+                          const v = e.target.value || null
+                          setPrestamoData({
+                            ...prestamoData,
+                            fecha_requerimiento: v,
+                          })
+                          setCambios({ ...cambios, prestamo: true })
+                        }}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Bloque: fecha de aprobación (manual; en BD se guarda el día anterior al selector). */}
+                  <div className="rounded-lg border border-gray-200 bg-slate-50/80 p-3 md:col-span-2">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">
+                        Fecha de aprobación
+                      </span>
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                        Actualización manual
+                      </span>
+                    </div>
+                    <p className="mb-2 text-xs text-gray-600">
+                      Columna{' '}
+                      <code className="rounded bg-white px-1">
+                        prestamos.fecha_aprobacion
+                      </code>{' '}
+                      y{' '}
+                      <code className="rounded bg-white px-1">
+                        prestamos.fecha_base_calculo
+                      </code>
+                      . En esta pantalla, al guardar o al usar «Recalcular
+                      vencimientos», el valor persistido en base es el{' '}
+                      <strong className="font-medium">día calendario anterior</strong>{' '}
+                      al indicado en el selector (inicio de ese día). Es
+                      obligatoria si el estado es Aprobado, Desembolsado o
+                      Liquidado. «Recalcular vencimientos» usa esa fecha persistida
+                      junto con plazo, cuota por período y modalidad.
+                    </p>
+                    <div className="relative min-w-0 max-w-md">
+                      <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="date"
+                        disabled={soloLectura}
+                        value={formatDateForInput(
+                          prestamoData.fecha_aprobacion
+                        )}
+                        onChange={e => {
+                          formDirtyRef.current = true
+                          const v = e.target.value || null
+                          setPrestamoData({
+                            ...prestamoData,
+                            fecha_aprobacion: v,
+                          })
+                          setCambios({ ...cambios, prestamo: true })
+                          if (errores['fecha_aprobacion']) {
+                            setErrores({
+                              ...errores,
+                              fecha_aprobacion: '',
+                            })
+                          }
+                        }}
+                        className={`pl-10 ${errores['fecha_aprobacion'] ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
+                      />
+                    </div>
+                    {errores['fecha_aprobacion'] && (
+                      <p className="mt-2 text-xs text-red-600">
+                        {errores['fecha_aprobacion']}
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3 w-full max-w-md shrink-0 sm:w-auto"
+                      disabled={soloLectura || recalculandoFechasCuotas}
+                      onClick={handleGuardarFechaYRecalcularVencimientos}
+                      title="Persiste la fecha (día anterior al selector) y reconstruye vencimientos según total, plazo, cuota por período y modalidad."
+                    >
+                      {recalculandoFechasCuotas ? (
+                        <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+                      ) : (
+                        <RefreshCw className="mr-2 h-4 w-4 shrink-0" />
+                      )}
+                      Recalcular vencimientos
+                    </Button>
                   </div>
 
                   {/* Fecha Base Cálculo - OCULTO */}
