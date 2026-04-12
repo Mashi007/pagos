@@ -1460,7 +1460,7 @@ class ReporteService {
   }
 
   /**
-   * Excel Préstamos Drive: 10 columnas snake_case desde la hoja sincronizada,
+   * Excel Préstamos Drive: 11 columnas snake_case desde la hoja sincronizada,
    * filtradas por columna LOTE (query `lotes=70` o `lotes=70,71`).
    */
   async exportarReportePrestamosDrive(filtros: {

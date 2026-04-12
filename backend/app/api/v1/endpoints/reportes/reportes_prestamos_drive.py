@@ -113,7 +113,7 @@ def exportar_prestamos_drive_excel(
 ):
     """
     Descarga Excel desde conciliacion_sheet_rows (misma fuente que Clientes hoja).
-    Columnas: cedula, total_financiamiento, modalidad_pago, fecha_requerimiento,
+    Columnas: cedula, total_financiamiento, abonos, modalidad_pago, fecha_requerimiento,
     fecha_aprobacion, producto, concesionario, analista, modelo_vehiculo, numero_cuotas.
     Solo filas cuyo LOTE coincide con uno de los valores en `lotes`.
     """

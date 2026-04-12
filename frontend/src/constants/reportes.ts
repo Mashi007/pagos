@@ -28,5 +28,5 @@ export const REPORTES_TOAST = {
     'Reporte Clientes (hoja CONCILIACIÓN filtrada por LOTE) descargado',
 
   prestamosDrive:
-    'Reporte Préstamos Drive (10 columnas, filtro por LOTE) descargado',
+    'Reporte Préstamos Drive (11 columnas, filtro por LOTE) descargado',
 } as const

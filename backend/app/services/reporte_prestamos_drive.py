@@ -54,6 +54,14 @@ def _pick_total_financiamiento_header(headers: List[str]) -> Optional[str]:
     return None
 
 
+def _pick_abonos_header(headers: List[str]) -> Optional[str]:
+    for h in headers:
+        hl = _norm_header_cell(h)
+        if hl == "abonos" or "abono" in hl:
+            return h
+    return None
+
+
 def _pick_modalidad_pago_header(headers: List[str]) -> Optional[str]:
     for h in headers:
         hl = _norm_header_cell(h)
@@ -217,6 +225,7 @@ def build_prestamos_drive_excel(
 
     # Columnas opcionales (si no existen en la hoja se deja vacío en el Excel)
     optional_keys: dict[str, Optional[str]] = {
+        "abonos": _pick_abonos_header(headers),
         "fecha aprobación (hoja)": _pick_fecha_aprobacion_header(headers),
         "producto": _pick_producto_header(headers),
     }
@@ -249,6 +258,7 @@ def build_prestamos_drive_excel(
     tf_key = required_keys["total financiamiento"]
     mod_key = required_keys["modalidad pago"]
     frq_key = required_keys["fecha requerimiento"]
+    abo_key = optional_keys["abonos"]
     fap_key = optional_keys["fecha aprobación (hoja)"]   # puede ser None
     prod_key = optional_keys["producto"]                  # puede ser None
     conc_key = required_keys["concesionario"]
@@ -257,11 +267,12 @@ def build_prestamos_drive_excel(
     ncu_key = required_keys["número cuotas"]
 
     logger.info(
-        "[prestamos_drive] columnas: lote=%r ced=%r tf=%r mod=%r frq=%r fap=%r "
+        "[prestamos_drive] columnas: lote=%r ced=%r tf=%r abo=%r mod=%r frq=%r fap=%r "
         "prod=%r conc=%r ana=%r mv=%r ncu=%r",
         lote_key,
         ced_key,
         tf_key,
+        abo_key,
         mod_key,
         frq_key,
         fap_key,
@@ -287,6 +298,7 @@ def build_prestamos_drive_excel(
         [
             "cedula",
             "total_financiamiento",
+            "abonos",
             "modalidad_pago",
             "fecha_requerimiento",
             "fecha_aprobacion",
@@ -311,6 +323,7 @@ def build_prestamos_drive_excel(
         row_out = [
             _as_text(cells.get(ced_key or "")),
             _as_text(cells.get(tf_key or "")),
+            _as_text(cells.get(abo_key or "")),
             _as_text(cells.get(mod_key or "")),
             _as_text(cells.get(frq_key or "")),
             _as_text(cells.get(fap_key or "")),

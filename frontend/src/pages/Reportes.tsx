@@ -165,9 +165,9 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'PRESTAMOS_DRIVE',
     label: 'Préstamos Drive',
     icon: Car,
-    subtitle: '10 columnas · filtro por lote (LOTE)',
+    subtitle: '11 columnas · filtro por lote (LOTE)',
     titleExtra:
-      'Desde la hoja CONCILIACIÓN: cédula, total financiamiento, modalidad, fechas, producto, concesionario, analista, modelo y número de cuotas; solo filas cuya columna LOTE coincide con el o los números indicados (ej. 70).',
+      'Desde la hoja CONCILIACIÓN: cédula, total financiamiento, abonos, modalidad, fechas, producto, concesionario, analista, modelo y número de cuotas; solo filas cuya columna LOTE coincide con el o los números indicados (ej. 70).',
   },
 ]
 
@@ -1111,9 +1111,9 @@ export function Reportes() {
                   <span className="font-semibold text-violet-900">
                     Préstamos Drive
                   </span>
-                  : diez campos de la hoja (financiamiento, modalidad, fechas,
-                  producto, concesionario, analista, modelo, cuotas) filtrados
-                  por <span className="font-medium">LOTE</span>.
+                  : once campos de la hoja (financiamiento, abonos, modalidad,
+                  fechas, producto, concesionario, analista, modelo, cuotas)
+                  filtrados por <span className="font-medium">LOTE</span>.
                 </li>
               </ul>
 
