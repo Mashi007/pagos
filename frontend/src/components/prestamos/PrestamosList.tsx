@@ -8,6 +8,8 @@ import React, {
 
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 
+import { limpiarReturnRevisionSesion } from '../../constants/revisionNavigation'
+
 import {
   Plus,
   Search,
@@ -125,6 +127,10 @@ export function PrestamosList() {
   const navigate = useNavigate()
 
   const location = useLocation()
+
+  useEffect(() => {
+    limpiarReturnRevisionSesion()
+  }, [])
 
   const buscarGeneralRef = useRef<HTMLInputElement>(null)
 
@@ -1857,11 +1863,12 @@ export function PrestamosList() {
                                     size="sm"
                                     title={cfg.title}
                                     className={cfg.cls}
-                                    onClick={() =>
+                                    onClick={() => {
+                                      limpiarReturnRevisionSesion()
                                       navigate(
                                         `/revision-manual/editar/${prestamo.id}`
                                       )
-                                    }
+                                    }}
                                   >
                                     {cfg.icon}
                                   </Button>

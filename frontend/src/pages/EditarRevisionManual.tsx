@@ -88,6 +88,13 @@ import {
   invalidatePagosPrestamosRevisionYCuotas,
 } from '../constants/queryKeys'
 
+import {
+  leerYConsumirReturnRevisionSesion,
+  limpiarReturnRevisionSesion,
+  normalizarReturnToRevisionPath,
+  RUTA_RETORNO_NOTIFICACIONES,
+} from '../constants/revisionNavigation'
+
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 
 import { useDebounce } from '../hooks/useDebounce'
@@ -337,18 +344,6 @@ async function ejecutarEnLotes<T>(
 /** Lista de préstamos (en producción: /pagos/prestamos vía basename). */
 const RUTA_LISTA_PRESTAMOS = '/prestamos'
 
-/**
- * Ruta SPA interna para volver tras revisión (p. ej. desde notificaciones).
- * Evita open redirect (solo path relativo a la app).
- */
-function normalizarReturnToRevision(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null
-  const t = raw.trim()
-  if (!t.startsWith('/') || t.startsWith('//') || t.includes('\\')) return null
-  if (t.length > 512) return null
-  return t
-}
-
 const PER_PAGE_PAGOS_REGISTRADOS = 20
 
 /** Tolerancia USD para comparar totales (redondeos / centavos). */
@@ -533,9 +528,16 @@ export function EditarRevisionManual() {
 
   const location = useLocation()
 
-  const returnToRevision = normalizarReturnToRevision(
-    (location.state as { returnTo?: unknown } | null)?.returnTo
-  )
+  const returnToRevision = useMemo(() => {
+    const normReturnState = normalizarReturnToRevisionPath(
+      (location.state as { returnTo?: unknown } | null)?.returnTo
+    )
+    if (normReturnState === RUTA_RETORNO_NOTIFICACIONES) {
+      limpiarReturnRevisionSesion()
+      return RUTA_RETORNO_NOTIFICACIONES
+    }
+    return leerYConsumirReturnRevisionSesion()
+  }, [location.key, location.state])
 
   const queryClient = useQueryClient()
 

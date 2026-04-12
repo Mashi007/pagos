@@ -31,6 +31,8 @@ import { revisionManualService } from '../services/revisionManualService'
 
 import { getErrorMessage } from '../types/errors'
 
+import { limpiarReturnRevisionSesion } from '../constants/revisionNavigation'
+
 export default function AutorizacionesRevisionManualAdminPage() {
   const navigate = useNavigate()
 
@@ -67,6 +69,7 @@ export default function AutorizacionesRevisionManualAdminPage() {
         `¿Abrir ahora la revisión manual del préstamo #${data.prestamo_id}?`
       )
       if (abrir) {
+        limpiarReturnRevisionSesion()
         navigate(`/revision-manual/editar/${data.prestamo_id}`)
       }
     },
@@ -115,6 +118,7 @@ export default function AutorizacionesRevisionManualAdminPage() {
         `¿Abrir ahora la pantalla de edición del préstamo #${prestamoId}?`
       )
       if (abrir) {
+        limpiarReturnRevisionSesion()
         navigate(`/revision-manual/editar/${prestamoId}`)
       }
     },
@@ -301,11 +305,12 @@ export default function AutorizacionesRevisionManualAdminPage() {
                             type="button"
                             size="sm"
                             variant="secondary"
-                            onClick={() =>
+                            onClick={() => {
+                              limpiarReturnRevisionSesion()
                               navigate(
                                 `/revision-manual/editar/${row.prestamo_id}`
                               )
-                            }
+                            }}
                           >
                             Abrir revisión
                           </Button>

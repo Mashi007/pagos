@@ -79,6 +79,11 @@ import {
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
+import {
+  marcarReturnRevisionDesdeNotificaciones,
+  RUTA_RETORNO_NOTIFICACIONES,
+} from '../constants/revisionNavigation'
+
 import { isRequestCanceled } from '../utils/requestCanceled'
 
 import { getErrorMessage, isAxiosTimeoutError } from '../types/errors'
@@ -669,8 +674,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 <Link
                   to={`/revision-manual/editar/${pid}`}
                   state={{
-                    /* Tras guardar/cerrar revisión: siempre el listado principal de notificaciones. */
-                    returnTo: '/notificaciones',
+                    returnTo: RUTA_RETORNO_NOTIFICACIONES,
                   }}
                   className="font-medium text-blue-600 hover:underline"
                 >
@@ -980,6 +984,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const TABS = tabsParaModulo(modulo)
 
   const listadoDefault = tabListadoDefault(modulo)
+
+  useEffect(() => {
+    marcarReturnRevisionDesdeNotificaciones()
+  }, [])
 
   const [searchParams, setSearchParams] = useSearchParams()
 
