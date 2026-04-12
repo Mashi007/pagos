@@ -150,6 +150,13 @@ def comparar_abonos_drive_vs_cuotas(
         and abs(diferencia) <= _TOL_MONTO
     )
 
+    # Indicador operativo: "sí" solo si ABONOS (hoja) es claramente mayor que total en cuotas (regla de negocio notificaciones).
+    puede_aplicar = bool(
+        abonos_drive is not None
+        and float(abonos_drive) > float(total_pagado_cuotas) + _TOL_MONTO
+    )
+    indicador: str = "si" if puede_aplicar else "no"
+
     logger.info(
         "[comparar_abonos] cedula=%s prestamo_id=%s filas_hoja=%s abonos_drive=%s total_cuotas=%s",
         cedula_in,
@@ -167,6 +174,8 @@ def comparar_abonos_drive_vs_cuotas(
         "total_pagado_cuotas": round(total_pagado_cuotas, 2),
         "diferencia": diferencia,
         "coincide_aproximado": coincide,
+        "indicador": indicador,
+        "puede_aplicar": puede_aplicar,
         "tolerancia": _TOL_MONTO,
         "hoja_synced_at": synced_at,
         "columna_cedula_detectada": ced_key,

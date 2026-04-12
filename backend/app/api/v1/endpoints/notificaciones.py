@@ -19,6 +19,7 @@ from fastapi.responses import Response, JSONResponse, RedirectResponse
 from starlette.requests import Request
 
 from app.core.deps import require_admin
+from app.schemas.auth import UserResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -2238,4 +2239,46 @@ def get_comparar_abonos_drive_cuotas(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/aplicar-abonos-drive-a-cuotas")
+def post_aplicar_abonos_drive_a_cuotas(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    admin: UserResponse = Depends(require_admin),
+):
+    """
+    Si ABONOS (hoja) > sum(cuotas.total_pagado): elimina todos los pagos del préstamo (flujo existente)
+    y crea un pago único por el monto ABONOS aplicado en cascada (_aplicar_pago_a_cuotas_interno).
+    Solo préstamos APROBADO (misma regla que eliminar_todos_pagos_prestamo).
+    """
+    from app.services.aplicar_abonos_drive_cuotas_service import aplicar_abonos_drive_a_cuotas_prestamo
+
+    cedula = str(payload.get("cedula") or "").strip()
+    pid = payload.get("prestamo_id")
+    try:
+        prestamo_id = int(pid)
+    except (TypeError, ValueError):
+        prestamo_id = 0
+    usuario = (admin.email or "").strip() or "admin"
+
+    try:
+        out = aplicar_abonos_drive_a_cuotas_prestamo(
+            db,
+            cedula=cedula,
+            prestamo_id=prestamo_id,
+            usuario_registro=usuario,
+        )
+        db.commit()
+        return out
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("[notificaciones] aplicar-abonos-drive-a-cuotas: %s", e)
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Error al aplicar ABONOS desde la hoja a las cuotas.",
+        ) from e
 

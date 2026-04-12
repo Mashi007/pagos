@@ -1,0 +1,150 @@
+"""
+Aplica el monto ABONOS de la hoja CONCILIACIÓN al préstamo cuando ABONOS > sum(cuotas.total_pagado).
+
+Pasos (reutiliza mecánica existente):
+1. Valida comparación (misma lógica que comparar_abonos_drive_vs_cuotas).
+2. eliminar_todos_pagos_prestamo: borra pagos, cuota_pagos y reinicia cuotas (solo préstamo APROBADO).
+3. Crea un Pago único con monto = ABONOS (USD vía resolver_monto_registro_pago) y referencia única.
+4. _aplicar_pago_a_cuotas_interno: cascada por numero_cuota ASC (mismo código que /pagos).
+
+No hace commit: quien llama debe commit/rollback.
+"""
+from __future__ import annotations
+
+import logging
+from datetime import datetime, time as dt_time
+from decimal import Decimal
+from typing import Any, Dict
+from uuid import uuid4
+from zoneinfo import ZoneInfo
+
+from sqlalchemy.orm import Session
+
+from app.models.pago import Pago
+from app.models.prestamo import Prestamo
+from app.services.comparar_abonos_drive_cuotas_service import comparar_abonos_drive_vs_cuotas
+from app.services.cuota_estado import TZ_NEGOCIO
+from app.services.pago_huella_funcional import conflicto_huella_para_creacion
+from app.services.pago_registro_moneda import resolver_monto_registro_pago
+from app.services.pagos_cuotas_reaplicacion import eliminar_todos_pagos_prestamo
+from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
+
+logger = logging.getLogger(__name__)
+
+_TOL = 0.02
+
+
+def aplicar_abonos_drive_a_cuotas_prestamo(
+    db: Session,
+    *,
+    cedula: str,
+    prestamo_id: int,
+    usuario_registro: str,
+) -> Dict[str, Any]:
+    snap = comparar_abonos_drive_vs_cuotas(db, cedula=cedula, prestamo_id=prestamo_id)
+    abonos_drive = snap.get("abonos_drive")
+    total_cuotas = float(snap.get("total_pagado_cuotas") or 0)
+
+    if abonos_drive is None:
+        raise ValueError(
+            "No hay monto ABONOS en la hoja para esta cédula o faltan columnas. Sincronice CONCILIACIÓN."
+        )
+    if float(abonos_drive) <= total_cuotas + _TOL:
+        raise ValueError(
+            "Solo se aplica cuando ABONOS (hoja) es mayor que el total pagado en cuotas."
+        )
+
+    del_res = eliminar_todos_pagos_prestamo(db, prestamo_id)
+    if not del_res.get("ok"):
+        raise ValueError(del_res.get("error") or "No se pudieron eliminar los pagos del préstamo.")
+
+    prestamo = db.get(Prestamo, prestamo_id)
+    if prestamo is None:
+        raise ValueError("Préstamo no encontrado tras limpieza.")
+
+    cedula_fk = normalizar_cedula_almacenamiento((prestamo.cedula or cedula or "").strip()) or ""
+
+    fecha_pago = datetime.now(ZoneInfo(TZ_NEGOCIO))
+    fecha_date = fecha_pago.date()
+    monto_dec = Decimal(str(round(float(abonos_drive), 2)))
+
+    suf = uuid4().hex[:10].upper()
+    ref_pago = f"ABONOS-DRIVE-{prestamo_id}-{suf}"[:100]
+
+    monto_usd_g, moneda_fin_g, monto_bs_g, tasa_g, fecha_tasa_g = resolver_monto_registro_pago(
+        db,
+        cedula_normalizada=(cedula_fk or "").strip().upper(),
+        fecha_pago=fecha_date,
+        monto_pagado=monto_dec,
+        moneda_registro="USD",
+        tasa_cambio_manual=None,
+    )
+
+    msg_h = conflicto_huella_para_creacion(
+        db,
+        prestamo_id=prestamo_id,
+        fecha_pago=fecha_date,
+        monto_pagado=monto_usd_g,
+        numero_documento=ref_pago,
+        referencia_pago=ref_pago,
+    )
+    if msg_h:
+        raise ValueError(msg_h)
+
+    ahora_conciliacion = datetime.now(ZoneInfo(TZ_NEGOCIO))
+
+    pago = Pago(
+        cedula_cliente=cedula_fk,
+        prestamo_id=prestamo_id,
+        fecha_pago=datetime.combine(fecha_date, dt_time.min),
+        monto_pagado=monto_usd_g,
+        numero_documento=ref_pago[:100],
+        estado="PAGADO",
+        referencia_pago=ref_pago,
+        conciliado=True,
+        fecha_conciliacion=ahora_conciliacion,
+        verificado_concordancia="SI",
+        usuario_registro=(usuario_registro or "").strip()[:255] or None,
+        moneda_registro=moneda_fin_g,
+        monto_bs_original=monto_bs_g,
+        tasa_cambio_bs_usd=tasa_g,
+        fecha_tasa_referencia=fecha_tasa_g,
+        notas="Alta automática desde ABONOS hoja CONCILIACIÓN (notificaciones).",
+    )
+    db.add(pago)
+    db.flush()
+
+    from app.api.v1.endpoints.pagos import (
+        _aplicar_pago_a_cuotas_interno,
+        _estado_conciliacion_post_cascada,
+        _marcar_prestamo_liquidado_si_corresponde,
+    )
+
+    cuotas_completadas = 0
+    cuotas_parciales = 0
+    if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
+        cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
+
+    pago.estado = _estado_conciliacion_post_cascada(pago, cuotas_completadas, cuotas_parciales)
+    _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+
+    logger.info(
+        "[aplicar_abonos_drive] prestamo_id=%s pago_id=%s monto=%s cc=%s cp=%s",
+        prestamo_id,
+        pago.id,
+        float(monto_usd_g or 0),
+        cuotas_completadas,
+        cuotas_parciales,
+    )
+
+    return {
+        "ok": True,
+        "prestamo_id": prestamo_id,
+        "pago_id": int(pago.id),
+        "abonos_drive_origen": float(abonos_drive),
+        "monto_pago_usd": float(monto_usd_g or 0),
+        "pagos_eliminados": int(del_res.get("pagos_eliminados") or 0),
+        "cuotas_completadas": int(cuotas_completadas),
+        "cuotas_parciales": int(cuotas_parciales),
+        "referencia_pago": ref_pago,
+    }

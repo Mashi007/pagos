@@ -122,6 +122,36 @@ export interface CompararAbonosDriveCuotasResponse {
   columna_abonos_detectada: string | null
 
   advertencias: string[]
+
+  /** "si" si ABONOS (hoja) > total pagado en cuotas (+ tolerancia); "no" en caso contrario. */
+
+  indicador?: 'si' | 'no' | string
+
+  /** Igual que indicador === "si" (backend envía ambos). */
+
+  puede_aplicar?: boolean
+}
+
+/** Respuesta de POST /notificaciones/aplicar-abonos-drive-a-cuotas (solo admin). */
+
+export interface AplicarAbonosDriveCuotasResponse {
+  ok: boolean
+
+  prestamo_id: number
+
+  pago_id: number
+
+  abonos_drive_origen: number
+
+  monto_pago_usd: number
+
+  pagos_eliminados: number
+
+  cuotas_completadas: number
+
+  cuotas_parciales: number
+
+  referencia_pago: string
 }
 
 /** Préstamo con total financiamiento = total abonos (liquidado). */
@@ -1038,6 +1068,25 @@ class NotificacionService {
     q.set('prestamo_id', String(params.prestamoId))
     return await apiClient.get<CompararAbonosDriveCuotasResponse>(
       `${this.baseUrl}/comparar-abonos-drive-cuotas?${q.toString()}`
+    )
+  }
+
+  /**
+   * Elimina pagos del préstamo y aplica ABONOS (hoja) en cascada.
+   * Solo si ABONOS > sum(cuotas.total_pagado); requiere rol admin en backend.
+   */
+  async postAplicarAbonosDriveACuotas(params: {
+    cedula: string
+
+    prestamoId: number
+  }): Promise<AplicarAbonosDriveCuotasResponse> {
+    return await apiClient.post<AplicarAbonosDriveCuotasResponse>(
+      `${this.baseUrl}/aplicar-abonos-drive-a-cuotas`,
+      {
+        cedula: params.cedula.trim(),
+
+        prestamo_id: params.prestamoId,
+      }
     )
   }
 }

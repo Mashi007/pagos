@@ -205,6 +205,9 @@ declare module 'lucide-react' {
   export const LogOut: any
 
   export const LayoutDashboard: any
+
+  /** Comparar / equilibrar valores (p. ej. ABONOS hoja vs cuotas en notificaciones). */
+  export const Scale: any
 }
 
 declare module '@tanstack/react-query' {

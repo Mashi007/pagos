@@ -16,7 +16,7 @@ import {
   ChevronDown,
   CheckCircle2,
   X,
-  GitCompare,
+  Scale,
 } from 'lucide-react'
 
 import {
@@ -44,6 +44,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   notificacionService,
   TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL,
+  type AplicarAbonosDriveCuotasResponse,
   type ClienteRetrasadoItem,
   type CompararAbonosDriveCuotasResponse,
   type EstadisticasPorTab,
@@ -444,18 +445,30 @@ function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
 
 /**
  * Icono junto a revisión manual: compara ABONOS (hoja CONCILIACIÓN en BD) vs suma total_pagado en cuotas del préstamo.
+ * El borrado de pagos y la cascada solo ocurren si el usuario pulsa explícitamente «Sí» y confirma (no al abrir el diálogo).
  */
 function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
+  const queryClient = useQueryClient()
+  const { user } = useSimpleAuth()
+  const esAdmin = (user?.rol || '').toLowerCase() === 'admin'
+
   const pid = row.prestamo_id
   const ced = (row.cedula || '').trim()
   const [open, setOpen] = useState(false)
+  const [paso, setPaso] = useState<'resumen' | 'confirmar'>('resumen')
   const [loading, setLoading] = useState(false)
+  const [applying, setApplying] = useState(false)
   const [data, setData] = useState<CompararAbonosDriveCuotasResponse | null>(null)
 
   if (pid == null || !ced) return null
 
+  const puedeOperar =
+    data?.puede_aplicar === true ||
+    (typeof data?.indicador === 'string' && data.indicador.toLowerCase() === 'si')
+
   const abrir = async () => {
     setOpen(true)
+    setPaso('resumen')
     setLoading(true)
     setData(null)
     try {
@@ -472,6 +485,27 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
     }
   }
 
+  const aplicar = async () => {
+    setApplying(true)
+    try {
+      const res: AplicarAbonosDriveCuotasResponse =
+        await notificacionService.postAplicarAbonosDriveACuotas({
+          cedula: ced,
+          prestamoId: pid,
+        })
+      toast.success(
+        `Aplicado: pago #${res.pago_id}. Pagos eliminados: ${res.pagos_eliminados}. Cuotas completadas: ${res.cuotas_completadas}.`
+      )
+      setOpen(false)
+      setPaso('resumen')
+      await invalidateListasNotificacionesMora(queryClient, { skipCrossTabBroadcast: true })
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo aplicar ABONOS a cuotas.')
+    } finally {
+      setApplying(false)
+    }
+  }
+
   const fmt = (n: number | null | undefined) =>
     n == null || Number.isNaN(Number(n))
       ? '—'
@@ -482,6 +516,9 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
 
   const btnBase =
     'inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50'
+
+  const pillBase =
+    'inline-flex min-w-[2.25rem] items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold'
 
   return (
     <>
@@ -494,17 +531,43 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
           void abrir()
         }}
       >
-        <GitCompare className="h-4 w-4" aria-hidden />
+        <Scale className="h-4 w-4" aria-hidden />
       </button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={v => {
+          setOpen(v)
+          if (!v) {
+            setPaso('resumen')
+            setData(null)
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>ABONOS (hoja) vs cuotas pagadas</DialogTitle>
+            <DialogTitle>
+              {paso === 'confirmar'
+                ? 'Confirmar aplicación desde la hoja'
+                : 'ABONOS (hoja) vs cuotas pagadas'}
+            </DialogTitle>
           </DialogHeader>
 
           {loading ? (
             <p className="text-sm text-muted-foreground">Cargando…</p>
+          ) : paso === 'confirmar' && data ? (
+            <div className="space-y-3 text-sm">
+              <p className="text-amber-900">
+                Se eliminarán todos los pagos del préstamo #{data.prestamo_id} y se registrará un
+                único pago por{' '}
+                <span className="font-semibold tabular-nums">{fmt(data.abonos_drive)}</span>{' '}
+                (ABONOS hoja), aplicado en cascada a las cuotas. Esta acción no se deshace desde
+                aquí.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Solo continúe si revisó cédula, hoja y montos. Requiere administrador.
+              </p>
+            </div>
           ) : data ? (
             <div className="space-y-3 text-sm">
               <p className="text-muted-foreground">
@@ -512,6 +575,49 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 {' · '}
                 Préstamo <span className="font-medium text-foreground">#{data.prestamo_id}</span>
               </p>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground text-xs">Indicador:</span>
+                <button
+                  type="button"
+                  disabled={!puedeOperar || !esAdmin || applying}
+                  title={
+                    !esAdmin
+                      ? 'Solo administradores pueden operar.'
+                      : puedeOperar
+                        ? 'Pulsar Sí para continuar al paso de confirmación (no aplica nada todavía).'
+                        : 'ABONOS no supera el total en cuotas: no hay operación.'
+                  }
+                  onClick={() => {
+                    if (!puedeOperar || !esAdmin || applying) return
+                    setPaso('confirmar')
+                  }}
+                  className={`${pillBase} ${
+                    puedeOperar
+                      ? 'border-green-600 bg-green-50 text-green-800 hover:bg-green-100 disabled:opacity-50'
+                      : 'cursor-not-allowed border-muted bg-muted/40 text-muted-foreground'
+                  }`}
+                  aria-label={
+                    puedeOperar
+                      ? 'Sí: ABONOS mayor que total en cuotas; pulse para confirmar operación'
+                      : 'Sí: no aplica'
+                  }
+                >
+                  Sí
+                </button>
+                <span
+                  className={`${pillBase} ${
+                    !puedeOperar
+                      ? 'border-slate-600 bg-slate-100 text-slate-800'
+                      : 'border-muted bg-muted/30 text-muted-foreground'
+                  }`}
+                  title="No se ejecuta ningún proceso al mostrar No."
+                  aria-label="No: no se aplica proceso desde la hoja"
+                >
+                  No
+                </span>
+              </div>
+
               <dl className="grid grid-cols-1 gap-2 rounded-md border bg-muted/30 p-3">
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">ABONOS (hoja Drive)</dt>
@@ -572,21 +678,49 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
               ) : null}
               {data.coincide_aproximado ? (
                 <p className="text-xs font-medium text-green-700">
-                  Coinciden (tolerancia ±{data.tolerencia}).
+                  Coinciden (tolerancia ±{data.tolerancia}).
                 </p>
               ) : data.diferencia != null ? (
                 <p className="text-xs text-amber-900">
-                  Hay diferencia mayor a la tolerancia (±{data.tolerencia}). Revise sync de la
+                  Hay diferencia mayor a la tolerancia (±{data.tolerancia}). Revise sync de la
                   hoja o pagos aplicados a cuotas.
+                </p>
+              ) : null}
+              {!esAdmin && puedeOperar ? (
+                <p className="text-xs text-muted-foreground">
+                  El indicador «Sí» requiere administrador para operar.
                 </p>
               ) : null}
             </div>
           ) : null}
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cerrar
-            </Button>
+          <DialogFooter className="gap-2 sm:gap-0">
+            {paso === 'confirmar' ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={applying}
+                  onClick={() => setPaso('resumen')}
+                >
+                  Volver
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={applying || !esAdmin}
+                  onClick={() => {
+                    void aplicar()
+                  }}
+                >
+                  {applying ? 'Aplicando…' : 'Confirmar y aplicar'}
+                </Button>
+              </>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cerrar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
