@@ -541,6 +541,21 @@ def _dedupe_image_pdf_by_content(items: List[Tuple[str, bytes, str]]) -> List[Tu
     return out
 
 
+def _dedupe_pipeline_candidates(
+    items: List[Tuple[str, bytes, str, str]],
+) -> List[Tuple[str, bytes, str, str]]:
+    """Deduplica por hash del binario; conserva la primera etiqueta de origen encontrada."""
+    seen: set[str] = set()
+    out: List[Tuple[str, bytes, str, str]] = []
+    for fn, content, mime, origen in items:
+        fp = hashlib.sha256(content).hexdigest()
+        if fp in seen:
+            continue
+        seen.add(fp)
+        out.append((fn, content, mime, origen))
+    return out
+
+
 def get_body_embedded_image_pdf_files_for_message(
     service: Any, message_id: str, payload: dict
 ) -> List[Tuple[str, bytes, str]]:
@@ -746,7 +761,7 @@ def _get_images_from_rfc822_parts(
 
 def get_pagos_gmail_image_pdf_files_for_pipeline(
     service: Any, message_id: str, payload: dict
-) -> List[Tuple[str, bytes, str]]:
+) -> List[Tuple[str, bytes, str, str]]:
     """
     Candidatos a escanear con Gemini (misma imagen adjunta o en cuerpo se deduplica por hash SHA-256):
     1) Incrustado en cuerpo: inline, multipart/related (cid), data: en HTML, hijos image/PDF en multipart/mixed
@@ -755,7 +770,10 @@ def get_pagos_gmail_image_pdf_files_for_pipeline(
     3) Reenvios: binarios image/PDF dentro de message/rfc822 (.eml anidado).
     4) Recorrido MIME completo: todas las partes image/PDF con body.data o attachmentId (cubre p. ej. hijos de
        multipart/alternative que 1) no marcaria solo como \"cuerpo\"). Duplicados respecto a 1–3 se eliminan al deduplicar.
-    Solo pasan a BD/Drive si el modelo devuelve plantilla A/B/C y datos completos.
+
+    Cada tupla incluye `origen_binario`: **embebida** (cuerpo/inline/HTML/related) o **adjunta** (attachment típico;
+    acepta PDF, JPG, PNG, etc.) o **reenvio_eml** (parte rfc822) o **mime_recorrido** (resto del árbol MIME).
+    El pipeline puede partir PDFs multi-página en una petición por página.
     """
     embedded = get_body_embedded_image_pdf_files_for_message(service, message_id, payload)
     attached = get_attachment_image_pdf_files_for_message(service, message_id, payload)
@@ -778,12 +796,12 @@ def get_pagos_gmail_image_pdf_files_for_pipeline(
         else []
     )
 
-    merged: List[Tuple[str, bytes, str]] = []
-    merged.extend(embedded)
-    merged.extend(attached)
-    merged.extend(rfc822_parts)
-    merged.extend(mime_walk)
-    unique = _dedupe_image_pdf_by_content(merged)
+    merged: List[Tuple[str, bytes, str, str]] = []
+    merged.extend((a[0], a[1], a[2], "embebida") for a in embedded)
+    merged.extend((a[0], a[1], a[2], "adjunta") for a in attached)
+    merged.extend((a[0], a[1], a[2], "reenvio_eml") for a in rfc822_parts)
+    merged.extend((a[0], a[1], a[2], "mime_recorrido") for a in mime_walk)
+    unique = _dedupe_pipeline_candidates(merged)
     logger.debug(
         "[PAGOS_GMAIL] msg %s candidatos (pre-dedupe): incrustados=%d adjuntos=%d rfc822=%d mime_completo=%d -> unicos=%d",
         message_id,

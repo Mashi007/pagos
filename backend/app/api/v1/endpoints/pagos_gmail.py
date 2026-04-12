@@ -529,6 +529,7 @@ def diagnostico(db: Session = Depends(get_db)):
         classify_and_extract_pagos_gmail_attachment,
         check_gemini_available,
     )
+    from app.services.pagos_gmail.pdf_pages import expand_pipeline_pdf_tuples
     from app.core.config import settings
     import traceback
 
@@ -598,17 +599,19 @@ def diagnostico(db: Session = Depends(get_db)):
         return result
 
     # PASO 4: Extracción de imágenes del primer correo
+    candidatos = []
     try:
         attachments = get_pagos_gmail_image_pdf_files_for_pipeline(
             gmail_svc, msg["id"], full_payload
         )
+        candidatos = expand_pipeline_pdf_tuples(attachments)
         result["paso_4_imagenes"] = {
             "ok": True,
-            "nota": "Cuerpo incrustado + adjuntos imagen/PDF + message/rfc822 (.eml), deduplicado por contenido",
-            "total_imagenes": len(attachments),
+            "nota": "Cuerpo incrustado + adjuntos imagen/PDF + message/rfc822 (.eml), deduplicado por contenido; PDF multi-pagina expandido a N candidatos",
+            "total_imagenes": len(candidatos),
             "detalle": [
-                {"nombre": f, "bytes": len(c), "mime": m}
-                for f, c, m in attachments[:5]
+                {"nombre": f, "bytes": len(c), "mime": m, "origen": o}
+                for f, c, m, o in candidatos[:5]
             ]
         }
     except Exception as e:
@@ -623,18 +626,22 @@ def diagnostico(db: Session = Depends(get_db)):
         result["paso_5_gemini_health"] = {"ok": False, "error": str(e)}
 
     # PASO 6: Extracción real con Gemini sobre la primera imagen (si existe)
-    if attachments:
-        fname, content, mime = attachments[0]
+    if candidatos:
+        fname, content, mime, origen = candidatos[0]
         try:
             from_hdr = (msg.get("headers") or {}).get("from") or ""
             fmt, data = classify_and_extract_pagos_gmail_attachment(
-                content, fname, remitente_correo_header=from_hdr
+                content,
+                fname,
+                remitente_correo_header=from_hdr,
+                origen_binario=origen,
             )
             result["paso_6_gemini_extraccion"] = {
                 "ok": True,
                 "archivo": fname,
                 "bytes": len(content),
                 "mime": mime,
+                "origen": origen,
                 "formato": fmt,
                 "resultado": data,
             }

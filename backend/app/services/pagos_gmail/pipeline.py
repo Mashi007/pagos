@@ -5,6 +5,7 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
 Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **MASTER** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
+PDF adjunto o embebido con varias paginas: se parte en **una peticion Gemini por pagina** (cada pagina = como maximo un pago / una fila).
 Estrella Gmail + etiquetas MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From): primero `email`, luego `email_secundario`.
@@ -58,6 +59,7 @@ from app.services.pagos_gmail.gemini_service import (
     PAGOS_GMAIL_FORMATOS_PLANTILLA,
     PAGOS_NA,
 )
+from app.services.pagos_gmail.pdf_pages import expand_pipeline_pdf_tuples
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
     formatear_cedula,
@@ -306,12 +308,13 @@ def run_pipeline(
                 attachments = get_pagos_gmail_image_pdf_files_for_pipeline(
                     gmail_svc, msg_id, full_payload or {}
                 )
+                candidatos = expand_pipeline_pdf_tuples(attachments)
 
                 logger.info(
-                    "[PAGOS_GMAIL]   candidatos imagen/PDF (adjunto + embebido + reenvio, dedup): %d - %s",
-                    len(attachments),
-                    ", ".join(f"{f}({len(c)}B)" for f, c, _ in attachments)
-                    if attachments
+                    "[PAGOS_GMAIL]   candidatos imagen/PDF (adjunto + embebido + reenvio, dedup; PDF multi-pag -> N): %d - %s",
+                    len(candidatos),
+                    ", ".join(f"{f}({len(c)}B,{o})" for f, c, _, o in candidatos)
+                    if candidatos
                     else "ninguno",
                 )
 
@@ -322,7 +325,7 @@ def run_pipeline(
                 any_skipped_not_plantilla_o_campos = False
                 label_ids_for_message: list[str] = []
                 gmail_etiqueta_clasificacion_aplicada = False
-                if not attachments:
+                if not candidatos:
                     any_incomplete_or_skipped = True
 
                 def _campos_completos(fecha: str, cedula: str, monto: str, ref: str) -> bool:
@@ -331,6 +334,14 @@ def run_pipeline(
                         return bool(s) and s.upper() != PAGOS_NA
 
                     return ok(fecha) and ok(cedula) and ok(monto) and ok(ref)
+
+                def _campos_completos_nr(cedula: str, monto: str) -> bool:
+                    """Fila NR: monto literal NR; cédula columna debe existir (cliente o ERROR EMAIL/BD)."""
+                    s_m = (monto or "").strip().upper()
+                    if s_m != "NR":
+                        return False
+                    s_c = (cedula or "").strip()
+                    return bool(s_c) and s_c.upper() != PAGOS_NA
 
                 def _insert_rows_sin_drive(
                     correo: str,
@@ -381,12 +392,13 @@ def run_pipeline(
 
                 pending: list[dict] = []
                 committed_comprobante_rows = False
-                for filename, content, mime_type in attachments:
+                for filename, content, mime_type, origen_binario in candidatos:
                     try:
                         fmt, data = classify_and_extract_pagos_gmail_attachment(
                             content,
                             filename,
                             remitente_correo_header=from_h,
+                            origen_binario=origen_binario,
                         )
 
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
@@ -412,6 +424,20 @@ def run_pipeline(
                                     sender_lc[:72],
                                     filename,
                                 )
+                        elif fmt == "NR":
+                            f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
+                            m = "NR"
+                            r = normalizar_referencia(_v(data.get("numero_referencia")))
+                            c, c_ok = _cedula_columna_desde_remitente(db, sender_lc)
+                            if not c_ok:
+                                any_incomplete_or_skipped = True
+                                any_cedula_lookup_failed = True
+                                logger.warning(
+                                    "[PAGOS_GMAIL]   NR (no RapiCredit): columna Cedula=%s — De=%s archivo=%s",
+                                    c,
+                                    sender_lc[:72],
+                                    filename,
+                                )
                         else:
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
                             m = _v(data.get("monto"))
@@ -427,7 +453,16 @@ def run_pipeline(
                                     sender_lc[:72],
                                     filename,
                                 )
-                        if not _campos_completos(f, c, m, r):
+                        if fmt == "NR":
+                            if not _campos_completos_nr(c, m):
+                                any_incomplete_or_skipped = True
+                                any_skipped_not_plantilla_o_campos = True
+                                logger.warning(
+                                    "[PAGOS_GMAIL]   Formato NR pero fila incompleta (monto!=NR o cedula vacia) - no Drive/BD: %s",
+                                    filename,
+                                )
+                                continue
+                        elif not _campos_completos(f, c, m, r):
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             logger.warning(
@@ -563,13 +598,19 @@ def run_pipeline(
                                 elif fmt == "D":
                                     label_id = id_d
                                     etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_4
-                                else:
+                                elif fmt == "C":
                                     label_id = id_c
                                     etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
+                                elif fmt == "NR":
+                                    label_id = None
+                                    etiqueta_nombre = "NR"
+                                else:
+                                    label_id = None
+                                    etiqueta_nombre = fmt or "?"
                                 if label_id and not remitente_solo_master:
                                     label_ids_for_message.append(label_id)
                                 logger.info(
-                                    "[PAGOS_GMAIL]   Digitalizado OK (%s); estrella/etiqueta solo si 100%% adjuntos: %s",
+                                    "[PAGOS_GMAIL]   Digitalizado OK (%s); estrella/etiqueta solo si 100%% candidatos: %s",
                                     etiqueta_nombre,
                                     p["filename"],
                                 )
@@ -584,7 +625,7 @@ def run_pipeline(
                                 db.rollback()
                                 any_incomplete_or_skipped = True
 
-                n_att = len(attachments)
+                n_att = len(candidatos)
                 if (
                     n_att > 1
                     and any_incomplete_or_skipped
@@ -619,7 +660,7 @@ def run_pipeline(
                         )
 
                 fully_digitized_email = (
-                    len(attachments) > 0
+                    len(candidatos) > 0
                     and not any_incomplete_or_skipped
                     and had_complete_digitalization
                 )
@@ -650,7 +691,7 @@ def run_pipeline(
                             k_err,
                         )
 
-                if remitente_solo_master and attachments:
+                if remitente_solo_master and candidatos:
                     k_master = PAGOS_GMAIL_LABEL_MASTER
                     if k_master not in plantilla_label_cache:
                         plantilla_label_cache[k_master] = ensure_user_label_id(
@@ -699,7 +740,7 @@ def run_pipeline(
                     logger.info(
                         "[PAGOS_GMAIL]   Gmail: 100%% adjuntos OK - estrella + etiqueta(s) + leido"
                     )
-                elif attachments:
+                elif candidatos:
                     mark_unread_clear_star(gmail_svc, msg_id)
                     logger.info(
                         "[PAGOS_GMAIL]   Gmail: sin estrella; hilo dejado NO LEIDO en Gmail "
@@ -713,7 +754,7 @@ def run_pipeline(
                         scan_filter,
                     )
 
-                if attachments and not gmail_etiqueta_clasificacion_aplicada:
+                if candidatos and not gmail_etiqueta_clasificacion_aplicada:
                     k_man = PAGOS_GMAIL_LABEL_MANUAL
                     if k_man not in plantilla_label_cache:
                         plantilla_label_cache[k_man] = ensure_user_label_id(

@@ -18,6 +18,14 @@ Funciones de este módulo:
       → devuelven [correo_1] solamente; usar para el campo `To:` en notificaciones automáticas.
   - secundario_distinto_del_principal
       → normaliza y verifica que correo_2 no sea idéntico a correo_1 antes de guardarlo o mostrarlo.
+  - algun_email_coincide
+      → útil al cruzar un remitente o lista con correo_1 y correo_2 en BD (mismo orden de prioridad).
+
+Escaneo Gmail / digitalización de pagos (plantillas Mercantil, BNC, Binance, BDV, NR, etc.):
+  La cédula del Excel **no** sale de la imagen; el backend resuelve el cliente comparando el **From** (De)
+  con `clientes.email` (predeterminado); si no hay coincidencia, con `clientes.email_secundario` si no está vacío.
+  Si tampoco coincide: la columna **Cédula** del Excel queda **ERROR EMAIL** y se aplica la etiqueta Gmail **ERROR EMAIL**
+  (no inventar cédula). Ver `app.services.pagos_gmail.pipeline._cedula_por_email_cliente`.
 """
 from __future__ import annotations
 

@@ -258,11 +258,25 @@ def test_format_monto_excel_sin_unidad():
     assert format_monto_excel_pagos_gmail("122 USDT") == "122.00"
     assert format_monto_excel_pagos_gmail("142.00 USD") == "142.00"
     assert format_monto_excel_pagos_gmail("96,00") == "96.00"
+    assert format_monto_excel_pagos_gmail("NR") == "NR"
+    assert format_monto_excel_pagos_gmail("nr") == "NR"
 
 
 def test_resolve_banco_excel_desde_texto_gemini():
     """Normaliza nombre de banco del comprobante hacia rotulos cortos."""
     d_a, d_b, d_c = "Mercantil", "BNC", "BINANCE"
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "NR", "NA", default_a=d_a, default_b=d_b, default_c=d_c, default_d="BDV"
+        )
+        == "NR"
+    )
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "NR", "  Banco Mercantil  ", default_a=d_a, default_b=d_b, default_c=d_c, default_d="BDV"
+        )
+        == "Mercantil"
+    )
     assert (
         resolve_banco_para_excel_pagos_gmail(
             "B", "Banco Nacional de Credito, C.A.", default_a=d_a, default_b=d_b, default_c=d_c

@@ -30,6 +30,40 @@ app.head('/healthz', (_req, res) => res.status(200).end());
 // Si falta API_BASE_URL, el proxy no funcionará y verás 404 en las peticiones /api/*
 const API_URL = process.env.API_BASE_URL || process.env.VITE_API_BASE_URL || process.env.VITE_API_URL || 'http://localhost:8000';
 
+/** Orígenes extra para connect-src (p. ej. API absoluta en VITE_API_URL). */
+function connectSrcExtraOrigins(apiUrl) {
+  const out = new Set();
+  const raw = (apiUrl || '').trim();
+  if (!raw) return out;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      out.add(parsed.origin);
+    }
+  } catch {
+    /* ignorar URL inválida */
+  }
+  return out;
+}
+
+function buildContentSecurityPolicy(apiUrl) {
+  const connectBits = ["'self'", ...connectSrcExtraOrigins(apiUrl)];
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    `connect-src ${connectBits.join(' ')}`,
+    "frame-src 'self' blob: data:",
+    "worker-src 'self' blob:",
+  ].join('; ');
+}
+
 // Log de la URL configurada para debug
 console.log(`🔍 API_URL configurado: ${API_URL || 'NO CONFIGURADO'}`);
 console.log(`🔍 API_BASE_URL (runtime): ${process.env.API_BASE_URL || 'NO SET'}`);
@@ -64,16 +98,8 @@ app.use((req, res, next) => {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
 
-  // Content Security Policy
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; " +
-    "font-src 'self' data:; " +
-    "connect-src 'self' " + API_URL
-  );
+  // Content Security Policy (única fuente; sin meta CSP en index.html)
+  res.setHeader('Content-Security-Policy', buildContentSecurityPolicy(API_URL));
 
   // Referrer Policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');

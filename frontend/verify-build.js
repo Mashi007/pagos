@@ -41,6 +41,14 @@ if (!existsSync(indexPath)) {
   process.exit(1)
 }
 
+for (const f of ['pagos-bootstrap.js', 'pagos-critical.css']) {
+  const p = path.join(distPath, f)
+  if (!existsSync(p)) {
+    console.error(`âŒ verify-build: falta ${f} en dist/ (public shell para CSP sin inline)`)
+    process.exit(1)
+  }
+}
+
 const html = readFileSync(indexPath, 'utf8')
 // Con base: '/pagos/', Vite genera src="/pagos/assets/index-xxx.js"; con base: '/' serÃ­a /assets/
 const scriptMatch = html.match(/src="(\/pagos)?\/assets\/(index-[^"]+\.js)"/)

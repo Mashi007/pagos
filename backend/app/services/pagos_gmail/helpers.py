@@ -192,10 +192,13 @@ def format_monto_excel_pagos_gmail(monto: Optional[str]) -> str:
     """
     Columna Excel «Monto» (export Gmail): entero o decimal con punto y exactamente dos cifras decimales, sin unidad.
     Ej.: '96.00 USD' -> '96.00', '122 USDT' -> '122.00', '96,00' -> '96.00'.
+    Valor literal **NR** (no RapiCredit) se conserva tal cual.
     """
     if monto is None:
         return ""
     s = str(monto).strip()
+    if s.upper() == "NR":
+        return "NR"
     if not s or s.upper() == "NA":
         return ""
     t = re.sub(
@@ -274,6 +277,32 @@ def resolve_banco_para_excel_pagos_gmail(
     normalizado por palabras clave; si viene vacio o NA, usa el valor por plantilla A/B/C/D.
     """
     f = (fmt or "").strip().upper()
+    if f == "NR":
+        raw = (banco_gemini or "").strip()
+        if not raw or raw.upper() == "NA":
+            return "NR"
+        low = raw.lower()
+        one_line = re.sub(r"\s+", " ", raw).strip()
+        if "mercantil" in low:
+            return "Mercantil"
+        if "nacional" in low and (
+            "credito" in low or "crédito" in low or "credit" in low
+        ):
+            return "BNC"
+        if re.search(r"\bbnc\b", low):
+            return "BNC"
+        if "banesco" in low:
+            return "Banesco"
+        if "bicentenario" in low:
+            return "Bicentenario"
+        if "banco de venezuela" in low or re.search(r"\b(bdv)\b", low):
+            return "BDV"
+        if "provincial" in low or "bbva" in low:
+            return "BBVA Provincial"
+        if "binance" in low:
+            return "BINANCE"
+        out = one_line[:max_len].strip()
+        return out if out else "NR"
     if f == "C":
         return (default_c or "")[:max_len]
     if f == "D":
