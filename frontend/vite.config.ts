@@ -190,6 +190,13 @@ export default defineConfig({
         experimentalMinChunkSize: 20000,
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
+            // Debe ir con react/react-dom: usan React.memo / hooks en el tope del módulo.
+            // Si caen en `vendor` (p. ej. junto a exceljs), en producción puede fallar:
+            // "can't access property 'memo' of undefined" (React aún no enlazado entre chunks).
+            if (id.includes('react-hot-toast') || /[/\\]sonner[/\\]/.test(id)) {
+              return 'react-core'
+            }
+
             // React core - chunk separado (se carga primero por dependencia del entry)
             // Reduce el tamaÃÂÃÂ±o del chunk principal index.js
             if ((id.includes('/react/') || id.includes('/react-dom/') ||
