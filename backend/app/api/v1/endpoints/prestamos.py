@@ -1594,7 +1594,6 @@ def check_cupo_cedulas(
 
 
 @router.get("/cedula/{cedula}", response_model=dict)
-@router.get("/cedula/{cedula}", response_model=dict)
 
 def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 

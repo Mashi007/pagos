@@ -864,15 +864,19 @@ export function useExcelUploadPrestamos({
           }
         }
 
-        // Validar cupo de préstamos por cédula (V/E máx 1, J máx 5)
+        // Validar cupo de préstamos por cédula (V/E máx 1, J máx 5; misma clave que backend)
+        const claveCupoDesdeTexto = (ced: string) =>
+          (ced || '').trim().toUpperCase().replace(/-/g, '').replace(/\s/g, '')
+
         if (uniqueCedulas.length > 0) {
           try {
             const cupoResponse = await prestamoService.checkCupoCedulas(uniqueCedulas)
-            
+
             for (const cupoItem of cupoResponse.cedulas || []) {
+              const claveItem = (cupoItem.cedula_normalizada || '').trim()
               for (const row of processed) {
-                const cedNorm = (row.cedula || '').trim().toUpperCase()
-                if (cedNorm === cupoItem.cedula || cedNorm === cupoItem.cedula_normalizada) {
+                const rowClave = claveCupoDesdeTexto(row.cedula || '')
+                if (rowClave && claveItem && rowClave === claveItem) {
                   if (cupoItem.error) {
                     row._validation.cedula = {
                       isValid: false,
