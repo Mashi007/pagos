@@ -119,6 +119,10 @@ def _pick_producto_header(headers: List[str]) -> Optional[str]:
         hl = _norm_header_cell(h)
         if hl.startswith("financiam") and len(hl) > 10:
             return h
+    for h in headers:
+        hl = _norm_header_cell(h)
+        if "auto" in hl or "vehiculo" in hl or "vehículo" in hl:
+            return h
     return None
 
 
@@ -175,11 +179,8 @@ def _pick_numero_cuotas_header(headers: List[str]) -> Optional[str]:
             return h
     for h in headers:
         hl = _norm_header_cell(h)
-        if hl == "r" or hl == "col r" or hl.endswith("r"):
-            if "cuota" in (headers[headers.index(h)-1] if headers.index(h) > 0 else "").lower():
-                continue
-            if any("cuota" in headers[i].lower() for i in range(max(0, headers.index(h)-2), min(len(headers), headers.index(h)+1))):
-                return h
+        if hl == "r":
+            return h
     return None
 
 
@@ -235,16 +236,23 @@ def build_prestamos_drive_excel(
 
     missing = [label for label, key in keys.items() if not key]
     if missing:
+        import json
+        headers_list_str = json.dumps(headers, ensure_ascii=False, indent=2)
         logger.error(
             "[prestamos_drive] COLUMNAS FALTANTES: %s. Headers disponibles: %s",
             missing,
-            headers,
+            headers_list_str,
         )
-        raise ValueError(
+        error_detail = (
             "No se pudieron detectar columnas en la hoja para: "
             + ", ".join(missing)
-            + ". Revise cabeceras en CONCILIACIÓN (incl. LOTE) y vuelva a sincronizar."
+            + ".\n\n"
+            + "COLUMNAS DISPONIBLES EN LA HOJA:\n"
+            + headers_list_str
+            + "\n\n"
+            "Revise que los nombres coincidan exactamente y vuelva a sincronizar desde Drive."
         )
+        raise ValueError(error_detail)
 
     ced_key = keys["cédula"]
     tf_key = keys["total financiamiento"]
