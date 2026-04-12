@@ -150,7 +150,39 @@ def prestamo_requiere_correccion_cascada(db: Session, prestamo_id: int) -> bool:
             ~Pago.id.in_(subq),
         )
     ) or 0
-    return int(n_orphans) > 0
+    if int(n_orphans) > 0:
+        return True
+
+    # Todos los pagos elegibles ya tienen al menos una fila en cuota_pagos (subconsulta global),
+    # pero el dinero puede no estar reflejado en las cuotas de ESTE préstamo (articulación errónea,
+    # filas huérfanas, import parcial). En ese caso aplicar_pagos_pendientes no hace nada y hay que resetear.
+    sum_pagos_eleg = float(
+        db.scalar(
+            select(func.coalesce(func.sum(Pago.monto_pagado), 0)).where(
+                Pago.prestamo_id == prestamo_id,
+                _where_pago_elegible_reaplicacion_cascada(),
+                Pago.monto_pagado > 0,
+            )
+        )
+        or 0
+    )
+    sum_cp_en_cuotas = float(
+        db.scalar(
+            select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
+            .select_from(CuotaPago)
+            .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+            .where(Cuota.prestamo_id == prestamo_id)
+        )
+        or 0
+    )
+    cap_cuotas = float(
+        db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).where(Cuota.prestamo_id == prestamo_id)) or 0
+    )
+    objetivo = min(sum_pagos_eleg, cap_cuotas)
+    if objetivo > TOL_INTEGRIDAD and sum_cp_en_cuotas + TOL_INTEGRIDAD < objetivo:
+        return True
+
+    return False
 
 
 def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:

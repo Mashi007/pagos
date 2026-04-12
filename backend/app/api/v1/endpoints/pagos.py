@@ -6586,14 +6586,18 @@ def _mensaje_sin_aplicacion_cascada(diagnostico: dict[str, Any]) -> str:
     elif n_oper == 0:
         partes.append(
             "No hay pagos operativos con monto > 0 pendientes de articulación para este crédito "
-            "(todos tienen filas en cuota_pagos o no hay registros aplicables)."
+            "(todos tienen al menos una fila en cuota_pagos a nivel global, o no hay registros aplicables). "
+            "Eso no implica que el dinero esté bien repartido en las cuotas de este préstamo: "
+            "si el sistema detecta desajuste entre pagos elegibles y monto articulado a sus cuotas, "
+            "reconstruye la cascada automáticamente al pulsar de nuevo."
         )
     if isinstance(errs, list) and len(errs) > 0:
         partes.append(f"Fallos al aplicar en {len(errs)} pago(s); revise logs o integridad.")
     if not partes:
         partes.append(
             "No quedaban pagos elegibles sin filas en cuota_pagos (o monto 0). "
-            "La reaplicación completa del préstamo solo corre si el sistema detecta inconsistencia de integridad."
+            "La reaplicación completa corre si hay inconsistencia de integridad en cuotas "
+            "o si el monto elegible en pagos supera lo articulado a las cuotas de este préstamo."
         )
     return "Ningún pago nuevo se articuló en cuotas. " + " ".join(partes)
 
