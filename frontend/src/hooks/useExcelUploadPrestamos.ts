@@ -118,14 +118,16 @@ export function useExcelUploadPrestamos({
 
       const timeoutId = setTimeout(() => controller.abort(), 5000)
 
-      await fetch('/api/v1/prestamos?page=1&per_page=1', {
+      // GET /prestamos exige JWT: un fetch sin Authorization generaba 401 en logs cada 5 min.
+      // Health raíz es público (mismo origen /api/v1) y basta para saber si la API responde.
+      const res = await fetch('/api/v1/health', {
         method: 'GET',
         signal: controller.signal,
       })
 
       clearTimeout(timeoutId)
 
-      setServiceStatus('online')
+      setServiceStatus(res.ok ? 'online' : 'offline')
     } catch {
       setServiceStatus('offline')
     }
