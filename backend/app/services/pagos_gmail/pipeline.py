@@ -9,7 +9,9 @@ PDF adjunto o embebido con varias paginas: se parte en **una peticion Gemini por
 Etiquetas Gmail MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From): primero `email`, luego `email_secundario`.
-Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin etiquetas MERCANTIL / BNC / BINANCE / BNV). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
+Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta **ERROR EMAIL**; si el comprobante es plantilla A/B/C/D reconocida,
+tambien se aplican en el mismo hilo las etiquetas de plantilla (**MERCANTIL** / **BNC** / **BINANCE** / **BNV**) que correspondan a los archivos subidos a Drive (rotulacion conjunta).
+Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail que ERROR EMAIL).
 En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
 Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL): etiqueta Gmail **OTROS** (con candidatos imagen/PDF).
 Si en cualquier archivo falta requisito o no es plantilla valida: no etiquetas de plantilla; con candidatos imagen/PDF
@@ -718,8 +720,8 @@ def run_pipeline(
                     elif any_cedula_lookup_failed:
                         logger.warning(
                             "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; comprobantes reconocidos y subidos pero "
-                            "remitente sin match en clientes (columna Cedula ERROR EMAIL/BD) -> sin "
-                            "etiquetas MERCANTIL/BNC/BINANCE/BNV; se aplica etiqueta ERROR EMAIL si hubo commit.",
+                            "remitente sin match en clientes (columna Cedula ERROR EMAIL/BD). "
+                            "En Gmail se aplicaran conjuntamente ERROR EMAIL y etiquetas de plantilla por archivo OK.",
                             n_att,
                         )
                     elif any_skipped_not_plantilla_o_campos:
@@ -741,9 +743,13 @@ def run_pipeline(
                     and not any_incomplete_or_skipped
                     and had_complete_digitalization
                 )
-                # Gmail: etiqueta de usuario ERROR EMAIL (igual que columna Excel) si hubo filas guardadas
-                # y el remitente no coincide con clientes.email (o fallo BD). Bloque independiente del if/elif
-                # de etiquetas IMAGEN para que no quede sin ejecutar.
+                plantilla_unique_ids = list(
+                    dict.fromkeys(x for x in label_ids_for_message if x)
+                )
+                # Precursores (ERROR EMAIL / EMAIL-12): se combinan con etiquetas de plantilla en una sola llamada
+                # a Gmail cuando apliquen varias a la vez (rotulacion conjunta).
+                gmail_label_id_error_email: Optional[str] = None
+                gmail_label_id_email_12: Optional[str] = None
                 if (
                     any_cedula_lookup_failed
                     and committed_comprobante_rows
@@ -756,10 +762,10 @@ def run_pipeline(
                         )
                     err_lid = plantilla_label_cache.get(k_err)
                     if err_lid:
-                        add_message_user_labels_only(gmail_svc, msg_id, [err_lid])
+                        gmail_label_id_error_email = err_lid
                         gmail_etiqueta_clasificacion_aplicada = True
                         logger.info(
-                            "[PAGOS_GMAIL]   Gmail: etiqueta %s aplicada (remitente sin match en clientes o ERROR BD)",
+                            "[PAGOS_GMAIL]   Gmail: se aplicara etiqueta %s (remitente sin match en clientes o ERROR BD)",
                             k_err,
                         )
                     else:
@@ -779,10 +785,10 @@ def run_pipeline(
                         plantilla_label_cache[k12] = ensure_user_label_id(gmail_svc, k12)
                     lid12 = plantilla_label_cache.get(k12)
                     if lid12:
-                        add_message_user_labels_only(gmail_svc, msg_id, [lid12])
+                        gmail_label_id_email_12 = lid12
                         gmail_etiqueta_clasificacion_aplicada = True
                         logger.info(
-                            "[PAGOS_GMAIL]   Gmail: etiqueta %s aplicada (re-scan ERROR EMAIL, fila Mercantil/BNC)",
+                            "[PAGOS_GMAIL]   Gmail: se aplicara etiqueta %s (re-scan ERROR EMAIL, fila Mercantil/BNC)",
                             k12,
                         )
                     else:
@@ -790,6 +796,14 @@ def run_pipeline(
                             "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
                             k12,
                         )
+
+                gmail_precursor_label_ids = list(
+                    dict.fromkeys(
+                        x
+                        for x in (gmail_label_id_error_email, gmail_label_id_email_12)
+                        if x
+                    )
+                )
 
                 if remitente_solo_master and candidatos:
                     k_master = PAGOS_GMAIL_LABEL_MASTER
@@ -800,17 +814,23 @@ def run_pipeline(
                     id_master = plantilla_label_cache.get(k_master)
                     if id_master:
                         if fully_digitized_email:
-                            add_message_user_labels_only(
-                                gmail_svc, msg_id, [id_master]
+                            batch_master = list(
+                                dict.fromkeys(
+                                    [*gmail_precursor_label_ids, id_master]
+                                )
                             )
+                            if batch_master:
+                                add_message_user_labels_only(
+                                    gmail_svc, msg_id, batch_master
+                                )
                             gmail_etiqueta_clasificacion_aplicada = True
                             mark_as_read(gmail_svc, msg_id)
                             correos_marcados_revision += 1
                             logger.info(
-                                "[PAGOS_GMAIL]   Gmail: %s — solo %s (100%% OK); "
-                                "sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL",
+                                "[PAGOS_GMAIL]   Gmail: %s — etiqueta %s aplicada; total etiquetas Gmail en hilo=%d (100%% OK)",
                                 PAGOS_GMAIL_SENDER_MASTER,
                                 k_master,
+                                len(batch_master),
                             )
                         else:
                             add_message_user_labels_only(
@@ -828,18 +848,44 @@ def run_pipeline(
                             k_master,
                         )
                 elif fully_digitized_email:
-                    unique_label_ids = list(
-                        dict.fromkeys(x for x in label_ids_for_message if x)
+                    batch_ok = list(
+                        dict.fromkeys([*gmail_precursor_label_ids, *plantilla_unique_ids])
                     )
-                    add_message_user_labels_only(
-                        gmail_svc, msg_id, unique_label_ids
-                    )
+                    if batch_ok:
+                        add_message_user_labels_only(gmail_svc, msg_id, batch_ok)
                     gmail_etiqueta_clasificacion_aplicada = True
                     mark_as_read(gmail_svc, msg_id)
                     correos_marcados_revision += 1
                     logger.info(
-                        "[PAGOS_GMAIL]   Gmail: 100%% adjuntos OK - etiqueta(s) plantilla + leido"
+                        "[PAGOS_GMAIL]   Gmail: 100%% adjuntos OK — etiquetas usuario aplicadas: %d id(s) (precursor + plantilla); leido",
+                        len(batch_ok),
                     )
+                elif (
+                    committed_comprobante_rows
+                    and not remitente_solo_master
+                    and (gmail_precursor_label_ids or plantilla_unique_ids)
+                ):
+                    batch_partial = list(
+                        dict.fromkeys(
+                            [*gmail_precursor_label_ids, *plantilla_unique_ids]
+                        )
+                    )
+                    if batch_partial:
+                        add_message_user_labels_only(
+                            gmail_svc, msg_id, batch_partial
+                        )
+                        gmail_etiqueta_clasificacion_aplicada = True
+                        logger.info(
+                            "[PAGOS_GMAIL]   Gmail: etiquetas usuario aplicadas conjuntamente: %d id(s) "
+                            "(ERROR EMAIL/EMAIL-12 si aplica + MERCANTIL/BNC/BINANCE/BNV por comprobante subido)",
+                            len(batch_partial),
+                        )
+                    if candidatos:
+                        mark_message_unread(gmail_svc, msg_id)
+                        logger.info(
+                            "[PAGOS_GMAIL]   Gmail: hilo NO LEIDO (revision; no 100%% digitalizacion completa; "
+                            "estrellas Gmail no se modifican)"
+                        )
                 elif candidatos:
                     mark_message_unread(gmail_svc, msg_id)
                     logger.info(
