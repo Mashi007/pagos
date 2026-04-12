@@ -781,7 +781,12 @@ export function Reportes() {
         mensajeError = 'No se pudo generar el reporte'
       }
 
-      toast.error(mensajeError)
+      // Errores largos (ej. lista de columnas) → alert nativo para que sea legible
+      if (mensajeError && mensajeError.length > 300) {
+        window.alert(mensajeError)
+      } else {
+        toast.error(mensajeError)
+      }
     } finally {
       setGenerandoReporte(null)
     }

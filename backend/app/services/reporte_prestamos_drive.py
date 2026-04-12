@@ -165,21 +165,7 @@ def _pick_numero_cuotas_header(headers: List[str]) -> Optional[str]:
             or "cantidad" in hl
         ):
             return h
-        if hl == "cuotas":
-            return h
-    for h in headers:
-        hl = _norm_header_cell(h)
-        if hl in (
-            "cuotas",
-            "numero cuotas",
-            "número cuotas",
-            "nro cuotas",
-            "# cuotas",
-        ):
-            return h
-    for h in headers:
-        hl = _norm_header_cell(h)
-        if hl == "r":
+        if hl in ("cuotas", ".", "numero cuotas", "número cuotas", "nro cuotas", "# cuotas"):
             return h
     return None
 
@@ -215,55 +201,60 @@ def build_prestamos_drive_excel(
     )
 
     lote_key = _pick_lote_header(headers)
-    keys = {
+
+    # Columnas obligatorias (error si no se detectan)
+    required_keys: dict[str, Optional[str]] = {
         "LOTE": lote_key,
         "cédula": _pick_cedula_header(headers),
         "total financiamiento": _pick_total_financiamiento_header(headers),
         "modalidad pago": _pick_modalidad_pago_header(headers),
         "fecha requerimiento": _pick_fecha_requerimiento_header(headers),
-        "fecha aprobación (hoja)": _pick_fecha_aprobacion_header(headers),
-        "producto": _pick_producto_header(headers),
         "concesionario": _pick_concesionario_header(headers),
         "analista": _pick_analista_header(headers),
         "modelo vehículo": _pick_modelo_vehiculo_header(headers),
         "número cuotas": _pick_numero_cuotas_header(headers),
     }
 
+    # Columnas opcionales (si no existen en la hoja se deja vacío en el Excel)
+    optional_keys: dict[str, Optional[str]] = {
+        "fecha aprobación (hoja)": _pick_fecha_aprobacion_header(headers),
+        "producto": _pick_producto_header(headers),
+    }
+
+    all_keys = {**required_keys, **optional_keys}
+
     logger.info(
         "[prestamos_drive] KEYS MAPEADAS: %s",
-        {k: v for k, v in keys.items()},
+        {k: v for k, v in all_keys.items()},
     )
 
-    missing = [label for label, key in keys.items() if not key]
+    missing = [label for label, key in required_keys.items() if not key]
     if missing:
         import json
-        headers_list_str = json.dumps(headers, ensure_ascii=False, indent=2)
+        headers_list_str = json.dumps(headers, ensure_ascii=False)
         logger.error(
             "[prestamos_drive] COLUMNAS FALTANTES: %s. Headers disponibles: %s",
             missing,
             headers_list_str,
         )
-        error_detail = (
+        raise ValueError(
             "No se pudieron detectar columnas en la hoja para: "
             + ", ".join(missing)
-            + ".\n\n"
-            + "COLUMNAS DISPONIBLES EN LA HOJA:\n"
+            + ". COLUMNAS DISPONIBLES EN LA HOJA: "
             + headers_list_str
-            + "\n\n"
-            "Revise que los nombres coincidan exactamente y vuelva a sincronizar desde Drive."
+            + " Revise que los nombres coincidan exactamente y vuelva a sincronizar desde Drive."
         )
-        raise ValueError(error_detail)
 
-    ced_key = keys["cédula"]
-    tf_key = keys["total financiamiento"]
-    mod_key = keys["modalidad pago"]
-    frq_key = keys["fecha requerimiento"]
-    fap_key = keys["fecha aprobación (hoja)"]
-    prod_key = keys["producto"]
-    conc_key = keys["concesionario"]
-    ana_key = keys["analista"]
-    mv_key = keys["modelo vehículo"]
-    ncu_key = keys["número cuotas"]
+    ced_key = required_keys["cédula"]
+    tf_key = required_keys["total financiamiento"]
+    mod_key = required_keys["modalidad pago"]
+    frq_key = required_keys["fecha requerimiento"]
+    fap_key = optional_keys["fecha aprobación (hoja)"]   # puede ser None
+    prod_key = optional_keys["producto"]                  # puede ser None
+    conc_key = required_keys["concesionario"]
+    ana_key = required_keys["analista"]
+    mv_key = required_keys["modelo vehículo"]
+    ncu_key = required_keys["número cuotas"]
 
     logger.info(
         "[prestamos_drive] columnas: lote=%r ced=%r tf=%r mod=%r frq=%r fap=%r "
