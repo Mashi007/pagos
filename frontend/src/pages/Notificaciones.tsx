@@ -669,7 +669,8 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 <Link
                   to={`/revision-manual/editar/${pid}`}
                   state={{
-                    returnTo: `${location.pathname}${location.search || ''}`,
+                    /* Tras guardar/cerrar revisión: siempre el listado principal de notificaciones. */
+                    returnTo: '/notificaciones',
                   }}
                   className="font-medium text-blue-600 hover:underline"
                 >
