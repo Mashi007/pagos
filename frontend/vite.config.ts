@@ -220,6 +220,12 @@ export default defineConfig({
               return 'react-core'
             }
 
+            // recharts → react-smooth: clases con React.PureComponent en el tope del módulo.
+            // Si react-smooth cae en `vendor` (chunk compartido), en prod: "PureComponent of undefined".
+            if (id.includes('react-smooth')) {
+              return 'react-core'
+            }
+
             // React core - chunk separado (se carga primero por dependencia del entry)
             // Reduce el tamaÃÂÃÂ±o del chunk principal index.js
             if ((id.includes('/react/') || id.includes('/react-dom/') ||
