@@ -131,7 +131,7 @@ export function useGmailPipeline({
                 onDoneRef.current?.(s)
               } else {
                 toast(
-                  'No hubo correos que cumplieran el criterio de búsqueda, o ninguno generó filas en esta pasada. Revise Gmail (no leídos, estrellas y etiquetas).',
+                  'No hubo correos que cumplieran el criterio de búsqueda, o ninguno generó filas en esta pasada. Revise Gmail (no leídos y etiquetas).',
 
                   { duration: 8000 }
                 )

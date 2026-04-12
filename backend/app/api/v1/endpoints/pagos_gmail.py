@@ -1,8 +1,8 @@
 """
 Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
 Solo correos con adjuntos (has:attachment); imagen/PDF desde cuerpo incrustado, adjuntos o .eml rfc822 (deduplicado).
-Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD/Drive; por cada OK: etiqueta IMAGEN 1/2/3 + estrella.
-Si ningun adjunto OK: sin estrella + no leido cuando hay candidatos imagen/PDF.
+Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD/Drive; por cada OK: etiqueta IMAGEN 1/2/3 (sin modificar estrellas Gmail).
+Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no las toca el pipeline).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD)
 - GET /pagos/gmail/status: ultima ejecucion; escaneo automatico cada N h (solo pending_identification) si esta habilitado en settings

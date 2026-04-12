@@ -45,7 +45,7 @@ PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 PAGOS_GMAIL_LABEL_EMAIL_12 = "EMAIL-12"
 # Ninguna plantilla A/B/C/D reconocida (o no se aplico otra etiqueta de clasificacion).
 PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
-# Correos con candidatos imagen/PDF pero sin MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL (ni estrella 100%%).
+# Correos con candidatos imagen/PDF pero sin MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL.
 PAGOS_GMAIL_LABEL_OTROS = "OTROS"
 
 
@@ -1098,7 +1098,7 @@ def mark_starred_and_read(service: Any, message_id: str) -> None:
 
 
 def mark_unread_clear_star(service: Any, message_id: str) -> None:
-    """Quita estrella y deja no leido: sin digitalizar o datos incompletos (reintento manual)."""
+    """Legacy: quita estrella y deja no leido. Preferir mark_message_unread (el pipeline no gestiona estrellas)."""
     try:
         service.users().messages().modify(
             userId="me",
@@ -1107,3 +1107,15 @@ def mark_unread_clear_star(service: Any, message_id: str) -> None:
         ).execute()
     except Exception as e:
         logger.warning("Error mark_unread_clear_star %s: %s", message_id, e)
+
+
+def mark_message_unread(service: Any, message_id: str) -> None:
+    """Marca el hilo como no leido para revision; no modifica STARRED (estrellas las controla el usuario)."""
+    try:
+        service.users().messages().modify(
+            userId="me",
+            id=message_id,
+            body={"addLabelIds": ["UNREAD"]},
+        ).execute()
+    except Exception as e:
+        logger.warning("Error mark_message_unread %s: %s", message_id, e)

@@ -111,7 +111,7 @@ REGLA SISTEMA C (imagen 3 / Binance Pay): Devuelve "C" si ves el nucleo C (PASO 
   En el JSON pon siempre fecha_pago="NA", cedula="NA" y email_cliente="NA" (el backend usa el remitente del correo para cliente y cedula).
   Si falta monto o id de orden con certeza -> "ninguno".
 
-COLUMNAS OBLIGATORIAS Y GMAIL (estrella / etiquetas — las aplica el backend):
+COLUMNAS OBLIGATORIAS Y GMAIL (etiquetas de usuario — las aplica el backend; no gestiona estrellas):
   A, B y D: fecha_pago, monto y numero_referencia reales desde la imagen; cedula siempre "NA" en JSON.
   C: monto y numero_referencia desde la imagen; fecha_pago, cedula y email_cliente "NA" en JSON.
   El pipeline evalua cada imagen/PDF por separado: varias piezas validas en un correo generan varias filas. La cedula en Excel la resuelve el backend con tabla clientes por email De.

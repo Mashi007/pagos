@@ -6,14 +6,14 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
 
 Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **MASTER** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
 PDF adjunto o embebido con varias paginas: se parte en **una peticion Gemini por pagina** (cada pagina = como maximo un pago / una fila).
-Estrella Gmail + etiquetas MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
+Etiquetas Gmail MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From): primero `email`, luego `email_secundario`.
-Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella MERCANTIL / BNC / BINANCE / BNV). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
+Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin etiquetas MERCANTIL / BNC / BINANCE / BNV). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
 En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
 Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL): etiqueta Gmail **OTROS** (con candidatos imagen/PDF).
-Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas de plantilla; con candidatos imagen/PDF
-se fuerza sin estrella + no leido en Gmail para reintento. No inventar datos: Gemini ya devuelve NA si no hay certeza.
+Si en cualquier archivo falta requisito o no es plantilla valida: no etiquetas de plantilla; con candidatos imagen/PDF
+se marca **no leido** en Gmail para reintento (no se modifican estrellas: las deja el usuario). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
 Cedula: por defecto solo desde tabla clientes por email del De (From): `email` y `email_secundario`; nunca desde la imagen.
 Excepcion: scan_filter **error_email_rescan** (correos con etiqueta ERROR EMAIL sin EMAIL-12) — plantillas **A** y **B**: cedula se lee de la imagen (Gemini) o columna **ERROR** si no es clara; ademas etiqueta Gmail **EMAIL-12** si hubo fila A/B confirmada.
@@ -35,7 +35,6 @@ from app.services.pagos_gmail.drive_service import (
     upload_file,
 )
 from app.services.pagos_gmail.gmail_service import (
-    add_message_star_and_user_labels,
     add_message_user_labels_only,
     build_gmail_service,
     ensure_user_label_id,
@@ -46,7 +45,7 @@ from app.services.pagos_gmail.gmail_service import (
     get_or_create_pagos_gmail_plantilla_label_ids,
     list_messages_by_filter,
     mark_as_read,
-    mark_unread_clear_star,
+    mark_message_unread,
     PagosGmailGmailListError,
     PAGOS_GMAIL_LABEL_EMAIL_12,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
@@ -210,9 +209,9 @@ def run_pipeline(
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
-    Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D) + estrella; cierre: leido si hubo algun OK.
+    Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D); cierre: leido si hubo digitalizacion 100%% OK.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto API/UI: all).
-      Por defecto (**all** / **pending_identification**): inbox con imagen/PDF — leidos y no leidos, con o sin estrella,
+      Por defecto (**all** / **pending_identification**): inbox con imagen/PDF — leidos y no leidos (el pipeline no modifica estrellas Gmail),
       con cualquier etiqueta de usuario (incluye **ERROR EMAIL**; la consulta Gmail no excluye esa etiqueta).
       **unread** / **read**: mismo criterio base + ``is:unread`` / ``is:read`` en la búsqueda Gmail.
       **error_email_rescan**: solo hilos con etiqueta **ERROR EMAIL** y sin **EMAIL-12**; Gemini en modo Mercantil/BNC con cédula en imagen para A/B.
@@ -264,7 +263,7 @@ def run_pipeline(
     emails_ok = 0
     files_ok = 0
     drive_errors = 0
-    # Correos que quedaron con estrella tras digitalizacion completa (cuatro columnas).
+    # Correos con digitalizacion 100%% y etiquetas de plantilla aplicadas + marcados leidos en Gmail.
     correos_marcados_revision = 0
     plantilla_label_cache: Dict[str, Optional[str]] = {}
     error_email_rescan = (scan_filter or "").strip().lower() == "error_email_rescan"
@@ -688,7 +687,7 @@ def run_pipeline(
                                 if label_id and not remitente_solo_master:
                                     label_ids_for_message.append(label_id)
                                 logger.info(
-                                    "[PAGOS_GMAIL]   Digitalizado OK (%s); estrella/etiqueta solo si 100%% candidatos: %s",
+                                    "[PAGOS_GMAIL]   Digitalizado OK (%s); etiquetas plantilla solo si 100%% candidatos: %s",
                                     etiqueta_nombre,
                                     p["filename"],
                                 )
@@ -713,27 +712,27 @@ def run_pipeline(
                         logger.warning(
                             "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; mezcla: uno o mas no son plantilla A/B/C/D "
                             "o datos incompletos, y ademas remitente sin cedula en clientes (ERROR EMAIL). "
-                            "No estrella ni leido automatico (100%% en todos + remitente valido).",
+                            "Sin etiquetas plantilla ni leido automatico (100%% en todos + remitente valido).",
                             n_att,
                         )
                     elif any_cedula_lookup_failed:
                         logger.warning(
                             "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; comprobantes reconocidos y subidos pero "
-                            "remitente sin match en clientes (columna Cedula ERROR EMAIL/BD) -> no estrella ni "
+                            "remitente sin match en clientes (columna Cedula ERROR EMAIL/BD) -> sin "
                             "etiquetas MERCANTIL/BNC/BINANCE/BNV; se aplica etiqueta ERROR EMAIL si hubo commit.",
                             n_att,
                         )
                     elif any_skipped_not_plantilla_o_campos:
                         logger.warning(
                             "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C/D valida "
-                            "o fallaron -> no estrella ni leido (se exige 100%% OK en todos). "
+                            "o fallaron -> sin etiquetas plantilla ni leido (se exige 100%% OK en todos). "
                             "Puede haber filas BD sin link Drive si fallo la subida tras el primer commit.",
                             n_att,
                         )
                     else:
                         logger.warning(
                             "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; incompleto por commit/subida Drive u otro fallo "
-                            "-> no estrella ni leido (100%% en todos).",
+                            "-> sin etiquetas plantilla ni leido (100%% en todos).",
                             n_att,
                         )
 
@@ -744,7 +743,7 @@ def run_pipeline(
                 )
                 # Gmail: etiqueta de usuario ERROR EMAIL (igual que columna Excel) si hubo filas guardadas
                 # y el remitente no coincide con clientes.email (o fallo BD). Bloque independiente del if/elif
-                # de estrella+IMAGEN para que no quede sin ejecutar.
+                # de etiquetas IMAGEN para que no quede sin ejecutar.
                 if (
                     any_cedula_lookup_failed
                     and committed_comprobante_rows
@@ -801,14 +800,14 @@ def run_pipeline(
                     id_master = plantilla_label_cache.get(k_master)
                     if id_master:
                         if fully_digitized_email:
-                            add_message_star_and_user_labels(
+                            add_message_user_labels_only(
                                 gmail_svc, msg_id, [id_master]
                             )
                             gmail_etiqueta_clasificacion_aplicada = True
                             mark_as_read(gmail_svc, msg_id)
                             correos_marcados_revision += 1
                             logger.info(
-                                "[PAGOS_GMAIL]   Gmail: %s — solo %s + estrella (100%% OK); "
+                                "[PAGOS_GMAIL]   Gmail: %s — solo %s (100%% OK); "
                                 "sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL",
                                 PAGOS_GMAIL_SENDER_MASTER,
                                 k_master,
@@ -832,26 +831,25 @@ def run_pipeline(
                     unique_label_ids = list(
                         dict.fromkeys(x for x in label_ids_for_message if x)
                     )
-                    add_message_star_and_user_labels(
+                    add_message_user_labels_only(
                         gmail_svc, msg_id, unique_label_ids
                     )
                     gmail_etiqueta_clasificacion_aplicada = True
                     mark_as_read(gmail_svc, msg_id)
                     correos_marcados_revision += 1
                     logger.info(
-                        "[PAGOS_GMAIL]   Gmail: 100%% adjuntos OK - estrella + etiqueta(s) + leido"
+                        "[PAGOS_GMAIL]   Gmail: 100%% adjuntos OK - etiqueta(s) plantilla + leido"
                     )
                 elif candidatos:
-                    mark_unread_clear_star(gmail_svc, msg_id)
+                    mark_message_unread(gmail_svc, msg_id)
                     logger.info(
-                        "[PAGOS_GMAIL]   Gmail: sin estrella; hilo dejado NO LEIDO en Gmail "
-                        "(no 100%% digitalizacion o sin adjuntos validos — para revision humana; "
-                        "el listado del pipeline ya incluye leidos y no leidos)"
+                        "[PAGOS_GMAIL]   Gmail: hilo marcado NO LEIDO (no 100%% digitalizacion o sin adjuntos validos; "
+                        "estrellas Gmail no se modifican — revision humana; el listado del pipeline incluye leidos y no leidos)"
                     )
                 else:
                     logger.info(
                         "[PAGOS_GMAIL]   Gmail: filtro=%s — sin candidatos imagen/PDF utiles; "
-                        "no estrella/leido automatico.",
+                        "sin modificaciones en Gmail.",
                         scan_filter,
                     )
 
