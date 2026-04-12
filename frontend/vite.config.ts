@@ -207,6 +207,19 @@ export default defineConfig({
               return 'react-core'
             }
 
+            // Paquetes `react-*` / hooks que NO pasan por la ruta `.../react/...` del paquete core
+            // (Radix, scroll lock, transiciones → useLayoutEffect / Children undefined si van a `vendor`).
+            if (
+              id.includes('react-remove-scroll') ||
+              id.includes('react-remove-scroll-bar') ||
+              id.includes('react-style-singleton') ||
+              id.includes('react-transition-group') ||
+              id.includes('use-sidecar') ||
+              id.includes('use-callback-ref')
+            ) {
+              return 'react-core'
+            }
+
             // React core - chunk separado (se carga primero por dependencia del entry)
             // Reduce el tamaÃÂÃÂ±o del chunk principal index.js
             if ((id.includes('/react/') || id.includes('/react-dom/') ||
@@ -230,9 +243,9 @@ export default defineConfig({
 
             // LibrerÃÂÃÂ­as pesadas de exportaciÃÂÃÂ³n - LAZY LOADING (cargar solo cuando se necesiten)
             // Estas librerÃÂÃÂ­as NO se incluyen en el bundle inicial, solo se cargan bajo demanda
-            // Exceljs en vendor para evitar 404 del chunk exceljs-XXX.js (cachÃÂ©/hash en Render)
+            // Chunk propio: no mezclar exceljs con `vendor` (menos riesgo de orden / APIs de React).
             if (id.includes('exceljs')) {
-              return 'vendor'
+              return 'exceljs'
             }
             if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('jspdf-autotable')) {
               return 'pdf-export' // Chunk separado, se carga solo al exportar PDF
