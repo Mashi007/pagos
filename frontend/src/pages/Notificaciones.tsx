@@ -595,7 +595,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     queryFn: () =>
       notificacionService.getCuotasPendiente2DiasAntes(fechaCaracasApi),
 
-    staleTime: 0,
+    // El criterio d2antes (vencimiento exactamente hoy+2) cambia muy poco intradía;
+    // 30 s de gracia evitan GETs en cada foco de ventana sin sacrificar frescura operativa.
+    staleTime: 30_000,
 
     refetchOnWindowFocus: true,
 

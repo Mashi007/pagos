@@ -240,7 +240,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         },
         {
           title: '2 días antes',
-          href: '/notificaciones/d-1-dia',
+          href: '/notificaciones/d-2-antes',
           icon: Clock,
         },
       ],

@@ -52,7 +52,7 @@ export function rutaListadoNotificacionesPorTipoPlantilla(
 ): string {
   switch (tipo) {
     case 'PAGO_2_DIAS_ANTES_PENDIENTE':
-      return '/notificaciones/d-1-dia'
+      return '/notificaciones/d-2-antes'
     case 'PREJUDICIAL':
       return '/notificaciones/a-3-cuotas'
     default:

@@ -2,9 +2,9 @@
 Endpoints de notificaciones a clientes retrasados.
 Todo el router exige rol admin (Depends(require_admin) a nivel de APIRouter).
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
-Reglas: 5 pestaÃƒÂ±as por dÃƒÂ­as hasta vencimiento y mora 61+.
-ConfiguraciÃƒÂ³n de envÃƒÂ­os (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
-CRUD de plantillas en plantillas_notificacion; envÃƒÂ­o puede usar plantilla por tipo vÃƒÂ­a plantilla_id en config.
+Reglas: 5 pestañas por días hasta vencimiento y mora 61+.
+Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
+CRUD de plantillas en plantillas_notificacion; envío puede usar plantilla por tipo vía plantilla_id en config.
 """
 import json
 import os
@@ -74,8 +74,8 @@ def get_notificaciones_envios_config(db: Session) -> dict:
     return get_notificaciones_envios_dict(db)
 
 
-# Las funciones _item e _item_tab estÃƒÂ¡n ahora en app.services.notificacion_service
-# para evitar duplicaciÃƒÂ³n y facilitar mantenimiento. Se importan desde allÃƒÂ­.
+# Las funciones _item e _item_tab están ahora en app.services.notificacion_service
+# para evitar duplicación y facilitar mantenimiento. Se importan desde allí.
 
 
 # --- Helpers plantillas ---
@@ -555,7 +555,7 @@ def _contexto_preview_cobranza() -> dict:
     """Contexto de ejemplo para vista previa del PDF (fecha en America/Caracas)."""
     return {
         "CLIENTES.TRATAMIENTO": "Sr.",
-        "CLIENTES.NOMBRE_COMPLETO": "Juan PÃƒÂ©rez (ejemplo)",
+        "CLIENTES.NOMBRE_COMPLETO": "Juan Pérez (ejemplo)",
         "CLIENTES.CEDULA": "V-12345678",
         "PRESTAMOS.ID": "1001",
         "NUMEROCORRELATIVO": "2025-001",
