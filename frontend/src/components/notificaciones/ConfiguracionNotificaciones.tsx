@@ -530,6 +530,13 @@ export function ConfiguracionNotificaciones({
   )
 
   /**
+   * Cron 03:00 Caracas: solo PAGO_2_DIAS_ANTES_PENDIENTE (clave cron_envio_pago_2_dias_antes en BD).
+   * Editable únicamente en el submódulo «2 días antes»; no se envía en guardados de otros alcances.
+   */
+  const [cronPago2DiasAntesHabilitado, setCronPago2DiasAntesHabilitado] =
+    useState(false)
+
+  /**
    * Texto libre del textarea CCO (incluye saltos con Enter). Sin esto, al parsear se pierden
    * lineas vacias y el valor controlado colapsa: Enter no permitia escribir el siguiente correo.
    */
@@ -727,6 +734,22 @@ export function ConfiguracionNotificaciones({
     setCampanasMasivos(cm)
     setCcoDraftPorTipo({})
     setCcoDraftPorCampanaId({})
+
+    const cronRaw = (dataEnvios as Record<string, unknown>)
+      ?.cron_envio_pago_2_dias_antes
+    if (cronRaw && typeof cronRaw === 'object' && cronRaw !== null) {
+      const o = cronRaw as { habilitado?: unknown; enabled?: unknown }
+      const h = o.habilitado ?? o.enabled
+      const on =
+        h === true ||
+        (typeof h === 'string' &&
+          ['true', '1', 'yes', 'si', 'sí', 'on'].includes(
+            h.trim().toLowerCase()
+          ))
+      setCronPago2DiasAntesHabilitado(Boolean(on))
+    } else {
+      setCronPago2DiasAntesHabilitado(false)
+    }
   }, [dataEnvios])
 
   useEffect(() => {
@@ -875,6 +898,11 @@ export function ConfiguracionNotificaciones({
             incluir_pdf_anexo:
               tipo === 'MASIVOS' ? false : c.incluir_pdf_anexo !== false,
             incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
+          }
+        }
+        if (alcance === 'solo_pago_2_dias_antes_pendiente') {
+          ;(payload as Record<string, unknown>).cron_envio_pago_2_dias_antes = {
+            habilitado: cronPago2DiasAntesHabilitado,
           }
         }
       } else {
@@ -1343,6 +1371,59 @@ export function ConfiguracionNotificaciones({
           </CardDescription>
         </CardHeader>
       </Card>
+
+      {alcance === 'solo_pago_2_dias_antes_pendiente' ? (
+        <Card className="border-indigo-200 bg-indigo-50/40">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Clock className="h-5 w-5 text-indigo-600" />
+              Envío automático a las 03:00 (America/Caracas)
+            </CardTitle>
+            <CardDescription className="text-sm">
+              Solo el criterio <strong>PAGO_2_DIAS_ANTES_PENDIENTE</strong> (esta
+              pantalla). No programa ni envía previas, retrasadas, prejudicial
+              ni masivos. Requiere{' '}
+              <code className="rounded bg-white px-1 text-xs">
+                ENABLE_AUTOMATIC_SCHEDULED_JOBS=true
+              </code>{' '}
+              en el servidor. A la hora indicada se usa la misma lógica que
+              «Enviar notificaciones (manual)»: correo del cliente, CCO de esta
+              fila (hasta 3 en la UI; revise que sean válidos), plantilla y modo
+              prueba/producción globales. Si la fila tiene <strong>Envío</strong>{' '}
+              desactivado, el cron omite todos los destinatarios (respeta el
+              interruptor).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-gray-800">
+              Disparo diario 03:00
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={cronPago2DiasAntesHabilitado}
+              onClick={() => {
+                markEnviosLocalDirty()
+                setCronPago2DiasAntesHabilitado(v => !v)
+              }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 ${
+                cronPago2DiasAntesHabilitado ? 'bg-indigo-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${
+                  cronPago2DiasAntesHabilitado ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className="text-sm text-gray-700">
+              {cronPago2DiasAntesHabilitado
+                ? 'Activado: el servidor intentará el envío cada día a las 03:00.'
+                : 'Desactivado: solo envío manual desde la pestaña de listado.'}
+            </span>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Modo Prueba / Producción: un solo bloque, sin duplicar config */}
 

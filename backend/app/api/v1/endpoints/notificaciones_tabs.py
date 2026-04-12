@@ -1153,6 +1153,8 @@ def ejecutar_envio_caso_manual(
     db: Session,
     tipo: str,
     fecha_referencia: Optional[date] = None,
+    *,
+    respetar_toggle_envio: bool = False,
 ) -> dict:
     """
     Envio sincrono solo para un criterio (una fila de configuracion: PAGO_1_DIA_ANTES, etc.).
@@ -1162,13 +1164,20 @@ def ejecutar_envio_caso_manual(
     unicamente la config de ese tipo (plantilla/CCO/PDF del caso), sin inferir otro tipo por fila.
 
     fecha_referencia: mismo criterio que ?fecha_caracas= en GET listados (America/Caracas).
+
+    respetar_toggle_envio: si True, respeta habilitado=False de la fila en BD (omitidos_config).
+        Solo debe usarse desde el job programado «2 días antes» a las 03:00 Caracas.
+        La API POST /enviar-caso-manual sigue forzando habilitado (respetar_toggle_envio=False).
     """
     tipo = (tipo or "").strip()
     if tipo not in TIPOS_CASO_MANUAL:
         raise ValueError("tipo_caso_manual_invalido")
 
     config_raw = get_notificaciones_envios_config(db)
-    config_envios = _config_envios_forzar_habilitado_caso(config_raw, tipo)
+    if respetar_toggle_envio:
+        config_envios = dict(config_raw) if isinstance(config_raw, dict) else {}
+    else:
+        config_envios = _config_envios_forzar_habilitado_caso(config_raw, tipo)
 
     asunto_prev = "Recordatorio: cuota por vencer - Rapicredit"
     cuerpo_prev = (

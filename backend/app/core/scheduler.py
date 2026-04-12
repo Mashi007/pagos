@@ -7,6 +7,7 @@ Por defecto esta desactivado: ningun cron en servidor; la pantalla Configuracion
 Cuando esta activo:
 - 02:00  Finiquito: refrescar tabla finiquito_casos.
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
+- 03:00  Notificaciones «2 dias antes» (PAGO_2_DIAS_ANTES_PENDIENTE): solo si cron_envio_pago_2_dias_antes.habilitado en BD; no afecta otros casos.
 - 04:00  Limpieza codigos estado de cuenta.
 - 04:01  Hoja CONCILIACION (Google Sheets) -> BD: conciliacion_sheet_* y tabla drive (columnas A..S).
 - 04:00, 11:00, 20:00  Gmail (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
@@ -53,6 +54,22 @@ def _job_finiquito_refresh() -> None:
         logger.exception("Error en job finiquito_refresh: %s", e)
     finally:
         db.close()
+
+
+def _job_notificaciones_pago_2_dias_antes_0300() -> None:
+    """
+    03:00 Caracas. Únicamente el caso PAGO_2_DIAS_ANTES_PENDIENTE si está habilitado en
+    configuracion.notificaciones_envios → cron_envio_pago_2_dias_antes.habilitado.
+    No dispara previas, retrasadas, prejudicial ni masivos.
+    """
+    try:
+        from app.services.notificaciones_cron_pago_2_dias_antes import (
+            job_wrapper_cron_pago_2_dias_antes,
+        )
+
+        job_wrapper_cron_pago_2_dias_antes()
+    except Exception as e:
+        logger.exception("Error en job notificaciones_pago_2_dias_antes_0300: %s", e)
 
 
 def _job_auditoria_cartera_prestamos() -> None:
@@ -170,7 +187,7 @@ def _job_pagos_gmail_pending_scan() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: finiquito 02:00; auditoria 03:00; hoja Drive 04:01; limpieza 04:00; Gmail 04/11/20 opcional."""
+    """Inicia el scheduler: finiquito 02:00; auditoria 03:00; notif 2 dias antes 03:00 (opcional por BD); hoja Drive 04:01; limpieza 04:00; Gmail 04/11/20 opcional."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
@@ -188,6 +205,12 @@ def start_scheduler() -> None:
         CronTrigger(hour=3, minute=0, timezone=SCHEDULER_TZ),
         id="auditoria_cartera_prestamos_0300",
         name="Auditoria cartera prestamos 03:00",
+    )
+    _scheduler.add_job(
+        _job_notificaciones_pago_2_dias_antes_0300,
+        CronTrigger(hour=3, minute=0, timezone=SCHEDULER_TZ),
+        id="notificaciones_pago_2_dias_antes_0300",
+        name="Notificaciones 2 dias antes (PAGO_2_DIAS_ANTES_PENDIENTE) 03:00",
     )
     # 04:01 - Snapshot Google CONCILIACIÓN -> conciliacion_sheet_* + tabla drive (A..S)
     _scheduler.add_job(
@@ -219,8 +242,8 @@ def start_scheduler() -> None:
         _gmail_log = "; Gmail pagos pendientes 4:00, 11:00 y 20:00"
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: finiquito 02:00; auditoria 03:00; hoja Drive CONCILIACION 04:01; "
-        "limpieza estado_cuenta_codigos 4:00%s (%s).",
+        "Scheduler iniciado: finiquito 02:00; auditoria 03:00; notif PAGO_2_DIAS_ANTES 03:00 (si habilitado en BD); "
+        "hoja Drive CONCILIACION 04:01; limpieza estado_cuenta_codigos 4:00%s (%s).",
         _gmail_log,
         SCHEDULER_TZ,
     )
