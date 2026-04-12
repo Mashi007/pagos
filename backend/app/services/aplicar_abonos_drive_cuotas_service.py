@@ -30,6 +30,7 @@ from app.services.comparar_abonos_drive_cuotas_service import (
     comparar_abonos_drive_vs_cuotas,
 )
 from app.services.cuota_estado import TZ_NEGOCIO
+from app.services.cuota_pago_integridad import suma_monto_aplicado_pago
 from app.services.pago_huella_funcional import conflicto_huella_para_creacion
 from app.services.pago_registro_moneda import resolver_monto_registro_pago
 from app.services.pagos_cuotas_reaplicacion import eliminar_todos_pagos_prestamo
@@ -152,6 +153,28 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
     cuotas_parciales = 0
     if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
         cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
+
+    # Defensa: el pago debe quedar articulado en cuota_pagos hasta agotar cupo en cuotas (no solo «<= monto»).
+    monto_f = float(monto_usd_g or 0)
+    if monto_f > _TOL and pago.id is not None:
+        sum_ap = float(suma_monto_aplicado_pago(db, int(pago.id)))
+        sin_aplicar = round(monto_f - sum_ap, 2)
+        if sin_aplicar > 0.05:
+            cap_cuotas = 0.0
+            for c in db.execute(
+                select(Cuota)
+                .where(Cuota.prestamo_id == prestamo_id)
+                .order_by(Cuota.numero_cuota.asc())
+            ).scalars().all():
+                cap_cuotas += max(
+                    0.0, float(c.monto or 0) - float(c.total_pagado or 0)
+                )
+            if cap_cuotas > 0.05:
+                raise ValueError(
+                    "La cascada no distribuyó todo el monto en las cuotas aunque hay cupo pendiente "
+                    f"(pago USD {monto_f:.2f}, aplicado a cuotas {sum_ap:.2f}, cupo restante en cuotas ≈ {cap_cuotas:.2f}). "
+                    "Reintente; si persiste, use reaplicación en cascada del préstamo en Pagos / préstamo."
+                )
 
     pago.estado = _estado_conciliacion_post_cascada(pago, cuotas_completadas, cuotas_parciales)
     _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)

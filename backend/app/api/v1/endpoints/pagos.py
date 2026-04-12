@@ -7155,7 +7155,9 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
                 or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto - 0.01),
             )
             .order_by(Cuota.numero_cuota.asc())  # Cascada: primero cuotas mas antiguas
-            .with_for_update(skip_locked=True)
+            # FOR UPDATE sin SKIP LOCKED: con SKIP LOCKED, filas bloqueadas por otra sesión no entran
+            # al SELECT y el pago puede quedar parcialmente sin aplicar (sobrante en cartera vs cuotas).
+            .with_for_update()
 
         )
 
