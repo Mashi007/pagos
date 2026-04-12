@@ -1,14 +1,19 @@
 """
 Compara ABONOS de la hoja CONCILIACIÓN (snapshot Drive) vs suma de total_pagado en cuotas por préstamo.
-Usado desde notificaciones (misma cédula que el listado).
+
+Solo se consideran filas de la hoja que corresponden al préstamo en análisis (cédula + huella de
+monto/cuotas/modalidad). Si hay varias filas con la misma cédula y no se puede resolver, se pide
+elegir LOTE (columna detectada, p. ej. LOTE en B) y se valida que esa fila corresponda al préstamo.
+No se suman abonos de otros créditos de la misma cédula (opción A de negocio).
 """
 from __future__ import annotations
 
 import logging
 import re
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -16,13 +21,24 @@ from sqlalchemy.orm import Session
 from app.models.conciliacion_sheet import ConciliacionSheetMeta, ConciliacionSheetRow
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
-from app.services.reporte_clientes_hoja import _as_text, _pick_cedula_header
-from app.services.reporte_prestamos_drive import _pick_abonos_header
+from app.services.reporte_clientes_hoja import (
+    _as_text,
+    _norm_lote_celda,
+    _pick_cedula_header,
+    _pick_lote_header,
+)
+from app.services.reporte_prestamos_drive import (
+    _pick_abonos_header,
+    _pick_modalidad_pago_header,
+    _pick_numero_cuotas_header,
+    _pick_total_financiamiento_header,
+)
 from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
 
 logger = logging.getLogger(__name__)
 
 _TOL_MONTO = 0.02
+_TOL_FIN_HOJA_USD = 1.0  # tolerancia hoja vs prestamo.total_financiamiento (redondeos / lectura)
 
 
 def _parse_monto_celda_hoja(val: Any) -> Optional[float]:
@@ -66,11 +82,75 @@ def _to_float_cuota_total(v: Any) -> float:
         return 0.0
 
 
+def _parse_int_celda(val: Any) -> Optional[int]:
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, int) and not isinstance(val, bool):
+        return int(val)
+    if isinstance(val, float):
+        if val != val or abs(val) > 1e9:
+            return None
+        return int(round(val))
+    s = _as_text(val)
+    if not s:
+        return None
+    s = s.replace(" ", "").replace(",", ".")
+    try:
+        return int(float(s))
+    except ValueError:
+        return None
+
+
+def _norm_modalidad(s: str) -> str:
+    return (s or "").strip().upper().replace(" ", "")
+
+
+def _fila_hoja_coincide_prestamo(
+    cells: Dict[str, Any],
+    prestamo: Prestamo,
+    tf_key: Optional[str],
+    mod_key: Optional[str],
+    ncu_key: Optional[str],
+) -> bool:
+    """True si la fila (monto total, cuotas, modalidad) alinea con el préstamo en BD."""
+    if not tf_key or not ncu_key or not mod_key:
+        return False
+    m_tf = _parse_monto_celda_hoja(cells.get(tf_key))
+    if m_tf is None:
+        return False
+    try:
+        tf_bd = float(prestamo.total_financiamiento or 0)
+    except (TypeError, ValueError):
+        tf_bd = 0.0
+    if abs(m_tf - tf_bd) > _TOL_FIN_HOJA_USD:
+        return False
+    n_h = _parse_int_celda(cells.get(ncu_key))
+    if n_h is None or int(prestamo.numero_cuotas or 0) != int(n_h):
+        return False
+    mod_h = _norm_modalidad(_as_text(cells.get(mod_key)))
+    mod_p = _norm_modalidad(prestamo.modalidad_pago or "")
+    if not mod_h or not mod_p or mod_h != mod_p:
+        return False
+    return True
+
+
+def _norm_lote_param(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    return _norm_lote_celda(s)
+
+
 def comparar_abonos_drive_vs_cuotas(
     db: Session,
     *,
     cedula: str,
     prestamo_id: int,
+    lote: Optional[str] = None,
 ) -> Dict[str, Any]:
     cedula_in = (cedula or "").strip()
     if not cedula_in:
@@ -108,14 +188,22 @@ def comparar_abonos_drive_vs_cuotas(
 
     ced_key = _pick_cedula_header(headers) if headers else None
     abo_key = _pick_abonos_header(headers) if headers else None
+    lote_key = _pick_lote_header(headers) if headers else None
+    tf_key = _pick_total_financiamiento_header(headers) if headers else None
+    mod_key = _pick_modalidad_pago_header(headers) if headers else None
+    ncu_key = _pick_numero_cuotas_header(headers) if headers else None
+
     if not ced_key:
         advertencias.append("No se detectó columna de cédula en la hoja.")
     if not abo_key:
         advertencias.append("No se detectó columna ABONOS en la hoja.")
+    if not lote_key:
+        advertencias.append("No se detectó columna LOTE en la hoja (necesaria si hay varios créditos por cédula).")
 
-    filas_coincidentes = 0
-    suma_abonos_drive = 0.0
-    if ced_key and abo_key:
+    lote_filtro = _norm_lote_param(lote)
+
+    filas_por_cedula: List[Tuple[Dict[str, Any], Optional[str]]] = []
+    if ced_key:
         clave = clave_param or normalizar_cedula_clave_cupo(cedula_in)
         sheet_rows = db.execute(
             select(ConciliacionSheetRow).order_by(ConciliacionSheetRow.row_index)
@@ -127,7 +215,72 @@ def comparar_abonos_drive_vs_cuotas(
             c_raw = _as_text(cells.get(ced_key))
             if normalizar_cedula_clave_cupo(c_raw) != clave:
                 continue
-            filas_coincidentes += 1
+            ln = _norm_lote_celda(cells.get(lote_key)) if lote_key else None
+            filas_por_cedula.append((cells, ln))
+
+    filas_prestamo: List[Dict[str, Any]] = []
+    requiere_seleccion_lote = False
+    opciones_lote: List[Dict[str, Any]] = []
+
+    if ced_key and abo_key and filas_por_cedula:
+        candidatas = filas_por_cedula
+        if lote_filtro and lote_key:
+            candidatas = [(c, ln) for c, ln in candidatas if ln is not None and ln == lote_filtro]
+
+        for cells, _ln in candidatas:
+            if _fila_hoja_coincide_prestamo(cells, prestamo, tf_key, mod_key, ncu_key):
+                filas_prestamo.append(cells)
+
+        if not filas_prestamo and filas_por_cedula:
+            # Varias filas misma cédula: pedir LOTE si hay más de un lote distinto
+            if len(filas_por_cedula) > 1 and lote_key and not lote_filtro:
+                por_lote: Dict[str, float] = defaultdict(float)
+                for cells, ln in filas_por_cedula:
+                    if ln is None:
+                        continue
+                    m = _parse_monto_celda_hoja(cells.get(abo_key)) if abo_key else None
+                    if m is not None:
+                        por_lote[ln] += m
+                if len(por_lote) > 1:
+                    requiere_seleccion_lote = True
+
+                    def _sort_lote_key(item: Tuple[str, float]) -> Tuple[int, str]:
+                        k, _ = item
+                        try:
+                            return (0, f"{int(k):012d}")
+                        except (TypeError, ValueError):
+                            return (1, str(k))
+
+                    opciones_lote = [
+                        {"lote": k, "abonos": round(v, 2)}
+                        for k, v in sorted(por_lote.items(), key=_sort_lote_key)
+                    ]
+                elif len(por_lote) == 1:
+                    unico = next(iter(por_lote.keys()))
+                    candidatas2 = [(c, ln) for c, ln in filas_por_cedula if ln == unico]
+                    for cells, _ln in candidatas2:
+                        if _fila_hoja_coincide_prestamo(cells, prestamo, tf_key, mod_key, ncu_key):
+                            filas_prestamo.append(cells)
+            # Una sola fila cédula: usar aunque falle huella estricta (compatibilidad), con aviso
+            if not filas_prestamo and len(filas_por_cedula) == 1:
+                cells0, _ = filas_por_cedula[0]
+                filas_prestamo = [cells0]
+                if not _fila_hoja_coincide_prestamo(cells0, prestamo, tf_key, mod_key, ncu_key):
+                    advertencias.append(
+                        "La fila de la hoja no coincide plenamente con monto/cuotas/modalidad del préstamo en BD; "
+                        "revise la hoja o use el lote correcto."
+                    )
+
+        if lote_filtro and lote_key and not filas_prestamo and filas_por_cedula:
+            raise ValueError(
+                f"El lote {lote_filtro!s} no corresponde a este préstamo en la hoja "
+                "(cédula + total financiamiento / número de cuotas / modalidad)."
+            )
+
+    filas_coincidentes = len(filas_prestamo)
+    suma_abonos_drive = 0.0
+    if abo_key:
+        for cells in filas_prestamo:
             m = _parse_monto_celda_hoja(cells.get(abo_key))
             if m is not None:
                 suma_abonos_drive += m
@@ -135,9 +288,14 @@ def comparar_abonos_drive_vs_cuotas(
     abonos_drive: Optional[float] = None
     if ced_key and abo_key and filas_coincidentes > 0:
         abonos_drive = suma_abonos_drive
-    elif ced_key and abo_key and filas_coincidentes == 0:
+    elif ced_key and abo_key and not filas_por_cedula:
         advertencias.append(
             "No hay filas en la hoja CONCILIACIÓN con esta cédula (tras sincronizar)."
+        )
+    elif ced_key and abo_key and filas_por_cedula and filas_coincidentes == 0 and not requiere_seleccion_lote:
+        advertencias.append(
+            "No hay fila en la hoja que corresponda a este préstamo (misma cédula y datos de crédito). "
+            "Si hay varios lotes, elija el lote correcto."
         )
 
     diferencia: Optional[float] = None
@@ -150,20 +308,22 @@ def comparar_abonos_drive_vs_cuotas(
         and abs(diferencia) <= _TOL_MONTO
     )
 
-    # Indicador operativo: "sí" solo si ABONOS (hoja) es claramente mayor que total en cuotas (regla de negocio notificaciones).
     puede_aplicar = bool(
         abonos_drive is not None
+        and not requiere_seleccion_lote
         and float(abonos_drive) > float(total_pagado_cuotas) + _TOL_MONTO
     )
     indicador: str = "si" if puede_aplicar else "no"
 
     logger.info(
-        "[comparar_abonos] cedula=%s prestamo_id=%s filas_hoja=%s abonos_drive=%s total_cuotas=%s",
+        "[comparar_abonos] cedula=%s prestamo_id=%s lote=%s filas_prestamo=%s abonos=%s total_cuotas=%s requiere_lote=%s",
         cedula_in,
         prestamo_id,
+        lote_filtro,
         filas_coincidentes,
         abonos_drive,
         total_pagado_cuotas,
+        requiere_seleccion_lote,
     )
 
     return {
@@ -180,5 +340,9 @@ def comparar_abonos_drive_vs_cuotas(
         "hoja_synced_at": synced_at,
         "columna_cedula_detectada": ced_key,
         "columna_abonos_detectada": abo_key,
+        "columna_lote_detectada": lote_key,
+        "lote_aplicado": lote_filtro,
+        "requiere_seleccion_lote": requiere_seleccion_lote,
+        "opciones_lote": opciones_lote,
         "advertencias": advertencias,
     }

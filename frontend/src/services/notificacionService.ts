@@ -97,6 +97,13 @@ export interface ClienteRetrasadoItem {
   estado?: string
 }
 
+/** Opción de lote cuando la hoja tiene varios créditos por cédula (GET comparar-abonos-drive-cuotas). */
+export interface OpcionLoteAbonos {
+  lote: string
+
+  abonos: number
+}
+
 /** GET /notificaciones/comparar-abonos-drive-cuotas */
 export interface CompararAbonosDriveCuotasResponse {
   cedula: string
@@ -120,6 +127,20 @@ export interface CompararAbonosDriveCuotasResponse {
   columna_cedula_detectada: string | null
 
   columna_abonos_detectada: string | null
+
+  /** Columna LOTE detectada en la hoja (p. ej. LOTE en B). */
+
+  columna_lote_detectada?: string | null
+
+  /** Lote usado en esta consulta (si se envió `lote` en query). */
+
+  lote_aplicado?: string | null
+
+  /** Hay varios lotes para la cédula: el usuario debe elegir uno que corresponda al préstamo. */
+
+  requiere_seleccion_lote?: boolean
+
+  opciones_lote?: OpcionLoteAbonos[]
 
   advertencias: string[]
 
@@ -1062,10 +1083,14 @@ class NotificacionService {
   async getCompararAbonosDriveCuotas(params: {
     cedula: string
     prestamoId: number
+    /** Lote en hoja cuando hay varios créditos por cédula; debe corresponder al préstamo. */
+    lote?: string | null
   }): Promise<CompararAbonosDriveCuotasResponse> {
     const q = new URLSearchParams()
     q.set('cedula', params.cedula.trim())
     q.set('prestamo_id', String(params.prestamoId))
+    const lote = params.lote?.trim()
+    if (lote) q.set('lote', lote)
     return await apiClient.get<CompararAbonosDriveCuotasResponse>(
       `${this.baseUrl}/comparar-abonos-drive-cuotas?${q.toString()}`
     )
@@ -1079,14 +1104,19 @@ class NotificacionService {
     cedula: string
 
     prestamoId: number
+
+    lote?: string | null
   }): Promise<AplicarAbonosDriveCuotasResponse> {
+    const body: Record<string, unknown> = {
+      cedula: params.cedula.trim(),
+
+      prestamo_id: params.prestamoId,
+    }
+    const lote = params.lote?.trim()
+    if (lote) body.lote = lote
     return await apiClient.post<AplicarAbonosDriveCuotasResponse>(
       `${this.baseUrl}/aplicar-abonos-drive-a-cuotas`,
-      {
-        cedula: params.cedula.trim(),
-
-        prestamo_id: params.prestamoId,
-      }
+      body
     )
   }
 }

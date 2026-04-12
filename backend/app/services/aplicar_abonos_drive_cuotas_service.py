@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, time as dt_time
 from decimal import Decimal
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -40,8 +40,15 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
     cedula: str,
     prestamo_id: int,
     usuario_registro: str,
+    lote: Optional[str] = None,
 ) -> Dict[str, Any]:
-    snap = comparar_abonos_drive_vs_cuotas(db, cedula=cedula, prestamo_id=prestamo_id)
+    snap = comparar_abonos_drive_vs_cuotas(
+        db, cedula=cedula, prestamo_id=prestamo_id, lote=lote
+    )
+    if snap.get("requiere_seleccion_lote"):
+        raise ValueError(
+            "Hay varios lotes para esta cédula en la hoja. Elija el lote correcto y vuelva a confirmar."
+        )
     abonos_drive = snap.get("abonos_drive")
     total_cuotas = float(snap.get("total_pagado_cuotas") or 0)
 

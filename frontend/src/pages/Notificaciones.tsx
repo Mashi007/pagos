@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 
 import { motion } from 'framer-motion'
 
@@ -449,6 +449,8 @@ function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
  */
 function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useSimpleAuth()
   const esAdmin = (user?.rol || '').toLowerCase() === 'admin'
 
@@ -462,19 +464,26 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
 
   if (pid == null || !ced) return null
 
-  const puedeOperar =
-    data?.puede_aplicar === true ||
-    (typeof data?.indicador === 'string' && data.indicador.toLowerCase() === 'si')
+  const loteResuelto =
+    !data?.requiere_seleccion_lote ||
+    Boolean((data?.lote_aplicado ?? '').toString().trim())
 
-  const abrir = async () => {
+  const puedeOperar =
+    loteResuelto &&
+    (data?.puede_aplicar === true ||
+      (typeof data?.indicador === 'string' && data.indicador.toLowerCase() === 'si'))
+
+  const abrir = async (loteExplicito?: string | null) => {
     setOpen(true)
     setPaso('resumen')
     setLoading(true)
     setData(null)
     try {
+      const loteQ = (loteExplicito ?? '').trim()
       const res = await notificacionService.getCompararAbonosDriveCuotas({
         cedula: ced,
         prestamoId: pid,
+        ...(loteQ ? { lote: loteQ } : {}),
       })
       setData(res)
     } catch (e) {
@@ -488,10 +497,12 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
   const aplicar = async () => {
     setApplying(true)
     try {
+      const loteAplicar = (data?.lote_aplicado ?? '').toString().trim() || undefined
       const res: AplicarAbonosDriveCuotasResponse =
         await notificacionService.postAplicarAbonosDriveACuotas({
           cedula: ced,
           prestamoId: pid,
+          ...(loteAplicar ? { lote: loteAplicar } : {}),
         })
       toast.success(
         `Aplicado: pago #${res.pago_id}. Pagos eliminados: ${res.pagos_eliminados}. Cuotas completadas: ${res.cuotas_completadas}.`
@@ -584,9 +595,11 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                   title={
                     !esAdmin
                       ? 'Solo administradores pueden operar.'
-                      : puedeOperar
-                        ? 'Pulsar Sí para continuar al paso de confirmación (no aplica nada todavía).'
-                        : 'ABONOS no supera el total en cuotas: no hay operación.'
+                      : data?.requiere_seleccion_lote && !loteResuelto
+                        ? 'Elija primero el lote de la hoja que corresponde a este préstamo.'
+                        : puedeOperar
+                          ? 'Pulsar Sí para continuar al paso de confirmación (no aplica nada todavía).'
+                          : 'ABONOS no supera el total en cuotas: no hay operación.'
                   }
                   onClick={() => {
                     if (!puedeOperar || !esAdmin || applying) return
@@ -605,18 +618,64 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 >
                   Sí
                 </button>
-                <span
+                <button
+                  type="button"
                   className={`${pillBase} ${
                     !puedeOperar
-                      ? 'border-slate-600 bg-slate-100 text-slate-800'
-                      : 'border-muted bg-muted/30 text-muted-foreground'
+                      ? 'border-slate-600 bg-slate-100 text-slate-800 hover:bg-slate-200/80'
+                      : 'border-muted bg-muted/30 text-muted-foreground hover:bg-muted/50'
                   }`}
-                  title="No se ejecuta ningún proceso al mostrar No."
-                  aria-label="No: no se aplica proceso desde la hoja"
+                  title="Cierra sin aplicar cambios y vuelve al listado de notificaciones."
+                  aria-label="No: cerrar y volver a notificaciones"
+                  onClick={() => {
+                    setOpen(false)
+                    navigate(
+                      {
+                        pathname: '/notificaciones',
+                        search: location.search || undefined,
+                      },
+                      { replace: true },
+                    )
+                  }}
                 >
                   No
-                </span>
+                </button>
               </div>
+
+              {data.requiere_seleccion_lote &&
+              data.opciones_lote &&
+              data.opciones_lote.length > 0 ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50/90 p-3 text-xs text-amber-950">
+                  <p className="mb-2 font-medium">
+                    Hay varios lotes en la hoja para esta cédula. Elija el que corresponde a este
+                    préstamo (solo se usará el abono de esa fila; no se mezclan otros créditos).
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {data.opciones_lote.map(op => (
+                      <Button
+                        key={op.lote}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="border-amber-300 bg-white text-amber-950 hover:bg-amber-100"
+                        disabled={loading}
+                        onClick={() => {
+                          void abrir(op.lote)
+                        }}
+                      >
+                        Lote {op.lote} — {fmt(op.abonos)}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {data.lote_aplicado ? (
+                <p className="text-xs text-muted-foreground">
+                  Lote usado para esta comparación:{' '}
+                  <span className="font-mono font-medium text-foreground">{data.lote_aplicado}</span>
+                </p>
+              ) : null}
 
               <dl className="grid grid-cols-1 gap-2 rounded-md border bg-muted/30 p-3">
                 <div className="flex justify-between gap-2">
@@ -641,7 +700,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 </div>
               </dl>
               <p className="text-xs text-muted-foreground">
-                Filas en hoja con esta cédula:{' '}
+                Filas de la hoja que corresponden a este préstamo:{' '}
                 <span className="font-medium text-foreground">
                   {data.filas_hoja_coincidentes}
                 </span>
@@ -657,7 +716,9 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                   </>
                 ) : null}
               </p>
-              {data.columna_cedula_detectada || data.columna_abonos_detectada ? (
+              {data.columna_cedula_detectada ||
+              data.columna_abonos_detectada ||
+              data.columna_lote_detectada ? (
                 <p className="text-xs text-muted-foreground">
                   Columnas detectadas:{' '}
                   <span className="font-mono text-foreground">
@@ -667,6 +728,14 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                   <span className="font-mono text-foreground">
                     {data.columna_abonos_detectada ?? '—'}
                   </span>
+                  {data.columna_lote_detectada ? (
+                    <>
+                      {' · '}
+                      <span className="font-mono text-foreground">
+                        {data.columna_lote_detectada}
+                      </span>
+                    </>
+                  ) : null}
                 </p>
               ) : null}
               {data.advertencias?.length ? (

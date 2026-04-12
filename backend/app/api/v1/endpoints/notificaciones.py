@@ -2223,11 +2223,16 @@ def post_enviar_prueba_paquete(payload: dict = Body(...), db: Session = Depends(
 def get_comparar_abonos_drive_cuotas(
     cedula: str = Query(..., min_length=3, description="Cédula del cliente (como en el listado)"),
     prestamo_id: int = Query(..., description="ID del préstamo para sumar cuotas.total_pagado"),
+    lote: Optional[str] = Query(
+        None,
+        description="Lote (columna LOTE en hoja) cuando hay varios créditos por cédula; debe corresponder al préstamo.",
+    ),
     db: Session = Depends(get_db),
 ):
     """
     Compara ABONOS de la hoja CONCILIACIÓN (snapshot en BD) con la suma de total_pagado en cuotas del préstamo.
     Requiere hoja sincronizada y columnas detectables (cédula + ABONOS).
+    Solo suma filas de la hoja que corresponden a este préstamo (huella monto/cuotas/modalidad) o al lote elegido.
     """
     from app.services.comparar_abonos_drive_cuotas_service import comparar_abonos_drive_vs_cuotas
 
@@ -2236,6 +2241,7 @@ def get_comparar_abonos_drive_cuotas(
             db,
             cedula=cedula.strip(),
             prestamo_id=int(prestamo_id),
+            lote=(lote.strip() if isinstance(lote, str) and lote.strip() else None),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -2256,6 +2262,8 @@ def post_aplicar_abonos_drive_a_cuotas(
 
     cedula = str(payload.get("cedula") or "").strip()
     pid = payload.get("prestamo_id")
+    lote_raw = payload.get("lote")
+    lote = str(lote_raw).strip() if lote_raw is not None and str(lote_raw).strip() else None
     try:
         prestamo_id = int(pid)
     except (TypeError, ValueError):
@@ -2268,6 +2276,7 @@ def post_aplicar_abonos_drive_a_cuotas(
             cedula=cedula,
             prestamo_id=prestamo_id,
             usuario_registro=usuario,
+            lote=lote,
         )
         db.commit()
         return out
