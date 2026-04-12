@@ -1942,7 +1942,8 @@ def get_cuotas_pendiente_2_dias_antes(
     ),
 ):
     """
-    Listado ligero: solo cuotas en estado PENDIENTE con fecha_vencimiento = hoy + 2 (Caracas).
+    Listado ligero: solo cuotas en estado PENDIENTE con fecha_vencimiento = hoy + 2 (Caracas),
+    excluyendo préstamos sin cuotas en atraso (cuotas_atrasadas = 0: al corriente en vencimientos pasados).
     Submenú «2 días antes»; configuración de envíos independiente (PAGO_2_DIAS_ANTES_PENDIENTE).
     """
     try:

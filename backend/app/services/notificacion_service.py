@@ -2,7 +2,8 @@
 Servicios para notificaciones de cuotas vencidas y en mora.
 Centraliza la lógica de serialización y filtrado de cuotas.
 Listados por pestaña: get_cuotas_pendientes_por_vencimientos (filtra en SQL por fechas);
-build_cuotas_pendiente_2_dias_antes_items (solo estado PENDIENTE, vence en 2 días).
+build_cuotas_pendiente_2_dias_antes_items (solo estado PENDIENTE, vence en 2 días; excluye préstamos
+    sin cuotas en atraso según contar_cuotas_atraso_por_prestamos, p. ej. adelantados al corriente).
 """
 import logging
 from collections import defaultdict
@@ -101,6 +102,9 @@ def build_cuotas_pendiente_2_dias_antes_items(
     """
     Cuotas con columna estado = PENDIENTE cuya fecha_vencimiento es exactamente
     hoy + 2 días (Caracas). Sin fecha_pago, saldo > tolerancia, préstamo no liquidado/desistimiento.
+
+    No incluye el préstamo si ``cuotas_atrasadas`` (misma regla que estado de cuenta / mora) es 0:
+    en la práctica el cliente va al corriente respecto a vencimientos pasados y no debe recibir este aviso.
     Una fila por cuota (misma forma que otras pestañas de notificaciones).
     """
     hoy = fecha_referencia or hoy_negocio()
@@ -123,7 +127,9 @@ def build_cuotas_pendiente_2_dias_antes_items(
     totales = sum_saldo_pendiente_total_por_prestamos(db, pids)
     out: List[dict] = []
     for cuota, cliente in rows:
-        ca = counts.get(cuota.prestamo_id, 0)
+        ca = int(counts.get(cuota.prestamo_id, 0) or 0)
+        if ca <= 0:
+            continue
         tp = totales.get(cuota.prestamo_id)
         out.append(
             format_cuota_item(
@@ -359,34 +365,8 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         )
 
     if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
-        target = hoy + timedelta(days=2)
-        q = (
-            select(Cuota, Cliente)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(Cuota.fecha_pago.is_(None))
-            .where(Cuota.estado == "PENDIENTE")
-            .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
-            .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
-            .where(Cuota.fecha_vencimiento == target)
-            .limit(1)
-        )
-        row = db.execute(q).first()
-        if not row:
-            return None
-        cuota, cliente = row[0], row[1]
-        ca = contar_cuotas_atraso_por_prestamos(db, [cuota.prestamo_id]).get(
-            cuota.prestamo_id, 0
-        )
-        totales = sum_saldo_pendiente_total_por_prestamos(db, [cuota.prestamo_id])
-        return format_cuota_item(
-            cliente,
-            cuota,
-            cuotas_atrasadas=ca,
-            dias_antes_vencimiento=2,
-            for_tab=True,
-            total_pendiente_pagar=totales.get(cuota.prestamo_id),
-        )
+        items = build_cuotas_pendiente_2_dias_antes_items(db, fecha_referencia=hoy)
+        return items[0] if items else None
 
     if tipo == "PREJUDICIAL":
         subq = (
