@@ -1,10 +1,43 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import fs from 'node:fs'
 import path from 'path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'url'
 import type { Plugin } from 'vite'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const requireFromViteConfig = createRequire(import.meta.url)
+
+/**
+ * exceljs "main" apunta a excel.js (Node). Alias al bundle browser.
+ * Debe resolverse con require.resolve (soporta hoist de npm fuera de frontend/node_modules);
+ * path fija .../frontend/node_modules/exceljs/... falla en ENOENT en algunos CI.
+ */
+function resolveExcelJsBrowserPath(): string {
+  let pkgDir: string
+  try {
+    pkgDir = path.dirname(requireFromViteConfig.resolve('exceljs/package.json'))
+  } catch {
+    throw new Error(
+      '[vite] No se pudo resolver el paquete npm "exceljs". Ejecute npm install en frontend.'
+    )
+  }
+  const candidates = [
+    path.join(pkgDir, 'dist', 'exceljs.min.js'),
+    path.join(pkgDir, 'dist', 'exceljs.js'),
+    path.join(pkgDir, 'dist', 'exceljs.bare.min.js'),
+    path.join(pkgDir, 'lib', 'exceljs.browser.js'),
+  ]
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate
+    }
+  }
+  throw new Error(
+    `[vite] exceljs en "${pkgDir}" sin bundle browser esperado (dist/). Revise la instalación del paquete.`
+  )
+}
 // Ruta a src con barras normales (necesario para que Vite resuelva @/ en Windows)
 const srcDir = path.resolve(__dirname, 'src').replace(/\\/g, '/')
 
@@ -113,7 +146,7 @@ export default defineConfig({
       // la entrada del paquete en build de navegador. Forzar el bundle publicado para browser.
       {
         find: /^exceljs$/,
-        replacement: path.resolve(__dirname, 'node_modules/exceljs/dist/exceljs.min.js'),
+        replacement: resolveExcelJsBrowserPath(),
       },
     ],
     // Asegurar que React se resuelva correctamente
