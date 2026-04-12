@@ -16,6 +16,7 @@ import {
   ChevronDown,
   CheckCircle2,
   X,
+  GitCompare,
 } from 'lucide-react'
 
 import {
@@ -44,6 +45,7 @@ import {
   notificacionService,
   TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL,
   type ClienteRetrasadoItem,
+  type CompararAbonosDriveCuotasResponse,
   type EstadisticasPorTab,
 } from '../services/notificacionService'
 
@@ -437,6 +439,158 @@ function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
     >
       <CheckCircle2 className="h-4 w-4" aria-hidden />
     </button>
+  )
+}
+
+/**
+ * Icono junto a revisión manual: compara ABONOS (hoja CONCILIACIÓN en BD) vs suma total_pagado en cuotas del préstamo.
+ */
+function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
+  const pid = row.prestamo_id
+  const ced = (row.cedula || '').trim()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<CompararAbonosDriveCuotasResponse | null>(null)
+
+  if (pid == null || !ced) return null
+
+  const abrir = async () => {
+    setOpen(true)
+    setLoading(true)
+    setData(null)
+    try {
+      const res = await notificacionService.getCompararAbonosDriveCuotas({
+        cedula: ced,
+        prestamoId: pid,
+      })
+      setData(res)
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo comparar ABONOS vs cuotas.')
+      setOpen(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fmt = (n: number | null | undefined) =>
+    n == null || Number.isNaN(Number(n))
+      ? '—'
+      : Number(n).toLocaleString('es-VE', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+
+  const btnBase =
+    'inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50'
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`${btnBase} bg-sky-50 text-sky-700 hover:bg-sky-100`}
+        title="Comparar ABONOS (Drive / hoja CONCILIACIÓN) con total pagado en cuotas (BD)"
+        aria-label="Comparar ABONOS de la hoja con total pagado en cuotas"
+        onClick={() => {
+          void abrir()
+        }}
+      >
+        <GitCompare className="h-4 w-4" aria-hidden />
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>ABONOS (hoja) vs cuotas pagadas</DialogTitle>
+          </DialogHeader>
+
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Cargando…</p>
+          ) : data ? (
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">
+                Cédula <span className="font-medium text-foreground">{data.cedula}</span>
+                {' · '}
+                Préstamo <span className="font-medium text-foreground">#{data.prestamo_id}</span>
+              </p>
+              <dl className="grid grid-cols-1 gap-2 rounded-md border bg-muted/30 p-3">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">ABONOS (hoja Drive)</dt>
+                  <dd className="font-medium tabular-nums">{fmt(data.abonos_drive)}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Total pagado (cuotas)</dt>
+                  <dd className="font-medium tabular-nums">
+                    {fmt(data.total_pagado_cuotas)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Diferencia (hoja − cuotas)</dt>
+                  <dd
+                    className={`font-semibold tabular-nums ${
+                      data.coincide_aproximado ? 'text-green-700' : 'text-amber-800'
+                    }`}
+                  >
+                    {fmt(data.diferencia)}
+                  </dd>
+                </div>
+              </dl>
+              <p className="text-xs text-muted-foreground">
+                Filas en hoja con esta cédula:{' '}
+                <span className="font-medium text-foreground">
+                  {data.filas_hoja_coincidentes}
+                </span>
+                {data.hoja_synced_at ? (
+                  <>
+                    {' '}
+                    · Última sync hoja:{' '}
+                    <span className="font-medium text-foreground">
+                      {new Date(data.hoja_synced_at).toLocaleString('es-VE', {
+                        timeZone: 'America/Caracas',
+                      })}
+                    </span>
+                  </>
+                ) : null}
+              </p>
+              {data.columna_cedula_detectada || data.columna_abonos_detectada ? (
+                <p className="text-xs text-muted-foreground">
+                  Columnas detectadas:{' '}
+                  <span className="font-mono text-foreground">
+                    {data.columna_cedula_detectada ?? '—'}
+                  </span>
+                  {' · '}
+                  <span className="font-mono text-foreground">
+                    {data.columna_abonos_detectada ?? '—'}
+                  </span>
+                </p>
+              ) : null}
+              {data.advertencias?.length ? (
+                <ul className="list-disc space-y-1 pl-4 text-xs text-amber-900">
+                  {data.advertencias.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {data.coincide_aproximado ? (
+                <p className="text-xs font-medium text-green-700">
+                  Coinciden (tolerancia ±{data.tolerencia}).
+                </p>
+              ) : data.diferencia != null ? (
+                <p className="text-xs text-amber-900">
+                  Hay diferencia mayor a la tolerancia (±{data.tolerencia}). Revise sync de la
+                  hoja o pagos aplicados a cuotas.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -1710,9 +1864,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         </th>
 
                         <th
-                          className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                          className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                           scope="col"
-                          title="Revisión manual: triángulo marca visto con nota genérica; visto solo admin puede reabrir."
+                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
                         >
                           Revisión
                           <br />
@@ -1783,7 +1937,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             </td>
 
                             <td className="px-1 py-2 text-center align-middle">
-                              <RevisionManualNotifCell row={row} />
+                              <div className="flex flex-wrap items-center justify-center gap-1">
+                                <RevisionManualNotifCell row={row} />
+                                <CompararAbonosDriveCuotasCell row={row} />
+                              </div>
                             </td>
 
                             <td className="px-2 py-2 text-center align-middle">
@@ -1811,9 +1968,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         </th>
 
                         <th
-                          className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                          className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                           scope="col"
-                          title="Revisión manual: triángulo marca visto con nota genérica; visto solo admin puede reabrir."
+                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
                         >
                           Revisión
                           <br />
@@ -1866,7 +2023,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             <td className="px-3 py-2">{row.cedula}</td>
 
                             <td className="px-1 py-2 text-center align-middle">
-                              <RevisionManualNotifCell row={row} />
+                              <div className="flex flex-wrap items-center justify-center gap-1">
+                                <RevisionManualNotifCell row={row} />
+                                <CompararAbonosDriveCuotasCell row={row} />
+                              </div>
                             </td>
 
                             <td className="px-2 py-2 text-center align-middle">

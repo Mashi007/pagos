@@ -97,6 +97,33 @@ export interface ClienteRetrasadoItem {
   estado?: string
 }
 
+/** GET /notificaciones/comparar-abonos-drive-cuotas */
+export interface CompararAbonosDriveCuotasResponse {
+  cedula: string
+
+  prestamo_id: number
+
+  filas_hoja_coincidentes: number
+
+  abonos_drive: number | null
+
+  total_pagado_cuotas: number
+
+  diferencia: number | null
+
+  coincide_aproximado: boolean
+
+  tolerancia: number
+
+  hoja_synced_at: string | null
+
+  columna_cedula_detectada: string | null
+
+  columna_abonos_detectada: string | null
+
+  advertencias: string[]
+}
+
 /** Préstamo con total financiamiento = total abonos (liquidado). */
 
 export interface LiquidadoItem {
@@ -999,6 +1026,19 @@ class NotificacionService {
       variables_existentes: number
       total: number
     }>(`${this.baseUrl}/variables/inicializar-precargadas`)
+  }
+
+  /** ABONOS (hoja CONCILIACIÓN) vs sum(cuotas.total_pagado) del préstamo. */
+  async getCompararAbonosDriveCuotas(params: {
+    cedula: string
+    prestamoId: number
+  }): Promise<CompararAbonosDriveCuotasResponse> {
+    const q = new URLSearchParams()
+    q.set('cedula', params.cedula.trim())
+    q.set('prestamo_id', String(params.prestamoId))
+    return await apiClient.get<CompararAbonosDriveCuotasResponse>(
+      `${this.baseUrl}/comparar-abonos-drive-cuotas?${q.toString()}`
+    )
   }
 }
 

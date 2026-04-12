@@ -2217,3 +2217,25 @@ def post_enviar_prueba_paquete(payload: dict = Body(...), db: Session = Depends(
 
     return ejecutar_enviar_prueba_paquete(db, payload)
 
+
+@router.get("/comparar-abonos-drive-cuotas")
+def get_comparar_abonos_drive_cuotas(
+    cedula: str = Query(..., min_length=3, description="Cédula del cliente (como en el listado)"),
+    prestamo_id: int = Query(..., description="ID del préstamo para sumar cuotas.total_pagado"),
+    db: Session = Depends(get_db),
+):
+    """
+    Compara ABONOS de la hoja CONCILIACIÓN (snapshot en BD) con la suma de total_pagado en cuotas del préstamo.
+    Requiere hoja sincronizada y columnas detectables (cédula + ABONOS).
+    """
+    from app.services.comparar_abonos_drive_cuotas_service import comparar_abonos_drive_vs_cuotas
+
+    try:
+        return comparar_abonos_drive_vs_cuotas(
+            db,
+            cedula=cedula.strip(),
+            prestamo_id=int(prestamo_id),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
