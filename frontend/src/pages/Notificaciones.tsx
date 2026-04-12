@@ -1,11 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 
-import {
-  Link,
-  useSearchParams,
-  useNavigate,
-  useLocation,
-} from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 
 import { motion } from 'framer-motion'
 
@@ -478,7 +473,6 @@ function abonosSuperanUmbralConfirmo(
 function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const location = useLocation()
   const { user } = useSimpleAuth()
   const esAdmin = (user?.rol || '').toLowerCase() === 'admin'
 
@@ -765,13 +759,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                   aria-label="No: cerrar y volver a notificaciones"
                   onClick={() => {
                     setOpen(false)
-                    navigate(
-                      {
-                        pathname: '/notificaciones',
-                        search: location.search || undefined,
-                      },
-                      { replace: true },
-                    )
+                    navigate(RUTA_RETORNO_NOTIFICACIONES, { replace: true })
                   }}
                 >
                   No
