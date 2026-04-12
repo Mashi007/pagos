@@ -112,6 +112,7 @@ from app.services.cuota_estado import (
 from app.services.prestamos.cupo_cedula_aprobados import (
     validar_cupo_nuevo_prestamo_aprobado,
     contar_aprobados_misma_clave_cupo,
+    contar_aprobados_por_claves_cupo,
 )
 from app.utils.cedula_almacenamiento import (
     normalizar_cedula_clave_cupo,
@@ -1552,14 +1553,34 @@ def check_cupo_cedulas(
         ]
     }
     """
-    resultado = []
-    
-    for ced in set(c.strip() for c in (body.cedulas or []) if c and c.strip()):
+    resultado: List[dict] = []
+    ced_list = [c.strip() for c in (body.cedulas or []) if c and c.strip()]
+    unique_ceds = list(dict.fromkeys(ced_list))
+
+    claves_para_db: list[str] = []
+    metas: list[tuple[str, str, Optional[str], Optional[int]]] = []
+    for ced in unique_ceds:
         clave = normalizar_cedula_clave_cupo(ced)
         prefijo = prefijo_politica_cupo_aprobados(clave)
         max_permitido = max_aprobados_permitidos_por_prefijo(prefijo)
-        
-        item = {
+        metas.append((ced, clave, prefijo, max_permitido))
+        if max_permitido is not None:
+            claves_para_db.append(clave)
+
+    try:
+        counts = contar_aprobados_por_claves_cupo(db, claves_para_db)
+    except Exception as e:
+        logger.warning("[check-cupo-cedulas] conteo por lotes fallo, fallback por cedula: %s", e)
+        counts = {}
+        for ck in dict.fromkeys(claves_para_db):
+            try:
+                counts[ck] = contar_aprobados_misma_clave_cupo(db, ck)
+            except Exception as e2:
+                logger.warning("[check-cupo-cedulas] conteo unitario clave=%s: %s", ck, e2)
+                counts[ck] = -1
+
+    for ced, clave, prefijo, max_permitido in metas:
+        item: dict = {
             "cedula": ced,
             "cedula_normalizada": clave,
             "prefijo": prefijo,
@@ -1568,13 +1589,16 @@ def check_cupo_cedulas(
             "puede_agregar": True,
             "error": None,
         }
-        
+
         if max_permitido is None:
             item["error"] = f"Cedula {ced}: prefijo no valido. Solo E, V o J permiten prestamos."
             item["puede_agregar"] = False
         else:
-            try:
-                conteo = contar_aprobados_misma_clave_cupo(db, clave)
+            conteo = int(counts.get(clave, 0))
+            if conteo < 0:
+                item["error"] = "Error al validar cupo en base de datos."
+                item["puede_agregar"] = False
+            else:
                 item["aprobados_actuales"] = conteo
                 item["puede_agregar"] = conteo < max_permitido
                 if not item["puede_agregar"]:
@@ -1582,12 +1606,9 @@ def check_cupo_cedulas(
                         f"Cedula {ced} ({prefijo}): ya tiene {conteo} prestamo(s) APROBADO(s). "
                         f"Maximo permitido: {max_permitido}."
                     )
-            except Exception as e:
-                item["error"] = f"Error al validar cupo: {str(e)}"
-                item["puede_agregar"] = False
-        
+
         resultado.append(item)
-    
+
     return {"cedulas": resultado}
 
 

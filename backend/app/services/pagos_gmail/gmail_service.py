@@ -41,6 +41,8 @@ PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY = "IMAGEN 5"
 PAGOS_GMAIL_LABEL_IMAGEN_5 = PAGOS_GMAIL_LABEL_MASTER
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
+# Re-escaneo ERROR EMAIL (Mercantil/BNC con cédula leída de la imagen): etiqueta adicional tras éxito.
+PAGOS_GMAIL_LABEL_EMAIL_12 = "EMAIL-12"
 # Ninguna plantilla A/B/C/D reconocida (o no se aplico otra etiqueta de clasificacion).
 PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
 
@@ -79,6 +81,17 @@ def pagos_gmail_inbox_media_query() -> str:
     Incluye leidos y no leidos, con y sin estrella, con cualquier etiqueta (no se excluye por -label: ni -is:starred).
     """
     return f"in:inbox {pagos_gmail_list_q_media_parts()}"
+
+
+def pagos_gmail_error_email_rescan_query() -> str:
+    """
+    Re-escaneo especial: correos en inbox con imagen/PDF y etiqueta **ERROR EMAIL**,
+    excluyendo los ya marcados con **EMAIL-12** (evita duplicar filas y reprocesar en bucle).
+    """
+    return (
+        f'in:inbox label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" -label:"{PAGOS_GMAIL_LABEL_EMAIL_12}" '
+        f"{pagos_gmail_list_q_media_parts()}"
+    )
 
 
 def pagos_gmail_pending_identification_query() -> str:
@@ -154,17 +167,22 @@ def _parse_gmail_retry_after_seconds(exc: Exception) -> Optional[int]:
 def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict]:
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
-    filter_type: "unread" | "read" | "all" | "pending_identification".
-    Todos usan el mismo criterio q: inbox + imagen/PDF — leidos y no leidos, con o sin estrella, con cualquier etiqueta.
-    Misma forma que antes: id, payload, headers.
+    filter_type: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan".
+    Por defecto: inbox + imagen/PDF. **error_email_rescan**: solo etiqueta ERROR EMAIL sin EMAIL-12 (reintento cédula en imagen).
+    Cada elemento incluye **internal_date_ms** (epoch ms de Gmail) para ordenar el pipeline del mas antiguo al mas reciente.
     """
     from googleapiclient.errors import HttpError
+
+    def _list_q() -> str:
+        if (filter_type or "").strip().lower() == "error_email_rescan":
+            return pagos_gmail_error_email_rescan_query()
+        return pagos_gmail_inbox_media_query()
 
     def _fetch() -> List[dict]:
         all_msg_refs: List[dict] = []
         page_token: Optional[str] = None
         params_base: dict = {"userId": "me", "maxResults": 500}
-        params_base["q"] = pagos_gmail_inbox_media_query()
+        params_base["q"] = _list_q()
 
         while True:
             params = dict(params_base)
@@ -184,7 +202,19 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
             ).execute()
             payload = meta.get("payload", {})
             headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
-            out.append({"id": mid, "payload": payload, "headers": headers})
+            raw_internal = meta.get("internalDate")
+            try:
+                internal_date_ms = int(raw_internal) if raw_internal is not None else 0
+            except (TypeError, ValueError):
+                internal_date_ms = 0
+            out.append(
+                {
+                    "id": mid,
+                    "payload": payload,
+                    "headers": headers,
+                    "internal_date_ms": internal_date_ms,
+                }
+            )
         return out
 
     try:
@@ -235,11 +265,16 @@ def count_messages_by_filter(service: Any, filter_type: str = "all") -> int:
     """
     from googleapiclient.errors import HttpError
 
+    def _list_q() -> str:
+        if (filter_type or "").strip().lower() == "error_email_rescan":
+            return pagos_gmail_error_email_rescan_query()
+        return pagos_gmail_inbox_media_query()
+
     def _count() -> int:
         total = 0
         page_token: Optional[str] = None
         params_base: dict = {"userId": "me", "maxResults": 500}
-        params_base["q"] = pagos_gmail_inbox_media_query()
+        params_base["q"] = _list_q()
         while True:
             params = dict(params_base)
             if page_token:

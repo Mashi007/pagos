@@ -304,7 +304,7 @@ def test_resolve_banco_excel_desde_texto_gemini():
 
 
 def test_parse_formato_c_binance_ok():
-    """JSON C valido: monto, referencia, email; fecha y cedula NA."""
+    """JSON C valido: monto, referencia; fecha, cedula y email_cliente NA (parser fuerza NA en C)."""
     j = (
         '{"formato":"C","fecha_pago":"NA","cedula":"NA",'
         '"monto":"122 USDT","numero_referencia":"423594224765779968",'
@@ -312,7 +312,7 @@ def test_parse_formato_c_binance_ok():
     )
     fmt, fields = _parse_formato_y_pagos_json(j)
     assert fmt == "C"
-    assert fields["email_cliente"] == "operaciones@rapicreditca.com"
+    assert fields["email_cliente"] == "NA"
     assert fields["monto"] == "122 USDT"
 
 
@@ -361,8 +361,8 @@ def test_comprobante_url_para_enlace_publico_ruta_relativa_con_base():
     )
 
 
-def test_parse_formato_c_rellena_email_desde_remitente():
-    """Binance sin email en imagen: cabecera From completa el email_cliente."""
+def test_parse_formato_c_email_cliente_siguen_siendo_na():
+    """Formato C: el parser deja email_cliente en NA (el backend usa remitente De para cliente/cédula)."""
     j = (
         '{"formato":"C","fecha_pago":"NA","cedula":"NA",'
         '"monto":"135.00 USDT","numero_referencia":"423594224765779968",'
@@ -373,7 +373,7 @@ def test_parse_formato_c_rellena_email_desde_remitente():
         remitente_from_header="Jesus Acosta <jacostamolleda@gmail.com>",
     )
     assert fmt == "C"
-    assert "jacostamolleda@gmail.com" in (fields.get("email_cliente") or "").lower()
+    assert (fields.get("email_cliente") or "").upper() == "NA"
 
 
 def test_pagos_gmail_list_q_media_parts_incluye_filename():
@@ -404,6 +404,70 @@ def test_sort_messages_by_date_asc_mas_antiguo_primero():
     ]
     out = _sort_messages_by_date_asc(msgs)
     assert [m["id"] for m in out] == ["old", "mid", "new"]
+
+
+def test_sort_messages_internal_date_ms_gana_sobre_date_header():
+    """internalDate (recepcion Gmail) define el orden aunque la cabecera Date diga otra cosa."""
+    from app.services.pagos_gmail.pipeline import _sort_messages_by_date_asc
+
+    msgs = [
+        {
+            "id": "b",
+            "internal_date_ms": 2_000,
+            "headers": {"date": "Mon, 1 Jan 2030 12:00:00 +0000"},
+        },
+        {
+            "id": "a",
+            "internal_date_ms": 1_000,
+            "headers": {"date": "Mon, 1 Jan 2030 12:00:00 +0000"},
+        },
+    ]
+    out = _sort_messages_by_date_asc(msgs)
+    assert [m["id"] for m in out] == ["a", "b"]
+
+
+def test_pagos_gmail_error_email_rescan_query_incluye_error_email_sin_email_12():
+    from app.services.pagos_gmail.gmail_service import (
+        PAGOS_GMAIL_LABEL_EMAIL_12,
+        PAGOS_GMAIL_LABEL_ERROR_EMAIL,
+        pagos_gmail_error_email_rescan_query,
+    )
+
+    q = pagos_gmail_error_email_rescan_query()
+    assert f'label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_EMAIL_12}"' in q
+    assert "in:inbox" in q
+
+
+def test_parse_formato_b_modo_error_email_ab_cedula_error():
+    j = (
+        '{"formato":"B","fecha_pago":"01/01/2026","cedula":"ERROR","monto":"1 USD",'
+        '"numero_referencia":"9","email_cliente":"NA","banco":"BNC"}'
+    )
+    fmt, fields = _parse_formato_y_pagos_json(j, modo_error_email_ab=True)
+    assert fmt == "B"
+    assert fields["cedula"] == "ERROR"
+
+
+def test_parse_formato_a_modo_error_email_ab_cedula_desde_imagen():
+    j = (
+        '{"formato":"A","fecha_pago":"01/01/2026","cedula":"V-01234567","monto":"10 USD",'
+        '"numero_referencia":"123","email_cliente":"NA","banco":"NA"}'
+    )
+    fmt, fields = _parse_formato_y_pagos_json(j, modo_error_email_ab=True)
+    assert fmt == "A"
+    assert fields["cedula"] == "V-01234567"
+
+
+def test_cedula_desde_imagen_rescan_normaliza_o_error():
+    from app.services.pagos_gmail.pipeline import (
+        PAGOS_GMAIL_ERROR_CEDULA_IMAGEN,
+        _cedula_desde_imagen_rescan_error_email,
+    )
+
+    assert _cedula_desde_imagen_rescan_error_email("V-030145077") == "V30145077"
+    assert _cedula_desde_imagen_rescan_error_email("ERROR") == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+    assert _cedula_desde_imagen_rescan_error_email("xyz") == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
 
 
 def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():

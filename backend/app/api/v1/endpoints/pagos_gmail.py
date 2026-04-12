@@ -84,14 +84,14 @@ def count_pending(
     Cuenta cuantos correos se procesarian sin iniciar el pipeline.
     El frontend puede mostrar "Se procesaran N correos. Iniciar? Si / No" y solo llamar
     POST /run-now si el usuario confirma (Si = inicia, No = no hace nada).
-    scan_filter: "unread" | "read" | "all" | "pending_identification" (mismo que run-now; por defecto all).
+    scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (mismo que run-now; por defecto all).
     unread/read/all/pending_identification listan los mismos hilos: inbox + imagen/PDF (leidos y no leidos, estrella o no, cualquier etiqueta).
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
         return {"count": 0, "scan_filter": scan_filter, "error": "no_credentials"}
     from app.services.pagos_gmail.gmail_service import build_gmail_service, count_messages_by_filter
-    if scan_filter not in ("unread", "read", "all", "pending_identification"):
+    if scan_filter not in ("unread", "read", "all", "pending_identification", "error_email_rescan"):
         scan_filter = "all"
     try:
         gmail_svc = build_gmail_service(creds)
@@ -112,8 +112,8 @@ def run_now(
     """
     Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
-    scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto all).
-    Listado: inbox con imagen/PDF — leidos y no leidos, con o sin estrella, con cualquier etiqueta (todos los valores de scan_filter usan el mismo criterio q).
+    scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto all).
+    Listado: por defecto inbox con imagen/PDF. **error_email_rescan**: etiqueta ERROR EMAIL sin EMAIL-12 (re-lectura A/B con cédula en imagen).
     Procesamiento en orden de fecha del correo: mas antiguo primero, mas reciente al final.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
@@ -149,7 +149,7 @@ def run_now(
     db.refresh(sync)
     sync_id = sync.id
     # Validar scan_filter
-    if scan_filter not in ("unread", "read", "all", "pending_identification"):
+    if scan_filter not in ("unread", "read", "all", "pending_identification", "error_email_rescan"):
         scan_filter = "all"
     # Lanzar pipeline en segundo plano; el cliente hace polling a /status
     background_tasks.add_task(_run_pipeline_background, sync_id, scan_filter)

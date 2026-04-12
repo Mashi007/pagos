@@ -15,9 +15,11 @@ Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/MASTER/ER
 Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas de plantilla; con candidatos imagen/PDF
 se fuerza sin estrella + no leido en Gmail para reintento. No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
-Cedula: solo desde tabla clientes por email del De (From): columna `email` y si no coincide `email_secundario`; nunca desde la imagen. El destinatario Para (To) no se usa para cedula.
+Cedula: por defecto solo desde tabla clientes por email del De (From): `email` y `email_secundario`; nunca desde la imagen.
+Excepcion: scan_filter **error_email_rescan** (correos con etiqueta ERROR EMAIL sin EMAIL-12) — plantillas **A** y **B**: cedula se lee de la imagen (Gemini) o columna **ERROR** si no es clara; ademas etiqueta Gmail **EMAIL-12** si hubo fila A/B confirmada.
 """
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
@@ -46,6 +48,7 @@ from app.services.pagos_gmail.gmail_service import (
     mark_as_read,
     mark_unread_clear_star,
     PagosGmailGmailListError,
+    PAGOS_GMAIL_LABEL_EMAIL_12,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
     PAGOS_GMAIL_LABEL_MANUAL,
     PAGOS_GMAIL_LABEL_MASTER,
@@ -85,18 +88,37 @@ def _dedupe_messages_pagos_gmail(raw_messages: list[dict]) -> list[dict]:
     return out
 
 
-def _sort_messages_by_date_asc(messages: list[dict]) -> list[dict]:
+def _sort_key_pagos_gmail_chrono_asc(m: dict) -> tuple:
     """
-    Orden estable: del correo mas antiguo al mas reciente (cabecera Date ascendente;
-    empate por id de mensaje). Gmail no garantiza orden en messages.list: siempre ordenar aqui.
+    Clave de orden cronologico ascendente (primero el mas antiguo, al final el mas reciente).
+    Prioriza **internal_date_ms** de Gmail (recepcion en servidor); si falta, cabecera Date -> epoch ms UTC;
+    empate estable por id de mensaje. Gmail no garantiza orden en messages.list: el pipeline siempre ordena el lote completo.
     """
 
-    def _key(m: dict) -> tuple:
+    def _header_date_to_epoch_ms() -> int:
         h = m.get("headers") or {}
         dt = get_message_date(h)
-        return (dt, m.get("id") or "")
+        try:
+            from datetime import timezone as _tz
 
-    return sorted(messages, key=_key, reverse=False)
+            if getattr(dt, "tzinfo", None) is None:
+                d = dt.replace(tzinfo=_tz.utc)
+            else:
+                d = dt.astimezone(_tz.utc)
+            return int(d.timestamp() * 1000)
+        except Exception:
+            return 0
+
+    ms = int(m.get("internal_date_ms") or 0)
+    if ms <= 0:
+        ms = _header_date_to_epoch_ms()
+    mid = m.get("id") or ""
+    return (ms, mid)
+
+
+def _sort_messages_by_date_asc(messages: list[dict]) -> list[dict]:
+    """Orden estable: del correo mas antiguo al mas reciente (ver _sort_key_pagos_gmail_chrono_asc)."""
+    return sorted(messages, key=_sort_key_pagos_gmail_chrono_asc, reverse=False)
 
 
 # Columna Excel "Banco" al digitalizar: imagen 1 (A) / imagen 2 (B) / imagen 3 Binance (C) / imagen 4 BDV (D).
@@ -108,6 +130,8 @@ PAGOS_GMAIL_BANCO_IMAGEN_4 = "BDV"
 # Columna Cedula en Excel cuando no se puede resolver por remitente (max 50 chars en modelo).
 PAGOS_GMAIL_ERROR_CEDULA_BD = "ERROR BD"  # 3.1 fallo al consultar tabla clientes
 PAGOS_GMAIL_ERROR_CEDULA_EMAIL = "ERROR EMAIL"  # 3.2 remitente sin fila en clientes
+# Re-escaneo ERROR EMAIL (Mercantil/BNC): cédula ilegible en imagen — literal en Excel (no confundir con ERROR EMAIL).
+PAGOS_GMAIL_ERROR_CEDULA_IMAGEN = "ERROR"
 
 # De / From en minusculas: Gmail solo etiqueta MASTER (no plantilla 1-4 ni ERROR EMAIL).
 PAGOS_GMAIL_SENDER_MASTER = "master@rapicreditca.com"
@@ -145,6 +169,24 @@ def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str
         return None, "BD"
 
 
+def _cedula_desde_imagen_rescan_error_email(raw: Optional[str]) -> str:
+    """
+    Re-escaneo ERROR EMAIL (solo plantillas A/B): cédula leída de la imagen por Gemini.
+    Si no es claramente válida (V/E/J + dígitos), devuelve PAGOS_GMAIL_ERROR_CEDULA_IMAGEN.
+    """
+    s = (raw or "").strip()
+    if not s or s.upper() in (PAGOS_NA, "NA"):
+        return PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+    if s.upper() == "ERROR":
+        return PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+    fc = formatear_cedula(s)
+    if not fc or fc.upper() == PAGOS_NA:
+        return PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+    if re.match(r"^[VEJ]\d{5,12}$", fc, re.IGNORECASE):
+        return fc[0].upper() + fc[1:]
+    return PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+
+
 def _cedula_columna_desde_remitente(
     db: Session, sender_lc: str
 ) -> tuple[str, bool]:
@@ -169,12 +211,15 @@ def run_pipeline(
     """
     Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
     Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D) + estrella; cierre: leido si hubo algun OK.
-    scan_filter: "unread" | "read" | "all" | "pending_identification" (por defecto API/UI: all).
-      Todos listan lo mismo en Gmail (q): inbox con imagen/PDF — leidos y no leidos, con o sin estrella, con cualquier etiqueta.
-      pending_identification es alias del mismo listado (nombre conservado para scheduler/API).
+    scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto API/UI: all).
+      Por defecto: inbox con imagen/PDF — leidos y no leidos, con o sin estrella, con cualquier etiqueta.
+      **error_email_rescan**: solo hilos con etiqueta **ERROR EMAIL** y sin **EMAIL-12**; Gemini en modo Mercantil/BNC con cédula en imagen para A/B.
+      pending_identification es alias del listado base (nombre conservado para scheduler/API).
     Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
     Los mensajes de cada lote se ordenan por fecha del correo de mas antiguo a mas reciente antes de procesar.
     Una sola pasada de listado+proceso por ejecucion (salvo reintentos manuales).
+    Tras listar **todos** los mensajes que cumplen el filtro (paginacion completa), se ordenan siempre del **mas antiguo al mas reciente**
+    y se procesan en ese orden estricto (primer correo de la lista primero, ultimo al final).
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
     logger.info("[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s)", existing_sync_id, scan_filter)
@@ -220,6 +265,7 @@ def run_pipeline(
     # Correos que quedaron con estrella tras digitalizacion completa (cuatro columnas).
     correos_marcados_revision = 0
     plantilla_label_cache: Dict[str, Optional[str]] = {}
+    error_email_rescan = (scan_filter or "").strip().lower() == "error_email_rescan"
 
     try:
         def fetch_sorted_batch() -> list[dict]:
@@ -233,7 +279,8 @@ def run_pipeline(
                 )
             ordered = _sort_messages_by_date_asc(messages)
             logger.info(
-                "[PAGOS_GMAIL] Correos (filtro=%s): %d (orden mas antiguo primero -> mas reciente al final)",
+                "[PAGOS_GMAIL] Correos (filtro=%s): %d — orden cronologico ascendente "
+                "(internalDate Gmail si existe; si no cabecera Date). Procesamiento: del primero al ultimo de esta lista.",
                 scan_filter,
                 len(ordered),
             )
@@ -249,6 +296,7 @@ def run_pipeline(
                 )
             for msg_info in batch:
                 msg_id = msg_info["id"]
+                committed_ab_error_email_rescan = False
                 payload = msg_info["payload"]
                 headers = msg_info["headers"]
                 from_h = headers.get("from") or headers.get("From") or ""
@@ -399,6 +447,7 @@ def run_pipeline(
                             filename,
                             remitente_correo_header=from_h,
                             origen_binario=origen_binario,
+                            modo_error_email_ab=error_email_rescan,
                         )
 
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
@@ -438,6 +487,18 @@ def run_pipeline(
                                     sender_lc[:72],
                                     filename,
                                 )
+                        elif error_email_rescan and fmt in ("A", "B"):
+                            f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
+                            m = _v(data.get("monto"))
+                            r = normalizar_referencia(_v(data.get("numero_referencia")))
+                            c = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
+                            c_ok = True
+                            logger.info(
+                                "[PAGOS_GMAIL]   Re-scan ERROR EMAIL (%s): columna Cedula desde imagen=%s archivo=%s",
+                                fmt,
+                                c[:24] if c else "",
+                                filename,
+                            )
                         else:
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
                             m = _v(data.get("monto"))
@@ -520,6 +581,10 @@ def run_pipeline(
                         try:
                             db.commit()
                             committed_comprobante_rows = True
+                            for _, _, p in rows_pairs:
+                                if error_email_rescan and p.get("fmt") in ("A", "B"):
+                                    committed_ab_error_email_rescan = True
+                                    break
                             logger.info(
                                 "[PAGOS_GMAIL]   Commit BD inicial: %d fila(s) comprobante sin enlaces Drive aun",
                                 len(rows_pairs),
@@ -689,6 +754,29 @@ def run_pipeline(
                         logger.warning(
                             "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s — revisar permisos Gmail",
                             k_err,
+                        )
+
+                if (
+                    error_email_rescan
+                    and committed_ab_error_email_rescan
+                    and committed_comprobante_rows
+                    and not remitente_solo_master
+                ):
+                    k12 = PAGOS_GMAIL_LABEL_EMAIL_12
+                    if k12 not in plantilla_label_cache:
+                        plantilla_label_cache[k12] = ensure_user_label_id(gmail_svc, k12)
+                    lid12 = plantilla_label_cache.get(k12)
+                    if lid12:
+                        add_message_user_labels_only(gmail_svc, msg_id, [lid12])
+                        gmail_etiqueta_clasificacion_aplicada = True
+                        logger.info(
+                            "[PAGOS_GMAIL]   Gmail: etiqueta %s aplicada (re-scan ERROR EMAIL, fila Mercantil/BNC)",
+                            k12,
+                        )
+                    else:
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
+                            k12,
                         )
 
                 if remitente_solo_master and candidatos:
