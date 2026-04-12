@@ -89,10 +89,10 @@ import {
 } from '../constants/queryKeys'
 
 import {
+  esReturnToRevisionDesdeNotificaciones,
   leerYConsumirReturnRevisionSesion,
   limpiarReturnRevisionSesion,
   normalizarReturnToRevisionPath,
-  RUTA_RETORNO_NOTIFICACIONES,
 } from '../constants/revisionNavigation'
 
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
@@ -532,9 +532,9 @@ export function EditarRevisionManual() {
     const normReturnState = normalizarReturnToRevisionPath(
       (location.state as { returnTo?: unknown } | null)?.returnTo
     )
-    if (normReturnState === RUTA_RETORNO_NOTIFICACIONES) {
+    if (normReturnState && esReturnToRevisionDesdeNotificaciones(normReturnState)) {
       limpiarReturnRevisionSesion()
-      return RUTA_RETORNO_NOTIFICACIONES
+      return normReturnState
     }
     return leerYConsumirReturnRevisionSesion()
   }, [location.key, location.state])

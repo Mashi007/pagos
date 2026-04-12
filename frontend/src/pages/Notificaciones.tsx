@@ -7,7 +7,7 @@ import {
   Fragment,
 } from 'react'
 
-import { Link, useSearchParams, useNavigate } from 'react-router-dom'
+import { Link, useSearchParams, useLocation } from 'react-router-dom'
 
 import { motion } from 'framer-motion'
 
@@ -81,10 +81,7 @@ import {
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
-import {
-  marcarReturnRevisionDesdeNotificaciones,
-  RUTA_RETORNO_NOTIFICACIONES,
-} from '../constants/revisionNavigation'
+import { marcarReturnRevisionDesdeNotificaciones } from '../constants/revisionNavigation'
 
 import { isRequestCanceled } from '../utils/requestCanceled'
 
@@ -479,7 +476,7 @@ function abonosSuperanUmbralConfirmo(
  */
 function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useSimpleAuth()
   const esAdmin = (user?.rol || '').toLowerCase() === 'admin'
 
@@ -492,18 +489,15 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
   const [data, setData] = useState<CompararAbonosDriveCuotasResponse | null>(null)
   const [confirmacionMontosAltos, setConfirmacionMontosAltos] = useState('')
 
-  const onDialogAbonosOpenChange = useCallback(
-    (v: boolean) => {
-      setOpen(v)
-      if (!v) {
-        setPaso('resumen')
-        setData(null)
-        setConfirmacionMontosAltos('')
-        navigate(RUTA_RETORNO_NOTIFICACIONES, { replace: true })
-      }
-    },
-    [navigate]
-  )
+  /** Cierra el modal sin cambiar de ruta (mismo submenú de notificaciones). */
+  const onDialogAbonosOpenChange = useCallback((v: boolean) => {
+    setOpen(v)
+    if (!v) {
+      setPaso('resumen')
+      setData(null)
+      setConfirmacionMontosAltos('')
+    }
+  }, [])
 
   if (pid == null || !ced) return null
 
@@ -676,7 +670,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 <Link
                   to={`/revision-manual/editar/${pid}`}
                   state={{
-                    returnTo: RUTA_RETORNO_NOTIFICACIONES,
+                    returnTo: `${location.pathname}${location.search || ''}`,
                   }}
                   className="font-medium text-blue-600 hover:underline"
                 >
@@ -763,8 +757,8 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                       ? 'border-slate-600 bg-slate-100 text-slate-800 hover:bg-slate-200/80'
                       : 'border-muted bg-muted/30 text-muted-foreground hover:bg-muted/50'
                   }`}
-                  title="Cierra sin aplicar cambios y vuelve al listado principal de notificaciones."
-                  aria-label="No: cerrar y volver a notificaciones"
+                  title="Cierra el cuadro sin aplicar nada; permanece en esta misma pantalla de notificaciones."
+                  aria-label="No: cerrar el cuadro sin cambiar de submenú"
                   onClick={() => onDialogAbonosOpenChange(false)}
                 >
                   No

@@ -6,6 +6,15 @@ export const RUTA_RETORNO_NOTIFICACIONES = '/notificaciones'
 
 const SESSION_REVISION_RETURN_TO = 'rapicredit-revision-return-to'
 
+/** Rutas SPA permitidas para volver desde revisión manual si vienen en `location.state.returnTo`. */
+export function esReturnToRevisionDesdeNotificaciones(p: string): boolean {
+  return (
+    p === RUTA_RETORNO_NOTIFICACIONES ||
+    p.startsWith(`${RUTA_RETORNO_NOTIFICACIONES}/`) ||
+    p.startsWith(`${RUTA_RETORNO_NOTIFICACIONES}?`)
+  )
+}
+
 /** Ruta SPA interna; evita open redirect. */
 export function normalizarReturnToRevisionPath(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
