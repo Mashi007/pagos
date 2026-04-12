@@ -1,4 +1,11 @@
-import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  Fragment,
+} from 'react'
 
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 
@@ -485,6 +492,19 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
   const [data, setData] = useState<CompararAbonosDriveCuotasResponse | null>(null)
   const [confirmacionMontosAltos, setConfirmacionMontosAltos] = useState('')
 
+  const onDialogAbonosOpenChange = useCallback(
+    (v: boolean) => {
+      setOpen(v)
+      if (!v) {
+        setPaso('resumen')
+        setData(null)
+        setConfirmacionMontosAltos('')
+        navigate(RUTA_RETORNO_NOTIFICACIONES, { replace: true })
+      }
+    },
+    [navigate]
+  )
+
   if (pid == null || !ced) return null
 
   const loteResuelto =
@@ -512,7 +532,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
       setData(res)
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo comparar ABONOS vs cuotas.')
-      setOpen(false)
+      onDialogAbonosOpenChange(false)
     } finally {
       setLoading(false)
     }
@@ -536,9 +556,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
       toast.success(
         `Aplicado: pago #${res.pago_id}. Pagos eliminados: ${res.pagos_eliminados}. Cuotas completadas: ${res.cuotas_completadas}.`
       )
-      setOpen(false)
-      setPaso('resumen')
-      setConfirmacionMontosAltos('')
+      onDialogAbonosOpenChange(false)
       await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
         skipNotificacionesMora: true,
         includeDashboardMenu: true,
@@ -584,17 +602,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
         <Scale className="h-4 w-4" aria-hidden />
       </button>
 
-      <Dialog
-        open={open}
-        onOpenChange={v => {
-          setOpen(v)
-          if (!v) {
-            setPaso('resumen')
-            setData(null)
-            setConfirmacionMontosAltos('')
-          }
-        }}
-      >
+      <Dialog open={open} onOpenChange={onDialogAbonosOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -755,12 +763,9 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                       ? 'border-slate-600 bg-slate-100 text-slate-800 hover:bg-slate-200/80'
                       : 'border-muted bg-muted/30 text-muted-foreground hover:bg-muted/50'
                   }`}
-                  title="Cierra sin aplicar cambios y vuelve al listado de notificaciones."
+                  title="Cierra sin aplicar cambios y vuelve al listado principal de notificaciones."
                   aria-label="No: cerrar y volver a notificaciones"
-                  onClick={() => {
-                    setOpen(false)
-                    navigate(RUTA_RETORNO_NOTIFICACIONES, { replace: true })
-                  }}
+                  onClick={() => onDialogAbonosOpenChange(false)}
                 >
                   No
                 </button>
@@ -937,7 +942,11 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 </Button>
               </>
             ) : (
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onDialogAbonosOpenChange(false)}
+              >
                 Cerrar
               </Button>
             )}
