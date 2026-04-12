@@ -187,6 +187,21 @@ class PrestamoService {
     return await apiClient.post<Prestamo>(this.baseUrl, data)
   }
 
+  // Validar cupo de cédulas en carga masiva
+  async checkCupoCedulas(cedulas: string[]): Promise<{
+    cedulas: Array<{
+      cedula: string
+      cedula_normalizada: string
+      prefijo: string | null
+      max_aprobados: number | null
+      aprobados_actuales: number
+      puede_agregar: boolean
+      error: string | null
+    }>
+  }> {
+    return await apiClient.post(`${this.baseUrl}/check-cupo-cedulas`, { cedulas })
+  }
+
   // --- Revisar Préstamos (prestamos_con_errores) ---
 
   /** Lista de préstamos enviados a revisión (paginado) */

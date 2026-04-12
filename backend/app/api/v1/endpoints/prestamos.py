@@ -109,7 +109,15 @@ from app.services.cuota_estado import (
     sincronizar_columna_estado_cuotas,
 )
 
-from app.services.prestamos.cupo_cedula_aprobados import validar_cupo_nuevo_prestamo_aprobado
+from app.services.prestamos.cupo_cedula_aprobados import (
+    validar_cupo_nuevo_prestamo_aprobado,
+    contar_aprobados_misma_clave_cupo,
+)
+from app.utils.cedula_almacenamiento import (
+    normalizar_cedula_clave_cupo,
+    prefijo_politica_cupo_aprobados,
+    max_aprobados_permitidos_por_prefijo,
+)
 from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
     PrestamoCedulaClienteError,
     asegurar_prestamo_alineado_con_cliente,
@@ -1515,7 +1523,77 @@ def listar_prestamos_por_cedulas_batch(
 
 
 
+class CheckCupoCedulasBody(BaseModel):
+    """Body para validar cupo de cédulas en carga masiva."""
+    cedulas: List[str] = []
 
+
+@router.post("/check-cupo-cedulas", response_model=dict)
+def check_cupo_cedulas(
+    body: CheckCupoCedulasBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Valida cupo de préstamos APROBADO para un batch de cédulas.
+    Usado en carga masiva de préstamos para avisar en preview si cedula V/E ya tiene 1 APROBADO.
+    
+    Retorna:
+    {
+        "cedulas": [
+            {
+                "cedula": "V123456",
+                "cedula_normalizada": "V123456",
+                "prefijo": "V",
+                "max_aprobados": 1,
+                "aprobados_actuales": 0,
+                "puede_agregar": true,
+                "error": null
+            }
+        ]
+    }
+    """
+    resultado = []
+    
+    for ced in set(c.strip() for c in (body.cedulas or []) if c and c.strip()):
+        clave = normalizar_cedula_clave_cupo(ced)
+        prefijo = prefijo_politica_cupo_aprobados(clave)
+        max_permitido = max_aprobados_permitidos_por_prefijo(prefijo)
+        
+        item = {
+            "cedula": ced,
+            "cedula_normalizada": clave,
+            "prefijo": prefijo,
+            "max_aprobados": max_permitido,
+            "aprobados_actuales": 0,
+            "puede_agregar": True,
+            "error": None,
+        }
+        
+        if max_permitido is None:
+            item["error"] = f"Cedula {ced}: prefijo no valido. Solo E, V o J permiten prestamos."
+            item["puede_agregar"] = False
+        else:
+            try:
+                conteo = contar_aprobados_misma_clave_cupo(db, clave)
+                item["aprobados_actuales"] = conteo
+                item["puede_agregar"] = conteo < max_permitido
+                if not item["puede_agregar"]:
+                    item["error"] = (
+                        f"Cedula {ced} ({prefijo}): ya tiene {conteo} prestamo(s) APROBADO(s). "
+                        f"Maximo permitido: {max_permitido}."
+                    )
+            except Exception as e:
+                item["error"] = f"Error al validar cupo: {str(e)}"
+                item["puede_agregar"] = False
+        
+        resultado.append(item)
+    
+    return {"cedulas": resultado}
+
+
+
+
+@router.get("/cedula/{cedula}", response_model=dict)
 @router.get("/cedula/{cedula}", response_model=dict)
 
 def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
@@ -5168,9 +5246,9 @@ async def upload_prestamos_excel(
 
                         errores.append("Nº Cuotas es requerido")
 
-                    elif cuotas < 1 or cuotas > 12:
+                    elif cuotas < 1 or cuotas > 50:
 
-                        errores.append("Nº Cuotas debe estar entre 1 y 12")
+                        errores.append("Nº Cuotas debe estar entre 1 y 50")
 
                 except (ValueError, TypeError):
 

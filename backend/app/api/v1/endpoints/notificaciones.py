@@ -609,7 +609,7 @@ def update_plantilla_pdf_cobranza(payload: dict = Body(...), db: Session = Depen
     if clausula is not None and len(clausula) > _PLANTILLA_PDF_CLAUSULA_MAX:
         raise HTTPException(
             status_code=400,
-            detail=f"La clÃƒÂ¡usula sÃƒÂ©ptima no puede superar {_PLANTILLA_PDF_CLAUSULA_MAX} caracteres (actual: {len(clausula)}).",
+            detail=f"La cláusula séptima no puede superar {_PLANTILLA_PDF_CLAUSULA_MAX} caracteres (actual: {len(clausula)}).",
         )
     firma = payload.get("firma")
     if firma is not None and len(firma) > _PLANTILLA_PDF_FIRMA_MAX:
@@ -781,7 +781,7 @@ def update_adjunto_fijo_cobranza(payload: dict = Body(...), db: Session = Depend
     except Exception as e:
         db.rollback()
         logger.exception("update_adjunto_fijo_cobranza: %s", e)
-        raise HTTPException(status_code=500, detail="Error al guardar la configuraciÃƒÂ³n del adjunto fijo")
+        raise HTTPException(status_code=500, detail="Error al guardar la configuración del adjunto fijo")
 
 
 @router.get("/adjuntos-fijos-cobranza")
@@ -1084,10 +1084,10 @@ def delete_variable(variable_id: int, db: Session = Depends(get_db)):
 
 VARIABLES_PRECARGADAS = [
     {"nombre_variable": "nombre_cliente", "tabla": "clientes", "campo_bd": "nombres", "descripcion": "Nombres del cliente"},
-    {"nombre_variable": "cedula", "tabla": "clientes", "campo_bd": "cedula", "descripcion": "CÃƒÂ©dula de identidad"},
-    {"nombre_variable": "telefono", "tabla": "clientes", "campo_bd": "telefono", "descripcion": "TelÃƒÂ©fono de contacto"},
-    {"nombre_variable": "email", "tabla": "clientes", "campo_bd": "email", "descripcion": "Correo electrÃƒÂ³nico"},
-    {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "NÃƒÂºmero de cuota"},
+    {"nombre_variable": "cedula", "tabla": "clientes", "campo_bd": "cedula", "descripcion": "Cédula de identidad"},
+    {"nombre_variable": "telefono", "tabla": "clientes", "campo_bd": "telefono", "descripcion": "Teléfono de contacto"},
+    {"nombre_variable": "email", "tabla": "clientes", "campo_bd": "email", "descripcion": "Correo electrónico"},
+    {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "Número de cuota"},
     {"nombre_variable": "fecha_vencimiento", "tabla": "cuotas", "campo_bd": "fecha_vencimiento", "descripcion": "Fecha de vencimiento"},
     {"nombre_variable": "monto_cuota", "tabla": "cuotas", "campo_bd": "monto", "descripcion": "Monto de la cuota"},
     {
@@ -1132,7 +1132,7 @@ def inicializar_variables_precargadas(db: Session = Depends(get_db)):
             logger.warning("inicializar_variables_precargadas: %s para %s", e, nombre)
     total = creadas + existentes
     return {
-        "mensaje": f"Variables precargadas: {creadas} creadas, {existentes} ya existÃƒÂ­an.",
+        "mensaje": f"Variables precargadas: {creadas} creadas, {existentes} ya existían.",
         "variables_creadas": creadas,
         "variables_existentes": existentes,
         "total": total,
@@ -1172,7 +1172,7 @@ def get_notificaciones_lista(
         items.append({
             "id": r.id,
             "estado": "ENVIADA" if r.exito else "FALLIDA",
-            "asunto": f"NotificaciÃƒÂ³n {r.tipo_tab}" if r.tipo_tab else "EnvÃƒÂ­o",
+            "asunto": f"Notificación {r.tipo_tab}" if r.tipo_tab else "Envío",
             "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else None,
             "fecha_creacion": r.fecha_envio.isoformat() if r.fecha_envio else None,
             "error_mensaje": r.error_mensaje,
@@ -1467,7 +1467,7 @@ def _generar_excel_rebotados(items: List[dict], tipo: str) -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Correos no entregados"
-    ws.append(["Email", "Nombre", "CÃƒÂ©dula", "Fecha envÃƒÂ­o", "Motivo rebote"])
+    ws.append(["Email", "Nombre", "Cédula", "Fecha envío", "Motivo rebote"])
     for r in items:
         ws.append([
             r.get("email") or "",
@@ -1548,7 +1548,7 @@ def get_historial_notificaciones_por_cedula(
             "id": r.id,
             "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else None,
             "tipo_tab": r.tipo_tab or "",
-            "asunto": getattr(r, "asunto", None) or (f"NotificaciÃƒÂ³n {r.tipo_tab}" if r.tipo_tab else "EnvÃƒÂ­o"),
+            "asunto": getattr(r, "asunto", None) or (f"Notificación {r.tipo_tab}" if r.tipo_tab else "Envío"),
             "email": r.email or "",
             "nombre": r.nombre or "",
             "cedula": r.cedula or "",
@@ -1578,7 +1578,7 @@ def _generar_excel_historial_cedula(items: List[dict], cedula: str) -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Historial notificaciones"
-    ws.append(["Fecha envÃƒÂ­o", "Tipo", "Asunto", "Email", "Nombre", "CÃƒÂ©dula", "Estado", "Error", "ID PrÃƒÂ©stamo", "Correlativo"])
+    ws.append(["Fecha envío", "Tipo", "Asunto", "Email", "Nombre", "Cédula", "Estado", "Error", "ID Préstamo", "Correlativo"])
     for r in items:
         ws.append([
             r.get("fecha_envio") or "",
@@ -1812,9 +1812,9 @@ def get_clientes_retrasados(
     dias_3: List[dict] = []
     dias_1: List[dict] = []
     hoy_list: List[dict] = []
-    dias_1_atraso: List[dict] = []   # 1 dÃƒÂ­a atrasado (cuota vencida ayer)
-    dias_5_atraso: List[dict] = []   # 5 dÃƒÂ­as atrasado (cuota vencida hace 5 dÃƒÂ­as)
-    dias_30_atraso: List[dict] = []  # 30 dÃƒÂ­as atrasado (cuota vencida hace 30 dÃƒÂ­as)
+    dias_1_atraso: List[dict] = []   # 1 día atrasado (cuota vencida ayer)
+    dias_5_atraso: List[dict] = []   # 5 días atrasado (cuota vencida hace 5 días)
+    dias_30_atraso: List[dict] = []  # 30 días atrasado (cuota vencida hace 30 días)
 
     pids_retraso = [c.prestamo_id for c, _ in rows]
     counts_retraso = contar_cuotas_atraso_por_prestamos(
@@ -1968,23 +1968,27 @@ def get_cuotas_pendiente_2_dias_antes(
 
 def ejecutar_actualizacion_notificaciones(db: Session) -> dict:
     """
-    Logica de actualizacion de notificaciones (mora desde cuotas no pagadas).
-    Solo se invoca desde POST /notificaciones/actualizar (disparo manual).
+    Punto de entrada para el botón «Actualización manual» del frontend.
+
+    El sistema de notificaciones es 100 % en tiempo real: los listados (clientes-retrasados,
+    cuotas-pendiente-2-dias-antes, etc.) consultan la BD directamente cada vez que se cargan,
+    por lo que no existe un estado intermedio que «recalcular» aquí. Este endpoint devuelve
+    una respuesta inmediata para que el frontend invalide su caché de React Query y refrescando
+    los listados con datos actualizados de la BD.
+
+    No realiza escrituras en BD ni modifica ningún estado: su utilidad es disparar el ciclo
+    de refresco en el cliente de forma explícita (sin esperar al foco de ventana).
     """
-    hoy = hoy_negocio()
-    q = select(Cuota).where(
-        Cuota.fecha_pago.is_(None),
-        CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-        SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-        Cuota.fecha_vencimiento <= hoy,
-    )
-    db.execute(q).scalars().all()
-    return {"mensaje": "ActualizaciÃƒÂ³n ejecutada.", "clientes_actualizados": 0}
+    return {"mensaje": "Actualización solicitada. Los listados se recargarán desde la BD.", "clientes_actualizados": 0}
 
 
 @router.post("/actualizar")
 def actualizar_notificaciones(db: Session = Depends(get_db)):
-    """Recalcular mora desde cuotas no pagadas. Disparo manual (no hay job programado)."""
+    """
+    Dispara el refresco de listados de notificaciones en el cliente.
+    No escribe en BD: los datos de mora son en tiempo real (consulta directa a cuotas/préstamos).
+    El frontend invalida su caché de React Query tras recibir 200.
+    """
     return ejecutar_actualizacion_notificaciones(db)
 
 

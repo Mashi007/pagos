@@ -221,7 +221,6 @@ export function mapaColumnasPrestamoDesdeFilaEncabezado(
     'numero_cuotas',
   ] as const
   if (required.some(k => m[k] === undefined)) return null
-  if (m.concesionario === undefined) return null
 
   return m
 }

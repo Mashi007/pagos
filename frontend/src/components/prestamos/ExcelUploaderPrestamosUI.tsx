@@ -567,7 +567,7 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                                   )
                                 }
                                 min={1}
-                                max={12}
+                                max={50}
                                 className={inputClass(
                                   row._validation.numero_cuotas?.isValid ?? true
                                 )}

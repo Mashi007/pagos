@@ -1473,8 +1473,11 @@ export function useExcelUpload({
                 }
               }
             }
-          } catch {
-            // Si falla la verificación, el backend rechazará 409 al guardar
+          } catch (err) {
+            addToast(
+              'warning',
+              'No se pudo verificar emails contra BD. El guardado individual validará.'
+            )
           }
         }
 
@@ -1486,8 +1489,9 @@ export function useExcelUpload({
       } catch (err) {
         console.error('Error procesando Excel:', err)
 
-        alert(
-          `Error procesando el archivo: ${err instanceof Error ? err.message : 'Error desconocido'}`
+        addToast(
+          'error',
+          `Error al procesar archivo: ${err instanceof Error ? err.message : 'Error desconocido'}`
         )
       } finally {
         if (isMounted()) setIsProcessing(false)
@@ -1526,11 +1530,11 @@ export function useExcelUpload({
 
         processExcelFile(excelFile)
       } else {
-        alert('Por favor selecciona un archivo Excel (.xlsx o .xls)')
+        addToast('error', 'Por favor selecciona un archivo Excel (.xlsx o .xls)')
       }
     },
 
-    [processExcelFile]
+    [processExcelFile, addToast]
   )
 
   const handleFileSelect = useCallback(

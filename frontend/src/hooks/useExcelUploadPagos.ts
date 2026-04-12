@@ -1004,7 +1004,7 @@ export function useExcelUploadPagos({
       if (prestamosActivos.length > 1 && !currentRow.prestamo_id) {
         addToast(
           'error',
-          `Fila ${row._rowIndex}: La cédula no tiene préstamo registrado.`
+          `Fila ${row._rowIndex}: La cédula tiene varios créditos activos; especifique el ID de préstamo en la fila.`
         )
 
         return { ok: false }
@@ -1434,7 +1434,7 @@ export function useExcelUploadPagos({
             row._hasErrors ? 'warning' : 'success',
             row._hasErrors
               ? 'Pago enviado a Revisar Pagos con errores.'
-              : 'Pago guardado correctamente.'
+              : 'Pago enviado a Revisar Pagos.'
           )
 
         onNavigate()
@@ -3191,7 +3191,7 @@ export function useExcelUploadPagos({
 
         addToast('success', 'Movido a Revisar Pagos')
 
-        queryClient.invalidateQueries({ queryKey: ['pagosConErrores'] })
+        queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'] })
       } catch (error) {
         addToast('error', 'Error al mover a revisar pagos')
       }

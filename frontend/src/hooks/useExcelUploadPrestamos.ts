@@ -117,7 +117,10 @@ export function useExcelUploadPrestamos({
 
       const timeoutId = setTimeout(() => controller.abort(), 5000)
 
-      await fetch('/', { method: 'HEAD', signal: controller.signal })
+      await fetch('/api/v1/prestamos?page=1&per_page=1', {
+        method: 'GET',
+        signal: controller.signal,
+      })
 
       clearTimeout(timeoutId)
 
@@ -618,7 +621,7 @@ export function useExcelUploadPrestamos({
         const fileValidation = validateExcelFile(file)
 
         if (!fileValidation.isValid) {
-          alert(`Error: ${fileValidation.error}`)
+          addToast('error', `Archivo inválido: ${fileValidation.error}`)
 
           return
         }
@@ -630,7 +633,7 @@ export function useExcelUploadPrestamos({
         if (!isMounted()) return
 
         if (data.byteLength > 10 * 1024 * 1024) {
-          alert('Archivo demasiado grande. Máximo 10 MB')
+          addToast('error', 'Archivo demasiado grande. Máximo 10 MB.')
 
           return
         }
@@ -644,13 +647,13 @@ export function useExcelUploadPrestamos({
         const dataValidation = validateExcelData(jsonData)
 
         if (!dataValidation.isValid) {
-          alert(`Error en datos: ${dataValidation.error}`)
+          addToast('error', `Error en datos: ${dataValidation.error}`)
 
           return
         }
 
         if (jsonData.length < 2) {
-          alert('El archivo debe tener al menos una fila de datos')
+          addToast('error', 'El archivo debe tener al menos una fila de datos.')
 
           return
         }
@@ -854,7 +857,37 @@ export function useExcelUploadPrestamos({
               }
             }
           } catch (_e) {
-            // Si falla la API, no marcar todas como error; el guardado individual validará
+            addToast(
+              'warning',
+              'No se pudieron verificar cédulas contra BD. Compruebe conexión; el guardado individual validará cada fila.'
+            )
+          }
+        }
+
+        // Validar cupo de préstamos por cédula (V/E máx 1, J máx 5)
+        if (uniqueCedulas.length > 0) {
+          try {
+            const cupoResponse = await prestamoService.checkCupoCedulas(uniqueCedulas)
+            
+            for (const cupoItem of cupoResponse.cedulas || []) {
+              for (const row of processed) {
+                const cedNorm = (row.cedula || '').trim().toUpperCase()
+                if (cedNorm === cupoItem.cedula || cedNorm === cupoItem.cedula_normalizada) {
+                  if (cupoItem.error) {
+                    row._validation.cedula = {
+                      isValid: false,
+                      message: cupoItem.error,
+                    }
+                    row._hasErrors = true
+                  }
+                }
+              }
+            }
+          } catch (_e) {
+            addToast(
+              'warning',
+              'No se pudieron verificar cupos de cédulas. El guardado individual validará.'
+            )
           }
         }
 
@@ -864,15 +897,16 @@ export function useExcelUploadPrestamos({
       } catch (err) {
         console.error('Error procesando Excel:', err)
 
-        alert(
-          `Error: ${err instanceof Error ? err.message : 'Error desconocido'}`
+        addToast(
+          'error',
+          `Error al procesar archivo: ${err instanceof Error ? err.message : 'Error desconocido'}`
         )
       } finally {
         setIsProcessing(false)
       }
     },
 
-    [isMounted]
+    [isMounted, addToast]
   )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -904,11 +938,11 @@ export function useExcelUploadPrestamos({
 
         processExcelFile(excelFile)
       } else {
-        alert('Selecciona un archivo Excel (.xlsx o .xls)')
+        addToast('error', 'Selecciona un archivo Excel (.xlsx o .xls)')
       }
     },
 
-    [processExcelFile]
+    [processExcelFile, addToast]
   )
 
   const handleFileSelect = useCallback(
@@ -1044,8 +1078,6 @@ export function useExcelUploadPrestamos({
     sendToRevisarPrestamos,
 
     sendAllToRevisarPrestamos,
-
-    sendAllErrorsToRevisarPrestamos,
 
     onClose,
 
