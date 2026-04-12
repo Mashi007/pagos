@@ -18,11 +18,17 @@ from typing import Any, Dict, Optional
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.cuota import Cuota
+from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
-from app.services.comparar_abonos_drive_cuotas_service import comparar_abonos_drive_vs_cuotas
+from app.services.comparar_abonos_drive_cuotas_service import (
+    UMBRAL_CONFIRMO_ABONOS_USD,
+    comparar_abonos_drive_vs_cuotas,
+)
 from app.services.cuota_estado import TZ_NEGOCIO
 from app.services.pago_huella_funcional import conflicto_huella_para_creacion
 from app.services.pago_registro_moneda import resolver_monto_registro_pago
@@ -41,6 +47,7 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
     prestamo_id: int,
     usuario_registro: str,
     lote: Optional[str] = None,
+    confirmacion_montos_altos: Optional[str] = None,
 ) -> Dict[str, Any]:
     snap = comparar_abonos_drive_vs_cuotas(
         db, cedula=cedula, prestamo_id=prestamo_id, lote=lote
@@ -60,6 +67,14 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
         raise ValueError(
             "Solo se aplica cuando ABONOS (hoja) es mayor que el total pagado en cuotas."
         )
+
+    if float(abonos_drive) > UMBRAL_CONFIRMO_ABONOS_USD:
+        conf = (confirmacion_montos_altos or "").strip().upper()
+        if conf != "CONFIRMO":
+            raise ValueError(
+                "Monto ABONOS elevado: en el paso de confirmación debe escribir exactamente CONFIRMO "
+                "antes de aplicar."
+            )
 
     del_res = eliminar_todos_pagos_prestamo(db, prestamo_id)
     if not del_res.get("ok"):
@@ -100,6 +115,12 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
 
     ahora_conciliacion = datetime.now(ZoneInfo(TZ_NEGOCIO))
 
+    lote_aplicado_snap = snap.get("lote_aplicado")
+    lote_txt = str(lote_aplicado_snap).strip() if lote_aplicado_snap else ""
+    nota_base = "Alta automática desde ABONOS hoja CONCILIACIÓN (notificaciones)."
+    if lote_txt:
+        nota_base += f" Lote hoja: {lote_txt}."
+
     pago = Pago(
         cedula_cliente=cedula_fk,
         prestamo_id=prestamo_id,
@@ -116,7 +137,7 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
         monto_bs_original=monto_bs_g,
         tasa_cambio_bs_usd=tasa_g,
         fecha_tasa_referencia=fecha_tasa_g,
-        notas="Alta automática desde ABONOS hoja CONCILIACIÓN (notificaciones).",
+        notas=nota_base,
     )
     db.add(pago)
     db.flush()
@@ -134,6 +155,24 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
 
     pago.estado = _estado_conciliacion_post_cascada(pago, cuotas_completadas, cuotas_parciales)
     _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+
+    cp_rows = db.execute(
+        select(Cuota.numero_cuota, CuotaPago.id)
+        .join(Cuota, Cuota.id == CuotaPago.cuota_id)
+        .where(CuotaPago.pago_id == pago.id)
+        .order_by(CuotaPago.id.asc())
+    ).all()
+    if cp_rows:
+        partes_corr = []
+        for idx, (num_cuota, _cpid) in enumerate(cp_rows, start=1):
+            try:
+                ncu = int(num_cuota)
+            except (TypeError, ValueError):
+                ncu = num_cuota
+            partes_corr.append(f"EXCEL {idx} → cuota {ncu}")
+        suf = "; ".join(partes_corr)
+        prev = (pago.notas or "").strip()
+        pago.notas = (prev + (" | " if prev else "") + f"Correlativo cascada (RM): {suf}").strip()
 
     logger.info(
         "[aplicar_abonos_drive] prestamo_id=%s pago_id=%s monto=%s cc=%s cp=%s",

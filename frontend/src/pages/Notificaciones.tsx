@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 
-import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
+import {
+  Link,
+  useSearchParams,
+  useNavigate,
+  useLocation,
+} from 'react-router-dom'
 
 import { motion } from 'framer-motion'
 
@@ -28,6 +33,8 @@ import {
 } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
+
+import { Input } from '../components/ui/input'
 
 import {
   Dialog,
@@ -67,6 +74,7 @@ import {
   NOTIFICACIONES_MORA_BROADCAST_CHANNEL,
   NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
   invalidateListasNotificacionesMora,
+  invalidatePagosPrestamosRevisionYCuotas,
 } from '../constants/queryKeys'
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
@@ -443,6 +451,21 @@ function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
   )
 }
 
+function umbralConfirmaAbonosUsd(
+  data: CompararAbonosDriveCuotasResponse | null
+): number {
+  const u = data?.umbral_doble_confirmacion_abonos_usd
+  return u != null && Number.isFinite(Number(u)) ? Number(u) : 5000
+}
+
+function abonosSuperanUmbralConfirmo(
+  data: CompararAbonosDriveCuotasResponse | null,
+  abonos: number | null | undefined
+): boolean {
+  if (abonos == null || Number.isNaN(Number(abonos))) return false
+  return Number(abonos) > umbralConfirmaAbonosUsd(data)
+}
+
 /**
  * Icono junto a revisión manual: compara ABONOS (hoja CONCILIACIÓN en BD) vs suma total_pagado en cuotas del préstamo.
  * El borrado de pagos y la cascada solo ocurren si el usuario pulsa explícitamente «Sí» y confirma (no al abrir el diálogo).
@@ -461,6 +484,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
   const [data, setData] = useState<CompararAbonosDriveCuotasResponse | null>(null)
+  const [confirmacionMontosAltos, setConfirmacionMontosAltos] = useState('')
 
   if (pid == null || !ced) return null
 
@@ -476,6 +500,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
   const abrir = async (loteExplicito?: string | null) => {
     setOpen(true)
     setPaso('resumen')
+    setConfirmacionMontosAltos('')
     setLoading(true)
     setData(null)
     try {
@@ -498,18 +523,30 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
     setApplying(true)
     try {
       const loteAplicar = (data?.lote_aplicado ?? '').toString().trim() || undefined
+      const needConf =
+        data != null && abonosSuperanUmbralConfirmo(data, data.abonos_drive)
       const res: AplicarAbonosDriveCuotasResponse =
         await notificacionService.postAplicarAbonosDriveACuotas({
           cedula: ced,
           prestamoId: pid,
           ...(loteAplicar ? { lote: loteAplicar } : {}),
+          ...(needConf
+            ? { confirmacionMontosAltos: confirmacionMontosAltos.trim() }
+            : {}),
         })
       toast.success(
         `Aplicado: pago #${res.pago_id}. Pagos eliminados: ${res.pagos_eliminados}. Cuotas completadas: ${res.cuotas_completadas}.`
       )
       setOpen(false)
       setPaso('resumen')
-      await invalidateListasNotificacionesMora(queryClient, { skipCrossTabBroadcast: true })
+      setConfirmacionMontosAltos('')
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+        skipNotificacionesMora: true,
+        includeDashboardMenu: true,
+      })
+      await invalidateListasNotificacionesMora(queryClient, {
+        skipCrossTabBroadcast: true,
+      })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo aplicar ABONOS a cuotas.')
     } finally {
@@ -530,6 +567,9 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
 
   const pillBase =
     'inline-flex min-w-[2.25rem] items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold'
+
+  const needConfirmaMontosAltos =
+    data != null && abonosSuperanUmbralConfirmo(data, data.abonos_drive)
 
   return (
     <>
@@ -552,6 +592,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
           if (!v) {
             setPaso('resumen')
             setData(null)
+            setConfirmacionMontosAltos('')
           }
         }}
       >
@@ -575,6 +616,44 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 (ABONOS hoja), aplicado en cascada a las cuotas. Esta acción no se deshace desde
                 aquí.
               </p>
+              <div className="rounded-md border border-slate-200 bg-muted/30 p-3 text-xs text-foreground">
+                <p className="mb-1 font-semibold text-slate-800">Verifique antes de aplicar</p>
+                <ul className="list-none space-y-1 tabular-nums">
+                  <li>
+                    Cédula: <span className="font-medium">{data.cedula}</span>
+                  </li>
+                  <li>
+                    Préstamo: <span className="font-medium">#{data.prestamo_id}</span>
+                  </li>
+                  <li>
+                    Lote (hoja):{' '}
+                    <span className="font-mono font-medium">
+                      {(data.lote_aplicado ?? '').toString().trim() || '—'}
+                    </span>
+                  </li>
+                  <li>
+                    Monto ABONOS (hoja):{' '}
+                    <span className="font-semibold">{fmt(data.abonos_drive)}</span>
+                  </li>
+                </ul>
+              </div>
+              {needConfirmaMontosAltos ? (
+                <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50/90 p-3 text-xs text-amber-950">
+                  <p className="font-medium">
+                    Monto elevado (&gt; {umbralConfirmaAbonosUsd(data).toLocaleString('es-VE')} USD).
+                    Escriba <span className="font-mono">CONFIRMO</span> para continuar.
+                  </p>
+                  <Input
+                    id="confirma-abonos-montos-altos"
+                    autoComplete="off"
+                    placeholder="CONFIRMO"
+                    value={confirmacionMontosAltos}
+                    onChange={e => setConfirmacionMontosAltos(e.target.value)}
+                    className="bg-white font-mono text-sm"
+                    aria-label="Confirmación por monto elevado: escriba CONFIRMO"
+                  />
+                </div>
+              ) : null}
               <p className="text-xs text-muted-foreground">
                 Solo continúe si revisó cédula, hoja y montos. Requiere administrador.
               </p>
@@ -586,6 +665,55 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 {' · '}
                 Préstamo <span className="font-medium text-foreground">#{data.prestamo_id}</span>
               </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <Link
+                  to={`/revision-manual/editar/${pid}`}
+                  className="font-medium text-blue-600 hover:underline"
+                >
+                  Abrir en revisión manual
+                </Link>
+                <span className="text-muted-foreground">
+                  (edición del préstamo y cuotas en otra pantalla)
+                </span>
+              </div>
+
+              {data.hoja_sync_antigua ? (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  La hoja supera las 48 h desde la última sincronización (aprox.{' '}
+                  {data.hoja_sync_antigua_horas != null
+                    ? `${data.hoja_sync_antigua_horas} h`
+                    : '—'}
+                  ). Resincronice CONCILIACIÓN si necesita ABONOS al día.
+                </p>
+              ) : null}
+
+              {data.prestamo_huella ? (
+                <div className="rounded-md border bg-slate-50 p-3 text-xs text-slate-900">
+                  <p className="mb-1 font-semibold text-slate-800">
+                    Huella del préstamo en BD (alinear con fila de la hoja)
+                  </p>
+                  <ul className="list-none space-y-0.5 tabular-nums">
+                    <li>
+                      Total financiamiento:{' '}
+                      {fmt(data.prestamo_huella.total_financiamiento)}
+                    </li>
+                    <li>N.º cuotas: {data.prestamo_huella.numero_cuotas}</li>
+                    <li>Modalidad: {data.prestamo_huella.modalidad_pago || '—'}</li>
+                  </ul>
+                </div>
+              ) : null}
+
+              {!puedeOperar ? (
+                <p className="rounded-md border border-slate-200 bg-muted/40 p-2 text-xs text-slate-800">
+                  <span className="font-medium">Regla: </span>
+                  solo se puede aplicar desde aquí si ABONOS en la hoja es{' '}
+                  <strong>mayor</strong> que la suma de los pagos reflejados en cuotas del préstamo
+                  (total pagado en cuotas), más una tolerancia de ±{data.tolerancia}. Si ABONOS es
+                  igual o menor (p. ej. cero o ya cubierto en BD), el flujo queda en «No»: aquí no se
+                  reordenan pagos ni se corrigen diferencias pequeñas; use revisión manual o la
+                  conciliación habitual.
+                </p>
+              ) : null}
 
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-muted-foreground text-xs">Indicador:</span>
@@ -670,7 +798,17 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 </div>
               ) : null}
 
-              {data.lote_aplicado ? (
+              {data.lote_aplicado && loteResuelto ? (
+                <p className="rounded-md border border-sky-200 bg-sky-50/90 p-2 text-xs text-sky-950">
+                  <span className="font-semibold">Resumen: </span>
+                  Lote <span className="font-mono">{data.lote_aplicado}</span>
+                  {' · '}
+                  ABONOS hoja{' '}
+                  <span className="font-medium tabular-nums">{fmt(data.abonos_drive)}</span>
+                  {' · '}
+                  Préstamo #{data.prestamo_id}
+                </p>
+              ) : data.lote_aplicado ? (
                 <p className="text-xs text-muted-foreground">
                   Lote usado para esta comparación:{' '}
                   <span className="font-mono font-medium text-foreground">{data.lote_aplicado}</span>
@@ -704,6 +842,15 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 <span className="font-medium text-foreground">
                   {data.filas_hoja_coincidentes}
                 </span>
+                {data.filas_misma_cedula_hoja != null ? (
+                  <>
+                    {' '}
+                    · Filas con la misma cédula en la hoja (todas):{' '}
+                    <span className="font-medium text-foreground">
+                      {data.filas_misma_cedula_hoja}
+                    </span>
+                  </>
+                ) : null}
                 {data.hoja_synced_at ? (
                   <>
                     {' '}
@@ -770,14 +917,22 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                   type="button"
                   variant="outline"
                   disabled={applying}
-                  onClick={() => setPaso('resumen')}
+                  onClick={() => {
+                    setConfirmacionMontosAltos('')
+                    setPaso('resumen')
+                  }}
                 >
                   Volver
                 </Button>
                 <Button
                   type="button"
                   variant="destructive"
-                  disabled={applying || !esAdmin}
+                  disabled={
+                    applying ||
+                    !esAdmin ||
+                    (needConfirmaMontosAltos &&
+                      confirmacionMontosAltos.trim().toUpperCase() !== 'CONFIRMO')
+                  }
                   onClick={() => {
                     void aplicar()
                   }}

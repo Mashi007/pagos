@@ -104,13 +104,27 @@ export interface OpcionLoteAbonos {
   abonos: number
 }
 
+/** Huella del préstamo en BD (financiamiento, cuotas, modalidad) para alinear con la fila de la hoja. */
+export interface PrestamoHuellaAbonos {
+  total_financiamiento: number
+
+  numero_cuotas: number
+
+  modalidad_pago: string
+}
+
 /** GET /notificaciones/comparar-abonos-drive-cuotas */
 export interface CompararAbonosDriveCuotasResponse {
   cedula: string
 
   prestamo_id: number
 
+  prestamo_huella?: PrestamoHuellaAbonos
+
   filas_hoja_coincidentes: number
+
+  /** Filas en la hoja con la misma cédula (antes de filtrar por préstamo / lote). */
+  filas_misma_cedula_hoja?: number
 
   abonos_drive: number | null
 
@@ -123,6 +137,12 @@ export interface CompararAbonosDriveCuotasResponse {
   tolerancia: number
 
   hoja_synced_at: string | null
+
+  /** True si la última sync supera el umbral de horas definido en backend (p. ej. 48 h). */
+  hoja_sync_antigua?: boolean
+
+  /** Horas desde la última sync (aprox.); puede existir aunque no sea «antigua». */
+  hoja_sync_antigua_horas?: number | null
 
   columna_cedula_detectada: string | null
 
@@ -151,6 +171,9 @@ export interface CompararAbonosDriveCuotasResponse {
   /** Igual que indicador === "si" (backend envía ambos). */
 
   puede_aplicar?: boolean
+
+  /** Monto ABONOS (USD) a partir del cual se exige escribir CONFIRMO antes de aplicar. */
+  umbral_doble_confirmacion_abonos_usd?: number
 }
 
 /** Respuesta de POST /notificaciones/aplicar-abonos-drive-a-cuotas (solo admin). */
@@ -1106,6 +1129,9 @@ class NotificacionService {
     prestamoId: number
 
     lote?: string | null
+
+    /** Si ABONOS supera el umbral del backend, debe ser exactamente `CONFIRMO`. */
+    confirmacionMontosAltos?: string | null
   }): Promise<AplicarAbonosDriveCuotasResponse> {
     const body: Record<string, unknown> = {
       cedula: params.cedula.trim(),
@@ -1114,6 +1140,8 @@ class NotificacionService {
     }
     const lote = params.lote?.trim()
     if (lote) body.lote = lote
+    const conf = params.confirmacionMontosAltos?.trim()
+    if (conf) body.confirmacion_montos_altos = conf
     return await apiClient.post<AplicarAbonosDriveCuotasResponse>(
       `${this.baseUrl}/aplicar-abonos-drive-a-cuotas`,
       body

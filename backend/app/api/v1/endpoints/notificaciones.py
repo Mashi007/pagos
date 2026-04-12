@@ -2264,6 +2264,12 @@ def post_aplicar_abonos_drive_a_cuotas(
     pid = payload.get("prestamo_id")
     lote_raw = payload.get("lote")
     lote = str(lote_raw).strip() if lote_raw is not None and str(lote_raw).strip() else None
+    conf_raw = payload.get("confirmacion_montos_altos")
+    if conf_raw is None:
+        conf_raw = payload.get("confirmacionMontosAltos")
+    confirmacion_montos_altos = (
+        str(conf_raw).strip() if conf_raw is not None and str(conf_raw).strip() else None
+    )
     try:
         prestamo_id = int(pid)
     except (TypeError, ValueError):
@@ -2277,6 +2283,7 @@ def post_aplicar_abonos_drive_a_cuotas(
             prestamo_id=prestamo_id,
             usuario_registro=usuario,
             lote=lote,
+            confirmacion_montos_altos=confirmacion_montos_altos,
         )
         db.commit()
         return out

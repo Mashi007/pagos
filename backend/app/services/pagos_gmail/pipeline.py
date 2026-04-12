@@ -18,8 +18,11 @@ Si en cualquier archivo falta requisito o no es plantilla valida: no etiquetas d
 se marca **no leido** en Gmail para reintento (no se modifican estrellas: las deja el usuario). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
 Cedula: por defecto solo desde tabla clientes por email del De (From): `email` y `email_secundario`; nunca desde la imagen.
-Excepcion: scan_filter **error_email_rescan** (correos con etiqueta ERROR EMAIL sin EMAIL-12) — plantillas **A** y **B**: cedula se lee de la imagen (Gemini) o columna **ERROR** si no es clara; ademas etiqueta Gmail **EMAIL-12** si hubo fila A/B confirmada.
+Re-lectura cédula en imagen (Mercantil/BNC, plantillas **A** y **B**): activa si **scan_filter=error_email_rescan** o si el mensaje
+ya tiene en Gmail la etiqueta **ERROR EMAIL** y no **EMAIL-12** (tambien con scan **all** / unread / read). Gemini en modo A/B con cédula
+desde imagen o columna **ERROR**; etiqueta Gmail **EMAIL-12** si hubo fila A/B confirmada en ese modo.
 """
+import hashlib
 import logging
 import re
 from datetime import datetime, timezone
@@ -216,13 +219,16 @@ def run_pipeline(
       Por defecto (**all** / **pending_identification**): inbox con imagen/PDF — leidos y no leidos (el pipeline no modifica estrellas Gmail),
       con cualquier etiqueta de usuario (incluye **ERROR EMAIL**; la consulta Gmail no excluye esa etiqueta).
       **unread** / **read**: mismo criterio base + ``is:unread`` / ``is:read`` en la búsqueda Gmail.
-      **error_email_rescan**: solo hilos con etiqueta **ERROR EMAIL** y sin **EMAIL-12**; Gemini en modo Mercantil/BNC con cédula en imagen para A/B.
+      **error_email_rescan**: misma lista Gmail que filtro por `q` (solo ERROR EMAIL sin EMAIL-12). Con **all**/unread/read,
+      cualquier hilo del listado que ya traiga esas etiquetas en **labelIds** usa el mismo modo A/B + **EMAIL-12** al confirmar.
       pending_identification es alias del listado base (nombre conservado para scheduler/API).
     Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
     Los mensajes de cada lote se ordenan por fecha del correo de mas antiguo a mas reciente antes de procesar.
     Una sola pasada de listado+proceso por ejecucion (salvo reintentos manuales).
     Tras listar **todos** los mensajes que cumplen el filtro (paginacion completa), se ordenan siempre del **mas antiguo al mas reciente**
     y se procesan en ese orden estricto (primer correo de la lista primero, ultimo al final).
+    Dedupe en la misma corrida: mismo binario de adjunto (SHA-256) tras un commit BD previo en ese run omite Gemini/BD/Drive
+    (reenvios o mensajes duplicados con el mismo JPG/PDF).
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
     logger.info("[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s)", existing_sync_id, scan_filter)
@@ -269,6 +275,8 @@ def run_pipeline(
     correos_marcados_revision = 0
     plantilla_label_cache: Dict[str, Optional[str]] = {}
     error_email_rescan = (scan_filter or "").strip().lower() == "error_email_rescan"
+    # Mismo binario de comprobante en varios mensajes Gmail (reenvíos / hilos duplicados): una sola pasada Gemini+BD+Drive por corrida.
+    seen_attachment_sha256: set[str] = set()
 
     try:
         def fetch_sorted_batch() -> list[dict]:
@@ -332,6 +340,30 @@ def run_pipeline(
                 msg_date = get_message_date(headers)
                 sheet_name = get_sheet_name_for_date(msg_date)
                 folder_name = get_folder_name_from_date(msg_date)
+
+                # Mercantil/BNC (A/B): cédula desde imagen si run error_email_rescan o hilo con ERROR EMAIL sin EMAIL-12.
+                if PAGOS_GMAIL_LABEL_ERROR_EMAIL not in plantilla_label_cache:
+                    plantilla_label_cache[PAGOS_GMAIL_LABEL_ERROR_EMAIL] = ensure_user_label_id(
+                        gmail_svc, PAGOS_GMAIL_LABEL_ERROR_EMAIL
+                    )
+                if PAGOS_GMAIL_LABEL_EMAIL_12 not in plantilla_label_cache:
+                    plantilla_label_cache[PAGOS_GMAIL_LABEL_EMAIL_12] = ensure_user_label_id(
+                        gmail_svc, PAGOS_GMAIL_LABEL_EMAIL_12
+                    )
+                cur_gmail_label_ids: list[str] = list(msg_info.get("label_ids") or [])
+                id_lbl_err = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_ERROR_EMAIL)
+                id_lbl_e12 = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_EMAIL_12)
+                tiene_error_email_gmail = bool(id_lbl_err and id_lbl_err in cur_gmail_label_ids)
+                tiene_email_12_gmail = bool(id_lbl_e12 and id_lbl_e12 in cur_gmail_label_ids)
+                modo_ab_cedula_desde_imagen = error_email_rescan or (
+                    tiene_error_email_gmail and not tiene_email_12_gmail
+                )
+                if modo_ab_cedula_desde_imagen and not error_email_rescan and tiene_error_email_gmail:
+                    logger.info(
+                        "[PAGOS_GMAIL]   Modo cedula imagen A/B por etiquetas Gmail (ERROR EMAIL sin EMAIL-12); "
+                        "scan_filter=%s",
+                        scan_filter,
+                    )
 
                 logger.info(
                     "[PAGOS_GMAIL] -- Correo %d (%s) id=%s | de=%s | asunto=%s",
@@ -456,12 +488,28 @@ def run_pipeline(
                 committed_comprobante_rows = False
                 for filename, content, mime_type, origen_binario in candidatos:
                     try:
+                        body_bin = (
+                            content
+                            if isinstance(content, (bytes, bytearray))
+                            else bytes(content)
+                        )
+                        file_digest = hashlib.sha256(body_bin).hexdigest()
+                        if file_digest in seen_attachment_sha256:
+                            logger.info(
+                                "[PAGOS_GMAIL]   Dedupe: bytes identicos a comprobante ya digitalizado antes en esta corrida "
+                                "(sha256=%s…) — sin Gemini/BD/Drive: %s",
+                                file_digest[:16],
+                                filename,
+                            )
+                            any_incomplete_or_skipped = True
+                            continue
+
                         fmt, data = classify_and_extract_pagos_gmail_attachment(
                             content,
                             filename,
                             remitente_correo_header=from_h,
                             origen_binario=origen_binario,
-                            modo_error_email_ab=error_email_rescan,
+                            modo_error_email_ab=modo_ab_cedula_desde_imagen,
                         )
 
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
@@ -501,7 +549,7 @@ def run_pipeline(
                                     sender_lc[:72],
                                     filename,
                                 )
-                        elif error_email_rescan and fmt in ("A", "B"):
+                        elif modo_ab_cedula_desde_imagen and fmt in ("A", "B"):
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
@@ -566,6 +614,7 @@ def run_pipeline(
                                 "filename": filename,
                                 "content": content,
                                 "mime_type": mime_type,
+                                "sha256": file_digest,
                             }
                         )
                     except Exception as e:
@@ -596,13 +645,17 @@ def run_pipeline(
                             db.commit()
                             committed_comprobante_rows = True
                             for _, _, p in rows_pairs:
-                                if error_email_rescan and p.get("fmt") in ("A", "B"):
+                                if modo_ab_cedula_desde_imagen and p.get("fmt") in ("A", "B"):
                                     committed_ab_error_email_rescan = True
                                     break
                             logger.info(
                                 "[PAGOS_GMAIL]   Commit BD inicial: %d fila(s) comprobante sin enlaces Drive aun",
                                 len(rows_pairs),
                             )
+                            for _, _, p in rows_pairs:
+                                d = p.get("sha256")
+                                if isinstance(d, str) and len(d) == 64:
+                                    seen_attachment_sha256.add(d)
                         except Exception as commit_err:
                             logger.warning(
                                 "[PAGOS_GMAIL] Error commit filas BD (antes de Drive): %s",
@@ -775,7 +828,7 @@ def run_pipeline(
                         )
 
                 if (
-                    error_email_rescan
+                    modo_ab_cedula_desde_imagen
                     and committed_ab_error_email_rescan
                     and committed_comprobante_rows
                     and not remitente_solo_master
@@ -788,7 +841,7 @@ def run_pipeline(
                         gmail_label_id_email_12 = lid12
                         gmail_etiqueta_clasificacion_aplicada = True
                         logger.info(
-                            "[PAGOS_GMAIL]   Gmail: se aplicara etiqueta %s (re-scan ERROR EMAIL, fila Mercantil/BNC)",
+                            "[PAGOS_GMAIL]   Gmail: se aplicara etiqueta %s (fila A/B confirmada en modo cedula-imagen)",
                             k12,
                         )
                     else:

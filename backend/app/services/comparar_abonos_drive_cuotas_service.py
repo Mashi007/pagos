@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -39,6 +39,26 @@ logger = logging.getLogger(__name__)
 
 _TOL_MONTO = 0.02
 _TOL_FIN_HOJA_USD = 1.0  # tolerancia hoja vs prestamo.total_financiamiento (redondeos / lectura)
+_HORAS_SYNC_CONSIDERADA_ANTIGUA = 48
+# Umbral compartido con aplicar_abonos_drive: montos mayores exigen escribir CONFIRMO en UI y backend.
+UMBRAL_CONFIRMO_ABONOS_USD = 5000.0
+
+
+def _prestamo_huella_dict(prestamo: Prestamo) -> Dict[str, Any]:
+    """Huella de negocio en BD (financiamiento, cuotas, modalidad) para depuración y UI."""
+    try:
+        tf = float(prestamo.total_financiamiento or 0)
+    except (TypeError, ValueError):
+        tf = 0.0
+    try:
+        nc = int(prestamo.numero_cuotas or 0)
+    except (TypeError, ValueError):
+        nc = 0
+    return {
+        "total_financiamiento": round(tf, 2),
+        "numero_cuotas": nc,
+        "modalidad_pago": (prestamo.modalidad_pago or "").strip(),
+    }
 
 
 def _parse_monto_celda_hoja(val: Any) -> Optional[float]:
@@ -177,12 +197,27 @@ def comparar_abonos_drive_vs_cuotas(
     meta = db.get(ConciliacionSheetMeta, 1)
     headers: List[str] = list(meta.headers) if meta and meta.headers else []
     synced_at: Optional[str] = None
+    hoja_sync_antigua = False
+    hoja_sync_antigua_horas: Optional[float] = None
     if meta and getattr(meta, "synced_at", None):
         sa = meta.synced_at
         if isinstance(sa, datetime):
             synced_at = sa.isoformat()
+            now_utc = datetime.now(timezone.utc)
+            sa_utc = sa if sa.tzinfo else sa.replace(tzinfo=timezone.utc)
+            if sa_utc.tzinfo is not None and sa_utc.tzinfo != timezone.utc:
+                sa_utc = sa_utc.astimezone(timezone.utc)
+            delta_h = (now_utc - sa_utc).total_seconds() / 3600.0
+            hoja_sync_antigua_horas = round(delta_h, 1)
+            if delta_h > float(_HORAS_SYNC_CONSIDERADA_ANTIGUA):
+                hoja_sync_antigua = True
 
     advertencias: List[str] = []
+    if hoja_sync_antigua and hoja_sync_antigua_horas is not None:
+        advertencias.append(
+            f"La última sincronización de la hoja fue hace ~{hoja_sync_antigua_horas} h "
+            f"(más de {_HORAS_SYNC_CONSIDERADA_ANTIGUA} h). Resincronice CONCILIACIÓN si necesita datos al día."
+        )
     if not headers:
         advertencias.append("No hay cabeceras de hoja sincronizada (CONCILIACIÓN).")
 
@@ -329,7 +364,9 @@ def comparar_abonos_drive_vs_cuotas(
     return {
         "cedula": cedula_in,
         "prestamo_id": prestamo_id,
+        "prestamo_huella": _prestamo_huella_dict(prestamo),
         "filas_hoja_coincidentes": filas_coincidentes,
+        "filas_misma_cedula_hoja": len(filas_por_cedula),
         "abonos_drive": abonos_drive,
         "total_pagado_cuotas": round(total_pagado_cuotas, 2),
         "diferencia": diferencia,
@@ -338,6 +375,8 @@ def comparar_abonos_drive_vs_cuotas(
         "puede_aplicar": puede_aplicar,
         "tolerancia": _TOL_MONTO,
         "hoja_synced_at": synced_at,
+        "hoja_sync_antigua": hoja_sync_antigua,
+        "hoja_sync_antigua_horas": hoja_sync_antigua_horas,
         "columna_cedula_detectada": ced_key,
         "columna_abonos_detectada": abo_key,
         "columna_lote_detectada": lote_key,
@@ -345,4 +384,5 @@ def comparar_abonos_drive_vs_cuotas(
         "requiere_seleccion_lote": requiere_seleccion_lote,
         "opciones_lote": opciones_lote,
         "advertencias": advertencias,
+        "umbral_doble_confirmacion_abonos_usd": UMBRAL_CONFIRMO_ABONOS_USD,
     }

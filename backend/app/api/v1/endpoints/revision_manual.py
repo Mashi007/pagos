@@ -36,6 +36,8 @@ from app.services.notificacion_service import (
     contar_cuotas_pagadas_tabla_amortizacion_ui,
     sum_saldo_pendiente_cuotas_tabla_amortizacion_ui,
 )
+from app.services.cuota_estado import sincronizar_columna_estado_cuotas
+from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 from app.services.prestamo_estado_coherencia import prestamo_bloquea_nuevas_cuotas_o_cambio_plazo
 from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
     PrestamoCedulaClienteError,
@@ -1571,11 +1573,17 @@ def get_detalle_prestamo_revision(
         if rev_row.fecha_revision:
             fecha_revision_iso = rev_row.fecha_revision.isoformat()
         usuario_revision_email = rev_row.usuario_revision_email
-    
+
+    # Igual que GET /prestamos/{id}/cuotas (_listado_cuotas_prestamo_dicts): aplica pagos conciliados
+    # sin fila en cuota_pagos y, si la integridad lo exige, reaplica la cascada. Así total_pagado
+    # y estados coinciden con la tabla de amortización tras procesos masivos (p. ej. ABONOS Drive).
+    sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
+
     # Obtener cuotas
     cuotas = db.execute(
         select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
     ).scalars().all()
+    sincronizar_columna_estado_cuotas(db, cuotas, commit=True)
     
     def _norm_codigo_estado(raw: Optional[str], default: str) -> str:
         if raw is None or not str(raw).strip():

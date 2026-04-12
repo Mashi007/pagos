@@ -193,7 +193,8 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
     (incluye **ERROR EMAIL**; no se excluye por -label:).
     **unread** / **read**: mismo criterio + ``is:unread`` / ``is:read`` en la consulta Gmail.
     **error_email_rescan**: solo etiqueta ERROR EMAIL sin EMAIL-12 (reintento cédula en imagen).
-    Cada elemento incluye **internal_date_ms** (epoch ms de Gmail) para ordenar el pipeline del mas antiguo al mas reciente.
+    Cada elemento incluye **internal_date_ms** (epoch ms de Gmail) para ordenar el pipeline del mas antiguo al mas reciente,
+    y **label_ids** (ids Gmail del mensaje) para activar modo cédula-en-imagen A/B si ya trae etiqueta ERROR EMAIL sin EMAIL-12.
     """
     from googleapiclient.errors import HttpError
 
@@ -226,12 +227,15 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
                 internal_date_ms = int(raw_internal) if raw_internal is not None else 0
             except (TypeError, ValueError):
                 internal_date_ms = 0
+            # labelIds: ids de sistema (INBOX, UNREAD) y de usuario; el pipeline detecta ERROR EMAIL / EMAIL-12.
+            label_ids = list(meta.get("labelIds") or [])
             out.append(
                 {
                     "id": mid,
                     "payload": payload,
                     "headers": headers,
                     "internal_date_ms": internal_date_ms,
+                    "label_ids": label_ids,
                 }
             )
         return out
