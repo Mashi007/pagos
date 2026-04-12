@@ -900,7 +900,12 @@ class PagoService {
 
   async runGmailNow(
     force = true,
-    scanFilter?: 'unread' | 'read' | 'all' | 'pending_identification'
+    scanFilter?:
+      | 'unread'
+      | 'read'
+      | 'all'
+      | 'pending_identification'
+      | 'error_email_rescan'
   ): Promise<{
     sync_id: number | null
     status: string
@@ -911,7 +916,13 @@ class PagoService {
 
     if (
       scanFilter &&
-      ['unread', 'read', 'all', 'pending_identification'].includes(scanFilter)
+      [
+        'unread',
+        'read',
+        'all',
+        'pending_identification',
+        'error_email_rescan',
+      ].includes(scanFilter)
     ) {
       params.set('scan_filter', scanFilter)
     }

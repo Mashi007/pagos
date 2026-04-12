@@ -11,7 +11,7 @@ plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/r
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From): primero `email`, luego `email_secundario`.
 Si no hay cliente para ese email: columna Cedula = ERROR EMAIL y en Gmail etiqueta de usuario **ERROR EMAIL** (sin estrella MERCANTIL / BNC / BINANCE / BNV). Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail).
 En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
-Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL): etiqueta Gmail **MANUAL** (con candidatos imagen/PDF).
+Si ninguna etiqueta de clasificacion aplica (MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL): etiqueta Gmail **OTROS** (con candidatos imagen/PDF).
 Si en cualquier archivo falta requisito o no es plantilla valida: no estrella, no etiquetas de plantilla; con candidatos imagen/PDF
 se fuerza sin estrella + no leido en Gmail para reintento. No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel.
@@ -50,7 +50,7 @@ from app.services.pagos_gmail.gmail_service import (
     PagosGmailGmailListError,
     PAGOS_GMAIL_LABEL_EMAIL_12,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
-    PAGOS_GMAIL_LABEL_MANUAL,
+    PAGOS_GMAIL_LABEL_OTROS,
     PAGOS_GMAIL_LABEL_MASTER,
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
@@ -212,7 +212,9 @@ def run_pipeline(
     Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
     Por adjunto OK (y remitente en clientes para cedula): etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D) + estrella; cierre: leido si hubo algun OK.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto API/UI: all).
-      Por defecto: inbox con imagen/PDF — leidos y no leidos, con o sin estrella, con cualquier etiqueta.
+      Por defecto (**all** / **pending_identification**): inbox con imagen/PDF — leidos y no leidos, con o sin estrella,
+      con cualquier etiqueta de usuario (incluye **ERROR EMAIL**; la consulta Gmail no excluye esa etiqueta).
+      **unread** / **read**: mismo criterio base + ``is:unread`` / ``is:read`` en la búsqueda Gmail.
       **error_email_rescan**: solo hilos con etiqueta **ERROR EMAIL** y sin **EMAIL-12**; Gemini en modo Mercantil/BNC con cédula en imagen para A/B.
       pending_identification es alias del listado base (nombre conservado para scheduler/API).
     Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
@@ -284,6 +286,17 @@ def run_pipeline(
                 scan_filter,
                 len(ordered),
             )
+            if ordered:
+                first = ordered[0]
+                last = ordered[-1]
+                logger.info(
+                    "[PAGOS_GMAIL] Ventana ordenada: primero id=%s internalDate_ms=%s; "
+                    "ultimo id=%s internalDate_ms=%s",
+                    first.get("id"),
+                    first.get("internal_date_ms"),
+                    last.get("id"),
+                    last.get("internal_date_ms"),
+                )
             return ordered
 
         def process_message_batch(batch: list[dict], label: str) -> None:
@@ -843,24 +856,24 @@ def run_pipeline(
                     )
 
                 if candidatos and not gmail_etiqueta_clasificacion_aplicada:
-                    k_man = PAGOS_GMAIL_LABEL_MANUAL
-                    if k_man not in plantilla_label_cache:
-                        plantilla_label_cache[k_man] = ensure_user_label_id(
-                            gmail_svc, k_man
+                    k_otros = PAGOS_GMAIL_LABEL_OTROS
+                    if k_otros not in plantilla_label_cache:
+                        plantilla_label_cache[k_otros] = ensure_user_label_id(
+                            gmail_svc, k_otros
                         )
-                    man_lid = plantilla_label_cache.get(k_man)
-                    if man_lid:
+                    otros_lid = plantilla_label_cache.get(k_otros)
+                    if otros_lid:
                         add_message_user_labels_only(
-                            gmail_svc, msg_id, [man_lid]
+                            gmail_svc, msg_id, [otros_lid]
                         )
                         logger.info(
                             "[PAGOS_GMAIL]   Gmail: etiqueta %s (sin MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL)",
-                            k_man,
+                            k_otros,
                         )
                     else:
                         logger.warning(
                             "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
-                            k_man,
+                            k_otros,
                         )
 
                 emails_ok += 1

@@ -85,7 +85,8 @@ def count_pending(
     El frontend puede mostrar "Se procesaran N correos. Iniciar? Si / No" y solo llamar
     POST /run-now si el usuario confirma (Si = inicia, No = no hace nada).
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (mismo que run-now; por defecto all).
-    unread/read/all/pending_identification listan los mismos hilos: inbox + imagen/PDF (leidos y no leidos, estrella o no, cualquier etiqueta).
+    **all** / **pending_identification**: inbox + imagen/PDF, leídos y no leídos, cualquier etiqueta (incluye ERROR EMAIL).
+    **unread** / **read**: mismo criterio base + solo no leídos / solo leídos en Gmail.
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
@@ -113,7 +114,9 @@ def run_now(
     Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto all).
-    Listado: por defecto inbox con imagen/PDF. **error_email_rescan**: etiqueta ERROR EMAIL sin EMAIL-12 (re-lectura A/B con cédula en imagen).
+    Listado: por defecto inbox con imagen/PDF (cualquier etiqueta, incluye ERROR EMAIL).
+    **unread** / **read**: añade is:unread / is:read a la búsqueda.
+    **error_email_rescan**: etiqueta ERROR EMAIL sin EMAIL-12 (re-lectura A/B con cédula en imagen).
     Procesamiento en orden de fecha del correo: mas antiguo primero, mas reciente al final.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.

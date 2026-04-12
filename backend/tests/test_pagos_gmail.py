@@ -439,6 +439,20 @@ def test_pagos_gmail_error_email_rescan_query_incluye_error_email_sin_email_12()
     assert "in:inbox" in q
 
 
+def test_pagos_gmail_list_query_unread_read_anade_is_unread_o_read():
+    from app.services.pagos_gmail.gmail_service import pagos_gmail_list_query_for_scan_filter
+
+    q_un = pagos_gmail_list_query_for_scan_filter("unread")
+    assert "is:unread" in q_un
+    assert "is:read" not in q_un
+    q_rd = pagos_gmail_list_query_for_scan_filter("read")
+    assert "is:read" in q_rd
+    assert "is:unread" not in q_rd
+    q_all = pagos_gmail_list_query_for_scan_filter("all")
+    assert "is:unread" not in q_all
+    assert "is:read" not in q_all
+
+
 def test_parse_formato_b_modo_error_email_ab_cedula_error():
     j = (
         '{"formato":"B","fecha_pago":"01/01/2026","cedula":"ERROR","monto":"1 USD",'
@@ -477,6 +491,7 @@ def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
         PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY,
         PAGOS_GMAIL_LABEL_MANUAL,
         PAGOS_GMAIL_LABEL_MASTER,
+        PAGOS_GMAIL_LABEL_OTROS,
         pagos_gmail_label_exclusions_query,
     )
 
@@ -486,5 +501,6 @@ def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
     assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_OTROS}"' in q
 
 

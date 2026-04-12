@@ -45,6 +45,8 @@ PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 PAGOS_GMAIL_LABEL_EMAIL_12 = "EMAIL-12"
 # Ninguna plantilla A/B/C/D reconocida (o no se aplico otra etiqueta de clasificacion).
 PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
+# Correos con candidatos imagen/PDF pero sin MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL (ni estrella 100%%).
+PAGOS_GMAIL_LABEL_OTROS = "OTROS"
 
 
 def pagos_gmail_label_exclusions_query() -> str:
@@ -60,7 +62,8 @@ def pagos_gmail_label_exclusions_query() -> str:
         f'-label:"{PAGOS_GMAIL_LABEL_MASTER}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY}" '
         f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"'
+        f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_OTROS}"'
     )
 
 
@@ -96,9 +99,27 @@ def pagos_gmail_error_email_rescan_query() -> str:
 
 def pagos_gmail_pending_identification_query() -> str:
     """
-    Mismo criterio que all/unread/read: inbox + media. Nombre conservado para el scheduler y la API.
+    Mismo criterio que **all**: inbox + media (leídos y no leídos). Nombre conservado para el scheduler y la API.
     """
     return pagos_gmail_inbox_media_query()
+
+
+def pagos_gmail_list_query_for_scan_filter(filter_type: str) -> str:
+    """
+    Parámetro **q** de Gmail para listar/count según scan_filter del pipeline.
+    - **all** / **pending_identification**: inbox + criterio imagen/PDF (incluye etiqueta ERROR EMAIL y demás).
+    - **unread** / **read**: mismo criterio + is:unread / is:read.
+    - **error_email_rescan**: inbox + media + label ERROR EMAIL sin EMAIL-12.
+    """
+    ft = (filter_type or "").strip().lower()
+    if ft == "error_email_rescan":
+        return pagos_gmail_error_email_rescan_query()
+    base = pagos_gmail_inbox_media_query()
+    if ft == "unread":
+        return f"{base} is:unread"
+    if ft == "read":
+        return f"{base} is:read"
+    return base
 
 
 def build_gmail_service(credentials: Any):
@@ -168,21 +189,19 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
     filter_type: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan".
-    Por defecto: inbox + imagen/PDF. **error_email_rescan**: solo etiqueta ERROR EMAIL sin EMAIL-12 (reintento cédula en imagen).
+    Por defecto (**all** / **pending_identification**): inbox + imagen/PDF, leidos y no leidos, con cualquier etiqueta
+    (incluye **ERROR EMAIL**; no se excluye por -label:).
+    **unread** / **read**: mismo criterio + ``is:unread`` / ``is:read`` en la consulta Gmail.
+    **error_email_rescan**: solo etiqueta ERROR EMAIL sin EMAIL-12 (reintento cédula en imagen).
     Cada elemento incluye **internal_date_ms** (epoch ms de Gmail) para ordenar el pipeline del mas antiguo al mas reciente.
     """
     from googleapiclient.errors import HttpError
-
-    def _list_q() -> str:
-        if (filter_type or "").strip().lower() == "error_email_rescan":
-            return pagos_gmail_error_email_rescan_query()
-        return pagos_gmail_inbox_media_query()
 
     def _fetch() -> List[dict]:
         all_msg_refs: List[dict] = []
         page_token: Optional[str] = None
         params_base: dict = {"userId": "me", "maxResults": 500}
-        params_base["q"] = _list_q()
+        params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type)
 
         while True:
             params = dict(params_base)
@@ -261,20 +280,15 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
 def count_messages_by_filter(service: Any, filter_type: str = "all") -> int:
     """
     Cuenta mensajes segun el filtro sin obtener metadata (solo list paginado).
-    Mismo criterio que list_messages_by_filter (inbox + media; leido/no leido, estrella, etiquetas).
+    Mismo criterio **q** que list_messages_by_filter (ver pagos_gmail_list_query_for_scan_filter).
     """
     from googleapiclient.errors import HttpError
-
-    def _list_q() -> str:
-        if (filter_type or "").strip().lower() == "error_email_rescan":
-            return pagos_gmail_error_email_rescan_query()
-        return pagos_gmail_inbox_media_query()
 
     def _count() -> int:
         total = 0
         page_token: Optional[str] = None
         params_base: dict = {"userId": "me", "maxResults": 500}
-        params_base["q"] = _list_q()
+        params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type)
         while True:
             params = dict(params_base)
             if page_token:
@@ -1025,7 +1039,7 @@ def add_message_star_and_user_labels(
 def add_message_user_labels_only(
     service: Any, message_id: str, user_label_ids: List[str]
 ) -> None:
-    """Anade solo etiquetas de usuario (sin estrella). Ej. ERROR EMAIL o MANUAL."""
+    """Anade solo etiquetas de usuario (sin estrella). Ej. ERROR EMAIL u OTROS."""
     add_ids = [x for x in user_label_ids if x]
     if not add_ids:
         return

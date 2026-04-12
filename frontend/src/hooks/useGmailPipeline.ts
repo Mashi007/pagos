@@ -123,7 +123,7 @@ export function useGmailPipeline({
                 // Datos de una ejecución anterior disponibles para descargar
 
                 toast(
-                  `Sin correos nuevos con adjuntos elegibles (no leídos). Hay datos del ${s.latest_data_date} listos para descargar.`,
+                  `Sin correos procesados en esta ejecución (inbox con imagen/PDF según el filtro). Hay datos del ${s.latest_data_date} listos para descargar.`,
 
                   { duration: 8000 }
                 )
@@ -131,7 +131,7 @@ export function useGmailPipeline({
                 onDoneRef.current?.(s)
               } else {
                 toast(
-                  'No hay correos no leídos con adjuntos, o todos quedaron destacados (formato no RAPI-CREDIT/BNC). Revise estrellas en Gmail.',
+                  'No hubo correos que cumplieran el criterio de búsqueda, o ninguno generó filas en esta pasada. Revise Gmail (no leídos, estrellas y etiquetas).',
 
                   { duration: 8000 }
                 )
@@ -196,7 +196,12 @@ export function useGmailPipeline({
 
   const run = useCallback(
     async (
-      scanFilter?: 'unread' | 'read' | 'all' | 'pending_identification'
+      scanFilter?:
+        | 'unread'
+        | 'read'
+        | 'all'
+        | 'pending_identification'
+        | 'error_email_rescan'
     ) => {
       if (loading) return
 
