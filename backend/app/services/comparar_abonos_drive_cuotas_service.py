@@ -412,3 +412,71 @@ def comparar_abonos_drive_vs_cuotas(
                 exc_info=True,
             )
     return out
+
+
+def conciliacion_sheet_sync_flags_actual(db: Session) -> Dict[str, Any]:
+    """
+    Antigüedad de la última sync de CONCILIACIÓN respecto a ahora (misma regla que comparar_abonos).
+    Útil para fusionar en payloads de caché servidos en listados sin recalcular toda la comparación.
+    """
+    meta = db.get(ConciliacionSheetMeta, 1)
+    synced_at: Optional[str] = None
+    hoja_sync_antigua = False
+    hoja_sync_antigua_horas: Optional[float] = None
+    if meta and getattr(meta, "synced_at", None):
+        sa = meta.synced_at
+        if isinstance(sa, datetime):
+            synced_at = sa.isoformat()
+            now_utc = datetime.now(timezone.utc)
+            sa_utc = sa if sa.tzinfo else sa.replace(tzinfo=timezone.utc)
+            if sa_utc.tzinfo is not None and sa_utc.tzinfo != timezone.utc:
+                sa_utc = sa_utc.astimezone(timezone.utc)
+            delta_h = (now_utc - sa_utc).total_seconds() / 3600.0
+            hoja_sync_antigua_horas = round(delta_h, 1)
+            if delta_h > float(_HORAS_SYNC_CONSIDERADA_ANTIGUA):
+                hoja_sync_antigua = True
+    return {
+        "hoja_synced_at": synced_at,
+        "hoja_sync_antigua": hoja_sync_antigua,
+        "hoja_sync_antigua_horas": hoja_sync_antigua_horas,
+    }
+
+
+def refrescar_cache_comparar_abonos_totales_cuotas_bd(
+    cache: Any,
+    total_pagado_cuotas: float,
+) -> Any:
+    """
+    Copia profunda del JSON de caché con total pagado en cuotas y campos derivados alineados al
+    total actual en BD. No relee la hoja: mantiene abonos_drive y requiere_seleccion_lote del caché.
+    Corrige listados cuando hubo pagos tras el último job de caché (modal en vivo vs filas «coladas»).
+    """
+    if not isinstance(cache, dict):
+        return cache
+    try:
+        out: Dict[str, Any] = json.loads(json.dumps(cache, default=str))
+    except (TypeError, ValueError):
+        return cache
+    ab = out.get("abonos_drive")
+    if ab is None:
+        return out
+    try:
+        tot = float(total_pagado_cuotas)
+        abf = float(ab)
+    except (TypeError, ValueError):
+        return out
+    req = bool(out.get("requiere_seleccion_lote"))
+    try:
+        tol = float(out.get("tolerancia"))
+        if tol != tol or tol < 0:
+            tol = _TOL_MONTO
+    except (TypeError, ValueError):
+        tol = _TOL_MONTO
+    tot_r = round(tot, 2)
+    dif = round(abf - tot_r, 2)
+    out["total_pagado_cuotas"] = tot_r
+    out["diferencia"] = dif
+    out["coincide_aproximado"] = abs(dif) <= tol
+    out["puede_aplicar"] = bool(not req and abf > tot_r + tol)
+    out["indicador"] = "si" if out["puede_aplicar"] else "no"
+    return out

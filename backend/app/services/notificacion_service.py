@@ -14,13 +14,17 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
-from app.core.serializers import to_finite_float
+from app.core.serializers import to_finite_float, to_finite_float_or_zero
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 from app.utils.cliente_emails import (
     lista_correo_principal_notificaciones_desde_objeto,
     secundario_distinto_del_principal,
+)
+from app.services.comparar_abonos_drive_cuotas_service import (
+    conciliacion_sheet_sync_flags_actual,
+    refrescar_cache_comparar_abonos_totales_cuotas_bd,
 )
 from app.services.cuota_estado import (
     clasificar_estado_cuota,
@@ -543,7 +547,13 @@ def revision_manual_estado_por_prestamo_ids(
 def enriquecer_items_abonos_drive_cuotas_cache(
     db: Session, items: Sequence[dict]
 ) -> None:
-    """Adjunta comparar_abonos_drive_cuotas desde prestamos.abonos_drive_cuotas_cache (in-place)."""
+    """
+    Adjunta comparar_abonos_drive_cuotas desde prestamos.abonos_drive_cuotas_cache (in-place).
+
+    Ajusta en memoria el total pagado en cuotas y la diferencia con el total actual en BD (sin
+    releer la hoja), y fusiona flags de antigüedad de sync de CONCILIACIÓN, para alinear listados
+    y filtros con el GET en vivo del modal.
+    """
     lst = [x for x in items if x]
     if not lst:
         return
@@ -565,15 +575,37 @@ def enriquecer_items_abonos_drive_cuotas_cache(
     by_id: Dict[int, Any] = {}
     for pid, cache in db.execute(q).all():
         by_id[int(pid)] = cache
+
+    tot_rows = db.execute(
+        select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.total_pagado), 0))
+        .where(Cuota.prestamo_id.in_(uniq))
+        .group_by(Cuota.prestamo_id)
+    ).all()
+    tot_by_pid: Dict[int, float] = {}
+    for pid, s in tot_rows:
+        tot_by_pid[int(pid)] = to_finite_float_or_zero(s)
+
+    sync_flags = conciliacion_sheet_sync_flags_actual(db)
+
     for it in lst:
         pid = it.get("prestamo_id")
         if pid is None:
             it["comparar_abonos_drive_cuotas"] = None
         else:
             try:
-                it["comparar_abonos_drive_cuotas"] = by_id.get(int(pid))
+                ip = int(pid)
             except (TypeError, ValueError):
                 it["comparar_abonos_drive_cuotas"] = None
+                continue
+            raw = by_id.get(ip)
+            if raw is None:
+                it["comparar_abonos_drive_cuotas"] = None
+            else:
+                total_fresh = float(tot_by_pid.get(ip, 0.0))
+                adj = refrescar_cache_comparar_abonos_totales_cuotas_bd(raw, total_fresh)
+                if isinstance(adj, dict):
+                    adj.update(sync_flags)
+                it["comparar_abonos_drive_cuotas"] = adj
 
 
 def enriquecer_items_fecha_entrega_q_aprobacion_cache(
