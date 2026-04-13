@@ -8,12 +8,8 @@ import {
   BarChart3,
   ChevronRight,
   Filter,
-  TrendingUp,
-  TrendingDown,
   AlertTriangle,
   Shield,
-  History,
-  FileText,
   PieChart,
   LineChart,
   Database,
@@ -76,7 +72,6 @@ import {
 } from '../constants/dashboard'
 
 import type {
-  KpisPrincipalesResponse,
   OpcionesFiltrosResponse,
   DashboardAdminResponse,
   FinanciamientoPorRangosResponse,
@@ -89,10 +84,6 @@ import type {
 } from '../types/dashboard'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
-
-import { CuotasCubiertasVencimientoChartCard } from '../components/dashboard/CuotasCubiertasVencimientoChartCard'
-
-import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
@@ -272,41 +263,6 @@ export function DashboardMenu() {
     cantidadFiltrosActivos,
   } = useDashboardFiltros(filtros)
 
-  const {
-    data: pagosInicialCuotasCubiertas,
-    isLoading: loadingPagosInicialCuotasCubiertas,
-  } = useQuery({
-    queryKey: ['dashboard-pagos-inicial', filtros],
-
-    queryFn: async ({ signal }) => {
-      const params = construirFiltrosObject()
-      const queryParams = new URLSearchParams()
-      queryParams.append('meses_evolucion', '6')
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-      return apiClient.get(
-        `/api/v1/dashboard/pagos-inicial?${queryParams.toString()}`,
-        { signal }
-      ) as Promise<{
-        cuotas_con_pago_aplicado_por_mes_cuota?: Array<{
-          mes: string
-          monto_programado: number
-          monto_cobrado: number
-          monto_falta: number
-          monto_usd?: number
-          cuotas_con_pago_aplicado: number
-        }>
-      }>
-    },
-
-    staleTime: 2 * 60 * 1000,
-
-    refetchOnWindowFocus: false,
-
-    retry: 1,
-  })
-
   /** Período efectivo para un gráfico: el del gráfico si está definido, si no el general */
 
   const getPeriodoGrafico = (chartId: string) =>
@@ -340,56 +296,6 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false, // No recargar automáticamente
 
     // Prioridad máxima - carga inmediatamente
-  })
-
-  // Batch 1: CRÍTICO - KPIs principales (visible primero para el usuario)
-
-  // Los KPIs siempre reflejan solo el mes actual (ej. febrero) - independiente del período de los gráficos
-
-  const mesActualKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
-
-  const {
-    data: kpisPrincipales,
-    isLoading: loadingKPIs,
-    isError: errorKPIs,
-    refetch,
-  } = useQuery({
-    queryKey: [
-      'kpis-principales-menu',
-      'mes',
-      mesActualKey,
-      JSON.stringify(filtros),
-    ],
-
-    queryFn: async (): Promise<KpisPrincipalesResponse> => {
-      const params = construirFiltrosObject('mes')
-
-      const queryParams = new URLSearchParams()
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-
-      const queryString = queryParams.toString()
-
-      const response = await apiClient.get(
-        `/api/v1/dashboard/kpis-principales${queryString ? '?' + queryString : ''}`
-      )
-
-      return response as KpisPrincipalesResponse
-    },
-
-    staleTime: 5 * 60 * 1000, // 5 min para datos más frescos
-
-    refetchOnWindowFocus: true,
-
-    refetchOnMount: true,
-
-    refetchInterval: 10 * 60 * 1000, // Refrescar cada 10 min
-
-    enabled: true,
-
-    retry: false,
   })
 
   // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal). Siempre con período que incluya 2025 si hay datos.
@@ -767,11 +673,6 @@ export function DashboardMenu() {
       // Invalidar y refrescar solo las queries usadas por esta página (auditoría: alinear con queryKeys reales)
 
       await queryClient.invalidateQueries({
-        queryKey: ['kpis-principales-menu'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
         queryKey: ['dashboard-menu'],
         exact: false,
       })
@@ -814,11 +715,6 @@ export function DashboardMenu() {
       // Refrescar todas las queries activas del dashboard
 
       await queryClient.refetchQueries({
-        queryKey: ['kpis-principales-menu'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
         queryKey: ['dashboard-menu'],
         exact: false,
       })
@@ -857,8 +753,6 @@ export function DashboardMenu() {
         queryKey: ['notificaciones-envios-por-dia'],
         exact: false,
       })
-
-      await refetch()
 
       toast.success('Datos actualizados correctamente')
     } catch (error) {
@@ -1046,8 +940,7 @@ export function DashboardMenu() {
 
   // Si hay un error crítico en las queries principales, mostrar mensaje pero no bloquear
 
-  const hasCriticalError =
-    errorOpcionesFiltros || errorKPIs || errorDashboardAdmin
+  const hasCriticalError = errorOpcionesFiltros || errorDashboardAdmin
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -1092,177 +985,6 @@ export function DashboardMenu() {
             </div>
           </motion.div>
         )}
-
-        <section
-          id="dashboard-cuotas-cubiertas"
-          aria-label="Cuotas cubiertas por mes de vencimiento"
-        >
-          <CuotasCubiertasVencimientoChartCard
-            loading={loadingPagosInicialCuotasCubiertas}
-            datos={
-              pagosInicialCuotasCubiertas?.cuotas_con_pago_aplicado_por_mes_cuota
-            }
-            motionDelay={0.06}
-          />
-        </section>
-
-        {/* KPIs PRINCIPALES (cuatro tarjetas; fila completa en xl) */}
-
-        <section id="dashboard-kpis" aria-label="KPIs principales">
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
-              {loadingKPIs ? (
-                <>
-                  {[1, 2, 3, 4].map(i => (
-                    <div
-                      key={i}
-                      className="h-[180px] animate-pulse rounded-xl bg-gray-100"
-                    />
-                  ))}
-                </>
-              ) : errorKPIs ? (
-                <Card className="border-red-200 bg-red-50 md:col-span-2 xl:col-span-4">
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3 text-red-700">
-                      <AlertTriangle className="h-5 w-5" />
-
-                      <p>
-                        Error al cargar los KPIs principales. Por favor, intente
-                        nuevamente.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : kpisPrincipales ? (
-                <>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                  >
-                    <KpiCardLarge
-                      title="Pagos conciliados en USD (hoy)"
-                      subtitle="Suma del monto del pago en dólares (USD del registro; BS con tasa del comprobante), conciliado hoy (Caracas), solo cuotas que vencen hoy; un pago cuenta una vez. Sin atrasos."
-                      value={kpisPrincipales.pagos_conciliados_hoy.valor_actual}
-                      variation={
-                        kpisPrincipales.pagos_conciliados_hoy
-                          .variacion_porcentual !== undefined
-                          ? {
-                              percent:
-                                kpisPrincipales.pagos_conciliados_hoy
-                                  .variacion_porcentual,
-
-                              label: 'vs día anterior',
-                            }
-                          : undefined
-                      }
-                      icon={TrendingUp}
-                      color="text-green-600"
-                      bgColor="bg-green-100"
-                      borderColor="border-green-500"
-                      format="currency"
-                    />
-                  </motion.div>
-
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                  >
-                    <KpiCardLarge
-                      title="Pagos programados (hoy)"
-                      subtitle={
-                        kpisPrincipales.porcentaje_cuotas_pagadas_hoy !==
-                        undefined
-                          ? `Monto con vencimiento hoy (Caracas) · ${Number(kpisPrincipales.porcentaje_cuotas_pagadas_hoy).toFixed(1)}% de esas cuotas ya con fecha de pago`
-                          : 'Monto con vencimiento hoy (America/Caracas)'
-                      }
-                      value={kpisPrincipales.pagos_programados_hoy.valor_actual}
-                      variation={
-                        kpisPrincipales.pagos_programados_hoy
-                          .variacion_porcentual !== undefined
-                          ? {
-                              percent:
-                                kpisPrincipales.pagos_programados_hoy
-                                  .variacion_porcentual,
-
-                              label: 'vs día anterior',
-                            }
-                          : undefined
-                      }
-                      icon={FileText}
-                      color="text-blue-600"
-                      bgColor="bg-blue-100"
-                      borderColor="border-blue-500"
-                      format="currency"
-                    />
-                  </motion.div>
-
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.11 }}
-                  >
-                    <KpiCardLarge
-                      title="Atrasos cobrados (hoy)"
-                      subtitle="Monto en USD de cuotas con vencimiento anterior a hoy (Caracas) y conciliación hoy; no incluye cuotas que vencen hoy"
-                      value={
-                        kpisPrincipales.cuotas_atrasadas_conciliadas_hoy
-                          ?.valor_actual ?? 0
-                      }
-                      variation={
-                        kpisPrincipales.cuotas_atrasadas_conciliadas_hoy
-                          ?.variacion_porcentual !== undefined
-                          ? {
-                              percent:
-                                kpisPrincipales.cuotas_atrasadas_conciliadas_hoy
-                                  .variacion_porcentual,
-
-                              label: 'vs día anterior',
-                            }
-                          : undefined
-                      }
-                      icon={History}
-                      color="text-amber-700"
-                      bgColor="bg-amber-100"
-                      borderColor="border-amber-500"
-                      format="currency"
-                    />
-                  </motion.div>
-
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.12 }}
-                  >
-                    <KpiCardLarge
-                      title="Pago vencido (mensual)"
-                      subtitle="Cuotas vencidas sin pagar (solo si ya pasó la fecha de vencimiento)"
-                      value={kpisPrincipales.total_morosidad_usd.valor_actual}
-                      variation={
-                        kpisPrincipales.total_morosidad_usd
-                          .variacion_porcentual !== undefined
-                          ? {
-                              percent:
-                                kpisPrincipales.total_morosidad_usd
-                                  .variacion_porcentual,
-
-                              label: 'vs mes anterior',
-                            }
-                          : undefined
-                      }
-                      icon={AlertTriangle}
-                      color="text-red-600"
-                      bgColor="bg-red-100"
-                      borderColor="border-red-500"
-                      format="currency"
-                    />
-                  </motion.div>
-                </>
-              ) : null}
-            </div>
-          </div>
-        </section>
 
         {/* Barra de filtros: período general (cada gráfico puede usar este o uno propio) */}
 
@@ -1354,9 +1076,7 @@ export function DashboardMenu() {
           <div className="space-y-6">
             {/* Aviso cuando no hay datos en los gráficos */}
 
-            {kpisPrincipales &&
-            Number(kpisPrincipales.total_prestamos?.valor_actual ?? 0) === 0 &&
-            (!datosDashboard?.evolucion_mensual?.length ||
+            {(!datosDashboard?.evolucion_mensual?.length ||
               datosDashboard.evolucion_mensual.every(
                 (e: EvolucionMensualItem) =>
                   !e.cartera && !e.cobrado && !(e.pagos_atrasos ?? 0)
