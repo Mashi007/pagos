@@ -1048,6 +1048,18 @@ export function DashboardMenu() {
                 </p>
               </>
             }
+            actions={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-violet-200 bg-white hover:bg-violet-50"
+                onClick={() => navigate('/dashboard/pagos')}
+              >
+                <DollarSign className="mr-2 h-4 w-4" />
+                Dashboard Pagos
+              </Button>
+            }
           />
         </motion.div>
 
