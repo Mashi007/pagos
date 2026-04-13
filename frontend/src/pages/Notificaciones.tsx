@@ -91,6 +91,45 @@ import { getErrorMessage, isAxiosTimeoutError } from '../types/errors'
 /** Máximo de filas (clientes / casos) por página en cada pestaña de listado de notificaciones. */
 const NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA = 10
 
+/**
+ * GET comparar-abonos por lote: evita disparar cientos de XHR en paralelo (Firefox/Render
+ * cancelan o vacían respuestas) y reduce presión en el worker de la hoja.
+ */
+const COMPARAR_ABONOS_GENERAL_CONCURRENCIA = 8
+
+async function compararAbonosGeneralEnLotes(
+  targets: ReadonlyArray<{
+    cedula: string
+    prestamoId: number
+    rowKey: string
+  }>,
+  chunkSize: number,
+  isCanceled: () => boolean
+): Promise<Array<readonly [string, CompararAbonosDriveCuotasResponse | null]>> {
+  const out: Array<readonly [string, CompararAbonosDriveCuotasResponse | null]> =
+    []
+  const n = Math.max(1, chunkSize)
+  for (let i = 0; i < targets.length; i += n) {
+    if (isCanceled()) return out
+    const slice = targets.slice(i, i + n)
+    const parte = await Promise.all(
+      slice.map(async t => {
+        try {
+          const d = await notificacionService.getCompararAbonosDriveCuotas({
+            cedula: t.cedula,
+            prestamoId: t.prestamoId,
+          })
+          return [t.rowKey, d] as const
+        } catch {
+          return [t.rowKey, null] as const
+        }
+      })
+    )
+    out.push(...parte)
+  }
+  return out
+}
+
 /** Etiquetas de origen en el submódulo GENERAL (misma semántica que cada submenú). */
 const CASO_NOTIF_GENERAL_D1 = 'Día siguiente al vencimiento'
 const CASO_NOTIF_GENERAL_PREJ = 'Atraso 5 cuotas (prejudicial)'
@@ -1658,7 +1697,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     void ejecutarEnvioManualTrasConfirmar(p)
   }
 
-  const getListForTab = (): ClienteRetrasadoItem[] => {
+  const list = useMemo((): ClienteRetrasadoItem[] => {
     if (modulo === 'general' && activeTab === 'general_todos') {
       const a = (data?.dias_1_atraso ?? []).map(r => ({
         ...r,
@@ -1694,9 +1733,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       default:
         return []
     }
-  }
-
-  const list = getListForTab()
+  }, [
+    modulo,
+    activeTab,
+    data,
+    data?.dias_1_atraso,
+    dataPrejudicial?.items,
+    dataD2Antes?.items,
+  ])
 
   const [sortCol, setSortCol] = useState<NotificacionesCuotasSortCol | null>(
     null
@@ -1847,7 +1891,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       setCompararAbonoGeneralCargando(false)
       return undefined
     }
-    if (generalCompararTargets.length === 0) {
+    const targetsSnapshot = generalCompararTargets
+    if (targetsSnapshot.length === 0) {
       setCompararAbonoGeneralMap(new Map())
       setCompararAbonoGeneralCargando(false)
       return undefined
@@ -1856,18 +1901,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setCompararAbonoGeneralCargando(true)
     void (async () => {
       try {
-        const entradas = await Promise.all(
-          generalCompararTargets.map(async t => {
-            try {
-              const d = await notificacionService.getCompararAbonosDriveCuotas({
-                cedula: t.cedula,
-                prestamoId: t.prestamoId,
-              })
-              return [t.rowKey, d] as const
-            } catch {
-              return [t.rowKey, null] as const
-            }
-          })
+        const entradas = await compararAbonosGeneralEnLotes(
+          targetsSnapshot,
+          COMPARAR_ABONOS_GENERAL_CONCURRENCIA,
+          () => cancelado
         )
         if (cancelado) return
         const m = new Map<string, CompararAbonosDriveCuotasResponse>()
@@ -1882,13 +1919,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     return () => {
       cancelado = true
     }
-  }, [
-    modulo,
-    activeTab,
-    generalCompararTargetsKey,
-    compararAbonoGeneralTick,
-    generalCompararTargets,
-  ])
+  }, [modulo, activeTab, generalCompararTargetsKey, compararAbonoGeneralTick])
 
   const filtrosAbonoGeneralPendientes =
     modulo === 'general' &&
