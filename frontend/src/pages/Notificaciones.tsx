@@ -363,27 +363,34 @@ function filaCoincideFiltroCedulaNotif(
   return ced.toLowerCase().includes(t.toLowerCase())
 }
 
-/** Filtro de columna «Diferencia Abono» (General): misma semántica que el modal ABONOS vs cuotas. */
+/** Filtro de columna «Diferencia Abono» (General): criterios alineados con `diferencia` y `tolerancia` del modal/caché. */
 type FiltroDiferenciaAbonoGeneral =
   | 'todas'
   | 'cero'
   | 'drive_mayor'
   | 'drive_menor'
 
+function toleranciaCompararAbonos(cmp: CompararAbonosDriveCuotasResponse): number {
+  const t = cmp.tolerancia
+  return typeof t === 'number' && Number.isFinite(t) ? t : 0.02
+}
+
 function filaCumpleFiltroDiferenciaAbonoGeneral(
   filtro: FiltroDiferenciaAbonoGeneral,
   cmp: CompararAbonosDriveCuotasResponse
 ): boolean {
   if (filtro === 'todas') return true
-  const puede =
-    cmp.puede_aplicar === true ||
-    (typeof cmp.indicador === 'string' && cmp.indicador.toLowerCase() === 'si')
-  if (filtro === 'drive_mayor') return puede
+  const tol = toleranciaCompararAbonos(cmp)
+  if (filtro === 'drive_mayor') {
+    const d = cmp.diferencia
+    if (d == null || Number.isNaN(Number(d))) return false
+    return Number(d) > tol
+  }
   if (filtro === 'cero') return cmp.coincide_aproximado === true
   if (filtro === 'drive_menor') {
     const d = cmp.diferencia
     if (d == null || Number.isNaN(Number(d))) return false
-    return cmp.coincide_aproximado !== true && !puede && Number(d) < 0
+    return Number(d) < -tol
   }
   return true
 }
@@ -3149,12 +3156,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       )
                     }
                     disabled={isLoadingLista}
-                    title="Cero = coincide con tolerancia del modal. Mayor a cero = ABONOS en hoja mayor que total en cuotas (indicador Sí; ahí se permite aplicar). Menor a cero = hoja por debajo de cuotas (diferencia negativa fuera de tolerancia)."
+                    title="Cero = coincide con tolerancia del modal. Mayor a cero = diferencia (hoja − cuotas) estrictamente mayor que la tolerancia (mismo umbral que «Sí» en el modal). Menor a cero = diferencia menor que −tolerancia. El listado usa caché en BD: si el modal en vivo no coincide, resincronice o recalcule."
                   >
                     <option value="todas">Todas</option>
                     <option value="cero">Cero (sin diferencia; tolerancia como en el modal)</option>
                     <option value="drive_mayor">
-                      Mayor a cero (Drive &gt; sistema; indicador Sí; ahí se permite aplicar)
+                      Mayor a cero (diferencia &gt; tolerancia; Drive por encima del total en cuotas)
                     </option>
                     <option value="drive_menor">
                       Menor a cero (Drive &lt; sistema; más pagado en cuotas que en la hoja)
@@ -3553,10 +3560,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
                                 Elija «Todas» u otro criterio. «Cero» usa la misma
                                 coincidencia por tolerancia que el modal; «Mayor a
-                                cero» solo filas con indicador Sí (ABONOS hoja mayor
-                                que total en cuotas); «Menor a cero» filas con
-                                diferencia negativa fuera de tolerancia (más pagado
-                                en cuotas que en la hoja).
+                                cero» = diferencia (hoja − cuotas) mayor que la
+                                tolerancia; «Menor a cero» = diferencia menor que
+                                −tolerancia (más pagado en cuotas que en la hoja).
+                                El listado refleja caché: si difiere del modal, actualice
+                                datos o espere el recálculo programado.
                               </span>
                             ) : modulo === 'fecha' &&
                               filtroDiferenciaFechaGeneral !== 'todas' &&
@@ -3808,9 +3816,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               listaTrasFiltroCedula.length > 0 ? (
                               <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
                                 Elija «Todas» u otro criterio. «Cero» coincide con la
-                                tolerancia del modal; «Mayor a cero» solo filas con
-                                indicador Sí; «Menor a cero» diferencia negativa
-                                fuera de tolerancia.
+                                tolerancia del modal; «Mayor a cero» = diferencia
+                                mayor que tolerancia; «Menor a cero» = diferencia menor
+                                que −tolerancia. Caché en listado vs comparación en vivo
+                                en el modal pueden discrepar hasta resincronizar.
                               </span>
                             ) : modulo === 'fecha' &&
                               filtroDiferenciaFechaGeneral !== 'todas' &&
