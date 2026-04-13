@@ -1045,6 +1045,121 @@ export function DashboardMenu() {
           </Card>
         </motion.div>
 
+        {/* Programado vs cobrado (mensual): inmediatamente después de filtros */}
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18 }}
+          className="mt-2"
+        >
+          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                  <LineChart className="h-5 w-5 text-sky-600" />
+
+                  <span>Programado vs cobrado (mensual)</span>
+                </CardTitle>
+
+                <div className="flex items-center gap-2">
+                  <SelectorPeriodoGrafico chartId="tendencia-cobranza-lineas" />
+
+                  <Badge
+                    variant="secondary"
+                    className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                  >
+                    2 líneas
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-6 pt-4">
+              {loadingTendenciaCobranza ? (
+                <div className="flex items-center justify-center py-16 text-gray-500">
+                  Cargando tendencia programado vs cobrado...
+                </div>
+              ) : datosTendenciaCobranza?.series &&
+                datosTendenciaCobranza.series.length > 0 ? (
+                <ChartWithDateRangeSlider
+                  data={datosTendenciaCobranza.series}
+                  dataKey="mes"
+                  chartHeight={400}
+                >
+                  {filteredData => (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsLineChart
+                        data={filteredData}
+                        margin={{
+                          top: 14,
+                          right: 24,
+                          left: 12,
+                          bottom: 14,
+                        }}
+                      >
+                        <CartesianGrid {...chartCartesianGrid} />
+
+                        <XAxis dataKey="mes" tick={chartAxisTick} />
+
+                        <YAxis
+                          tick={chartAxisTick}
+                          tickFormatter={value => {
+                            if (value >= 1000) {
+                              return `$${(value / 1000).toFixed(0)}K`
+                            }
+
+                            return `$${value}`
+                          }}
+                          label={{
+                            value: 'Monto (USD)',
+                            angle: -90,
+                            position: 'insideLeft',
+                            style: { fill: '#374151', fontSize: 13 },
+                          }}
+                        />
+
+                        <Tooltip
+                          contentStyle={chartTooltipStyle.contentStyle}
+                          labelStyle={chartTooltipStyle.labelStyle}
+                          formatter={(value: number, name: string) => [
+                            formatCurrency(value),
+                            name,
+                          ]}
+                        />
+
+                        <Legend {...chartLegendStyle} />
+
+                        <Line
+                          type="monotone"
+                          dataKey="cuotas_programadas"
+                          stroke="#2563eb"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          name="Cuotas programadas a cobrar"
+                        />
+
+                        <Line
+                          type="monotone"
+                          dataKey="total_cobrado"
+                          stroke="#059669"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          name="Pagos conciliados + meses anteriores"
+                        />
+                      </RechartsLineChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartWithDateRangeSlider>
+              ) : (
+                <div className="flex items-center justify-center py-16 text-gray-500">
+                  No hay datos para el período seleccionado
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
         {/* GRÁFICOS PRINCIPALES */}
 
         {loadingDashboard ? (
@@ -1383,124 +1498,10 @@ export function DashboardMenu() {
                 </CardContent>
               </Card>
             </motion.div>
-
-            {/* Tendencia: programado vs total cobrado (2 líneas) */}
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <LineChart className="h-5 w-5 text-sky-600" />
-
-                      <span>Programado vs cobrado (mensual)</span>
-                    </CardTitle>
-
-                    <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="tendencia-cobranza-lineas" />
-
-                      <Badge
-                        variant="secondary"
-                        className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                      >
-                        2 líneas
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="p-6 pt-4">
-                  {loadingTendenciaCobranza ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando tendencia programado vs cobrado...
-                    </div>
-                  ) : datosTendenciaCobranza?.series &&
-                    datosTendenciaCobranza.series.length > 0 ? (
-                    <ChartWithDateRangeSlider
-                      data={datosTendenciaCobranza.series}
-                      dataKey="mes"
-                      chartHeight={400}
-                    >
-                      {filteredData => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RechartsLineChart
-                            data={filteredData}
-                            margin={{
-                              top: 14,
-                              right: 24,
-                              left: 12,
-                              bottom: 14,
-                            }}
-                          >
-                            <CartesianGrid {...chartCartesianGrid} />
-
-                            <XAxis dataKey="mes" tick={chartAxisTick} />
-
-                            <YAxis
-                              tick={chartAxisTick}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
-
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'Monto (USD)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
-
-                            <Tooltip
-                              contentStyle={chartTooltipStyle.contentStyle}
-                              labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number, name: string) => [
-                                formatCurrency(value),
-                                name,
-                              ]}
-                            />
-
-                            <Legend {...chartLegendStyle} />
-
-                            <Line
-                              type="monotone"
-                              dataKey="cuotas_programadas"
-                              stroke="#2563eb"
-                              strokeWidth={2}
-                              dot={{ r: 4 }}
-                              name="Cuotas programadas a cobrar"
-                            />
-
-                            <Line
-                              type="monotone"
-                              dataKey="total_cobrado"
-                              stroke="#059669"
-                              strokeWidth={2}
-                              dot={{ r: 4 }}
-                              name="Pagos conciliados + meses anteriores"
-                            />
-                          </RechartsLineChart>
-                        </ResponsiveContainer>
-                      )}
-                    </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay datos para el período seleccionado
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
           </div>
         ) : null}
 
-        {/* Notificaciones por día: gráfico de línea (después de Programado vs cobrado); no es KPI */}
+        {/* Notificaciones por día */}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
