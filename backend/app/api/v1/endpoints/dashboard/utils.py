@@ -168,6 +168,42 @@ def _fechas_iso_desde_periodo_dashboard(periodo: Optional[str]) -> tuple[Optiona
     return None, None
 
 
+def _ultimos_n_meses_calendario_etiquetados(n: int) -> list[dict]:
+    """
+    Últimos n meses naturales consecutivos terminando en el mes calendario actual.
+    Cada elemento: year, month, label (\"Ene 2026\"), fecha_inicio, fecha_fin (date).
+    Orden cronológico antiguo -> reciente (eje X de gráficos).
+    """
+    if n < 1:
+        return []
+    hoy = date.today()
+    nombres = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+    yi, mi = hoy.year, hoy.month - (n - 1)
+    while mi < 1:
+        mi += 12
+        yi -= 1
+    items: list[dict] = []
+    for _ in range(n):
+        inicio = date(yi, mi, 1)
+        last_d = calendar.monthrange(yi, mi)[1]
+        fin = date(yi, mi, last_d)
+        label = f"{nombres[mi - 1]} {yi}"
+        items.append(
+            {
+                "year": yi,
+                "month": mi,
+                "label": label,
+                "fecha_inicio": inicio,
+                "fecha_fin": fin,
+            }
+        )
+        mi += 1
+        if mi > 12:
+            mi = 1
+            yi += 1
+    return items
+
+
 def _etiquetas_12_meses() -> list[dict]:
     """Solo etiquetas de los últimos 12 meses (sin datos demo). Valores en cero."""
     meses = []

@@ -31,8 +31,8 @@ type Props = {
 }
 
 /**
- * Cuotas con monto aplicado (cuota_pagos) en USD, agrupado por mes de
- * fecha_vencimiento de la cuota (no por fecha del pago).
+ * Cuotas programadas: suma USD aplicados (cuota_pagos) por mes de vencimiento;
+ * incluye pagos conciliados y no conciliados. No agrupa por fecha del pago.
  */
 export function CuotasCubiertasVencimientoChartCard({
   loading,
@@ -50,17 +50,19 @@ export function CuotasCubiertasVencimientoChartCard({
           <CardTitle className="flex flex-col gap-1 text-xl font-bold text-gray-800 sm:flex-row sm:items-center sm:space-x-2">
             <span className="flex items-center space-x-2">
               <Calendar className="h-6 w-6 text-emerald-600" />
-              <span>Cuotas cubiertas (USD por mes de vencimiento)</span>
+              <span>Cuotas programadas cubiertas (USD)</span>
             </span>
           </CardTitle>
           <p className="text-sm font-normal text-gray-600">
-            Suma en <span className="font-medium">USD</span> del monto aplicado
-            en cascada (<span className="font-medium">cuota_pagos</span>
-            ), agrupada por el mes de{' '}
-            <span className="font-medium">vencimiento de la cuota</span>. No usa
-            la fecha del pago: un abono aplicado en otro mes sigue contando en
-            el mes de la cuota. En el detalle del gráfico verás también cuántas
-            cuotas distintas recibieron abono en ese bucket.
+            Total en <span className="font-medium">USD</span> de todo lo
+            aplicado a cuotas vía{' '}
+            <span className="font-medium">cuota_pagos</span>, por{' '}
+            <span className="font-medium">mes calendario de vencimiento</span>{' '}
+            de la cuota. Incluye pagos{' '}
+            <span className="font-medium">conciliados y no conciliados</span>.
+            Si la cuota es de enero y el abono cae en abril, el monto se muestra
+            en <span className="font-medium">enero</span>. El detalle indica
+            cuántas cuotas distintas recibieron abono en ese mes de vencimiento.
           </p>
         </CardHeader>
 
