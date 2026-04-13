@@ -1225,6 +1225,25 @@ class NotificacionService {
   }
 
   /**
+   * Persiste la fecha de la columna Q como `prestamos.fecha_aprobacion` (y alinea base de cálculo);
+   * recalcula vencimientos de cuotas con la misma lógica que `PUT /prestamos/{id}`.
+   * Solo si la fecha Q es estrictamente posterior a la fecha de aprobación actual; requiere admin.
+   */
+  async postAplicarFechaEntregaQComoFechaAprobacion(params: {
+    cedula: string
+    prestamoId: number
+    lote?: string | null
+  }): Promise<{ ok: boolean; prestamo?: Record<string, unknown> }> {
+    const body: Record<string, unknown> = {
+      cedula: params.cedula.trim(),
+      prestamo_id: params.prestamoId,
+    }
+    const lote = params.lote?.trim()
+    if (lote) body.lote = lote
+    return await apiClient.post(`${this.baseUrl}/aplicar-fecha-entrega-q-como-fecha-aprobacion`, body)
+  }
+
+  /**
    * Elimina pagos del préstamo y aplica ABONOS (hoja) en cascada.
    * Solo si ABONOS > sum(cuotas.total_pagado); requiere rol admin en backend.
    */

@@ -2349,6 +2349,137 @@ def get_comparar_fecha_entrega_q_aprobacion(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.post("/aplicar-fecha-entrega-q-como-fecha-aprobacion")
+def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    admin: UserResponse = Depends(require_admin),
+):
+    """
+    Persiste en `prestamos.fecha_aprobacion` (y alinea `fecha_base_calculo`) la fecha de entrega
+    leída en la columna Q de CONCILIACIÓN para la fila alineada al préstamo, y recalcula fechas de
+    vencimiento de cuotas cuando aplica la misma regla que `PUT /prestamos/{id}`.
+
+    Requisitos (misma lectura en vivo que GET comparar-fecha-entrega-q-aprobacion):
+    - La fecha Q debe ser estrictamente posterior a la fecha de aprobación actual en BD.
+    - La fecha Q debe ser igual o posterior a `fecha_requerimiento` del préstamo.
+    - No opera sobre préstamos en desistimiento (bloqueo del PUT estándar).
+
+    Tras el PUT, intenta refrescar `prestamos.fecha_entrega_q_aprobacion_cache` con la comparación
+    actualizada (fallo del caché no revierte el préstamo ya confirmado).
+    """
+    from datetime import time as time_cls
+
+    from app.schemas.prestamo import PrestamoUpdate
+    from app.services.comparar_fecha_entrega_q_aprobacion_service import (
+        comparar_fecha_entrega_column_q_vs_aprobacion,
+    )
+    from app.api.v1.endpoints.prestamos import update_prestamo
+
+    cedula = str(payload.get("cedula") or "").strip()
+    pid_raw = payload.get("prestamo_id")
+    lote_raw = payload.get("lote")
+    lote = str(lote_raw).strip() if lote_raw is not None and str(lote_raw).strip() else None
+    try:
+        prestamo_id = int(pid_raw)
+    except (TypeError, ValueError):
+        prestamo_id = 0
+
+    if not cedula or prestamo_id <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Indique cédula y prestamo_id válidos.",
+        )
+
+    try:
+        cmp = comparar_fecha_entrega_column_q_vs_aprobacion(
+            db,
+            cedula=cedula,
+            prestamo_id=prestamo_id,
+            lote=lote,
+            persist_cache=False,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    if not bool(cmp.get("puede_aplicar")):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Solo se puede confirmar cuando la fecha de la columna Q es estrictamente "
+                "posterior a la fecha de aprobación actual en el sistema."
+            ),
+        )
+
+    fq_iso = cmp.get("fecha_entrega_column_q")
+    if not fq_iso:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay fecha interpretable en la columna Q para esta fila y préstamo.",
+        )
+
+    try:
+        fecha_q = date.fromisoformat(str(fq_iso)[:10])
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo interpretar la fecha Q como calendario (YYYY-MM-DD).",
+        ) from e
+
+    row = db.get(Prestamo, prestamo_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado.")
+
+    req = getattr(row, "fecha_requerimiento", None)
+    if isinstance(req, datetime):
+        req_d = req.date()
+    else:
+        req_d = req
+    if req_d is not None and fecha_q < req_d:
+        raise HTTPException(
+            status_code=400,
+            detail="La fecha Q es anterior a la fecha de requerimiento del préstamo; no se aplica.",
+        )
+
+    fa_dt = datetime.combine(fecha_q, time_cls.min)
+    try:
+        out = update_prestamo(
+            prestamo_id,
+            PrestamoUpdate(fecha_aprobacion=fa_dt),
+            db,
+            admin,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            "[notificaciones] aplicar-fecha-entrega-q-como-fecha_aprobacion: %s", e
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Error al actualizar la fecha de aprobación del préstamo.",
+        ) from e
+
+    try:
+        comparar_fecha_entrega_column_q_vs_aprobacion(
+            db,
+            cedula=cedula,
+            prestamo_id=prestamo_id,
+            lote=lote,
+            persist_cache=True,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning(
+            "[notificaciones] aplicar-fecha-q: préstamo actualizado pero falló refresco de caché Q",
+            exc_info=True,
+        )
+
+    dumped = out.model_dump(mode="json") if hasattr(out, "model_dump") else out
+    return {"ok": True, "prestamo": dumped}
+
+
 @router.post("/aplicar-abonos-drive-a-cuotas")
 def post_aplicar_abonos_drive_a_cuotas(
     payload: dict = Body(...),

@@ -1182,9 +1182,12 @@ function fmtDiferenciaDiasNotif(n: number | null | undefined): string {
 /**
  * Misma estructura visual que ABONOS vs cuotas: huella, aviso de sync, regla, indicador Sí/No,
  * tabla de comparación y pie. La fecha Q debe ser estrictamente posterior a fecha_aprobación
- * para «Sí» (paralelo a hoja &gt; sistema en ABONOS). No hay aplicación automática desde fechas.
+ * para «Sí» (paralelo a hoja &gt; sistema en ABONOS). El paso de confirmación llama al backend:
+ * `PUT /prestamos/{id}` vía endpoint de notificaciones (misma persistencia y recálculo de
+ * vencimientos que revisión manual al cambiar la fecha de aprobación).
  */
 function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoItem }) {
+  const queryClient = useQueryClient()
   const location = useLocation()
   const { user } = useSimpleAuth()
   const esAdmin = (user?.rol || '').toLowerCase() === 'admin'
@@ -1194,6 +1197,7 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
   const [open, setOpen] = useState(false)
   const [paso, setPaso] = useState<'resumen' | 'confirmar'>('resumen')
   const [loading, setLoading] = useState(false)
+  const [applying, setApplying] = useState(false)
   const [data, setData] = useState<CompararFechaEntregaQvsAprobacionResponse | null>(null)
 
   const onDialogFechaOpenChange = useCallback((v: boolean) => {
@@ -1201,6 +1205,7 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
     if (!v) {
       setPaso('resumen')
       setData(null)
+      setApplying(false)
     }
   }, [])
 
@@ -1233,6 +1238,37 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
       onDialogFechaOpenChange(false)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const aplicarFechaQComoAprobacion = async () => {
+    if (!data || pid == null) return
+    setApplying(true)
+    try {
+      const loteA = (data.lote_aplicado ?? '').toString().trim() || undefined
+      await notificacionService.postAplicarFechaEntregaQComoFechaAprobacion({
+        cedula: ced,
+        prestamoId: pid,
+        ...(loteA ? { lote: loteA } : {}),
+      })
+      toast.success(
+        'Fecha de aprobación guardada en BD con la fecha de la columna Q. Si había cuotas en APROBADO/LIQUIDADO y cambió la base, se recalcularon vencimientos (misma regla que al editar en revisión manual).'
+      )
+      onDialogFechaOpenChange(false)
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+        skipNotificacionesMora: true,
+        includeDashboardMenu: true,
+      })
+      await invalidateListasNotificacionesMora(queryClient, {
+        skipCrossTabBroadcast: true,
+      })
+    } catch (e) {
+      toast.error(
+        getErrorMessage(e) ||
+          'No se pudo guardar la fecha de aprobación. Revise el mensaje del servidor o use revisión manual.'
+      )
+    } finally {
+      setApplying(false)
     }
   }
 
@@ -1270,7 +1306,7 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
           <DialogHeader>
             <DialogTitle>
               {paso === 'confirmar'
-                ? 'Acerca del indicador Sí (fechas)'
+                ? 'Confirmar: fecha Q como fecha de aprobación'
                 : 'Fecha (columna Q) vs fecha de aprobación'}
             </DialogTitle>
           </DialogHeader>
@@ -1280,11 +1316,12 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
           ) : paso === 'confirmar' && data ? (
             <div className="space-y-3 text-sm">
               <p className="text-slate-800">
-                El indicador <span className="font-semibold">Sí</span> solo refleja que la fecha
-                leída en la columna Q es <strong>estrictamente posterior</strong> a la fecha de
-                aprobación del préstamo en el sistema (misma idea que «hoja &gt; sistema» en ABONOS).
-                Este cuadro es solo de consulta: <strong>no modifica</strong> fechas en BD ni en
-                Drive.
+                Va a guardar en la tabla <span className="font-semibold">prestamos</span> la fecha
+                de la columna Q como <strong>nueva fecha de aprobación</strong> (y la base de cálculo
+                alineada al mismo día calendario). No modifica la hoja de Google. Si el préstamo
+                está en APROBADO o LIQUIDADO con cuotas y la base cambia, el servidor{' '}
+                <strong>recalcula fechas de vencimiento</strong> en <span className="font-semibold">cuotas</span>{' '}
+                con la misma lógica que al guardar desde revisión manual.
               </p>
               <ul className="list-none space-y-1 rounded-md border border-slate-200 bg-muted/30 p-3 text-xs tabular-nums">
                 <li>
@@ -1309,7 +1346,8 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
                 </li>
               </ul>
               <p className="text-xs text-muted-foreground">
-                Use revisión manual o la conciliación habitual si necesita corregir datos.
+                Pulse «Confirmar y guardar» solo si la fecha Q es la fuente de verdad que desea en el
+                sistema.
               </p>
             </div>
           ) : data ? (
@@ -1368,8 +1406,8 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
                   <span className="font-medium">Regla: </span>
                   el indicador «Sí» solo aplica si la fecha de la columna Q es{' '}
                   <strong>estrictamente posterior</strong> a la fecha de aprobación del préstamo en el
-                  sistema. Si la fecha Q es igual o anterior, el flujo queda en «No»: aquí no se
-                  corrigen fechas en BD ni en Drive; use revisión manual o la conciliación habitual.
+                  sistema. Si la fecha Q es igual o anterior, el flujo queda en «No»: use revisión
+                  manual o la conciliación habitual.
                 </p>
               ) : null}
 
@@ -1380,11 +1418,11 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
                   disabled={!puedeOperar || !esAdmin || loading}
                   title={
                     !esAdmin
-                      ? 'Solo administradores pueden abrir el paso de detalle.'
+                      ? 'Solo administradores pueden abrir el paso de confirmación.'
                       : data?.requiere_seleccion_lote && !loteResuelto
                         ? 'Elija primero el lote de la hoja que corresponde a este préstamo.'
                         : puedeOperar
-                          ? 'Pulse Sí para ver la aclaración (no aplica cambios en el sistema).'
+                          ? 'Pulse Sí para confirmar en el siguiente paso el guardado en BD (fecha Q → fecha de aprobación).'
                           : 'La fecha Q no es posterior a la aprobación: no hay indicador Sí.'
                   }
                   onClick={() => {
@@ -1398,7 +1436,7 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
                   }`}
                   aria-label={
                     puedeOperar
-                      ? 'Sí: fecha Q posterior a fecha de aprobación; pulse para ver detalle'
+                      ? 'Sí: fecha Q posterior a fecha de aprobación; siguiente paso para guardar en BD'
                       : 'Sí: no aplica'
                   }
                 >
@@ -1554,7 +1592,7 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
               ) : null}
               {!esAdmin && puedeOperar ? (
                 <p className="text-xs text-muted-foreground">
-                  El indicador «Sí» requiere administrador para abrir el detalle.
+                  El indicador «Sí» y el guardado en BD requieren administrador.
                 </p>
               ) : null}
             </div>
@@ -1566,14 +1604,21 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={applying}
                   onClick={() => {
                     setPaso('resumen')
                   }}
                 >
                   Volver
                 </Button>
-                <Button type="button" onClick={() => onDialogFechaOpenChange(false)}>
-                  Entendido
+                <Button
+                  type="button"
+                  disabled={applying || !esAdmin}
+                  onClick={() => {
+                    void aplicarFechaQComoAprobacion()
+                  }}
+                >
+                  {applying ? 'Guardando…' : 'Confirmar y guardar'}
                 </Button>
               </>
             ) : (
