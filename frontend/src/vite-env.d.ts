@@ -206,6 +206,9 @@ declare module 'lucide-react' {
 
   export const LayoutDashboard: any
 
+  /** Lista / vista de ítems (sidebar, pestañas de notificaciones). */
+  export const LayoutList: any
+
   /** Comparar / equilibrar valores (p. ej. ABONOS hoja vs cuotas en notificaciones). */
   export const Scale: any
 }
