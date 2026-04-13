@@ -2437,7 +2437,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       row.total_pendiente_pagar != null
   )
 
-  const listaBasePaginacion = mostrarTablaCuotas ? sortedList : list
+  /** Siempre partir de `sortedList`: con `sortCol` null es idéntico a `list`; en tabla compacta permite ordenar por diferencia abono. */
+  const listaBasePaginacion = sortedList
 
   const listaTrasFiltroCedula = useMemo(() => {
     const q = filtroCedula.trim()
@@ -3712,11 +3713,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         ) : null}
 
                         {modulo === 'general' ? (
-                          <th
-                            className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Valor fijo del listado: se recalcula en el servidor cada domingo a las 02:00 (America/Caracas) y al aplicar ABONOS desde la balanza."
-                          >
-                            Diferencia Abono
+                          <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
+                            <div className="inline-flex w-full items-center justify-end gap-1">
+                              <span
+                                title="Valor del listado desde caché en BD: domingo 02:00 Caracas o Recalcular; también al aplicar ABONOS desde la balanza."
+                              >
+                                Diferencia Abono
+                              </span>
+
+                              <SortArrowsCuotas
+                                column="diferencia_abono"
+                                labelAsc="Orden ascendente: diferencia abono (hoja − cuotas)"
+                                labelDesc="Orden descendente: diferencia abono (hoja − cuotas)"
+                                sortCol={sortCol}
+                                sortDir={sortDir}
+                                onAsc={aplicarOrdenAsc}
+                                onDesc={aplicarOrdenDesc}
+                              />
+                            </div>
                           </th>
                         ) : null}
 
