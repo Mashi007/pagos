@@ -1553,6 +1553,7 @@ export function DashboardMenu() {
 
                             <YAxis
                               tick={chartAxisTick}
+                              domain={[0, 500000]}
                               tickFormatter={value => {
                                 if (value >= 1000) {
                                   return `$${(value / 1000).toFixed(0)}K`
