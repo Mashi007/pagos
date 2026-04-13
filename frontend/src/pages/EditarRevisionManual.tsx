@@ -1321,42 +1321,20 @@ export function EditarRevisionManual() {
   }
 
   /**
-   * Revisión manual: al persistir, la BD recibe el calendario del selector **menos un día**
-   * (aprobación y base de cálculo). El valor en pantalla sigue siendo el día elegido hasta el refetch.
+   * Incluye fechas en el PUT sin enviar solo fecha_base (el backend responde 400).
+   * Aprobación y base de cálculo = mismo YYYY-MM-DD que el selector; el API fija fecha_registro al día anterior.
    */
-  const fechaYmdRestarUnDia = (ymd: string): string | null => {
-    const t = ymd.trim()
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t)
-    if (!m) return null
-    const y = Number(m[1])
-    const mo = Number(m[2])
-    const d = Number(m[3])
-    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) {
-      return null
-    }
-    const dt = new Date(Date.UTC(y, mo - 1, d))
-    if (Number.isNaN(dt.getTime())) return null
-    dt.setUTCDate(dt.getUTCDate() - 1)
-    const yy = dt.getUTCFullYear()
-    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
-    const dd = String(dt.getUTCDate()).padStart(2, '0')
-    return `${yy}-${mm}-${dd}`
-  }
-
-  /** Incluye fechas en el PUT sin enviar solo fecha_base (el backend responde 400). */
   const applyFechaAprobacionAlPayload = (out: Record<string, unknown>) => {
     const faNorm = formatDateForInput(prestamoData.fecha_aprobacion)
     const fbNorm = formatDateForInput(prestamoData.fecha_base_calculo)
     if (faNorm) {
-      const persisted = fechaYmdRestarUnDia(faNorm) ?? faNorm
-      out.fecha_aprobacion = persisted
-      out.fecha_base_calculo = persisted
+      out.fecha_aprobacion = faNorm
+      out.fecha_base_calculo = faNorm
       return
     }
     if (fbNorm) {
-      const persisted = fechaYmdRestarUnDia(fbNorm) ?? fbNorm
-      out.fecha_aprobacion = persisted
-      out.fecha_base_calculo = persisted
+      out.fecha_aprobacion = fbNorm
+      out.fecha_base_calculo = fbNorm
     }
   }
 
@@ -1397,13 +1375,11 @@ export function EditarRevisionManual() {
       return
     }
 
-    const faPersist = fechaYmdRestarUnDia(fa) ?? fa
-
     setRecalculandoFechasCuotas(true)
     try {
       const prestamoPatch: Record<string, unknown> = {
-        fecha_aprobacion: faPersist,
-        fecha_base_calculo: faPersist,
+        fecha_aprobacion: fa,
+        fecha_base_calculo: fa,
         observaciones: String(prestamoData.observaciones ?? ''),
       }
 
@@ -1459,7 +1435,7 @@ export function EditarRevisionManual() {
         const faGuardada = formatDateForInput(datos.prestamo.fecha_aprobacion)
         if (faGuardada) setFechaAprobacionOriginal(faGuardada)
       } else {
-        setFechaAprobacionOriginal(faPersist)
+        setFechaAprobacionOriginal(fa)
       }
       if (datos?.cuotas) {
         setCuotasData(datos.cuotas)

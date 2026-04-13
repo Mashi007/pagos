@@ -127,6 +127,7 @@ from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
 from app.services.prestamos.prestamo_huella import ensure_no_duplicate_aprobado_huella
 from app.services.prestamos.fechas_prestamo_coherencia import (
     alinear_fecha_aprobacion_y_base_calculo,
+    fecha_registro_naive_un_dia_antes_aprobacion,
 )
 from app.services.prestamos.prestamo_fecha_referencia_query import (
     prestamo_fecha_referencia_negocio,
@@ -3386,6 +3387,8 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
 
         p.fecha_aprobacion = datetime.combine(fecha_calendario, datetime.min.time())
 
+        p.fecha_registro = fecha_registro_naive_un_dia_antes_aprobacion(fecha_calendario)
+
     elif p.fecha_aprobacion is None:
 
         raise HTTPException(
@@ -3573,6 +3576,8 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
     # fecha_base_calculo siempre igual a fecha_aprobacion
     p.fecha_base_calculo = fecha_ap_date
 
+    p.fecha_registro = fecha_registro_naive_un_dia_antes_aprobacion(fecha_ap_date)
+
     p.estado = "APROBADO"
 
     validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
@@ -3726,6 +3731,8 @@ def aprobar_manual(
         p.fecha_aprobacion = datetime.combine(fecha_ap, datetime.min.time())
 
         p.fecha_base_calculo = fecha_ap
+
+        p.fecha_registro = fecha_registro_naive_un_dia_antes_aprobacion(fecha_ap)
 
         p.usuario_aprobador = current_user.email
 
@@ -4436,7 +4443,7 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
 
     estado_inicial = "APROBADO"
 
-    # fecha_registro: la pone la BD al insertar; no sustituye fecha_aprobacion ni fecha_base_calculo.
+    # fecha_registro: día calendario anterior a fecha_aprobacion (regla de negocio; ver fechas_prestamo_coherencia).
     fa_d = payload.fecha_aprobacion
     req_d = payload.fecha_requerimiento
     if req_d and fa_d < req_d:
@@ -4483,6 +4490,8 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
         analista_id=analista_row_id,
 
         usuario_proponente=usuario_proponente_email,
+
+        fecha_registro=fecha_registro_naive_un_dia_antes_aprobacion(fa_d),
 
     )
 
@@ -4694,6 +4703,7 @@ def update_prestamo(
         )
 
         row.fecha_base_calculo = fa_date
+        row.fecha_registro = fecha_registro_naive_un_dia_antes_aprobacion(fa_date)
 
     if payload.cuota_periodo is not None:
 
@@ -5474,7 +5484,7 @@ async def upload_prestamos_excel(
 
                 
 
-                # Carga masiva: fechas explicitas en Excel (columnas H e I); no se usa fecha_registro ni hoy.
+                # Carga masiva: fechas explícitas en Excel (columnas H e I). fecha_registro = día anterior a aprobación.
 
                 prestamo = Prestamo(
 
@@ -5491,6 +5501,8 @@ async def upload_prestamos_excel(
                     fecha_aprobacion=datetime.combine(fecha_aprobacion_x, time.min),
 
                     fecha_base_calculo=fecha_aprobacion_x,
+
+                    fecha_registro=fecha_registro_naive_un_dia_antes_aprobacion(fecha_aprobacion_x),
 
                     modalidad_pago=modalidad,
 

@@ -19,6 +19,7 @@ from app.core.rol_normalization import canonical_rol
 from app.constants.prestamo_estados import prestamo_estado_exige_fecha_aprobacion
 from app.services.prestamos.fechas_prestamo_coherencia import (
     alinear_fecha_aprobacion_y_base_calculo,
+    fecha_registro_naive_un_dia_antes_aprobacion,
     rellenar_fecha_aprobacion_desde_base_si_falta,
 )
 from app.core.serializers import format_datetime_iso, to_finite_float, to_finite_float_or_zero
@@ -722,16 +723,11 @@ def editar_cliente_revision(
 
 
 def _sync_fecha_registro_con_aprobacion_en_revision(prestamo: Prestamo, cambios_dict: dict) -> None:
-    """Si hay fecha_aprobacion, fecha_registro debe ser el mismo datetime (inicio del día)."""
+    """Si hay fecha_aprobacion, fecha_registro = inicio del día calendario anterior (misma regla que PUT /prestamos)."""
     fa = prestamo.fecha_aprobacion
     if fa is None:
         return
-    if isinstance(fa, datetime):
-        target = fa
-    elif isinstance(fa, date):
-        target = datetime.combine(fa, datetime.min.time())
-    else:
-        return
+    target = fecha_registro_naive_un_dia_antes_aprobacion(fa)
     old_fr = prestamo.fecha_registro
     if old_fr == target:
         return

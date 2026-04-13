@@ -44,7 +44,7 @@ class Prestamo(Base):
     usuario_aprobador = Column(String(255), nullable=True)
     observaciones = Column(Text, nullable=True, server_default=text("'No observaciones'"))
     informacion_desplegable = Column(Boolean, nullable=False, server_default=text("false"))
-    # Alta en BD (default al insertar). En revisión manual, si se persiste fecha_aprobacion, el API alinea fecha_registro al mismo datetime.
+    # Alta en BD (default al insertar). Si se persiste fecha_aprobacion, el API alinea fecha_registro al día calendario anterior (medianoche naive).
     fecha_registro = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     fecha_aprobacion = Column(DateTime(timezone=False), nullable=True)
     fecha_actualizacion = Column(DateTime(timezone=False), nullable=False, server_default=func.now(), onupdate=func.now())

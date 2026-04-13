@@ -6,11 +6,12 @@ Regla de negocio:
 - Sin fecha_aprobacion no se inventa fecha_base_calculo (ni desde fecha_registro, ni hoy).
 - No se borra fecha_base_calculo solo por no tener aprobacion (datos legados); alinear solo copia el dia cuando hay aprobacion.
 - No se usa fecha_registro como aprobacion ni como base de calculo.
+- Al persistir fecha_aprobacion, fecha_registro es el inicio del día calendario **anterior** (alta lógica un día antes).
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 
 
 def rellenar_fecha_aprobacion_desde_base_si_falta(row: object) -> None:
@@ -52,3 +53,15 @@ def alinear_fecha_aprobacion_y_base_calculo(row: object) -> None:
         )
         if getattr(row, "fecha_base_calculo", None) != ap_d:
             setattr(row, "fecha_base_calculo", ap_d)
+
+
+def fecha_registro_naive_un_dia_antes_aprobacion(fecha_aprobacion: date | datetime) -> datetime:
+    """Medianoche naive del día calendario previo a la fecha de aprobación."""
+    if isinstance(fecha_aprobacion, datetime):
+        d = fecha_aprobacion.date()
+    elif isinstance(fecha_aprobacion, date):
+        d = fecha_aprobacion
+    else:
+        raise TypeError("fecha_aprobacion debe ser date o datetime")
+    prev = d - timedelta(days=1)
+    return datetime.combine(prev, time.min)
