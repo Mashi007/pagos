@@ -228,6 +228,14 @@ function textoTotalPendientePagar(row: ClienteRetrasadoItem): string {
   return v != null && Number.isFinite(v) ? v.toLocaleString('es') : '-'
 }
 
+/** Mismo id de préstamo que usa estado de cuenta / revisión (BD). */
+function textoNumeroCreditoNotif(row: ClienteRetrasadoItem): string {
+  const pid = row.prestamo_id
+  if (pid == null) return '—'
+  const n = Number(pid)
+  return Number.isFinite(n) ? String(n) : '—'
+}
+
 /** Valor numérico para ordenar (misma prioridad que el texto mostrado). */
 function numericTotalPendienteSort(row: ClienteRetrasadoItem): number | null {
   if (row.total_pendiente_pagar != null) {
@@ -334,6 +342,75 @@ function filaCoincideFiltroCedulaNotif(
     return soloDigitosCedulaNotif(ced).includes(qDigits)
   }
   return ced.toLowerCase().includes(t.toLowerCase())
+}
+
+/** Filtro de columna «Diferencia Abono» (General): misma semántica que el modal ABONOS vs cuotas. */
+type FiltroDiferenciaAbonoGeneral = 'todas' | 'cero' | 'drive_mayor'
+
+function filaCumpleFiltroDiferenciaAbonoGeneral(
+  filtro: FiltroDiferenciaAbonoGeneral,
+  cmp: CompararAbonosDriveCuotasResponse
+): boolean {
+  if (filtro === 'todas') return true
+  const puede =
+    cmp.puede_aplicar === true ||
+    (typeof cmp.indicador === 'string' && cmp.indicador.toLowerCase() === 'si')
+  if (filtro === 'drive_mayor') return puede
+  if (filtro === 'cero') return cmp.coincide_aproximado === true
+  return true
+}
+
+function fmtDiferenciaAbonoCelda(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(Number(n))) return '—'
+  return Number(n).toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function DiferenciaAbonoGeneralCell({
+  row,
+  data,
+  isLoading,
+  isError,
+}: {
+  row: ClienteRetrasadoItem
+  data?: CompararAbonosDriveCuotasResponse
+  isLoading: boolean
+  isError: boolean
+}) {
+  const pid = row.prestamo_id
+  const ced = (row.cedula || '').trim()
+  if (pid == null || !ced) {
+    return (
+      <span className="text-xs text-muted-foreground" title="Sin cédula o préstamo">
+        —
+      </span>
+    )
+  }
+  if (isLoading) {
+    return <span className="text-xs text-muted-foreground">…</span>
+  }
+  if (isError || !data) {
+    return (
+      <span
+        className="text-xs text-amber-800"
+        title="No se pudo obtener la comparación ABONOS vs cuotas"
+      >
+        —
+      </span>
+    )
+  }
+  return (
+    <span
+      className={`tabular-nums text-sm font-medium ${
+        data.coincide_aproximado ? 'text-green-700' : 'text-amber-800'
+      }`}
+      title="Diferencia (hoja Drive − total pagado en cuotas), misma regla que el icono de balanza."
+    >
+      {fmtDiferenciaAbonoCelda(data.diferencia)}
+    </span>
+  )
 }
 
 /**
@@ -1385,6 +1462,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
         }),
       ])
+      setCompararAbonoGeneralTick(t => t + 1)
       toast.success(
         'Listas y KPI actualizados. El envio de correos y campanas sigue siendo manual desde esta pantalla o configuracion.'
       )
@@ -1632,9 +1710,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [filtroCedula, setFiltroCedula] = useState('')
 
+  const [filtroDiferenciaAbonoGeneral, setFiltroDiferenciaAbonoGeneral] =
+    useState<FiltroDiferenciaAbonoGeneral>('todas')
+
   useEffect(() => {
     setFiltroCedula('')
   }, [activeTab, modulo, fechaCaracasApi])
+
+  useEffect(() => {
+    setFiltroDiferenciaAbonoGeneral('todas')
+  }, [activeTab, modulo, fechaCaracasApi, filtroCedula])
 
   useEffect(() => {
     setSortCol(null)
@@ -1709,13 +1794,132 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const listaBasePaginacion = mostrarTablaCuotas ? sortedList : list
 
-  const listaFiltradaCedula = useMemo(() => {
+  const listaTrasFiltroCedula = useMemo(() => {
     const q = filtroCedula.trim()
     if (!q) return listaBasePaginacion
     return listaBasePaginacion.filter(row =>
       filaCoincideFiltroCedulaNotif(row, q)
     )
   }, [listaBasePaginacion, filtroCedula])
+
+  const generalCompararTargets = useMemo(() => {
+    if (modulo !== 'general' || activeTab !== 'general_todos') return []
+    const seen = new Set<string>()
+    const out: Array<{
+      cedula: string
+      prestamoId: number
+      rowKey: string
+    }> = []
+    for (const row of listaTrasFiltroCedula) {
+      const ced = String(row.cedula ?? '').trim()
+      const pid = row.prestamo_id
+      if (!ced || pid == null) continue
+      const k = `${ced}|${pid}`
+      if (seen.has(k)) continue
+      seen.add(k)
+      out.push({ cedula: ced, prestamoId: pid, rowKey: k })
+    }
+    return out
+  }, [modulo, activeTab, listaTrasFiltroCedula])
+
+  const generalCompararTargetsKey = useMemo(
+    () => [...generalCompararTargets.map(t => t.rowKey)].sort().join('\n'),
+    [generalCompararTargets]
+  )
+
+  const generalCompararRowKeySet = useMemo(
+    () => new Set(generalCompararTargets.map(t => t.rowKey)),
+    [generalCompararTargets]
+  )
+
+  const [compararAbonoGeneralMap, setCompararAbonoGeneralMap] = useState<
+    Map<string, CompararAbonosDriveCuotasResponse>
+  >(() => new Map())
+
+  const [compararAbonoGeneralCargando, setCompararAbonoGeneralCargando] =
+    useState(false)
+
+  const [compararAbonoGeneralTick, setCompararAbonoGeneralTick] = useState(0)
+
+  useEffect(() => {
+    if (modulo !== 'general' || activeTab !== 'general_todos') {
+      setCompararAbonoGeneralMap(new Map())
+      setCompararAbonoGeneralCargando(false)
+      return undefined
+    }
+    if (generalCompararTargets.length === 0) {
+      setCompararAbonoGeneralMap(new Map())
+      setCompararAbonoGeneralCargando(false)
+      return undefined
+    }
+    let cancelado = false
+    setCompararAbonoGeneralCargando(true)
+    void (async () => {
+      try {
+        const entradas = await Promise.all(
+          generalCompararTargets.map(async t => {
+            try {
+              const d = await notificacionService.getCompararAbonosDriveCuotas({
+                cedula: t.cedula,
+                prestamoId: t.prestamoId,
+              })
+              return [t.rowKey, d] as const
+            } catch {
+              return [t.rowKey, null] as const
+            }
+          })
+        )
+        if (cancelado) return
+        const m = new Map<string, CompararAbonosDriveCuotasResponse>()
+        for (const [k, v] of entradas) {
+          if (v) m.set(k, v)
+        }
+        setCompararAbonoGeneralMap(m)
+      } finally {
+        if (!cancelado) setCompararAbonoGeneralCargando(false)
+      }
+    })()
+    return () => {
+      cancelado = true
+    }
+  }, [
+    modulo,
+    activeTab,
+    generalCompararTargetsKey,
+    compararAbonoGeneralTick,
+    generalCompararTargets,
+  ])
+
+  const filtrosAbonoGeneralPendientes =
+    modulo === 'general' &&
+    filtroDiferenciaAbonoGeneral !== 'todas' &&
+    compararAbonoGeneralCargando
+
+  const listaFiltradaCedula = useMemo(() => {
+    if (modulo !== 'general' || filtroDiferenciaAbonoGeneral === 'todas') {
+      return listaTrasFiltroCedula
+    }
+    if (filtrosAbonoGeneralPendientes) {
+      return listaTrasFiltroCedula
+    }
+    return listaTrasFiltroCedula.filter(row => {
+      const ced = String(row.cedula ?? '').trim()
+      const pid = row.prestamo_id
+      if (!ced || pid == null) return false
+      const d = compararAbonoGeneralMap.get(`${ced}|${pid}`)
+      if (!d) return false
+      return filaCumpleFiltroDiferenciaAbonoGeneral(
+        filtroDiferenciaAbonoGeneral,
+        d
+      )
+    })
+  }, [
+    listaTrasFiltroCedula,
+    modulo,
+    filtroDiferenciaAbonoGeneral,
+    filtrosAbonoGeneralPendientes,
+    compararAbonoGeneralMap,
+  ])
 
   const totalFilasListado = listaFiltradaCedula.length
 
@@ -2243,13 +2447,79 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   Limpiar filtro
                 </Button>
               ) : null}
-              {filtroCedula.trim() && list.length > 0 ? (
+              {modulo === 'general' ? (
+                <div className="flex min-w-[14rem] max-w-md flex-col gap-1">
+                  <label
+                    htmlFor="filtro-dif-abono-general"
+                    className="text-xs font-medium text-gray-600"
+                  >
+                    Diferencia Abono (hoja − cuotas)
+                  </label>
+                  <select
+                    id="filtro-dif-abono-general"
+                    className="h-9 rounded-md border border-input bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    value={filtroDiferenciaAbonoGeneral}
+                    onChange={e =>
+                      setFiltroDiferenciaAbonoGeneral(
+                        e.target.value as FiltroDiferenciaAbonoGeneral
+                      )
+                    }
+                    disabled={isLoadingLista}
+                    title="Misma regla que el modal de la balanza: «0» = coincide con tolerancia; «Drive &gt; sistema» = solo ahí se permite aplicar desde el modal."
+                  >
+                    <option value="todas">Todas</option>
+                    <option value="cero">
+                      0 — sin diferencia (tolerancia, como en el modal)
+                    </option>
+                    <option value="drive_mayor">
+                      Drive &gt; sistema (indicador Sí; solo ahí se permite aplicar)
+                    </option>
+                  </select>
+                </div>
+              ) : null}
+              {filtroCedula.trim() &&
+              list.length > 0 &&
+              !(
+                modulo === 'general' &&
+                filtroDiferenciaAbonoGeneral !== 'todas'
+              ) ? (
                 <p className="text-xs text-muted-foreground sm:ml-auto">
                   Mostrando{' '}
                   <span className="font-semibold tabular-nums text-foreground">
                     {listaFiltradaCedula.length}
                   </span>{' '}
                   de <span className="tabular-nums">{list.length}</span> filas
+                </p>
+              ) : null}
+              {!filtroCedula.trim() &&
+              modulo === 'general' &&
+              filtroDiferenciaAbonoGeneral !== 'todas' &&
+              list.length > 0 ? (
+                <p className="text-xs text-muted-foreground sm:ml-auto">
+                  Mostrando{' '}
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {listaFiltradaCedula.length}
+                  </span>{' '}
+                  de{' '}
+                  <span className="tabular-nums">
+                    {listaTrasFiltroCedula.length}
+                  </span>{' '}
+                  filas (tras filtro de diferencia)
+                </p>
+              ) : null}
+              {filtroCedula.trim() &&
+              modulo === 'general' &&
+              filtroDiferenciaAbonoGeneral !== 'todas' &&
+              list.length > 0 ? (
+                <p className="text-xs text-muted-foreground sm:ml-auto">
+                  Tras cédula y diferencia:{' '}
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {listaFiltradaCedula.length}
+                  </span>{' '}
+                  de{' '}
+                  <span className="tabular-nums">
+                    {listaTrasFiltroCedula.length}
+                  </span>
                 </p>
               ) : null}
             </div>
@@ -2341,13 +2611,20 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                          #
+                        <th
+                          className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold leading-tight"
+                          title="Identificador del préstamo (crédito) en el sistema"
+                        >
+                          Número de
+                          <br />
+                          crédito
                         </th>
 
-                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                          Nombre
-                        </th>
+                        {modulo !== 'general' ? (
+                          <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                            Nombre
+                          </th>
+                        ) : null}
 
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                           Cédula
@@ -2356,6 +2633,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         {modulo === 'general' ? (
                           <th className="min-w-[10rem] whitespace-normal px-3 py-2 text-left text-xs font-semibold leading-tight">
                             Caso
+                          </th>
+                        ) : null}
+
+                        {modulo === 'general' ? (
+                          <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
+                            Diferencia Abono
                           </th>
                         ) : null}
 
@@ -2456,7 +2739,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                 ? 'Ningún registro en este criterio.'
                                 : filtroCedula.trim()
                                   ? 'Ninguna fila coincide con la cédula indicada.'
-                                  : 'Ningún registro en este criterio.'}
+                                  : modulo === 'general' &&
+                                      filtroDiferenciaAbonoGeneral !== 'todas' &&
+                                      listaTrasFiltroCedula.length > 0
+                                    ? 'Ninguna fila cumple el filtro de diferencia de abono.'
+                                    : 'Ningún registro en este criterio.'}
                             </span>
                             {listaCargadaSinFilas ? (
                               <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
@@ -2474,6 +2761,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                 búsqueda ignora puntos y guiones y compara por
                                 subcadena de dígitos.
                               </span>
+                            ) : modulo === 'general' &&
+                              filtroDiferenciaAbonoGeneral !== 'todas' &&
+                              listaTrasFiltroCedula.length > 0 ? (
+                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                Elija «Todas» o otro criterio. «0» usa la misma
+                                coincidencia por tolerancia que el modal; «Drive
+                                &gt; sistema» solo filas con indicador Sí (ABONOS
+                                hoja mayor que total en cuotas).
+                              </span>
                             ) : null}
                           </td>
                         </tr>
@@ -2483,19 +2779,55 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             key={`${row.notificacion_caso ?? 'sin-caso'}-${row.cliente_id}-${row.prestamo_id ?? 'np'}-${row.numero_cuota ?? 'nc'}-${indiceInicioPagina + idx}`}
                             className="border-b hover:bg-gray-50"
                           >
-                            <td className="px-3 py-2">
-                              {indiceInicioPagina + idx + 1}
+                            <td className="px-3 py-2 font-medium tabular-nums">
+                              {textoNumeroCreditoNotif(row)}
                             </td>
 
-                            <td className="px-3 py-2 font-medium">
-                              {row.nombre}
-                            </td>
+                            {modulo !== 'general' ? (
+                              <td className="px-3 py-2 font-medium">
+                                {row.nombre}
+                              </td>
+                            ) : null}
 
                             <td className="px-3 py-2">{row.cedula}</td>
 
                             {modulo === 'general' ? (
                               <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
                                 {row.notificacion_caso ?? '—'}
+                              </td>
+                            ) : null}
+
+                            {modulo === 'general' ? (
+                              <td className="px-3 py-2 text-right align-middle">
+                                {(() => {
+                                  const cedR = String(row.cedula ?? '').trim()
+                                  const pidR = row.prestamo_id
+                                  const rk =
+                                    cedR && pidR != null
+                                      ? `${cedR}|${pidR}`
+                                      : ''
+                                  return (
+                                    <DiferenciaAbonoGeneralCell
+                                      row={row}
+                                      data={
+                                        rk
+                                          ? compararAbonoGeneralMap.get(rk)
+                                          : undefined
+                                      }
+                                      isLoading={Boolean(
+                                        rk &&
+                                          compararAbonoGeneralCargando &&
+                                          generalCompararRowKeySet.has(rk)
+                                      )}
+                                      isError={Boolean(
+                                        rk &&
+                                          generalCompararRowKeySet.has(rk) &&
+                                          !compararAbonoGeneralCargando &&
+                                          !compararAbonoGeneralMap.has(rk)
+                                      )}
+                                    />
+                                  )
+                                })()}
                               </td>
                             ) : null}
 
@@ -2538,11 +2870,20 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="px-3 py-2 text-left font-semibold">#</th>
-
-                        <th className="px-3 py-2 text-left font-semibold">
-                          Nombre
+                        <th
+                          className="px-3 py-2 text-left text-xs font-semibold leading-tight"
+                          title="Identificador del préstamo (crédito) en el sistema"
+                        >
+                          Número de
+                          <br />
+                          crédito
                         </th>
+
+                        {modulo !== 'general' ? (
+                          <th className="px-3 py-2 text-left font-semibold">
+                            Nombre
+                          </th>
+                        ) : null}
 
                         <th className="px-3 py-2 text-left font-semibold">
                           Cédula
@@ -2551,6 +2892,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         {modulo === 'general' ? (
                           <th className="min-w-[10rem] px-3 py-2 text-left text-xs font-semibold leading-tight">
                             Caso
+                          </th>
+                        ) : null}
+
+                        {modulo === 'general' ? (
+                          <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
+                            Diferencia Abono
                           </th>
                         ) : null}
 
@@ -2584,7 +2931,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                 ? 'Ningún cliente en este criterio.'
                                 : filtroCedula.trim()
                                   ? 'Ninguna fila coincide con la cédula indicada.'
-                                  : 'Ningún cliente en este criterio.'}
+                                  : modulo === 'general' &&
+                                      filtroDiferenciaAbonoGeneral !== 'todas' &&
+                                      listaTrasFiltroCedula.length > 0
+                                    ? 'Ninguna fila cumple el filtro de diferencia de abono.'
+                                    : 'Ningún cliente en este criterio.'}
                             </span>
                             {listaCargadaSinFilas ? (
                               <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
@@ -2602,6 +2953,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                 búsqueda ignora puntos y guiones y compara por
                                 subcadena de dígitos.
                               </span>
+                            ) : modulo === 'general' &&
+                              filtroDiferenciaAbonoGeneral !== 'todas' &&
+                              listaTrasFiltroCedula.length > 0 ? (
+                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                Elija «Todas» u otro criterio. «0» coincide con la
+                                tolerancia del modal; «Drive &gt; sistema» solo
+                                filas con indicador Sí.
+                              </span>
                             ) : null}
                           </td>
                         </tr>
@@ -2611,19 +2970,55 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             key={`${row.notificacion_caso ?? 'sin-caso'}-${row.cliente_id}-${row.numero_cuota ?? idx}`}
                             className="border-b hover:bg-gray-50"
                           >
-                            <td className="px-3 py-2">
-                              {indiceInicioPagina + idx + 1}
+                            <td className="px-3 py-2 font-medium tabular-nums">
+                              {textoNumeroCreditoNotif(row)}
                             </td>
 
-                            <td className="px-3 py-2 font-medium">
-                              {row.nombre}
-                            </td>
+                            {modulo !== 'general' ? (
+                              <td className="px-3 py-2 font-medium">
+                                {row.nombre}
+                              </td>
+                            ) : null}
 
                             <td className="px-3 py-2">{row.cedula}</td>
 
                             {modulo === 'general' ? (
                               <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
                                 {row.notificacion_caso ?? '—'}
+                              </td>
+                            ) : null}
+
+                            {modulo === 'general' ? (
+                              <td className="px-3 py-2 text-right align-middle">
+                                {(() => {
+                                  const cedR = String(row.cedula ?? '').trim()
+                                  const pidR = row.prestamo_id
+                                  const rk =
+                                    cedR && pidR != null
+                                      ? `${cedR}|${pidR}`
+                                      : ''
+                                  return (
+                                    <DiferenciaAbonoGeneralCell
+                                      row={row}
+                                      data={
+                                        rk
+                                          ? compararAbonoGeneralMap.get(rk)
+                                          : undefined
+                                      }
+                                      isLoading={Boolean(
+                                        rk &&
+                                          compararAbonoGeneralCargando &&
+                                          generalCompararRowKeySet.has(rk)
+                                      )}
+                                      isError={Boolean(
+                                        rk &&
+                                          generalCompararRowKeySet.has(rk) &&
+                                          !compararAbonoGeneralCargando &&
+                                          !compararAbonoGeneralMap.has(rk)
+                                      )}
+                                    />
+                                  )
+                                })()}
                               </td>
                             ) : null}
 
