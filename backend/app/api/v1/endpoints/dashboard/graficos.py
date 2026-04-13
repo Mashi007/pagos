@@ -1001,8 +1001,8 @@ def get_evolucion_pagos(
 @router.get(
     "/cuotas-con-pago-aplicado-por-mes-cuota",
     summary=(
-        "Cuotas programadas cubiertas (USD) por mes de vencimiento: suma cuota_pagos cuando existe; "
-        "si no, total_pagado o monto de la cuota si tiene fecha_pago (alineado a analisis-cuentas-por-cobrar). "
+        "Por mes de vencimiento: monto_programado (cartera), monto_cobrado (aplicado a esas cuotas, "
+        "sin importar el mes del pago), monto_falta. Reglas de monto por cuota alineadas a Evolución mensual. "
         "Sin filtro cliente ACTIVO; préstamo APROBADO."
     ),
 )
@@ -1017,13 +1017,21 @@ def get_cuotas_con_pago_aplicado_por_mes_cuota(
     Por mes **calendario** de `cuotas.fecha_vencimiento` (igual criterio de “cuota de ese mes” que
     `analisis-cuentas-por-cobrar`: vencimiento dentro del mes).
 
-    Monto por cuota (una sola vez por cuota en ese mes):
-    1) Si hay filas en `cuota_pagos`, se usa **sum(monto_aplicado)** (incluye pagos conciliados o no).
-    2) Si no hay aplicaciones pero `total_pagado` > 0, se usa **total_pagado**.
-    3) Si sigue en cero pero `fecha_pago` está informada (histórico sin detalle), se usa **monto** de la cuota
-       (misma magnitud que el gráfico verde de cuentas por cobrar para “cobrado del mes”).
+    Monto por cuota (una sola vez por cuota en ese mes), coherente con la barra verde de Evolución mensual
+    cuando la cuota está marcada pagada:
+    1) Si `fecha_pago` está informada → **Cuota.monto** (igual que `evolucion_mensual.cobrado` en dashboard/admin).
+    2) Si no, pero hay `cuota_pagos` → **sum(monto_aplicado)** (abonos sin cerrar fecha_pago aún).
+    3) Si no, pero `total_pagado` > 0 → **total_pagado**.
 
-    El bucket sigue siendo el mes de **vencimiento**, no el mes del pago: cuota de enero pagada en abril suma en enero.
+    El bucket sigue siendo el mes de **vencimiento**, no el mes del pago: cuota de abril pagada en mayo suma el
+    cobrado en **abril** (y no en la barra naranja “mes del pago” de Evolución).
+
+    Por cada mes calendario de vencimiento se devuelve:
+    - **monto_programado**: suma de `Cuota.monto` de las cuotas con vencimiento en ese mes.
+    - **monto_cobrado**: suma por cuota de `LEAST(monto_cubierto, Cuota.monto)` (cobrado efectivo hacia esa cuota).
+    - **monto_falta**: `monto_programado - monto_cobrado` (pendiente de esas cuotas en ese bucket).
+
+    **monto_usd** repite `monto_cobrado` por compatibilidad con clientes anteriores.
 
     No se filtra `Cliente.estado` (coherente con analisis-cuentas-por-cobrar).
     """
@@ -1055,19 +1063,26 @@ def get_cuotas_con_pago_aplicado_por_mes_cuota(
             ).group_by(CuotaPago.cuota_id)
         ).subquery()
         sum_aplic_col = func.coalesce(sum_aplic_subq.c.sum_aplic, 0)
+        # Alineado a la barra verde de Evolución mensual (`_compute_dashboard_admin` → `cobrado`):
+        # si la cuota tiene `fecha_pago`, el monto mostrado allí es siempre `Cuota.monto` (monto_cuota),
+        # no la suma de `cuota_pagos` (que puede diferir por redondeos o abonos parciales antes de cerrar).
         monto_cubierto = case(
+            (Cuota.fecha_pago.isnot(None), Cuota.monto),
             (sum_aplic_col > 0, sum_aplic_col),
             (func.coalesce(Cuota.total_pagado, 0) > 0, func.coalesce(Cuota.total_pagado, 0)),
-            (Cuota.fecha_pago.isnot(None), Cuota.monto),
             else_=literal(0),
         )
+        # Cobrado efectivo por cuota (tope al monto de la cuota); falta = programado - cobrado.
+        efect_cobrado = func.least(monto_cubierto, Cuota.monto)
         anio = extract("year", Cuota.fecha_vencimiento)
         mes_num = extract("month", Cuota.fecha_vencimiento)
         q = (
             select(
                 anio.label("anio"),
                 mes_num.label("mes"),
-                func.coalesce(func.sum(monto_cubierto), 0).label("monto_usd"),
+                func.coalesce(func.sum(Cuota.monto), 0).label("monto_programado"),
+                func.coalesce(func.sum(efect_cobrado), 0).label("monto_cobrado"),
+                func.coalesce(func.sum(Cuota.monto - efect_cobrado), 0).label("monto_falta"),
                 func.sum(case((monto_cubierto > 0, 1), else_=0)).label("n_cuotas"),
             )
             .select_from(Cuota)
@@ -1077,19 +1092,27 @@ def get_cuotas_con_pago_aplicado_por_mes_cuota(
             .group_by(anio, mes_num)
         )
         rows = db.execute(q).all()
-        by_ym: dict[tuple[int, int], tuple[float, int]] = {}
+        by_ym: dict[tuple[int, int], tuple[float, float, float, int]] = {}
         for r in rows:
             yi = int(r.anio)
             mi = int(r.mes)
-            by_ym[(yi, mi)] = (_safe_float(r.monto_usd), int(r.n_cuotas or 0))
+            by_ym[(yi, mi)] = (
+                _safe_float(r.monto_programado),
+                _safe_float(r.monto_cobrado),
+                _safe_float(r.monto_falta),
+                int(r.n_cuotas or 0),
+            )
         resultado = []
         for slot in cal:
             key = (int(slot["year"]), int(slot["month"]))
-            monto, nq = by_ym.get(key, (0.0, 0))
+            prog, cob, fal, nq = by_ym.get(key, (0.0, 0.0, 0.0, 0))
             resultado.append(
                 {
                     "mes": str(slot["label"]),
-                    "monto_usd": monto,
+                    "monto_programado": prog,
+                    "monto_cobrado": cob,
+                    "monto_falta": fal,
+                    "monto_usd": cob,
                     "cuotas_con_pago_aplicado": nq,
                 }
             )
@@ -1099,7 +1122,15 @@ def get_cuotas_con_pago_aplicado_por_mes_cuota(
         fb = _ultimos_n_meses_calendario_etiquetados(meses_efectivos)
         return {
             "meses": [
-                {"mes": str(x["label"]), "monto_usd": 0.0, "cuotas_con_pago_aplicado": 0} for x in fb
+                {
+                    "mes": str(x["label"]),
+                    "monto_programado": 0.0,
+                    "monto_cobrado": 0.0,
+                    "monto_falta": 0.0,
+                    "monto_usd": 0.0,
+                    "cuotas_con_pago_aplicado": 0,
+                }
+                for x in fb
             ]
         }
 

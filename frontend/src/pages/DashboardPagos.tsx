@@ -104,7 +104,10 @@ export function DashboardPagos() {
         }>
         cuotas_con_pago_aplicado_por_mes_cuota: Array<{
           mes: string
-          monto_usd: number
+          monto_programado: number
+          monto_cobrado: number
+          monto_falta: number
+          monto_usd?: number
           cuotas_con_pago_aplicado: number
         }>
       }
