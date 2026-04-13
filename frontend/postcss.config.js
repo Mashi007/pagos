@@ -5,18 +5,16 @@ import removeTextSizeAdjust from './postcss-remove-text-size-adjust.js';
 export default {
   plugins: [
     tailwindcss,
-    // Plugin personalizado DEBE ir después de Tailwind pero antes de Autoprefixer
-    // para procesar el CSS generado por Tailwind
-    removeTextSizeAdjust(),
     autoprefixer({
-      // Configuración para evitar propiedades problemáticas
       overrideBrowserslist: [
         'defaults',
         'not IE 11',
-        'not op_mini all'
+        'not op_mini all',
       ],
-      // Excluir propiedades que causan errores en navegadores
       ignoreUnknownVersions: true,
     }),
+    // Después de Autoprefixer: quita prefijos/propiedades que Firefox moderno rechaza en consola
+    // (p. ej. -moz-column-gap) y sanea selectores del CSS ya expandido.
+    removeTextSizeAdjust(),
   ],
 }

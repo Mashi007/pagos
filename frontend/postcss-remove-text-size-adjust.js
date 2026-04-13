@@ -6,13 +6,20 @@ export default function removeTextSizeAdjust() {
   return {
     postcssPlugin: 'postcss-remove-text-size-adjust',
     Declaration(decl) {
+      const p = decl.prop
       // Eliminar propiedades text-size-adjust problemáticas
       if (
-        decl.prop === '-webkit-text-size-adjust' ||
-        decl.prop === '-moz-text-size-adjust' ||
-        decl.prop === 'text-size-adjust'
+        p === '-webkit-text-size-adjust' ||
+        p === '-moz-text-size-adjust' ||
+        p === 'text-size-adjust'
       ) {
-        decl.remove();
+        decl.remove()
+        return
+      }
+      // Firefox actual ignora -moz-column-gap / -moz-row-gap en muchos contextos (p. ej. flex)
+      // y avisa en consola; el unprefixed column-gap/row-gap basta en versiones objetivo.
+      if (p === '-moz-column-gap' || p === '-moz-row-gap') {
+        decl.remove()
       }
     },
     Rule(rule) {

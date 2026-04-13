@@ -856,9 +856,14 @@ class ApiClient {
 
     const diagnosticoPaqueteTimeout = 180000
 
+    // Sesión al arranque: Render frío + CORS preflight puede dejar el GET por detrás de un timeout corto.
+    const isAuthMe = url.includes('/auth/me')
+
     let defaultTimeout = DEFAULT_TIMEOUT_MS
 
-    if (isRevisionManual) {
+    if (isAuthMe) {
+      defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
+    } else if (isRevisionManual) {
       defaultTimeout = revisionManualTimeout
     } else if (isReportesDashboard) {
       defaultTimeout = reportesDashboardTimeout

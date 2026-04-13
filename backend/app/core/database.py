@@ -17,23 +17,29 @@ _db_url = settings.DATABASE_URL
 if _db_url.startswith("postgres://"):
     _db_url = _db_url.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(
-    _db_url,
-    pool_pre_ping=True,   # Verifica que la conexión esté viva antes de usarla (reconexión automática)
+_is_postgres = _db_url.startswith("postgresql")
+
+_engine_kwargs = dict(
+    pool_pre_ping=True,  # Verifica que la conexión esté viva antes de usarla (reconexión automática)
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
-    pool_recycle=300,     # Recicla cada 5 min (Render cierra SSL antes; evita SSL connection closed unexpectedly)
+    pool_recycle=300,  # Recicla cada 5 min (Render cierra SSL antes; evita SSL connection closed unexpectedly)
     pool_timeout=settings.DATABASE_POOL_TIMEOUT,
     connect_args={
-        "connect_timeout": 15,        # Timeout de conexión inicial (psycopg2)
+        "connect_timeout": 15,  # Timeout de conexión inicial (psycopg2)
         "application_name": "rapicredit_backend",
-        "keepalives": 1,              # Habilitar TCP keepalives (psycopg2 nativo)
-        "keepalives_idle": 30,        # Inicia keepalive tras 30s de inactividad
-        "keepalives_interval": 10,    # Envía keepalive cada 10s
-        "keepalives_count": 5,        # Máximo 5 keepalives sin respuesta antes de cerrar
+        "keepalives": 1,  # Habilitar TCP keepalives (psycopg2 nativo)
+        "keepalives_idle": 30,  # Inicia keepalive tras 30s de inactividad
+        "keepalives_interval": 10,  # Envía keepalive cada 10s
+        "keepalives_count": 5,  # Máximo 5 keepalives sin respuesta antes de cerrar
     },
     echo=False,
 )
+# QueuePool (PostgreSQL): bajo ráfagas de requests, LIFO reutiliza conexiones recientes. SQLite ignora pool_use_lifo.
+if _is_postgres:
+    _engine_kwargs["pool_use_lifo"] = True
+
+engine = create_engine(_db_url, **_engine_kwargs)
 
 @event.listens_for(engine, "connect")
 def _set_timezone_vzla(dbapi_connection, connection_record):

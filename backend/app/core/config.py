@@ -46,15 +46,15 @@ class Settings(BaseSettings):
     )
     # Pool por proceso (cada worker de Gunicorn tiene su propio engine). Subir si el dashboard
     # dispara muchas peticiones lentas en paralelo y aparece: QueuePool limit ... overflow ... reached.
-    # Respetar max_connections de Postgres (ej. 2 workers × (pool + overflow) < límite del servidor).
+    # Respetar max_connections de Postgres (ej. 2 workers × (15+25) = 80; ajuste con env si el plan DB es bajo).
     DATABASE_POOL_SIZE: int = Field(
-        default=10,
+        default=15,
         ge=1,
         le=80,
         description="Conexiones persistentes del pool SQLAlchemy por worker",
     )
     DATABASE_MAX_OVERFLOW: int = Field(
-        default=20,
+        default=25,
         ge=0,
         le=80,
         description="Conexiones extra bajo pico (máx por worker ≈ pool_size + max_overflow)",

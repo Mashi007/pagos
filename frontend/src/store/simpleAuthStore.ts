@@ -78,6 +78,33 @@ const hasAuthData = (): boolean => {
   }
 }
 
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+
+/** Red fría / Render: reintentar una vez antes de borrar sesión local. */
+const isTransientAuthVerifyError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false
+  const e = error as { code?: string; message?: string }
+  const code = e.code
+  const msg = String(e.message || '')
+  return (
+    code === 'ECONNABORTED' ||
+    code === 'ERR_NETWORK' ||
+    msg.includes('Timeout') ||
+    msg.toLowerCase().includes('timeout') ||
+    msg.includes('Network Error')
+  )
+}
+
+const fetchCurrentUserWithRetry = async (): Promise<User> => {
+  try {
+    return await authService.getCurrentUser()
+  } catch (first) {
+    if (!isTransientAuthVerifyError(first)) throw first
+    await sleep(2500)
+    return await authService.getCurrentUser()
+  }
+}
+
 export const useSimpleAuthStore = create<SimpleAuthState>(set => {
   // Verificar si hay datos de auth de forma segura (no lanzar si storage no disponible
 
@@ -143,22 +170,10 @@ export const useSimpleAuthStore = create<SimpleAuthState>(set => {
         if (user && token) {
           // CRÍTICO: Siempre verificar con el backend al inicializar
 
-          // ✅ Agregar timeout para evitar bloqueos si el backend no responde
+          // El timeout lo marca axios (apiClient); /auth/me usa margen amplio para cold start en Render.
 
           try {
-            const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(
-                () => reject(new Error('Timeout: El servidor no respondió')),
-                8000
-              ) // 8 segundos
-            })
-
-            const userPromise = authService.getCurrentUser()
-
-            const freshUser = (await Promise.race([
-              userPromise,
-              timeoutPromise,
-            ])) as typeof user
+            const freshUser = await fetchCurrentUserWithRetry()
 
             if (freshUser) {
               set({
