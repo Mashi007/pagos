@@ -101,6 +101,9 @@ export interface ClienteRetrasadoItem {
 
   /** Caché en BD (prestamos.abonos_drive_cuotas_cache); evita N llamadas GET comparar en listado General. */
   comparar_abonos_drive_cuotas?: CompararAbonosDriveCuotasResponse | null
+
+  /** Caché en BD: columna Q (hoja) vs fecha_aprobacion; submódulo Notificaciones Fecha. */
+  comparar_fecha_entrega_q_aprobacion?: CompararFechaEntregaQvsAprobacionResponse | null
 }
 
 /** Opción de lote cuando la hoja tiene varios créditos por cédula (GET comparar-abonos-drive-cuotas). */
@@ -180,6 +183,68 @@ export interface CompararAbonosDriveCuotasResponse {
 
   /** Monto ABONOS (USD) a partir del cual se exige escribir CONFIRMO antes de aplicar. */
   umbral_doble_confirmacion_abonos_usd?: number
+}
+
+/** Caché / comparación: columna Q de CONCILIACIÓN vs fecha_aprobacion del préstamo (BD). */
+export interface CompararFechaEntregaQvsAprobacionResponse {
+  cedula: string
+
+  prestamo_id: number
+
+  prestamo_huella?: PrestamoHuellaAbonos
+
+  filas_hoja_coincidentes: number
+
+  filas_misma_cedula_hoja?: number
+
+  columna_q_letra?: string
+
+  columna_q_header_detectado?: string | null
+
+  rango_columnas_hoja?: string
+
+  columna_q_dentro_rango?: boolean
+
+  /** ISO YYYY-MM-DD si se pudo interpretar la celda Q. */
+  fecha_entrega_column_q?: string | null
+
+  fecha_entrega_column_q_raw?: unknown
+
+  /** ISO YYYY-MM-DD (solo fecha) desde prestamos.fecha_aprobacion. */
+  fecha_aprobacion_sistema?: string | null
+
+  /** Días calendario: fecha Q (entrega hoja) − fecha_aprobacion (sistema). */
+  diferencia_dias?: number | null
+
+  coincide_calendario?: boolean
+
+  /** Misma clave que ABONOS: true si misma fecha calendario (tolerancia días en tolerancia_dias). */
+  coincide_aproximado?: boolean
+
+  /** True si fecha Q es estrictamente posterior a fecha_aprobacion (análogo a «hoja > sistema» en ABONOS). */
+  puede_aplicar?: boolean
+
+  indicador?: 'si' | 'no' | string
+
+  tolerancia_dias?: number
+
+  hoja_synced_at?: string | null
+
+  hoja_sync_antigua?: boolean
+
+  hoja_sync_antigua_horas?: number | null
+
+  columna_cedula_detectada?: string | null
+
+  columna_lote_detectada?: string | null
+
+  lote_aplicado?: string | null
+
+  requiere_seleccion_lote?: boolean
+
+  opciones_lote?: Array<{ lote: string }>
+
+  advertencias?: string[]
 }
 
 /** Respuesta de POST /notificaciones/aplicar-abonos-drive-a-cuotas (solo admin). */
@@ -665,6 +730,13 @@ class NotificacionService {
     )
   }
 
+  async refreshFechaEntregaQCache(): Promise<{ ok: boolean; mensaje: string }> {
+    return await apiClient.post<{ ok: boolean; mensaje: string }>(
+      `${this.baseUrl}/refresh-fecha-entrega-q-cache`,
+      {}
+    )
+  }
+
   /** Plantilla editable del PDF de carta de cobranza (adjunto al email). */
 
   async getPlantillaPdfCobranza(): Promise<{
@@ -1133,6 +1205,22 @@ class NotificacionService {
     if (lote) q.set('lote', lote)
     return await apiClient.get<CompararAbonosDriveCuotasResponse>(
       `${this.baseUrl}/comparar-abonos-drive-cuotas?${q.toString()}`
+    )
+  }
+
+  /** Columna Q (hoja) vs fecha_aprobacion (BD); lectura en vivo (no persiste caché). */
+  async getCompararFechaEntregaQvsAprobacion(params: {
+    cedula: string
+    prestamoId: number
+    lote?: string | null
+  }): Promise<CompararFechaEntregaQvsAprobacionResponse> {
+    const q = new URLSearchParams()
+    q.set('cedula', params.cedula.trim())
+    q.set('prestamo_id', String(params.prestamoId))
+    const lote = params.lote?.trim()
+    if (lote) q.set('lote', lote)
+    return await apiClient.get<CompararFechaEntregaQvsAprobacionResponse>(
+      `${this.baseUrl}/comparar-fecha-entrega-q-aprobacion?${q.toString()}`
     )
   }
 

@@ -67,6 +67,9 @@ class Prestamo(Base):
     # Snapshot de GET comparar-abonos-drive-cuotas (JSON) + marca de tiempo; se invalida al sync de la hoja CONCILIACIÓN.
     abonos_drive_cuotas_cache = Column(JSON, nullable=True)
     abonos_drive_cuotas_cache_at = Column(DateTime(timezone=False), nullable=True)
+    # Columna Q (fila CONCILIACIÓN alineada al préstamo) vs fecha_aprobacion en BD; Notificaciones > Fecha.
+    fecha_entrega_q_aprobacion_cache = Column(JSON, nullable=True)
+    fecha_entrega_q_aprobacion_cache_at = Column(DateTime(timezone=False), nullable=True)
 
     @property
     def modelo(self):

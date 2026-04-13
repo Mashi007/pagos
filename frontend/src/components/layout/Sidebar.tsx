@@ -37,6 +37,7 @@ import {
   FileSpreadsheet,
   TrendingUp,
   LayoutList,
+  Calendar,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -232,6 +233,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'General',
           href: '/notificaciones/general',
           icon: LayoutList,
+        },
+        {
+          title: 'Fecha',
+          href: '/notificaciones/fecha',
+          icon: Calendar,
         },
         {
           title: 'Día siguiente al vencimiento',

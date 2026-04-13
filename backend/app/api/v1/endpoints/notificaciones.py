@@ -1994,7 +1994,7 @@ def actualizar_notificaciones(db: Session = Depends(get_db)):
 
 
 def _run_refresh_abonos_drive_cache_bg() -> None:
-    """Misma lógica que el job 02:00 Caracas; sesión propia para no mezclar con el request HTTP."""
+    """Misma lógica que el job domingo 02:00 Caracas; sesión propia para no mezclar con el request HTTP."""
     db = SessionLocal()
     try:
         from app.services.abonos_drive_cuotas_cache_job import (
@@ -2016,7 +2016,7 @@ def _run_refresh_abonos_drive_cache_bg() -> None:
 def post_refresh_abonos_drive_cache(background_tasks: BackgroundTasks):
     """
     Programa en segundo plano el recálculo de `prestamos.abonos_drive_cuotas_cache`
-    (columna «Diferencia abono» en General). Igual criterio que el cron de las 02:00 Caracas;
+    (columna «Diferencia abono» en General). Igual criterio que el cron domingo 02:00 Caracas;
     en carteras grandes puede tardar varios minutos. Tras terminar, el cliente debe volver a
     cargar listados (p. ej. «Actualización manual»).
     """
@@ -2025,6 +2025,41 @@ def post_refresh_abonos_drive_cache(background_tasks: BackgroundTasks):
         "ok": True,
         "mensaje": (
             "Recálculo de caché «Diferencia abono» programado en segundo plano. "
+            "Cuando termine (varios minutos), use «Actualización manual» o recargue la vista."
+        ),
+    }
+
+
+def _run_refresh_fecha_entrega_q_cache_bg() -> None:
+    db = SessionLocal()
+    try:
+        from app.services.fecha_entrega_q_aprobacion_cache_job import (
+            ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly,
+        )
+
+        res = ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db)
+        logger.info(
+            "[notificaciones] refresh_fecha_entrega_q_cache background resultado=%s",
+            res,
+        )
+    except Exception:
+        logger.exception("[notificaciones] refresh_fecha_entrega_q_cache background error")
+    finally:
+        db.close()
+
+
+@router.post("/refresh-fecha-entrega-q-cache")
+def post_refresh_fecha_entrega_q_cache(background_tasks: BackgroundTasks):
+    """
+    Programa en segundo plano el recálculo de `prestamos.fecha_entrega_q_aprobacion_cache`
+    (submódulo Notificaciones «Fecha»: columna Q de la hoja vs `fecha_aprobacion` en BD).
+    Misma lógica que el job domingo 02:03 Caracas.
+    """
+    background_tasks.add_task(_run_refresh_fecha_entrega_q_cache_bg)
+    return {
+        "ok": True,
+        "mensaje": (
+            "Recálculo de caché «Fecha Q vs aprobación» programado en segundo plano. "
             "Cuando termine (varios minutos), use «Actualización manual» o recargue la vista."
         ),
     }
@@ -2279,6 +2314,36 @@ def get_comparar_abonos_drive_cuotas(
             cedula=cedula.strip(),
             prestamo_id=int(prestamo_id),
             lote=(lote.strip() if isinstance(lote, str) and lote.strip() else None),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/comparar-fecha-entrega-q-aprobacion")
+def get_comparar_fecha_entrega_q_aprobacion(
+    cedula: str = Query(..., min_length=3, description="Cédula del cliente (como en el listado)"),
+    prestamo_id: int = Query(..., description="ID del préstamo para leer fecha_aprobacion y alinear fila de la hoja"),
+    lote: Optional[str] = Query(
+        None,
+        description="Lote (columna LOTE en hoja) cuando hay varios créditos por cédula; debe corresponder al préstamo.",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Compara la columna Q de la hoja CONCILIACIÓN (snapshot en BD) con `prestamos.fecha_aprobacion`.
+    Misma alineación de fila que ABONOS (cédula + huella + lote). No persiste caché (lectura en vivo).
+    """
+    from app.services.comparar_fecha_entrega_q_aprobacion_service import (
+        comparar_fecha_entrega_column_q_vs_aprobacion,
+    )
+
+    try:
+        return comparar_fecha_entrega_column_q_vs_aprobacion(
+            db,
+            cedula=cedula.strip(),
+            prestamo_id=int(prestamo_id),
+            lote=(lote.strip() if isinstance(lote, str) and lote.strip() else None),
+            persist_cache=False,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

@@ -26,6 +26,7 @@ import {
   Scale,
   LayoutList,
   Database,
+  Calendar,
 } from 'lucide-react'
 
 import {
@@ -58,6 +59,7 @@ import {
   type AplicarAbonosDriveCuotasResponse,
   type ClienteRetrasadoItem,
   type CompararAbonosDriveCuotasResponse,
+  type CompararFechaEntregaQvsAprobacionResponse,
   type EstadisticasPorTab,
 } from '../services/notificacionService'
 
@@ -171,7 +173,12 @@ function toastErrorTrasEnvioManual(e: unknown, fraseRevisionConfig: string) {
   )
 }
 
-export type NotificacionesModulo = 'a1dia' | 'a3cuotas' | 'd2antes' | 'general'
+export type NotificacionesModulo =
+  | 'a1dia'
+  | 'a3cuotas'
+  | 'd2antes'
+  | 'general'
+  | 'fecha'
 
 type TabId =
   | 'dias_1_atraso'
@@ -183,6 +190,9 @@ type TabId =
 function tabsParaModulo(
   modulo: NotificacionesModulo
 ): { id: TabId; label: string; icon: typeof Clock }[] {
+  if (modulo === 'fecha') {
+    return [{ id: 'general_todos', label: 'Fecha', icon: Calendar }]
+  }
   if (modulo === 'general') {
     return [{ id: 'general_todos', label: 'General', icon: LayoutList }]
   }
@@ -209,7 +219,7 @@ function tabsParaModulo(
 }
 
 function tabListadoDefault(modulo: NotificacionesModulo): TabId {
-  if (modulo === 'general') return 'general_todos'
+  if (modulo === 'general' || modulo === 'fecha') return 'general_todos'
   if (modulo === 'a3cuotas') return 'prejudicial'
   if (modulo === 'd2antes') return 'd2antes'
   return 'dias_1_atraso'
@@ -346,7 +356,11 @@ function filaCoincideFiltroCedulaNotif(
 }
 
 /** Filtro de columna «Diferencia Abono» (General): misma semántica que el modal ABONOS vs cuotas. */
-type FiltroDiferenciaAbonoGeneral = 'todas' | 'cero' | 'drive_mayor'
+type FiltroDiferenciaAbonoGeneral =
+  | 'todas'
+  | 'cero'
+  | 'drive_mayor'
+  | 'drive_menor'
 
 function filaCumpleFiltroDiferenciaAbonoGeneral(
   filtro: FiltroDiferenciaAbonoGeneral,
@@ -358,6 +372,11 @@ function filaCumpleFiltroDiferenciaAbonoGeneral(
     (typeof cmp.indicador === 'string' && cmp.indicador.toLowerCase() === 'si')
   if (filtro === 'drive_mayor') return puede
   if (filtro === 'cero') return cmp.coincide_aproximado === true
+  if (filtro === 'drive_menor') {
+    const d = cmp.diferencia
+    if (d == null || Number.isNaN(Number(d))) return false
+    return cmp.coincide_aproximado !== true && !puede && Number(d) < 0
+  }
   return true
 }
 
@@ -367,6 +386,87 @@ function fmtDiferenciaAbonoCelda(n: number | null | undefined): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+}
+
+/** Filtro columna «Diferencia fecha» (submódulo Fecha): días = Q (hoja) − fecha_aprobacion (BD). */
+type FiltroDiferenciaFechaGeneral = 'todas' | 'cero' | 'mayor_cero' | 'menor_cero'
+
+function filaCumpleFiltroDiferenciaFechaGeneral(
+  filtro: FiltroDiferenciaFechaGeneral,
+  cmp: CompararFechaEntregaQvsAprobacionResponse
+): boolean {
+  if (filtro === 'todas') return true
+  const puede =
+    cmp.puede_aplicar === true ||
+    (typeof cmp.indicador === 'string' && cmp.indicador.toLowerCase() === 'si')
+  if (filtro === 'cero') {
+    return cmp.coincide_calendario === true || cmp.coincide_aproximado === true
+  }
+  if (filtro === 'mayor_cero') return puede
+  if (filtro === 'menor_cero') {
+    const d = cmp.diferencia_dias
+    if (d == null || Number.isNaN(Number(d))) return false
+    return (
+      cmp.coincide_calendario !== true &&
+      cmp.coincide_aproximado !== true &&
+      !puede &&
+      Number(d) < 0
+    )
+  }
+  return true
+}
+
+function fmtDiferenciaFechaDiasCelda(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(Number(n))) return '—'
+  const v = Number(n)
+  if (v === 0) return '0'
+  if (v > 0) return `+${v}`
+  return String(v)
+}
+
+function DiferenciaFechaGeneralCell({
+  row,
+  data,
+  isLoading,
+  isError,
+}: {
+  row: ClienteRetrasadoItem
+  data?: CompararFechaEntregaQvsAprobacionResponse
+  isLoading: boolean
+  isError: boolean
+}) {
+  const pid = row.prestamo_id
+  const ced = (row.cedula || '').trim()
+  if (pid == null || !ced) {
+    return (
+      <span className="text-xs text-muted-foreground" title="Sin cédula o préstamo">
+        —
+      </span>
+    )
+  }
+  if (isLoading) {
+    return <span className="text-xs text-muted-foreground">…</span>
+  }
+  if (isError || !data) {
+    return (
+      <span
+        className="text-xs text-muted-foreground"
+        title="Dato del cierre nocturno (02:03 Caracas). Si está vacío, aún no hay caché en BD para este préstamo."
+      >
+        —
+      </span>
+    )
+  }
+  return (
+    <span
+      className={`tabular-nums text-sm font-medium ${
+        data.coincide_calendario ? 'text-green-700' : 'text-amber-800'
+      }`}
+      title="Días (columna Q entrega en hoja − fecha_aprobacion en sistema). Valor del listado desde caché en BD."
+    >
+      {fmtDiferenciaFechaDiasCelda(data.diferencia_dias)}
+    </span>
+  )
 }
 
 function DiferenciaAbonoGeneralCell({
@@ -1063,6 +1163,431 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
   )
 }
 
+function fmtFechaNotifIso(iso?: string | null): string {
+  if (iso == null || String(iso).trim() === '') return '—'
+  const s = String(iso).trim()
+  const t = Date.parse(s.length >= 10 ? s.slice(0, 10) : s)
+  if (Number.isNaN(t)) return s
+  return new Date(t).toLocaleDateString('es-VE', { timeZone: 'America/Caracas' })
+}
+
+function fmtDiferenciaDiasNotif(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(Number(n))) return '—'
+  const v = Number(n)
+  if (v === 0) return '0'
+  const sign = v > 0 ? '+' : ''
+  return `${sign}${v}`
+}
+
+/**
+ * Misma estructura visual que ABONOS vs cuotas: huella, aviso de sync, regla, indicador Sí/No,
+ * tabla de comparación y pie. La fecha Q debe ser estrictamente posterior a fecha_aprobación
+ * para «Sí» (paralelo a hoja &gt; sistema en ABONOS). No hay aplicación automática desde fechas.
+ */
+function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoItem }) {
+  const location = useLocation()
+  const { user } = useSimpleAuth()
+  const esAdmin = (user?.rol || '').toLowerCase() === 'admin'
+
+  const pid = row.prestamo_id
+  const ced = (row.cedula || '').trim()
+  const [open, setOpen] = useState(false)
+  const [paso, setPaso] = useState<'resumen' | 'confirmar'>('resumen')
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<CompararFechaEntregaQvsAprobacionResponse | null>(null)
+
+  const onDialogFechaOpenChange = useCallback((v: boolean) => {
+    setOpen(v)
+    if (!v) {
+      setPaso('resumen')
+      setData(null)
+    }
+  }, [])
+
+  if (pid == null || !ced) return null
+
+  const loteResuelto =
+    !data?.requiere_seleccion_lote ||
+    Boolean((data?.lote_aplicado ?? '').toString().trim())
+
+  const puedeOperar =
+    loteResuelto &&
+    (data?.puede_aplicar === true ||
+      (typeof data?.indicador === 'string' && data.indicador.toLowerCase() === 'si'))
+
+  const abrir = async (loteExplicito?: string | null) => {
+    setOpen(true)
+    setPaso('resumen')
+    setLoading(true)
+    setData(null)
+    try {
+      const loteQ = (loteExplicito ?? '').trim()
+      const res = await notificacionService.getCompararFechaEntregaQvsAprobacion({
+        cedula: ced,
+        prestamoId: pid,
+        ...(loteQ ? { lote: loteQ } : {}),
+      })
+      setData(res)
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo comparar la columna Q con la fecha de aprobación.')
+      onDialogFechaOpenChange(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const btnBase =
+    'inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50'
+
+  const pillBase =
+    'inline-flex min-w-[2.25rem] items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold'
+
+  const colQEtiqueta =
+    data != null
+      ? `${(data.columna_q_letra ?? 'Q').trim()}${
+          (data.columna_q_header_detectado ?? '').toString().trim()
+            ? ` (${String(data.columna_q_header_detectado).trim()})`
+            : ''
+        }`
+      : 'Q'
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`${btnBase} bg-sky-50 text-sky-700 hover:bg-sky-100`}
+        title="Comparar fecha de entrega (columna Q de CONCILIACIÓN) con fecha de aprobación del préstamo (BD)"
+        aria-label="Comparar columna Q con fecha de aprobación"
+        onClick={() => {
+          void abrir()
+        }}
+      >
+        <Calendar className="h-4 w-4" aria-hidden />
+      </button>
+
+      <Dialog open={open} onOpenChange={onDialogFechaOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {paso === 'confirmar'
+                ? 'Acerca del indicador Sí (fechas)'
+                : 'Fecha (columna Q) vs fecha de aprobación'}
+            </DialogTitle>
+          </DialogHeader>
+
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Cargando…</p>
+          ) : paso === 'confirmar' && data ? (
+            <div className="space-y-3 text-sm">
+              <p className="text-slate-800">
+                El indicador <span className="font-semibold">Sí</span> solo refleja que la fecha
+                leída en la columna Q es <strong>estrictamente posterior</strong> a la fecha de
+                aprobación del préstamo en el sistema (misma idea que «hoja &gt; sistema» en ABONOS).
+                Este cuadro es solo de consulta: <strong>no modifica</strong> fechas en BD ni en
+                Drive.
+              </p>
+              <ul className="list-none space-y-1 rounded-md border border-slate-200 bg-muted/30 p-3 text-xs tabular-nums">
+                <li>
+                  Cédula: <span className="font-medium">{data.cedula}</span>
+                </li>
+                <li>
+                  Préstamo: <span className="font-medium">#{data.prestamo_id}</span>
+                </li>
+                <li>
+                  Fecha Q:{' '}
+                  <span className="font-medium">{fmtFechaNotifIso(data.fecha_entrega_column_q)}</span>
+                </li>
+                <li>
+                  Fecha aprobación (BD):{' '}
+                  <span className="font-medium">
+                    {fmtFechaNotifIso(data.fecha_aprobacion_sistema)}
+                  </span>
+                </li>
+                <li>
+                  Diferencia (días):{' '}
+                  <span className="font-semibold">{fmtDiferenciaDiasNotif(data.diferencia_dias)}</span>
+                </li>
+              </ul>
+              <p className="text-xs text-muted-foreground">
+                Use revisión manual o la conciliación habitual si necesita corregir datos.
+              </p>
+            </div>
+          ) : data ? (
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">
+                Cédula <span className="font-medium text-foreground">{data.cedula}</span>
+                {' · '}
+                Préstamo <span className="font-medium text-foreground">#{data.prestamo_id}</span>
+              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <Link
+                  to={`/revision-manual/editar/${pid}`}
+                  state={{
+                    returnTo: `${location.pathname}${location.search || ''}`,
+                  }}
+                  className="font-medium text-blue-600 hover:underline"
+                >
+                  Abrir en revisión manual
+                </Link>
+                <span className="text-muted-foreground">
+                  (edición del préstamo y cuotas en otra pantalla)
+                </span>
+              </div>
+
+              {data.hoja_sync_antigua ? (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  La hoja supera las 48 h desde la última sincronización (aprox.{' '}
+                  {data.hoja_sync_antigua_horas != null
+                    ? `${data.hoja_sync_antigua_horas} h`
+                    : '—'}
+                  ). Resincronice CONCILIACIÓN si necesita la columna Q (fechas) al día.
+                </p>
+              ) : null}
+
+              {data.prestamo_huella ? (
+                <div className="rounded-md border bg-slate-50 p-3 text-xs text-slate-900">
+                  <p className="mb-1 font-semibold text-slate-800">
+                    Huella del préstamo en BD (alinear con fila de la hoja)
+                  </p>
+                  <ul className="list-none space-y-0.5 tabular-nums">
+                    <li>
+                      Total financiamiento:{' '}
+                      {data.prestamo_huella.total_financiamiento.toLocaleString('es-VE', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </li>
+                    <li>N.º cuotas: {data.prestamo_huella.numero_cuotas}</li>
+                    <li>Modalidad: {data.prestamo_huella.modalidad_pago || '—'}</li>
+                  </ul>
+                </div>
+              ) : null}
+
+              {!puedeOperar ? (
+                <p className="rounded-md border border-slate-200 bg-muted/40 p-2 text-xs text-slate-800">
+                  <span className="font-medium">Regla: </span>
+                  el indicador «Sí» solo aplica si la fecha de la columna Q es{' '}
+                  <strong>estrictamente posterior</strong> a la fecha de aprobación del préstamo en el
+                  sistema. Si la fecha Q es igual o anterior, el flujo queda en «No»: aquí no se
+                  corrigen fechas en BD ni en Drive; use revisión manual o la conciliación habitual.
+                </p>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground text-xs">Indicador:</span>
+                <button
+                  type="button"
+                  disabled={!puedeOperar || !esAdmin || loading}
+                  title={
+                    !esAdmin
+                      ? 'Solo administradores pueden abrir el paso de detalle.'
+                      : data?.requiere_seleccion_lote && !loteResuelto
+                        ? 'Elija primero el lote de la hoja que corresponde a este préstamo.'
+                        : puedeOperar
+                          ? 'Pulse Sí para ver la aclaración (no aplica cambios en el sistema).'
+                          : 'La fecha Q no es posterior a la aprobación: no hay indicador Sí.'
+                  }
+                  onClick={() => {
+                    if (!puedeOperar || !esAdmin || loading) return
+                    setPaso('confirmar')
+                  }}
+                  className={`${pillBase} ${
+                    puedeOperar
+                      ? 'border-green-600 bg-green-50 text-green-800 hover:bg-green-100 disabled:opacity-50'
+                      : 'cursor-not-allowed border-muted bg-muted/40 text-muted-foreground'
+                  }`}
+                  aria-label={
+                    puedeOperar
+                      ? 'Sí: fecha Q posterior a fecha de aprobación; pulse para ver detalle'
+                      : 'Sí: no aplica'
+                  }
+                >
+                  Sí
+                </button>
+                <button
+                  type="button"
+                  className={`${pillBase} ${
+                    !puedeOperar
+                      ? 'border-slate-600 bg-slate-100 text-slate-800 hover:bg-slate-200/80'
+                      : 'border-muted bg-muted/30 text-muted-foreground hover:bg-muted/50'
+                  }`}
+                  title="Cierra el cuadro sin aplicar nada; permanece en esta misma pantalla de notificaciones."
+                  aria-label="No: cerrar el cuadro sin cambiar de submenú"
+                  onClick={() => onDialogFechaOpenChange(false)}
+                >
+                  No
+                </button>
+              </div>
+
+              {data.requiere_seleccion_lote &&
+              data.opciones_lote &&
+              data.opciones_lote.length > 0 ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50/90 p-3 text-xs text-amber-950">
+                  <p className="mb-2 font-medium">
+                    Hay varios lotes en la hoja para esta cédula. Elija el que corresponde a este
+                    préstamo (solo se usará la fila de esa combinación cédula + lote).
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {data.opciones_lote.map(op => (
+                      <Button
+                        key={op.lote}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="border-amber-300 bg-white text-amber-950 hover:bg-amber-100"
+                        disabled={loading}
+                        onClick={() => {
+                          void abrir(op.lote)
+                        }}
+                      >
+                        Lote {op.lote}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {data.lote_aplicado && loteResuelto ? (
+                <p className="rounded-md border border-sky-200 bg-sky-50/90 p-2 text-xs text-sky-950">
+                  <span className="font-semibold">Resumen: </span>
+                  Lote <span className="font-mono">{data.lote_aplicado}</span>
+                  {' · '}
+                  Columna {colQEtiqueta}
+                  {' · '}
+                  Préstamo #{data.prestamo_id}
+                </p>
+              ) : data.lote_aplicado ? (
+                <p className="text-xs text-muted-foreground">
+                  Lote usado para esta comparación:{' '}
+                  <span className="font-mono font-medium text-foreground">{data.lote_aplicado}</span>
+                </p>
+              ) : null}
+
+              <dl className="grid grid-cols-1 gap-2 rounded-md border bg-muted/30 p-3">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Fecha entrega (columna Q)</dt>
+                  <dd className="font-medium tabular-nums">
+                    {fmtFechaNotifIso(data.fecha_entrega_column_q)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Fecha aprobación (sistema)</dt>
+                  <dd className="font-medium tabular-nums">
+                    {fmtFechaNotifIso(data.fecha_aprobacion_sistema)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Diferencia (Q − aprobación, días)</dt>
+                  <dd
+                    className={`font-semibold tabular-nums ${
+                      data.coincide_aproximado ? 'text-green-700' : 'text-amber-800'
+                    }`}
+                  >
+                    {fmtDiferenciaDiasNotif(data.diferencia_dias)}
+                  </dd>
+                </div>
+              </dl>
+              <p className="text-xs text-muted-foreground">
+                Filas de la hoja que corresponden a este préstamo:{' '}
+                <span className="font-medium text-foreground">{data.filas_hoja_coincidentes}</span>
+                {data.filas_misma_cedula_hoja != null ? (
+                  <>
+                    {' '}
+                    · Filas con la misma cédula en la hoja (todas):{' '}
+                    <span className="font-medium text-foreground">{data.filas_misma_cedula_hoja}</span>
+                  </>
+                ) : null}
+                {data.hoja_synced_at ? (
+                  <>
+                    {' '}
+                    · Última sync hoja:{' '}
+                    <span className="font-medium text-foreground">
+                      {new Date(data.hoja_synced_at).toLocaleString('es-VE', {
+                        timeZone: 'America/Caracas',
+                      })}
+                    </span>
+                  </>
+                ) : null}
+              </p>
+              {data.columna_cedula_detectada || data.columna_q_letra || data.columna_lote_detectada ? (
+                <p className="text-xs text-muted-foreground">
+                  Columnas detectadas:{' '}
+                  <span className="font-mono text-foreground">
+                    {data.columna_cedula_detectada ?? '—'}
+                  </span>
+                  {' · '}
+                  <span className="font-mono text-foreground">{colQEtiqueta}</span>
+                  {data.columna_lote_detectada ? (
+                    <>
+                      {' · '}
+                      <span className="font-mono text-foreground">{data.columna_lote_detectada}</span>
+                    </>
+                  ) : null}
+                  {data.rango_columnas_hoja ? (
+                    <>
+                      {' '}
+                      <span className="text-muted-foreground">
+                        (rango hoja {data.rango_columnas_hoja}
+                        {data.columna_q_dentro_rango === false ? '; Q fuera de rango' : ''})
+                      </span>
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+              {data.advertencias?.length ? (
+                <ul className="list-disc space-y-1 pl-4 text-xs text-amber-900">
+                  {data.advertencias.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {data.coincide_aproximado ? (
+                <p className="text-xs font-medium text-green-700">
+                  Coinciden (misma fecha en calendario; tolerancia ±{data.tolerancia_dias ?? 0}{' '}
+                  día(s)).
+                </p>
+              ) : data.diferencia_dias != null ? (
+                <p className="text-xs text-amber-900">
+                  Hay diferencia de días entre la hoja y la fecha de aprobación en BD. Revise la sync
+                  de la hoja o el registro del préstamo.
+                </p>
+              ) : null}
+              {!esAdmin && puedeOperar ? (
+                <p className="text-xs text-muted-foreground">
+                  El indicador «Sí» requiere administrador para abrir el detalle.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            {paso === 'confirmar' ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setPaso('resumen')
+                  }}
+                >
+                  Volver
+                </Button>
+                <Button type="button" onClick={() => onDialogFechaOpenChange(false)}>
+                  Entendido
+                </Button>
+              </>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => onDialogFechaOpenChange(false)}>
+                Cerrar
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
   switch (tab) {
     case 'dias_1_atraso':
@@ -1088,6 +1613,8 @@ type NotificacionesProps = {
 
 export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const TABS = tabsParaModulo(modulo)
+
+  const esListaCombinadaMoras = modulo === 'general' || modulo === 'fecha'
 
   const listadoDefault = tabListadoDefault(modulo)
 
@@ -1162,10 +1689,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       (modulo === 'a1dia' && t === 'prejudicial') ||
       (modulo === 'a1dia' && t === 'd2antes') ||
       (modulo === 'd2antes' && (t === 'dias_1_atraso' || t === 'prejudicial')) ||
-      (modulo === 'general' &&
+      (esListaCombinadaMoras &&
         t !== 'general_todos' &&
         Boolean(t)) ||
-      (modulo === 'general' && t === 'configuracion')
+      (esListaCombinadaMoras && t === 'configuracion')
     ) {
       setSearchParams(
         p => {
@@ -1178,10 +1705,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         { replace: true }
       )
     }
-  }, [searchParams, setSearchParams, modulo])
+  }, [searchParams, setSearchParams, modulo, esListaCombinadaMoras])
 
   useEffect(() => {
-    if (modulo !== 'general') return
+    if (!esListaCombinadaMoras) return
     if (activeTab === 'configuracion') {
       setActiveTab('general_todos')
       setSearchParams(
@@ -1194,7 +1721,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         { replace: true }
       )
     }
-  }, [modulo, activeTab, setSearchParams])
+  }, [modulo, activeTab, setSearchParams, esListaCombinadaMoras])
 
   const setActiveTabAndUrl = (tab: TabId) => {
     setActiveTab(tab)
@@ -1229,7 +1756,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
 
       enabled:
-        (modulo === 'a1dia' || modulo === 'general') &&
+        (modulo === 'a1dia' || esListaCombinadaMoras) &&
         activeTab !== 'configuracion',
     })
 
@@ -1254,7 +1781,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     refetchOnWindowFocus: true,
 
     enabled:
-      (modulo === 'd2antes' || modulo === 'general') &&
+      (modulo === 'd2antes' || esListaCombinadaMoras) &&
       activeTab !== 'configuracion',
   })
 
@@ -1283,7 +1810,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     refetchOnWindowFocus: true,
 
     enabled:
-      (modulo === 'a3cuotas' || modulo === 'general') &&
+      (modulo === 'a3cuotas' || esListaCombinadaMoras) &&
       activeTab !== 'configuracion',
   })
 
@@ -1294,7 +1821,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     staleTime: 0,
 
-    enabled: activeTab !== 'configuracion' && modulo !== 'general',
+    enabled: activeTab !== 'configuracion' && !esListaCombinadaMoras,
 
     placeholderData: {
       dias_5: { enviados: 0, rebotados: 0 },
@@ -1348,6 +1875,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const [actualizandoListas, setActualizandoListas] = useState(false)
 
   const [programandoRefreshAbonosDrive, setProgramandoRefreshAbonosDrive] =
+    useState(false)
+
+  const [programandoRefreshFechaQ, setProgramandoRefreshFechaQ] =
     useState(false)
 
   const [descargandoEstadoCuentaId, setDescargandoEstadoCuentaId] = useState<
@@ -1502,6 +2032,25 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
     } finally {
       setProgramandoRefreshAbonosDrive(false)
+    }
+  }
+
+  const handleRefreshFechaEntregaQCache = async () => {
+    setProgramandoRefreshFechaQ(true)
+    try {
+      const res = await notificacionService.refreshFechaEntregaQCache()
+      toast.success(
+        res.mensaje ??
+          'Recálculo de «Fecha Q vs aprobación» programado en el servidor. En unos minutos use Actualización manual o recargue.'
+      )
+    } catch (e) {
+      console.error(e)
+      toast.error(
+        getErrorMessage(e) ||
+          'No se pudo programar el recálculo de «Fecha Q vs aprobación».'
+      )
+    } finally {
+      setProgramandoRefreshFechaQ(false)
     }
   }
 
@@ -1681,7 +2230,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   }
 
   const list = useMemo((): ClienteRetrasadoItem[] => {
-    if (modulo === 'general' && activeTab === 'general_todos') {
+    if (esListaCombinadaMoras && activeTab === 'general_todos') {
       const a = (data?.dias_1_atraso ?? []).map(r => ({
         ...r,
         notificacion_caso: CASO_NOTIF_GENERAL_D1,
@@ -1723,6 +2272,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     data?.dias_1_atraso,
     dataPrejudicial?.items,
     dataD2Antes?.items,
+    esListaCombinadaMoras,
   ])
 
   const [sortCol, setSortCol] = useState<NotificacionesCuotasSortCol | null>(
@@ -1740,12 +2290,19 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const [filtroDiferenciaAbonoGeneral, setFiltroDiferenciaAbonoGeneral] =
     useState<FiltroDiferenciaAbonoGeneral>('todas')
 
+  const [filtroDiferenciaFechaGeneral, setFiltroDiferenciaFechaGeneral] =
+    useState<FiltroDiferenciaFechaGeneral>('todas')
+
   useEffect(() => {
     setFiltroCedula('')
   }, [activeTab, modulo, fechaCaracasApi])
 
   useEffect(() => {
     setFiltroDiferenciaAbonoGeneral('todas')
+  }, [activeTab, modulo, fechaCaracasApi, filtroCedula])
+
+  useEffect(() => {
+    setFiltroDiferenciaFechaGeneral('todas')
   }, [activeTab, modulo, fechaCaracasApi, filtroCedula])
 
   useEffect(() => {
@@ -1844,26 +2401,56 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     return m
   }, [modulo, activeTab, listaTrasFiltroCedula])
 
-  const listaFiltradaCedula = useMemo(() => {
-    if (modulo !== 'general' || filtroDiferenciaAbonoGeneral === 'todas') {
-      return listaTrasFiltroCedula
-    }
-    return listaTrasFiltroCedula.filter(row => {
+  const compararFechaDesdeFilas = useMemo(() => {
+    const m = new Map<string, CompararFechaEntregaQvsAprobacionResponse>()
+    if (modulo !== 'fecha' || activeTab !== 'general_todos') return m
+    for (const row of listaTrasFiltroCedula) {
       const ced = String(row.cedula ?? '').trim()
       const pid = row.prestamo_id
-      if (!ced || pid == null) return false
-      const d = compararAbonoDesdeFilas.get(`${ced}|${pid}`)
-      if (!d) return false
-      return filaCumpleFiltroDiferenciaAbonoGeneral(
-        filtroDiferenciaAbonoGeneral,
-        d
-      )
-    })
+      if (!ced || pid == null) continue
+      const k = `${ced}|${pid}`
+      const c = row.comparar_fecha_entrega_q_aprobacion
+      if (c != null && !m.has(k)) m.set(k, c)
+    }
+    return m
+  }, [modulo, activeTab, listaTrasFiltroCedula])
+
+  const listaFiltradaCedula = useMemo(() => {
+    let base = listaTrasFiltroCedula
+    if (modulo === 'general' && filtroDiferenciaAbonoGeneral !== 'todas') {
+      base = base.filter(row => {
+        const ced = String(row.cedula ?? '').trim()
+        const pid = row.prestamo_id
+        if (!ced || pid == null) return false
+        const d = compararAbonoDesdeFilas.get(`${ced}|${pid}`)
+        if (!d) return false
+        return filaCumpleFiltroDiferenciaAbonoGeneral(
+          filtroDiferenciaAbonoGeneral,
+          d
+        )
+      })
+    }
+    if (modulo === 'fecha' && filtroDiferenciaFechaGeneral !== 'todas') {
+      base = base.filter(row => {
+        const ced = String(row.cedula ?? '').trim()
+        const pid = row.prestamo_id
+        if (!ced || pid == null) return false
+        const d = compararFechaDesdeFilas.get(`${ced}|${pid}`)
+        if (!d) return false
+        return filaCumpleFiltroDiferenciaFechaGeneral(
+          filtroDiferenciaFechaGeneral,
+          d
+        )
+      })
+    }
+    return base
   }, [
     listaTrasFiltroCedula,
     modulo,
     filtroDiferenciaAbonoGeneral,
+    filtroDiferenciaFechaGeneral,
     compararAbonoDesdeFilas,
+    compararFechaDesdeFilas,
   ])
 
   const totalFilasListado = listaFiltradaCedula.length
@@ -1929,7 +2516,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   }
 
   const isLoadingLista =
-    modulo === 'general'
+    esListaCombinadaMoras
       ? isPending || isPendingPrej || isPendingD2
       : modulo === 'a1dia'
         ? isPending
@@ -1943,7 +2530,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
    * Si el GET de la lista falló (isError), no bloquear envío: el servidor puede armar la lista al enviar.
    */
   const esperandoPrimeraCargaLista =
-    (modulo === 'general' &&
+    (esListaCombinadaMoras &&
       ((isPending && !isFetched && !isError) ||
         (isPendingPrej && !isFetchedPrej && !isErrorPrej) ||
         (isPendingD2 && !isFetchedD2 && !isErrorD2))) ||
@@ -1955,7 +2542,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     (modulo === 'd2antes' && isPendingD2 && !isFetchedD2 && !isErrorD2)
 
   const isErrorLista =
-    modulo === 'general'
+    esListaCombinadaMoras
       ? isError && isErrorPrej && isErrorD2
       : modulo === 'a1dia'
         ? isError
@@ -1964,7 +2551,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           : isErrorD2
 
   const errorLista =
-    modulo === 'general'
+    esListaCombinadaMoras
       ? error ?? errorPrej ?? errorD2
       : modulo === 'a1dia'
         ? error
@@ -1973,7 +2560,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           : errorD2
 
   const refetchLista =
-    modulo === 'general'
+    esListaCombinadaMoras
       ? () => {
           void Promise.all([refetch(), refetchPrej(), refetchD2()])
         }
@@ -1984,7 +2571,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           : refetchD2
 
   const isFetchingLista =
-    modulo === 'general'
+    esListaCombinadaMoras
       ? isFetching || isFetchingPrej || isFetchingD2
       : modulo === 'a1dia'
         ? isFetching
@@ -1993,7 +2580,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           : isFetchingD2
 
   const isFetchedLista =
-    modulo === 'general'
+    esListaCombinadaMoras
       ? (isFetched || isError) &&
         (isFetchedPrej || isErrorPrej) &&
         (isFetchedD2 || isErrorD2)
@@ -2025,7 +2612,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           onChange={e => setFechaCaracasYUrl(e.target.value)}
           className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm"
           title={
-            modulo === 'general'
+            modulo === 'general' || modulo === 'fecha'
               ? 'Listados como si fuera este día en America/Caracas. Vacío = hoy.'
               : 'Listados y envíos manuales como si fuera este día en America/Caracas (p. ej. si no envió a tiempo). Vacío = hoy.'
           }
@@ -2043,7 +2630,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     </div>
   )
 
-  if (activeTab === 'configuracion' && modulo !== 'general') {
+  if (activeTab === 'configuracion' && !esListaCombinadaMoras) {
     return (
       <div className="space-y-6">
         <ModulePageHeader
@@ -2125,8 +2712,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           icon={Bell}
           title="Notificaciones"
           description={
-            modulo === 'general'
-              ? 'Solo consulta: listas unificadas (día siguiente al vencimiento, atraso 5 cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (job 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
+            modulo === 'fecha'
+              ? 'Solo consulta: mismas listas combinadas que General (día siguiente, atraso 5 cuotas, 2 días antes). La columna «Diferencia fecha» compara la columna Q de la hoja CONCILIACIÓN (entrega) con fecha_aprobacion del préstamo en BD; caché en servidor (cada domingo 02:03 Caracas o Recalcular; luego Actualización manual). Sin envío de correos desde esta pantalla.'
+              : modulo === 'general'
+                ? 'Solo consulta: listas unificadas (día siguiente al vencimiento, atraso 5 cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
               : modulo === 'a3cuotas'
                 ? 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
                 : modulo === 'd2antes'
@@ -2156,7 +2745,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   disabled={
                     programandoRefreshAbonosDrive || actualizandoListas
                   }
-                  title="Misma lógica que el job de las 02:00 (America/Caracas): persiste comparación ABONOS (hoja) vs cuotas para préstamos activos. Corre en segundo plano; luego use Actualización manual."
+                  title="Misma lógica que el job cada domingo 02:00 (America/Caracas): persiste comparación ABONOS (hoja) vs cuotas para préstamos activos. Corre en segundo plano; luego use Actualización manual."
                 >
                   <Database
                     className={`mr-2 h-4 w-4 ${
@@ -2164,6 +2753,23 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     }`}
                   />
                   Recalcular Diferencia abono
+                </Button>
+              ) : null}
+
+              {modulo === 'fecha' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleRefreshFechaEntregaQCache()}
+                  disabled={programandoRefreshFechaQ || actualizandoListas}
+                  title="Misma lógica que el job cada domingo 02:03 (America/Caracas): columna Q vs fecha_aprobacion. Segundo plano; luego use Actualización manual."
+                >
+                  <Calendar
+                    className={`mr-2 h-4 w-4 ${
+                      programandoRefreshFechaQ ? 'animate-pulse' : ''
+                    }`}
+                  />
+                  Recalcular Diferencia fecha
                 </Button>
               ) : null}
 
@@ -2184,7 +2790,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         />
       </motion.div>
 
-      {modulo !== 'general' ? (
+      {!esListaCombinadaMoras ? (
         <div className="border-b border-gray-200">
           <nav className="flex flex-wrap gap-1">
             {TABS.filter(t => t.id !== 'configuracion').map(tab => {
@@ -2256,13 +2862,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
-              {modulo === 'general'
-                ? 'General — todos los casos de mora (listas combinadas)'
-                : modulo === 'a3cuotas'
-                  ? 'Cinco o más cuotas VENCIDO o MORA (prejudicial)'
-                  : modulo === 'd2antes'
-                    ? '2 días antes - PENDIENTE, vence en 2 días'
-                    : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
+              {modulo === 'fecha'
+                ? 'Fecha — mismos casos de mora (listas combinadas)'
+                : modulo === 'general'
+                  ? 'General'
+                  : modulo === 'a3cuotas'
+                    ? 'Cinco o más cuotas VENCIDO o MORA (prejudicial)'
+                    : modulo === 'd2antes'
+                      ? '2 días antes - PENDIENTE, vence en 2 días'
+                      : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
             </CardTitle>
 
             <CardDescription>
@@ -2272,13 +2880,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   (America/Caracas). Use «Hoy» arriba para volver al día actual.
                 </span>
               ) : null}
-              {modulo === 'general'
-                ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes». La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (02:00 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
-                : modulo === 'a3cuotas'
-                  ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
-                  : modulo === 'd2antes'
-                    ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
-                    : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
+              {modulo === 'fecha'
+                ? 'Se concatenan las mismas filas que en General. «Diferencia fecha» = días (columna Q de la hoja CONCILIACIÓN, posición Excel dentro del rango configurado, p. ej. A:S − fecha_aprobacion del préstamo en BD). Caché 02:03 Caracas o Recalcular arriba.'
+                : modulo === 'general'
+                  ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes». La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (02:00 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
+                  : modulo === 'a3cuotas'
+                    ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
+                    : modulo === 'd2antes'
+                      ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
+                      : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
             </CardDescription>
           </CardHeader>
 
@@ -2322,6 +2932,30 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     }`}
                   />
                   Recalcular Diferencia abono
+                </Button>
+              ) : null}
+
+              {modulo === 'fecha' ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleRefreshFechaEntregaQCache()}
+                  disabled={
+                    programandoRefreshFechaQ ||
+                    actualizandoListas ||
+                    enviandoPrejudicial ||
+                    enviandoD2Antes ||
+                    enviandoPago1Dia
+                  }
+                  title="Job en servidor (segundo plano), igual que 02:03 Caracas. Luego pulse Actualización manual."
+                >
+                  <Calendar
+                    className={`mr-2 h-4 w-4 ${
+                      programandoRefreshFechaQ ? 'animate-pulse' : ''
+                    }`}
+                  />
+                  Recalcular Diferencia fecha
                 </Button>
               ) : null}
 
@@ -2453,14 +3087,48 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       )
                     }
                     disabled={isLoadingLista}
-                    title="Misma regla que el modal de la balanza: «0» = coincide con tolerancia; «Drive &gt; sistema» = solo ahí se permite aplicar desde el modal."
+                    title="Cero = coincide con tolerancia del modal. Mayor a cero = ABONOS en hoja mayor que total en cuotas (indicador Sí; ahí se permite aplicar). Menor a cero = hoja por debajo de cuotas (diferencia negativa fuera de tolerancia)."
+                  >
+                    <option value="todas">Todas</option>
+                    <option value="cero">Cero (sin diferencia; tolerancia como en el modal)</option>
+                    <option value="drive_mayor">
+                      Mayor a cero (Drive &gt; sistema; indicador Sí; ahí se permite aplicar)
+                    </option>
+                    <option value="drive_menor">
+                      Menor a cero (Drive &lt; sistema; más pagado en cuotas que en la hoja)
+                    </option>
+                  </select>
+                </div>
+              ) : null}
+              {modulo === 'fecha' ? (
+                <div className="flex min-w-[14rem] max-w-md flex-col gap-1">
+                  <label
+                    htmlFor="filtro-dif-fecha-general"
+                    className="text-xs font-medium text-gray-600"
+                  >
+                    Diferencia fecha (Q − aprobación)
+                  </label>
+                  <select
+                    id="filtro-dif-fecha-general"
+                    className="h-9 rounded-md border border-input bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    value={filtroDiferenciaFechaGeneral}
+                    onChange={e =>
+                      setFiltroDiferenciaFechaGeneral(
+                        e.target.value as FiltroDiferenciaFechaGeneral
+                      )
+                    }
+                    disabled={isLoadingLista}
+                    title="Igual a 0 = misma fecha calendario (Q y aprobación; tolerancia como en el modal). Mayor que cero = Q estrictamente posterior (indicador Sí). Menor que cero = Q anterior a la aprobación (días negativos)."
                   >
                     <option value="todas">Todas</option>
                     <option value="cero">
-                      0 — sin diferencia (tolerancia, como en el modal)
+                      Igual a 0 (misma fecha calendario; tolerancia como en el modal)
                     </option>
-                    <option value="drive_mayor">
-                      Drive &gt; sistema (indicador Sí; solo ahí se permite aplicar)
+                    <option value="mayor_cero">
+                      Mayor que cero (Q posterior a la fecha de aprobación; indicador Sí)
+                    </option>
+                    <option value="menor_cero">
+                      Menor que cero (Q anterior a la fecha de aprobación; días negativos)
                     </option>
                   </select>
                 </div>
@@ -2470,6 +3138,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               !(
                 modulo === 'general' &&
                 filtroDiferenciaAbonoGeneral !== 'todas'
+              ) &&
+              !(
+                modulo === 'fecha' &&
+                filtroDiferenciaFechaGeneral !== 'todas'
               ) ? (
                 <p className="text-xs text-muted-foreground sm:ml-auto">
                   Mostrando{' '}
@@ -2492,7 +3164,23 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   <span className="tabular-nums">
                     {listaTrasFiltroCedula.length}
                   </span>{' '}
-                  filas (tras filtro de diferencia)
+                  filas (tras filtro de diferencia de abono)
+                </p>
+              ) : null}
+              {!filtroCedula.trim() &&
+              modulo === 'fecha' &&
+              filtroDiferenciaFechaGeneral !== 'todas' &&
+              list.length > 0 ? (
+                <p className="text-xs text-muted-foreground sm:ml-auto">
+                  Mostrando{' '}
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {listaFiltradaCedula.length}
+                  </span>{' '}
+                  de{' '}
+                  <span className="tabular-nums">
+                    {listaTrasFiltroCedula.length}
+                  </span>{' '}
+                  filas (tras filtro de diferencia de fecha)
                 </p>
               ) : null}
               {filtroCedula.trim() &&
@@ -2510,12 +3198,27 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   </span>
                 </p>
               ) : null}
+              {filtroCedula.trim() &&
+              modulo === 'fecha' &&
+              filtroDiferenciaFechaGeneral !== 'todas' &&
+              list.length > 0 ? (
+                <p className="text-xs text-muted-foreground sm:ml-auto">
+                  Tras cédula y diferencia de fecha:{' '}
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {listaFiltradaCedula.length}
+                  </span>{' '}
+                  de{' '}
+                  <span className="tabular-nums">
+                    {listaTrasFiltroCedula.length}
+                  </span>
+                </p>
+              ) : null}
             </div>
 
             {/* KPIs por pestaña: correos enviados y rebotados */}
 
             {(activeTab as TabId) !== 'configuracion' &&
-              modulo !== 'general' &&
+              !esListaCombinadaMoras &&
               estadisticasPorTab && (
               <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-2">
                 <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
@@ -2573,7 +3276,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               </div>
             )}
 
-            {modulo === 'general' &&
+            {esListaCombinadaMoras &&
             !isErrorLista &&
             (isError || isErrorPrej || isErrorD2) ? (
               <div className="mb-4 rounded border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
@@ -2608,7 +3311,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           crédito
                         </th>
 
-                        {modulo !== 'general' ? (
+                        {!esListaCombinadaMoras ? (
                           <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                             Nombre
                           </th>
@@ -2618,7 +3321,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           Cédula
                         </th>
 
-                        {modulo === 'general' ? (
+                        {esListaCombinadaMoras ? (
                           <th className="min-w-[10rem] whitespace-normal px-3 py-2 text-left text-xs font-semibold leading-tight">
                             Caso
                           </th>
@@ -2627,9 +3330,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         {modulo === 'general' ? (
                           <th
                             className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Valor fijo del listado: se recalcula en el servidor una vez al día a las 02:00 (America/Caracas) y al aplicar ABONOS desde la balanza."
+                            title="Valor fijo del listado: se recalcula en el servidor cada domingo a las 02:00 (America/Caracas) y al aplicar ABONOS desde la balanza."
                           >
                             Diferencia Abono
+                          </th>
+                        ) : null}
+
+                        {modulo === 'fecha' ? (
+                          <th
+                            className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
+                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché cada domingo 02:03 Caracas o Recalcular."
+                          >
+                            Diferencia fecha (días)
                           </th>
                         ) : null}
 
@@ -2703,7 +3415,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         <th
                           className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                           scope="col"
-                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
+                          title={
+                            modulo === 'fecha'
+                              ? 'Revisión manual (triángulo) y comparar columna Q (hoja) vs fecha de aprobación en BD (icono calendario).'
+                              : 'Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul).'
+                          }
                         >
                           Revisión
                           <br />
@@ -2722,7 +3438,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       {listaFiltradaCedula.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={modulo === 'general' ? 10 : 9}
+                            colSpan={esListaCombinadaMoras ? 10 : 9}
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
@@ -2734,11 +3450,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       filtroDiferenciaAbonoGeneral !== 'todas' &&
                                       listaTrasFiltroCedula.length > 0
                                     ? 'Ninguna fila cumple el filtro de diferencia de abono.'
-                                    : 'Ningún registro en este criterio.'}
+                                    : modulo === 'fecha' &&
+                                        filtroDiferenciaFechaGeneral !== 'todas' &&
+                                        listaTrasFiltroCedula.length > 0
+                                      ? 'Ninguna fila cumple el filtro de diferencia de fecha.'
+                                      : 'Ningún registro en este criterio.'}
                             </span>
                             {listaCargadaSinFilas ? (
                               <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                                {modulo === 'general'
+                                {modulo === 'general' || modulo === 'fecha'
                                   ? 'Listas ya cargadas: no hay filas en ninguno de los tres criterios (día siguiente, prejudicial, 2 días antes) para la fecha de referencia.'
                                   : modulo === 'a3cuotas'
                                     ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
@@ -2756,10 +3476,21 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               filtroDiferenciaAbonoGeneral !== 'todas' &&
                               listaTrasFiltroCedula.length > 0 ? (
                               <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                Elija «Todas» o otro criterio. «0» usa la misma
-                                coincidencia por tolerancia que el modal; «Drive
-                                &gt; sistema» solo filas con indicador Sí (ABONOS
-                                hoja mayor que total en cuotas).
+                                Elija «Todas» u otro criterio. «Cero» usa la misma
+                                coincidencia por tolerancia que el modal; «Mayor a
+                                cero» solo filas con indicador Sí (ABONOS hoja mayor
+                                que total en cuotas); «Menor a cero» filas con
+                                diferencia negativa fuera de tolerancia (más pagado
+                                en cuotas que en la hoja).
+                              </span>
+                            ) : modulo === 'fecha' &&
+                              filtroDiferenciaFechaGeneral !== 'todas' &&
+                              listaTrasFiltroCedula.length > 0 ? (
+                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                Elija «Todas» u otro criterio. «Igual a 0» = misma fecha
+                                (calendario; tolerancia como en el modal); «Mayor que
+                                cero» = columna Q posterior a la aprobación (indicador
+                                Sí); «Menor que cero» = Q anterior (días negativos).
                               </span>
                             ) : null}
                           </td>
@@ -2774,7 +3505,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               {textoNumeroCreditoNotif(row)}
                             </td>
 
-                            {modulo !== 'general' ? (
+                            {!esListaCombinadaMoras ? (
                               <td className="px-3 py-2 font-medium">
                                 {row.nombre}
                               </td>
@@ -2782,7 +3513,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                             <td className="px-3 py-2">{row.cedula}</td>
 
-                            {modulo === 'general' ? (
+                            {esListaCombinadaMoras ? (
                               <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
                                 {row.notificacion_caso ?? '—'}
                               </td>
@@ -2803,6 +3534,31 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       data={
                                         rk
                                           ? compararAbonoDesdeFilas.get(rk)
+                                          : undefined
+                                      }
+                                      isLoading={false}
+                                      isError={false}
+                                    />
+                                  )
+                                })()}
+                              </td>
+                            ) : null}
+
+                            {modulo === 'fecha' ? (
+                              <td className="px-3 py-2 text-right align-middle">
+                                {(() => {
+                                  const cedR = String(row.cedula ?? '').trim()
+                                  const pidR = row.prestamo_id
+                                  const rk =
+                                    cedR && pidR != null
+                                      ? `${cedR}|${pidR}`
+                                      : ''
+                                  return (
+                                    <DiferenciaFechaGeneralCell
+                                      row={row}
+                                      data={
+                                        rk
+                                          ? compararFechaDesdeFilas.get(rk)
                                           : undefined
                                       }
                                       isLoading={false}
@@ -2834,7 +3590,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             <td className="px-1 py-2 text-center align-middle">
                               <div className="flex flex-wrap items-center justify-center gap-1">
                                 <RevisionManualNotifCell row={row} />
-                                <CompararAbonosDriveCuotasCell row={row} />
+                                {modulo === 'fecha' ? (
+                                  <CompararFechaEntregaQAprobacionCell row={row} />
+                                ) : (
+                                  <CompararAbonosDriveCuotasCell row={row} />
+                                )}
                               </div>
                             </td>
 
@@ -2861,7 +3621,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           crédito
                         </th>
 
-                        {modulo !== 'general' ? (
+                        {!esListaCombinadaMoras ? (
                           <th className="px-3 py-2 text-left font-semibold">
                             Nombre
                           </th>
@@ -2871,7 +3631,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           Cédula
                         </th>
 
-                        {modulo === 'general' ? (
+                        {esListaCombinadaMoras ? (
                           <th className="min-w-[10rem] px-3 py-2 text-left text-xs font-semibold leading-tight">
                             Caso
                           </th>
@@ -2880,16 +3640,29 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         {modulo === 'general' ? (
                           <th
                             className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Valor fijo del listado: se recalcula en el servidor una vez al día a las 02:00 (America/Caracas) y al aplicar ABONOS desde la balanza."
+                            title="Valor fijo del listado: se recalcula en el servidor cada domingo a las 02:00 (America/Caracas) y al aplicar ABONOS desde la balanza."
                           >
                             Diferencia Abono
+                          </th>
+                        ) : null}
+
+                        {modulo === 'fecha' ? (
+                          <th
+                            className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
+                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché cada domingo 02:03 Caracas o Recalcular."
+                          >
+                            Diferencia fecha (días)
                           </th>
                         ) : null}
 
                         <th
                           className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                           scope="col"
-                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
+                          title={
+                            modulo === 'fecha'
+                              ? 'Revisión manual (triángulo) y comparar columna Q (hoja) vs fecha de aprobación en BD (icono calendario).'
+                              : 'Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul).'
+                          }
                         >
                           Revisión
                           <br />
@@ -2908,7 +3681,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       {listaFiltradaCedula.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={modulo === 'general' ? 6 : 5}
+                            colSpan={esListaCombinadaMoras ? 6 : 5}
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
@@ -2920,11 +3693,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       filtroDiferenciaAbonoGeneral !== 'todas' &&
                                       listaTrasFiltroCedula.length > 0
                                     ? 'Ninguna fila cumple el filtro de diferencia de abono.'
-                                    : 'Ningún cliente en este criterio.'}
+                                    : modulo === 'fecha' &&
+                                        filtroDiferenciaFechaGeneral !== 'todas' &&
+                                        listaTrasFiltroCedula.length > 0
+                                      ? 'Ninguna fila cumple el filtro de diferencia de fecha.'
+                                      : 'Ningún cliente en este criterio.'}
                             </span>
                             {listaCargadaSinFilas ? (
                               <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                                {modulo === 'general'
+                                {modulo === 'general' || modulo === 'fecha'
                                   ? 'Listas ya cargadas: ningún criterio devolvió filas sin detalle de cuota para la fecha de referencia.'
                                   : modulo === 'a3cuotas'
                                     ? 'Lista ya cargada: 5+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
@@ -2942,9 +3719,19 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               filtroDiferenciaAbonoGeneral !== 'todas' &&
                               listaTrasFiltroCedula.length > 0 ? (
                               <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                Elija «Todas» u otro criterio. «0» coincide con la
-                                tolerancia del modal; «Drive &gt; sistema» solo
-                                filas con indicador Sí.
+                                Elija «Todas» u otro criterio. «Cero» coincide con la
+                                tolerancia del modal; «Mayor a cero» solo filas con
+                                indicador Sí; «Menor a cero» diferencia negativa
+                                fuera de tolerancia.
+                              </span>
+                            ) : modulo === 'fecha' &&
+                              filtroDiferenciaFechaGeneral !== 'todas' &&
+                              listaTrasFiltroCedula.length > 0 ? (
+                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                Elija «Todas» u otro criterio. «Igual a 0» = misma fecha
+                                (tolerancia como en el modal); «Mayor que cero» = Q
+                                posterior (indicador Sí); «Menor que cero» = Q anterior
+                                (días negativos).
                               </span>
                             ) : null}
                           </td>
@@ -2959,7 +3746,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               {textoNumeroCreditoNotif(row)}
                             </td>
 
-                            {modulo !== 'general' ? (
+                            {!esListaCombinadaMoras ? (
                               <td className="px-3 py-2 font-medium">
                                 {row.nombre}
                               </td>
@@ -2967,7 +3754,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                             <td className="px-3 py-2">{row.cedula}</td>
 
-                            {modulo === 'general' ? (
+                            {esListaCombinadaMoras ? (
                               <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
                                 {row.notificacion_caso ?? '—'}
                               </td>
@@ -2998,10 +3785,39 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               </td>
                             ) : null}
 
+                            {modulo === 'fecha' ? (
+                              <td className="px-3 py-2 text-right align-middle">
+                                {(() => {
+                                  const cedR = String(row.cedula ?? '').trim()
+                                  const pidR = row.prestamo_id
+                                  const rk =
+                                    cedR && pidR != null
+                                      ? `${cedR}|${pidR}`
+                                      : ''
+                                  return (
+                                    <DiferenciaFechaGeneralCell
+                                      row={row}
+                                      data={
+                                        rk
+                                          ? compararFechaDesdeFilas.get(rk)
+                                          : undefined
+                                      }
+                                      isLoading={false}
+                                      isError={false}
+                                    />
+                                  )
+                                })()}
+                              </td>
+                            ) : null}
+
                             <td className="px-1 py-2 text-center align-middle">
                               <div className="flex flex-wrap items-center justify-center gap-1">
                                 <RevisionManualNotifCell row={row} />
-                                <CompararAbonosDriveCuotasCell row={row} />
+                                {modulo === 'fecha' ? (
+                                  <CompararFechaEntregaQAprobacionCell row={row} />
+                                ) : (
+                                  <CompararAbonosDriveCuotasCell row={row} />
+                                )}
                               </div>
                             </td>
 

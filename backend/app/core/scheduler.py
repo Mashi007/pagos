@@ -6,7 +6,8 @@ Por defecto esta desactivado: ningun cron en servidor; la pantalla Configuracion
 
 Cuando esta activo:
 - 02:00  Finiquito: refrescar tabla finiquito_casos.
-- 02:00  Notificaciones: caché «Diferencia abono» (ABONOS hoja vs cuotas) en prestamos, si ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY.
+- domingo 02:00  Notificaciones: caché «Diferencia abono» (ABONOS hoja vs cuotas) en prestamos, si ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY.
+- domingo 02:03  Notificaciones: caché columna Q vs fecha_aprobacion en prestamos, si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY.
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 03:00  Notificaciones «2 dias antes» (PAGO_2_DIAS_ANTES_PENDIENTE): solo si cron_envio_pago_2_dias_antes.habilitado en BD; no afecta otros casos.
 - 04:00  Limpieza codigos estado de cuenta.
@@ -38,7 +39,7 @@ def scheduler_is_running() -> bool:
 
 
 def _job_abonos_drive_cuotas_cache_0200() -> None:
-    """02:00 Caracas. Persiste comparación ABONOS (hoja) vs cuotas en prestamos (columna Notificaciones General)."""
+    """Domingo 02:00 Caracas. Persiste comparación ABONOS (hoja) vs cuotas en prestamos (columna Notificaciones General)."""
     if not getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
         return
     db = SessionLocal()
@@ -57,6 +58,30 @@ def _job_abonos_drive_cuotas_cache_0200() -> None:
         )
     except Exception as e:
         logger.exception("Error en job abonos_drive_cuotas_cache_0200: %s", e)
+    finally:
+        db.close()
+
+
+def _job_fecha_entrega_q_aprobacion_cache_0203() -> None:
+    """Domingo 02:03 Caracas. Columna Q (hoja) vs fecha_aprobacion en prestamos (Notificaciones Fecha)."""
+    if not getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
+        return
+    db = SessionLocal()
+    try:
+        from app.services.fecha_entrega_q_aprobacion_cache_job import (
+            ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly,
+        )
+
+        res = ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db)
+        logger.info(
+            "[fecha_q_cache] nightly prestamos=%s ok=%s err=%s skip=%s",
+            res.get("prestamos_considerados"),
+            res.get("actualizados_ok"),
+            res.get("errores"),
+            res.get("omitidos_sin_cedula"),
+        )
+    except Exception as e:
+        logger.exception("Error en job fecha_entrega_q_aprobacion_cache_0203: %s", e)
     finally:
         db.close()
 
@@ -212,7 +237,7 @@ def _job_pagos_gmail_pending_scan() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: finiquito 02:00; caché Diferencia abono 02:00 (opcional); auditoria 03:00; notif 2 dias antes 03:00 (opcional por BD); hoja Drive 04:01; limpieza 04:00; Gmail 04/11/20 opcional."""
+    """Inicia el scheduler: finiquito 02:00 diario; caché Diferencia abono domingo 02:00 (opcional); caché Q vs aprobación domingo 02:03 (opcional); auditoria 03:00; notif 2 dias antes 03:00 (opcional por BD); hoja Drive 04:01; limpieza 04:00; Gmail 04/11/20 opcional."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
@@ -227,9 +252,16 @@ def start_scheduler() -> None:
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
         _scheduler.add_job(
             _job_abonos_drive_cuotas_cache_0200,
-            CronTrigger(hour=2, minute=0, timezone=SCHEDULER_TZ),
-            id="abonos_drive_cuotas_cache_0200",
-            name="Notificaciones: caché Diferencia abono (hoja vs cuotas) 02:00",
+            CronTrigger(day_of_week="sun", hour=2, minute=0, timezone=SCHEDULER_TZ),
+            id="abonos_drive_cuotas_cache_dom_0200",
+            name="Notificaciones: caché Diferencia abono (hoja vs cuotas) domingo 02:00",
+        )
+    if getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
+        _scheduler.add_job(
+            _job_fecha_entrega_q_aprobacion_cache_0203,
+            CronTrigger(day_of_week="sun", hour=2, minute=3, timezone=SCHEDULER_TZ),
+            id="fecha_entrega_q_aprobacion_cache_dom_0203",
+            name="Notificaciones: caché columna Q vs fecha_aprobacion domingo 02:03",
         )
 
     _scheduler.add_job(
@@ -273,13 +305,15 @@ def start_scheduler() -> None:
             )
         _gmail_log = "; Gmail pagos pendientes 4:00, 11:00 y 20:00"
     _scheduler.start()
-    _abonos_log = ""
+    _caches_notif_log = ""
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
-        _abonos_log = "; caché Diferencia abono 02:00"
+        _caches_notif_log += "; caché Diferencia abono domingo 02:00"
+    if getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
+        _caches_notif_log += "; caché Q vs aprobación domingo 02:03"
     logger.info(
         "Scheduler iniciado: finiquito 02:00%s; auditoria 03:00; notif PAGO_2_DIAS_ANTES 03:00 (si habilitado en BD); "
         "hoja Drive CONCILIACION 04:01; limpieza estado_cuenta_codigos 4:00%s (%s).",
-        _abonos_log,
+        _caches_notif_log,
         _gmail_log,
         SCHEDULER_TZ,
     )

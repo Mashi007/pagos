@@ -514,6 +514,15 @@ function App() {
               }
             />
 
+            <Route
+              path="notificaciones/fecha"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <Notificaciones modulo="fecha" />
+                </SimpleProtectedRoute>
+              }
+            />
+
             {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el módulo es «2 días antes»). */}
             <Route
               path="notificaciones/d-1-dia"

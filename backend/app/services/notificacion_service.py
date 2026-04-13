@@ -576,6 +576,44 @@ def enriquecer_items_abonos_drive_cuotas_cache(
                 it["comparar_abonos_drive_cuotas"] = None
 
 
+def enriquecer_items_fecha_entrega_q_aprobacion_cache(
+    db: Session, items: Sequence[dict]
+) -> None:
+    """Adjunta comparar_fecha_entrega_q_aprobacion desde prestamos.fecha_entrega_q_aprobacion_cache (in-place)."""
+    lst = [x for x in items if x]
+    if not lst:
+        return
+    ids: List[int] = []
+    for it in lst:
+        pid = it.get("prestamo_id")
+        if pid is None:
+            continue
+        try:
+            ids.append(int(pid))
+        except (TypeError, ValueError):
+            continue
+    uniq = sorted({i for i in ids})
+    if not uniq:
+        for it in lst:
+            it["comparar_fecha_entrega_q_aprobacion"] = None
+        return
+    q = select(Prestamo.id, Prestamo.fecha_entrega_q_aprobacion_cache).where(
+        Prestamo.id.in_(uniq)
+    )
+    by_id: Dict[int, Any] = {}
+    for pid, cache in db.execute(q).all():
+        by_id[int(pid)] = cache
+    for it in lst:
+        pid = it.get("prestamo_id")
+        if pid is None:
+            it["comparar_fecha_entrega_q_aprobacion"] = None
+        else:
+            try:
+                it["comparar_fecha_entrega_q_aprobacion"] = by_id.get(int(pid))
+            except (TypeError, ValueError):
+                it["comparar_fecha_entrega_q_aprobacion"] = None
+
+
 def enriquecer_items_notificacion_revision_manual(
     db: Session, items: Sequence[dict]
 ) -> None:
@@ -592,6 +630,7 @@ def enriquecer_items_notificacion_revision_manual(
         else:
             it["revision_manual_estado"] = m.get(int(pid))
     enriquecer_items_abonos_drive_cuotas_cache(db, lst)
+    enriquecer_items_fecha_entrega_q_aprobacion_cache(db, lst)
 
 
 # Funciones de compatibilidad (deprecated pero mantienen la API anterior)

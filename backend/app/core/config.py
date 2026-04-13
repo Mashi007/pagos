@@ -36,12 +36,20 @@ class Settings(BaseSettings):
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
     )
-    # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada en job 02:00 Caracas.
+    # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada domingo 02:00 Caracas.
     ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, a las 02:00 America/Caracas se recalcula "
-            "prestamos.abonos_drive_cuotas_cache para préstamos no LIQUIDADO/DESISTIMIENTO (una pasada al día)."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 02:00 America/Caracas se recalcula "
+            "prestamos.abonos_drive_cuotas_cache para préstamos no LIQUIDADO/DESISTIMIENTO (una pasada semanal)."
+        ),
+    )
+    # Columna Q (hoja) vs fecha_aprobacion: caché en BD para Notificaciones > Fecha.
+    ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 02:03 America/Caracas se recalcula "
+            "prestamos.fecha_entrega_q_aprobacion_cache (columna Q dentro de CONCILIACION_SHEET_COLUMNS_RANGE)."
         ),
     )
 

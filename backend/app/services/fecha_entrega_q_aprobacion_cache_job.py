@@ -1,9 +1,7 @@
 """
-Recalcula y persiste en `prestamos.abonos_drive_cuotas_cache` la comparación ABONOS (hoja) vs cuotas.
+Persiste en `prestamos.fecha_entrega_q_aprobacion_cache` la comparación columna Q (hoja) vs fecha_aprobacion.
 
-Ejecución prevista: cada domingo a las 02:00 America/Caracas (APScheduler), para la columna
-«Diferencia abono» en Notificaciones > General (dato estático en listado hasta el siguiente cierre).
-También se persiste al aplicar ABONOS desde la UI (ese préstamo).
+Job programado (cada domingo 02:03 America/Caracas) y POST manual de refresco en notificaciones.
 """
 from __future__ import annotations
 
@@ -14,18 +12,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.prestamo import Prestamo
-from app.services.comparar_abonos_drive_cuotas_service import comparar_abonos_drive_vs_cuotas
+from app.services.comparar_fecha_entrega_q_aprobacion_service import (
+    comparar_fecha_entrega_column_q_vs_aprobacion,
+)
 
 logger = logging.getLogger(__name__)
 
 _EXCL = ("LIQUIDADO", "DESISTIMIENTO")
 
 
-def ejecutar_refresh_abonos_drive_cuotas_cache_nightly(db: Session) -> Dict[str, Any]:
-    """
-    Recorre préstamos no liquidados/desistimiento y guarda el resultado de comparar (persist_cache=True).
-    Hace commit por préstamo para no mantener una transacción enorme.
-    """
+def ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db: Session) -> Dict[str, Any]:
     ok = 0
     err = 0
     skipped = 0
@@ -47,7 +43,7 @@ def ejecutar_refresh_abonos_drive_cuotas_cache_nightly(db: Session) -> Dict[str,
             skipped += 1
             continue
         try:
-            comparar_abonos_drive_vs_cuotas(
+            comparar_fecha_entrega_column_q_vs_aprobacion(
                 db,
                 cedula=ced,
                 prestamo_id=int(pid),
@@ -64,13 +60,13 @@ def ejecutar_refresh_abonos_drive_cuotas_cache_nightly(db: Session) -> Dict[str,
             err += 1
             if err <= 8:
                 logger.warning(
-                    "[abonos_drive_cache_nightly] prestamo_id=%s cedula=%s: %s",
+                    "[fecha_q_cache_nightly] prestamo_id=%s cedula=%s: %s",
                     pid,
                     ced[:12],
                     e,
                 )
     logger.info(
-        "[abonos_drive_cache_nightly] total_ids=%s ok=%s err=%s skipped=%s",
+        "[fecha_q_cache_nightly] total_ids=%s ok=%s err=%s skipped=%s",
         total,
         ok,
         err,
