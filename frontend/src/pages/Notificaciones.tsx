@@ -2426,25 +2426,21 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           </div>
                         </th>
 
-                        {modulo !== 'general' ? (
-                          <>
-                            <th
-                              className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
-                              scope="col"
-                              title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
-                            >
-                              Revisión
-                              <br />
-                              manual
-                            </th>
+                        <th
+                          className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                          scope="col"
+                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
+                        >
+                          Revisión
+                          <br />
+                          manual
+                        </th>
 
-                            <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
-                              <span title="Descargar PDF de estado de cuenta">
-                                Estado de cuenta
-                              </span>
-                            </th>
-                          </>
-                        ) : null}
+                        <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
+                          <span title="Descargar PDF de estado de cuenta">
+                            Estado de cuenta
+                          </span>
+                        </th>
                       </tr>
                     </thead>
 
@@ -2452,7 +2448,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       {listaFiltradaCedula.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={modulo === 'general' ? 8 : 9}
+                            colSpan={modulo === 'general' ? 10 : 9}
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
@@ -2521,20 +2517,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               {textoTotalPendientePagar(row)}
                             </td>
 
-                            {modulo !== 'general' ? (
-                              <>
-                                <td className="px-1 py-2 text-center align-middle">
-                                  <div className="flex flex-wrap items-center justify-center gap-1">
-                                    <RevisionManualNotifCell row={row} />
-                                    <CompararAbonosDriveCuotasCell row={row} />
-                                  </div>
-                                </td>
+                            <td className="px-1 py-2 text-center align-middle">
+                              <div className="flex flex-wrap items-center justify-center gap-1">
+                                <RevisionManualNotifCell row={row} />
+                                <CompararAbonosDriveCuotasCell row={row} />
+                              </div>
+                            </td>
 
-                                <td className="px-2 py-2 text-center align-middle">
-                                  {estadoCuentaPdfCell(row.prestamo_id)}
-                                </td>
-                              </>
-                            ) : null}
+                            <td className="px-2 py-2 text-center align-middle">
+                              {estadoCuentaPdfCell(row.prestamo_id)}
+                            </td>
                           </tr>
                         ))
                       )}
@@ -2562,25 +2554,21 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           </th>
                         ) : null}
 
-                        {modulo !== 'general' ? (
-                          <>
-                            <th
-                              className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
-                              scope="col"
-                              title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
-                            >
-                              Revisión
-                              <br />
-                              manual
-                            </th>
+                        <th
+                          className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                          scope="col"
+                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
+                        >
+                          Revisión
+                          <br />
+                          manual
+                        </th>
 
-                            <th className="w-14 px-2 py-2 text-center font-semibold">
-                              <span title="Descargar PDF de estado de cuenta">
-                                Estado de cuenta
-                              </span>
-                            </th>
-                          </>
-                        ) : null}
+                        <th className="w-14 px-2 py-2 text-center font-semibold">
+                          <span title="Descargar PDF de estado de cuenta">
+                            Estado de cuenta
+                          </span>
+                        </th>
                       </tr>
                     </thead>
 
@@ -2588,7 +2576,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       {listaFiltradaCedula.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={modulo === 'general' ? 4 : 5}
+                            colSpan={modulo === 'general' ? 6 : 5}
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
@@ -2639,20 +2627,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               </td>
                             ) : null}
 
-                            {modulo !== 'general' ? (
-                              <>
-                                <td className="px-1 py-2 text-center align-middle">
-                                  <div className="flex flex-wrap items-center justify-center gap-1">
-                                    <RevisionManualNotifCell row={row} />
-                                    <CompararAbonosDriveCuotasCell row={row} />
-                                  </div>
-                                </td>
+                            <td className="px-1 py-2 text-center align-middle">
+                              <div className="flex flex-wrap items-center justify-center gap-1">
+                                <RevisionManualNotifCell row={row} />
+                                <CompararAbonosDriveCuotasCell row={row} />
+                              </div>
+                            </td>
 
-                                <td className="px-2 py-2 text-center align-middle">
-                                  {estadoCuentaPdfCell(row.prestamo_id)}
-                                </td>
-                              </>
-                            ) : null}
+                            <td className="px-2 py-2 text-center align-middle">
+                              {estadoCuentaPdfCell(row.prestamo_id)}
+                            </td>
                           </tr>
                         ))
                       )}
