@@ -92,6 +92,8 @@ import type {
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
 
+import { CuotasCubiertasVencimientoChartCard } from '../components/dashboard/CuotasCubiertasVencimientoChartCard'
+
 import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
@@ -238,16 +240,6 @@ export function DashboardMenu() {
     const run = async () => {
       try {
         await queryClient.prefetchQuery({
-          queryKey: ['dashboard-pagos-inicial', {}],
-          queryFn: async () =>
-            apiClient.get('/api/v1/dashboard/pagos-inicial?meses_evolucion=6'),
-          staleTime: 2 * 60 * 1000,
-        })
-      } catch {
-        /* prefetch opcional */
-      }
-      try {
-        await queryClient.prefetchQuery({
           queryKey: ['dashboard-financiamiento-inicial', {}],
           queryFn: async () =>
             apiClient.get(
@@ -283,6 +275,38 @@ export function DashboardMenu() {
     tieneFiltrosActivos,
     cantidadFiltrosActivos,
   } = useDashboardFiltros(filtros)
+
+  const {
+    data: pagosInicialCuotasCubiertas,
+    isLoading: loadingPagosInicialCuotasCubiertas,
+  } = useQuery({
+    queryKey: ['dashboard-pagos-inicial', filtros],
+
+    queryFn: async ({ signal }) => {
+      const params = construirFiltrosObject()
+      const queryParams = new URLSearchParams()
+      queryParams.append('meses_evolucion', '6')
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+      return apiClient.get(
+        `/api/v1/dashboard/pagos-inicial?${queryParams.toString()}`,
+        { signal }
+      ) as Promise<{
+        cuotas_con_pago_aplicado_por_mes_cuota?: Array<{
+          mes: string
+          monto_usd: number
+          cuotas_con_pago_aplicado: number
+        }>
+      }>
+    },
+
+    staleTime: 2 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    retry: 1,
+  })
 
   /** Período efectivo para un gráfico: el del gráfico si está definido, si no el general */
 
@@ -1081,6 +1105,19 @@ export function DashboardMenu() {
             </div>
           </motion.div>
         )}
+
+        <section
+          id="dashboard-cuotas-cubiertas"
+          aria-label="Cuotas cubiertas por mes de vencimiento"
+        >
+          <CuotasCubiertasVencimientoChartCard
+            loading={loadingPagosInicialCuotasCubiertas}
+            datos={
+              pagosInicialCuotasCubiertas?.cuotas_con_pago_aplicado_por_mes_cuota
+            }
+            motionDelay={0.06}
+          />
+        </section>
 
         {/* KPIs PRINCIPALES (cuatro tarjetas; fila completa en xl) */}
 
