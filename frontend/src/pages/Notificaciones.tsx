@@ -183,14 +183,7 @@ function tabsParaModulo(
   modulo: NotificacionesModulo
 ): { id: TabId; label: string; icon: typeof Clock }[] {
   if (modulo === 'general') {
-    return [
-      {
-        id: 'general_todos',
-        label: 'General',
-        icon: LayoutList,
-      },
-      { id: 'configuracion', label: 'Configuración', icon: Settings },
-    ]
+    return [{ id: 'general_todos', label: 'General', icon: LayoutList }]
   }
   if (modulo === 'a3cuotas') {
     return [
@@ -322,6 +315,25 @@ function detalleErrorRevisionNotif(e: unknown): string {
   return typeof d === 'string'
     ? d
     : (e as Error)?.message || 'Error desconocido'
+}
+
+function soloDigitosCedulaNotif(s: string): string {
+  return String(s ?? '').replace(/\D/g, '')
+}
+
+/** Coincidencia por subcadena: prioriza comparación solo dígitos (V-123 / 123). */
+function filaCoincideFiltroCedulaNotif(
+  row: ClienteRetrasadoItem,
+  filtro: string
+): boolean {
+  const t = filtro.trim()
+  if (!t) return true
+  const qDigits = soloDigitosCedulaNotif(t)
+  const ced = String(row.cedula ?? '')
+  if (qDigits.length > 0) {
+    return soloDigitosCedulaNotif(ced).includes(qDigits)
+  }
+  return ced.toLowerCase().includes(t.toLowerCase())
 }
 
 /**
@@ -1074,8 +1086,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       (modulo === 'd2antes' && (t === 'dias_1_atraso' || t === 'prejudicial')) ||
       (modulo === 'general' &&
         t !== 'general_todos' &&
-        t !== 'configuracion' &&
-        Boolean(t))
+        Boolean(t)) ||
+      (modulo === 'general' && t === 'configuracion')
     ) {
       setSearchParams(
         p => {
@@ -1089,6 +1101,22 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
     }
   }, [searchParams, setSearchParams, modulo])
+
+  useEffect(() => {
+    if (modulo !== 'general') return
+    if (activeTab === 'configuracion') {
+      setActiveTab('general_todos')
+      setSearchParams(
+        p => {
+          const next = new URLSearchParams(p)
+          next.delete('tab')
+          next.delete('cfg')
+          return next
+        },
+        { replace: true }
+      )
+    }
+  }, [modulo, activeTab, setSearchParams])
 
   const setActiveTabAndUrl = (tab: TabId) => {
     setActiveTab(tab)
@@ -1188,7 +1216,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     staleTime: 0,
 
-    enabled: activeTab !== 'configuracion',
+    enabled: activeTab !== 'configuracion' && modulo !== 'general',
 
     placeholderData: {
       dias_5: { enviados: 0, rebotados: 0 },
@@ -1602,6 +1630,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     Partial<Record<TabId, number>>
   >({})
 
+  const [filtroCedula, setFiltroCedula] = useState('')
+
+  useEffect(() => {
+    setFiltroCedula('')
+  }, [activeTab, modulo, fechaCaracasApi])
+
   useEffect(() => {
     setSortCol(null)
 
@@ -1673,7 +1707,17 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       row.total_pendiente_pagar != null
   )
 
-  const totalFilasListado = mostrarTablaCuotas ? sortedList.length : list.length
+  const listaBasePaginacion = mostrarTablaCuotas ? sortedList : list
+
+  const listaFiltradaCedula = useMemo(() => {
+    const q = filtroCedula.trim()
+    if (!q) return listaBasePaginacion
+    return listaBasePaginacion.filter(row =>
+      filaCoincideFiltroCedulaNotif(row, q)
+    )
+  }, [listaBasePaginacion, filtroCedula])
+
+  const totalFilasListado = listaFiltradaCedula.length
 
   const totalPaginasListado = Math.max(
     1,
@@ -1702,12 +1746,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     (paginaListaActual - 1) * NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA
 
   const filasPagina = useMemo(() => {
-    const src = mostrarTablaCuotas ? sortedList : list
-    return src.slice(
+    return listaFiltradaCedula.slice(
       indiceInicioPagina,
       indiceInicioPagina + NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA
     )
-  }, [mostrarTablaCuotas, sortedList, list, indiceInicioPagina])
+  }, [listaFiltradaCedula, indiceInicioPagina])
 
   const irPaginaLista = (p: number) => {
     const next = Math.min(Math.max(1, p), totalPaginasListado)
@@ -1832,7 +1875,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           value={fechaReferenciaCaracas}
           onChange={e => setFechaCaracasYUrl(e.target.value)}
           className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm"
-          title="Listados y envíos manuales como si fuera este día en America/Caracas (p. ej. si no envió a tiempo). Vacío = hoy."
+          title={
+            modulo === 'general'
+              ? 'Listados como si fuera este día en America/Caracas. Vacío = hoy.'
+              : 'Listados y envíos manuales como si fuera este día en America/Caracas (p. ej. si no envió a tiempo). Vacío = hoy.'
+          }
         />
         <Button
           type="button"
@@ -1847,7 +1894,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     </div>
   )
 
-  if (activeTab === 'configuracion') {
+  if (activeTab === 'configuracion' && modulo !== 'general') {
     return (
       <div className="space-y-6">
         <ModulePageHeader
@@ -1908,13 +1955,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         {/* Cada submenú: una fila de envíos / adjuntos por tipo en BD. */}
         <ConfiguracionNotificaciones
           alcance={
-            modulo === 'general'
-              ? 'completo'
-              : modulo === 'a1dia'
-                ? 'solo_pago_1_dia'
-                : modulo === 'd2antes'
-                  ? 'solo_pago_2_dias_antes_pendiente'
-                  : 'solo_prejudicial'
+            modulo === 'a1dia'
+              ? 'solo_pago_1_dia'
+              : modulo === 'd2antes'
+                ? 'solo_pago_2_dias_antes_pendiente'
+                : 'solo_prejudicial'
           }
         />
       </div>
@@ -1932,7 +1977,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           title="Notificaciones"
           description={
             modulo === 'general'
-              ? 'Vista unificada: mismas listas que «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes», con columna de caso. Los envíos masivos siguen en cada submódulo específico.'
+              ? 'Solo consulta: listas unificadas (día siguiente al vencimiento, atraso 5 cuotas, 2 días antes) con columna de caso. Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
               : modulo === 'a3cuotas'
                 ? 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
                 : modulo === 'd2antes'
@@ -1971,52 +2016,63 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         />
       </motion.div>
 
-      <div className="border-b border-gray-200">
-        <nav className="flex flex-wrap gap-1">
-          {TABS.filter(t => t.id !== 'configuracion').map(tab => {
-            const count =
-              tab.id === 'general_todos'
-                ? (data?.dias_1_atraso?.length ?? 0) +
-                  (dataPrejudicial?.items?.length ?? 0) +
-                  (dataD2Antes?.items?.length ?? 0)
-                : tab.id === 'prejudicial'
-                  ? (dataPrejudicial?.items?.length ?? 0)
-                  : tab.id === 'd2antes'
-                    ? (dataD2Antes?.items?.length ?? 0)
-                    : (data?.dias_1_atraso?.length ?? 0)
+      {modulo !== 'general' ? (
+        <div className="border-b border-gray-200">
+          <nav className="flex flex-wrap gap-1">
+            {TABS.filter(t => t.id !== 'configuracion').map(tab => {
+              const count =
+                tab.id === 'general_todos'
+                  ? (data?.dias_1_atraso?.length ?? 0) +
+                    (dataPrejudicial?.items?.length ?? 0) +
+                    (dataD2Antes?.items?.length ?? 0)
+                  : tab.id === 'prejudicial'
+                    ? (dataPrejudicial?.items?.length ?? 0)
+                    : tab.id === 'd2antes'
+                      ? (dataD2Antes?.items?.length ?? 0)
+                      : (data?.dias_1_atraso?.length ?? 0)
 
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTabAndUrl(tab.id)}
-                className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <tab.icon className="h-4 w-4" />
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTabAndUrl(tab.id)}
+                  className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <tab.icon className="h-4 w-4" />
 
-                {tab.label}
+                  {tab.label}
 
-                {count > 0 && (
-                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-700">
-                    {count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+                  {count > 0 && (
+                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
 
-          <button
-            onClick={() => setActiveTabAndUrl('configuracion')}
-            className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700"
-          >
-            <Settings className="h-4 w-4" />
-            Configuración
-          </button>
-        </nav>
-      </div>
+            <button
+              onClick={() => setActiveTabAndUrl('configuracion')}
+              className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700"
+            >
+              <Settings className="h-4 w-4" />
+              Configuración
+            </button>
+          </nav>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Total de filas en las tres listas:{' '}
+          <span className="font-semibold tabular-nums text-foreground">
+            {(data?.dias_1_atraso?.length ?? 0) +
+              (dataPrejudicial?.items?.length ?? 0) +
+              (dataD2Antes?.items?.length ?? 0)}
+          </span>
+        </p>
+      )}
 
       <motion.div
         key={activeTab}
@@ -2049,7 +2105,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </span>
               ) : null}
               {modulo === 'general'
-                ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes». La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. Para enviar correos use el submódulo correspondiente.'
+                ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes». La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios.'
                 : modulo === 'a3cuotas'
                   ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
                   : modulo === 'd2antes'
@@ -2143,14 +2199,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </Button>
               )}
 
-              {modulo === 'general' ? (
-                <p className="max-w-xl text-xs text-muted-foreground">
-                  El envío de correos no está disponible en esta vista unificada:
-                  use «Día siguiente al vencimiento», «Atraso 5 cuotas» o «2 días
-                  antes» según el caso.
-                </p>
-              ) : null}
-
               <Button
                 type="button"
                 variant="outline"
@@ -2163,6 +2211,47 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <X className="mr-2 h-4 w-4" />
                 Cancelar
               </Button>
+            </div>
+
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="flex min-w-[12rem] max-w-md flex-1 flex-col gap-1">
+                <label
+                  htmlFor="filtro-cedula-notificaciones"
+                  className="text-xs font-medium text-gray-600"
+                >
+                  Filtrar por cédula
+                </label>
+                <Input
+                  id="filtro-cedula-notificaciones"
+                  type="search"
+                  placeholder="Contiene (ej. 17579297 o V-17579297)"
+                  value={filtroCedula}
+                  onChange={e => setFiltroCedula(e.target.value)}
+                  autoComplete="off"
+                  className="h-9 max-w-md bg-white"
+                  disabled={isLoadingLista}
+                />
+              </div>
+              {filtroCedula.trim() ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 shrink-0"
+                  onClick={() => setFiltroCedula('')}
+                >
+                  Limpiar filtro
+                </Button>
+              ) : null}
+              {filtroCedula.trim() && list.length > 0 ? (
+                <p className="text-xs text-muted-foreground sm:ml-auto">
+                  Mostrando{' '}
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {listaFiltradaCedula.length}
+                  </span>{' '}
+                  de <span className="tabular-nums">{list.length}</span> filas
+                </p>
+              ) : null}
             </div>
 
             {/* KPIs por pestaña: correos enviados y rebotados */}
@@ -2337,33 +2426,41 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           </div>
                         </th>
 
-                        <th
-                          className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
-                          scope="col"
-                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
-                        >
-                          Revisión
-                          <br />
-                          manual
-                        </th>
+                        {modulo !== 'general' ? (
+                          <>
+                            <th
+                              className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                              scope="col"
+                              title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
+                            >
+                              Revisión
+                              <br />
+                              manual
+                            </th>
 
-                        <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
-                          <span title="Descargar PDF de estado de cuenta">
-                            Estado de cuenta
-                          </span>
-                        </th>
+                            <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
+                              <span title="Descargar PDF de estado de cuenta">
+                                Estado de cuenta
+                              </span>
+                            </th>
+                          </>
+                        ) : null}
                       </tr>
                     </thead>
 
                     <tbody>
-                      {list.length === 0 ? (
+                      {listaFiltradaCedula.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={modulo === 'general' ? 10 : 9}
+                            colSpan={modulo === 'general' ? 8 : 9}
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
-                              Ningún registro en este criterio.
+                              {listaCargadaSinFilas
+                                ? 'Ningún registro en este criterio.'
+                                : filtroCedula.trim()
+                                  ? 'Ninguna fila coincide con la cédula indicada.'
+                                  : 'Ningún registro en este criterio.'}
                             </span>
                             {listaCargadaSinFilas ? (
                               <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
@@ -2374,6 +2471,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     : modulo === 'd2antes'
                                       ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
                                       : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
+                              </span>
+                            ) : filtroCedula.trim() ? (
+                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                Ajuste el texto del filtro o use «Limpiar filtro». La
+                                búsqueda ignora puntos y guiones y compara por
+                                subcadena de dígitos.
                               </span>
                             ) : null}
                           </td>
@@ -2418,16 +2521,20 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               {textoTotalPendientePagar(row)}
                             </td>
 
-                            <td className="px-1 py-2 text-center align-middle">
-                              <div className="flex flex-wrap items-center justify-center gap-1">
-                                <RevisionManualNotifCell row={row} />
-                                <CompararAbonosDriveCuotasCell row={row} />
-                              </div>
-                            </td>
+                            {modulo !== 'general' ? (
+                              <>
+                                <td className="px-1 py-2 text-center align-middle">
+                                  <div className="flex flex-wrap items-center justify-center gap-1">
+                                    <RevisionManualNotifCell row={row} />
+                                    <CompararAbonosDriveCuotasCell row={row} />
+                                  </div>
+                                </td>
 
-                            <td className="px-2 py-2 text-center align-middle">
-                              {estadoCuentaPdfCell(row.prestamo_id)}
-                            </td>
+                                <td className="px-2 py-2 text-center align-middle">
+                                  {estadoCuentaPdfCell(row.prestamo_id)}
+                                </td>
+                              </>
+                            ) : null}
                           </tr>
                         ))
                       )}
@@ -2455,33 +2562,41 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           </th>
                         ) : null}
 
-                        <th
-                          className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
-                          scope="col"
-                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
-                        >
-                          Revisión
-                          <br />
-                          manual
-                        </th>
+                        {modulo !== 'general' ? (
+                          <>
+                            <th
+                              className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                              scope="col"
+                              title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
+                            >
+                              Revisión
+                              <br />
+                              manual
+                            </th>
 
-                        <th className="w-14 px-2 py-2 text-center font-semibold">
-                          <span title="Descargar PDF de estado de cuenta">
-                            Estado de cuenta
-                          </span>
-                        </th>
+                            <th className="w-14 px-2 py-2 text-center font-semibold">
+                              <span title="Descargar PDF de estado de cuenta">
+                                Estado de cuenta
+                              </span>
+                            </th>
+                          </>
+                        ) : null}
                       </tr>
                     </thead>
 
                     <tbody>
-                      {list.length === 0 ? (
+                      {listaFiltradaCedula.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={modulo === 'general' ? 6 : 5}
+                            colSpan={modulo === 'general' ? 4 : 5}
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
-                              Ningún cliente en este criterio.
+                              {listaCargadaSinFilas
+                                ? 'Ningún cliente en este criterio.'
+                                : filtroCedula.trim()
+                                  ? 'Ninguna fila coincide con la cédula indicada.'
+                                  : 'Ningún cliente en este criterio.'}
                             </span>
                             {listaCargadaSinFilas ? (
                               <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
@@ -2492,6 +2607,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     : modulo === 'd2antes'
                                       ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
                                       : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
+                              </span>
+                            ) : filtroCedula.trim() ? (
+                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                Ajuste el texto del filtro o use «Limpiar filtro». La
+                                búsqueda ignora puntos y guiones y compara por
+                                subcadena de dígitos.
                               </span>
                             ) : null}
                           </td>
@@ -2518,16 +2639,20 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               </td>
                             ) : null}
 
-                            <td className="px-1 py-2 text-center align-middle">
-                              <div className="flex flex-wrap items-center justify-center gap-1">
-                                <RevisionManualNotifCell row={row} />
-                                <CompararAbonosDriveCuotasCell row={row} />
-                              </div>
-                            </td>
+                            {modulo !== 'general' ? (
+                              <>
+                                <td className="px-1 py-2 text-center align-middle">
+                                  <div className="flex flex-wrap items-center justify-center gap-1">
+                                    <RevisionManualNotifCell row={row} />
+                                    <CompararAbonosDriveCuotasCell row={row} />
+                                  </div>
+                                </td>
 
-                            <td className="px-2 py-2 text-center align-middle">
-                              {estadoCuentaPdfCell(row.prestamo_id)}
-                            </td>
+                                <td className="px-2 py-2 text-center align-middle">
+                                  {estadoCuentaPdfCell(row.prestamo_id)}
+                                </td>
+                              </>
+                            ) : null}
                           </tr>
                         ))
                       )}
