@@ -24,8 +24,8 @@ Funciones de este módulo:
 Escaneo Gmail / digitalización de pagos (plantillas Mercantil, BNC, Binance, BDV, NR, etc.):
   La cédula del Excel **no** sale de la imagen; el backend resuelve el cliente comparando el **From** (De)
   con `clientes.email` (predeterminado); si no hay coincidencia, con `clientes.email_secundario` si no está vacío.
-  Si tampoco coincide: la columna **Cédula** del Excel queda **ERROR EMAIL** y se aplica la etiqueta Gmail **ERROR EMAIL**
-  (no inventar cédula). Ver `app.services.pagos_gmail.pipeline._cedula_por_email_cliente`.
+  Si tampoco coincide: la columna **Cédula** del Excel queda **ERROR EMAIL** y en Gmail **solo** la etiqueta **ERROR EMAIL**
+  (no inventar cédula; sin MERCANTIL/BNC/BINANCE/BNV ni otras). Ver `app.services.pagos_gmail.pipeline`.
 """
 from __future__ import annotations
 
