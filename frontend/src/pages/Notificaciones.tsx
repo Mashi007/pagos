@@ -273,11 +273,19 @@ function cuotasAtrasadasSortValue(row: ClienteRetrasadoItem): number {
   return Number(n)
 }
 
+/** Diferencia ABONOS (hoja) − total pagado en cuotas; desde caché en fila (General). */
+function numericDiferenciaAbonoSort(row: ClienteRetrasadoItem): number | null {
+  const d = row.comparar_abonos_drive_cuotas?.diferencia
+  if (d == null || Number.isNaN(Number(d))) return null
+  return Number(d)
+}
+
 type NotificacionesCuotasSortCol =
   | 'numero_cuota'
   | 'fecha_vencimiento'
   | 'cuotas_atrasadas'
   | 'total_pendiente'
+  | 'diferencia_abono'
 
 function SortArrowsCuotas({
   column,
@@ -2392,6 +2400,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           return na - nb
         }
 
+        case 'diferencia_abono': {
+          const va = numericDiferenciaAbonoSort(a)
+          const vb = numericDiferenciaAbonoSort(b)
+          const na = va == null ? Number.POSITIVE_INFINITY : va
+          const nb = vb == null ? Number.POSITIVE_INFINITY : vb
+          return na - nb
+        }
+
         default:
           return 0
       }
@@ -3373,11 +3389,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         ) : null}
 
                         {modulo === 'general' ? (
-                          <th
-                            className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Valor fijo del listado: se recalcula en el servidor cada domingo a las 02:00 (America/Caracas) y al aplicar ABONOS desde la balanza."
-                          >
-                            Diferencia Abono
+                          <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
+                            <div className="inline-flex w-full items-center justify-end gap-1">
+                              <span
+                                title="Valor del listado desde caché en BD: domingo 02:00 Caracas o Recalcular; también al aplicar ABONOS desde la balanza."
+                              >
+                                Diferencia Abono
+                              </span>
+
+                              <SortArrowsCuotas
+                                column="diferencia_abono"
+                                labelAsc="Orden ascendente: diferencia abono (hoja − cuotas)"
+                                labelDesc="Orden descendente: diferencia abono (hoja − cuotas)"
+                                sortCol={sortCol}
+                                sortDir={sortDir}
+                                onAsc={aplicarOrdenAsc}
+                                onDesc={aplicarOrdenDesc}
+                              />
+                            </div>
                           </th>
                         ) : null}
 
