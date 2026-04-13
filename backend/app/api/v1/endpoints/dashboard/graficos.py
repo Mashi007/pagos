@@ -1001,8 +1001,9 @@ def get_evolucion_pagos(
 @router.get(
     "/cuotas-con-pago-aplicado-por-mes-cuota",
     summary=(
-        "Cuotas programadas: USD aplicados vía cuota_pagos por mes de vencimiento de la cuota; "
-        "incluye pagos conciliados y no conciliados (no se filtra por conciliado)."
+        "Cuotas programadas cubiertas (USD) por mes de vencimiento: suma cuota_pagos cuando existe; "
+        "si no, total_pagado o monto de la cuota si tiene fecha_pago (alineado a analisis-cuentas-por-cobrar). "
+        "Sin filtro cliente ACTIVO; préstamo APROBADO."
     ),
 )
 def get_cuotas_con_pago_aplicado_por_mes_cuota(
@@ -1013,11 +1014,18 @@ def get_cuotas_con_pago_aplicado_por_mes_cuota(
     db: Session = Depends(get_db),
 ):
     """
-    Por mes **calendario** de `cuotas.fecha_vencimiento` (cuota programada):
-    - Suma **todos** los `cuota_pagos.monto_aplicado` (todo lo aplicado en cascada a esa cuota),
-      venga de pagos **conciliados o no** (no hay filtro sobre `pagos.conciliado` ni `estado`).
-    - La fecha del pago no define el bucket: cuota del 2 ene y pago el 5 abr cuenta en **enero**.
-    - `COUNT(DISTINCT cuota_id)` por mes: cuotas distintas con al menos un abono aplicado en ese mes.
+    Por mes **calendario** de `cuotas.fecha_vencimiento` (igual criterio de “cuota de ese mes” que
+    `analisis-cuentas-por-cobrar`: vencimiento dentro del mes).
+
+    Monto por cuota (una sola vez por cuota en ese mes):
+    1) Si hay filas en `cuota_pagos`, se usa **sum(monto_aplicado)** (incluye pagos conciliados o no).
+    2) Si no hay aplicaciones pero `total_pagado` > 0, se usa **total_pagado**.
+    3) Si sigue en cero pero `fecha_pago` está informada (histórico sin detalle), se usa **monto** de la cuota
+       (misma magnitud que el gráfico verde de cuentas por cobrar para “cobrado del mes”).
+
+    El bucket sigue siendo el mes de **vencimiento**, no el mes del pago: cuota de enero pagada en abril suma en enero.
+
+    No se filtra `Cliente.estado` (coherente con analisis-cuentas-por-cobrar).
     """
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
@@ -1030,7 +1038,6 @@ def get_cuotas_con_pago_aplicado_por_mes_cuota(
         rango_inicio = cal[0]["fecha_inicio"]
         rango_fin = cal[-1]["fecha_fin"]
         conds = [
-            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_vencimiento >= rango_inicio,
             Cuota.fecha_vencimiento <= rango_fin,
@@ -1041,20 +1048,31 @@ def get_cuotas_con_pago_aplicado_por_mes_cuota(
             conds.append(Prestamo.concesionario == concesionario)
         if modelo:
             conds.append(Prestamo.modelo_vehiculo == modelo)
+        sum_aplic_subq = (
+            select(
+                CuotaPago.cuota_id.label("sq_cuota_id"),
+                func.sum(CuotaPago.monto_aplicado).label("sum_aplic"),
+            ).group_by(CuotaPago.cuota_id)
+        ).subquery()
+        sum_aplic_col = func.coalesce(sum_aplic_subq.c.sum_aplic, 0)
+        monto_cubierto = case(
+            (sum_aplic_col > 0, sum_aplic_col),
+            (func.coalesce(Cuota.total_pagado, 0) > 0, func.coalesce(Cuota.total_pagado, 0)),
+            (Cuota.fecha_pago.isnot(None), Cuota.monto),
+            else_=literal(0),
+        )
         anio = extract("year", Cuota.fecha_vencimiento)
         mes_num = extract("month", Cuota.fecha_vencimiento)
         q = (
             select(
                 anio.label("anio"),
                 mes_num.label("mes"),
-                func.coalesce(func.sum(CuotaPago.monto_aplicado), 0).label("monto_usd"),
-                func.count(distinct(Cuota.id)).label("n_cuotas"),
+                func.coalesce(func.sum(monto_cubierto), 0).label("monto_usd"),
+                func.sum(case((monto_cubierto > 0, 1), else_=0)).label("n_cuotas"),
             )
-            .select_from(CuotaPago)
-            .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+            .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .join(Pago, CuotaPago.pago_id == Pago.id)
+            .outerjoin(sum_aplic_subq, sum_aplic_subq.c.sq_cuota_id == Cuota.id)
             .where(and_(*conds))
             .group_by(anio, mes_num)
         )

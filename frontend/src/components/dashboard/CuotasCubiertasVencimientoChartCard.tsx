@@ -54,15 +54,15 @@ export function CuotasCubiertasVencimientoChartCard({
             </span>
           </CardTitle>
           <p className="text-sm font-normal text-gray-600">
-            Total en <span className="font-medium">USD</span> de todo lo
-            aplicado a cuotas vía{' '}
-            <span className="font-medium">cuota_pagos</span>, por{' '}
-            <span className="font-medium">mes calendario de vencimiento</span>{' '}
-            de la cuota. Incluye pagos{' '}
-            <span className="font-medium">conciliados y no conciliados</span>.
-            Si la cuota es de enero y el abono cae en abril, el monto se muestra
-            en <span className="font-medium">enero</span>. El detalle indica
-            cuántas cuotas distintas recibieron abono en ese mes de vencimiento.
+            Por <span className="font-medium">mes de vencimiento</span> de la
+            cuota (no por mes del pago). El monto usa primero lo aplicado en{' '}
+            <span className="font-medium">cuota_pagos</span> (conciliado o no);
+            si no hay detalle ahí, el total pagado en la cuota o el monto de la
+            cuota si ya tiene fecha de pago, en línea con el gráfico de{' '}
+            <span className="font-medium">Cuentas por cobrar</span>. Incluye
+            todos los préstamos aprobados (sin filtrar clientes inactivos). El
+            detalle indica cuántas cuotas distintas tienen cobertura en ese mes
+            de vencimiento.
           </p>
         </CardHeader>
 
