@@ -654,6 +654,17 @@ class NotificacionService {
     }>(`${this.baseUrl}/actualizar`, {}, { signal: opts?.signal })
   }
 
+  /**
+   * Programa en el servidor el recálculo de la caché «Diferencia abono» (mismo job que 02:00 Caracas).
+   * La respuesta es inmediata; el trabajo corre en segundo plano.
+   */
+  async refreshAbonosDriveCache(): Promise<{ ok: boolean; mensaje: string }> {
+    return await apiClient.post<{ ok: boolean; mensaje: string }>(
+      `${this.baseUrl}/refresh-abonos-drive-cache`,
+      {}
+    )
+  }
+
   /** Plantilla editable del PDF de carta de cobranza (adjunto al email). */
 
   async getPlantillaPdfCobranza(): Promise<{

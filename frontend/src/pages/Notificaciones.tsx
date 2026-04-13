@@ -25,6 +25,7 @@ import {
   X,
   Scale,
   LayoutList,
+  Database,
 } from 'lucide-react'
 
 import {
@@ -1346,6 +1347,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [actualizandoListas, setActualizandoListas] = useState(false)
 
+  const [programandoRefreshAbonosDrive, setProgramandoRefreshAbonosDrive] =
+    useState(false)
+
   const [descargandoEstadoCuentaId, setDescargandoEstadoCuentaId] = useState<
     number | null
   >(null)
@@ -1479,6 +1483,25 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         operacionListaAbortRef.current = null
       }
       setActualizandoListas(false)
+    }
+  }
+
+  const handleRefreshAbonosDriveCache = async () => {
+    setProgramandoRefreshAbonosDrive(true)
+    try {
+      const res = await notificacionService.refreshAbonosDriveCache()
+      toast.success(
+        res.mensaje ??
+          'Recálculo de «Diferencia abono» programado en el servidor. En unos minutos use Actualización manual o recargue.'
+      )
+    } catch (e) {
+      console.error(e)
+      toast.error(
+        getErrorMessage(e) ||
+          'No se pudo programar el recálculo de «Diferencia abono».'
+      )
+    } finally {
+      setProgramandoRefreshAbonosDrive(false)
     }
   }
 
@@ -2103,7 +2126,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           title="Notificaciones"
           description={
             modulo === 'general'
-              ? 'Solo consulta: listas unificadas (día siguiente al vencimiento, atraso 5 cuotas, 2 días antes) con columna de caso. Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
+              ? 'Solo consulta: listas unificadas (día siguiente al vencimiento, atraso 5 cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (job 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
               : modulo === 'a3cuotas'
                 ? 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
                 : modulo === 'd2antes'
@@ -2124,6 +2147,25 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 />
                 Actualizacion manual
               </Button>
+
+              {modulo === 'general' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleRefreshAbonosDriveCache()}
+                  disabled={
+                    programandoRefreshAbonosDrive || actualizandoListas
+                  }
+                  title="Misma lógica que el job de las 02:00 (America/Caracas): persiste comparación ABONOS (hoja) vs cuotas para préstamos activos. Corre en segundo plano; luego use Actualización manual."
+                >
+                  <Database
+                    className={`mr-2 h-4 w-4 ${
+                      programandoRefreshAbonosDrive ? 'animate-pulse' : ''
+                    }`}
+                  />
+                  Recalcular Diferencia abono
+                </Button>
+              ) : null}
 
               <Button
                 type="button"
@@ -2231,7 +2273,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </span>
               ) : null}
               {modulo === 'general'
-                ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes». La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios.'
+                ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes». La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (02:00 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
                 : modulo === 'a3cuotas'
                   ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
                   : modulo === 'd2antes'
@@ -2258,6 +2300,30 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 />
                 Actualizacion manual
               </Button>
+
+              {modulo === 'general' ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleRefreshAbonosDriveCache()}
+                  disabled={
+                    programandoRefreshAbonosDrive ||
+                    actualizandoListas ||
+                    enviandoPrejudicial ||
+                    enviandoD2Antes ||
+                    enviandoPago1Dia
+                  }
+                  title="Job en servidor (segundo plano), igual que 02:00 Caracas. Luego pulse Actualización manual."
+                >
+                  <Database
+                    className={`mr-2 h-4 w-4 ${
+                      programandoRefreshAbonosDrive ? 'animate-pulse' : ''
+                    }`}
+                  />
+                  Recalcular Diferencia abono
+                </Button>
+              ) : null}
 
               {modulo === 'a1dia' && (
                 <Button

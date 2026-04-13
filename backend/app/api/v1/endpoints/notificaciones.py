@@ -23,7 +23,7 @@ from app.schemas.auth import UserResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.core.serializers import to_finite_float_or_zero
 from app.services.cuota_estado import hoy_negocio, parse_fecha_referencia_negocio
 from app.services.notificacion_service import (
@@ -1991,6 +1991,43 @@ def actualizar_notificaciones(db: Session = Depends(get_db)):
     El frontend invalida su caché de React Query tras recibir 200.
     """
     return ejecutar_actualizacion_notificaciones(db)
+
+
+def _run_refresh_abonos_drive_cache_bg() -> None:
+    """Misma lógica que el job 02:00 Caracas; sesión propia para no mezclar con el request HTTP."""
+    db = SessionLocal()
+    try:
+        from app.services.abonos_drive_cuotas_cache_job import (
+            ejecutar_refresh_abonos_drive_cuotas_cache_nightly,
+        )
+
+        res = ejecutar_refresh_abonos_drive_cuotas_cache_nightly(db)
+        logger.info(
+            "[notificaciones] refresh_abonos_drive_cache background resultado=%s",
+            res,
+        )
+    except Exception:
+        logger.exception("[notificaciones] refresh_abonos_drive_cache background error")
+    finally:
+        db.close()
+
+
+@router.post("/refresh-abonos-drive-cache")
+def post_refresh_abonos_drive_cache(background_tasks: BackgroundTasks):
+    """
+    Programa en segundo plano el recálculo de `prestamos.abonos_drive_cuotas_cache`
+    (columna «Diferencia abono» en General). Igual criterio que el cron de las 02:00 Caracas;
+    en carteras grandes puede tardar varios minutos. Tras terminar, el cliente debe volver a
+    cargar listados (p. ej. «Actualización manual»).
+    """
+    background_tasks.add_task(_run_refresh_abonos_drive_cache_bg)
+    return {
+        "ok": True,
+        "mensaje": (
+            "Recálculo de caché «Diferencia abono» programado en segundo plano. "
+            "Cuando termine (varios minutos), use «Actualización manual» o recargue la vista."
+        ),
+    }
 
 
 def build_prejudicial_items(
