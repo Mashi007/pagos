@@ -22,6 +22,7 @@ from app.core.deps import get_current_user
 from app.models.cliente import Cliente
 from app.models.envio_notificacion import EnvioNotificacion
 from app.models.cuota import Cuota
+from app.models.cuota_pago import CuotaPago
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.pago import Pago
 from app.models.pago_reportado import PagoReportado
@@ -994,6 +995,96 @@ def get_evolucion_pagos(
         logger.exception("Error en evolucion-pagos: %s", e)
         m = _etiquetas_12_meses()
         return {"meses": [{"mes": x["mes"], "pagos": x.get("pagos", 0), "monto": x.get("monto", 0)} for x in m]}
+
+
+@router.get(
+    "/cuotas-con-pago-aplicado-por-mes-cuota",
+    summary=(
+        "Monto USD aplicado a cuotas (suma cuota_pagos.monto_aplicado) y cantidad de cuotas "
+        "con aplicación, agrupados por mes natural de fecha_vencimiento de la cuota (no por fecha de pago)."
+    ),
+)
+def get_cuotas_con_pago_aplicado_por_mes_cuota(
+    meses: Optional[int] = Query(12, ge=1, le=24),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Por cada mes (ventana alineada a /evolucion-pagos):
+    - Suma en USD de monto_aplicado en cuota_pagos para cuotas cuyo vencimiento cae en ese mes.
+      Independiente de la fecha en que se registró/aplicó el pago.
+    - Cuenta cuotas distintas con al menos una aplicación en ese bucket.
+    Monto en línea con cartera: pagos aplicados en cascada (cuota_pagos).
+    """
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
+    meses_efectivos = min(int(meses or 12), 12)
+    try:
+        meses_list = _etiquetas_12_meses()
+        hoy = datetime.now(timezone.utc)
+        resultado = []
+        for i, m in enumerate(meses_list):
+            fin_mes = hoy - timedelta(days=30 * (11 - i))
+            ultimo_dia = _ultimo_dia_del_mes(
+                fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes
+            )
+            ultimo_dia_date = ultimo_dia.date() if hasattr(ultimo_dia, "date") else ultimo_dia
+            inicio_mes = ultimo_dia_date.replace(day=1)
+            conds = [
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento >= inicio_mes,
+                Cuota.fecha_vencimiento <= ultimo_dia_date,
+            ]
+            if analista:
+                conds.append(Prestamo.analista == analista)
+            if concesionario:
+                conds.append(Prestamo.concesionario == concesionario)
+            if modelo:
+                conds.append(Prestamo.modelo_vehiculo == modelo)
+            aplic_base = (
+                select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
+                .select_from(CuotaPago)
+                .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(and_(*conds))
+            )
+            monto_usd = db.scalar(aplic_base) or 0
+            n_cuotas = (
+                db.scalar(
+                    select(func.count(distinct(Cuota.id)))
+                    .select_from(CuotaPago)
+                    .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                    .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                    .where(and_(*conds))
+                )
+                or 0
+            )
+            resultado.append(
+                {
+                    "mes": m["mes"],
+                    "monto_usd": _safe_float(monto_usd),
+                    "cuotas_con_pago_aplicado": int(n_cuotas),
+                }
+            )
+        if meses_efectivos < len(resultado):
+            resultado = resultado[-meses_efectivos:]
+        return {"meses": resultado}
+    except Exception as e:
+        logger.exception("Error en cuotas-con-pago-aplicado-por-mes-cuota: %s", e)
+        fb = _etiquetas_12_meses()
+        if meses_efectivos < len(fb):
+            fb = fb[-meses_efectivos:]
+        return {
+            "meses": [
+                {"mes": x["mes"], "monto_usd": 0.0, "cuotas_con_pago_aplicado": 0} for x in fb
+            ]
+        }
 
 
 def _trim_serie_bs_recibos_extremos(series: list[dict]) -> list[dict]:

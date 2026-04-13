@@ -102,6 +102,11 @@ export function DashboardPagos() {
           pagos: number
           monto: number
         }>
+        cuotas_con_pago_aplicado_por_mes_cuota: Array<{
+          mes: string
+          monto_usd: number
+          cuotas_con_pago_aplicado: number
+        }>
       }
 
       queryClient.setQueryData(['opciones-filtros'], res.opciones_filtros)
@@ -161,6 +166,11 @@ export function DashboardPagos() {
   const datosEvolucion = inicialPagos?.evolucion_pagos_meses
 
   const loadingEvolucion = loadingInicialPagos
+
+  const datosCuotasPagoAplicadoPorMesCuota =
+    inicialPagos?.cuotas_con_pago_aplicado_por_mes_cuota
+
+  const loadingCuotasPagoAplicadoPorMesCuota = loadingInicialPagos
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -316,21 +326,34 @@ export function DashboardPagos() {
 
         <Suspense
           fallback={
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="space-y-6">
               <div className="flex h-[320px] items-center justify-center rounded-lg border border-gray-200 bg-white">
                 <div className="animate-pulse text-gray-400">
                   Cargando graficos...
                 </div>
               </div>
-              <div className="flex h-[320px] items-center justify-center rounded-lg border border-gray-200 bg-white">
-                <div className="animate-pulse text-gray-400">
-                  Cargando graficos...
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="flex h-[320px] items-center justify-center rounded-lg border border-gray-200 bg-white">
+                  <div className="animate-pulse text-gray-400">
+                    Cargando graficos...
+                  </div>
+                </div>
+                <div className="flex h-[320px] items-center justify-center rounded-lg border border-gray-200 bg-white">
+                  <div className="animate-pulse text-gray-400">
+                    Cargando graficos...
+                  </div>
                 </div>
               </div>
             </div>
           }
         >
           <DashboardPagosCharts
+            loadingCuotasPagoAplicadoPorMesCuota={
+              loadingCuotasPagoAplicadoPorMesCuota
+            }
+            datosCuotasPagoAplicadoPorMesCuota={
+              datosCuotasPagoAplicadoPorMesCuota
+            }
             loadingPagosEstado={loadingPagosEstado}
             datosPagosEstado={datosPagosEstado}
             totalPagos={totalPagos}

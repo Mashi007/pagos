@@ -29,7 +29,10 @@ def get_pagos_dashboard_inicial(
     """
     # Import diferido para evitar ciclos de importacion al cargar modulos.
     from app.api.v1.endpoints.pagos import get_pagos_kpis, get_pagos_stats
-    from app.api.v1.endpoints.dashboard.graficos import get_evolucion_pagos
+    from app.api.v1.endpoints.dashboard.graficos import (
+        get_cuotas_con_pago_aplicado_por_mes_cuota,
+        get_evolucion_pagos,
+    )
     from app.api.v1.endpoints.dashboard.kpis import get_opciones_filtros
 
     opciones = get_opciones_filtros(db=db)
@@ -56,9 +59,17 @@ def get_pagos_dashboard_inicial(
         modelo=modelo,
         db=db,
     )
+    cuotas_aplicadas_mes = get_cuotas_con_pago_aplicado_por_mes_cuota(
+        meses=meses_evolucion,
+        analista=analista,
+        concesionario=concesionario,
+        modelo=modelo,
+        db=db,
+    )
     return {
         "opciones_filtros": opciones,
         "pagos_stats": stats,
         "kpis_pagos": kpis,
         "evolucion_pagos_meses": evolucion.get("meses", []),
+        "cuotas_con_pago_aplicado_por_mes_cuota": cuotas_aplicadas_mes.get("meses", []),
     }
