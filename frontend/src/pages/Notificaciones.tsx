@@ -451,7 +451,7 @@ function DiferenciaFechaGeneralCell({
     return (
       <span
         className="text-xs text-muted-foreground"
-        title="Dato del cierre nocturno (02:03 Caracas). Si está vacío, aún no hay caché en BD para este préstamo."
+        title="Dato del caché semanal (04:00 Caracas, domingo). Si está vacío, aún no hay caché en BD para este préstamo."
       >
         —
       </span>
@@ -2713,7 +2713,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           title="Notificaciones"
           description={
             modulo === 'fecha'
-              ? 'Solo consulta: mismas listas combinadas que General (día siguiente, atraso 5 cuotas, 2 días antes). La columna «Diferencia fecha» compara la columna Q de la hoja CONCILIACIÓN (entrega) con fecha_aprobacion del préstamo en BD; caché en servidor (cada domingo 02:03 Caracas o Recalcular; luego Actualización manual). Sin envío de correos desde esta pantalla.'
+              ? 'Solo consulta: mismas listas combinadas que General (día siguiente, atraso 5 cuotas, 2 días antes). La columna «Diferencia fecha» compara la columna Q de la hoja CONCILIACIÓN (entrega) con fecha_aprobacion del préstamo en BD; caché en servidor (cada domingo 04:00 Caracas o Recalcular; luego Actualización manual). Sin envío de correos desde esta pantalla.'
               : modulo === 'general'
                 ? 'Solo consulta: listas unificadas (día siguiente al vencimiento, atraso 5 cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
               : modulo === 'a3cuotas'
@@ -2762,7 +2762,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   variant="outline"
                   onClick={() => void handleRefreshFechaEntregaQCache()}
                   disabled={programandoRefreshFechaQ || actualizandoListas}
-                  title="Misma lógica que el job cada domingo 02:03 (America/Caracas): columna Q vs fecha_aprobacion. Segundo plano; luego use Actualización manual."
+                  title="Misma lógica que el job cada domingo 04:00 (America/Caracas): columna Q vs fecha_aprobacion. Segundo plano; luego use Actualización manual."
                 >
                   <Calendar
                     className={`mr-2 h-4 w-4 ${
@@ -2881,7 +2881,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </span>
               ) : null}
               {modulo === 'fecha'
-                ? 'Se concatenan las mismas filas que en General. «Diferencia fecha» = días (columna Q de la hoja CONCILIACIÓN, posición Excel dentro del rango configurado, p. ej. A:S − fecha_aprobacion del préstamo en BD). Caché 02:03 Caracas o Recalcular arriba.'
+                ? 'Se concatenan las mismas filas que en General. «Diferencia fecha» = días (columna Q de la hoja CONCILIACIÓN, posición Excel dentro del rango configurado, p. ej. A:S − fecha_aprobacion del préstamo en BD). Caché domingo 04:00 Caracas o Recalcular arriba.'
                 : modulo === 'general'
                   ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes». La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (02:00 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
                   : modulo === 'a3cuotas'
@@ -2948,7 +2948,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     enviandoD2Antes ||
                     enviandoPago1Dia
                   }
-                  title="Job en servidor (segundo plano), igual que 02:03 Caracas. Luego pulse Actualización manual."
+                  title="Job en servidor (segundo plano), igual que domingo 04:00 Caracas. Luego pulse Actualización manual."
                 >
                   <Calendar
                     className={`mr-2 h-4 w-4 ${
@@ -3339,7 +3339,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         {modulo === 'fecha' ? (
                           <th
                             className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché cada domingo 02:03 Caracas o Recalcular."
+                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché cada domingo 04:00 Caracas o Recalcular."
                           >
                             Diferencia fecha (días)
                           </th>
@@ -3649,7 +3649,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         {modulo === 'fecha' ? (
                           <th
                             className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché cada domingo 02:03 Caracas o Recalcular."
+                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché cada domingo 04:00 Caracas o Recalcular."
                           >
                             Diferencia fecha (días)
                           </th>

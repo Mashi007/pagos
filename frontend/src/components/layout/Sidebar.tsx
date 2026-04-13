@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 
@@ -51,8 +51,6 @@ import { Button } from '../../components/ui/button'
 
 import { Badge } from '../../components/ui/badge'
 
-import { useSidebarCounts } from '../../hooks/useSidebarCounts'
-
 import { Logo } from '../../components/ui/Logo'
 
 interface SidebarProps {
@@ -104,8 +102,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
     return saved === 'true'
   })
-
-  const { counts } = useSidebarCounts()
 
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
 
@@ -223,12 +219,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
 
       children: [
-        {
-          title: 'Autorizaciones (revisión manual)',
-          href: '/administracion/autorizaciones-revision-manual',
-          icon: Bell,
-          adminOnly: true,
-        },
         {
           title: 'General',
           href: '/notificaciones/general',
@@ -440,22 +430,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       return null
     })
     .filter((x): x is MenuItem => x !== null)
-
-  const menuItemsWithBadges = useMemo(() => {
-    const nAuth = counts.autorizacionesRevisionManual ?? 0
-    const reaperturaBadge =
-      nAuth > 0 ? (nAuth > 99 ? '99+' : String(nAuth)) : undefined
-    return filteredMenuItems.map(item => {
-      if (!item.isSubmenu || !item.children) return item
-      const children = item.children.map(ch => {
-        if (ch.href === '/administracion/autorizaciones-revision-manual') {
-          return reaperturaBadge ? { ...ch, badge: reaperturaBadge } : ch
-        }
-        return ch
-      })
-      return { ...item, children }
-    })
-  }, [filteredMenuItems, counts.autorizacionesRevisionManual])
 
   // Sincronizar submenús con la ruta: solo el (los) que contienen la ruta activa; al cambiar de sección se repliegan el resto.
 
@@ -820,7 +794,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 isCompact ? 'px-2' : 'px-3'
               )}
             >
-              {menuItemsWithBadges.map((item, index) => (
+              {filteredMenuItems.map((item, index) => (
                 <motion.div
                   key={item.href || item.title}
                   variants={itemVariants}

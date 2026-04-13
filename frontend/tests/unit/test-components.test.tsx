@@ -31,17 +31,6 @@ vi.mock('@/store/simpleAuthStore', () => ({
   useSimpleAuth: () => authMock,
 }))
 
-vi.mock('@/hooks/useSidebarCounts', () => ({
-  useSidebarCounts: () => ({
-    counts: {
-      pagosPendientes: 0,
-      cuotasEnMora: 0,
-      notificacionesNoLeidas: 0,
-    },
-    loading: false,
-  }),
-}))
-
 vi.mock('@/services/validadoresService', () => ({
   validadoresService: {
     validarCampo: vi.fn().mockResolvedValue({

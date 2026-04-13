@@ -2053,7 +2053,7 @@ def post_refresh_fecha_entrega_q_cache(background_tasks: BackgroundTasks):
     """
     Programa en segundo plano el recálculo de `prestamos.fecha_entrega_q_aprobacion_cache`
     (submódulo Notificaciones «Fecha»: columna Q de la hoja vs `fecha_aprobacion` en BD).
-    Misma lógica que el job domingo 02:03 Caracas.
+    Misma lógica que el job domingo 04:00 Caracas.
     """
     background_tasks.add_task(_run_refresh_fecha_entrega_q_cache_bg)
     return {

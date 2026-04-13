@@ -227,8 +227,6 @@ import CobrosHistoricoPage from './pages/CobrosHistoricoPage'
 
 import { AdminTasaCambioPage } from './pages/AdminTasaCambioPage'
 
-import AutorizacionesRevisionManualAdminPage from './pages/AutorizacionesRevisionManualAdminPage'
-
 import AccesoLimitadoPage from './pages/AccesoLimitadoPage'
 
 // Todas las pginas ahora estn importadas desde archivos reales
@@ -656,7 +654,7 @@ function App() {
               path="administracion/autorizaciones-revision-manual"
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
-                  <AutorizacionesRevisionManualAdminPage />
+                  <Navigate to="/revision-manual" replace />
                 </SimpleProtectedRoute>
               }
             />
