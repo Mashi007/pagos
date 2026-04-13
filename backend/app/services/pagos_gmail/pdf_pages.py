@@ -1,6 +1,7 @@
 """
-Divide PDFs en una entrada por página para el pipeline Pagos Gmail (un pago = una página).
-Requiere `pypdf` en el entorno de ejecución.
+PDF en pipeline Pagos Gmail: **solo se digitaliza (Gemini) si el PDF tiene exactamente 1 página**.
+Si el PDF tiene **2 o más páginas**, no se envía a escaneo: se omite aquí y el pipeline etiqueta el hilo en Gmail como **MANUAL**.
+Imágenes no-PDF no se parten por páginas. Requiere `pypdf` para contar páginas.
 """
 from __future__ import annotations
 
@@ -49,12 +50,14 @@ def split_pdf_bytes_into_single_page_pdfs(pdf_bytes: bytes) -> List[bytes]:
 
 def expand_pipeline_pdf_tuples(
     items: List[Tuple[str, bytes, str, str]],
-) -> List[Tuple[str, bytes, str, str]]:
+) -> Tuple[List[Tuple[str, bytes, str, str]], int]:
     """
-    Para cada tupla (nombre, bytes, mime, origen): si es PDF, reemplaza por N tuplas (una por página).
-    Los nombres pasan a ser `stem_pag1.pdf`, `stem_pag2.pdf`, ...
+    Para cada tupla (nombre, bytes, mime, origen): si es PDF con **una sola página**, deja un candidato.
+    Si el PDF tiene **2+ páginas**, **no** añade candidatos (no escaneo Gemini); el pipeline aplica etiqueta Gmail **MANUAL**.
+    Devuelve ``(lista_candidatos, pdf_multipagina_omitidos)``.
     """
     expanded: List[Tuple[str, bytes, str, str]] = []
+    multipage_omitidos = 0
     for fname, content, mime, origen in items:
         m = (mime or "").lower()
         fn = (fname or "").lower()
@@ -63,16 +66,13 @@ def expand_pipeline_pdf_tuples(
             expanded.append((fname, content, mime, origen))
             continue
         pages = split_pdf_bytes_into_single_page_pdfs(content)
-        if len(pages) <= 1:
-            expanded.append((fname, content, mime, origen))
+        if len(pages) > 1:
+            multipage_omitidos += 1
+            logger.info(
+                "[PAGOS_GMAIL] PDF %s: %d paginas (>1) — sin escaneo automatico; se clasifica como MANUAL en Gmail",
+                fname,
+                len(pages),
+            )
             continue
-        base = fname.rsplit(".", 1)[0] if "." in fname else fname
-        ext = fname.rsplit(".", 1)[-1] if "." in fname else "pdf"
-        for idx, pb in enumerate(pages, start=1):
-            expanded.append((f"{base}_pag{idx}.{ext}", pb, "application/pdf", origen))
-        logger.info(
-            "[PAGOS_GMAIL] PDF %s dividido en %d página(s) (una fila por página)",
-            fname,
-            len(pages),
-        )
-    return expanded
+        expanded.append((fname, content, mime, origen))
+    return expanded, multipage_omitidos

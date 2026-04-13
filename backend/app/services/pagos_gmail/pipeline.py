@@ -5,7 +5,7 @@ Orquestacion: Gmail -> Gemini (toda imagen/PDF adjunta o en cuerpo/related/HTML/
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
 
 Remitente **master@rapicreditca.com**: en Gmail solo etiqueta **MASTER** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
-PDF adjunto o embebido con varias paginas: se parte en **una peticion Gemini por pagina** (cada pagina = como maximo un pago / una fila).
+PDF: **solo se escanea (Gemini) si tiene exactamente 1 página**; si tiene **2 o más páginas** no entra a candidatos y el hilo recibe etiqueta Gmail **MANUAL** (todas las demás reglas de etiquetas aplican sobre candidatos restantes).
 Etiquetas Gmail MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From): primero `email`, luego `email_secundario`.
@@ -55,6 +55,7 @@ from app.services.pagos_gmail.gmail_service import (
     PAGOS_GMAIL_LABEL_EMAIL_12,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
     PAGOS_GMAIL_LABEL_OTROS,
+    PAGOS_GMAIL_LABEL_MANUAL,
     PAGOS_GMAIL_LABEL_MASTER,
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
@@ -402,10 +403,11 @@ def run_pipeline(
                 attachments = get_pagos_gmail_image_pdf_files_for_pipeline(
                     gmail_svc, msg_id, full_payload or {}
                 )
-                candidatos = expand_pipeline_pdf_tuples(attachments)
+                candidatos, multipage_pdf_omitidos = expand_pipeline_pdf_tuples(attachments)
 
                 logger.info(
-                    "[PAGOS_GMAIL]   candidatos imagen/PDF (adjunto + embebido + reenvio, dedup; PDF multi-pag -> N): %d - %s",
+                    "[PAGOS_GMAIL]   candidatos imagen/PDF (adjunto + embebido + reenvio; PDF 2+ pag omitidos=%d): %d - %s",
+                    multipage_pdf_omitidos,
                     len(candidatos),
                     ", ".join(f"{f}({len(c)}B,{o})" for f, c, _, o in candidatos)
                     if candidatos
@@ -951,6 +953,27 @@ def run_pipeline(
                         "sin modificaciones en Gmail.",
                         scan_filter,
                     )
+
+                if multipage_pdf_omitidos > 0:
+                    k_man = PAGOS_GMAIL_LABEL_MANUAL
+                    if k_man not in plantilla_label_cache:
+                        plantilla_label_cache[k_man] = ensure_user_label_id(
+                            gmail_svc, k_man
+                        )
+                    man_lid = plantilla_label_cache.get(k_man)
+                    if man_lid:
+                        add_message_user_labels_only(gmail_svc, msg_id, [man_lid])
+                        gmail_etiqueta_clasificacion_aplicada = True
+                        logger.info(
+                            "[PAGOS_GMAIL]   Gmail: etiqueta %s (%d PDF multipagina omitido(s); sin escaneo Gemini)",
+                            k_man,
+                            multipage_pdf_omitidos,
+                        )
+                    else:
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
+                            k_man,
+                        )
 
                 if candidatos and not gmail_etiqueta_clasificacion_aplicada:
                     k_otros = PAGOS_GMAIL_LABEL_OTROS

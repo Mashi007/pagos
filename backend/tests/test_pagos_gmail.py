@@ -394,6 +394,33 @@ def test_pagos_gmail_inbox_media_query_incluye_todo_sin_filtrar_estrella_ni_etiq
     assert "-label:" not in q
 
 
+def test_expand_pipeline_pdf_tuples_imagen_pasa_y_multipage_pdf_omite():
+    from io import BytesIO
+
+    from app.services.pagos_gmail.pdf_pages import expand_pipeline_pdf_tuples
+
+    jpg = [("a.jpg", b"\xff\xd8\xff", "image/jpeg", "adjunta")]
+    out_j, n_j = expand_pipeline_pdf_tuples(jpg)
+    assert n_j == 0
+    assert out_j == jpg
+
+    try:
+        from pypdf import PdfWriter
+    except ImportError:
+        pytest.skip("pypdf no instalado")
+    w = PdfWriter()
+    w.add_blank_page(width=72, height=72)
+    w.add_blank_page(width=72, height=72)
+    buf = BytesIO()
+    w.write(buf)
+    pdf_2p = buf.getvalue()
+    out_p, n_p = expand_pipeline_pdf_tuples(
+        [("dos.pdf", pdf_2p, "application/pdf", "adjunta")]
+    )
+    assert n_p == 1
+    assert out_p == []
+
+
 def test_sort_messages_by_date_asc_mas_antiguo_primero():
     from app.services.pagos_gmail.pipeline import _sort_messages_by_date_asc
 
