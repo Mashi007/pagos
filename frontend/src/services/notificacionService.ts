@@ -95,6 +95,9 @@ export interface ClienteRetrasadoItem {
   correo?: string
   telefono?: string
   estado?: string
+
+  /** Submódulo GENERAL: criterio de origen de la fila (día siguiente, prejudicial, 2 días antes). */
+  notificacion_caso?: string
 }
 
 /** Opción de lote cuando la hoja tiene varios créditos por cédula (GET comparar-abonos-drive-cuotas). */

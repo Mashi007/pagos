@@ -36,6 +36,7 @@ import {
   Building2,
   FileSpreadsheet,
   TrendingUp,
+  LayoutList,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -226,6 +227,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           href: '/administracion/autorizaciones-revision-manual',
           icon: Bell,
           adminOnly: true,
+        },
+        {
+          title: 'General',
+          href: '/notificaciones/general',
+          icon: LayoutList,
         },
         {
           title: 'Día siguiente al vencimiento',

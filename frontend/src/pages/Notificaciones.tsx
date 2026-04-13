@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   X,
   Scale,
+  LayoutList,
 } from 'lucide-react'
 
 import {
@@ -89,6 +90,11 @@ import { getErrorMessage, isAxiosTimeoutError } from '../types/errors'
 
 /** Máximo de filas (clientes / casos) por página en cada pestaña de listado de notificaciones. */
 const NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA = 10
+
+/** Etiquetas de origen en el submódulo GENERAL (misma semántica que cada submenú). */
+const CASO_NOTIF_GENERAL_D1 = 'Día siguiente al vencimiento'
+const CASO_NOTIF_GENERAL_PREJ = 'Atraso 5 cuotas (prejudicial)'
+const CASO_NOTIF_GENERAL_D2 = '2 días antes del vencimiento'
 
 /** Botones numéricos mostrados en la barra de paginación (ventana deslizante). */
 const NOTIFICACIONES_VENTANA_NUMEROS_PAGINA = 5
@@ -164,13 +170,28 @@ function toastErrorTrasEnvioManual(e: unknown, fraseRevisionConfig: string) {
   )
 }
 
-export type NotificacionesModulo = 'a1dia' | 'a3cuotas' | 'd2antes'
+export type NotificacionesModulo = 'a1dia' | 'a3cuotas' | 'd2antes' | 'general'
 
-type TabId = 'dias_1_atraso' | 'prejudicial' | 'd2antes' | 'configuracion'
+type TabId =
+  | 'dias_1_atraso'
+  | 'prejudicial'
+  | 'd2antes'
+  | 'general_todos'
+  | 'configuracion'
 
 function tabsParaModulo(
   modulo: NotificacionesModulo
 ): { id: TabId; label: string; icon: typeof Clock }[] {
+  if (modulo === 'general') {
+    return [
+      {
+        id: 'general_todos',
+        label: 'General',
+        icon: LayoutList,
+      },
+      { id: 'configuracion', label: 'Configuración', icon: Settings },
+    ]
+  }
   if (modulo === 'a3cuotas') {
     return [
       { id: 'prejudicial', label: 'Atraso 5 cuotas', icon: Clock },
@@ -194,6 +215,7 @@ function tabsParaModulo(
 }
 
 function tabListadoDefault(modulo: NotificacionesModulo): TabId {
+  if (modulo === 'general') return 'general_todos'
   if (modulo === 'a3cuotas') return 'prejudicial'
   if (modulo === 'd2antes') return 'd2antes'
   return 'dias_1_atraso'
@@ -962,6 +984,9 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
     case 'd2antes':
       return 'd_2_antes_vencimiento'
 
+    case 'general_todos':
+      return null
+
     default:
       return null
   }
@@ -1046,7 +1071,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       (modulo === 'a3cuotas' && t === 'd2antes') ||
       (modulo === 'a1dia' && t === 'prejudicial') ||
       (modulo === 'a1dia' && t === 'd2antes') ||
-      (modulo === 'd2antes' && (t === 'dias_1_atraso' || t === 'prejudicial'))
+      (modulo === 'd2antes' && (t === 'dias_1_atraso' || t === 'prejudicial')) ||
+      (modulo === 'general' &&
+        t !== 'general_todos' &&
+        t !== 'configuracion' &&
+        Boolean(t))
     ) {
       setSearchParams(
         p => {
@@ -1093,7 +1122,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       // Sin placeholderData: con v5, placeholder hace isPending=false y la tabla se ve vacía mientras carga (Render frío).
       /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
 
-      enabled: modulo === 'a1dia' && activeTab !== 'configuracion',
+      enabled:
+        (modulo === 'a1dia' || modulo === 'general') &&
+        activeTab !== 'configuracion',
     })
 
   const {
@@ -1116,7 +1147,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     refetchOnWindowFocus: true,
 
-    enabled: modulo === 'd2antes' && activeTab !== 'configuracion',
+    enabled:
+      (modulo === 'd2antes' || modulo === 'general') &&
+      activeTab !== 'configuracion',
   })
 
   const {
@@ -1143,7 +1176,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     refetchOnWindowFocus: true,
 
-    enabled: modulo === 'a3cuotas' && activeTab !== 'configuracion',
+    enabled:
+      (modulo === 'a3cuotas' || modulo === 'general') &&
+      activeTab !== 'configuracion',
   })
 
   const { data: estadisticasPorTab } = useQuery({
@@ -1518,6 +1553,22 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   }
 
   const getListForTab = (): ClienteRetrasadoItem[] => {
+    if (modulo === 'general' && activeTab === 'general_todos') {
+      const a = (data?.dias_1_atraso ?? []).map(r => ({
+        ...r,
+        notificacion_caso: CASO_NOTIF_GENERAL_D1,
+      }))
+      const b = (dataPrejudicial?.items ?? []).map(r => ({
+        ...r,
+        notificacion_caso: CASO_NOTIF_GENERAL_PREJ,
+      }))
+      const c = (dataD2Antes?.items ?? []).map(r => ({
+        ...r,
+        notificacion_caso: CASO_NOTIF_GENERAL_D2,
+      }))
+      return [...a, ...b, ...c]
+    }
+
     if (modulo === 'a3cuotas') {
       if (activeTab !== 'prejudicial') return []
       return dataPrejudicial?.items ?? []
@@ -1686,11 +1737,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   }
 
   const isLoadingLista =
-    modulo === 'a1dia'
-      ? isPending
-      : modulo === 'a3cuotas'
-        ? isPendingPrej
-        : isPendingD2
+    modulo === 'general'
+      ? isPending || isPendingPrej || isPendingD2
+      : modulo === 'a1dia'
+        ? isPending
+        : modulo === 'a3cuotas'
+          ? isPendingPrej
+          : isPendingD2
 
   /**
    * No deshabilitar «Enviar notificaciones (manual)» durante refetch en segundo plano
@@ -1698,6 +1751,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
    * Si el GET de la lista falló (isError), no bloquear envío: el servidor puede armar la lista al enviar.
    */
   const esperandoPrimeraCargaLista =
+    (modulo === 'general' &&
+      ((isPending && !isFetched && !isError) ||
+        (isPendingPrej && !isFetchedPrej && !isErrorPrej) ||
+        (isPendingD2 && !isFetchedD2 && !isErrorD2))) ||
     (modulo === 'a1dia' && isPending && !isFetched && !isError) ||
     (modulo === 'a3cuotas' &&
       isPendingPrej &&
@@ -1706,35 +1763,53 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     (modulo === 'd2antes' && isPendingD2 && !isFetchedD2 && !isErrorD2)
 
   const isErrorLista =
-    modulo === 'a1dia'
-      ? isError
-      : modulo === 'a3cuotas'
-        ? isErrorPrej
-        : isErrorD2
+    modulo === 'general'
+      ? isError && isErrorPrej && isErrorD2
+      : modulo === 'a1dia'
+        ? isError
+        : modulo === 'a3cuotas'
+          ? isErrorPrej
+          : isErrorD2
 
   const errorLista =
-    modulo === 'a1dia' ? error : modulo === 'a3cuotas' ? errorPrej : errorD2
+    modulo === 'general'
+      ? error ?? errorPrej ?? errorD2
+      : modulo === 'a1dia'
+        ? error
+        : modulo === 'a3cuotas'
+          ? errorPrej
+          : errorD2
 
   const refetchLista =
-    modulo === 'a1dia'
-      ? refetch
-      : modulo === 'a3cuotas'
-        ? refetchPrej
-        : refetchD2
+    modulo === 'general'
+      ? () => {
+          void Promise.all([refetch(), refetchPrej(), refetchD2()])
+        }
+      : modulo === 'a1dia'
+        ? refetch
+        : modulo === 'a3cuotas'
+          ? refetchPrej
+          : refetchD2
 
   const isFetchingLista =
-    modulo === 'a1dia'
-      ? isFetching
-      : modulo === 'a3cuotas'
-        ? isFetchingPrej
-        : isFetchingD2
+    modulo === 'general'
+      ? isFetching || isFetchingPrej || isFetchingD2
+      : modulo === 'a1dia'
+        ? isFetching
+        : modulo === 'a3cuotas'
+          ? isFetchingPrej
+          : isFetchingD2
 
   const isFetchedLista =
-    modulo === 'a1dia'
-      ? isFetched
-      : modulo === 'a3cuotas'
-        ? isFetchedPrej
-        : isFetchedD2
+    modulo === 'general'
+      ? (isFetched || isError) &&
+        (isFetchedPrej || isErrorPrej) &&
+        (isFetchedD2 || isErrorD2)
+      : modulo === 'a1dia'
+        ? isFetched
+        : modulo === 'a3cuotas'
+          ? isFetchedPrej
+          : isFetchedD2
 
   const listaCargadaSinFilas =
     !isErrorLista && !isLoadingLista && isFetchedLista && list.length === 0
@@ -1833,11 +1908,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         {/* Cada submenú: una fila de envíos / adjuntos por tipo en BD. */}
         <ConfiguracionNotificaciones
           alcance={
-            modulo === 'a1dia'
-              ? 'solo_pago_1_dia'
-              : modulo === 'd2antes'
-                ? 'solo_pago_2_dias_antes_pendiente'
-                : 'solo_prejudicial'
+            modulo === 'general'
+              ? 'completo'
+              : modulo === 'a1dia'
+                ? 'solo_pago_1_dia'
+                : modulo === 'd2antes'
+                  ? 'solo_pago_2_dias_antes_pendiente'
+                  : 'solo_prejudicial'
           }
         />
       </div>
@@ -1854,11 +1931,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           icon={Bell}
           title="Notificaciones"
           description={
-            modulo === 'a3cuotas'
-              ? 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
-              : modulo === 'd2antes'
-                ? 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 2 días (hoy + 2, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
-                : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+            modulo === 'general'
+              ? 'Vista unificada: mismas listas que «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes», con columna de caso. Los envíos masivos siguen en cada submódulo específico.'
+              : modulo === 'a3cuotas'
+                ? 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+                : modulo === 'd2antes'
+                  ? 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 2 días (hoy + 2, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
+                  : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
           }
           actions={
             <div className="flex flex-wrap items-center gap-2">
@@ -1896,11 +1975,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         <nav className="flex flex-wrap gap-1">
           {TABS.filter(t => t.id !== 'configuracion').map(tab => {
             const count =
-              tab.id === 'prejudicial'
-                ? (dataPrejudicial?.items?.length ?? 0)
-                : tab.id === 'd2antes'
-                  ? (dataD2Antes?.items?.length ?? 0)
-                  : (data?.dias_1_atraso?.length ?? 0)
+              tab.id === 'general_todos'
+                ? (data?.dias_1_atraso?.length ?? 0) +
+                  (dataPrejudicial?.items?.length ?? 0) +
+                  (dataD2Antes?.items?.length ?? 0)
+                : tab.id === 'prejudicial'
+                  ? (dataPrejudicial?.items?.length ?? 0)
+                  : tab.id === 'd2antes'
+                    ? (dataD2Antes?.items?.length ?? 0)
+                    : (data?.dias_1_atraso?.length ?? 0)
 
             return (
               <button
@@ -1949,11 +2032,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
-              {modulo === 'a3cuotas'
-                ? 'Cinco o más cuotas VENCIDO o MORA (prejudicial)'
-                : modulo === 'd2antes'
-                  ? '2 días antes - PENDIENTE, vence en 2 días'
-                  : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
+              {modulo === 'general'
+                ? 'General — todos los casos de mora (listas combinadas)'
+                : modulo === 'a3cuotas'
+                  ? 'Cinco o más cuotas VENCIDO o MORA (prejudicial)'
+                  : modulo === 'd2antes'
+                    ? '2 días antes - PENDIENTE, vence en 2 días'
+                    : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
             </CardTitle>
 
             <CardDescription>
@@ -1963,11 +2048,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   (America/Caracas). Use «Hoy» arriba para volver al día actual.
                 </span>
               ) : null}
-              {modulo === 'a3cuotas'
-                ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
-                : modulo === 'd2antes'
-                  ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
-                  : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
+              {modulo === 'general'
+                ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes». La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. Para enviar correos use el submódulo correspondiente.'
+                : modulo === 'a3cuotas'
+                  ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
+                  : modulo === 'd2antes'
+                    ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
+                    : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
             </CardDescription>
           </CardHeader>
 
@@ -2056,6 +2143,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </Button>
               )}
 
+              {modulo === 'general' ? (
+                <p className="max-w-xl text-xs text-muted-foreground">
+                  El envío de correos no está disponible en esta vista unificada:
+                  use «Día siguiente al vencimiento», «Atraso 5 cuotas» o «2 días
+                  antes» según el caso.
+                </p>
+              ) : null}
+
               <Button
                 type="button"
                 variant="outline"
@@ -2072,7 +2167,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
             {/* KPIs por pestaña: correos enviados y rebotados */}
 
-            {(activeTab as TabId) !== 'configuracion' && estadisticasPorTab && (
+            {(activeTab as TabId) !== 'configuracion' &&
+              modulo !== 'general' &&
+              estadisticasPorTab && (
               <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-2">
                 <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
                   <Mail className="h-8 w-8 text-green-600" />
@@ -2129,6 +2226,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               </div>
             )}
 
+            {modulo === 'general' &&
+            !isErrorLista &&
+            (isError || isErrorPrej || isErrorD2) ? (
+              <div className="mb-4 rounded border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
+                Parte de las listas no respondió (día siguiente, prejudicial o 2
+                días antes). Se muestran las que sí cargaron; use Reintentar o
+                Actualización manual.
+              </div>
+            ) : null}
+
             {isLoadingLista && (
               <div className="mb-4 flex items-center gap-2 rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">
                 <RefreshCw
@@ -2156,6 +2263,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                           Cédula
                         </th>
+
+                        {modulo === 'general' ? (
+                          <th className="min-w-[10rem] whitespace-normal px-3 py-2 text-left text-xs font-semibold leading-tight">
+                            Caso
+                          </th>
+                        ) : null}
 
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                           <div className="inline-flex items-center gap-1">
@@ -2246,7 +2359,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       {list.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={9}
+                            colSpan={modulo === 'general' ? 10 : 9}
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
@@ -2254,11 +2367,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             </span>
                             {listaCargadaSinFilas ? (
                               <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                                {modulo === 'a3cuotas'
-                                  ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
-                                  : modulo === 'd2antes'
-                                    ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
-                                    : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
+                                {modulo === 'general'
+                                  ? 'Listas ya cargadas: no hay filas en ninguno de los tres criterios (día siguiente, prejudicial, 2 días antes) para la fecha de referencia.'
+                                  : modulo === 'a3cuotas'
+                                    ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
+                                    : modulo === 'd2antes'
+                                      ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
+                                      : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
                               </span>
                             ) : null}
                           </td>
@@ -2266,7 +2381,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       ) : (
                         filasPagina.map((row, idx) => (
                           <tr
-                            key={`${row.cliente_id}-${row.prestamo_id ?? 'np'}-${row.numero_cuota ?? 'nc'}`}
+                            key={`${row.notificacion_caso ?? 'sin-caso'}-${row.cliente_id}-${row.prestamo_id ?? 'np'}-${row.numero_cuota ?? 'nc'}-${indiceInicioPagina + idx}`}
                             className="border-b hover:bg-gray-50"
                           >
                             <td className="px-3 py-2">
@@ -2278,6 +2393,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             </td>
 
                             <td className="px-3 py-2">{row.cedula}</td>
+
+                            {modulo === 'general' ? (
+                              <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
+                                {row.notificacion_caso ?? '—'}
+                              </td>
+                            ) : null}
 
                             <td className="px-3 py-2">
                               {row.numero_cuota ?? '-'}
@@ -2328,6 +2449,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           Cédula
                         </th>
 
+                        {modulo === 'general' ? (
+                          <th className="min-w-[10rem] px-3 py-2 text-left text-xs font-semibold leading-tight">
+                            Caso
+                          </th>
+                        ) : null}
+
                         <th
                           className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                           scope="col"
@@ -2350,7 +2477,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       {list.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={modulo === 'general' ? 6 : 5}
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
@@ -2358,11 +2485,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             </span>
                             {listaCargadaSinFilas ? (
                               <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                                {modulo === 'a3cuotas'
-                                  ? 'Lista ya cargada: 5+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
-                                  : modulo === 'd2antes'
-                                    ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
-                                    : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
+                                {modulo === 'general'
+                                  ? 'Listas ya cargadas: ningún criterio devolvió filas sin detalle de cuota para la fecha de referencia.'
+                                  : modulo === 'a3cuotas'
+                                    ? 'Lista ya cargada: 5+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
+                                    : modulo === 'd2antes'
+                                      ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
+                                      : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
                               </span>
                             ) : null}
                           </td>
@@ -2370,7 +2499,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       ) : (
                         filasPagina.map((row, idx) => (
                           <tr
-                            key={`${row.cliente_id}-${row.numero_cuota ?? idx}`}
+                            key={`${row.notificacion_caso ?? 'sin-caso'}-${row.cliente_id}-${row.numero_cuota ?? idx}`}
                             className="border-b hover:bg-gray-50"
                           >
                             <td className="px-3 py-2">
@@ -2382,6 +2511,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             </td>
 
                             <td className="px-3 py-2">{row.cedula}</td>
+
+                            {modulo === 'general' ? (
+                              <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
+                                {row.notificacion_caso ?? '—'}
+                              </td>
+                            ) : null}
 
                             <td className="px-1 py-2 text-center align-middle">
                               <div className="flex flex-wrap items-center justify-center gap-1">
