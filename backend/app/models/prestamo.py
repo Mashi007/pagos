@@ -2,7 +2,7 @@
 Modelo SQLAlchemy para Préstamo.
 Alineado con la tabla real public.prestamos (columnas confirmadas desde BD).
 """
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Boolean, Text
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Boolean, Text, JSON
 from sqlalchemy.orm import validates
 from sqlalchemy.sql import func, text
 
@@ -64,6 +64,9 @@ class Prestamo(Base):
     ml_impago_modelo_id = Column(Integer, nullable=True)
     requiere_revision = Column(Boolean, nullable=False, server_default=text("false"))
     estado_edicion = Column(String(50), nullable=False, server_default=text("'COMPLETADO'"), index=True)
+    # Snapshot de GET comparar-abonos-drive-cuotas (JSON) + marca de tiempo; se invalida al sync de la hoja CONCILIACIÓN.
+    abonos_drive_cuotas_cache = Column(JSON, nullable=True)
+    abonos_drive_cuotas_cache_at = Column(DateTime(timezone=False), nullable=True)
 
     @property
     def modelo(self):

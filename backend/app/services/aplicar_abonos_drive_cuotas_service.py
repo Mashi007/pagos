@@ -51,7 +51,11 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
     confirmacion_montos_altos: Optional[str] = None,
 ) -> Dict[str, Any]:
     snap = comparar_abonos_drive_vs_cuotas(
-        db, cedula=cedula, prestamo_id=prestamo_id, lote=lote
+        db,
+        cedula=cedula,
+        prestamo_id=prestamo_id,
+        lote=lote,
+        persist_cache=False,
     )
     if snap.get("requiere_seleccion_lote"):
         raise ValueError(
@@ -205,6 +209,20 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
         cuotas_completadas,
         cuotas_parciales,
     )
+
+    try:
+        comparar_abonos_drive_vs_cuotas(
+            db,
+            cedula=cedula,
+            prestamo_id=prestamo_id,
+            lote=lote,
+            persist_cache=True,
+        )
+    except Exception as cache_exc:
+        logger.warning(
+            "[aplicar_abonos_drive] no se pudo actualizar caché comparar tras aplicar: %s",
+            cache_exc,
+        )
 
     return {
         "ok": True,

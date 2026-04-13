@@ -36,7 +36,15 @@ class Settings(BaseSettings):
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
     )
-    
+    # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada en job 02:00 Caracas.
+    ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, a las 02:00 America/Caracas se recalcula "
+            "prestamos.abonos_drive_cuotas_cache para préstamos no LIQUIDADO/DESISTIMIENTO (una pasada al día)."
+        ),
+    )
+
     # ============================================
     # Base de Datos
     # ============================================

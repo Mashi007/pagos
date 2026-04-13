@@ -1972,14 +1972,13 @@ def ejecutar_actualizacion_notificaciones(db: Session) -> dict:
     """
     Punto de entrada para el botón «Actualización manual» del frontend.
 
-    El sistema de notificaciones es 100 % en tiempo real: los listados (clientes-retrasados,
-    cuotas-pendiente-2-dias-antes, etc.) consultan la BD directamente cada vez que se cargan,
-    por lo que no existe un estado intermedio que «recalcular» aquí. Este endpoint devuelve
-    una respuesta inmediata para que el frontend invalide su caché de React Query y refrescando
-    los listados con datos actualizados de la BD.
+    Los listados (clientes-retrasados, cuotas-pendiente-2-dias-antes, etc.) se leen en vivo desde la BD.
+    La columna «Diferencia abono» (submódulo General) usa la caché `prestamos.abonos_drive_cuotas_cache`,
+    recalculada en servidor una vez al día a las 02:00 America/Caracas (y al aplicar ABONOS desde la UI);
+    este botón no fuerza ese recálculo. Este endpoint devuelve 200 para que el cliente invalide React Query
+    y vuelva a cargar listados.
 
-    No realiza escrituras en BD ni modifica ningún estado: su utilidad es disparar el ciclo
-    de refresco en el cliente de forma explícita (sin esperar al foco de ventana).
+    No realiza escrituras en BD ni modifica ningún estado.
     """
     return {"mensaje": "Actualización solicitada. Los listados se recargarán desde la BD.", "clientes_actualizados": 0}
 

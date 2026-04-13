@@ -98,6 +98,9 @@ export interface ClienteRetrasadoItem {
 
   /** Submódulo GENERAL: criterio de origen de la fila (día siguiente, prejudicial, 2 días antes). */
   notificacion_caso?: string
+
+  /** Caché en BD (prestamos.abonos_drive_cuotas_cache); evita N llamadas GET comparar en listado General. */
+  comparar_abonos_drive_cuotas?: CompararAbonosDriveCuotasResponse | null
 }
 
 /** Opción de lote cuando la hoja tiene varios créditos por cédula (GET comparar-abonos-drive-cuotas). */

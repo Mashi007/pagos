@@ -91,45 +91,6 @@ import { getErrorMessage, isAxiosTimeoutError } from '../types/errors'
 /** Máximo de filas (clientes / casos) por página en cada pestaña de listado de notificaciones. */
 const NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA = 10
 
-/**
- * GET comparar-abonos por lote: evita disparar cientos de XHR en paralelo (Firefox/Render
- * cancelan o vacían respuestas) y reduce presión en el worker de la hoja.
- */
-const COMPARAR_ABONOS_GENERAL_CONCURRENCIA = 8
-
-async function compararAbonosGeneralEnLotes(
-  targets: ReadonlyArray<{
-    cedula: string
-    prestamoId: number
-    rowKey: string
-  }>,
-  chunkSize: number,
-  isCanceled: () => boolean
-): Promise<Array<readonly [string, CompararAbonosDriveCuotasResponse | null]>> {
-  const out: Array<readonly [string, CompararAbonosDriveCuotasResponse | null]> =
-    []
-  const n = Math.max(1, chunkSize)
-  for (let i = 0; i < targets.length; i += n) {
-    if (isCanceled()) return out
-    const slice = targets.slice(i, i + n)
-    const parte = await Promise.all(
-      slice.map(async t => {
-        try {
-          const d = await notificacionService.getCompararAbonosDriveCuotas({
-            cedula: t.cedula,
-            prestamoId: t.prestamoId,
-          })
-          return [t.rowKey, d] as const
-        } catch {
-          return [t.rowKey, null] as const
-        }
-      })
-    )
-    out.push(...parte)
-  }
-  return out
-}
-
 /** Etiquetas de origen en el submódulo GENERAL (misma semántica que cada submenú). */
 const CASO_NOTIF_GENERAL_D1 = 'Día siguiente al vencimiento'
 const CASO_NOTIF_GENERAL_PREJ = 'Atraso 5 cuotas (prejudicial)'
@@ -433,8 +394,8 @@ function DiferenciaAbonoGeneralCell({
   if (isError || !data) {
     return (
       <span
-        className="text-xs text-amber-800"
-        title="No se pudo obtener la comparación ABONOS vs cuotas"
+        className="text-xs text-muted-foreground"
+        title="Dato del cierre nocturno (02:00 Caracas). Si está vacío, aún no hay caché en BD para este préstamo."
       >
         —
       </span>
@@ -445,7 +406,7 @@ function DiferenciaAbonoGeneralCell({
       className={`tabular-nums text-sm font-medium ${
         data.coincide_aproximado ? 'text-green-700' : 'text-amber-800'
       }`}
-      title="Diferencia (hoja Drive − total pagado en cuotas), misma regla que el icono de balanza."
+      title="Diferencia (hoja Drive − total pagado en cuotas). Valor fijo del listado: se actualiza en servidor a las 02:00 (Caracas) y al aplicar ABONOS desde la balanza."
     >
       {fmtDiferenciaAbonoCelda(data.diferencia)}
     </span>
@@ -1501,7 +1462,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
         }),
       ])
-      setCompararAbonoGeneralTick(t => t + 1)
       toast.success(
         'Listas y KPI actualizados. El envio de correos y campanas sigue siendo manual desde esta pantalla o configuracion.'
       )
@@ -1846,98 +1806,30 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     )
   }, [listaBasePaginacion, filtroCedula])
 
-  const generalCompararTargets = useMemo(() => {
-    if (modulo !== 'general' || activeTab !== 'general_todos') return []
-    const seen = new Set<string>()
-    const out: Array<{
-      cedula: string
-      prestamoId: number
-      rowKey: string
-    }> = []
+  /** Caché de BD por préstamo (columna «Diferencia abono»); el servidor la renueva a las 02:00 Caracas. */
+  const compararAbonoDesdeFilas = useMemo(() => {
+    const m = new Map<string, CompararAbonosDriveCuotasResponse>()
+    if (modulo !== 'general' || activeTab !== 'general_todos') return m
     for (const row of listaTrasFiltroCedula) {
       const ced = String(row.cedula ?? '').trim()
       const pid = row.prestamo_id
       if (!ced || pid == null) continue
       const k = `${ced}|${pid}`
-      if (seen.has(k)) continue
-      seen.add(k)
-      out.push({ cedula: ced, prestamoId: pid, rowKey: k })
+      const c = row.comparar_abonos_drive_cuotas
+      if (c != null && !m.has(k)) m.set(k, c)
     }
-    return out
+    return m
   }, [modulo, activeTab, listaTrasFiltroCedula])
-
-  const generalCompararTargetsKey = useMemo(
-    () => [...generalCompararTargets.map(t => t.rowKey)].sort().join('\n'),
-    [generalCompararTargets]
-  )
-
-  const generalCompararRowKeySet = useMemo(
-    () => new Set(generalCompararTargets.map(t => t.rowKey)),
-    [generalCompararTargets]
-  )
-
-  const [compararAbonoGeneralMap, setCompararAbonoGeneralMap] = useState<
-    Map<string, CompararAbonosDriveCuotasResponse>
-  >(() => new Map())
-
-  const [compararAbonoGeneralCargando, setCompararAbonoGeneralCargando] =
-    useState(false)
-
-  const [compararAbonoGeneralTick, setCompararAbonoGeneralTick] = useState(0)
-
-  useEffect(() => {
-    if (modulo !== 'general' || activeTab !== 'general_todos') {
-      setCompararAbonoGeneralMap(new Map())
-      setCompararAbonoGeneralCargando(false)
-      return undefined
-    }
-    const targetsSnapshot = generalCompararTargets
-    if (targetsSnapshot.length === 0) {
-      setCompararAbonoGeneralMap(new Map())
-      setCompararAbonoGeneralCargando(false)
-      return undefined
-    }
-    let cancelado = false
-    setCompararAbonoGeneralCargando(true)
-    void (async () => {
-      try {
-        const entradas = await compararAbonosGeneralEnLotes(
-          targetsSnapshot,
-          COMPARAR_ABONOS_GENERAL_CONCURRENCIA,
-          () => cancelado
-        )
-        if (cancelado) return
-        const m = new Map<string, CompararAbonosDriveCuotasResponse>()
-        for (const [k, v] of entradas) {
-          if (v) m.set(k, v)
-        }
-        setCompararAbonoGeneralMap(m)
-      } finally {
-        if (!cancelado) setCompararAbonoGeneralCargando(false)
-      }
-    })()
-    return () => {
-      cancelado = true
-    }
-  }, [modulo, activeTab, generalCompararTargetsKey, compararAbonoGeneralTick])
-
-  const filtrosAbonoGeneralPendientes =
-    modulo === 'general' &&
-    filtroDiferenciaAbonoGeneral !== 'todas' &&
-    compararAbonoGeneralCargando
 
   const listaFiltradaCedula = useMemo(() => {
     if (modulo !== 'general' || filtroDiferenciaAbonoGeneral === 'todas') {
-      return listaTrasFiltroCedula
-    }
-    if (filtrosAbonoGeneralPendientes) {
       return listaTrasFiltroCedula
     }
     return listaTrasFiltroCedula.filter(row => {
       const ced = String(row.cedula ?? '').trim()
       const pid = row.prestamo_id
       if (!ced || pid == null) return false
-      const d = compararAbonoGeneralMap.get(`${ced}|${pid}`)
+      const d = compararAbonoDesdeFilas.get(`${ced}|${pid}`)
       if (!d) return false
       return filaCumpleFiltroDiferenciaAbonoGeneral(
         filtroDiferenciaAbonoGeneral,
@@ -1948,8 +1840,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     listaTrasFiltroCedula,
     modulo,
     filtroDiferenciaAbonoGeneral,
-    filtrosAbonoGeneralPendientes,
-    compararAbonoGeneralMap,
+    compararAbonoDesdeFilas,
   ])
 
   const totalFilasListado = listaFiltradaCedula.length
@@ -2668,7 +2559,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         ) : null}
 
                         {modulo === 'general' ? (
-                          <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
+                          <th
+                            className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
+                            title="Valor fijo del listado: se recalcula en el servidor una vez al día a las 02:00 (America/Caracas) y al aplicar ABONOS desde la balanza."
+                          >
                             Diferencia Abono
                           </th>
                         ) : null}
@@ -2842,20 +2736,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       row={row}
                                       data={
                                         rk
-                                          ? compararAbonoGeneralMap.get(rk)
+                                          ? compararAbonoDesdeFilas.get(rk)
                                           : undefined
                                       }
-                                      isLoading={Boolean(
-                                        rk &&
-                                          compararAbonoGeneralCargando &&
-                                          generalCompararRowKeySet.has(rk)
-                                      )}
-                                      isError={Boolean(
-                                        rk &&
-                                          generalCompararRowKeySet.has(rk) &&
-                                          !compararAbonoGeneralCargando &&
-                                          !compararAbonoGeneralMap.has(rk)
-                                      )}
+                                      isLoading={false}
+                                      isError={false}
                                     />
                                   )
                                 })()}
@@ -2927,7 +2812,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         ) : null}
 
                         {modulo === 'general' ? (
-                          <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
+                          <th
+                            className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
+                            title="Valor fijo del listado: se recalcula en el servidor una vez al día a las 02:00 (America/Caracas) y al aplicar ABONOS desde la balanza."
+                          >
                             Diferencia Abono
                           </th>
                         ) : null}
@@ -3033,20 +2921,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       row={row}
                                       data={
                                         rk
-                                          ? compararAbonoGeneralMap.get(rk)
+                                          ? compararAbonoDesdeFilas.get(rk)
                                           : undefined
                                       }
-                                      isLoading={Boolean(
-                                        rk &&
-                                          compararAbonoGeneralCargando &&
-                                          generalCompararRowKeySet.has(rk)
-                                      )}
-                                      isError={Boolean(
-                                        rk &&
-                                          generalCompararRowKeySet.has(rk) &&
-                                          !compararAbonoGeneralCargando &&
-                                          !compararAbonoGeneralMap.has(rk)
-                                      )}
+                                      isLoading={false}
+                                      isError={false}
                                     />
                                   )
                                 })()}

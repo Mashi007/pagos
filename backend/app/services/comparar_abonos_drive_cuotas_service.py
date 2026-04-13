@@ -8,6 +8,7 @@ No se suman abonos de otros créditos de la misma cédula (opción A de negocio)
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections import defaultdict
@@ -42,6 +43,20 @@ _TOL_FIN_HOJA_USD = 1.0  # tolerancia hoja vs prestamo.total_financiamiento (red
 _HORAS_SYNC_CONSIDERADA_ANTIGUA = 48
 # Umbral compartido con aplicar_abonos_drive: montos mayores exigen escribir CONFIRMO en UI y backend.
 UMBRAL_CONFIRMO_ABONOS_USD = 5000.0
+
+
+def _persist_prestamo_abonos_drive_cuotas_cache(
+    db: Session, prestamo_id: int, payload: Dict[str, Any]
+) -> None:
+    """Persiste el resultado de comparación en el préstamo (columna JSON + marca de tiempo)."""
+    row = db.get(Prestamo, prestamo_id)
+    if row is None:
+        return
+    try:
+        row.abonos_drive_cuotas_cache = json.loads(json.dumps(payload, default=str))
+    except (TypeError, ValueError):
+        row.abonos_drive_cuotas_cache = None
+    row.abonos_drive_cuotas_cache_at = datetime.utcnow()
 
 
 def _prestamo_huella_dict(prestamo: Prestamo) -> Dict[str, Any]:
@@ -171,6 +186,7 @@ def comparar_abonos_drive_vs_cuotas(
     cedula: str,
     prestamo_id: int,
     lote: Optional[str] = None,
+    persist_cache: bool = False,
 ) -> Dict[str, Any]:
     cedula_in = (cedula or "").strip()
     if not cedula_in:
@@ -361,7 +377,7 @@ def comparar_abonos_drive_vs_cuotas(
         requiere_seleccion_lote,
     )
 
-    return {
+    out: Dict[str, Any] = {
         "cedula": cedula_in,
         "prestamo_id": prestamo_id,
         "prestamo_huella": _prestamo_huella_dict(prestamo),
@@ -386,3 +402,13 @@ def comparar_abonos_drive_vs_cuotas(
         "advertencias": advertencias,
         "umbral_doble_confirmacion_abonos_usd": UMBRAL_CONFIRMO_ABONOS_USD,
     }
+    if persist_cache:
+        try:
+            _persist_prestamo_abonos_drive_cuotas_cache(db, prestamo_id, out)
+        except Exception:
+            logger.warning(
+                "[comparar_abonos] no se pudo persistir caché prestamo_id=%s",
+                prestamo_id,
+                exc_info=True,
+            )
+    return out

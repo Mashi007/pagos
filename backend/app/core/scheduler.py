@@ -6,6 +6,7 @@ Por defecto esta desactivado: ningun cron en servidor; la pantalla Configuracion
 
 Cuando esta activo:
 - 02:00  Finiquito: refrescar tabla finiquito_casos.
+- 02:00  Notificaciones: caché «Diferencia abono» (ABONOS hoja vs cuotas) en prestamos, si ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY.
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 03:00  Notificaciones «2 dias antes» (PAGO_2_DIAS_ANTES_PENDIENTE): solo si cron_envio_pago_2_dias_antes.habilitado en BD; no afecta otros casos.
 - 04:00  Limpieza codigos estado de cuenta.
@@ -34,6 +35,30 @@ _scheduler: Optional[BackgroundScheduler] = None
 def scheduler_is_running() -> bool:
     """True si este proceso ya tiene BackgroundScheduler iniciado (lider con jobs registrados)."""
     return _scheduler is not None
+
+
+def _job_abonos_drive_cuotas_cache_0200() -> None:
+    """02:00 Caracas. Persiste comparación ABONOS (hoja) vs cuotas en prestamos (columna Notificaciones General)."""
+    if not getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
+        return
+    db = SessionLocal()
+    try:
+        from app.services.abonos_drive_cuotas_cache_job import (
+            ejecutar_refresh_abonos_drive_cuotas_cache_nightly,
+        )
+
+        res = ejecutar_refresh_abonos_drive_cuotas_cache_nightly(db)
+        logger.info(
+            "[abonos_drive_cache] nightly prestamos=%s ok=%s err=%s skip=%s",
+            res.get("prestamos_considerados"),
+            res.get("actualizados_ok"),
+            res.get("errores"),
+            res.get("omitidos_sin_cedula"),
+        )
+    except Exception as e:
+        logger.exception("Error en job abonos_drive_cuotas_cache_0200: %s", e)
+    finally:
+        db.close()
 
 
 def _job_finiquito_refresh() -> None:
@@ -187,7 +212,7 @@ def _job_pagos_gmail_pending_scan() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: finiquito 02:00; auditoria 03:00; notif 2 dias antes 03:00 (opcional por BD); hoja Drive 04:01; limpieza 04:00; Gmail 04/11/20 opcional."""
+    """Inicia el scheduler: finiquito 02:00; caché Diferencia abono 02:00 (opcional); auditoria 03:00; notif 2 dias antes 03:00 (opcional por BD); hoja Drive 04:01; limpieza 04:00; Gmail 04/11/20 opcional."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
@@ -199,6 +224,13 @@ def start_scheduler() -> None:
         id="finiquito_refresh_0200",
         name="Finiquito: refrescar casos 02:00",
     )
+    if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
+        _scheduler.add_job(
+            _job_abonos_drive_cuotas_cache_0200,
+            CronTrigger(hour=2, minute=0, timezone=SCHEDULER_TZ),
+            id="abonos_drive_cuotas_cache_0200",
+            name="Notificaciones: caché Diferencia abono (hoja vs cuotas) 02:00",
+        )
 
     _scheduler.add_job(
         _job_auditoria_cartera_prestamos,
@@ -241,9 +273,13 @@ def start_scheduler() -> None:
             )
         _gmail_log = "; Gmail pagos pendientes 4:00, 11:00 y 20:00"
     _scheduler.start()
+    _abonos_log = ""
+    if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
+        _abonos_log = "; caché Diferencia abono 02:00"
     logger.info(
-        "Scheduler iniciado: finiquito 02:00; auditoria 03:00; notif PAGO_2_DIAS_ANTES 03:00 (si habilitado en BD); "
+        "Scheduler iniciado: finiquito 02:00%s; auditoria 03:00; notif PAGO_2_DIAS_ANTES 03:00 (si habilitado en BD); "
         "hoja Drive CONCILIACION 04:01; limpieza estado_cuenta_codigos 4:00%s (%s).",
+        _abonos_log,
         _gmail_log,
         SCHEDULER_TZ,
     )
