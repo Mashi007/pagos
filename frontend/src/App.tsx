@@ -173,8 +173,6 @@ import Analistas from './pages/Analistas'
 
 import PagosPage from './pages/PagosPage'
 
-import { DashboardPagos } from './pages/DashboardPagos'
-
 import PagoBsPage from './pages/PagoBsPage'
 
 import TasaCambioPage from './pages/TasaCambioPage'
@@ -376,8 +374,6 @@ function App() {
             {/* Dashboard - ruta ms especfica primero */}
 
             <Route path="dashboard/menu" element={<DashboardMenu />} />
-
-            <Route path="dashboard/pagos" element={<DashboardPagos />} />
 
             <Route
               path="dashboard"

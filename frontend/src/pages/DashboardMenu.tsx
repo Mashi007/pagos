@@ -2,8 +2,6 @@ import { useState, useMemo, useEffect, useLayoutEffect } from 'react'
 
 import { motion } from 'framer-motion'
 
-import { useNavigate } from 'react-router-dom'
-
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
@@ -228,8 +226,6 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
 }
 
 export function DashboardMenu() {
-  const navigate = useNavigate()
-
   const { user } = useSimpleAuth()
 
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
@@ -1074,18 +1070,6 @@ export function DashboardMenu() {
                   Monitoreo estratégico de KPIs y gráficos.
                 </p>
               </>
-            }
-            actions={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="border-violet-200 bg-white hover:bg-violet-50"
-                onClick={() => navigate('/dashboard/pagos')}
-              >
-                <DollarSign className="mr-2 h-4 w-4" />
-                Dashboard Pagos
-              </Button>
             }
           />
         </motion.div>

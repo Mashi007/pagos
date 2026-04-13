@@ -113,7 +113,7 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
   const inv: Promise<unknown>[] = [
     queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false }),
     queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }),
-    /** Sidebar / DashboardPagos usan esta clave para GET /pagos/kpis sin filtros. */
+    /** Sidebar / dashboard usan esta clave para GET /pagos/kpis sin filtros. */
     queryClient.invalidateQueries({ queryKey: ['kpis-pagos'], exact: false }),
     queryClient.invalidateQueries({
       queryKey: ['pagos-ultimos'],

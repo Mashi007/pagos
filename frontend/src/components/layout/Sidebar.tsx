@@ -266,12 +266,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
 
       children: [
-        {
-          title: 'Dashboard Pagos',
-          href: '/dashboard/pagos',
-          icon: BarChart3,
-        },
-
         { title: 'Pagos', href: '/pagos', icon: Wallet },
 
         {
