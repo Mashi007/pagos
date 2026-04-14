@@ -60,6 +60,31 @@ const POLL_INTERVAL_MS = 5000
 
 const POLL_MAX_ATTEMPTS = 300 // 300 × 5s = 25 min máximo de espera (pipeline con muchos correos)
 
+type GmailScanFilter =
+  | 'unread'
+  | 'read'
+  | 'all'
+  | 'pending_identification'
+  | 'error_email_rescan'
+
+function mensajeSinCorreosNiFilas(scan: GmailScanFilter): string {
+  const base =
+    'No hubo correos que cumplieran la búsqueda del pipeline (p. ej. imagen/PDF que aplique) o ninguno generó filas en esta pasada (p. ej. varias piezas en el hilo, PDF multipágina, remitente sin coincidencia en clientes).'
+
+  const porFiltro: Record<GmailScanFilter, string> = {
+    all:
+      ' Filtro: toda la bandeja (leídos y no leídos). Revise Gmail y las etiquetas del flujo.',
+    unread: ' Filtro: solo no leídos. Revise Gmail y las etiquetas del flujo.',
+    read: ' Filtro: solo leídos. Revise Gmail y las etiquetas del flujo.',
+    pending_identification:
+      ' Filtro: pendientes de identificación. Revise esa vista y las etiquetas del flujo.',
+    error_email_rescan:
+      ' Filtro: re-escaneo ERROR EMAIL. Revise esos hilos y las etiquetas del flujo.',
+  }
+
+  return base + porFiltro[scan]
+}
+
 export function useGmailPipeline({
   onDone,
   onStatusUpdate,
@@ -71,6 +96,9 @@ export function useGmailPipeline({
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const abortedRef = useRef(false)
+
+  /** Último scan_filter enviado a run-now (el status no lo devuelve). */
+  const lastScanFilterRef = useRef<GmailScanFilter>('all')
 
   const onDoneRef = useRef(onDone)
 
@@ -130,11 +158,9 @@ export function useGmailPipeline({
 
                 onDoneRef.current?.(s)
               } else {
-                toast(
-                  'No hubo correos que cumplieran el criterio de búsqueda, o ninguno generó filas en esta pasada. Revise Gmail (no leídos y etiquetas).',
-
-                  { duration: 8000 }
-                )
+                toast(mensajeSinCorreosNiFilas(lastScanFilterRef.current), {
+                  duration: 10000,
+                })
 
                 // Sin datos: no abrir el diálogo de descarga
               }
@@ -208,6 +234,8 @@ export function useGmailPipeline({
       abortedRef.current = false
 
       setLoading(true)
+
+      lastScanFilterRef.current = scanFilter ?? 'all'
 
       toast('Procesando correos en segundo plano...', { duration: 4000 })
 
