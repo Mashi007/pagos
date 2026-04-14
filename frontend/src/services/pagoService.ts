@@ -950,6 +950,16 @@ class PagoService {
     latest_data_date?: string | null
 
     last_correos_marcados_revision?: number
+
+    /** Métricas diagnóstico última corrida (p. ej. hilos listados vs omitidos). */
+    last_run_summary?: {
+      scan_filter?: string
+      gmail_messages_listed?: number
+      messages_skipped_invalid_sender?: number
+      messages_skipped_drive_folder?: number
+      list_error?: boolean
+      pipeline_error?: boolean
+    } | null
   }> {
     return await apiClient.get(`${this.baseUrl}/gmail/status`)
   }

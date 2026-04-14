@@ -1,7 +1,7 @@
 """
 Modelos para el pipeline Gmail -> Drive -> Gemini -> Sheets (módulo Pagos).
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -19,6 +19,8 @@ class PagosGmailSync(Base):
     # Conteo por sync (filtro unread): correos con al menos un adjunto digitalizado OK (etiqueta+estrella).
     correos_marcados_revision = Column(Integer, nullable=False, server_default="0", default=0)
     error_message = Column(Text, nullable=True)
+    # Resumen diagnóstico de la última corrida (listados Gmail vs omitidos); expuesto en GET /pagos/gmail/status.
+    run_summary = Column(JSON, nullable=True)
 
 
 class PagosGmailSyncItem(Base):

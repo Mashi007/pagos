@@ -32,6 +32,16 @@ import { pagoService } from '../services/pagoService'
 
 import { getErrorMessage } from '../types/errors'
 
+/** Resumen de la última corrida (backend); sirve para explicar 0 correos / 0 archivos. */
+export type GmailRunSummary = {
+  scan_filter?: string
+  gmail_messages_listed?: number
+  messages_skipped_invalid_sender?: number
+  messages_skipped_drive_folder?: number
+  list_error?: boolean
+  pipeline_error?: boolean
+}
+
 interface GmailStatus {
   last_run: string | null
 
@@ -48,6 +58,8 @@ interface GmailStatus {
   latest_data_date?: string | null // fecha más reciente con datos disponibles para descargar
 
   last_correos_marcados_revision?: number
+
+  last_run_summary?: GmailRunSummary | null
 }
 
 interface UseGmailPipelineOptions {
@@ -83,6 +95,47 @@ function mensajeSinCorreosNiFilas(scan: GmailScanFilter): string {
   }
 
   return base + porFiltro[scan]
+}
+
+/** Aclara por qué quedó 0/0 según métricas del servidor (GET /pagos/gmail/status). */
+function detalleCausaSinFilas(s: GmailStatus): string {
+  const raw = s.last_run_summary
+  if (raw == null || typeof raw !== 'object') return ''
+
+  const listed = Number(raw.gmail_messages_listed)
+  const skipS = Number(raw.messages_skipped_invalid_sender)
+  const skipD = Number(raw.messages_skipped_drive_folder)
+  if (
+    !Number.isFinite(listed) ||
+    !Number.isFinite(skipS) ||
+    !Number.isFinite(skipD)
+  ) {
+    return ''
+  }
+
+  if (raw.list_error === true) {
+    return ' Motivo: falló la API de Gmail al listar correos (no significa “bandeja vacía”); revise credenciales, cuotas y el mensaje de error arriba.'
+  }
+
+  if (listed === 0) {
+    return ' Motivo: Gmail no devolvió hilos con el criterio del módulo (entrada + imagen/PDF o medios admitidos). Un correo solo de texto o sin medio escaneable no entra, aunque figure como no leído.'
+  }
+
+  const emails = s.last_emails ?? 0
+  const files = s.last_files ?? 0
+  if (emails === 0 && files === 0 && skipS + skipD >= listed) {
+    return ` Motivo: se listaron ${listed} hilo(s) pero ninguno pasó al detalle (remitente «De» inválido: ${skipS}; fallo carpeta Drive: ${skipD}).`
+  }
+
+  return ''
+}
+
+/** Si hubo revisión de hilos pero 0 archivos en Excel. */
+function detalleCeroArchivosConCorreos(s: GmailStatus): string {
+  const emails = s.last_emails ?? 0
+  const files = s.last_files ?? 0
+  if (files > 0 || emails === 0) return ''
+  return ' Ningún comprobante generó fila final (plantilla incompleta, regla «una sola pieza», dedupe de binario, etc.).'
 }
 
 export function useGmailPipeline({
@@ -158,9 +211,12 @@ export function useGmailPipeline({
 
                 onDoneRef.current?.(s)
               } else {
-                toast(mensajeSinCorreosNiFilas(lastScanFilterRef.current), {
-                  duration: 10000,
-                })
+                toast(
+                  `${mensajeSinCorreosNiFilas(lastScanFilterRef.current)}${detalleCausaSinFilas(s)}`,
+                  {
+                    duration: 12000,
+                  }
+                )
 
                 // Sin datos: no abrir el diálogo de descarga
               }
@@ -170,8 +226,8 @@ export function useGmailPipeline({
                 : ''
 
               toast.success(
-                `Listo: se revisaron ${emails} correo(s) y ${files} archivo(s) procesados.${dateHint}`,
-                { duration: 8000 }
+                `Listo: se revisaron ${emails} correo(s) y ${files} archivo(s) procesados.${dateHint}${detalleCeroArchivosConCorreos(s)}`,
+                { duration: 10000 }
               )
 
               onDoneRef.current?.(s)

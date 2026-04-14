@@ -285,6 +285,12 @@ def run_pipeline(
     error_email_rescan = (scan_filter or "").strip().lower() == "error_email_rescan"
     # Mismo binario de comprobante en varios mensajes Gmail (reenvíos / hilos duplicados): una sola pasada Gemini+BD+Drive por corrida.
     seen_attachment_sha256: set[str] = set()
+    # Métricas para GET /pagos/gmail/status → last_run_summary (diagnóstico en toast UI).
+    run_stats: dict[str, int] = {
+        "gmail_messages_listed": 0,
+        "messages_skipped_invalid_sender": 0,
+        "messages_skipped_drive_folder": 0,
+    }
 
     try:
         def fetch_sorted_batch() -> list[dict]:
@@ -341,6 +347,7 @@ def run_pipeline(
                         sender_lc[:72] if sender_lc else "(vacio)",
                         msg_id,
                     )
+                    run_stats["messages_skipped_invalid_sender"] += 1
                     continue
                 remitente_solo_master = sender_lc == PAGOS_GMAIL_SENDER_MASTER
                 _ced_lookup, _ = _cedula_por_email_cliente(db, sender_lc)
@@ -370,6 +377,7 @@ def run_pipeline(
                 folder_id = get_or_create_folder(drive_svc, folder_name)
                 if not folder_id:
                     drive_errors += 1
+                    run_stats["messages_skipped_drive_folder"] += 1
                     logger.warning(
                         "[PAGOS_GMAIL] No se pudo crear carpeta Drive '%s' - omitiendo msg %s",
                         folder_name,
@@ -1088,6 +1096,7 @@ def run_pipeline(
                 db.commit()
 
         messages = fetch_sorted_batch()
+        run_stats["gmail_messages_listed"] = len(messages)
         if not messages:
             logger.info("[PAGOS_GMAIL] No hay correos con filtro %s", scan_filter)
         else:
@@ -1097,6 +1106,16 @@ def run_pipeline(
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok
         sync.correos_marcados_revision = correos_marcados_revision
+        sync.run_summary = {
+            "scan_filter": scan_filter,
+            "gmail_messages_listed": run_stats["gmail_messages_listed"],
+            "messages_skipped_invalid_sender": run_stats[
+                "messages_skipped_invalid_sender"
+            ],
+            "messages_skipped_drive_folder": run_stats[
+                "messages_skipped_drive_folder"
+            ],
+        }
         logger.info("[PAGOS_GMAIL] FIN pipeline: emails=%d filas=%d drive_errors=%d",
             emails_ok, files_ok, drive_errors)
 
@@ -1124,6 +1143,17 @@ def run_pipeline(
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok
         sync.correos_marcados_revision = correos_marcados_revision
+        sync.run_summary = {
+            "scan_filter": scan_filter,
+            "gmail_messages_listed": run_stats["gmail_messages_listed"],
+            "messages_skipped_invalid_sender": run_stats[
+                "messages_skipped_invalid_sender"
+            ],
+            "messages_skipped_drive_folder": run_stats[
+                "messages_skipped_drive_folder"
+            ],
+            "list_error": True,
+        }
         db.commit()
         return sync_id, "error"
 
@@ -1135,5 +1165,16 @@ def run_pipeline(
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok
         sync.correos_marcados_revision = correos_marcados_revision
+        sync.run_summary = {
+            "scan_filter": scan_filter,
+            "gmail_messages_listed": run_stats["gmail_messages_listed"],
+            "messages_skipped_invalid_sender": run_stats[
+                "messages_skipped_invalid_sender"
+            ],
+            "messages_skipped_drive_folder": run_stats[
+                "messages_skipped_drive_folder"
+            ],
+            "pipeline_error": True,
+        }
         db.commit()
         return sync_id, "error"

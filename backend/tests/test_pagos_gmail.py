@@ -59,6 +59,20 @@ def _ensure_pagos_gmail_sync_correos_revision_column():
                     )
                 )
                 conn.commit()
+            r2 = conn.execute(
+                text(
+                    """
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'pagos_gmail_sync'
+                      AND column_name = 'run_summary'
+                    """
+                )
+            )
+            if r2.fetchone() is None:
+                conn.execute(
+                    text("ALTER TABLE pagos_gmail_sync ADD COLUMN run_summary JSONB NULL")
+                )
+                conn.commit()
     except Exception:
         pass
     for tbl in ("pagos_gmail_sync_item", "gmail_temporal"):
@@ -111,6 +125,7 @@ def test_status_endpoint_returns_structure(db: Session):
     assert "next_run_approx" in resp
     assert "latest_data_date" in resp
     assert "last_correos_marcados_revision" in resp
+    assert "last_run_summary" in resp
     assert resp["next_run_approx"] is None
 
 

@@ -172,6 +172,7 @@ def status(db: Session = Depends(get_db)):
     marcados = 0
     if last is not None:
         marcados = int(getattr(last, "correos_marcados_revision", 0) or 0)
+    run_summary = getattr(last, "run_summary", None) if last is not None else None
     return {
         "last_run": last.started_at.isoformat() if last and last.started_at else None,
         "last_status": last.status if last else None,
@@ -181,6 +182,7 @@ def status(db: Session = Depends(get_db)):
         "next_run_approx": None,
         "latest_data_date": latest_data_date,
         "last_correos_marcados_revision": marcados,
+        "last_run_summary": run_summary,
     }
 
 

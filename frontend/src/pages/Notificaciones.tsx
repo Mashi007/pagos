@@ -2455,35 +2455,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     )
   }, [listaBasePaginacion, filtroCedula])
 
-  /** Caché de BD por préstamo (columna «Diferencia abono»); el servidor la renueva a las 02:00 Caracas. */
-  const compararAbonoDesdeFilas = useMemo(() => {
-    const m = new Map<string, CompararAbonosDriveCuotasResponse>()
-    if (modulo !== 'general' || activeTab !== 'general_todos') return m
-    for (const row of listaTrasFiltroCedula) {
-      const ced = String(row.cedula ?? '').trim()
-      const pid = row.prestamo_id
-      if (!ced || pid == null) continue
-      const k = `${ced}|${pid}`
-      const c = row.comparar_abonos_drive_cuotas
-      if (c != null && !m.has(k)) m.set(k, c)
-    }
-    return m
-  }, [modulo, activeTab, listaTrasFiltroCedula])
-
-  const compararFechaDesdeFilas = useMemo(() => {
-    const m = new Map<string, CompararFechaEntregaQvsAprobacionResponse>()
-    if (modulo !== 'fecha' || activeTab !== 'general_todos') return m
-    for (const row of listaTrasFiltroCedula) {
-      const ced = String(row.cedula ?? '').trim()
-      const pid = row.prestamo_id
-      if (!ced || pid == null) continue
-      const k = `${ced}|${pid}`
-      const c = row.comparar_fecha_entrega_q_aprobacion
-      if (c != null && !m.has(k)) m.set(k, c)
-    }
-    return m
-  }, [modulo, activeTab, listaTrasFiltroCedula])
-
   const listaFiltradaCedula = useMemo(() => {
     let base = listaTrasFiltroCedula
     if (modulo === 'general' && filtroDiferenciaAbonoGeneral !== 'todas') {
@@ -2491,7 +2462,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         const ced = String(row.cedula ?? '').trim()
         const pid = row.prestamo_id
         if (!ced || pid == null) return false
-        const d = compararAbonoDesdeFilas.get(`${ced}|${pid}`)
+        const d = row.comparar_abonos_drive_cuotas
         if (!d) return false
         return filaCumpleFiltroDiferenciaAbonoGeneral(
           filtroDiferenciaAbonoGeneral,
@@ -2504,7 +2475,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         const ced = String(row.cedula ?? '').trim()
         const pid = row.prestamo_id
         if (!ced || pid == null) return false
-        const d = compararFechaDesdeFilas.get(`${ced}|${pid}`)
+        const d = row.comparar_fecha_entrega_q_aprobacion
         if (!d) return false
         return filaCumpleFiltroDiferenciaFechaGeneral(
           filtroDiferenciaFechaGeneral,
@@ -2518,8 +2489,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     modulo,
     filtroDiferenciaAbonoGeneral,
     filtroDiferenciaFechaGeneral,
-    compararAbonoDesdeFilas,
-    compararFechaDesdeFilas,
   ])
 
   const totalFilasListado = listaFiltradaCedula.length
@@ -3604,51 +3573,28 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                             {modulo === 'general' ? (
                               <td className="px-3 py-2 text-right align-middle">
-                                {(() => {
-                                  const cedR = String(row.cedula ?? '').trim()
-                                  const pidR = row.prestamo_id
-                                  const rk =
-                                    cedR && pidR != null
-                                      ? `${cedR}|${pidR}`
-                                      : ''
-                                  return (
-                                    <DiferenciaAbonoGeneralCell
-                                      row={row}
-                                      data={
-                                        rk
-                                          ? compararAbonoDesdeFilas.get(rk)
-                                          : undefined
-                                      }
-                                      isLoading={false}
-                                      isError={false}
-                                    />
-                                  )
-                                })()}
+                                <DiferenciaAbonoGeneralCell
+                                  row={row}
+                                  data={
+                                    row.comparar_abonos_drive_cuotas ?? undefined
+                                  }
+                                  isLoading={false}
+                                  isError={false}
+                                />
                               </td>
                             ) : null}
 
                             {modulo === 'fecha' ? (
                               <td className="px-3 py-2 text-right align-middle">
-                                {(() => {
-                                  const cedR = String(row.cedula ?? '').trim()
-                                  const pidR = row.prestamo_id
-                                  const rk =
-                                    cedR && pidR != null
-                                      ? `${cedR}|${pidR}`
-                                      : ''
-                                  return (
-                                    <DiferenciaFechaGeneralCell
-                                      row={row}
-                                      data={
-                                        rk
-                                          ? compararFechaDesdeFilas.get(rk)
-                                          : undefined
-                                      }
-                                      isLoading={false}
-                                      isError={false}
-                                    />
-                                  )
-                                })()}
+                                <DiferenciaFechaGeneralCell
+                                  row={row}
+                                  data={
+                                    row.comparar_fecha_entrega_q_aprobacion ??
+                                    undefined
+                                  }
+                                  isLoading={false}
+                                  isError={false}
+                                />
                               </td>
                             ) : null}
 
@@ -3859,51 +3805,28 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                             {modulo === 'general' ? (
                               <td className="px-3 py-2 text-right align-middle">
-                                {(() => {
-                                  const cedR = String(row.cedula ?? '').trim()
-                                  const pidR = row.prestamo_id
-                                  const rk =
-                                    cedR && pidR != null
-                                      ? `${cedR}|${pidR}`
-                                      : ''
-                                  return (
-                                    <DiferenciaAbonoGeneralCell
-                                      row={row}
-                                      data={
-                                        rk
-                                          ? compararAbonoDesdeFilas.get(rk)
-                                          : undefined
-                                      }
-                                      isLoading={false}
-                                      isError={false}
-                                    />
-                                  )
-                                })()}
+                                <DiferenciaAbonoGeneralCell
+                                  row={row}
+                                  data={
+                                    row.comparar_abonos_drive_cuotas ?? undefined
+                                  }
+                                  isLoading={false}
+                                  isError={false}
+                                />
                               </td>
                             ) : null}
 
                             {modulo === 'fecha' ? (
                               <td className="px-3 py-2 text-right align-middle">
-                                {(() => {
-                                  const cedR = String(row.cedula ?? '').trim()
-                                  const pidR = row.prestamo_id
-                                  const rk =
-                                    cedR && pidR != null
-                                      ? `${cedR}|${pidR}`
-                                      : ''
-                                  return (
-                                    <DiferenciaFechaGeneralCell
-                                      row={row}
-                                      data={
-                                        rk
-                                          ? compararFechaDesdeFilas.get(rk)
-                                          : undefined
-                                      }
-                                      isLoading={false}
-                                      isError={false}
-                                    />
-                                  )
-                                })()}
+                                <DiferenciaFechaGeneralCell
+                                  row={row}
+                                  data={
+                                    row.comparar_fecha_entrega_q_aprobacion ??
+                                    undefined
+                                  }
+                                  isLoading={false}
+                                  isError={false}
+                                />
                               </td>
                             ) : null}
 
