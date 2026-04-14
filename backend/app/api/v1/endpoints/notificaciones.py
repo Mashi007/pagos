@@ -2076,18 +2076,20 @@ def build_prejudicial_items(
     evitar timeouts en carteras grandes / cold start en Render.
     """
     hoy = fecha_referencia or hoy_negocio()
+    # Agrupar por titular del préstamo (prestamos.cliente_id). cuotas.cliente_id es denormalizado
+    # y si diverge, el listado prejudicial mezclaba contacto de un titular con montos de otro crédito.
     subq = (
-        select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
+        select(Prestamo.cliente_id, func.count(Cuota.id).label("total"))
+        .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(
             Cuota.fecha_pago.is_(None),
             Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
             Cuota.fecha_vencimiento < hoy,
-            Cuota.cliente_id.isnot(None),
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
             ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
         )
-        .group_by(Cuota.cliente_id)
+        .group_by(Prestamo.cliente_id)
         .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA)
     )
     rows = db.execute(subq).all()
@@ -2102,32 +2104,33 @@ def build_prejudicial_items(
         for c in db.scalars(select(Cliente).where(Cliente.id.in_(cliente_ids))).all()
     }
 
-    cuotas_candidatas = db.execute(
-        select(Cuota)
+    cuotas_rows = db.execute(
+        select(Cuota, Prestamo.cliente_id)
+        .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(
-            Cuota.cliente_id.in_(cliente_ids),
+            Prestamo.cliente_id.in_(cliente_ids),
             Cuota.fecha_pago.is_(None),
             Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
             Cuota.fecha_vencimiento < hoy,
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
             ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
         )
-    ).scalars().all()
+    ).all()
 
     primera_por_cliente: dict[int, Cuota] = {}
-    for c in cuotas_candidatas:
-        cid = c.cliente_id
-        if cid is None:
+    for c, titular_id in cuotas_rows:
+        if titular_id is None:
             continue
-        cur = primera_por_cliente.get(cid)
+        tid = int(titular_id)
+        cur = primera_por_cliente.get(tid)
         if cur is None:
-            primera_por_cliente[cid] = c
+            primera_por_cliente[tid] = c
             continue
         cfv = c.fecha_vencimiento
         pfv = cur.fecha_vencimiento
         if pfv is None or (cfv is not None and cfv < pfv):
-            primera_por_cliente[cid] = c
+            primera_por_cliente[tid] = c
 
     bloques_prej: List[tuple] = []
     pids_prej: List[int] = []
@@ -2177,8 +2180,9 @@ def get_notificaciones_tabs_data(
     Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
     calendario después de la fecha de vencimiento), sin fecha_pago y con saldo pendiente.
 
-    Prejudicial: por cliente_id, al menos 4 cuotas con cuotas.estado en (VENCIDO, MORA),
-    fecha_vencimiento < hoy, sin fecha_pago y saldo pendiente; préstamo no liquidado/desistimiento.
+    Prejudicial: por titular del préstamo (prestamos.cliente_id), al menos el mínimo configurado
+    de cuotas con cuotas.estado en (VENCIDO, MORA), fecha_vencimiento < hoy, sin fecha_pago y
+    saldo pendiente; préstamo no liquidado/desistimiento.
     """
     hoy = fecha_referencia or hoy_negocio()
     fechas_retraso = (

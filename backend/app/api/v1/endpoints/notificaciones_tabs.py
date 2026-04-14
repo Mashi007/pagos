@@ -48,7 +48,10 @@ from app.services.notificaciones_exclusion_desistimiento import (
 )
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
-from app.services.notificacion_service import build_cuotas_pendiente_2_dias_antes_items
+from app.services.notificacion_service import (
+    alinear_items_contacto_titular_prestamo,
+    build_cuotas_pendiente_2_dias_antes_items,
+)
 from app.utils.cliente_emails import (
     lista_correo_principal_para_notificaciones,
     lista_correo_principal_notificaciones_desde_objeto,
@@ -259,6 +262,8 @@ def _enviar_correos_items(
     omitidos_desistimiento = 0
     registros_envio: List[Tuple[EnvioNotificacion, Optional[List[Tuple[str, bytes]]]]] = []
     correlativos_en_batch = {}
+    if db:
+        alinear_items_contacto_titular_prestamo(db, items)
     for idx, item in enumerate(items):
         item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
         tipo = get_tipo_for_item(item)

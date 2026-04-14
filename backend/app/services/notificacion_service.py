@@ -373,18 +373,19 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         return items[0] if items else None
 
     if tipo == "PREJUDICIAL":
+        # Titular: prestamos.cliente_id (cuotas.cliente_id denormalizado puede divergir).
         subq = (
-            select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
+            select(Prestamo.cliente_id, func.count(Cuota.id).label("total"))
+            .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
                 Cuota.fecha_pago.is_(None),
                 Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.cliente_id.isnot(None),
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
                 ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
             )
-            .group_by(Cuota.cliente_id)
+            .group_by(Prestamo.cliente_id)
             .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA)
             .limit(1)
         )
@@ -399,7 +400,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             select(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
-                Cuota.cliente_id == cliente_id,
+                Prestamo.cliente_id == cliente_id,
                 Cuota.fecha_pago.is_(None),
                 Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
                 Cuota.fecha_vencimiento < hoy,
@@ -512,6 +513,100 @@ def format_cuota_item(
             base_item["dias_antes_vencimiento"] = dias_antes_vencimiento
 
     return base_item
+
+
+def alinear_items_contacto_titular_prestamo(db: Session, items: Sequence[dict]) -> None:
+    """
+    Alinea en sitio nombre, cédula, correo y teléfono del ítem con el titular real del préstamo
+    (prestamos.cliente_id). Si ``cuotas.cliente_id`` quedó denormalizado distinto del titular,
+    el listado puede mostrar (y el envío usar) el contacto de una persona y los montos de otra.
+
+    Se invoca antes del bucle de envío por lote; solo carga clientes cuando detecta divergencia.
+    """
+    lst = [it for it in items if it and it.get("prestamo_id")]
+    if not lst:
+        return
+    pids_uniq: List[int] = []
+    for it in lst:
+        try:
+            pids_uniq.append(int(it["prestamo_id"]))
+        except (TypeError, ValueError):
+            continue
+    pids_uniq = sorted({p for p in pids_uniq})
+    if not pids_uniq:
+        return
+    rows = db.execute(
+        select(Prestamo.id, Prestamo.cliente_id).where(Prestamo.id.in_(pids_uniq))
+    ).all()
+    titular_por_pid: Dict[int, int] = {int(pid): int(cid) for pid, cid in rows if cid is not None}
+
+    cids_needed: set[int] = set()
+    for it in lst:
+        try:
+            ip = int(it["prestamo_id"])
+        except (TypeError, ValueError):
+            continue
+        tid = titular_por_pid.get(ip)
+        if tid is None:
+            continue
+        cur = it.get("cliente_id")
+        try:
+            cur_i = int(cur) if cur is not None else None
+        except (TypeError, ValueError):
+            cur_i = None
+        if cur_i != tid:
+            cids_needed.add(tid)
+
+    if not cids_needed:
+        return
+
+    clientes = {
+        c.id: c
+        for c in db.scalars(select(Cliente).where(Cliente.id.in_(sorted(cids_needed)))).all()
+    }
+
+    for it in lst:
+        try:
+            ip = int(it["prestamo_id"])
+        except (TypeError, ValueError):
+            continue
+        tid = titular_por_pid.get(ip)
+        if tid is None:
+            continue
+        cur = it.get("cliente_id")
+        try:
+            cur_i = int(cur) if cur is not None else None
+        except (TypeError, ValueError):
+            cur_i = None
+        if cur_i == tid:
+            continue
+        cli = clientes.get(tid)
+        if not cli:
+            continue
+        logger.warning(
+            "[notif_alineacion] prestamo_id=%s: cliente_id en fila=%s != titular del préstamo=%s; "
+            "se corrige contacto al titular antes del envío.",
+            ip,
+            cur_i,
+            tid,
+        )
+        it["cliente_id"] = cli.id
+        it["nombre"] = cli.nombres or ""
+        it["cedula"] = cli.cedula or ""
+        correos = lista_correo_principal_notificaciones_desde_objeto(cli)
+        correo_prim = correos[0] if correos else (cli.email or "").strip()
+        _, correo_sec = secundario_distinto_del_principal(
+            getattr(cli, "email", None),
+            getattr(cli, "email_secundario", None),
+        )
+        it["correo_1"] = correo_prim if correo_prim and "@" in correo_prim else None
+        it["correo_2"] = correo_sec if correo_sec and "@" in correo_sec else None
+        it["correo"] = correo_prim if correo_prim and "@" in correo_prim else ""
+        it["correos"] = correos
+        it["telefono"] = (cli.telefono or "").strip()
+        # El PDF/carta podría haberse armado con el titular incorrecto; se recalcula en el envío.
+        it.pop("contexto_cobranza", None)
+        it.pop("_correlativo_envio", None)
 
 
 def revision_manual_estado_por_prestamo_ids(
