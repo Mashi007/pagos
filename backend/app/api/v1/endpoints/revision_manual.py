@@ -1570,10 +1570,11 @@ def get_detalle_prestamo_revision(
             fecha_revision_iso = rev_row.fecha_revision.isoformat()
         usuario_revision_email = rev_row.usuario_revision_email
 
-    # Igual que GET /prestamos/{id}/cuotas (_listado_cuotas_prestamo_dicts): aplica pagos conciliados
-    # sin fila en cuota_pagos y, si la integridad lo exige, reaplica la cascada. Así total_pagado
-    # y estados coinciden con la tabla de amortización tras procesos masivos (p. ej. ABONOS Drive).
-    sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
+    # Aplica pagos conciliados sin fila en cuota_pagos (incremental), mismo criterio de costo que
+    # sincronizar_pagos_pendientes_para_listado_notificaciones: sin reaplicacion en cascada aqui.
+    # La reparacion por integridad (reset + cascada por prestamo) sigue en GET /prestamos/{id}/cuotas
+    # (_listado_cuotas_prestamo_dicts) y en estado de cuenta, para no bloquear este GET en produccion.
+    sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id], ejecutar_cascada=False)
 
     # Obtener cuotas
     cuotas = db.execute(
