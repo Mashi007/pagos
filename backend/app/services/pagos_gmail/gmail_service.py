@@ -1,7 +1,7 @@
 """
 Gmail: listar correos con adjunto o parte con nombre de imagen/PDF (has:attachment OR filename:png|jpg|...).
-Pipeline Pagos: toda imagen/PDF util (archivo adjunto o incrustada en cuerpo/related/HTML/mixed), mas .eml rfc822;
-deduplicado por contenido. La plantilla imagen 1/2/3/4 la decide solo Gemini al escanear cada binario.
+Pipeline Pagos: extrae candidatos imagen/PDF (adjunto, cuerpo, .eml); **Gemini solo si queda exactamente 1 candidato**
+tras expandir PDF (1 página); con 2+ candidatos no hay escaneo. Plantilla A/B/C/D la decide Gemini en ese único binario.
 """
 import base64
 import hashlib
@@ -41,8 +41,6 @@ PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY = "IMAGEN 5"
 PAGOS_GMAIL_LABEL_IMAGEN_5 = PAGOS_GMAIL_LABEL_MASTER
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
-# Re-escaneo ERROR EMAIL (Mercantil/BNC con cédula leída de la imagen): etiqueta adicional tras éxito.
-PAGOS_GMAIL_LABEL_EMAIL_12 = "EMAIL-12"
 # Ninguna plantilla A/B/C/D reconocida (o no se aplico otra etiqueta de clasificacion).
 PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
 # Correos con candidatos imagen/PDF pero sin MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL.
@@ -88,11 +86,11 @@ def pagos_gmail_inbox_media_query() -> str:
 
 def pagos_gmail_error_email_rescan_query() -> str:
     """
-    Re-escaneo especial: correos en inbox con imagen/PDF y etiqueta **ERROR EMAIL**,
-    excluyendo los ya marcados con **EMAIL-12** (evita duplicar filas y reprocesar en bucle).
+    Re-escaneo especial: correos en inbox con imagen/PDF y etiqueta **ERROR EMAIL**.
+    El pipeline deduplica por hash de adjunto en la misma corrida para evitar filas duplicadas.
     """
     return (
-        f'in:inbox label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" -label:"{PAGOS_GMAIL_LABEL_EMAIL_12}" '
+        f'in:inbox label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
         f"{pagos_gmail_list_q_media_parts()}"
     )
 
@@ -109,7 +107,7 @@ def pagos_gmail_list_query_for_scan_filter(filter_type: str) -> str:
     Parámetro **q** de Gmail para listar/count según scan_filter del pipeline.
     - **all** / **pending_identification**: inbox + criterio imagen/PDF (incluye etiqueta ERROR EMAIL y demás).
     - **unread** / **read**: mismo criterio + is:unread / is:read.
-    - **error_email_rescan**: inbox + media + label ERROR EMAIL sin EMAIL-12.
+    - **error_email_rescan**: inbox + media + label ERROR EMAIL.
     """
     ft = (filter_type or "").strip().lower()
     if ft == "error_email_rescan":
@@ -192,9 +190,9 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
     Por defecto (**all** / **pending_identification**): inbox + imagen/PDF, leidos y no leidos, con cualquier etiqueta
     (incluye **ERROR EMAIL**; no se excluye por -label:).
     **unread** / **read**: mismo criterio + ``is:unread`` / ``is:read`` en la consulta Gmail.
-    **error_email_rescan**: solo etiqueta ERROR EMAIL sin EMAIL-12 (reintento cédula en imagen).
+    **error_email_rescan**: inbox con etiqueta ERROR EMAIL + media (reintento cédula A/B en imagen vía Gemini).
     Cada elemento incluye **internal_date_ms** (epoch ms de Gmail) para ordenar el pipeline del mas antiguo al mas reciente,
-    y **label_ids** (ids Gmail del mensaje) para activar modo cédula-en-imagen A/B si ya trae etiqueta ERROR EMAIL sin EMAIL-12.
+    y **label_ids** (ids Gmail del mensaje) para metadatos del mensaje.
     """
     from googleapiclient.errors import HttpError
 
@@ -227,7 +225,7 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
                 internal_date_ms = int(raw_internal) if raw_internal is not None else 0
             except (TypeError, ValueError):
                 internal_date_ms = 0
-            # labelIds: ids de sistema (INBOX, UNREAD) y de usuario; el pipeline detecta ERROR EMAIL / EMAIL-12.
+            # labelIds: ids de sistema (INBOX, UNREAD) y de usuario; el pipeline puede leer ERROR EMAIL entre ellas.
             label_ids = list(meta.get("labelIds") or [])
             out.append(
                 {

@@ -31,8 +31,8 @@ PagosGmailFormato = Literal["A", "B", "C", "D", "NR", "ninguno"]
 
 # Apéndice al prompt cuando scan_filter=error_email_rescan (re-lectura A/B con cédula en JSON).
 GEMINI_PAGOS_GMAIL_MODO_ERROR_EMAIL_AB = """
-MODO ESPECIAL — RE-ESCANEO ETIQUETA **ERROR EMAIL** (solo esta peticion):
-  El hilo se marcó porque el remitente no coincidió con clientes; aqui se pide **re-clasificar** solo con la **misma** logica visual de **Mercantil (A)** y **BNC (B)** que el prompt principal, con **exigencia maxima** de legibilidad.
+MODO ESPECIAL — RE-ESCANEO (solo esta peticion; el backend usa scan_filter **error_email_rescan**):
+  El hilo puede tener etiqueta Gmail **ERROR EMAIL** (p. ej. remitente sin match en clientes u otras reglas del backend). Aqui se pide **re-clasificar** solo con la **misma** logica visual de **Mercantil (A)** y **BNC (B)** que el prompt principal, con **exigencia maxima** de legibilidad.
   CALIDAD / NO INVENTAR: Si **fecha_pago**, **monto** o **numero_referencia** no son **100%** legibles en los pixeles (borroso, recorte severo, reflejo, compresion ilegible) -> **formato "ninguno"** y todos los campos "NA". No rellenes desde asunto ni cuerpo del correo.
   FORMATOS **A** y **B** — el campo JSON **"cedula"** **si** se evalua en este modo (excepcion al bloque REGLA CEDULA **solo** para esta peticion y solo si clasificas A o B):
     - Extrae la cedula del **depositante** **unicamente** desde el comprobante: **DP:V-** / **DP:E-** / **DP:J-** + digitos, **Cedula Dep.**, casillas **Nro. de Cédula** en papel Mercantil, etc.
@@ -61,8 +61,7 @@ REGLA CEDULA (SISTEMA — obligatoria imagen 1, 2, 3 y 4 / formatos A, B, C, D, 
   REGLA BACKEND — comparacion email (De / From) vs tabla `clientes` (misma regla para A, B, C, D y NR):
     (1) Comparar con `clientes.email` (predeterminado), trim y minusculas.
     (2) Si no coincide, comparar con `clientes.email_secundario` (correo 2) si no esta vacio.
-    (3) Si no coincide ninguno: la **columna Cedula** del Excel (export) quedara con el texto **ERROR EMAIL** y Gmail
-        recibira la etiqueta de usuario **ERROR EMAIL**; el modelo no inventa cedula (no es tu tarea rellenar cedula).
+    (3) Si no coincide ninguno: la **columna Cedula** del Excel (export) quedara con el texto **ERROR EMAIL** y el backend aplicara en Gmail **solo** la etiqueta de usuario **ERROR EMAIL** (sin combinar con MERCANTIL/BNC/etc. en ese paso); el modelo no inventa cedula (no es tu tarea rellenar cedula).
   Si falla la consulta a la base de datos, el backend escribe **ERROR BD** en esa misma columna Cedula (misma etiqueta Gmail de error).
   Puedes usar lineas DP:, Cedula Dep., casillas de cedula en papel, RIF depositante, etc. **solo** para **clasificar** plantilla (A vs B, etc.);
     **nunca** escribas esos digitos en el campo "cedula" del JSON.

@@ -453,17 +453,17 @@ def test_sort_messages_internal_date_ms_gana_sobre_date_header():
     assert [m["id"] for m in out] == ["a", "b"]
 
 
-def test_pagos_gmail_error_email_rescan_query_incluye_error_email_sin_email_12():
+def test_pagos_gmail_error_email_rescan_query_incluye_error_email_y_media():
     from app.services.pagos_gmail.gmail_service import (
-        PAGOS_GMAIL_LABEL_EMAIL_12,
         PAGOS_GMAIL_LABEL_ERROR_EMAIL,
         pagos_gmail_error_email_rescan_query,
     )
 
     q = pagos_gmail_error_email_rescan_query()
     assert f'label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"' in q
-    assert f'-label:"{PAGOS_GMAIL_LABEL_EMAIL_12}"' in q
     assert "in:inbox" in q
+    assert "has:attachment" in q or "filename:png" in q
+    assert "EMAIL-12" not in q
 
 
 def test_pagos_gmail_list_query_unread_read_anade_is_unread_o_read():

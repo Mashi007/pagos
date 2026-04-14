@@ -1,6 +1,6 @@
 """
 Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
-Solo correos con adjuntos (has:attachment); imagen/PDF desde cuerpo incrustado, adjuntos o .eml rfc822 (deduplicado).
+Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822 (deduplicado).
 Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD/Drive; por cada OK: etiqueta IMAGEN 1/2/3 (sin modificar estrellas Gmail).
 Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no las toca el pipeline).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
@@ -116,7 +116,7 @@ def run_now(
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto all).
     Listado: por defecto inbox con imagen/PDF (cualquier etiqueta, incluye ERROR EMAIL).
     **unread** / **read**: añade is:unread / is:read a la búsqueda.
-    **error_email_rescan**: etiqueta ERROR EMAIL sin EMAIL-12 (re-lectura A/B con cédula en imagen).
+    **error_email_rescan**: inbox con etiqueta ERROR EMAIL + media (re-lectura A/B con cédula en imagen).
     Procesamiento en orden de fecha del correo: mas antiguo primero, mas reciente al final.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.

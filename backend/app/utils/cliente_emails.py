@@ -22,10 +22,11 @@ Funciones de este módulo:
       → útil al cruzar un remitente o lista con correo_1 y correo_2 en BD (mismo orden de prioridad).
 
 Escaneo Gmail / digitalización de pagos (plantillas Mercantil, BNC, Binance, BDV, NR, etc.):
-  La cédula del Excel **no** sale de la imagen; el backend resuelve el cliente comparando el **From** (De)
+  En flujo normal la cédula del Excel **no** sale de la imagen; el backend resuelve el cliente comparando el **From** (De)
   con `clientes.email` (predeterminado); si no hay coincidencia, con `clientes.email_secundario` si no está vacío.
-  Si tampoco coincide: la columna **Cédula** del Excel queda **ERROR EMAIL** y en Gmail **solo** la etiqueta **ERROR EMAIL**
-  (no inventar cédula; sin MERCANTIL/BNC/BINANCE/BNV ni otras). Ver `app.services.pagos_gmail.pipeline`.
+  Excepción: con **scan_filter=error_email_rescan**, plantillas **A/B** pueden llevar cédula leída de la imagen (Gemini); el resto igual por remitente.
+  Si tampoco coincide: la columna **Cédula** del Excel queda **ERROR EMAIL** y en Gmail **únicamente** la etiqueta **ERROR EMAIL**
+  en ese paso (no inventar cédula; no combinar con MANUAL, OTROS, etc.). Si coincide el remitente, aplican plantillas y demás reglas. Ver `app.services.pagos_gmail.pipeline`.
 """
 from __future__ import annotations
 
