@@ -7,14 +7,16 @@ en legado `fecha_base_calculo` (inicio de cuotas) != `date(fecha_aprobacion)`:
 1) **Cuotas / cartera / listados por “inicio operacion” en BD**:
    priorizar `fecha_base_calculo`, luego aprobacion, luego requerimiento.
 
-2) **Conteos por “mes de aprobacion” administrativa**:
-   priorizar `date(fecha_aprobacion)`, luego base, luego requerimiento.
+2) **Conteos por “mes de aprobacion” administrativa / filtros alineados a la columna Fecha (aprobacion)**:
+   priorizar `date(fecha_aprobacion)`, luego base, luego requerimiento — ver `prestamo_fecha_referencia_por_aprobacion`.
 
 En altas y actualizaciones vigentes, `fecha_base_calculo` solo se rellena copiando el dia de
 `fecha_aprobacion` (ingreso manual); no se usa `fecha_registro` como sustituto.
 
-Los endpoints que importaban `prestamo_fecha_referencia_negocio` siguen el criterio (1)
-para alinear con la tabla de amortizacion existente cuando en legado base y aprobacion difieren.
+`prestamo_fecha_referencia_negocio` sigue el criterio (1) para SQL/reportes que deben cuadrar con
+**cuotas ya generadas** cuando en legado `fecha_base_calculo` y `fecha_aprobacion` difieren.
+Listados de préstamos y KPIs/dashboard por periodo usan `prestamo_fecha_referencia_por_aprobacion`
+para alinear con **fecha de aprobacion** en UI.
 """
 
 from sqlalchemy import func

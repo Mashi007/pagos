@@ -8,6 +8,7 @@ from sqlalchemy import and_, or_
 
 from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
+from app.services.prestamos.fechas_prestamo_coherencia import fecha_para_amortizacion
 from app.services.cuota_estado import (
     clasificar_estado_cuota,
     dias_retraso_desde_vencimiento,
@@ -68,7 +69,7 @@ class AmortizacionService:
             raise PrestamoNotFoundError(prestamo_id)
 
         if fecha_inicio is None:
-            fecha_inicio = prestamo.fecha_base_calculo or hoy_negocio()
+            fecha_inicio = fecha_para_amortizacion(prestamo) or hoy_negocio()
 
         # Si regenerar es True, eliminar cuotas existentes
         if regenerar:
@@ -491,7 +492,7 @@ class AmortizacionService:
             fecha_inicio = getattr(cuota_anterior, 'fecha_vencimiento', hoy_negocio())
         else:
             saldo_inicial = float(prestamo.total_financiamiento)
-            fecha_inicio = prestamo.fecha_base_calculo or hoy_negocio()
+            fecha_inicio = fecha_para_amortizacion(prestamo) or hoy_negocio()
 
         # Usar tasa actualizada si se proporciona
         tasa_a_usar = tasa_actualizada or float(prestamo.tasa_interes)

@@ -881,7 +881,7 @@ def editar_prestamo_revision(
     _validar_permiso_edicion(db, prestamo_id, current_user, actor)
 
     # Misma regla que PUT prestamos: comparar fecha base de amortización antes/después.
-    from app.api.v1.endpoints.prestamos import _fecha_para_amortizacion
+    from app.services.prestamos.fechas_prestamo_coherencia import fecha_para_amortizacion as _fecha_para_amortizacion
 
     fecha_base_amort_antes = _fecha_para_amortizacion(prestamo)
 

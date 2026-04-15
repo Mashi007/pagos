@@ -2,11 +2,10 @@
 Dashboard gráficos: cobranzas-semanales, composicion-morosidad, morosidad-analista,
 cuentas-cobrar-tendencias, y demás endpoints de gráficos.
 
-Criterios de fecha en prestamos: los graficos que agrupan por tiempo de operacion
-suelen filtrar con `prestamo_fecha_referencia_negocio` (base de calculo primero,
-luego dia de aprobacion, luego requerimiento), coherente con cuotas ya generadas.
-Para vistas explicitamente por mes de aprobacion use la variante
-`prestamo_fecha_referencia_por_aprobacion` del modulo de consulta.
+Criterios de fecha en préstamos: gráficos que filtran o agrupan préstamos por periodo
+usan `prestamo_fecha_referencia_por_aprobacion` (dia de aprobacion primero), alineado
+con fecha_aprobacion. Reportes que deben cuadrar con cuotas legadas (base != aprobacion)
+pueden usar `prestamo_fecha_referencia_negocio` en otros módulos.
 """
 import logging
 from datetime import date, datetime, timedelta, timezone
@@ -29,7 +28,7 @@ from app.models.pago_reportado import PagoReportado
 from app.models.prestamo import Prestamo
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
 from app.services.prestamos.prestamo_fecha_referencia_query import (
-    prestamo_fecha_referencia_negocio,
+    prestamo_fecha_referencia_por_aprobacion,
 )
 from app.services.cuota_estado import (
     SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO,
@@ -141,7 +140,7 @@ def _compute_financiamiento_por_rangos(
             try:
                 inicio = date.fromisoformat(fecha_inicio)
                 fin = date.fromisoformat(fecha_fin)
-                fref = prestamo_fecha_referencia_negocio()
+                fref = prestamo_fecha_referencia_por_aprobacion()
                 conds_base.append(fref >= inicio)
                 conds_base.append(fref <= fin)
             except ValueError:
@@ -235,7 +234,7 @@ def _compute_composicion_morosidad(
             try:
                 inicio = date.fromisoformat(fecha_inicio)
                 fin = date.fromisoformat(fecha_fin)
-                fref = prestamo_fecha_referencia_negocio()
+                fref = prestamo_fecha_referencia_por_aprobacion()
                 conds_prestamo.append(fref >= inicio)
                 conds_prestamo.append(fref <= fin)
             except ValueError:
@@ -473,7 +472,7 @@ def get_financiamiento_tendencia_mensual(
                 select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
                 .select_from(Prestamo)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(prestamo_fecha_referencia_negocio() <= ultimo_d, Prestamo.estado == "APROBADO")
+                .where(prestamo_fecha_referencia_por_aprobacion() <= ultimo_d, Prestamo.estado == "APROBADO")
             ) or 0
             resultado.append({
                 "mes": m["mes"],
@@ -624,7 +623,7 @@ def _compute_prestamos_por_concesionario(
     """Agregados préstamos por concesionario (sin caché)."""
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
-        fref = prestamo_fecha_referencia_negocio()
+        fref = prestamo_fecha_referencia_por_aprobacion()
         mes_expr = func.to_char(func.date_trunc("month", fref), "YYYY-MM")
         concesionario_label = func.coalesce(Prestamo.concesionario, "Sin concesionario").label("concesionario")
         conds_base = [
@@ -682,7 +681,7 @@ def _compute_prestamos_por_modelo(
     """Agregados préstamos por modelo (sin caché)."""
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
-        fref = prestamo_fecha_referencia_negocio()
+        fref = prestamo_fecha_referencia_por_aprobacion()
         mes_expr = func.to_char(func.date_trunc("month", fref), "YYYY-MM")
         producto_valido = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
         modelo_expr = _modelo_label_dashboard_expr(

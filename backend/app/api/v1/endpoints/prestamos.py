@@ -127,10 +127,11 @@ from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
 from app.services.prestamos.prestamo_huella import ensure_no_duplicate_aprobado_huella
 from app.services.prestamos.fechas_prestamo_coherencia import (
     alinear_fecha_aprobacion_y_base_calculo,
+    fecha_para_amortizacion as _fecha_para_amortizacion,
     fecha_registro_naive_un_dia_antes_aprobacion,
 )
 from app.services.prestamos.prestamo_fecha_referencia_query import (
-    prestamo_fecha_referencia_negocio,
+    prestamo_fecha_referencia_por_aprobacion,
 )
 
 from app.services.prestamo_estado_coherencia import (
@@ -777,9 +778,9 @@ def listar_prestamos(
 
             fd = datetime.fromisoformat(fecha_inicio.replace("Z", "+00:00")).date()
 
-            q = q.where(prestamo_fecha_referencia_negocio() >= fd)
+            q = q.where(prestamo_fecha_referencia_por_aprobacion() >= fd)
 
-            count_q = count_q.where(prestamo_fecha_referencia_negocio() >= fd)
+            count_q = count_q.where(prestamo_fecha_referencia_por_aprobacion() >= fd)
 
         except ValueError:
 
@@ -791,9 +792,9 @@ def listar_prestamos(
 
             fh = datetime.fromisoformat(fecha_fin.replace("Z", "+00:00")).date()
 
-            q = q.where(prestamo_fecha_referencia_negocio() <= fh)
+            q = q.where(prestamo_fecha_referencia_por_aprobacion() <= fh)
 
-            count_q = count_q.where(prestamo_fecha_referencia_negocio() <= fh)
+            count_q = count_q.where(prestamo_fecha_referencia_por_aprobacion() <= fh)
 
         except ValueError:
 
@@ -2102,48 +2103,6 @@ def _ajustar_req_si_mayor_que_aprobacion(
             exito=True,
         )
     )
-
-
-
-
-
-def _fecha_para_amortizacion(p: "Prestamo") -> Optional[date]:
-
-    """
-
-    Regla unica: la amortizacion usa fecha_base_calculo (copia de la fecha de aprobacion en formularios).
-
-    Compatibilidad: si fecha_base_calculo es NULL (datos antiguos), se usa la parte fecha de fecha_aprobacion.
-
-    """
-
-    fb = getattr(p, "fecha_base_calculo", None)
-
-    if fb is not None:
-
-        if isinstance(fb, datetime):
-
-            return fb.date()
-
-        if isinstance(fb, date):
-
-            return fb
-
-    fa = getattr(p, "fecha_aprobacion", None)
-
-    if not fa:
-
-        return None
-
-    if hasattr(fa, "date") and callable(getattr(fa, "date", None)):
-
-        return fa.date()
-
-    if isinstance(fa, date):
-
-        return fa
-
-    return None
 
 
 

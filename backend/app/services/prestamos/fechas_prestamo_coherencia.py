@@ -65,3 +65,27 @@ def fecha_registro_naive_un_dia_antes_aprobacion(fecha_aprobacion: date | dateti
         raise TypeError("fecha_aprobacion debe ser date o datetime")
     prev = d - timedelta(days=1)
     return datetime.combine(prev, time.min)
+
+
+def fecha_para_amortizacion(p: object) -> date | None:
+    """
+    Fecha calendario base para generar o recalcular cuotas (misma regla en API y AmortizacionService).
+
+    - Prioridad: fecha_base_calculo (copia del día de fecha_aprobacion en flujos vigentes).
+    - Si fecha_base_calculo es NULL (legado): parte fecha de fecha_aprobacion.
+    - Sin ambas: None (no inventar desde fecha_registro ni hoy).
+    """
+    fb = getattr(p, "fecha_base_calculo", None)
+    if fb is not None:
+        if isinstance(fb, datetime):
+            return fb.date()
+        if isinstance(fb, date):
+            return fb
+    fa = getattr(p, "fecha_aprobacion", None)
+    if not fa:
+        return None
+    if hasattr(fa, "date") and callable(getattr(fa, "date", None)):
+        return fa.date()
+    if isinstance(fa, date):
+        return fa
+    return None

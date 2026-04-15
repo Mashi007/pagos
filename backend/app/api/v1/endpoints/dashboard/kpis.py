@@ -1,12 +1,11 @@
 """
 Dashboard KPIs: opciones-filtros, kpis-principales, admin.
 
-Criterios de fecha en prestamos: la mayoria de agregados que filtran por periodo
-usan `prestamo_fecha_referencia_negocio` (coalesce: fecha_base_calculo,
-date(fecha_aprobacion), fecha_requerimiento) para alinear con el inicio de cuotas
-cuando en datos historicos la base y la aprobacion difieren. Los conteos
-explicitos por mes de aprobacion administrativa deben usar
-`prestamo_fecha_referencia_por_aprobacion` (aprobacion primero).
+Criterios de fecha en préstamos: GET /kpis/dashboard y filtros por periodo usan
+`prestamo_fecha_referencia_por_aprobacion` (dia de aprobacion primero) para alinear
+con la columna «Fecha» / fecha_aprobacion. Para SQL que debe cuadrar con cuotas
+ya generadas en legado (base != aprobacion), usar `prestamo_fecha_referencia_negocio`
+en otros modulos.
 """
 import logging
 from datetime import date, datetime, timedelta, timezone
@@ -25,7 +24,7 @@ from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import hoy_negocio
 from app.services.prestamos.prestamo_fecha_referencia_query import (
-    prestamo_fecha_referencia_negocio,
+    prestamo_fecha_referencia_por_aprobacion,
 )
 
 from .utils import (
@@ -549,7 +548,7 @@ def _compute_kpis_dashboard_flat(
     producto_valido = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
     modelo_lbl = _modelo_label_dashboard_expr(producto_valido, incluir_sin_modelo=False)
 
-    fecha_ref = prestamo_fecha_referencia_negocio()
+    fecha_ref = prestamo_fecha_referencia_por_aprobacion()
     conds = [
         Prestamo.estado.in_(["APROBADO", "LIQUIDADO"]),
         fecha_ref >= inicio,
