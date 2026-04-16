@@ -611,6 +611,11 @@ class EnviarReporteResponse(BaseModel):
 
     error: Optional[str] = None
 
+    # Metadatos para la UI: el envio puede ser ok=True aun con revision manual o sin recibo por correo.
+    estado_reportado: Optional[str] = None
+
+    recibo_enviado: Optional[bool] = None
+
 
 
 
@@ -1656,6 +1661,8 @@ async def enviar_reporte_publico(
 
         db.commit()
 
+        recibo_enviado_val = False
+
         if coincide:
 
             _intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
@@ -1707,6 +1714,8 @@ async def enviar_reporte_publico(
 
                 )
 
+                recibo_enviado_val = bool(ok_mail)
+
                 if not ok_mail:
 
                     logger.error(
@@ -1719,7 +1728,7 @@ async def enviar_reporte_publico(
 
             db.commit()
 
-
+        db.refresh(pr)
 
         return EnviarReporteResponse(
 
@@ -1728,6 +1737,10 @@ async def enviar_reporte_publico(
             referencia_interna=referencia,
 
             mensaje="Tu reporte de pago fue recibido exitosamente.",
+
+            estado_reportado=(pr.estado or "").strip() or None,
+
+            recibo_enviado=recibo_enviado_val,
 
         )
 

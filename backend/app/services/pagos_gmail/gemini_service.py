@@ -1149,9 +1149,17 @@ def _is_rate_limit_error(exc: Exception) -> bool:
 
 
 def _is_server_error_503(exc: Exception) -> bool:
-    """Detecta errores 503 UNAVAILABLE (ServerError de Gemini por alta demanda)."""
+    """Detecta 503/UNAVAILABLE/timeouts de Gemini (alta demanda o peticion demasiado larga)."""
     msg = (getattr(exc, "message", "") or str(exc)) if exc else ""
-    return "503" in msg or "UNAVAILABLE" in msg or "high demand" in msg.lower()
+    low = msg.lower()
+    return (
+        "503" in msg
+        or "unavailable" in low
+        or "high demand" in low
+        or "timed out" in low
+        or "timeout" in low
+        or "deadline" in low
+    )
 
 
 def _extract_retry_seconds(exc: Exception) -> int:
@@ -1289,9 +1297,9 @@ def compare_form_with_image(
         client = _gemini_client(key)
         image_part = _build_image_part(image_bytes, filename, mime)
         last_error = None
-        # Determinar número máximo de reintentos según si es 503 o 429
-        max_retries = GEMINI_RATE_LIMIT_MAX_RETRIES
-        for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
+        # 429 y 503 pueden tener distinto max de reintentos: el bucle debe permitir el mayor.
+        _max_gemini_attempts = max(GEMINI_RATE_LIMIT_MAX_RETRIES, GEMINI_SERVER_ERROR_MAX_RETRIES) + 1
+        for attempt in range(_max_gemini_attempts):
             try:
                 response = client.models.generate_content(
                     model=model_name,
@@ -1339,8 +1347,8 @@ def compare_form_with_image(
                         )
                         if solo_banco and _is_recibo_alias(form_data.get("institucion_financiera")):
                             coincide = True
-                    comentario = ""
-                    logger.info("[COBROS] Gemini: divergencia solo Banco con Recibo/Recibos; ignorada.")
+                            comentario = ""
+                            logger.info("[COBROS] Gemini: divergencia solo Banco con Recibo/Recibos; ignorada.")
                     result = {
                         "coincide_exacto": coincide,
                         "requiere_revision_humana": not coincide,
@@ -1371,7 +1379,10 @@ def compare_form_with_image(
                     raise
         return default_result
     except Exception as e:
-        logger.exception("Gemini compare_form_with_image: %s", e)
+        if _is_server_error_503(e) or _is_rate_limit_error(e):
+            logger.warning("[COBROS] Gemini compare_form_with_image (transitorio): %s", str(e)[:800])
+        else:
+            logger.exception("Gemini compare_form_with_image: %s", e)
         default_result["comentario"] = str(e)[:500]
         return default_result
 

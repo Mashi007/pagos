@@ -758,10 +758,20 @@ export default function ReportePagoPage({
           return
         }
 
-        showNotification(
-          'success',
+        const st = String(res.estado_reportado ?? '')
+          .toLowerCase()
+          .replace(/\s+/g, '_')
+        const enRevision = st === 'en_revision'
+        let msgPublico =
           res.mensaje || 'Reporte de pago enviado correctamente.'
-        )
+        if (enRevision) {
+          msgPublico =
+            'Su reporte fue recibido. El comprobante quedará en revisión manual antes de confirmarse; guarde su número de referencia.'
+        } else if (st === 'aprobado' && res.recibo_enviado === false) {
+          msgPublico =
+            'Reporte aprobado, pero no se pudo enviar el recibo por correo. Guarde su referencia o contacte por WhatsApp.'
+        }
+        showNotification('success', msgPublico)
 
         setReferencia(res.referencia_interna || '')
 

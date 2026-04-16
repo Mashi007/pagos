@@ -133,6 +133,14 @@ export interface EnviarReporteResponse {
   mensaje?: string
 
   error?: string
+
+  /** Backend: aprobado | en_revision | pendiente (segun flujo Gemini/import). */
+
+  estado_reportado?: string | null
+
+  /** True solo si hubo aprobacion automatica y SMTP acepto el envio del recibo. */
+
+  recibo_enviado?: boolean | null
 }
 
 /** Respuesta de Infopagos: incluye token para descargar recibo en la misma pantalla. */
