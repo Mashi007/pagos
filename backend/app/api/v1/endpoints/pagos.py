@@ -7063,6 +7063,23 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
 
             logger.info("Prestamo id=%s marcado como LIQUIDADO (todas las cuotas pagadas).", prestamo_id)
 
+            try:
+                from app.services.finiquito_refresh import (
+                    refrescar_finiquito_caso_prestamo_si_aplica,
+                )
+
+                fin_res = refrescar_finiquito_caso_prestamo_si_aplica(db, prestamo_id)
+                logger.info(
+                    "Prestamo id=%s finiquito_casos tras liquidar: %s",
+                    prestamo_id,
+                    fin_res.get("accion"),
+                )
+            except Exception:
+                logger.exception(
+                    "Prestamo id=%s: error refrescando finiquito_casos al liquidar",
+                    prestamo_id,
+                )
+
     elif est == "LIQUIDADO":
 
         prestamo.estado = "APROBADO"

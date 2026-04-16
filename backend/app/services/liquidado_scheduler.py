@@ -64,6 +64,25 @@ class LiquidadoScheduler:
                     "Omitido UPDATE fecha_liquidado: columna no existe (aplique migracion 023)."
                 )
 
+            if ids_liquidados:
+                try:
+                    from app.services.finiquito_refresh import (
+                        refrescar_finiquito_caso_prestamo_si_aplica,
+                    )
+
+                    for lid in ids_liquidados:
+                        refrescar_finiquito_caso_prestamo_si_aplica(db, int(lid))
+                    db.commit()
+                except Exception:
+                    logger.exception(
+                        "Error refrescando finiquito_casos tras batch LIQUIDADO (n=%s)",
+                        len(ids_liquidados),
+                    )
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
             # Consultar total de cambios registrados
             cambios = db.execute(text('''
                 SELECT COUNT(*) FROM auditoria_cambios_estado_prestamo
