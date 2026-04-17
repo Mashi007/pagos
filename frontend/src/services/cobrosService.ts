@@ -55,6 +55,18 @@ const BASE_COBROS = `${API}/api/v1/cobros`
 /** Timeout (ms) para peticiones públicas. Sin timeout pueden quedar colgadas. */
 const FETCH_TIMEOUT_MS = 30000
 
+/** Mensaje del navegador ante CORS, DNS, TLS o API inalcanzable; no es texto del backend. */
+function mensajeSiFalloDeRedFetch(msg: string): string {
+  const m = (msg || '').trim()
+  if (/failed to fetch|load failed|networkerror/i.test(m)) {
+    return (
+      'No hubo conexión con el servidor (red, API en reposo, CORS o proxy). ' +
+      'En Red (F12) revise la petición fallida; en Render el servicio del frontend debe definir API_BASE_URL hacia el backend.'
+    )
+  }
+  return m
+}
+
 /** Helper: fetch con timeout y mejor manejo de errores */
 async function fetchWithTimeout(
   url: string,
@@ -368,9 +380,9 @@ export async function enviarReportePublico(
 
     return data
   } catch (e: unknown) {
-    const msg =
+    const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
-    return { ok: false, error: msg }
+    return { ok: false, error: mensajeSiFalloDeRedFetch(raw) }
   }
 }
 
@@ -425,9 +437,9 @@ export async function enviarReporteInfopagos(
 
     return data
   } catch (e: unknown) {
-    const msg =
+    const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
-    return { ok: false, error: msg }
+    return { ok: false, error: mensajeSiFalloDeRedFetch(raw) }
   }
 }
 

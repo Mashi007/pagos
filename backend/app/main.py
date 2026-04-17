@@ -6,6 +6,8 @@ import time
 import logging
 import warnings
 from datetime import datetime, timezone
+from typing import List, Tuple
+from urllib.parse import parse_qsl, urlencode
 
 # Evitar ruido en logs por versiones de urllib3/chardet (dependencias de requests)
 warnings.filterwarnings("ignore", message=".*urllib3.*chardet.*", category=UserWarning, module="requests")
@@ -40,12 +42,52 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Claves cuyo valor no debe aparecer en logs (JWT en query, OTP, etc.).
+_QUERY_KEYS_SENSIBLE_LOG = frozenset(
+    {
+        "token",
+        "access_token",
+        "refresh_token",
+        "id_token",
+        "password",
+        "code",
+        "codigo",
+        "otp",
+        "authorization",
+    }
+)
+
+
+def _path_para_log(request: Request) -> str:
+    """
+    path + query string con valores sensibles enmascarados (p. ej. recibo-cuota?token=...).
+    Si la query falla al parsear, no vuelca el valor crudo.
+    """
+    url = request.url
+    path = url.path
+    raw_q = url.query
+    if not raw_q:
+        return path
+    try:
+        pairs = parse_qsl(str(raw_q), keep_blank_values=True)
+        masked: List[Tuple[str, str]] = []
+        for k, v in pairs:
+            lk = k.lower()
+            if lk in _QUERY_KEYS_SENSIBLE_LOG or lk.endswith("_token"):
+                masked.append((k, "[REDACTED]"))
+            else:
+                masked.append((k, v))
+        return f"{path}?{urlencode(masked, doseq=True)}"
+    except Exception:
+        return f"{path}?[query_omitida]"
+
 
 class RequestLogMiddleware(BaseHTTPMiddleware):
     """Registra metodo, ruta, codigo de estado y tiempo para correlacionar con logs de Render."""
     async def dispatch(self, request: Request, call_next):
         start = time.perf_counter()
         path = request.url.path
+        path_for_log = _path_para_log(request)
         request_id = (
             getattr(request.state, "request_id", None)
             or request.headers.get("X-Request-ID")
@@ -61,7 +103,7 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             logger.exception(
                 "request method=%s path=%s status=%s elapsed_ms=%s request_id=%s client_ip=%s",
                 request.method,
-                path,
+                path_for_log,
                 500,
                 elapsed_ms,
                 request_id,
@@ -83,14 +125,14 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             or "estado-cuenta/public/solicitar-codigo" in path
         )
         if status >= 500:
-            logger.warning(msg + " (error)", request.method, path, status, elapsed_ms, request_id, client_ip)
+            logger.warning(msg + " (error)", request.method, path_for_log, status, elapsed_ms, request_id, client_ip)
         elif not is_long_job_path and elapsed_ms >= 5000:
-            logger.warning(msg + " (slow)", request.method, path, status, elapsed_ms, request_id, client_ip)
+            logger.warning(msg + " (slow)", request.method, path_for_log, status, elapsed_ms, request_id, client_ip)
         elif request.method == "POST" and path.rstrip("/").endswith("/api/v1/pagos") and status == 409:
             # 409 documento duplicado en carga masiva: muchos por lote; solo DEBUG para no saturar logs
-            logger.debug(msg, request.method, path, status, elapsed_ms, request_id, client_ip)
+            logger.debug(msg, request.method, path_for_log, status, elapsed_ms, request_id, client_ip)
         else:
-            logger.info(msg, request.method, path, status, elapsed_ms, request_id, client_ip)
+            logger.info(msg, request.method, path_for_log, status, elapsed_ms, request_id, client_ip)
 
         return response
 
