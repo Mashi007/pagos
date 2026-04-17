@@ -1327,7 +1327,7 @@ export function ConfiguracionNotificaciones({
             {alcance === 'solo_prejudicial' ? (
               <>
                 Configuración solo para el listado{' '}
-                <strong>Atraso 5 cuotas</strong> (caso{' '}
+                <strong>Prejudicial (5+ cuotas)</strong> (caso{' '}
                 <strong>PREJUDICIAL</strong>
                 ): plantilla, envío, PDF y adjuntos de ese criterio. Las
                 plantillas COBRANZA se crean en Plantillas. El backend exige
@@ -1359,8 +1359,9 @@ export function ConfiguracionNotificaciones({
                 <strong>10 días de atraso</strong> (caso{' '}
                 <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes cuya
                 fecha de vencimiento está exactamente a 10 días calendario en el
-                pasado respecto de la fecha de referencia (Caracas); plantilla,
-                envío, PDF y adjuntos del caso{' '}
+                pasado respecto de la fecha de referencia (Caracas); el préstamo
+                debe tener como máximo 2 cuotas en mora (3 o más no aplican).
+                Incluye plantilla, envío, PDF y adjuntos del caso{' '}
                 <code className="rounded bg-gray-100 px-1">dias_10_retraso</code>
                 . Al pulsar Guardar solo se persisten esta fila y el bloque global
                 de modo prueba (no se modifican otros criterios ni campañas

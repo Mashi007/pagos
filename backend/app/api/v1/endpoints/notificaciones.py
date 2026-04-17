@@ -2,7 +2,8 @@
 Endpoints de notificaciones a clientes retrasados.
 Todo el router exige rol admin (Depends(require_admin) a nivel de APIRouter).
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
-Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 y 10 días calendario).
+Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 y 10 días calendario;
+10 días solo si el préstamo tiene como máximo 2 cuotas en mora; con 3+ no aplica).
 Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
 CRUD de plantillas en plantillas_notificacion; envío puede usar plantilla por tipo vía plantilla_id en config.
 """
@@ -37,6 +38,7 @@ from app.services.notificacion_service import (
     enriquecer_items_notificacion_revision_manual,
     format_cuota_item,
     get_cuotas_pendientes_por_vencimientos,
+    prestamo_aplica_listado_10_dias_por_cuotas_atrasadas,
     sum_saldo_pendiente_total_por_prestamos,
     _item,
     _item_tab,
@@ -1779,7 +1781,8 @@ def get_clientes_retrasados(
     Politica: no se listan avisos antes del vencimiento ni el dia del vencimiento;
     el primer seguimiento es el dia calendario siguiente (ej. vence 22 -> entra el 23).
     1. 1 dia despues del vencimiento (ayer fue la fecha de vencimiento)
-    2. 10 dias despues del vencimiento (solo cuotas con exactamente 10 dias de atraso calendario)
+    2. 10 dias despues del vencimiento (exactamente 10 dias de atraso calendario y como maximo
+       2 cuotas en mora en el prestamo; con 3 o mas cuotas atrasadas no entra en este listado)
     3. Credito pagado (liquidados): prestamos con estado LIQUIDADO (misma columna estado en BD).
        Se muestran total_financiamiento y suma de abonos en cuotas para referencia.
     Claves dias_5, dias_3, dias_1, hoy se devuelven vacias (compatibilidad API).
@@ -1843,15 +1846,16 @@ def get_clientes_retrasados(
                     )
                 )
             elif dias_atraso == 10:
-                dias_10_atraso.append(
-                    _item(
-                        cliente,
-                        cuota,
-                        dias_atraso=10,
-                        cuotas_atrasadas=ca,
-                        total_pendiente_pagar=tp,
+                if prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(ca):
+                    dias_10_atraso.append(
+                        _item(
+                            cliente,
+                            cuota,
+                            dias_atraso=10,
+                            cuotas_atrasadas=ca,
+                            total_pendiente_pagar=tp,
+                        )
                     )
-                )
 
     enriquecer_items_notificacion_revision_manual(
         db, dias_1_atraso + dias_10_atraso
@@ -2165,6 +2169,9 @@ def get_notificaciones_tabs_data(
     Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
     calendario después de la fecha de vencimiento), sin fecha_pago y con saldo pendiente.
 
+    Pestaña 10 días (dias_10_retraso): misma regla de fecha (vencimiento = hoy − 10 días) y además
+    el préstamo debe tener como máximo 2 cuotas en mora; con 3 o más no aplica este listado.
+
     Prejudicial: por titular del préstamo (prestamos.cliente_id), al menos el mínimo configurado
     de cuotas con cuotas.estado en (VENCIDO, MORA), fecha_vencimiento < hoy, sin fecha_pago y
     saldo pendiente; préstamo no liquidado/desistimiento.
@@ -2209,15 +2216,16 @@ def get_notificaciones_tabs_data(
                     )
                 )
             elif dias_atraso == 10:
-                dias_10_retraso.append(
-                    _item_tab(
-                        cliente,
-                        cuota,
-                        dias_atraso=10,
-                        cuotas_atrasadas=ca,
-                        total_pendiente_pagar=tp,
+                if prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(ca):
+                    dias_10_retraso.append(
+                        _item_tab(
+                            cliente,
+                            cuota,
+                            dias_atraso=10,
+                            cuotas_atrasadas=ca,
+                            total_pendiente_pagar=tp,
+                        )
                     )
-                )
 
     prejudicial = build_prejudicial_items(db, fecha_referencia=hoy)
     enriquecer_items_notificacion_revision_manual(

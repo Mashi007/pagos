@@ -236,7 +236,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           exactHref: true,
         },
         {
-          title: 'Atraso 5 cuotas',
+          title: 'Prejudicial (5+ cuotas)',
           href: '/notificaciones/a-3-cuotas',
           icon: Clock,
         },

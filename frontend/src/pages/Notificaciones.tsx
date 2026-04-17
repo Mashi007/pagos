@@ -96,7 +96,7 @@ const NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA = 10
 
 /** Etiquetas de origen en el submódulo GENERAL (misma semántica que cada submenú). */
 const CASO_NOTIF_GENERAL_D1 = 'Día siguiente al vencimiento'
-const CASO_NOTIF_GENERAL_PREJ = 'Atraso 5 cuotas (prejudicial)'
+const CASO_NOTIF_GENERAL_PREJ = 'Prejudicial (5+ cuotas VENCIDO/MORA)'
 const CASO_NOTIF_GENERAL_D2 = '2 días antes del vencimiento'
 
 /** Botones numéricos mostrados en la barra de paginación (ventana deslizante). */
@@ -200,7 +200,11 @@ function tabsParaModulo(
   }
   if (modulo === 'a3cuotas') {
     return [
-      { id: 'prejudicial', label: 'Atraso 5 cuotas', icon: Clock },
+      {
+        id: 'prejudicial',
+        label: 'Prejudicial (5+ cuotas)',
+        icon: Clock,
+      },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
     ]
   }
@@ -2833,15 +2837,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           title="Notificaciones"
           description={
             modulo === 'fecha'
-              ? 'Solo consulta: mismas listas combinadas que General (día siguiente, atraso 5 cuotas, 2 días antes). La columna «Diferencia fecha» compara la columna Q de la hoja CONCILIACIÓN (entrega) con fecha_aprobacion del préstamo en BD; caché en servidor (cada domingo 04:00 Caracas o Recalcular; luego Actualización manual). Sin envío de correos desde esta pantalla.'
+              ? 'Solo consulta: mismas listas combinadas que General (día siguiente, prejudicial 5+ cuotas, 2 días antes). La columna «Diferencia fecha» compara la columna Q de la hoja CONCILIACIÓN (entrega) con fecha_aprobacion del préstamo en BD; caché en servidor (cada domingo 04:00 Caracas o Recalcular; luego Actualización manual). Sin envío de correos desde esta pantalla.'
               : modulo === 'general'
-                ? 'Solo consulta: listas unificadas (día siguiente al vencimiento, atraso 5 cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
+                ? 'Solo consulta: listas unificadas (día siguiente al vencimiento, prejudicial 5+ cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
               : modulo === 'a3cuotas'
                 ? 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
                 : modulo === 'd2antes'
                   ? 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 2 días (hoy + 2, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
                   : modulo === 'a10dias'
-                    ? 'Solo cuotas pendientes cuya fecha de vencimiento está exactamente a 10 días calendario en el pasado respecto de la fecha de referencia (America/Caracas), con saldo pendiente. No mezcla otros días de mora.'
+                    ? 'Solo cuotas pendientes cuya fecha de vencimiento está exactamente a 10 días calendario en el pasado respecto de la fecha de referencia (America/Caracas), con saldo pendiente, y el préstamo con como máximo 2 cuotas en mora (si tiene 3 o más no aplica este listado). No mezcla otros días de mora.'
                     : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
           }
           actions={
@@ -2925,7 +2929,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     ? (dataPrejudicial?.items?.length ?? 0)
                     : tab.id === 'd2antes'
                       ? (dataD2Antes?.items?.length ?? 0)
-                      : (data?.dias_1_atraso?.length ?? 0)
+                      : tab.id === 'atraso10dias'
+                        ? (data?.dias_10_atraso?.length ?? 0)
+                        : (data?.dias_1_atraso?.length ?? 0)
 
               return (
                 <button
@@ -3007,13 +3013,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               {modulo === 'fecha'
                 ? 'Se concatenan las mismas filas que en General. «Diferencia fecha» = días (columna Q de la hoja CONCILIACIÓN, posición Excel dentro del rango configurado, p. ej. A:S − fecha_aprobacion del préstamo en BD). Caché domingo 04:00 Caracas o Recalcular arriba.'
                 : modulo === 'general'
-                  ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Atraso 5 cuotas» y «2 días antes». La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (02:00 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
+                  ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Prejudicial (5+ cuotas)» y «2 días antes». El listado por «10 días de atraso» (calendario) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (02:00 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
                   : modulo === 'a3cuotas'
                     ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
                     : modulo === 'd2antes'
                       ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
                       : modulo === 'a10dias'
-                        ? 'Una fila por cuota pendiente con fecha_vencimiento = fecha de referencia − 10 días (calendario), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. No incluye cuotas con otro número de días de atraso respecto de esa fecha.'
+                        ? 'Una fila por cuota pendiente con fecha_vencimiento = fecha de referencia − 10 días (calendario), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene como máximo 2 cuotas en mora (misma regla que la columna Cuotas atrasadas); con 3 o más no entra. No incluye cuotas con otro número de días de atraso respecto de esa fecha.'
                         : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
             </CardDescription>
           </CardHeader>
@@ -3628,7 +3634,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
                                     : modulo === 'd2antes'
                                       ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
-                                      : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
+                                      : modulo === 'a10dias'
+                                        ? 'Lista ya cargada: vencimiento = referencia − 10 días (Caracas), saldo pendiente y como máximo 2 cuotas en mora en el préstamo. Si hay 3+ cuotas atrasadas o la fecha no coincide, no aparecerá.'
+                                        : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
                               </span>
                             ) : filtroCedula.trim() ? (
                               <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
@@ -3862,7 +3870,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     ? 'Lista ya cargada: 5+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
                                     : modulo === 'd2antes'
                                       ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
-                                      : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
+                                      : modulo === 'a10dias'
+                                        ? 'Lista ya cargada: sin cuotas en −10 días con saldo pendiente y máximo 2 cuotas en mora, o todos los casos tienen 3+ cuotas atrasadas (no aplican aquí).'
+                                        : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
                               </span>
                             ) : filtroCedula.trim() ? (
                               <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">

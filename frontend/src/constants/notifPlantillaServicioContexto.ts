@@ -16,7 +16,7 @@ export const ETIQUETA_SERVICIO_PLANTILLA: Record<string, string> = {
   PAGO_1_DIA_ATRASADO:
     'Día siguiente al vencimiento (1 día de atraso calendario)',
   PAGO_10_DIAS_ATRASADO: '10 días de retraso (calendario desde vencimiento)',
-  PREJUDICIAL: 'Atraso 5 cuotas (prejudicial)',
+  PREJUDICIAL: 'Prejudicial (5+ cuotas VENCIDO/MORA)',
   MASIVOS: 'Comunicaciones masivas',
   COBRANZA: 'Carta de cobranza (COBRANZA)',
 }

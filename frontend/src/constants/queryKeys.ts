@@ -29,7 +29,7 @@ export const NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY = [
   'notificaciones-estadisticas-por-tab',
 ] as const
 
-/** Lista prejudicial (GET /notificaciones-prejudicial); módulo Atraso 5 cuotas. */
+/** Lista prejudicial (GET /notificaciones-prejudicial); módulo Prejudicial (5+ cuotas). */
 export const NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY = [
   'notificaciones-prejudicial-lista',
 ] as const

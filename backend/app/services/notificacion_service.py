@@ -309,6 +309,21 @@ def contar_cuotas_atraso_por_prestamos(
     return out
 
 
+# Listado / envío «10 días de atraso» (calendario): solo préstamos con a lo sumo este número
+# de cuotas en mora (misma regla que `contar_cuotas_atraso_por_prestamos`). Con 3 o más
+# cuotas atrasadas no aplica este criterio (el caso sigue en otros canales, p. ej. prejudicial).
+MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 2
+
+
+def prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(cuotas_atrasadas: int) -> bool:
+    """True si el préstamo puede aparecer en el listado de mora a 10 días calendario."""
+    try:
+        n = int(cuotas_atrasadas or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return n <= MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS
+
+
 def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
     """
     Todas las cuotas pendientes de notificar (sin filtrar por día de vencimiento).
@@ -345,24 +360,31 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
             .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
             .where(Cuota.fecha_vencimiento == target)
-            .limit(1)
+            .order_by(Cuota.id)
+            .limit(120)
         )
-        row = db.execute(q).first()
-        if not row:
+        rows = db.execute(q).all()
+        if not rows:
             return None
-        cuota, cliente = row[0], row[1]
-        ca = contar_cuotas_atraso_por_prestamos(db, [cuota.prestamo_id]).get(
-            cuota.prestamo_id, 0
-        )
-        totales = sum_saldo_pendiente_total_por_prestamos(db, [cuota.prestamo_id])
-        return format_cuota_item(
-            cliente,
-            cuota,
-            dias_atraso=dias,
-            cuotas_atrasadas=ca,
-            for_tab=True,
-            total_pendiente_pagar=totales.get(cuota.prestamo_id),
-        )
+        pids = sorted({int(r[0].prestamo_id) for r in rows if r and r[0] is not None})
+        counts = contar_cuotas_atraso_por_prestamos(db, pids, fecha_referencia=hoy)
+        totales = sum_saldo_pendiente_total_por_prestamos(db, pids)
+        for row in rows:
+            cuota, cliente = row[0], row[1]
+            ca = counts.get(cuota.prestamo_id, 0)
+            if tipo == "PAGO_10_DIAS_ATRASADO" and not prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(
+                ca
+            ):
+                continue
+            return format_cuota_item(
+                cliente,
+                cuota,
+                dias_atraso=dias,
+                cuotas_atrasadas=ca,
+                for_tab=True,
+                total_pendiente_pagar=totales.get(cuota.prestamo_id),
+            )
+        return None
 
     if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
         items = build_cuotas_pendiente_2_dias_antes_items(db, fecha_referencia=hoy)
