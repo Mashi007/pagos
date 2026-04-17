@@ -65,6 +65,7 @@ from app.models.pago_reportado import PagoReportado
 from app.models.cobros_publico_codigo import CobrosPublicoCodigo
 
 from app.api.v1.endpoints.validadores import validate_cedula
+from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 
 from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_para_bs
 
@@ -833,7 +834,9 @@ def cobros_public_solicitar_codigo_reporte(
 
     cliente = db.execute(
 
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+        select(Cliente).where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
+        )
 
     ).scalars().first()
 
@@ -1138,7 +1141,9 @@ def cobros_public_verificar_codigo_reporte(
 
     cliente = db.execute(
 
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+        select(Cliente).where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
+        )
 
     ).scalars().first()
 
@@ -1251,7 +1256,9 @@ def validar_cedula_publico(
 
     cliente = db.execute(
 
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+        select(Cliente).where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
+        )
 
     ).scalars().first()
 
@@ -1375,7 +1382,9 @@ async def enviar_reporte_publico(
 
     cliente = db.execute(
 
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+        select(Cliente).where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
+        )
 
     ).scalars().first()
 
@@ -1910,7 +1919,9 @@ async def enviar_reporte_infopagos(
 
     cliente = db.execute(
 
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+        select(Cliente).where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
+        )
 
     ).scalars().first()
 

@@ -119,7 +119,7 @@ function AtencionClienteWhatsAppLink({
   )
 }
 
-/** Normaliza para validar: quita espacios, guiones y puntos. Si solo 6-11 dígitos, al procesar se antepone V. No acepta puntos ni signos intermedios. */
+/** Normaliza para validar: quita espacios, guiones y puntos (ej. V-20.235.335 → V20235335). Si solo 6-11 dígitos, se antepone V. Letras permitidas: V, E, G, J. */
 
 function normalizarCedulaParaProcesar(val: string): {
   valido: boolean

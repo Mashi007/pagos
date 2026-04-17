@@ -82,6 +82,7 @@ from app.services.notificaciones_exclusion_desistimiento import (
     cliente_bloqueado_por_desistimiento,
 )
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
+from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 
 
 
@@ -280,7 +281,7 @@ def _cliente_nombre_email_por_cedula_lookup(
 
     cliente_row = db.execute(
 
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == lu)
+        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == lu)
 
     ).scalars().first()
 

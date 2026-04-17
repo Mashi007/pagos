@@ -6,6 +6,19 @@ from typing import Iterable, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
+
+
+def expr_cedula_normalizada_para_comparar(column) -> ColumnElement:
+    """
+    Expresión SQL para comparar cédulas con la misma lógica que validate_cedula / _cedula_lookup:
+    mayúsculas y sin guión, punto ni espacio (ej. V-20.235.335 y V20235335 coinciden).
+    """
+    x = func.upper(column)
+    x = func.replace(x, "-", "")
+    x = func.replace(x, ".", "")
+    x = func.replace(x, " ", "")
+    return x
 
 
 def normalizar_cedula_almacenamiento(value: Optional[str]) -> Optional[str]:

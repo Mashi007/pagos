@@ -27,6 +27,7 @@ from app.services.pagos.comprobante_link_desde_gmail import (
 )
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 from app.utils.cliente_emails import emails_destino_desde_objeto
+from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 
 logger = logging.getLogger(__name__)
 
@@ -635,7 +636,9 @@ def obtener_datos_estado_cuenta_cliente(db, cedula_lookup: str):
         return None
 
     cliente_row = db.execute(
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+        select(Cliente).where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
+        )
     ).scalars().first()
 
     if not cliente_row:
