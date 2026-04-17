@@ -13,9 +13,7 @@ from sqlalchemy.orm import Session
 TIPOS_PRUEBA_PAQUETE = frozenset(
     {
         "PAGO_1_DIA_ATRASADO",
-        "PAGO_3_DIAS_ATRASADO",
-        "PAGO_5_DIAS_ATRASADO",
-        "PAGO_30_DIAS_ATRASADO",
+        "PAGO_10_DIAS_ATRASADO",
         "PAGO_2_DIAS_ANTES_PENDIENTE",
         "PREJUDICIAL",
     }
@@ -63,9 +61,7 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
 
     if tipo in (
         "PAGO_1_DIA_ATRASADO",
-        "PAGO_3_DIAS_ATRASADO",
-        "PAGO_5_DIAS_ATRASADO",
-        "PAGO_30_DIAS_ATRASADO",
+        "PAGO_10_DIAS_ATRASADO",
     ):
         asunto = "Cuenta con cuota atrasada - Rapicredit"
         cuerpo = (
@@ -193,9 +189,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
 
     if tipo in (
         "PAGO_1_DIA_ATRASADO",
-        "PAGO_3_DIAS_ATRASADO",
-        "PAGO_5_DIAS_ATRASADO",
-        "PAGO_30_DIAS_ATRASADO",
+        "PAGO_10_DIAS_ATRASADO",
     ):
         asunto_base = "Cuenta con cuota atrasada - Rapicredit"
         cuerpo_base = "Prueba diagnostico"

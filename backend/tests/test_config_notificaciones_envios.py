@@ -174,7 +174,15 @@ def test_put_notificaciones_envios_guarda_y_get_devuelve_igual(client: TestClien
     assert r.status_code == 200
     body = r.json()
     assert body.get("message") is not None
-    assert body.get("configuracion") == payload
+    conf = body.get("configuracion") or {}
+    # PUT fusiona con lo ya persistido y el servidor puede completar campos legacy (p. ej. cco, programador).
+    for key, expected in payload.items():
+        assert key in conf
+        if isinstance(expected, dict):
+            for sk, sv in expected.items():
+                assert conf[key].get(sk) == sv
+        else:
+            assert conf[key] == expected
 
     r2 = client.get("/api/v1/configuracion/notificaciones/envios")
     assert r2.status_code == 200

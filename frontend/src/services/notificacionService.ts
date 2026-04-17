@@ -296,9 +296,7 @@ export interface ClientesRetrasadosResponse {
 
   dias_1_atraso?: ClienteRetrasadoItem[]
 
-  dias_5_atraso?: ClienteRetrasadoItem[]
-
-  dias_30_atraso?: ClienteRetrasadoItem[]
+  dias_10_atraso?: ClienteRetrasadoItem[]
 
   liquidados?: LiquidadoItem[]
 }
@@ -327,11 +325,7 @@ export interface EstadisticasPorTab {
 
   dias_1_retraso: EstadisticasTabItem
 
-  dias_3_retraso: EstadisticasTabItem
-
-  dias_5_retraso: EstadisticasTabItem
-
-  dias_30_retraso: EstadisticasTabItem
+  dias_10_retraso: EstadisticasTabItem
 
   prejudicial: EstadisticasTabItem
 

@@ -176,6 +176,7 @@ function toastErrorTrasEnvioManual(e: unknown, fraseRevisionConfig: string) {
 export type NotificacionesModulo =
   | 'a1dia'
   | 'a3cuotas'
+  | 'a10dias'
   | 'd2antes'
   | 'general'
   | 'fecha'
@@ -184,6 +185,7 @@ type TabId =
   | 'dias_1_atraso'
   | 'prejudicial'
   | 'd2antes'
+  | 'atraso10dias'
   | 'general_todos'
   | 'configuracion'
 
@@ -208,6 +210,16 @@ function tabsParaModulo(
       { id: 'configuracion', label: 'Configuración', icon: Settings },
     ]
   }
+  if (modulo === 'a10dias') {
+    return [
+      {
+        id: 'atraso10dias',
+        label: '10 días de atraso',
+        icon: Clock,
+      },
+      { id: 'configuracion', label: 'Configuración', icon: Settings },
+    ]
+  }
   return [
     {
       id: 'dias_1_atraso',
@@ -222,6 +234,7 @@ function tabListadoDefault(modulo: NotificacionesModulo): TabId {
   if (modulo === 'general' || modulo === 'fecha') return 'general_todos'
   if (modulo === 'a3cuotas') return 'prejudicial'
   if (modulo === 'd2antes') return 'd2antes'
+  if (modulo === 'a10dias') return 'atraso10dias'
   return 'dias_1_atraso'
 }
 
@@ -242,9 +255,9 @@ function textoTotalPendientePagar(row: ClienteRetrasadoItem): string {
 /** Mismo id de préstamo que usa estado de cuenta / revisión (BD). */
 function textoNumeroCreditoNotif(row: ClienteRetrasadoItem): string {
   const pid = row.prestamo_id
-  if (pid == null) return '—'
+  if (pid == null) return '-'
   const n = Number(pid)
-  return Number.isFinite(n) ? String(n) : '—'
+  return Number.isFinite(n) ? String(n) : '-'
 }
 
 /** Valor numérico para ordenar (misma prioridad que el texto mostrado). */
@@ -396,7 +409,7 @@ function filaCumpleFiltroDiferenciaAbonoGeneral(
 }
 
 function fmtDiferenciaAbonoCelda(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(Number(n))) return '—'
+  if (n == null || Number.isNaN(Number(n))) return '-'
   return Number(n).toLocaleString('es-VE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -432,7 +445,7 @@ function filaCumpleFiltroDiferenciaFechaGeneral(
 }
 
 function fmtDiferenciaFechaDiasCelda(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(Number(n))) return '—'
+  if (n == null || Number.isNaN(Number(n))) return '-'
   const v = Number(n)
   if (v === 0) return '0'
   if (v > 0) return `+${v}`
@@ -455,7 +468,7 @@ function DiferenciaFechaGeneralCell({
   if (pid == null || !ced) {
     return (
       <span className="text-xs text-muted-foreground" title="Sin cédula o préstamo">
-        —
+        -
       </span>
     )
   }
@@ -468,7 +481,7 @@ function DiferenciaFechaGeneralCell({
         className="text-xs text-muted-foreground"
         title="Dato del caché semanal (04:00 Caracas, domingo). Si está vacío, aún no hay caché en BD para este préstamo."
       >
-        —
+        -
       </span>
     )
   }
@@ -500,7 +513,7 @@ function DiferenciaAbonoGeneralCell({
   if (pid == null || !ced) {
     return (
       <span className="text-xs text-muted-foreground" title="Sin cédula o préstamo">
-        —
+        -
       </span>
     )
   }
@@ -513,7 +526,7 @@ function DiferenciaAbonoGeneralCell({
         className="text-xs text-muted-foreground"
         title="Dato del cierre nocturno (02:00 Caracas). Si está vacío, aún no hay caché en BD para este préstamo."
       >
-        —
+        -
       </span>
     )
   }
@@ -794,7 +807,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
 
   const fmt = (n: number | null | undefined) =>
     n == null || Number.isNaN(Number(n))
-      ? '—'
+      ? '-'
       : Number(n).toLocaleString('es-VE', {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
@@ -856,7 +869,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                   <li>
                     Lote (hoja):{' '}
                     <span className="font-mono font-medium">
-                      {(data.lote_aplicado ?? '').toString().trim() || '—'}
+                      {(data.lote_aplicado ?? '').toString().trim() || '-'}
                     </span>
                   </li>
                   <li>
@@ -913,7 +926,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                   La hoja supera las 48 h desde la última sincronización (aprox.{' '}
                   {data.hoja_sync_antigua_horas != null
                     ? `${data.hoja_sync_antigua_horas} h`
-                    : '—'}
+                    : '-'}
                   ). Resincronice CONCILIACIÓN si necesita ABONOS al día.
                 </p>
               ) : null}
@@ -929,7 +942,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                       {fmt(data.prestamo_huella.total_financiamiento)}
                     </li>
                     <li>N.º cuotas: {data.prestamo_huella.numero_cuotas}</li>
-                    <li>Modalidad: {data.prestamo_huella.modalidad_pago || '—'}</li>
+                    <li>Modalidad: {data.prestamo_huella.modalidad_pago || '-'}</li>
                   </ul>
                 </div>
               ) : null}
@@ -1013,7 +1026,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                           void abrir(op.lote)
                         }}
                       >
-                        Lote {op.lote} — {fmt(op.abonos)}
+                        Lote {op.lote} - {fmt(op.abonos)}
                       </Button>
                     ))}
                   </div>
@@ -1091,11 +1104,11 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
                 <p className="text-xs text-muted-foreground">
                   Columnas detectadas:{' '}
                   <span className="font-mono text-foreground">
-                    {data.columna_cedula_detectada ?? '—'}
+                    {data.columna_cedula_detectada ?? '-'}
                   </span>
                   {' · '}
                   <span className="font-mono text-foreground">
-                    {data.columna_abonos_detectada ?? '—'}
+                    {data.columna_abonos_detectada ?? '-'}
                   </span>
                   {data.columna_lote_detectada ? (
                     <>
@@ -1179,7 +1192,7 @@ function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
 }
 
 function fmtFechaNotifIso(iso?: string | null): string {
-  if (iso == null || String(iso).trim() === '') return '—'
+  if (iso == null || String(iso).trim() === '') return '-'
   const s = String(iso).trim()
   const t = Date.parse(s.length >= 10 ? s.slice(0, 10) : s)
   if (Number.isNaN(t)) return s
@@ -1187,7 +1200,7 @@ function fmtFechaNotifIso(iso?: string | null): string {
 }
 
 function fmtDiferenciaDiasNotif(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(Number(n))) return '—'
+  if (n == null || Number.isNaN(Number(n))) return '-'
   const v = Number(n)
   if (v === 0) return '0'
   const sign = v > 0 ? '+' : ''
@@ -1392,7 +1405,7 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
                   La hoja supera las 48 h desde la última sincronización (aprox.{' '}
                   {data.hoja_sync_antigua_horas != null
                     ? `${data.hoja_sync_antigua_horas} h`
-                    : '—'}
+                    : '-'}
                   ). Resincronice CONCILIACIÓN si necesita la columna Q (fechas) al día.
                 </p>
               ) : null}
@@ -1411,7 +1424,7 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
                       })}
                     </li>
                     <li>N.º cuotas: {data.prestamo_huella.numero_cuotas}</li>
-                    <li>Modalidad: {data.prestamo_huella.modalidad_pago || '—'}</li>
+                    <li>Modalidad: {data.prestamo_huella.modalidad_pago || '-'}</li>
                   </ul>
                 </div>
               ) : null}
@@ -1566,7 +1579,7 @@ function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoIte
                 <p className="text-xs text-muted-foreground">
                   Columnas detectadas:{' '}
                   <span className="font-mono text-foreground">
-                    {data.columna_cedula_detectada ?? '—'}
+                    {data.columna_cedula_detectada ?? '-'}
                   </span>
                   {' · '}
                   <span className="font-mono text-foreground">{colQEtiqueta}</span>
@@ -1659,6 +1672,9 @@ function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
     case 'd2antes':
       return 'd_2_antes_vencimiento'
 
+    case 'atraso10dias':
+      return 'dias_10_retraso'
+
     case 'general_todos':
       return null
 
@@ -1742,12 +1758,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     if (
       t === 'liquidados' ||
       t === 'masivos' ||
-      t === 'dias_5_atraso' ||
-      t === 'dias_30_atraso' ||
+      t === 'dias_10_atraso' ||
       (modulo === 'a3cuotas' && t === 'dias_1_atraso') ||
       (modulo === 'a3cuotas' && t === 'd2antes') ||
       (modulo === 'a1dia' && t === 'prejudicial') ||
       (modulo === 'a1dia' && t === 'd2antes') ||
+      (modulo === 'a10dias' &&
+        (t === 'dias_1_atraso' || t === 'prejudicial' || t === 'd2antes')) ||
       (modulo === 'd2antes' && (t === 'dias_1_atraso' || t === 'prejudicial')) ||
       (esListaCombinadaMoras &&
         t !== 'general_todos' &&
@@ -1816,7 +1833,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
 
       enabled:
-        (modulo === 'a1dia' || esListaCombinadaMoras) &&
+        (modulo === 'a1dia' || modulo === 'a10dias' || esListaCombinadaMoras) &&
         activeTab !== 'configuracion',
     })
 
@@ -1894,11 +1911,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
       dias_1_retraso: { enviados: 0, rebotados: 0 },
 
-      dias_3_retraso: { enviados: 0, rebotados: 0 },
-
-      dias_5_retraso: { enviados: 0, rebotados: 0 },
-
-      dias_30_retraso: { enviados: 0, rebotados: 0 },
+      dias_10_retraso: { enviados: 0, rebotados: 0 },
 
       prejudicial: { enviados: 0, rebotados: 0 },
 
@@ -1950,9 +1963,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [enviandoPago1Dia, setEnviandoPago1Dia] = useState(false)
 
+  const [enviandoPago10Dias, setEnviandoPago10Dias] = useState(false)
+
   /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
   const [confirmEnvio, setConfirmEnvio] = useState<null | {
-    kind: 'prejudicial' | 'd2antes' | 'pago1dia'
+    kind: 'prejudicial' | 'd2antes' | 'pago1dia' | 'pago10dias'
     n: number
   }>(null)
 
@@ -1972,6 +1987,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setEnviandoPrejudicial(false)
     setEnviandoD2Antes(false)
     setEnviandoPago1Dia(false)
+    setEnviandoPago10Dias(false)
     toast.warning(
       'Cancelación: se cortó la petición en el navegador. El servidor puede seguir unos segundos.'
     )
@@ -1981,7 +1997,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     actualizandoListas ||
     enviandoPrejudicial ||
     enviandoD2Antes ||
-    enviandoPago1Dia
+    enviandoPago1Dia ||
+    enviandoPago10Dias
 
   const handleDescargarEstadoCuentaPdf = async (prestamoId: number) => {
     setDescargandoEstadoCuentaId(prestamoId)
@@ -2115,7 +2132,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   }
 
   const ejecutarEnvioManualTrasConfirmar = async (p: {
-    kind: 'prejudicial' | 'd2antes' | 'pago1dia'
+    kind: 'prejudicial' | 'd2antes' | 'pago1dia' | 'pago10dias'
     n: number
   }) => {
     const { kind, n } = p
@@ -2218,6 +2235,54 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return
     }
 
+    if (kind === 'pago10dias') {
+      const ac = beginOperacionListaAbortable()
+      setEnviandoPago10Dias(true)
+      const loadingId = toast.loading(
+        'Enviando correos… con muchas filas puede tardar más de 10 minutos. No cierre esta pestaña.'
+      )
+
+      try {
+        const res = await notificacionService.enviarCasoManual(
+          'PAGO_10_DIAS_ATRASADO',
+          { signal: ac.signal, fechaCaracas: fechaCaracasApi }
+        )
+
+        toast.dismiss(loadingId)
+        toastResultadoEnvioNotificaciones(res, n)
+
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+        })
+
+        await invalidateListasNotificacionesMora(queryClient, {
+          skipCrossTabBroadcast: true,
+        })
+
+        await queryClient.refetchQueries({
+          queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+        })
+      } catch (e) {
+        console.error(e)
+        toast.dismiss(loadingId)
+        if (isRequestCanceled(e)) {
+          toast.info('Envío cancelado en el navegador.')
+          return
+        }
+
+        toastErrorTrasEnvioManual(
+          e,
+          'Revise PAGO_10_DIAS_ATRASADO en Configuración y el correo del servidor.'
+        )
+      } finally {
+        if (operacionListaAbortRef.current === ac) {
+          operacionListaAbortRef.current = null
+        }
+        setEnviandoPago10Dias(false)
+      }
+      return
+    }
+
     const ac = beginOperacionListaAbortable()
     setEnviandoPago1Dia(true)
     const loadingId = toast.loading(
@@ -2282,6 +2347,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setConfirmEnvio({ kind: 'pago1dia', n })
   }
 
+  const solicitarConfirmacionEnvioPago10Dias = () => {
+    if (modulo !== 'a10dias') return
+    const n = data?.dias_10_atraso?.length ?? 0
+    setConfirmEnvio({ kind: 'pago10dias', n })
+  }
+
   const confirmarEnvioManualYEnviar = () => {
     const p = confirmEnvio
     if (!p) return
@@ -2316,6 +2387,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return dataD2Antes?.items ?? []
     }
 
+    if (modulo === 'a10dias') {
+      if (activeTab !== 'atraso10dias') return []
+      return data?.dias_10_atraso ?? []
+    }
+
     if (!data) return []
 
     switch (activeTab) {
@@ -2330,6 +2406,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     activeTab,
     data,
     data?.dias_1_atraso,
+    data?.dias_10_atraso,
     dataPrejudicial?.items,
     dataD2Antes?.items,
     esListaCombinadaMoras,
@@ -2556,7 +2633,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const isLoadingLista =
     esListaCombinadaMoras
       ? isPending || isPendingPrej || isPendingD2
-      : modulo === 'a1dia'
+      : modulo === 'a1dia' || modulo === 'a10dias'
         ? isPending
         : modulo === 'a3cuotas'
           ? isPendingPrej
@@ -2572,7 +2649,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       ((isPending && !isFetched && !isError) ||
         (isPendingPrej && !isFetchedPrej && !isErrorPrej) ||
         (isPendingD2 && !isFetchedD2 && !isErrorD2))) ||
-    (modulo === 'a1dia' && isPending && !isFetched && !isError) ||
+    ((modulo === 'a1dia' || modulo === 'a10dias') &&
+      isPending &&
+      !isFetched &&
+      !isError) ||
     (modulo === 'a3cuotas' &&
       isPendingPrej &&
       !isFetchedPrej &&
@@ -2582,7 +2662,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const isErrorLista =
     esListaCombinadaMoras
       ? isError && isErrorPrej && isErrorD2
-      : modulo === 'a1dia'
+      : modulo === 'a1dia' || modulo === 'a10dias'
         ? isError
         : modulo === 'a3cuotas'
           ? isErrorPrej
@@ -2591,7 +2671,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const errorLista =
     esListaCombinadaMoras
       ? error ?? errorPrej ?? errorD2
-      : modulo === 'a1dia'
+      : modulo === 'a1dia' || modulo === 'a10dias'
         ? error
         : modulo === 'a3cuotas'
           ? errorPrej
@@ -2602,7 +2682,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       ? () => {
           void Promise.all([refetch(), refetchPrej(), refetchD2()])
         }
-      : modulo === 'a1dia'
+      : modulo === 'a1dia' || modulo === 'a10dias'
         ? refetch
         : modulo === 'a3cuotas'
           ? refetchPrej
@@ -2611,7 +2691,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const isFetchingLista =
     esListaCombinadaMoras
       ? isFetching || isFetchingPrej || isFetchingD2
-      : modulo === 'a1dia'
+      : modulo === 'a1dia' || modulo === 'a10dias'
         ? isFetching
         : modulo === 'a3cuotas'
           ? isFetchingPrej
@@ -2622,7 +2702,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       ? (isFetched || isError) &&
         (isFetchedPrej || isErrorPrej) &&
         (isFetchedD2 || isErrorD2)
-      : modulo === 'a1dia'
+      : modulo === 'a1dia' || modulo === 'a10dias'
         ? isFetched
         : modulo === 'a3cuotas'
           ? isFetchedPrej
@@ -2733,7 +2813,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               ? 'solo_pago_1_dia'
               : modulo === 'd2antes'
                 ? 'solo_pago_2_dias_antes_pendiente'
-                : 'solo_prejudicial'
+                : modulo === 'a10dias'
+                  ? 'solo_pago_10_dias_atrasado'
+                  : 'solo_prejudicial'
           }
         />
       </div>
@@ -2758,7 +2840,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 ? 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
                 : modulo === 'd2antes'
                   ? 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 2 días (hoy + 2, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
-                  : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+                  : modulo === 'a10dias'
+                    ? 'Solo cuotas pendientes cuya fecha de vencimiento está exactamente a 10 días calendario en el pasado respecto de la fecha de referencia (America/Caracas), con saldo pendiente. No mezcla otros días de mora.'
+                    : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
           }
           actions={
             <div className="flex flex-wrap items-center gap-2">
@@ -2901,14 +2985,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
               {modulo === 'fecha'
-                ? 'Fecha — mismos casos de mora (listas combinadas)'
+                ? 'Fecha - mismos casos de mora (listas combinadas)'
                 : modulo === 'general'
                   ? 'General'
                   : modulo === 'a3cuotas'
                     ? 'Cinco o más cuotas VENCIDO o MORA (prejudicial)'
                     : modulo === 'd2antes'
                       ? '2 días antes - PENDIENTE, vence en 2 días'
-                      : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
+                      : modulo === 'a10dias'
+                        ? '10 días de atraso (calendario desde vencimiento)'
+                        : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
             </CardTitle>
 
             <CardDescription>
@@ -2926,7 +3012,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
                     : modulo === 'd2antes'
                       ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
-                      : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
+                      : modulo === 'a10dias'
+                        ? 'Una fila por cuota pendiente con fecha_vencimiento = fecha de referencia − 10 días (calendario), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. No incluye cuotas con otro número de días de atraso respecto de esa fecha.'
+                        : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
             </CardDescription>
           </CardHeader>
 
@@ -2940,7 +3028,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   actualizandoListas ||
                   enviandoPrejudicial ||
                   enviandoD2Antes ||
-                  enviandoPago1Dia
+                  enviandoPago1Dia ||
+                  enviandoPago10Dias
                 }
               >
                 <RefreshCw
@@ -2960,7 +3049,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     actualizandoListas ||
                     enviandoPrejudicial ||
                     enviandoD2Antes ||
-                    enviandoPago1Dia
+                    enviandoPago1Dia ||
+                    enviandoPago10Dias
                   }
                   title="Job en servidor (segundo plano), igual que 02:00 Caracas. Luego pulse Actualización manual."
                 >
@@ -2984,7 +3074,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     actualizandoListas ||
                     enviandoPrejudicial ||
                     enviandoD2Antes ||
-                    enviandoPago1Dia
+                    enviandoPago1Dia ||
+                    enviandoPago10Dias
                   }
                   title="Job en servidor (segundo plano), igual que domingo 04:00 Caracas. Luego pulse Actualización manual."
                 >
@@ -3014,6 +3105,28 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     className={`mr-2 h-4 w-4 ${enviandoPago1Dia ? 'animate-pulse' : ''}`}
                   />
                   {enviandoPago1Dia
+                    ? 'Enviando...'
+                    : 'Enviar notificaciones (manual)'}
+                </Button>
+              )}
+
+              {modulo === 'a10dias' && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={solicitarConfirmacionEnvioPago10Dias}
+                  disabled={enviandoPago10Dias || esperandoPrimeraCargaLista}
+                  title={
+                    esperandoPrimeraCargaLista
+                      ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                      : undefined
+                  }
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  <Mail
+                    className={`mr-2 h-4 w-4 ${enviandoPago10Dias ? 'animate-pulse' : ''}`}
+                  />
+                  {enviandoPago10Dias
                     ? 'Enviando...'
                     : 'Enviar notificaciones (manual)'}
                 </Button>
@@ -3567,7 +3680,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                             {esListaCombinadaMoras ? (
                               <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
-                                {row.notificacion_caso ?? '—'}
+                                {row.notificacion_caso ?? '-'}
                               </td>
                             ) : null}
 
@@ -3799,7 +3912,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                             {esListaCombinadaMoras ? (
                               <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
-                                {row.notificacion_caso ?? '—'}
+                                {row.notificacion_caso ?? '-'}
                               </td>
                             ) : null}
 
@@ -3957,6 +4070,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará el criterio «día siguiente al vencimiento» (puede estar vacía).'
                     : `Envío para día siguiente al vencimiento (${confirmEnvio.n} casos en la lista completa; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                </p>
+              ) : null}
+
+              {confirmEnvio?.kind === 'pago10dias' ? (
+                <p>
+                  {confirmEnvio.n === 0
+                    ? 'No hay casos en la lista cargada. El servidor procesará PAGO_10_DIAS_ATRASADO (puede estar vacía).'
+                    : `Envío para 10 días de atraso (${confirmEnvio.n} casos en la lista completa; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
                 </p>
               ) : null}
 

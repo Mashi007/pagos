@@ -328,15 +328,11 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
 
     if tipo in (
         "PAGO_1_DIA_ATRASADO",
-        "PAGO_3_DIAS_ATRASADO",
-        "PAGO_5_DIAS_ATRASADO",
-        "PAGO_30_DIAS_ATRASADO",
+        "PAGO_10_DIAS_ATRASADO",
     ):
         dias_map = {
             "PAGO_1_DIA_ATRASADO": 1,
-            "PAGO_3_DIAS_ATRASADO": 3,
-            "PAGO_5_DIAS_ATRASADO": 5,
-            "PAGO_30_DIAS_ATRASADO": 30,
+            "PAGO_10_DIAS_ATRASADO": 10,
         }
         dias = dias_map[tipo]
         target = hoy - timedelta(days=dias)

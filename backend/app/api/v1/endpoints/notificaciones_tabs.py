@@ -1,5 +1,5 @@
 """
-Endpoints para notificaciones por cuota (retrasadas 1/3/5 dias, prejudicial).
+Endpoints para notificaciones por cuota (retrasadas 1 dia de atraso, prejudicial).
 Routers: solo rol admin (Depends(require_admin)).
 
 Politica: sin envios "previos" ni el dia del vencimiento; previas/dia-pago devuelven listas vacias.
@@ -78,9 +78,7 @@ _CONFIG_TIPO_TO_TAB = {
     "PAGO_2_DIAS_ANTES_PENDIENTE": "d_2_antes_vencimiento",
     "PAGO_DIA_0": "hoy",
     "PAGO_1_DIA_ATRASADO": "dias_1_retraso",
-    "PAGO_3_DIAS_ATRASADO": "dias_3_retraso",
-    "PAGO_5_DIAS_ATRASADO": "dias_5_retraso",
-    "PAGO_30_DIAS_ATRASADO": "dias_30_retraso",
+    "PAGO_10_DIAS_ATRASADO": "dias_10_retraso",
     "PREJUDICIAL": "prejudicial",
     "MASIVOS": "masivos",
 }
@@ -241,8 +239,23 @@ def _enviar_correos_items(
     usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
     # Si modo prueba activo pero sin correo v�lido: no enviar a clientes (evitar env�o por error)
     bloqueo_pruebas_sin_email = modo_pruebas and not (email_pruebas and "@" in email_pruebas)
-    # Incluir caso cuando Envío está activo; solo excluir si habilitado está explícitamente en False
-    habilitados = sum(1 for v in config_envios.values() if isinstance(v, dict) and v.get("habilitado", True) is not False)
+    # Solo filas de criterio (PAGO_*, PREJUDICIAL, MASIVOS, COBRANZA, …); no contar cron ni masivos_campanas.
+    _keys_no_fila_envio = frozenset(
+        {
+            "modo_pruebas",
+            "email_pruebas",
+            "emails_pruebas",
+            "masivos_campanas",
+            "cron_envio_pago_2_dias_antes",
+        }
+    )
+    habilitados = sum(
+        1
+        for k, v in config_envios.items()
+        if k not in _keys_no_fila_envio
+        and isinstance(v, dict)
+        and v.get("habilitado", True) is not False
+    )
     log_envio_config(modo_pruebas, bool(email_pruebas and "@" in email_pruebas), habilitados)
     if habilitados == 0:
         logger = logging.getLogger(__name__)
@@ -722,7 +735,7 @@ def enviar_notificaciones_dia_pago(
     return {"mensaje": "Env�o de notificaciones d�a de pago finalizado.", **res}
 
 
-# --- Notificaciones retrasadas (1, 3, 5 d�as atrasado) ---
+# --- Notificaciones retrasadas (1 dia de atraso; listado agregado legacy) ---
 
 @router_retrasadas.get("")
 def get_notificaciones_retrasadas(
@@ -730,22 +743,15 @@ def get_notificaciones_retrasadas(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Lista de notificaciones retrasadas: cuotas con 1, 3 o 5 d�as de atraso. Email desde tabla clientes."""
+    """Lista de notificaciones retrasadas: cuotas con 1 dia de atraso calendario. Email desde tabla clientes."""
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     data = get_notificaciones_tabs_data(db, fecha_referencia=fecha_ref)
-    items = (
-        data["dias_1_retraso"]
-        + data["dias_3_retraso"]
-        + data["dias_5_retraso"]
-        + data["dias_30_retraso"]
-    )
+    # PAGO_10_DIAS_ATRASADO: no forma parte de este listado agregado; solo submodulo + enviar-caso-manual.
+    items = list(data["dias_1_retraso"])
     return {
         "items": items,
         "total": len(items),
         "dias_1": len(data["dias_1_retraso"]),
-        "dias_3": len(data["dias_3_retraso"]),
-        "dias_5": len(data["dias_5_retraso"]),
-        "dias_30": len(data["dias_30_retraso"]),
     }
 
 
@@ -753,9 +759,7 @@ def _tipo_retrasadas(item: dict) -> str:
     d = item.get("dias_atraso")
     return {
         1: "PAGO_1_DIA_ATRASADO",
-        3: "PAGO_3_DIAS_ATRASADO",
-        5: "PAGO_5_DIAS_ATRASADO",
-        30: "PAGO_30_DIAS_ATRASADO",
+        10: "PAGO_10_DIAS_ATRASADO",
     }.get(d, "PAGO_1_DIA_ATRASADO")
 
 
@@ -768,12 +772,8 @@ def enviar_notificaciones_retrasadas(
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db, fecha_referencia=fecha_ref)
-    items = (
-        data["dias_1_retraso"]
-        + data["dias_3_retraso"]
-        + data["dias_5_retraso"]
-        + data["dias_30_retraso"]
-    )
+    # Sin dias_10_retraso en este POST agregado: PAGO_10_DIAS_ATRASADO solo por enviar-caso-manual (submodulo dedicado).
+    items = list(data["dias_1_retraso"])
     asunto = "Cuenta con cuota atrasada - Rapicredit"
     cuerpo = (
         "Estimado/a {nombre} (c�dula {cedula}),\n\n"
@@ -1117,9 +1117,7 @@ TIPOS_CASO_MANUAL = frozenset(
         "PAGO_2_DIAS_ANTES_PENDIENTE",
         "PAGO_DIA_0",
         "PAGO_1_DIA_ATRASADO",
-        "PAGO_3_DIAS_ATRASADO",
-        "PAGO_5_DIAS_ATRASADO",
-        "PAGO_30_DIAS_ATRASADO",
+        "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
         "MASIVOS",
     }
@@ -1145,7 +1143,7 @@ def _resolver_tipo_envio_manual_fijo(tipo_caso: str) -> Callable[[dict], str]:
     (plantilla, CCO, PDFs, tipo_tab) para todos los destinatarios del lote, la del caso elegido.
 
     No usar _tipo_previas / _tipo_retrasadas aqui: infieren por dias_antes_vencimiento / dias_atraso
-    de cada fila y pueden mezclar PAGO_1_DIA_ANTES con PAGO_3_DIAS_ATRASADO, etc.
+    de cada fila y pueden mezclar PAGO_1_DIA_ANTES con otro tipo si se usara inferencia por fila.
     """
 
     def _inner(_item: dict) -> str:
@@ -1315,36 +1313,14 @@ def ejecutar_envio_caso_manual(
                 db,
                 fecha_referencia=ref,
             )
-        elif tipo == "PAGO_3_DIAS_ATRASADO":
-            items = data["dias_3_retraso"]
+        elif tipo == "PAGO_10_DIAS_ATRASADO":
+            items = data["dias_10_retraso"]
             res = _enviar_correos_items(
                 items,
                 asunto_ret,
                 cuerpo_ret,
                 config_envios,
-                _resolver_tipo_envio_manual_fijo("PAGO_3_DIAS_ATRASADO"),
-                db,
-                fecha_referencia=ref,
-            )
-        elif tipo == "PAGO_5_DIAS_ATRASADO":
-            items = data["dias_5_retraso"]
-            res = _enviar_correos_items(
-                items,
-                asunto_ret,
-                cuerpo_ret,
-                config_envios,
-                _resolver_tipo_envio_manual_fijo("PAGO_5_DIAS_ATRASADO"),
-                db,
-                fecha_referencia=ref,
-            )
-        elif tipo == "PAGO_30_DIAS_ATRASADO":
-            items = data["dias_30_retraso"]
-            res = _enviar_correos_items(
-                items,
-                asunto_ret,
-                cuerpo_ret,
-                config_envios,
-                _resolver_tipo_envio_manual_fijo("PAGO_30_DIAS_ATRASADO"),
+                _resolver_tipo_envio_manual_fijo("PAGO_10_DIAS_ATRASADO"),
                 db,
                 fecha_referencia=ref,
             )
@@ -1366,6 +1342,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     CCO, modo pruebas, etc.); no se mezclan entre si.
 
     No incluye PAGO_2_DIAS_ANTES_PENDIENTE (2 dias antes del vencimiento), que tiene envio propio.
+    No incluye PAGO_10_DIAS_ATRASADO (10 dias de atraso): solo POST /notificaciones/enviar-caso-manual desde el submodulo dedicado.
 
     Solo desde POST /notificaciones/enviar-todas (BackgroundTasks); sin envio automatico por hora.
     """
@@ -1424,13 +1401,9 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["dia_pago"] = r
 
-    # Retrasadas (1, 3, 5 d�as atraso)
-    items_retrasadas = (
-        data["dias_1_retraso"]
-        + data["dias_3_retraso"]
-        + data["dias_5_retraso"]
-        + data["dias_30_retraso"]
-    )
+    # Retrasadas (1 dia de atraso)
+    # Sin dias_10_retraso en enviar-todas: PAGO_10_DIAS_ATRASADO solo por enviar-caso-manual (submodulo dedicado).
+    items_retrasadas = list(data["dias_1_retraso"])
     asunto_r = "Cuenta con cuota atrasada - Rapicredit"
     cuerpo_r = (
         "Estimado/a {nombre} (c�dula {cedula}),\n\n"

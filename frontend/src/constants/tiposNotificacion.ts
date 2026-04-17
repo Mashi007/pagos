@@ -11,11 +11,7 @@ export const TIPOS_NOTIFICACION: { tipo: string; label: string }[] = [
     label: 'Día siguiente al vencimiento (1 día después)',
   },
 
-  { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
-
-  { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 días atrasado' },
-
-  { tipo: 'PAGO_30_DIAS_ATRASADO', label: '30 días de retraso' },
+  { tipo: 'PAGO_10_DIAS_ATRASADO', label: '10 días de retraso' },
 
   { tipo: 'PREJUDICIAL', label: 'Prejudicial' },
 

@@ -167,20 +167,8 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
     color: 'orange',
   },
   {
-    tipo: 'PAGO_3_DIAS_ATRASADO',
-    label: '3 días de retraso',
-    categoria: 'Retrasada',
-    color: 'orange',
-  },
-  {
-    tipo: 'PAGO_5_DIAS_ATRASADO',
-    label: '5 días atrasado',
-    categoria: 'Retrasada',
-    color: 'orange',
-  },
-  {
-    tipo: 'PAGO_30_DIAS_ATRASADO',
-    label: '30 días de retraso',
+    tipo: 'PAGO_10_DIAS_ATRASADO',
+    label: '10 días de retraso',
     categoria: 'Retrasada',
     color: 'orange',
   },
@@ -245,20 +233,8 @@ export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
     color: 'orange',
   },
   {
-    tipo: 'PAGO_3_DIAS_ATRASADO',
-    label: '3 días de retraso',
-    categoria: 'Retrasada',
-    color: 'orange',
-  },
-  {
-    tipo: 'PAGO_5_DIAS_ATRASADO',
-    label: '5 días atrasado',
-    categoria: 'Retrasada',
-    color: 'orange',
-  },
-  {
-    tipo: 'PAGO_30_DIAS_ATRASADO',
-    label: '30 días de retraso',
+    tipo: 'PAGO_10_DIAS_ATRASADO',
+    label: '10 días de retraso',
     categoria: 'Retrasada',
     color: 'orange',
   },
@@ -372,9 +348,14 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
     emailsPruebas = [data.email_pruebas, '']
   }
 
-  const sinGlobales = { ...data }
-
-  CLAVES_GLOBALES.forEach(k => delete sinGlobales[k])
+  const tiposCasoEnvio = new Set(CRITERIOS_ENVIO_TABLA.map(r => r.tipo))
+  const configEnvios: Record<string, ConfigEnvioItem> = {}
+  for (const tipo of tiposCasoEnvio) {
+    const v = (data as Record<string, unknown>)[tipo]
+    if (v != null && typeof v === 'object' && !Array.isArray(v)) {
+      configEnvios[tipo] = v as ConfigEnvioItem
+    }
+  }
 
   const rawCampanas = Array.isArray(
     (data as Record<string, unknown>).masivos_campanas
@@ -410,7 +391,7 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
   return {
     modoPruebas,
     emailsPruebas,
-    configEnvios: sinGlobales as Record<string, ConfigEnvioItem>,
+    configEnvios,
     campanasMasivos,
   }
 }
@@ -420,6 +401,7 @@ export type ConfiguracionNotificacionesAlcance =
   | 'completo'
   | 'solo_pago_1_dia'
   | 'solo_pago_2_dias_antes_pendiente'
+  | 'solo_pago_10_dias_atrasado'
   | 'solo_prejudicial'
 
 /** Tipos de caso cuyas filas de envío pertenecen a un submódulo de Notificaciones (guardado parcial). */
@@ -431,6 +413,8 @@ function tiposCasoNotificacionParaAlcance(
       return ['PAGO_1_DIA_ATRASADO']
     case 'solo_pago_2_dias_antes_pendiente':
       return ['PAGO_2_DIAS_ANTES_PENDIENTE']
+    case 'solo_pago_10_dias_atrasado':
+      return ['PAGO_10_DIAS_ATRASADO']
     case 'solo_prejudicial':
       return ['PREJUDICIAL']
     default:
@@ -474,6 +458,11 @@ export function ConfiguracionNotificaciones({
         c => c.tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE'
       )
     }
+    if (alcance === 'solo_pago_10_dias_atrasado') {
+      return CRITERIOS_ENVIO_PANEL.filter(
+        c => c.tipo === 'PAGO_10_DIAS_ATRASADO'
+      )
+    }
     if (alcance === 'solo_prejudicial') {
       return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'PREJUDICIAL')
     }
@@ -486,6 +475,9 @@ export function ConfiguracionNotificaciones({
     }
     if (alcance === 'solo_pago_2_dias_antes_pendiente') {
       return hrefPlantillasConContexto('PAGO_2_DIAS_ANTES_PENDIENTE')
+    }
+    if (alcance === 'solo_pago_10_dias_atrasado') {
+      return hrefPlantillasConContexto('PAGO_10_DIAS_ATRASADO')
     }
     if (alcance === 'solo_prejudicial') {
       return hrefPlantillasConContexto('PREJUDICIAL')
@@ -500,6 +492,8 @@ export function ConfiguracionNotificaciones({
         return 'dias_1_retraso'
       case 'solo_pago_2_dias_antes_pendiente':
         return 'd_2_antes_vencimiento'
+      case 'solo_pago_10_dias_atrasado':
+        return 'dias_10_retraso'
       case 'solo_prejudicial':
         return 'prejudicial'
       default:
@@ -635,6 +629,11 @@ export function ConfiguracionNotificaciones({
     if (alcance === 'solo_pago_2_dias_antes_pendiente') {
       return CRITERIOS_ENVIO_TABLA.filter(
         r => r.tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE'
+      )
+    }
+    if (alcance === 'solo_pago_10_dias_atrasado') {
+      return CRITERIOS_ENVIO_TABLA.filter(
+        r => r.tipo === 'PAGO_10_DIAS_ATRASADO'
       )
     }
     if (alcance === 'solo_prejudicial') {
@@ -906,36 +905,36 @@ export function ConfiguracionNotificaciones({
           }
         }
       } else {
-        Object.assign(payload, {
-          ...configEnvios,
-          modo_pruebas: modoPruebas,
-          emails_pruebas: emailsPruebas.filter(e => e?.trim()),
-          email_pruebas: emailsPruebas[0]?.trim() || '',
-          masivos_campanas: campanasMasivos.map(c => ({
-            id: c.id,
-            nombre: c.nombre,
-            habilitado: c.habilitado,
-            plantilla_id: c.plantilla_id ?? null,
-            programador: c.programador || HORA_DEFAULT_MASIVOS,
-            dias_semana: Array.from(new Set(c.dias_semana || [])).sort(
-              (a, b) => a - b
-            ),
-            cco: (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
-          })),
-        } as ConfigEnvioCompleta)
+        // Guardado completo: solo claves de producto conocidas (sin reenviar JSON legado ni
+        // mezclar masivos/cron dentro del mismo objeto que las filas por tipo).
+        const p = payload as Record<string, unknown>
+        p.modo_pruebas = modoPruebas
+        p.emails_pruebas = emailsPruebas.filter(e => e?.trim())
+        p.email_pruebas = emailsPruebas[0]?.trim() || ''
+        p.masivos_campanas = campanasMasivos.map(c => ({
+          id: c.id,
+          nombre: c.nombre,
+          habilitado: c.habilitado,
+          plantilla_id: c.plantilla_id ?? null,
+          programador: c.programador || HORA_DEFAULT_MASIVOS,
+          dias_semana: Array.from(new Set(c.dias_semana || [])).sort(
+            (a, b) => a - b
+          ),
+          cco: (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
+        }))
+        p.cron_envio_pago_2_dias_antes = {
+          habilitado: cronPago2DiasAntesHabilitado,
+        }
 
-        CRITERIOS_ENVIO_TABLA.forEach(({ tipo }) => {
+        for (const { tipo } of CRITERIOS_ENVIO_TABLA) {
           const c = getConfig(tipo)
-
-          ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
+          p[tipo] = {
             ...c,
-
             incluir_pdf_anexo:
               tipo === 'MASIVOS' ? false : c.incluir_pdf_anexo !== false,
-
             incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
           }
-        })
+        }
       }
 
       await emailConfigService.actualizarConfiguracionEnvios(payload)
@@ -1354,6 +1353,21 @@ export function ConfiguracionNotificaciones({
                 adjuntos. Plantillas en Plantillas; PDFs fijos según adjuntos
                 del caso.
               </>
+            ) : alcance === 'solo_pago_10_dias_atrasado' ? (
+              <>
+                Configuración solo para{' '}
+                <strong>10 días de atraso</strong> (caso{' '}
+                <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes cuya
+                fecha de vencimiento está exactamente a 10 días calendario en el
+                pasado respecto de la fecha de referencia (Caracas); plantilla,
+                envío, PDF y adjuntos del caso{' '}
+                <code className="rounded bg-gray-100 px-1">dias_10_retraso</code>
+                . Al pulsar Guardar solo se persisten esta fila y el bloque global
+                de modo prueba (no se modifican otros criterios ni campañas
+                masivas). El envío de correos de este criterio es solo manual
+                desde la pestaña de listado del submódulo (no entra en «enviar
+                todas» ni en el POST agregado legacy de retrasadas).
+              </>
             ) : (
               <>
                 Cada correo al cliente (modo estricto) combina tres piezas: (1)
@@ -1610,6 +1624,15 @@ export function ConfiguracionNotificaciones({
                     PDF fijo (
                     <code className="rounded bg-gray-100 px-1">
                       dias_1_retraso
+                    </code>
+                    ), subido abajo o en Plantillas; se guarda en base de datos.
+                  </>
+                ) : alcance === 'solo_pago_10_dias_atrasado' ? (
+                  <>
+                    Pestaña 1 = cuerpo HTML; pestaña 2 = carta PDF; pestaña 3 =
+                    PDF fijo (
+                    <code className="rounded bg-gray-100 px-1">
+                      dias_10_retraso
                     </code>
                     ), subido abajo o en Plantillas; se guarda en base de datos.
                   </>

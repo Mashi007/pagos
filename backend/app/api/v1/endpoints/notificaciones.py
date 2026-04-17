@@ -2,7 +2,7 @@
 Endpoints de notificaciones a clientes retrasados.
 Todo el router exige rol admin (Depends(require_admin) a nivel de APIRouter).
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
-Reglas: 5 pestañas por días hasta vencimiento y mora 61+.
+Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 y 10 días calendario).
 Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
 CRUD de plantillas en plantillas_notificacion; envío puede usar plantilla por tipo vía plantilla_id en config.
 """
@@ -427,8 +427,8 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_5_DIAS_ANTES", "PAGO_3_DIAS_ANTES", "PAGO_1_DIA_ANTES",
     "PAGO_2_DIAS_ANTES_PENDIENTE",
     "PAGO_DIA_0",
-    "PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO",
-    "PAGO_30_DIAS_ATRASADO",
+    "PAGO_1_DIA_ATRASADO",
+    "PAGO_10_DIAS_ATRASADO",
     "PREJUDICIAL", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
 ])
@@ -796,7 +796,7 @@ def get_adjuntos_fijos_cobranza(db: Session = Depends(get_db)):
 def upload_adjunto_fijo_cobranza(
     tipo_caso: str = Query(
         ...,
-        description="Caso: dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, d_2_antes_vencimiento, prejudicial, masivos",
+        description="Caso: dias_1_retraso, dias_10_retraso, d_2_antes_vencimiento, prejudicial, masivos",
     ),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -810,7 +810,7 @@ def upload_adjunto_fijo_cobranza(
     if tipo_caso not in TIPOS_CASO_VALIDOS:
         raise HTTPException(
             status_code=400,
-            detail="tipo_caso debe ser uno de: dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, d_2_antes_vencimiento, prejudicial, masivos",
+            detail="tipo_caso debe ser uno de: dias_1_retraso, dias_10_retraso, d_2_antes_vencimiento, prejudicial, masivos",
         )
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se permiten documentos PDF")
@@ -1234,6 +1234,7 @@ def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
     Responde 202 de inmediato para evitar timeout (el envio puede tardar muchos minutos).
     Respeta la configuracion guardada (modo_pruebas, email_pruebas, habilitado por tipo).
     No existe cron ni tarea oculta que llame a este endpoint: solo se ejecuta cuando alguien hace POST explicito.
+    PAGO_10_DIAS_ATRASADO no forma parte de este lote: solo envio manual POST /enviar-caso-manual desde el submodulo de 10 dias.
     """
     background_tasks.add_task(_tarea_envio_todas_notificaciones)
     return JSONResponse(
@@ -1355,9 +1356,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "dias_1": {"enviados": 0, "rebotados": 0},
         "hoy": {"enviados": 0, "rebotados": 0},
         "dias_1_retraso": {"enviados": 0, "rebotados": 0},
-        "dias_3_retraso": {"enviados": 0, "rebotados": 0},
-        "dias_5_retraso": {"enviados": 0, "rebotados": 0},
-        "dias_30_retraso": {"enviados": 0, "rebotados": 0},
+        "dias_10_retraso": {"enviados": 0, "rebotados": 0},
         "d_2_antes_vencimiento": {"enviados": 0, "rebotados": 0},
         "prejudicial": {"enviados": 0, "rebotados": 0},
         "masivos": {"enviados": 0, "rebotados": 0},
@@ -1370,9 +1369,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
             "dias_1",
             "hoy",
             "dias_1_retraso",
-            "dias_3_retraso",
-            "dias_5_retraso",
-            "dias_30_retraso",
+            "dias_10_retraso",
             "d_2_antes_vencimiento",
             "prejudicial",
             "masivos",
@@ -1402,9 +1399,7 @@ TIPOS_TAB_NOTIFICACIONES = (
     "dias_1",
     "hoy",
     "dias_1_retraso",
-    "dias_3_retraso",
-    "dias_5_retraso",
-    "dias_30_retraso",
+    "dias_10_retraso",
     "d_2_antes_vencimiento",
     "prejudicial",
     "masivos",
@@ -1450,7 +1445,7 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 def get_rebotados_por_tab(
     tipo: str = Query(
         ...,
-        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, dias_30_retraso, d_2_antes_vencimiento, prejudicial, masivos, liquidados",
+        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_10_retraso, d_2_antes_vencimiento, prejudicial, masivos, liquidados",
     ),
     db: Session = Depends(get_db),
 ):
@@ -1784,12 +1779,11 @@ def get_clientes_retrasados(
     Politica: no se listan avisos antes del vencimiento ni el dia del vencimiento;
     el primer seguimiento es el dia calendario siguiente (ej. vence 22 -> entra el 23).
     1. 1 dia despues del vencimiento (ayer fue la fecha de vencimiento)
-    2. 5 dias despues del vencimiento
-    3. 30 dias despues del vencimiento
-    4. Credito pagado (liquidados): prestamos con estado LIQUIDADO (misma columna estado en BD).
+    2. 10 dias despues del vencimiento (solo cuotas con exactamente 10 dias de atraso calendario)
+    3. Credito pagado (liquidados): prestamos con estado LIQUIDADO (misma columna estado en BD).
        Se muestran total_financiamiento y suma de abonos en cuotas para referencia.
     Claves dias_5, dias_3, dias_1, hoy se devuelven vacias (compatibilidad API).
-    Datos desde BD: cuotas pendientes filtradas por fecha_vencimiento (hoy-1, hoy-5, hoy-30)
+    Datos desde BD: cuotas pendientes filtradas por fecha_vencimiento (hoy-1, hoy-10)
     y tabla prestamos/cuotas (liquidados).
     Solo cuotas con fecha_pago nula: si se registra un pago que liquida la cuota,
     deja de listarse en la siguiente lectura (sin depender de un job de refresco).
@@ -1799,7 +1793,10 @@ def get_clientes_retrasados(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     hoy = ref_opt or hoy_negocio()
-    fechas_retraso = (hoy - timedelta(days=1), hoy - timedelta(days=5), hoy - timedelta(days=30))
+    fechas_retraso = (
+        hoy - timedelta(days=1),
+        hoy - timedelta(days=10),
+    )
     try:
         rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
     except Exception as e:
@@ -1814,8 +1811,7 @@ def get_clientes_retrasados(
     dias_1: List[dict] = []
     hoy_list: List[dict] = []
     dias_1_atraso: List[dict] = []   # 1 día atrasado (cuota vencida ayer)
-    dias_5_atraso: List[dict] = []   # 5 días atrasado (cuota vencida hace 5 días)
-    dias_30_atraso: List[dict] = []  # 30 días atrasado (cuota vencida hace 30 días)
+    dias_10_atraso: List[dict] = []  # 10 dias de atraso (cuota vencida hace 10 dias calendario)
 
     pids_retraso = [c.prestamo_id for c, _ in rows]
     counts_retraso = contar_cuotas_atraso_por_prestamos(
@@ -1846,29 +1842,19 @@ def get_clientes_retrasados(
                         total_pendiente_pagar=tp,
                     )
                 )
-            elif dias_atraso == 5:
-                dias_5_atraso.append(
+            elif dias_atraso == 10:
+                dias_10_atraso.append(
                     _item(
                         cliente,
                         cuota,
-                        dias_atraso=5,
-                        cuotas_atrasadas=ca,
-                        total_pendiente_pagar=tp,
-                    )
-                )
-            elif dias_atraso == 30:
-                dias_30_atraso.append(
-                    _item(
-                        cliente,
-                        cuota,
-                        dias_atraso=30,
+                        dias_atraso=10,
                         cuotas_atrasadas=ca,
                         total_pendiente_pagar=tp,
                     )
                 )
 
     enriquecer_items_notificacion_revision_manual(
-        db, dias_1_atraso + dias_5_atraso + dias_30_atraso
+        db, dias_1_atraso + dias_10_atraso
     )
 
     # Crédito pagado: préstamos en estado LIQUIDADO (alineado con prestamos.estado).
@@ -1924,8 +1910,7 @@ def get_clientes_retrasados(
         "dias_1": dias_1,
         "hoy": hoy_list,
         "dias_1_atraso": dias_1_atraso,
-        "dias_5_atraso": dias_5_atraso,
-        "dias_30_atraso": dias_30_atraso,
+        "dias_10_atraso": dias_10_atraso,
         "liquidados": liquidados,
     }
 
@@ -2070,7 +2055,7 @@ def build_prejudicial_items(
 ) -> List[dict]:
     """
     Solo la lista prejudicial (5+ cuotas con estado VENCIDO/MORA, vencidas, saldo pendiente).
-    No ejecuta la rama de retrasadas 1/3/5/30 ni contar_cuotas_atraso_por_prestamos masivo.
+    No ejecuta la rama de retrasadas por dias de mora ni contar_cuotas_atraso_por_prestamos masivo.
 
     GET /notificaciones-prejudicial debe usar esto (no get_notificaciones_tabs_data entero) para
     evitar timeouts en carteras grandes / cold start en Render.
@@ -2172,9 +2157,9 @@ def get_notificaciones_tabs_data(
 ):
     """
     Datos para envio de notificaciones (retrasadas, prejudicial).
-    Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1/3/5 dias de atraso)
+    Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1 y 10 dias de atraso calendario)
     y prejudicial. Claves dias_5, dias_3, dias_1, hoy van vacias (compat API).
-    Fuente: cuotas pendientes con fecha_vencimiento en {hoy-1, hoy-3, hoy-5, hoy-30} (consulta acotada).
+    Fuente: cuotas pendientes con fecha_vencimiento en {hoy-1, hoy-10} (consulta acotada).
     Fecha de corte: America/Caracas.
 
     Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
@@ -2187,9 +2172,7 @@ def get_notificaciones_tabs_data(
     hoy = fecha_referencia or hoy_negocio()
     fechas_retraso = (
         hoy - timedelta(days=1),
-        hoy - timedelta(days=3),
-        hoy - timedelta(days=5),
-        hoy - timedelta(days=30),
+        hoy - timedelta(days=10),
     )
     rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
     pids_tabs = [c.prestamo_id for c, _ in rows]
@@ -2203,9 +2186,7 @@ def get_notificaciones_tabs_data(
     dias_1: List[dict] = []
     hoy_list: List[dict] = []
     dias_1_retraso: List[dict] = []
-    dias_3_retraso: List[dict] = []
-    dias_5_retraso: List[dict] = []
-    dias_30_retraso: List[dict] = []
+    dias_10_retraso: List[dict] = []
 
     for (cuota, cliente) in rows:
         fv = cuota.fecha_vencimiento
@@ -2227,32 +2208,12 @@ def get_notificaciones_tabs_data(
                         total_pendiente_pagar=tp,
                     )
                 )
-            elif dias_atraso == 3:
-                dias_3_retraso.append(
+            elif dias_atraso == 10:
+                dias_10_retraso.append(
                     _item_tab(
                         cliente,
                         cuota,
-                        dias_atraso=3,
-                        cuotas_atrasadas=ca,
-                        total_pendiente_pagar=tp,
-                    )
-                )
-            elif dias_atraso == 5:
-                dias_5_retraso.append(
-                    _item_tab(
-                        cliente,
-                        cuota,
-                        dias_atraso=5,
-                        cuotas_atrasadas=ca,
-                        total_pendiente_pagar=tp,
-                    )
-                )
-            elif dias_atraso == 30:
-                dias_30_retraso.append(
-                    _item_tab(
-                        cliente,
-                        cuota,
-                        dias_atraso=30,
+                        dias_atraso=10,
                         cuotas_atrasadas=ca,
                         total_pendiente_pagar=tp,
                     )
@@ -2261,7 +2222,7 @@ def get_notificaciones_tabs_data(
     prejudicial = build_prejudicial_items(db, fecha_referencia=hoy)
     enriquecer_items_notificacion_revision_manual(
         db,
-        dias_1_retraso + dias_3_retraso + dias_5_retraso + dias_30_retraso,
+        dias_1_retraso + dias_10_retraso,
     )
 
     return {
@@ -2270,9 +2231,7 @@ def get_notificaciones_tabs_data(
         "dias_1": dias_1,
         "hoy": hoy_list,
         "dias_1_retraso": dias_1_retraso,
-        "dias_3_retraso": dias_3_retraso,
-        "dias_5_retraso": dias_5_retraso,
-        "dias_30_retraso": dias_30_retraso,
+        "dias_10_retraso": dias_10_retraso,
         "prejudicial": prejudicial,
     }
 

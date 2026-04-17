@@ -245,6 +245,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           href: '/notificaciones/d-2-antes',
           icon: Clock,
         },
+        {
+          title: '10 días de atraso',
+          href: '/notificaciones/atraso-10-dias',
+          icon: Clock,
+        },
       ],
     },
 

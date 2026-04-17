@@ -504,6 +504,20 @@ function App() {
             />
 
             <Route
+              path="notificaciones/atraso-45-dias"
+              element={<Navigate to="/notificaciones/atraso-10-dias" replace />}
+            />
+
+            <Route
+              path="notificaciones/atraso-10-dias"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <Notificaciones modulo="a10dias" />
+                </SimpleProtectedRoute>
+              }
+            />
+
+            <Route
               path="notificaciones/general"
               element={
                 <SimpleProtectedRoute requireAdmin={true}>

@@ -5,9 +5,7 @@
 export const ETIQUETA_CASO_TAB_ADJUNTO: Record<string, string> = {
   dias_1_retraso: 'Día siguiente al vencimiento',
   d_2_antes_vencimiento: '2 días antes (pendiente, vence en 2 días)',
-  dias_3_retraso: '3 días retraso',
-  dias_5_retraso: '5 días retraso',
-  dias_30_retraso: '30 días retraso',
+  dias_10_retraso: '10 días retraso',
   prejudicial: 'Prejudicial',
   masivos: 'Comunicaciones masivas',
 }
@@ -23,16 +21,8 @@ export const TIPOS_CASO_ADJUNTO_SUBIDA: { value: string; label: string }[] = [
     label: ETIQUETA_CASO_TAB_ADJUNTO.d_2_antes_vencimiento,
   },
   {
-    value: 'dias_3_retraso',
-    label: ETIQUETA_CASO_TAB_ADJUNTO.dias_3_retraso,
-  },
-  {
-    value: 'dias_5_retraso',
-    label: ETIQUETA_CASO_TAB_ADJUNTO.dias_5_retraso,
-  },
-  {
-    value: 'dias_30_retraso',
-    label: ETIQUETA_CASO_TAB_ADJUNTO.dias_30_retraso,
+    value: 'dias_10_retraso',
+    label: ETIQUETA_CASO_TAB_ADJUNTO.dias_10_retraso,
   },
   {
     value: 'prejudicial',

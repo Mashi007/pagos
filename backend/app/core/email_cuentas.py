@@ -24,9 +24,7 @@ ASIGNACION_DEFAULT = {
     "notificaciones_tab": {
         "d_2_antes_vencimiento": 3,
         "dias_1_retraso": 3,
-        "dias_3_retraso": 3,
-        "dias_5_retraso": 3,
-        "dias_30_retraso": 3,
+        "dias_10_retraso": 3,
         "prejudicial": 3,
     },
 }

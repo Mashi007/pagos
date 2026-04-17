@@ -75,14 +75,9 @@ const mapeoTipos = {
     caso: 'Día siguiente al vencimiento',
   },
 
-  PAGO_3_DIAS_ATRASADO: {
+  PAGO_10_DIAS_ATRASADO: {
     categoria: 'Notificación retrasada',
-    caso: '3 días de retraso',
-  },
-
-  PAGO_5_DIAS_ATRASADO: {
-    categoria: 'Notificación retrasada',
-    caso: '5 días de retraso',
+    caso: '10 días de retraso',
   },
 
   PREJUDICIAL: { categoria: 'Prejudicial', caso: 'Prejudicial' },
