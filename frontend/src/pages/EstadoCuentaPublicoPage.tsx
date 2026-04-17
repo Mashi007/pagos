@@ -49,7 +49,10 @@ import { Input } from '../components/ui/input'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
-const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
+import {
+  extraerCaracteresCedulaPublica,
+  normalizarCedulaParaProcesar,
+} from '../utils/cedulaConsultaPublica'
 
 /** Logo marca (misma ruta que rapicredit-cobros; ver public/logos/README.md). */
 const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
@@ -117,38 +120,6 @@ function AtencionClienteWhatsAppLink({
       </span>
     </a>
   )
-}
-
-/** Normaliza para validar: quita espacios, guiones y puntos (ej. V-20.235.335 → V20235335). Si solo 6-11 dígitos, se antepone V. Letras permitidas: V, E, G, J. */
-
-function normalizarCedulaParaProcesar(val: string): {
-  valido: boolean
-  valorParaEnviar?: string
-  error?: string
-} {
-  const s = val
-    .trim()
-    .toUpperCase()
-    .replace(/[\s.\-]/g, '')
-
-  if (!s) return { valido: false, error: 'Ingrese el número de cédula.' }
-
-  if (!/^[VEGJ]?\d+$/.test(s)) {
-    return {
-      valido: false,
-      error:
-        'No use puntos ni signos intermedios. Solo letra (V, E, G o J) y dígitos.',
-    }
-  }
-
-  if (/^\d{6,11}$/.test(s)) return { valido: true, valorParaEnviar: 'V' + s }
-
-  if (CEDULA_REGEX.test(s)) return { valido: true, valorParaEnviar: s }
-
-  return {
-    valido: false,
-    error: 'Cédula inválida. Use letra V, E, G o J seguida de 6 a 11 dígitos.',
-  }
 }
 
 type NotificationState = { type: 'error' | 'success'; message: string } | null
@@ -783,19 +754,22 @@ function EstadoCuentaPublicoPage() {
               </CardTitle>
 
               <p className="text-sm text-gray-600">
-                Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni
-                signos. Si solo ingresa números se procesará con V.
+                Letra (V, E, G o J) y 6 a 11 dígitos. Puede escribir o pegar con
+                puntos, comas o guiones; el sistema los ignora. Si solo ingresa
+                números se usará V.
               </p>
             </CardHeader>
 
             <CardContent className="space-y-4 px-4 sm:px-6">
               <Input
                 className="min-h-[44px] touch-manipulation rounded-xl border-slate-200 focus:border-[#1e3a5f] focus:ring-2 focus:ring-[#1e3a5f]/30"
-                placeholder="Ej: V12345678, E12345678 o 12345678"
+                placeholder="Ej: V-16.578.561, 16.578.561 o V16578561"
                 value={cedula}
-                onChange={e => setCedula(e.target.value)}
+                onChange={e =>
+                  setCedula(extraerCaracteresCedulaPublica(e.target.value))
+                }
                 onKeyDown={e => e.key === 'Enter' && handleSolicitarCodigo()}
-                maxLength={20}
+                maxLength={28}
               />
 
               <div className="flex flex-wrap gap-2 sm:flex-nowrap">

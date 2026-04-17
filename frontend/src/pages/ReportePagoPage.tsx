@@ -56,6 +56,10 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { formatMontoBsVe, parseMontoLatam } from '../utils/montoLatam'
+import {
+  extraerCaracteresCedulaPublica,
+  normalizarCedulaParaProcesar,
+} from '../utils/cedulaConsultaPublica'
 
 // Límites iguales al backend (cobros_publico)
 
@@ -118,49 +122,6 @@ function formatoMontoParaMostrar(num: number, moneda: 'BS' | 'USD'): string {
 /** Valor enviado al backend (punto decimal, exactamente 2 decimales). */
 function montoParaApi(num: number): string {
   return num.toFixed(2)
-}
-
-// Cédula: solo letra (V|E|G|J) + 6-11 dígitos; no puntos ni signos intermedios. Si solo dígitos, al procesar se antepone V.
-
-const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
-
-/** Normaliza para validar: quita espacios, guiones y puntos. Rechaza si queda otro signo o punto. Si solo 6-11 dígitos, devuelve con V antepuesto. */
-
-function normalizarCedulaParaProcesar(val: string): {
-  valido: boolean
-  valorParaEnviar?: string
-  error?: string
-} {
-  const s = val
-    .trim()
-    .toUpperCase()
-    .replace(/[\s.\-]/g, '')
-
-  if (!s) return { valido: false, error: 'Ingrese el número de cédula.' }
-
-  if (!/^[VEGJ]?\d+$/.test(s)) {
-    return {
-      valido: false,
-      error:
-        'No use puntos ni signos intermedios. Solo letra (V, E, G o J) y dígitos.',
-    }
-  }
-
-  if (/^\d{6,11}$/.test(s)) return { valido: true, valorParaEnviar: 'V' + s }
-
-  if (CEDULA_REGEX.test(s)) return { valido: true, valorParaEnviar: s }
-
-  return {
-    valido: false,
-    error: 'Cédula inválida. Use letra V, E, G o J seguida de 6 a 11 dígitos.',
-  }
-}
-
-function normalizarCedulaInput(val: string): string {
-  return val
-    .trim()
-    .toUpperCase()
-    .replace(/[\s.\-]/g, '')
 }
 
 /** En cobros público no existe el paso interno 2 (moneda); badges van 1..6 en lugar de 1..7. */
@@ -1122,19 +1083,22 @@ export default function ReportePagoPage({
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                Formato: Letra (V, E, G o J) seguida de 6 a 11 dígitos. Sin
-                puntos ni signos.
+                Letra (V, E, G o J) y 6 a 11 dígitos. Puede escribir o pegar con
+                puntos, comas o guiones; el sistema los ignora. Si solo pone
+                números, se usa V.
               </p>
             </CardHeader>
 
             <CardContent className="space-y-4 px-5 sm:px-6">
               <Input
                 className="min-h-[48px] touch-manipulation border-slate-200 bg-slate-50"
-                placeholder="Ej: V12345678 o 12345678"
+                placeholder="Ej: V-16.578.561, 16.578.561 o V16578561"
                 value={cedula}
-                onChange={e => setCedula(normalizarCedulaInput(e.target.value))}
+                onChange={e =>
+                  setCedula(extraerCaracteresCedulaPublica(e.target.value))
+                }
                 onKeyDown={e => e.key === 'Enter' && handleValidarCedula()}
-                maxLength={20}
+                maxLength={28}
               />
 
               <Button
