@@ -9,6 +9,12 @@ import {
 
 import { logger } from '../utils/logger'
 
+import {
+  extraerCaracteresCedulaPublica,
+  normalizarBusquedaPrestamosSearch,
+  normalizarCedulaParaProcesar,
+} from '../utils/cedulaConsultaPublica'
+
 // Constantes de configuración
 
 const DEFAULT_PER_PAGE = 20
@@ -25,7 +31,25 @@ class ClienteService {
 
     perPage: number = DEFAULT_PER_PAGE
   ): Promise<PaginatedResponse<Cliente>> {
-    const params = { ...filters, page, per_page: perPage }
+    const params: Record<string, any> = { ...filters, page, per_page: perPage }
+
+    if (typeof params.search === 'string' && params.search.trim()) {
+      params.search = normalizarBusquedaPrestamosSearch(params.search)
+    }
+
+    if (typeof params.cedula === 'string' && params.cedula.trim()) {
+      const raw = params.cedula.trim()
+
+      const v = normalizarCedulaParaProcesar(raw)
+
+      if (v.valido && v.valorParaEnviar) {
+        params.cedula = v.valorParaEnviar
+      } else {
+        const ext = extraerCaracteresCedulaPublica(raw)
+
+        if (ext) params.cedula = ext
+      }
+    }
 
     const url = buildUrl(this.baseUrl, params)
 
@@ -209,10 +233,19 @@ class ClienteService {
   async getClienteByCedula(cedula: string): Promise<Cliente | null> {
     if (!cedula?.trim()) return null
 
-    const list = await this.searchClientes(cedula.trim(), true)
+    const rawTrim = cedula.trim()
+
+    const nv = normalizarCedulaParaProcesar(rawTrim)
+
+    const clave =
+      nv.valido && nv.valorParaEnviar
+        ? nv.valorParaEnviar
+        : extraerCaracteresCedulaPublica(rawTrim)
+
+    const list = await this.searchClientes(rawTrim, true)
 
     const exact = list.find(
-      c => (c.cedula || '').trim().toUpperCase() === cedula.trim().toUpperCase()
+      c => extraerCaracteresCedulaPublica(c.cedula || '') === clave
     )
 
     return exact ?? null
