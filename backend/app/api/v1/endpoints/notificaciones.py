@@ -3,7 +3,7 @@ Endpoints de notificaciones a clientes retrasados.
 Todo el router exige rol admin (Depends(require_admin) a nivel de APIRouter).
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
 Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 y 10 días calendario;
-10 días solo si el préstamo tiene como máximo 2 cuotas en mora; con 3+ no aplica).
+10 días solo si el préstamo tiene entre 2 y 3 cuotas en mora (inclusive); con 1 o con 4+ no aplica).
 Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
 CRUD de plantillas en plantillas_notificacion; envío puede usar plantilla por tipo vía plantilla_id en config.
 """
@@ -1781,8 +1781,8 @@ def get_clientes_retrasados(
     Politica: no se listan avisos antes del vencimiento ni el dia del vencimiento;
     el primer seguimiento es el dia calendario siguiente (ej. vence 22 -> entra el 23).
     1. 1 dia despues del vencimiento (ayer fue la fecha de vencimiento)
-    2. 10 dias despues del vencimiento (exactamente 10 dias de atraso calendario y como maximo
-       2 cuotas en mora en el prestamo; con 3 o mas cuotas atrasadas no entra en este listado)
+    2. 10 dias despues del vencimiento (exactamente 10 dias de atraso calendario y entre 2 y 3
+       cuotas en mora en el prestamo inclusive; con 1 o con 4 o mas cuotas atrasadas no entra)
     3. Credito pagado (liquidados): prestamos con estado LIQUIDADO (misma columna estado en BD).
        Se muestran total_financiamiento y suma de abonos en cuotas para referencia.
     Claves dias_5, dias_3, dias_1, hoy se devuelven vacias (compatibilidad API).
@@ -2170,7 +2170,7 @@ def get_notificaciones_tabs_data(
     calendario después de la fecha de vencimiento), sin fecha_pago y con saldo pendiente.
 
     Pestaña 10 días (dias_10_retraso): misma regla de fecha (vencimiento = hoy − 10 días) y además
-    el préstamo debe tener como máximo 2 cuotas en mora; con 3 o más no aplica este listado.
+    el préstamo debe tener entre 2 y 3 cuotas en mora (inclusive); con 1 o con 4 o más no aplica.
 
     Prejudicial: por titular del préstamo (prestamos.cliente_id), al menos el mínimo configurado
     de cuotas con cuotas.estado en (VENCIDO, MORA), fecha_vencimiento < hoy, sin fecha_pago y

@@ -1360,7 +1360,7 @@ export function ConfiguracionNotificaciones({
                 <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes cuya
                 fecha de vencimiento está exactamente a 10 días calendario en el
                 pasado respecto de la fecha de referencia (Caracas); el préstamo
-                debe tener como máximo 2 cuotas en mora (3 o más no aplican).
+                debe tener entre 2 y 3 cuotas en mora (inclusive); con 1 o con 4 o más no aplican.
                 Incluye plantilla, envío, PDF y adjuntos del caso{' '}
                 <code className="rounded bg-gray-100 px-1">dias_10_retraso</code>
                 . Al pulsar Guardar solo se persisten esta fila y el bloque global

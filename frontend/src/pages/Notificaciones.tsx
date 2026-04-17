@@ -2845,7 +2845,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 : modulo === 'd2antes'
                   ? 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 2 días (hoy + 2, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
                   : modulo === 'a10dias'
-                    ? 'Solo cuotas pendientes cuya fecha de vencimiento está exactamente a 10 días calendario en el pasado respecto de la fecha de referencia (America/Caracas), con saldo pendiente, y el préstamo con como máximo 2 cuotas en mora (si tiene 3 o más no aplica este listado). No mezcla otros días de mora.'
+                    ? 'Solo cuotas pendientes cuya fecha de vencimiento está exactamente a 10 días calendario en el pasado respecto de la fecha de referencia (America/Caracas), con saldo pendiente, y el préstamo con exactamente entre 2 y 3 cuotas en mora (inclusive). Con 1 cuota o con 4 o más no aplica este listado. No mezcla otros días de mora.'
                     : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
           }
           actions={
@@ -3019,7 +3019,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : modulo === 'd2antes'
                       ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
                       : modulo === 'a10dias'
-                        ? 'Una fila por cuota pendiente con fecha_vencimiento = fecha de referencia − 10 días (calendario), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene como máximo 2 cuotas en mora (misma regla que la columna Cuotas atrasadas); con 3 o más no entra. No incluye cuotas con otro número de días de atraso respecto de esa fecha.'
+                        ? 'Una fila por cuota pendiente con fecha_vencimiento = fecha de referencia − 10 días (calendario), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene entre 2 y 3 cuotas en mora (misma regla que la columna Cuotas atrasadas); con 1 o con 4 o más no entra. No incluye cuotas con otro número de días de atraso respecto de esa fecha.'
                         : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
             </CardDescription>
           </CardHeader>
@@ -3635,7 +3635,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     : modulo === 'd2antes'
                                       ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
                                       : modulo === 'a10dias'
-                                        ? 'Lista ya cargada: vencimiento = referencia − 10 días (Caracas), saldo pendiente y como máximo 2 cuotas en mora en el préstamo. Si hay 3+ cuotas atrasadas o la fecha no coincide, no aparecerá.'
+                                        ? 'Lista ya cargada: vencimiento = referencia − 10 días (Caracas), saldo pendiente y entre 2 y 3 cuotas en mora en el préstamo. Con 1 o con 4+ cuotas atrasadas, o si la fecha no coincide, no aparecerá.'
                                         : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
                               </span>
                             ) : filtroCedula.trim() ? (
@@ -3871,7 +3871,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     : modulo === 'd2antes'
                                       ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
                                       : modulo === 'a10dias'
-                                        ? 'Lista ya cargada: sin cuotas en −10 días con saldo pendiente y máximo 2 cuotas en mora, o todos los casos tienen 3+ cuotas atrasadas (no aplican aquí).'
+                                        ? 'Lista ya cargada: sin cuotas en −10 días con saldo pendiente y entre 2 y 3 cuotas en mora, o todos los casos tienen 1 o 4+ cuotas atrasadas (no aplican aquí).'
                                         : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
                               </span>
                             ) : filtroCedula.trim() ? (

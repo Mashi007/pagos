@@ -309,10 +309,11 @@ def contar_cuotas_atraso_por_prestamos(
     return out
 
 
-# Listado / envío «10 días de atraso» (calendario): solo préstamos con a lo sumo este número
-# de cuotas en mora (misma regla que `contar_cuotas_atraso_por_prestamos`). Con 3 o más
-# cuotas atrasadas no aplica este criterio (el caso sigue en otros canales, p. ej. prejudicial).
-MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 2
+# Listado / envío «10 días de atraso» (calendario): solo préstamos cuyo conteo de cuotas en mora
+# (misma regla que `contar_cuotas_atraso_por_prestamos`) está en [MIN, MAX] inclusive.
+# Con 1 cuota atrasada o con 4 o más no aplica este criterio.
+MIN_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 2
+MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 3
 
 
 def prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(cuotas_atrasadas: int) -> bool:
@@ -321,7 +322,7 @@ def prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(cuotas_atrasadas: int) 
         n = int(cuotas_atrasadas or 0)
     except (TypeError, ValueError):
         n = 0
-    return n <= MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS
+    return MIN_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS <= n <= MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS
 
 
 def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
