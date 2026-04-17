@@ -24,11 +24,57 @@ app.head('/health', (_req, res) => res.status(200).end());
 app.get('/healthz', (_req, res) => sendHealthJson(res));
 app.head('/healthz', (_req, res) => res.status(200).end());
 
-// URL del backend - Prioridad: API_BASE_URL (runtime) > VITE_API_BASE_URL (build-time fallback) > VITE_API_URL > localhost
-// ⚠️ IMPORTANTE: En Render, DEBE estar configurada la variable API_BASE_URL (SIN prefijo VITE_)
-// Las variables VITE_* solo funcionan durante el build, NO en runtime de Node.js
-// Si falta API_BASE_URL, el proxy no funcionará y verás 404 en las peticiones /api/*
-const API_URL = process.env.API_BASE_URL || process.env.VITE_API_BASE_URL || process.env.VITE_API_URL || 'http://localhost:8000';
+/**
+ * URL base del backend para el proxy Express (/api/* -> backend).
+ * En Render, si no hay ninguna variable de entorno, Node caía en localhost:8000 (no existe en el dyno)
+ * y el navegador veía fallos de red en cobros/infopagos.
+ */
+function normalizeBackendBase(raw) {
+  const t = (raw || '').trim();
+  if (!t) return '';
+  let u = t.replace(/\/$/, '');
+  if (!/^https?:\/\//i.test(u)) {
+    u = `https://${u.replace(/^\/+/, '')}`;
+  }
+  try {
+    const parsed = new URL(u);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    return u.replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+
+/** Despliegue conocido: front rapicredit.onrender.com + API en pagos-f2qf (solo si falta API_BASE_URL en Render). */
+const RENDER_KNOWN_FALLBACK_API = 'https://pagos-f2qf.onrender.com';
+
+function resolveApiProxyTarget() {
+  const candidates = [
+    process.env.API_BASE_URL,
+    process.env.BACKEND_URL,
+    process.env.VITE_API_BASE_URL,
+    process.env.VITE_API_URL,
+  ];
+  for (const raw of candidates) {
+    const n = normalizeBackendBase(raw);
+    if (n) return { url: n, source: 'env' };
+  }
+  const onRender =
+    process.env.RENDER === 'true' ||
+    Boolean((process.env.RENDER_SERVICE_ID || '').trim());
+  if (onRender && process.env.DISABLE_RENDER_KNOWN_API_FALLBACK !== '1') {
+    console.warn(
+      `[proxy] Render sin API_BASE_URL ni BACKEND_URL; usando respaldo ${RENDER_KNOWN_FALLBACK_API}. ` +
+        'Configure API_BASE_URL en el servicio del front, o ponga DISABLE_RENDER_KNOWN_API_FALLBACK=1 y defina la URL.'
+    );
+    return { url: RENDER_KNOWN_FALLBACK_API, source: 'render-fallback' };
+  }
+  const local = normalizeBackendBase('http://localhost:8000');
+  return { url: local || 'http://localhost:8000', source: 'localhost' };
+}
+
+const _resolvedApi = resolveApiProxyTarget();
+const API_URL = _resolvedApi.url;
 
 /** Orígenes extra para connect-src (p. ej. API absoluta en VITE_API_URL). */
 function connectSrcExtraOrigins(apiUrl) {
@@ -65,17 +111,11 @@ function buildContentSecurityPolicy(apiUrl) {
 }
 
 // Log de la URL configurada para debug
-console.log(`🔍 API_URL configurado: ${API_URL || 'NO CONFIGURADO'}`);
+console.log(`🔍 API_URL (proxy): ${API_URL} [${_resolvedApi.source}]`);
 console.log(`🔍 API_BASE_URL (runtime): ${process.env.API_BASE_URL || 'NO SET'}`);
+console.log(`🔍 BACKEND_URL (runtime): ${process.env.BACKEND_URL || 'NO SET'}`);
 console.log(`🔍 VITE_API_BASE_URL (build-time): ${process.env.VITE_API_BASE_URL || 'NO SET'}`);
 console.log(`🔍 VITE_API_URL (build-time): ${process.env.VITE_API_URL || 'NO SET'}`);
-
-// Validación: en producción (PORT definido), API_BASE_URL debe apuntar al backend
-// localhost:8000 es válido para pruebas locales del build
-if (process.env.PORT && !API_URL) {
-  console.warn('⚠️  ADVERTENCIA: API_BASE_URL no configurado. Las peticiones /api/* fallarán.');
-  console.warn('   Configure API_BASE_URL en Render Dashboard con la URL del backend.');
-}
 
 // ============================================
 // SECURITY HEADERS - OWASP Best Practices

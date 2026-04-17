@@ -67,6 +67,13 @@ import {
   bordeTarjetaServicioPlantilla,
 } from '../../constants/notifPlantillaServicioContexto'
 
+import {
+  PLANTILLA_EMAIL_MORA_ASUNTO,
+  PLANTILLA_EMAIL_MORA_ENCABEZADO_FIJO,
+  PLANTILLA_EMAIL_MORA_CUERPO_VARIABLES,
+  PLANTILLA_EMAIL_MORA_FIRMA_FIJO,
+} from '../../constants/plantillaEmailMoraCompartida'
+
 type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 
 interface PlantillasNotificacionesProps {
@@ -158,6 +165,12 @@ export function PlantillasNotificaciones({
   const cuerpoRef = useRef<HTMLTextAreaElement>(null)
 
   const firmaRef = useRef<HTMLTextAreaElement>(null)
+
+  /**
+   * Evita aplicar dos veces el mismo pegado inicial; no introduce texto distinto
+   * al de `plantillaEmailMoraCompartida`.
+   */
+  const moraDiezBasePrefillRef = useRef(false)
 
   const cuerpoFinal = useMemo(() => {
     const parts = [encabezado, cuerpo, firma].filter(Boolean)
@@ -486,6 +499,41 @@ export function PlantillasNotificaciones({
     setTiposSeleccionados([tipoServicioPlantilla])
   }, [tipoServicioPlantilla, selected])
 
+  // Plantilla nueva PAGO_10: solo rellena con constantes (HTML = cuerpo_ret / asunto_ret); nada mas.
+  useEffect(() => {
+    if (tipoServicioPlantilla !== 'PAGO_10_DIAS_ATRASADO') {
+      moraDiezBasePrefillRef.current = false
+
+      return
+    }
+
+    if (selected || plantillaInicial) return
+
+    if (asunto.trim() || encabezado.trim() || cuerpo.trim() || firma.trim()) {
+      return
+    }
+
+    if (moraDiezBasePrefillRef.current) return
+
+    moraDiezBasePrefillRef.current = true
+
+    setAsunto(PLANTILLA_EMAIL_MORA_ASUNTO)
+
+    setEncabezado(PLANTILLA_EMAIL_MORA_ENCABEZADO_FIJO)
+
+    setCuerpo(PLANTILLA_EMAIL_MORA_CUERPO_VARIABLES)
+
+    setFirma(PLANTILLA_EMAIL_MORA_FIRMA_FIJO)
+  }, [
+    tipoServicioPlantilla,
+    selected,
+    plantillaInicial,
+    asunto,
+    encabezado,
+    cuerpo,
+    firma,
+  ])
+
   // Filtrar plantillas
 
   useEffect(() => {
@@ -529,6 +577,8 @@ export function PlantillasNotificaciones({
     setCuerpo('')
 
     setFirma('')
+
+    moraDiezBasePrefillRef.current = false
   }
 
   const seleccionar = (p: NotificacionPlantilla) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 import {
   notificacionService,
@@ -28,6 +28,11 @@ import { Save, Mail, Eye, FileText } from 'lucide-react'
 import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
 
 import { etiquetaServicioPlantilla } from '../../constants/notifPlantillaServicioContexto'
+
+import {
+  PLANTILLA_EMAIL_MORA_ASUNTO,
+  plantillaEmailMoraHtmlMonobloque,
+} from '../../constants/plantillaEmailMoraCompartida'
 
 /** Mapeo alineado con backend notificaciones_tabs._CONFIG_TIPO_TO_TAB (cuenta SMTP por pesta\u00f1a). */
 const PLANTILLA_TIPO_A_TIPO_TAB: Record<string, string> = {
@@ -84,6 +89,32 @@ export function EditorPlantillaHTML({
   const [emailPrueba, setEmailPrueba] = useState('')
 
   const [mostrarPreview, setMostrarPreview] = useState(true)
+
+  /** Evita doble pegado del bloque de `plantillaEmailMoraCompartida` al crear. */
+  const moraDiezEditorBaseRef = useRef(false)
+
+  // Plantilla nueva PAGO_10: solo asunto + HTML de las constantes (mora por defecto); nada mas.
+  useEffect(() => {
+    if (tipoServicioPorDefecto !== 'PAGO_10_DIAS_ATRASADO') {
+      moraDiezEditorBaseRef.current = false
+
+      return
+    }
+
+    if (id != null) return
+
+    if (asunto.trim() || cuerpoHTML.trim()) return
+
+    if (moraDiezEditorBaseRef.current) return
+
+    moraDiezEditorBaseRef.current = true
+
+    setAsunto(PLANTILLA_EMAIL_MORA_ASUNTO)
+
+    setCuerpoHTML(
+      replaceBase64ImagesWithLogoUrl(plantillaEmailMoraHtmlMonobloque())
+    )
+  }, [tipoServicioPorDefecto, id, asunto, cuerpoHTML])
 
   const handleGuardar = async () => {
     if (!nombre.trim()) {
