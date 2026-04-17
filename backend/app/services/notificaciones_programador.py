@@ -3,7 +3,7 @@
 Campos legacy `programador` en notificaciones_envios: parseo y normalizacion al guardar (PUT).
 
 El valor `programador` (hora en JSON) es solo metadato / compatibilidad con la UI: ningun job del
-servidor lee esa hora para enviar correos. Los envios de mora son solo manuales (POST desde la UI).
+servidor lee esa hora para enviar correos. Los envios de notificaciones a clientes son solo manuales (POST desde la UI).
 No hay ejecucion periodica de notificaciones por hora en este modulo. Zona America/Caracas donde aplique.
 """
 from __future__ import annotations

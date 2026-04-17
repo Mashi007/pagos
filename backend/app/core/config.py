@@ -31,8 +31,7 @@ class Settings(BaseSettings):
             "Si True, el proceso lider puede iniciar APScheduler (finiquito, auditoria cartera, limpieza codigos, "
             "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
-            "A las 03:00 America/Caracas puede ejecutarse el envio automatico exclusivo PAGO_2_DIAS_ANTES_PENDIENTE "
-            "si en BD notificaciones_envios.cron_envio_pago_2_dias_antes.habilitado esta activo (submenu 2 dias antes). "
+            "Los envios de notificaciones a clientes son solo manuales (POST desde la UI); no hay cron de correo. "
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
     )

@@ -190,13 +190,6 @@ export function useCreatePrestamo() {
 
       toast.success('Préstamo creado exitosamente')
     },
-
-    onError: (error: any) => {
-      const errorMessage =
-        error.response?.data?.detail || 'Error al crear préstamo'
-
-      toast.error(errorMessage)
-    },
   })
 }
 
@@ -260,13 +253,6 @@ export function useUpdatePrestamo() {
       toast.success(
         'Préstamo actualizado exitosamente. El dashboard se ha actualizado.'
       )
-    },
-
-    onError: (error: any) => {
-      const errorMessage =
-        error.response?.data?.detail || 'Error al actualizar préstamo'
-
-      toast.error(errorMessage)
     },
   })
 }

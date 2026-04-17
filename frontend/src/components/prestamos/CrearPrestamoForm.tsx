@@ -74,6 +74,8 @@ import {
 
 import { Prestamo, PrestamoForm } from '../../types'
 
+import { getErrorMessage } from '../../types/errors'
+
 import { ModalValidacionPrestamoExistente } from './ModalValidacionPrestamoExistente'
 
 /** Fecha API (date o ISO) a YYYY-MM-DD para inputs type="date". */
@@ -898,8 +900,8 @@ export function CrearPrestamoForm({
       onSuccess()
 
       onClose()
-    } catch (error) {
-      toast.error('Error al guardar el préstamo')
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error))
 
       if (import.meta.env.DEV) {
         console.error('Error saving loan:', error)
@@ -1857,7 +1859,8 @@ export function CrearPrestamoForm({
                 <Button
                   variant="destructive"
                   onClick={async () => {
-                    if (prestamo?.id) {
+                    if (!prestamo?.id) return
+                    try {
                       await updatePrestamo.mutateAsync({
                         id: prestamo.id,
 
@@ -1869,6 +1872,8 @@ export function CrearPrestamoForm({
                       onSuccess()
 
                       onClose()
+                    } catch (err: unknown) {
+                      toast.error(getErrorMessage(err))
                     }
                   }}
                   disabled={updatePrestamo.isPending}

@@ -524,13 +524,6 @@ export function ConfiguracionNotificaciones({
   )
 
   /**
-   * Cron 03:00 Caracas: solo PAGO_2_DIAS_ANTES_PENDIENTE (clave cron_envio_pago_2_dias_antes en BD).
-   * Editable únicamente en el submódulo «2 días antes»; no se envía en guardados de otros alcances.
-   */
-  const [cronPago2DiasAntesHabilitado, setCronPago2DiasAntesHabilitado] =
-    useState(false)
-
-  /**
    * Texto libre del textarea CCO (incluye saltos con Enter). Sin esto, al parsear se pierden
    * lineas vacias y el valor controlado colapsa: Enter no permitia escribir el siguiente correo.
    */
@@ -733,22 +726,6 @@ export function ConfiguracionNotificaciones({
     setCampanasMasivos(cm)
     setCcoDraftPorTipo({})
     setCcoDraftPorCampanaId({})
-
-    const cronRaw = (dataEnvios as Record<string, unknown>)
-      ?.cron_envio_pago_2_dias_antes
-    if (cronRaw && typeof cronRaw === 'object' && cronRaw !== null) {
-      const o = cronRaw as { habilitado?: unknown; enabled?: unknown }
-      const h = o.habilitado ?? o.enabled
-      const on =
-        h === true ||
-        (typeof h === 'string' &&
-          ['true', '1', 'yes', 'si', 'sí', 'on'].includes(
-            h.trim().toLowerCase()
-          ))
-      setCronPago2DiasAntesHabilitado(Boolean(on))
-    } else {
-      setCronPago2DiasAntesHabilitado(false)
-    }
   }, [dataEnvios])
 
   useEffect(() => {
@@ -899,11 +876,6 @@ export function ConfiguracionNotificaciones({
             incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
           }
         }
-        if (alcance === 'solo_pago_2_dias_antes_pendiente') {
-          ;(payload as Record<string, unknown>).cron_envio_pago_2_dias_antes = {
-            habilitado: cronPago2DiasAntesHabilitado,
-          }
-        }
       } else {
         // Guardado completo: solo claves de producto conocidas (sin reenviar JSON legado ni
         // mezclar masivos/cron dentro del mismo objeto que las filas por tipo).
@@ -922,9 +894,6 @@ export function ConfiguracionNotificaciones({
           ),
           cco: (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
         }))
-        p.cron_envio_pago_2_dias_antes = {
-          habilitado: cronPago2DiasAntesHabilitado,
-        }
 
         for (const { tipo } of CRITERIOS_ENVIO_TABLA) {
           const c = getConfig(tipo)
@@ -1355,19 +1324,21 @@ export function ConfiguracionNotificaciones({
               </>
             ) : alcance === 'solo_pago_10_dias_atrasado' ? (
               <>
-                Configuración solo para{' '}
-                <strong>10 días de atraso</strong> (caso{' '}
+                Configuración solo para <strong>10 días de atraso</strong> (caso{' '}
                 <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes cuya
                 fecha de vencimiento está exactamente a 10 días calendario en el
                 pasado respecto de la fecha de referencia (Caracas); el préstamo
-                debe tener entre 2 y 3 cuotas en mora (inclusive); con 1 o con 4 o más no aplican.
-                Incluye plantilla, envío, PDF y adjuntos del caso{' '}
-                <code className="rounded bg-gray-100 px-1">dias_10_retraso</code>
-                . Al pulsar Guardar solo se persisten esta fila y el bloque global
-                de modo prueba (no se modifican otros criterios ni campañas
-                masivas). El envío de correos de este criterio es solo manual
-                desde la pestaña de listado del submódulo (no entra en «enviar
-                todas» ni en el POST agregado legacy de retrasadas).
+                debe tener entre 2 y 3 cuotas en mora (inclusive); con 1 o con 4
+                o más no aplican. Incluye plantilla, envío, PDF y adjuntos del
+                caso{' '}
+                <code className="rounded bg-gray-100 px-1">
+                  dias_10_retraso
+                </code>
+                . Al pulsar Guardar solo se persisten esta fila y el bloque
+                global de modo prueba (no se modifican otros criterios ni
+                campañas masivas). El envío de correos de este criterio es solo
+                manual desde la pestaña de listado del submódulo (no entra en
+                «enviar todas» ni en el POST agregado legacy de retrasadas).
               </>
             ) : (
               <>
@@ -1386,59 +1357,6 @@ export function ConfiguracionNotificaciones({
           </CardDescription>
         </CardHeader>
       </Card>
-
-      {alcance === 'solo_pago_2_dias_antes_pendiente' ? (
-        <Card className="border-indigo-200 bg-indigo-50/40">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Clock className="h-5 w-5 text-indigo-600" />
-              Envío automático a las 03:00 (America/Caracas)
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Solo el criterio <strong>PAGO_2_DIAS_ANTES_PENDIENTE</strong> (esta
-              pantalla). No programa ni envía previas, retrasadas, prejudicial
-              ni masivos. Requiere{' '}
-              <code className="rounded bg-white px-1 text-xs">
-                ENABLE_AUTOMATIC_SCHEDULED_JOBS=true
-              </code>{' '}
-              en el servidor. A la hora indicada se usa la misma lógica que
-              «Enviar notificaciones (manual)»: correo del cliente, CCO de esta
-              fila (hasta 3 en la UI; revise que sean válidos), plantilla y modo
-              prueba/producción globales. Si la fila tiene <strong>Envío</strong>{' '}
-              desactivado, el cron omite todos los destinatarios (respeta el
-              interruptor).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-medium text-gray-800">
-              Disparo diario 03:00
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={cronPago2DiasAntesHabilitado}
-              onClick={() => {
-                markEnviosLocalDirty()
-                setCronPago2DiasAntesHabilitado(v => !v)
-              }}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 ${
-                cronPago2DiasAntesHabilitado ? 'bg-indigo-600' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${
-                  cronPago2DiasAntesHabilitado ? 'translate-x-5' : 'translate-x-1'
-                }`}
-              />
-            </button>
-            <span className="text-sm text-gray-700">
-              {cronPago2DiasAntesHabilitado
-                ? 'Activado: el servidor intentará el envío cada día a las 03:00.'
-                : 'Desactivado: solo envío manual desde la pestaña de listado.'}
-            </span>
-          </CardContent>
-        </Card>
-      ) : null}
 
       {/* Modo Prueba / Producción: un solo bloque, sin duplicar config */}
 
@@ -1474,13 +1392,14 @@ export function ConfiguracionNotificaciones({
         <CardContent className="space-y-4">
           {alcanceReducido && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-900">
-              <strong className="font-semibold">Alcance de esta pantalla:</strong>{' '}
+              <strong className="font-semibold">
+                Alcance de esta pantalla:
+              </strong>{' '}
               al pulsar Guardar solo se persisten las filas de este criterio (
               {tiposCasoNotificacionParaAlcance(alcance).join(', ')}). El modo
-              prueba/producción y los correos de prueba son{' '}
-              <em>globales</em> en la base de datos (afectan a todos los
-              criterios al enviar). Las campañas masivas y el resto de casos no
-              se modifican desde aquí.
+              prueba/producción y los correos de prueba son <em>globales</em> en
+              la base de datos (afectan a todos los criterios al enviar). Las
+              campañas masivas y el resto de casos no se modifican desde aquí.
             </div>
           )}
 
@@ -1781,9 +1700,9 @@ export function ConfiguracionNotificaciones({
 
             <CardDescription className="text-xs">
               Resultado del último lote grande (p. ej. «Enviar todas» en segundo
-              plano), del programador o de «Enviar este caso ahora» por fila. El
-              submódulo 2 días antes no entra en «Enviar todas». Útil cuando una
-              petición responde 202 sin cuerpo.
+              plano) o de «Enviar este caso ahora» por fila. El submódulo 2 días
+              antes no entra en «Enviar todas». Útil cuando una petición
+              responde 202 sin cuerpo.
             </CardDescription>
           </CardHeader>
 

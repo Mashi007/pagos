@@ -1169,8 +1169,7 @@ def ejecutar_envio_caso_manual(
     fecha_referencia: mismo criterio que ?fecha_caracas= en GET listados (America/Caracas).
 
     respetar_toggle_envio: si True, respeta habilitado=False de la fila en BD (omitidos_config).
-        Solo debe usarse desde el job programado «2 días antes» a las 03:00 Caracas.
-        La API POST /enviar-caso-manual sigue forzando habilitado (respetar_toggle_envio=False).
+        Reservado para integraciones internas; la API POST /enviar-caso-manual usa False (fuerza habilitado).
     """
     tipo = (tipo or "").strip()
     if tipo not in TIPOS_CASO_MANUAL:
