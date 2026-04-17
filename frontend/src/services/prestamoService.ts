@@ -4,6 +4,12 @@ import { Prestamo, PrestamoForm } from '../types'
 
 import { logger } from '../utils/logger'
 
+import {
+  extraerCaracteresCedulaPublica,
+  normalizarBusquedaPrestamosSearch,
+  normalizarCedulaParaProcesar,
+} from '../utils/cedulaConsultaPublica'
+
 // Constantes de configuración
 
 const DEFAULT_PER_PAGE = 10
@@ -118,6 +124,24 @@ class PrestamoService {
     perPage: number = DEFAULT_PER_PAGE
   ): Promise<PaginatedResponse<Prestamo>> {
     const params: any = { ...filters, page, per_page: perPage }
+
+    if (typeof params.cedula === 'string' && params.cedula.trim()) {
+      const raw = params.cedula.trim()
+
+      const v = normalizarCedulaParaProcesar(raw)
+
+      if (v.valido && v.valorParaEnviar) {
+        params.cedula = v.valorParaEnviar
+      } else {
+        const ext = extraerCaracteresCedulaPublica(raw)
+
+        if (ext) params.cedula = ext
+      }
+    }
+
+    if (typeof params.search === 'string' && params.search.trim()) {
+      params.search = normalizarBusquedaPrestamosSearch(params.search)
+    }
 
     // Convertir fechas a formato ISO si existen
 

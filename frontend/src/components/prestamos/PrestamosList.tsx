@@ -101,6 +101,8 @@ import { formatCurrency, formatDate } from '../../utils'
 
 import { lineasFiniquitoColumna } from '../../utils/prestamoFiniquitoDisplay'
 
+import { extraerCaracteresCedulaPublica } from '../../utils/cedulaConsultaPublica'
+
 import { prestamoService } from '../../services/prestamoService'
 
 import { toast } from 'sonner'
@@ -1242,7 +1244,7 @@ export function PrestamosList() {
 
                   <Input
                     ref={buscarGeneralRef}
-                    placeholder="Cédula o nombre del cliente..."
+                    placeholder="Cédula (con o sin puntos) o nombre del cliente..."
                     value={filters.search || ''}
                     onChange={e =>
                       setFilters({ ...filters, search: e.target.value })
@@ -1346,16 +1348,20 @@ export function PrestamosList() {
                   </label>
 
                   <Input
-                    placeholder="Cédula de identidad"
+                    placeholder="Ej: V-16.578.561 o 16.578.561"
                     value={filters.cedula || ''}
                     onChange={e =>
-                      setFilters({ ...filters, cedula: e.target.value })
+                      setFilters({
+                        ...filters,
+                        cedula: extraerCaracteresCedulaPublica(e.target.value),
+                      })
                     }
                     onKeyPress={e => {
                       if (e.key === 'Enter') {
                         setPage(1)
                       }
                     }}
+                    maxLength={28}
                   />
                 </div>
 

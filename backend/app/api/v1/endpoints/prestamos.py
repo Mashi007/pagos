@@ -115,10 +115,13 @@ from app.services.prestamos.cupo_cedula_aprobados import (
     contar_aprobados_por_claves_cupo,
 )
 from app.utils.cedula_almacenamiento import (
+    expr_cedula_normalizada_para_comparar,
+    max_aprobados_permitidos_por_prefijo,
     normalizar_cedula_clave_cupo,
     prefijo_politica_cupo_aprobados,
-    max_aprobados_permitidos_por_prefijo,
+    texto_cedula_comparable_bd,
 )
+from app.api.v1.endpoints.validadores import validate_cedula
 from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
     PrestamoCedulaClienteError,
     asegurar_prestamo_alineado_con_cliente,
@@ -703,11 +706,27 @@ def listar_prestamos(
 
     if cedula and cedula.strip():
 
-        ced_clean = cedula.strip()
+        ced_raw = cedula.strip()
 
-        q = q.where(Cliente.cedula == ced_clean)
+        vr_ced = validate_cedula(ced_raw)
 
-        count_q = count_q.where(Cliente.cedula == ced_clean)
+        if vr_ced.get("valido"):
+
+            ced_clave = (vr_ced.get("valor_formateado") or "").replace("-", "").upper()
+
+            if ced_clave:
+
+                ced_expr = expr_cedula_normalizada_para_comparar(Cliente.cedula)
+
+                q = q.where(ced_expr == ced_clave)
+
+                count_q = count_q.where(ced_expr == ced_clave)
+
+        else:
+
+            q = q.where(Cliente.cedula == ced_raw)
+
+            count_q = count_q.where(Cliente.cedula == ced_raw)
 
     if prestamo_id is not None:
 
@@ -719,13 +738,31 @@ def listar_prestamos(
 
         search_clean = search.strip()
 
-        pat = f"%{_escape_ilike_pattern(search_clean)}%"
+        vr_s = validate_cedula(search_clean)
 
-        condicion_search = Cliente.cedula.ilike(pat, escape="\\") | Cliente.nombres.ilike(pat, escape="\\")
+        if vr_s.get("valido"):
 
-        q = q.where(condicion_search)
+            s_clave = (vr_s.get("valor_formateado") or "").replace("-", "").upper()
 
-        count_q = count_q.where(condicion_search)
+            if s_clave:
+
+                s_expr = expr_cedula_normalizada_para_comparar(Cliente.cedula)
+
+                condicion_search = s_expr == s_clave
+
+                q = q.where(condicion_search)
+
+                count_q = count_q.where(condicion_search)
+
+        else:
+
+            pat = f"%{_escape_ilike_pattern(search_clean)}%"
+
+            condicion_search = Cliente.cedula.ilike(pat, escape="\\") | Cliente.nombres.ilike(pat, escape="\\")
+
+            q = q.where(condicion_search)
+
+            count_q = count_q.where(condicion_search)
 
     if modelo and modelo.strip():
 
@@ -1301,13 +1338,9 @@ def get_prestamos_stats(
 
 def _normalizar_cedula_para_busqueda(cedula: str) -> str:
 
-    """Normaliza cédula para búsqueda: sin guiones, sin espacios, mayúsculas."""
+    """Clave comparable con cédula en BD (misma lógica que validate_cedula / expr SQL)."""
 
-    if not cedula:
-
-        return ""
-
-    return (cedula or "").strip().upper().replace("-", "").replace(" ", "")
+    return texto_cedula_comparable_bd(cedula)
 
 
 
@@ -1400,7 +1433,7 @@ def listar_prestamos_por_cedulas_batch(
         # Buscar coincidencia normalizada en cedulas_clean
         cedula_encontrada = None
         for ced_clean in cedulas_clean:
-            ced_clean_norm = ced_clean.replace("-", "").replace(" ", "").upper()
+            ced_clean_norm = texto_cedula_comparable_bd(ced_clean)
             if cedula_cli_norm == ced_clean_norm:
                 cedula_encontrada = ced_clean
                 break
@@ -1435,9 +1468,11 @@ def listar_prestamos_por_cedulas_batch(
 
         for ced in cedulas_faltantes:
 
-            ced_norm = ced.replace("-", "").replace(" ", "").upper()
+            ced_norm = texto_cedula_comparable_bd(ced)
 
-            cedulas_norm_map[ced_norm] = ced
+            if ced_norm:
+
+                cedulas_norm_map[ced_norm] = ced
 
         
 
@@ -1451,17 +1486,9 @@ def listar_prestamos_por_cedulas_batch(
 
             # Buscar: Cliente.cedula normalizada = ced_norm O Prestamo.cedula normalizada = ced_norm
 
-            or_conditions.append(
+            or_conditions.append(expr_cedula_normalizada_para_comparar(Cliente.cedula) == ced_norm)
 
-                func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")) == ced_norm
-
-            )
-
-            or_conditions.append(
-
-                func.upper(func.replace(func.replace(Prestamo.cedula, "-", ""), " ", "")) == ced_norm
-
-            )
+            or_conditions.append(expr_cedula_normalizada_para_comparar(Prestamo.cedula) == ced_norm)
 
         
 
@@ -1487,7 +1514,7 @@ def listar_prestamos_por_cedulas_batch(
 
             cedula_cli = (cli_cedula or p_cedula or "").strip()
 
-            cedula_cli_norm = cedula_cli.replace("-", "").replace(" ", "").upper()
+            cedula_cli_norm = texto_cedula_comparable_bd(cedula_cli)
 
             
 

@@ -1,6 +1,6 @@
 /**
- * Cédula en flujos públicos (estado de cuenta, cobros): tolerar pegado con
- * puntos, comas, guiones, espacios y variantes Unicode; validar como V/E/G/J + 6–11 dígitos.
+ * Cédula en flujos públicos (estado de cuenta, cobros) y filtros internos (préstamos):
+ * tolerar pegado con puntos, comas, guiones, espacios y variantes Unicode; validar como V/E/G/J + 6–11 dígitos.
  */
 
 export const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
@@ -48,4 +48,16 @@ export function normalizarCedulaParaProcesar(val: string): {
     valido: false,
     error: 'Cédula inválida. Use letra V, E, G o J seguida de 6 a 11 dígitos.',
   }
+}
+
+/**
+ * Campo "Buscar" en préstamos (cédula o nombre): si el texto completo es una cédula válida
+ * (con separadores), devuelve el valor canónico para la API; si no, el texto recortado (nombre, etc.).
+ */
+export function normalizarBusquedaPrestamosSearch(raw: string): string {
+  const t = raw.trim()
+  if (!t) return ''
+  const v = normalizarCedulaParaProcesar(t)
+  if (v.valido && v.valorParaEnviar) return v.valorParaEnviar
+  return t
 }

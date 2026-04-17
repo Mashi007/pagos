@@ -46,6 +46,8 @@ import { Textarea } from '../../components/ui/textarea'
 
 import { clienteService } from '../../services/clienteService'
 
+import { extraerCaracteresCedulaPublica } from '../../utils/cedulaConsultaPublica'
+
 import { useCreatePrestamo, useUpdatePrestamo } from '../../hooks/usePrestamos'
 
 import { useSearchClientes } from '../../hooks/useClientes'
@@ -1092,15 +1094,16 @@ export function CrearPrestamoForm({
                   </label>
 
                   <Input
-                    placeholder="Buscar por cédula..."
+                    placeholder="Ej: V-16.578.561 o 16.578.561"
                     value={formData.cedula}
                     onChange={e =>
                       setFormData({
                         ...formData,
-                        cedula: e.target.value.toUpperCase(),
+                        cedula: extraerCaracteresCedulaPublica(e.target.value),
                       })
                     }
                     disabled={isReadOnly || isLoadingCliente}
+                    maxLength={28}
                   />
                 </div>
 

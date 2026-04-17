@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Iterable, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
+
+
+def texto_cedula_comparable_bd(value: Optional[str]) -> str:
+    """
+    Misma semantica que expr_cedula_normalizada_para_comparar pero en Python
+    (batch, comparaciones en memoria). NFKC, mayusculas, solo VEGJ y digitos.
+    """
+    if value is None:
+        return ""
+    s = unicodedata.normalize("NFKC", str(value).strip()).upper()
+    s = re.sub(r"[\u200B-\u200D\uFEFF]", "", s)
+    return re.sub(r"[^VEGJ0-9]", "", s)
 
 
 def expr_cedula_normalizada_para_comparar(column) -> ColumnElement:
