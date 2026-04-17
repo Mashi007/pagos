@@ -81,6 +81,25 @@ function resolveApiProxyTarget() {
 const _resolvedApi = resolveApiProxyTarget();
 const API_URL = _resolvedApi.url;
 
+/**
+ * Starlette/FastAPI suelen enviar Location absoluta al dominio público del API.
+ * El cliente llamó a https://rapicredit.../api/...; si recibe 307 hacia pagos-f2qf...,
+ * el fetch sigue a otro origen y puede fallar (CORS, POST+redirect). Forzamos ruta relativa /api/...
+ */
+function locationHeaderSameOriginForProxy(locationHeader, apiBaseUrl) {
+  if (!locationHeader || typeof locationHeader !== 'string') return locationHeader;
+  const raw = locationHeader.trim();
+  if (!raw) return locationHeader;
+  try {
+    const base = new URL(apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl);
+    const loc = new URL(raw, base);
+    if (loc.origin !== base.origin) return locationHeader;
+    return `${loc.pathname}${loc.search}${loc.hash}`;
+  } catch {
+    return locationHeader;
+  }
+}
+
 /** Orígenes extra para connect-src (p. ej. API absoluta en VITE_API_URL). */
 function connectSrcExtraOrigins(apiUrl) {
   const out = new Set();
@@ -295,6 +314,18 @@ if (API_URL) {
     },
     onProxyRes: (proxyRes, req, res) => {
       const status = proxyRes.statusCode;
+
+      const locHdr = proxyRes.headers['location'];
+      if (locHdr) {
+        const locStr = Array.isArray(locHdr) ? locHdr[0] : locHdr;
+        const fixed = locationHeaderSameOriginForProxy(locStr, API_URL);
+        if (fixed !== locStr) {
+          proxyRes.headers['location'] = fixed;
+          if (isDevelopment) {
+            console.log(`🔄 Location (proxy): "${locStr}" -> "${fixed}"`);
+          }
+        }
+      }
 
       // ✅ OPTIMIZACIÓN: Agregar cache headers para respuestas exitosas de GET
       // Esto reduce la carga en el backend para datos que no cambian frecuentemente

@@ -306,7 +306,8 @@ export function CrearPrestamoForm({
     if (!g) {
       return {
         modelosParaSelect: base,
-        valorSelectModelo: undefined as string | undefined,
+        // Cadena vacía: Select siempre controlado (Radix: undefined = no controlado).
+        valorSelectModelo: '',
       }
     }
     const gn = normalizarTextoModelo(g)
@@ -1448,7 +1449,7 @@ export function CrearPrestamoForm({
                     </label>
 
                     <Select
-                      value={formData.modalidad_pago}
+                      value={formData.modalidad_pago ?? 'MENSUAL'}
                       onValueChange={(value: any) =>
                         setFormData({
                           ...formData,
