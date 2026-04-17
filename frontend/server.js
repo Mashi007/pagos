@@ -45,8 +45,8 @@ function normalizeBackendBase(raw) {
   }
 }
 
-/** Despliegue conocido: front rapicredit.onrender.com + API en pagos-f2qf (solo si falta API_BASE_URL en Render). */
-const RENDER_KNOWN_FALLBACK_API = 'https://pagos-f2qf.onrender.com';
+/** Valor por defecto si falta API en Render (sobrescribible con RENDER_API_FALLBACK_URL). */
+const RENDER_KNOWN_FALLBACK_DEFAULT = 'https://pagos-f2qf.onrender.com';
 
 function resolveApiProxyTarget() {
   const candidates = [
@@ -63,11 +63,16 @@ function resolveApiProxyTarget() {
     process.env.RENDER === 'true' ||
     Boolean((process.env.RENDER_SERVICE_ID || '').trim());
   if (onRender && process.env.DISABLE_RENDER_KNOWN_API_FALLBACK !== '1') {
+    const fallbackRaw =
+      (process.env.RENDER_API_FALLBACK_URL || '').trim() ||
+      RENDER_KNOWN_FALLBACK_DEFAULT;
+    const fallback = normalizeBackendBase(fallbackRaw);
+    const fb = fallback || normalizeBackendBase(RENDER_KNOWN_FALLBACK_DEFAULT);
     console.warn(
-      `[proxy] Render sin API_BASE_URL ni BACKEND_URL; usando respaldo ${RENDER_KNOWN_FALLBACK_API}. ` +
-        'Configure API_BASE_URL en el servicio del front, o ponga DISABLE_RENDER_KNOWN_API_FALLBACK=1 y defina la URL.'
+      `[proxy] Render sin API_BASE_URL/BACKEND_URL; usando respaldo ${fb}. ` +
+        'Opcional: RENDER_API_FALLBACK_URL, o API_BASE_URL. Desactive con DISABLE_RENDER_KNOWN_API_FALLBACK=1.'
     );
-    return { url: RENDER_KNOWN_FALLBACK_API, source: 'render-fallback' };
+    return { url: fb, source: 'render-fallback' };
   }
   const local = normalizeBackendBase('http://localhost:8000');
   return { url: local || 'http://localhost:8000', source: 'localhost' };

@@ -55,14 +55,26 @@ const BASE_COBROS = `${API}/api/v1/cobros`
 /** Timeout (ms) para peticiones públicas. Sin timeout pueden quedar colgadas. */
 const FETCH_TIMEOUT_MS = 30000
 
-/** Mensaje del navegador ante CORS, DNS, TLS o API inalcanzable; no es texto del backend. */
-function mensajeSiFalloDeRedFetch(msg: string): string {
+/**
+ * Traduce fallos de red del navegador (no vienen del JSON del API).
+ * Texto corto para móvil; en desarrollo se añade una pista técnica en consola.
+ */
+function mensajeErrorRedPublico(msg: string): string {
   const m = (msg || '').trim()
+  if (/timeout|abort/i.test(m) || /30\s*s/i.test(m)) {
+    return 'El servidor tardó demasiado. Intente de nuevo en unos segundos.'
+  }
   if (/failed to fetch|load failed|networkerror/i.test(m)) {
-    return (
-      'No hubo conexión con el servidor (red, API en reposo, CORS o proxy). ' +
-      'En Red (F12) revise la petición fallida; en Render el servicio del frontend debe definir API_BASE_URL hacia el backend.'
-    )
+    const corto =
+      'Sin conexión con el servidor. Revise la red o intente más tarde.'
+    if (import.meta.env.DEV) {
+      console.warn(
+        '[cobros] fetch de red:',
+        m,
+        '| Si es local: proxy /api y API_BASE_URL; si es producción: API en reposo o CORS.'
+      )
+    }
+    return corto
   }
   return m
 }
@@ -219,9 +231,9 @@ export async function validarCedulaPublico(
       error: 'Error al procesar respuesta del servidor.',
     }))
   } catch (e: unknown) {
-    const msg =
+    const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
-    return { ok: false, error: msg }
+    return { ok: false, error: mensajeErrorRedPublico(raw) }
   }
 }
 
@@ -258,10 +270,10 @@ export async function solicitarCodigoReportePublico(body: {
       error: 'Error al procesar respuesta del servidor.',
     }))
   } catch (e: unknown) {
-    const msg =
+    const raw =
       e instanceof Error ? e.message : 'Error de conexion con el servidor.'
 
-    return { ok: false, error: msg }
+    return { ok: false, error: mensajeErrorRedPublico(raw) }
   }
 }
 
@@ -299,10 +311,10 @@ export async function verificarCodigoReportePublico(body: {
       error: 'Error al procesar respuesta del servidor.',
     }))
   } catch (e: unknown) {
-    const msg =
+    const raw =
       e instanceof Error ? e.message : 'Error de conexion con el servidor.'
 
-    return { ok: false, error: msg }
+    return { ok: false, error: mensajeErrorRedPublico(raw) }
   }
 }
 
@@ -382,7 +394,7 @@ export async function enviarReportePublico(
   } catch (e: unknown) {
     const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
-    return { ok: false, error: mensajeSiFalloDeRedFetch(raw) }
+    return { ok: false, error: mensajeErrorRedPublico(raw) }
   }
 }
 
@@ -406,6 +418,22 @@ export async function enviarReporteInfopagos(
       return {
         ok: false,
         error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.',
+      }
+    }
+
+    if (res.status === 503) {
+      return {
+        ok: false,
+        error:
+          'Servicio temporalmente no disponible. Intente más tarde o contacte por WhatsApp 424-4579934.',
+      }
+    }
+
+    if (res.status === 502) {
+      return {
+        ok: false,
+        error:
+          'El servidor intermedio no pudo contactar al API. Intente de nuevo en un momento.',
       }
     }
 
@@ -439,7 +467,7 @@ export async function enviarReporteInfopagos(
   } catch (e: unknown) {
     const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
-    return { ok: false, error: mensajeSiFalloDeRedFetch(raw) }
+    return { ok: false, error: mensajeErrorRedPublico(raw) }
   }
 }
 
@@ -463,11 +491,11 @@ export async function getReciboInfopagos(
 
     return res.blob()
   } catch (e: unknown) {
-    const msg =
+    const raw =
       e instanceof Error
         ? e.message
         : 'Error de conexión al descargar el recibo.'
-    throw new Error(msg)
+    throw new Error(mensajeErrorRedPublico(raw))
   }
 }
 

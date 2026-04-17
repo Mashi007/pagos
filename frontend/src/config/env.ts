@@ -60,7 +60,7 @@ function validateEnv(): EnvConfig {
 
   const APP_VERSION = import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION
 
-  // Produccion: rutas relativas (proxy en server.js maneja /api/*).
+  // Produccion: rutas relativas (proxy en server.js maneja /api/*; en Render use API_BASE_URL o BACKEND_URL en Node).
   // Desarrollo: URL absoluta opcional con VITE_API_URL.
   let API_URL = import.meta.env.VITE_API_URL || ''
 
