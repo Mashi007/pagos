@@ -1,4 +1,10 @@
-import { useState, type ComponentType, type SVGProps } from 'react'
+import {
+  useState,
+  useEffect,
+  useCallback,
+  type ComponentType,
+  type SVGProps,
+} from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -24,6 +30,7 @@ import {
   Wallet,
   Database,
   Car,
+  RefreshCw,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -81,6 +88,13 @@ const PUBLIC_ESTADO_CUENTA_PATH = 'rapicredit-estadocuenta'
 /** Ruta relativa de esta pagina (compartir URL del Centro de Reportes). */
 
 const REPORTES_PAGE_PATH = 'reportes'
+
+function formatoFechaSyncConciliacion(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })
+}
 
 function getLinkParaCompartir(path: string): string {
   const base = typeof window !== 'undefined' ? window.location.origin : ''
@@ -211,10 +225,70 @@ export function Reportes() {
 
   const queryClient = useQueryClient()
 
-  const { canViewReports, canDownloadReports, canAccessReport } =
+  const { canViewReports, canDownloadReports, canAccessReport, isFiniquitador } =
     usePermissions()
 
   const puedeVerReportes = canViewReports()
+
+  const [estadoHojaConciliacion, setEstadoHojaConciliacion] = useState<{
+    cargando: boolean
+    filasSnapshot: number | null
+    syncedAtIso: string | null
+  }>({ cargando: false, filasSnapshot: null, syncedAtIso: null })
+
+  const [sincronizandoHojaConciliacion, setSincronizandoHojaConciliacion] =
+    useState(false)
+
+  const cargarEstadoHojaConciliacion = useCallback(async () => {
+    setEstadoHojaConciliacion(prev => ({ ...prev, cargando: true }))
+    try {
+      const st = await reporteService.getConciliacionSheetStatus()
+      const meta = st.meta as { synced_at?: string } | null | undefined
+      const synced =
+        meta && typeof meta.synced_at === 'string' ? meta.synced_at : null
+      setEstadoHojaConciliacion({
+        cargando: false,
+        filasSnapshot:
+          typeof st.snapshot_row_count === 'number' ? st.snapshot_row_count : null,
+        syncedAtIso: synced,
+      })
+    } catch (e: unknown) {
+      console.error(e)
+      setEstadoHojaConciliacion({
+        cargando: false,
+        filasSnapshot: null,
+        syncedAtIso: null,
+      })
+      toast.error(
+        getErrorMessage(e) || 'No se pudo cargar el estado de la hoja en servidor.'
+      )
+    }
+  }, [])
+
+  const sincronizarHojaConciliacionDesdeDrive = useCallback(async () => {
+    setSincronizandoHojaConciliacion(true)
+    try {
+      await reporteService.syncConciliacionSheetDesdeDrive()
+      toast.success(
+        'Hoja CONCILIACIÓN copiada desde Drive al servidor. Ya puede descargar los informes.'
+      )
+      await cargarEstadoHojaConciliacion()
+    } catch (e: unknown) {
+      console.error(e)
+      toast.error(
+        getErrorDetail(e) ||
+          getErrorMessage(e) ||
+          'No se pudo sincronizar la hoja (compruebe permisos y credenciales).'
+      )
+    } finally {
+      setSincronizandoHojaConciliacion(false)
+    }
+  }, [cargarEstadoHojaConciliacion])
+
+  useEffect(() => {
+    if (!puedeVerReportes) return
+    void cargarEstadoHojaConciliacion()
+  }, [puedeVerReportes, cargarEstadoHojaConciliacion])
 
   // Historial de notificaciones por cédula (reportes / legales)
 
@@ -1076,13 +1150,78 @@ export function Reportes() {
                     </p>
                     <p className="mt-2 max-w-2xl text-xs leading-relaxed text-violet-950/85">
                       Los botones de abajo leen el mismo snapshot en base de
-                      datos (no abren el Google Sheet aquí). La copia en
-                      servidor la actualiza quien opera el despliegue (cron o
-                      proceso con credenciales Google). Si los datos no
-                      coinciden con la hoja actual, contacte a soporte o
-                      administración.
+                      datos (no abren el Google Sheet aquí). Las filas nuevas
+                      que agregue al final en Drive aparecen aquí solo después de
+                      una sincronización exitosa (cron nocturno, cron externo o
+                      «Traer hoja desde Drive ahora»). Además, solo se importa el
+                      rango de columnas configurado en el servidor (por defecto
+                      A–S): filas totalmente vacías en ese rango no las devuelve
+                      Google hasta que tengan al menos un valor en esas
+                      columnas.
                     </p>
                   </div>
+                </div>
+              </div>
+
+              <div className="mb-4 flex flex-col gap-3 rounded-lg border border-violet-200/80 bg-white/75 px-3 py-3 text-xs text-violet-950 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <p className="font-semibold text-violet-900">
+                    Estado de la copia en servidor
+                    {estadoHojaConciliacion.syncedAtIso
+                      ? ` · última sync ${formatoFechaSyncConciliacion(estadoHojaConciliacion.syncedAtIso)}`
+                      : estadoHojaConciliacion.cargando
+                        ? ' · cargando…'
+                        : ' · sin fecha (aún no hubo sync o no se pudo leer)'}
+                  </p>
+                  <p className="text-[11px] leading-snug text-violet-900/85">
+                    Filas en snapshot:{' '}
+                    <span className="font-mono font-medium">
+                      {estadoHojaConciliacion.cargando
+                        ? '…'
+                        : estadoHojaConciliacion.filasSnapshot ?? '—'}
+                    </span>
+                    . Si falta lo último que pegó en Drive, sincronice y vuelva a
+                    descargar.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-violet-300 bg-white text-violet-950 hover:bg-violet-50"
+                    onClick={() => void cargarEstadoHojaConciliacion()}
+                    disabled={
+                      estadoHojaConciliacion.cargando ||
+                      sincronizandoHojaConciliacion
+                    }
+                  >
+                    {estadoHojaConciliacion.cargando ? (
+                      <Loader2 className="mr-1 h-4 w-4 shrink-0 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-1 h-4 w-4 shrink-0" />
+                    )}
+                    Refrescar estado
+                  </Button>
+                  {isFiniquitador ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-violet-600 text-white hover:bg-violet-700"
+                      onClick={() => void sincronizarHojaConciliacionDesdeDrive()}
+                      disabled={
+                        sincronizandoHojaConciliacion ||
+                        estadoHojaConciliacion.cargando
+                      }
+                    >
+                      {sincronizandoHojaConciliacion ? (
+                        <Loader2 className="mr-1 h-4 w-4 shrink-0 animate-spin" />
+                      ) : (
+                        <RefreshCw className="mr-1 h-4 w-4 shrink-0" />
+                      )}
+                      Traer hoja desde Drive ahora
+                    </Button>
+                  ) : null}
                 </div>
               </div>
 

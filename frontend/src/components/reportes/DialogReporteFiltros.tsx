@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 import {
   Dialog,
@@ -76,8 +76,13 @@ export function DialogReporteFiltros({
 
   const [lotesTexto, setLotesTexto] = useState('')
 
+  /** Solo al pasar de cerrado → abierto: evita borrar el texto si el efecto corre tarde tras pegar. */
+  const lotesDialogEstabaAbiertoRef = useRef(false)
+
   useEffect(() => {
-    if (open && variant === 'lotes') {
+    const estaba = lotesDialogEstabaAbiertoRef.current
+    lotesDialogEstabaAbiertoRef.current = open
+    if (open && !estaba && variant === 'lotes') {
       setLotesTexto('')
     }
   }, [open, variant])

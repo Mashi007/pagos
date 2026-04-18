@@ -248,6 +248,8 @@ def build_clientes_hoja_excel(
         ws.append([ced, nom, tel, em])
         out_count += 1
 
+    raise_if_zero_lote_rows(out_count, lotes, "Clientes (hoja)")
+
     buf = io.BytesIO()
     wb.save(buf)
     out_bytes = buf.getvalue()
@@ -284,5 +286,25 @@ def parse_lotes_query(lotes: str) -> List[int]:
         part = part.strip()
         if not part:
             continue
-        out.append(int(part))
+        try:
+            out.append(int(part))
+        except ValueError as e:
+            raise ValueError(
+                f"Lote inválido en la solicitud: {part!r}. Use solo números enteros "
+                "separados por coma (ej. 70 o 70,71)."
+            ) from e
     return out
+
+
+def raise_if_zero_lote_rows(out_count: int, lotes: List[int], titulo_informe: str) -> None:
+    """Evita devolver un .xlsx «vacío» (solo cabecera): el usuario lo interpreta como fallo silencioso."""
+    if out_count > 0:
+        return
+    ls = ", ".join(str(int(x)) for x in sorted(set(lotes)))
+    raise ValueError(
+        f"No hay ninguna fila con LOTE(s) [{ls}] en la copia de CONCILIACIÓN guardada en el servidor "
+        f"({titulo_informe}). Si acaba de pegar filas nuevas en Google Sheets, ejecute primero "
+        "«Traer hoja desde Drive ahora» (o el cron de sincronización) y vuelva a descargar. "
+        "Compruebe también que en la hoja el valor de LOTE sea exactamente ese número (entero), "
+        "no texto tipo «Lote 70» ni celdas vacías en esa columna."
+    )

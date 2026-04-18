@@ -391,63 +391,73 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                     <div className="mb-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
                       <div className="flex items-center gap-2 font-semibold">
                         <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                        Comparación con tabla clientes y duplicados en archivo
+                        Duplicados en el archivo y coincidencias con{' '}
+                        <strong>clientes</strong>
                       </div>
 
                       <p className="text-amber-900">
-                        No se puede guardar filas con cédula o email duplicado
-                        en el archivo, ni con datos que ya existan en clientes.
-                        Corrija las filas en rojo o cambie el archivo.
+                        No se puede guardar filas con cédula o email repetido en
+                        el Excel, ni si ya están en la tabla{' '}
+                        <strong>clientes</strong>. Revise las filas en rojo o use
+                        otro archivo.
                       </p>
 
                       {cedulasExistentesEnBD.length > 0 && (
                         <div>
                           <p className="font-medium text-amber-950">
-                            Cédulas ya en clientes ({cedulasExistentesEnBD.length}
-                            ):
+                            Cédulas que ya están en{' '}
+                            <strong>clientes</strong> (
+                            {cedulasExistentesEnBD.length})
                           </p>
 
-                          <p className="mt-1 break-all font-mono text-xs">
-                            {cedulasExistentesEnBD.join(', ')}
+                          <p className="mt-1 text-xs text-amber-800">
+                            Lista desplazable (no se muestra todo en una sola
+                            línea).
                           </p>
+
+                          <div className="mt-1 max-h-40 overflow-y-auto rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs break-all">
+                            {cedulasExistentesEnBD.join(', ')}
+                          </div>
                         </div>
                       )}
 
                       {emailsExistentesEnBD.length > 0 && (
                         <div>
                           <p className="font-medium text-amber-950">
-                            Emails ya en clientes ({emailsExistentesEnBD.length}):
+                            Correos que ya están en{' '}
+                            <strong>clientes</strong> (
+                            {emailsExistentesEnBD.length})
                           </p>
 
-                          <p className="mt-1 break-all font-mono text-xs">
+                          <div className="mt-1 max-h-32 overflow-y-auto rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs break-all">
                             {emailsExistentesEnBD.join(', ')}
-                          </p>
+                          </div>
                         </div>
                       )}
 
                       {cedulasDuplicadasEnArchivo.size > 0 && (
                         <div>
                           <p className="font-medium text-amber-950">
-                            Cédulas repetidas en este archivo (
-                            {cedulasDuplicadasEnArchivo.size}):
+                            Cédulas repetidas en este Excel (
+                            {cedulasDuplicadasEnArchivo.size})
                           </p>
 
-                          <p className="mt-1 break-all font-mono text-xs">
+                          <div className="mt-1 max-h-32 overflow-y-auto rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs break-all">
                             {[...cedulasDuplicadasEnArchivo].join(', ')}
-                          </p>
+                          </div>
                         </div>
                       )}
 
                       {duplicateEmailKeysEnArchivo.length > 0 && (
                         <div>
                           <p className="font-medium text-amber-950">
-                            Emails repetidos en este archivo (
-                            {duplicateEmailKeysEnArchivo.length}):
+                            Correos repetidos en este Excel (
+                            {duplicateEmailKeysEnArchivo.length})
                           </p>
 
-                          <p className="mt-1 break-all font-mono text-xs">
+                          <div className="mt-1 max-h-32 overflow-y-auto rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs break-all">
                             {duplicateEmailKeysEnArchivo.join(', ')}
-                          </p>
+                          </div>
                         </div>
                       )}
                     </div>

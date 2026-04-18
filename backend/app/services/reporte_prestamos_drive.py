@@ -20,6 +20,7 @@ from app.services.reporte_clientes_hoja import (
     _norm_lote_celda,
     _pick_cedula_header,
     _pick_lote_header,
+    raise_if_zero_lote_rows,
 )
 
 logger = logging.getLogger(__name__)
@@ -335,6 +336,8 @@ def build_prestamos_drive_excel(
         ]
         ws.append(row_out)
         out_count += 1
+
+    raise_if_zero_lote_rows(out_count, lotes, "Préstamos Drive")
 
     buf = io.BytesIO()
     wb.save(buf)

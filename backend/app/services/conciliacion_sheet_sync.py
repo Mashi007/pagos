@@ -335,6 +335,8 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             )
 
         data_rows = values[h_idx + 1 :]
+        # Google Sheets values.get omite filas totalmente vacías al final del rango
+        # pedido; aquí solo quitamos una cola vacía explícita si llegó en el JSON.
         while data_rows and all(_cell_str(c) == "" for c in (data_rows[-1] or [])):
             data_rows.pop()
         logger.info(
