@@ -353,6 +353,24 @@ class CheckCedulasResponse(BaseModel):
     existing_cedulas: list[str] = []
 
 
+def _normalizar_cedula_carga_masiva(s: str) -> str:
+    """Alineado con frontend `normalizeCedulaInput`: mayúsculas, sin espacios/guiones/puntos/dos puntos, dígitos ancho completo → ASCII."""
+    if not s:
+        return ""
+    t = str(s).strip().upper()
+    t = re.sub(r"[\u200B-\u200D\uFEFF\u00AD]", "", t)
+    out: list[str] = []
+    for ch in t:
+        o = ord(ch)
+        if 0xFF10 <= o <= 0xFF19:
+            out.append(chr(o - 0xFF10 + ord("0")))
+        else:
+            out.append(ch)
+    t = "".join(out)
+    t = re.sub(r"[\s\-_.:]", "", t)
+    return t
+
+
 class CheckEmailsRequest(BaseModel):
     """Lista de emails a comprobar (p. ej. desde carga masiva)."""
     emails: list[str] = []
@@ -495,19 +513,37 @@ def check_cedulas(
 ):
     """
     Comprobar qué cédulas ya están registradas en tabla clientes (carga masiva).
-    Duplicado = 100% igual (comparación exacta con BD). Las que ya existen no se pueden guardar.
+    Comparación por cédula normalizada (sin guiones/puntos/espacios), coherente con el Excel de clientes.
+    Devuelve las formas canónicas enviadas que ya existen en BD.
     """
     if not payload.cedulas:
         return CheckCedulasResponse(existing_cedulas=[])
-    cedulas_norm = [(c or "").strip().upper() for c in payload.cedulas if (c or "").strip()]
-    if not cedulas_norm:
+    incoming_set: set[str] = set()
+    incoming_order: list[str] = []
+    for c in payload.cedulas:
+        n = _normalizar_cedula_carga_masiva(c or "")
+        if n and n not in incoming_set:
+            incoming_set.add(n)
+            incoming_order.append(n)
+    if not incoming_order:
         return CheckCedulasResponse(existing_cedulas=[])
 
-    rows = db.execute(
-        select(Cliente.cedula).where(Cliente.cedula.in_(cedulas_norm))
-    ).scalars().all()
-    existing = list(rows) if rows else []
-    return CheckCedulasResponse(existing_cedulas=existing)
+    # Misma lógica que _normalizar_cedula_carga_masiva vía SQL (PostgreSQL POSIX).
+    ced_norm_sql = func.regexp_replace(
+        func.regexp_replace(func.upper(func.trim(Cliente.cedula)), r"[[:space:]]", "", "g"),
+        r"[-_.:]",
+        "",
+        "g",
+    )
+    rows = db.execute(select(Cliente.cedula).where(ced_norm_sql.in_(incoming_order))).scalars().all()
+    found: list[str] = []
+    seen_found: set[str] = set()
+    for raw in rows or []:
+        n = _normalizar_cedula_carga_masiva(raw or "")
+        if n in incoming_set and n not in seen_found:
+            seen_found.add(n)
+            found.append(n)
+    return CheckCedulasResponse(existing_cedulas=found)
 
 
 @router.post("/check-emails", response_model=CheckEmailsResponse)

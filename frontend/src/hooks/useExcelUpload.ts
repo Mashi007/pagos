@@ -56,6 +56,9 @@ import {
   sanitizeFileName,
   normalizeTelefonoFromExcel,
   normalizeCedulaInput,
+  cedulaComparableKey,
+  emailDuplicateKey,
+  EMAIL_PLACEHOLDER_DUPLICADO,
   CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION,
   CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO,
   CARGA_MASIVA_CLIENTES_DEFAULT_OCUPACION,
@@ -159,6 +162,11 @@ export function useExcelUpload({
 
   const [emailsExistentesEnBD, setEmailsExistentesEnBD] = useState<string[]>([])
 
+  /** Claves de email (minúsculas) que aparecen más de una vez en el archivo. */
+
+  const [duplicateEmailKeysEnArchivo, setDuplicateEmailKeysEnArchivo] =
+    useState<string[]>([])
+
   const [pendingSaveFilteredByCedulas, setPendingSaveFilteredByCedulas] =
     useState<ExcelRow[] | null>(null)
 
@@ -256,9 +264,9 @@ export function useExcelUpload({
     const counts: Record<string, number> = {}
 
     excelData.forEach(row => {
-      const c = (row.cedula || '').trim().toUpperCase() || 'Z999999999'
+      const c = cedulaComparableKey(row.cedula)
 
-      if (c !== 'Z999999999') counts[c] = (counts[c] || 0) + 1
+      if (c) counts[c] = (counts[c] || 0) + 1
     })
 
     return new Set(Object.keys(counts).filter(ced => (counts[ced] || 0) > 1))
@@ -280,7 +288,7 @@ export function useExcelUpload({
     const counts: Record<string, number> = {}
 
     excelData.forEach(row => {
-      const e = (row.email || '').trim().toLowerCase()
+      const e = emailDuplicateKey(row.email)
 
       if (e) counts[e] = (counts[e] || 0) + 1
     })
@@ -291,55 +299,40 @@ export function useExcelUpload({
   const telefonoDuplicadosEnArchivo = useMemo(() => {
     const counts: Record<string, number> = {}
 
-    const digits = (s: string) => (s || '').replace(/\D/g, '')
-
     excelData.forEach(row => {
-      let t = digits(row.telefono || '')
+      const t = normalizeTelefonoFromExcel(row.telefono || '')
 
-      if (t.startsWith('58') && t.length > 10) t = t.slice(2)
-
-      if (t.length > 10) t = '9999999999'
-
-      if (t.length >= 10) counts[t] = (counts[t] || 0) + 1
+      if (t.length === 10) counts[t] = (counts[t] || 0) + 1
     })
 
-    return new Set(
-      Object.keys(counts).filter(
-        t => t !== '4111111111' && (counts[t] || 0) > 1
-      )
-    )
+    return new Set(Object.keys(counts).filter(t => (counts[t] || 0) > 1))
   }, [excelData])
 
   const isClientValid = useCallback(
     (row: ExcelRow): boolean => {
       if (row._hasErrors) return false
 
-      const ced = (row.cedula || '').trim().toUpperCase() || 'Z999999999'
+      const ced = cedulaComparableKey(row.cedula)
 
-      if (ced !== 'Z999999999' && cedulasDuplicadasEnArchivo.has(ced))
-        return false
+      if (ced && cedulasDuplicadasEnArchivo.has(ced)) return false
 
-      if (ced !== 'Z999999999' && cedulasExistentesEnBD.includes(ced))
-        return false
+      if (ced && cedulasExistentesEnBD.includes(ced)) return false
 
       const nom = (row.nombres || '').trim()
 
       if (nom && nombresDuplicadosEnArchivo.has(nom)) return false
 
-      const em = (row.email || '').trim().toLowerCase()
+      const em = emailDuplicateKey(row.email)
+
+      if (row._emailDuplicadoEnArchivo) return false
 
       if (em && emailDuplicadosEnArchivo.has(em)) return false
 
       if (em && emailsExistentesEnBD.includes(em)) return false
 
-      let telDig = (row.telefono || '').replace(/\D/g, '')
+      const telDig = normalizeTelefonoFromExcel(row.telefono || '')
 
-      if (telDig.startsWith('58') && telDig.length > 10)
-        telDig = telDig.slice(2)
-
-      if (telDig.length > 10) telDig = '9999999999'
-
-      if (telDig.length >= 10 && telefonoDuplicadosEnArchivo.has(telDig))
+      if (telDig.length === 10 && telefonoDuplicadosEnArchivo.has(telDig))
         return false
 
       return true
@@ -354,6 +347,8 @@ export function useExcelUpload({
 
       emailDuplicadosEnArchivo,
 
+      emailsExistentesEnBD,
+
       telefonoDuplicadosEnArchivo,
     ]
   )
@@ -362,15 +357,15 @@ export function useExcelUpload({
     (row: ExcelRow): string[] => {
       const motivos: string[] = []
 
-      const ced = (row.cedula || '').trim().toUpperCase() || 'Z999999999'
+      const ced = cedulaComparableKey(row.cedula)
 
-      if (ced !== 'Z999999999' && cedulasDuplicadasEnArchivo.has(ced))
+      if (ced && cedulasDuplicadasEnArchivo.has(ced))
         motivos.push('cédula en archivo')
 
-      if (ced !== 'Z999999999' && cedulasExistentesEnBD.includes(ced))
+      if (ced && cedulasExistentesEnBD.includes(ced))
         motivos.push('cédula ya existe en sistema')
 
-      const em = (row.email || '').trim().toLowerCase()
+      const em = emailDuplicateKey(row.email)
 
       if (em && emailsExistentesEnBD.includes(em))
         motivos.push('email ya existe en sistema')
@@ -382,19 +377,17 @@ export function useExcelUpload({
         motivos.push('nombres')
 
       if (
-        (row.email || '').trim() &&
-        emailDuplicadosEnArchivo.has((row.email || '').trim().toLowerCase())
+        row._emailDuplicadoEnArchivo ||
+        (em && emailDuplicadosEnArchivo.has(em))
       )
-        motivos.push('email')
+        motivos.push('email duplicado en archivo')
 
-      let telDig = (row.telefono || '').replace(/\D/g, '')
+      if (row.email?.trim() === EMAIL_PLACEHOLDER_DUPLICADO)
+        motivos.push('email marcado XXX (duplicado en BD o archivo)')
 
-      if (telDig.startsWith('58') && telDig.length > 10)
-        telDig = telDig.slice(2)
+      const telDig = normalizeTelefonoFromExcel(row.telefono || '')
 
-      if (telDig.length > 10) telDig = '9999999999'
-
-      if (telDig.length >= 10 && telefonoDuplicadosEnArchivo.has(telDig))
+      if (telDig.length === 10 && telefonoDuplicadosEnArchivo.has(telDig))
         motivos.push('teléfono')
 
       return motivos
@@ -407,9 +400,9 @@ export function useExcelUpload({
 
       emailsExistentesEnBD,
 
-      nombresDuplicadosEnArchivo,
-
       emailDuplicadosEnArchivo,
+
+      nombresDuplicadosEnArchivo,
 
       telefonoDuplicadosEnArchivo,
     ]
@@ -583,27 +576,10 @@ export function useExcelUpload({
   const saveIndividualClient = useCallback(
     async (row: ExcelRow): Promise<boolean> => {
       try {
-        if (row._hasErrors) {
-          alert(
-            '⚠️ NO SE PUEDE GUARDAR: Hay campos vacíos o con errores en esta fila.\n\nPor favor, complete todos los campos obligatorios en la tabla antes de guardar.'
-          )
-
-          return false
-        }
-
-        // Cédula: comparar con tabla clientes - NUNCA permitir guardar si ya está en BD (100% igual)
-
-        const cedNorm = (blankIfNN(row.cedula) || 'Z999999999')
-          .trim()
-          .toUpperCase()
-
-        if (
-          cedNorm !== 'Z999999999' &&
-          cedulasExistentesEnBD.includes(cedNorm)
-        ) {
+        if (!isClientValid(row)) {
           addToast(
             'error',
-            'Cédula ya existe en tabla clientes. No se puede guardar.'
+            'No se puede guardar: cédula o email duplicado en el archivo, o ya existe en la tabla clientes, u otros datos inválidos.'
           )
 
           return false
@@ -611,22 +587,24 @@ export function useExcelUpload({
 
         setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
 
-        const rawTel = blankIfNN(row.telefono) || '4111111111'
+        const telDigits = normalizeTelefonoFromExcel(blankIfNN(row.telefono))
 
-        const digits = rawTel.replace(/\D/g, '')
+        if (telDigits.length !== 10 || !/^[1-9]\d{9}$/.test(telDigits)) {
+          addToast('error', 'Teléfono inválido: se requieren 10 dígitos válidos.')
 
-        const tel10 = digits.length > 10 ? '9999999999' : digits.slice(0, 10)
+          return false
+        }
 
-        const telefonoNormalizado = '+58' + (tel10 || rawTel)
+        const telefonoNormalizado = '+58' + telDigits
 
         const clienteData = {
-          cedula: blankIfNN(row.cedula) || 'Z999999999',
+          cedula: normalizeCedulaInput(blankIfNN(row.cedula)),
 
           nombres: formatNombres(blankIfNN(row.nombres)),
 
           telefono: telefonoNormalizado,
 
-          email: blankIfNN(row.email).toLowerCase(),
+          email: blankIfNN(row.email),
 
           direccion: CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION,
 
@@ -787,7 +765,7 @@ export function useExcelUpload({
     },
 
     [
-      cedulasExistentesEnBD,
+      isClientValid,
 
       usuarioRegistro,
 
@@ -932,7 +910,7 @@ export function useExcelUpload({
     try {
       const cedulasToCheck = validClients
 
-        .map(c => blankIfNN(c.cedula) || 'Z999999999')
+        .map(c => cedulaComparableKey(c.cedula))
 
         .filter(Boolean)
 
@@ -944,7 +922,7 @@ export function useExcelUpload({
 
         setPendingSaveFilteredByCedulas(
           validClients.filter(
-            c => !existing_cedulas.includes(blankIfNN(c.cedula) || 'Z999999999')
+            c => !existing_cedulas.includes(cedulaComparableKey(c.cedula))
           )
         )
 
@@ -1351,14 +1329,18 @@ export function useExcelUpload({
 
             _hasErrors: false,
 
-            cedula: normalizeCedulaInput(row[0]?.toString()) || 'Z999999999',
+            _emailDuplicadoEnArchivo: false,
+
+            cedula: normalizeCedulaInput(row[0]?.toString()),
 
             nombres: row[1]?.toString() || '',
 
-            telefono:
-              normalizeTelefonoFromExcel(row[2]?.toString()) || '4111111111',
+            telefono: normalizeTelefonoFromExcel(row[2]?.toString()),
 
-            email: row[3]?.toString() || '',
+            email:
+              row[3] != null && row[3] !== ''
+                ? String(row[3]).trim()
+                : '',
 
             direccion: CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION,
 
@@ -1373,28 +1355,98 @@ export function useExcelUpload({
             notas: row[9]?.toString() || '',
           }
 
+          processedData.push(rowData)
+        }
+
+        if (!isMounted()) return
+
+        const syncRowValidation = (row: ExcelRow) => {
           let hasErrors = false
 
           for (const field of requiredFields) {
-            if (!isMounted()) return
-
-            const rawVal = rowData[field as keyof ExcelData]
+            const rawVal = row[field as keyof ExcelData]
 
             const strVal =
               typeof rawVal === 'string' ? rawVal : String(rawVal ?? '')
 
             const validation = validateFieldWithOptions(field, strVal)
 
-            rowData._validation[field] = validation
+            row._validation[field] = validation
 
             if (!validation.isValid) hasErrors = true
           }
 
-          rowData._validation.notas = { isValid: true }
+          row._validation.notas = { isValid: true }
 
-          rowData._hasErrors = hasErrors
+          row._hasErrors = hasErrors
+        }
 
-          processedData.push(rowData)
+        for (const row of processedData) {
+          if (!isMounted()) return
+
+          syncRowValidation(row)
+        }
+
+        if (!isMounted()) return
+
+        const cedulaCounts = new Map<string, number>()
+
+        for (const row of processedData) {
+          const k = cedulaComparableKey(row.cedula)
+
+          if (k) cedulaCounts.set(k, (cedulaCounts.get(k) || 0) + 1)
+        }
+
+        const cedulasDupEnArchivo = new Set(
+          [...cedulaCounts.entries()]
+            .filter(([, n]) => n > 1)
+            .map(([k]) => k)
+        )
+
+        for (const row of processedData) {
+          const k = cedulaComparableKey(row.cedula)
+
+          if (k && cedulasDupEnArchivo.has(k)) {
+            row._validation.cedula = {
+              isValid: false,
+
+              message: 'Cédula duplicada en el archivo',
+            }
+
+            row._hasErrors = true
+          }
+        }
+
+        const emailCounts = new Map<string, number>()
+
+        for (const row of processedData) {
+          const k = emailDuplicateKey(row.email)
+
+          if (k) emailCounts.set(k, (emailCounts.get(k) || 0) + 1)
+        }
+
+        const emailsDupEnArchivo = new Set(
+          [...emailCounts.entries()]
+            .filter(([, n]) => n > 1)
+            .map(([k]) => k)
+        )
+
+        setDuplicateEmailKeysEnArchivo([...emailsDupEnArchivo])
+
+        for (const row of processedData) {
+          const k = emailDuplicateKey(row.email)
+
+          if (k && emailsDupEnArchivo.has(k)) {
+            row._emailDuplicadoEnArchivo = true
+
+            row._validation.email = {
+              isValid: false,
+
+              message: 'Email duplicado en el archivo',
+            }
+
+            row._hasErrors = true
+          }
         }
 
         if (!isMounted()) return
@@ -1403,11 +1455,7 @@ export function useExcelUpload({
 
         const uniqueCedulas = [
           ...new Set(
-            processedData
-
-              .map(r => (r.cedula || '').trim().toUpperCase())
-
-              .filter(c => c && c !== 'Z999999999')
+            processedData.map(r => cedulaComparableKey(r.cedula)).filter(Boolean)
           ),
         ]
 
@@ -1420,9 +1468,9 @@ export function useExcelUpload({
               setCedulasExistentesEnBD(existing_cedulas)
 
               for (const row of processedData) {
-                const ced = (row.cedula || '').trim().toUpperCase()
+                const ced = cedulaComparableKey(row.cedula)
 
-                if (ced !== 'Z999999999' && existing_cedulas.includes(ced)) {
+                if (ced && existing_cedulas.includes(ced)) {
                   row._validation.cedula = {
                     isValid: false,
 
@@ -1444,9 +1492,7 @@ export function useExcelUpload({
         const uniqueEmails = [
           ...new Set(
             processedData
-
-              .map(r => (r.email || '').trim().toLowerCase())
-
+              .map(r => emailDuplicateKey(r.email))
               .filter(e => e && e.includes('@'))
           ),
         ]
@@ -1460,13 +1506,13 @@ export function useExcelUpload({
               setEmailsExistentesEnBD(existing_emails)
 
               for (const row of processedData) {
-                const em = (row.email || '').trim().toLowerCase()
+                const em = emailDuplicateKey(row.email)
 
                 if (em && existing_emails.includes(em)) {
                   row._validation.email = {
                     isValid: false,
 
-                    message: 'Email ya existe en el sistema',
+                    message: 'Email ya existe en la tabla clientes',
                   }
 
                   row._hasErrors = true
@@ -1573,7 +1619,7 @@ export function useExcelUpload({
       let formattedValue = value || ''
 
       if (field === 'cedula') {
-        formattedValue = normalizeCedulaInput(formattedValue) || 'Z999999999'
+        formattedValue = normalizeCedulaInput(formattedValue)
       }
 
       if (field === 'activo' && !formattedValue.trim()) {
@@ -1581,7 +1627,9 @@ export function useExcelUpload({
       }
 
       if (field === 'email' && formattedValue) {
-        formattedValue = formattedValue.trim().toLowerCase()
+        formattedValue = formattedValue.trim()
+
+        row._emailDuplicadoEnArchivo = false
       }
 
       if (field === 'direccion') {
@@ -1617,20 +1665,16 @@ export function useExcelUpload({
 
       // Re-aplicar regla: si cédula/email ya están en tabla clientes, no se puede guardar (no se borra al editar)
 
-      const cedNorm = (row.cedula || '').trim().toUpperCase()
+      const cedNorm = cedulaComparableKey(row.cedula)
 
-      if (
-        field === 'cedula' &&
-        cedNorm !== 'Z999999999' &&
-        cedulasExistentesEnBD.includes(cedNorm)
-      ) {
+      if (field === 'cedula' && cedNorm && cedulasExistentesEnBD.includes(cedNorm)) {
         row._validation.cedula = {
           isValid: false,
           message: 'Cédula ya existe en tabla clientes (no se puede guardar)',
         }
       }
 
-      const emNorm = (row.email || '').trim().toLowerCase()
+      const emNorm = emailDuplicateKey(row.email)
 
       if (
         field === 'email' &&
@@ -1687,6 +1731,8 @@ export function useExcelUpload({
     setCedulasExistentesEnBD([])
 
     setEmailsExistentesEnBD([])
+
+    setDuplicateEmailKeysEnArchivo([])
 
     setPendingSaveFilteredByCedulas(null)
 
@@ -1784,7 +1830,11 @@ export function useExcelUpload({
 
     emailDuplicadosEnArchivo,
 
+    duplicateEmailKeysEnArchivo,
+
     telefonoDuplicadosEnArchivo,
+
+    emailsExistentesEnBD,
 
     saveIndividualClient,
 

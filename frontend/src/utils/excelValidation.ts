@@ -451,6 +451,8 @@ export interface ExcelRow extends ExcelData {
   _rowIndex: number
   _validation: Record<string, ValidationResult>
   _hasErrors: boolean
+  /** True si el email está repetido en otra fila del mismo Excel (clave normalizada). */
+  _emailDuplicadoEnArchivo?: boolean
 }
 
 export interface ValidateFieldOptions {
@@ -463,12 +465,22 @@ export function blankIfNN(v: string | null | undefined): string {
   return t.toLowerCase() === 'nn' ? '' : t
 }
 
-/** Normaliza cédula para validación y comparación: quita espacios, dos puntos, caracteres de ancho completo (０-９→0-9) y caracteres de ancho cero. Evita que reescribir el mismo valor cambie el resultado. */
+/** Marca en carga Excel cuando el correo está repetido (archivo o BD). No es un email válido hasta que el usuario corrija. */
+export const EMAIL_PLACEHOLDER_DUPLICADO = 'XXX'
+
+/** Clave para detectar mismo email (minúsculas); vacío si falta correo o es el marcador XXX. */
+export function emailDuplicateKey(email: string | null | undefined): string {
+  const t = (email ?? '').trim()
+  if (!t || t === EMAIL_PLACEHOLDER_DUPLICADO) return ''
+  return t.toLowerCase()
+}
+
+/** Normaliza cédula para validación y comparación: quita espacios, guiones, puntos, dos puntos y guión bajo; caracteres de ancho completo (０-９→0-9) y ancho cero. Resultado tipo `V1546465456` para cruzar con BD y detectar duplicados. */
 
 export function normalizeCedulaInput(value: string | null | undefined): string {
   if (value == null) return ''
 
-  let s = String(value).replace(/\s/g, '').replace(/:$/g, '').replace(/:/g, '')
+  let s = String(value).trim()
 
   s = s.replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')
 
@@ -482,25 +494,39 @@ export function normalizeCedulaInput(value: string | null | undefined): string {
 
   s = [...s].map(fullwidthToHalf).join('')
 
+  s = s.replace(/[\s\-_.:]/g, '')
+
   return s.toUpperCase()
 }
 
-/** Normaliza teléfono al subir archivo: quita guiones/espacios, 0 inicial y prefijo 58. Devuelve 10 dígitos para Venezuela. */
+/** Clave canónica para duplicados en Excel y coincidencia con `check-cedulas` (misma normalización). Vacío si no es cédula válida. */
+
+export function cedulaComparableKey(
+  value: string | null | undefined
+): string {
+  const n = normalizeCedulaInput(blankIfNN(value ?? ''))
+
+  if (!n || !/^[VEJ]\d{6,11}$/.test(n)) return ''
+
+  return n
+}
+
+/** Normaliza teléfono al subir archivo: quita guiones y espacios, luego solo dígitos; opcional prefijo 58; solo quita ceros por la izquierda. No trunca por la derecha. */
 
 export function normalizeTelefonoFromExcel(
   raw: string | null | undefined
 ): string {
   if (raw == null || String(raw).trim() === '') return ''
 
-  let d = String(raw).replace(/\D/g, '')
+  let s = String(raw).replace(/[\s\-–—]/g, '')
+
+  let d = s.replace(/\D/g, '')
 
   if (d.startsWith('58') && d.length >= 11) d = d.slice(2)
 
   d = d.replace(/^0+/, '')
 
-  if (d.length > 10) d = d.slice(-10)
-
-  return d.slice(0, 10)
+  return d
 }
 
 export function formatNombres(n: string): string {
@@ -564,21 +590,27 @@ export function validateField(
   value: string,
   options?: ValidateFieldOptions
 ): ValidationResult {
-  if (typeof value === 'string' && value.trim().toLowerCase() === 'nn')
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'nn') {
+    if (field === 'cedula') {
+      return { isValid: false, message: 'Cédula requerida (no se admite NN)' }
+    }
+
     return { isValid: true, message: 'Valor omitido por NN' }
+  }
 
   const opts = options?.estadoOpciones ?? []
 
   switch (field) {
-    case 'cedula':
-      if (!value.trim()) return { isValid: true }
+    case 'cedula': {
       const c = normalizeCedulaInput(value)
+      if (!c) return { isValid: false, message: 'Cédula requerida' }
       return /^[VEJ]\d{6,11}$/.test(c)
         ? { isValid: true }
         : {
             isValid: false,
-            message: 'Formato V/E/J + 6-11 dígitos (no se admite Z)',
+            message: 'Formato V/E/J + 6-11 dígitos (sin guiones ni puntos)',
           }
+    }
 
     case 'nombres':
       if (!value.trim())
@@ -591,20 +623,25 @@ export function validateField(
         ? { isValid: true }
         : { isValid: false, message: 'Entre 2 y 7 palabras' }
 
-    case 'telefono':
+    case 'telefono': {
       if (!value?.trim())
         return { isValid: false, message: 'Teléfono requerido' }
-      let d = (value || '').replace(/\D/g, '')
-      if (d.startsWith('58') && d.length >= 11) d = d.slice(2)
-      if (d.length > 10) return { isValid: true }
-      if (d.length !== 10) return { isValid: false, message: '10 dígitos' }
+      const d = normalizeTelefonoFromExcel(value)
+      if (d.length !== 10)
+        return { isValid: false, message: '10 dígitos' }
       return /^[1-9]\d{9}$/.test(d)
         ? { isValid: true }
         : { isValid: false, message: '10 dígitos sin 0 inicial' }
+    }
 
     case 'email':
       if (!value.trim()) return { isValid: false, message: 'Email requerido' }
       const t = value.trim()
+      if (t === EMAIL_PLACEHOLDER_DUPLICADO)
+        return {
+          isValid: false,
+          message: 'Email duplicado (sustituido por XXX; corrija)',
+        }
       if (t.length > CLIENTE_EMAIL_MAX_LENGTH)
         return {
           isValid: false,
@@ -679,14 +716,4 @@ export function validateField(
     default:
       return { isValid: true }
   }
-}
-
-// --- Types and validators for client bulk upload ---
-
-export interface ValidationResult {
-  isValid: boolean
-
-  message?: string
-
-  normalizedValue?: string
 }

@@ -48,6 +48,7 @@ import {
 import {
   CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO,
   CLIENTE_EMAIL_MAX_LENGTH,
+  cedulaComparableKey,
 } from '../../utils/excelValidation'
 
 export function ExcelUploaderUI(props: ExcelUploaderProps) {
@@ -126,7 +127,11 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
 
     emailDuplicadosEnArchivo,
 
+    duplicateEmailKeysEnArchivo,
+
     telefonoDuplicadosEnArchivo,
+
+    emailsExistentesEnBD,
 
     saveIndividualClient,
 
@@ -155,7 +160,11 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
     cedulasDuplicadasEnArchivo.size > 0 ||
     nombresDuplicadosEnArchivo.size > 0 ||
     emailDuplicadosEnArchivo.size > 0 ||
-    telefonoDuplicadosEnArchivo.size > 0
+    telefonoDuplicadosEnArchivo.size > 0 ||
+    duplicateEmailKeysEnArchivo.length > 0
+
+  const hayConflictosConBD =
+    cedulasExistentesEnBD.length > 0 || emailsExistentesEnBD.length > 0
 
   /** Regla: observación 100% solo nombre(s) de columna - sin "duplicado" ni texto extra */
 
@@ -263,9 +272,11 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                   </h3>
 
                   <p className="mb-4 text-sm text-gray-600">
-                    Columnas: Cédula | Nombres | Apellidos | Email | Teléfono |
-                    Estado (opcional). Duplicado = 100% igual. Cédula se compara
-                    con tabla clientes: si ya existe no se puede guardar.
+                    Columnas: Cédula | Nombres | Teléfono | Email (columna D). La
+                    cédula y el email se comparan con la tabla{' '}
+                    <strong>clientes</strong> al cargar. Si hay duplicado en el
+                    archivo o ya registrado en BD, la fila no se puede guardar
+                    hasta corregir.
                   </p>
 
                   <Button
@@ -376,6 +387,72 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                 </CardHeader>
 
                 <CardContent>
+                  {(hasDuplicates || hayConflictosConBD) && (
+                    <div className="mb-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                        Comparación con tabla clientes y duplicados en archivo
+                      </div>
+
+                      <p className="text-amber-900">
+                        No se puede guardar filas con cédula o email duplicado
+                        en el archivo, ni con datos que ya existan en clientes.
+                        Corrija las filas en rojo o cambie el archivo.
+                      </p>
+
+                      {cedulasExistentesEnBD.length > 0 && (
+                        <div>
+                          <p className="font-medium text-amber-950">
+                            Cédulas ya en clientes ({cedulasExistentesEnBD.length}
+                            ):
+                          </p>
+
+                          <p className="mt-1 break-all font-mono text-xs">
+                            {cedulasExistentesEnBD.join(', ')}
+                          </p>
+                        </div>
+                      )}
+
+                      {emailsExistentesEnBD.length > 0 && (
+                        <div>
+                          <p className="font-medium text-amber-950">
+                            Emails ya en clientes ({emailsExistentesEnBD.length}):
+                          </p>
+
+                          <p className="mt-1 break-all font-mono text-xs">
+                            {emailsExistentesEnBD.join(', ')}
+                          </p>
+                        </div>
+                      )}
+
+                      {cedulasDuplicadasEnArchivo.size > 0 && (
+                        <div>
+                          <p className="font-medium text-amber-950">
+                            Cédulas repetidas en este archivo (
+                            {cedulasDuplicadasEnArchivo.size}):
+                          </p>
+
+                          <p className="mt-1 break-all font-mono text-xs">
+                            {[...cedulasDuplicadasEnArchivo].join(', ')}
+                          </p>
+                        </div>
+                      )}
+
+                      {duplicateEmailKeysEnArchivo.length > 0 && (
+                        <div>
+                          <p className="font-medium text-amber-950">
+                            Emails repetidos en este archivo (
+                            {duplicateEmailKeysEnArchivo.length}):
+                          </p>
+
+                          <p className="mt-1 break-all font-mono text-xs">
+                            {duplicateEmailKeysEnArchivo.join(', ')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div
                     className="relative min-w-full overflow-x-auto"
                     style={{
@@ -477,14 +554,16 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                     }`}
                                   />
 
-                                  {row.cedula &&
-                                    cedulasDuplicadasEnArchivo.has(
-                                      (row.cedula || '').trim()
-                                    ) && (
+                                  {(() => {
+                                    const ck = cedulaComparableKey(row.cedula)
+
+                                    return ck &&
+                                      cedulasDuplicadasEnArchivo.has(ck) ? (
                                       <span className="block rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700">
                                         Duplicada en archivo
                                       </span>
-                                    )}
+                                    ) : null
+                                  })()}
                                 </div>
                               </td>
 
@@ -789,12 +868,12 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                           Guardados: {getSavedClientsCount()}
                         </Badge>
 
-                        {hasDuplicates && (
+                        {(hasDuplicates || hayConflictosConBD) && (
                           <Badge
                             variant="outline"
                             className="border-red-400 bg-red-100 text-red-800"
                           >
-                            NO DUPLICADOS (cédula, nombres, email, tel)
+                            Duplicados: revisar archivo o BD
                           </Badge>
                         )}
 
