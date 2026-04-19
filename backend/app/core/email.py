@@ -384,7 +384,8 @@ def send_email(
         )
         logger.info("Modo Pruebas: envio redirigido a %s", emails_pruebas_list)
     else:
-        if modo_pruebas and not emails_pruebas_list:
+        # Destino explícito (p. ej. «Enviar prueba» con To manual): no exigir lista de pruebas aunque el servicio esté en modo pruebas.
+        if modo_pruebas and not emails_pruebas_list and not respetar_destinos_manuales:
             log_phase(logger, FASE_SMTP_CONFIG, False, "modo pruebas sin email de pruebas configurado")
             logger.warning(
                 "[SMTP_ENVIO] estado=abortado razon=modo_pruebas_sin_correo servicio=%s tipo_tab=%s solicitados_MASK=%s",

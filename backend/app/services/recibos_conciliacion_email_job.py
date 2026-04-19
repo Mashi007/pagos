@@ -483,6 +483,162 @@ def ejecutar_recibos_envio_slot(
     }
 
 
+def enviar_correo_prueba_recibos_datos_reales(
+    db: Session,
+    *,
+    email_destino: str,
+    fecha_dia: date,
+) -> Dict[str, Any]:
+    """
+    Correo de prueba desde Configuración Recibos: mismo HTML (plantilla fija) y PDF de estado de cuenta
+    que el envío real, tomando el **primer** cliente en orden de lote (cédulas distintas en ventana) que
+    cumpla las mismas validaciones que el job (datos EC, email en ficha, no desistimiento, cédula alineada).
+    El mensaje se envía **solo** a ``email_destino`` (p. ej. itmaster@…), no a los correos del cliente.
+    No escribe ``recibos_email_envio`` ni ``envios_notificacion``.
+    """
+    dest = (email_destino or "").strip()
+    if not dest or "@" not in dest:
+        return {"success": False, "mensaje": "Indique un correo de destino válido."}
+
+    pagos = listar_pagos_recibos_ventana(db, fecha_dia=fecha_dia)
+    cedulas = _cedulas_distintas_desde_pagos(pagos)
+    if not pagos or not cedulas:
+        return {
+            "success": False,
+            "mensaje": (
+                "No hay pagos en la ventana Recibos para esa fecha (Caracas); no se puede generar una muestra "
+                "con datos reales. Revise el listado Recibos o la fecha de corte."
+            ),
+            "fecha_dia": fecha_dia.isoformat(),
+            "slot": RECIBOS_VENTANA_SLOT,
+        }
+
+    intentos: List[Dict[str, Any]] = []
+
+    for cedula_norm in cedulas:
+        try:
+            datos = obtener_datos_estado_cuenta_cliente(db, cedula_norm)
+        except Exception as e:
+            intentos.append({"cedula": cedula_norm, "motivo": "error_carga_datos_ec", "error": str(e)[:300]})
+            continue
+
+        if not datos:
+            intentos.append({"cedula": cedula_norm, "motivo": "sin_datos_estado_cuenta"})
+            continue
+
+        emails = datos.get("emails")
+        if not isinstance(emails, list) or not emails:
+            intentos.append({"cedula": cedula_norm, "motivo": "sin_email"})
+            continue
+
+        email0 = (emails[0] or "").strip() if emails else ""
+        if cliente_bloqueado_por_desistimiento(db, cedula=cedula_norm, email=email0):
+            intentos.append({"cedula": cedula_norm, "motivo": "desistimiento"})
+            continue
+
+        cedula_raw_ventana = next(
+            (
+                (p.get("cedula") or "").strip()
+                for p in pagos
+                if (p.get("cedula_normalizada") or "").strip() == cedula_norm
+            ),
+            "",
+        )
+        cedula_display = (datos.get("cedula_display") or "").strip()
+        cedula_para_comparar = cedula_display or cedula_raw_ventana
+        if texto_cedula_comparable_bd(cedula_para_comparar) != cedula_norm:
+            intentos.append({"cedula": cedula_norm, "motivo": "cedula_desalineada"})
+            continue
+
+        cedula_pdf = cedula_display or cedula_raw_ventana or cedula_norm
+        nombre = (datos.get("nombre") or "").strip()
+        fecha_corte = datos.get("fecha_corte") or fecha_dia
+        if isinstance(fecha_corte, datetime):
+            fecha_corte_d = fecha_corte.date()
+        else:
+            fecha_corte_d = fecha_corte if isinstance(fecha_corte, date) else fecha_dia
+
+        asunto = f"[Prueba] Estado de cuenta - {fecha_corte_d.isoformat()} (Recibos)"
+        html_body = _cuerpo_html_recibos_confirmacion()
+        body_plain = (
+            "Confirmación de pago – RapiCredit. Adjunto: estado de cuenta actualizado (PDF). "
+            f"Cédula: {cedula_pdf}. Fecha de corte: {fecha_corte_d.isoformat()}."
+        )
+
+        try:
+            recibos = obtener_recibos_cliente_estado_cuenta(db, cedula_norm)
+            pdf_bytes = generar_pdf_estado_cuenta(
+                cedula=cedula_pdf,
+                nombre=nombre,
+                prestamos=datos.get("prestamos_list") or [],
+                fecha_corte=fecha_corte_d,
+                amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
+                pagos_realizados=datos.get("pagos_realizados") or [],
+                recibos=recibos,
+                recibo_token=None,
+                base_url="",
+            )
+        except Exception as e:
+            intentos.append(
+                {"cedula": cedula_norm, "motivo": "error_generacion_pdf_ec", "error": str(e)[:300]}
+            )
+            continue
+
+        if not pdf_bytes or len(pdf_bytes) < 8 or not pdf_bytes.startswith(b"%PDF"):
+            intentos.append({"cedula": cedula_norm, "motivo": "pdf_invalido_ec"})
+            continue
+
+        fname_seguro = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in cedula_pdf)[:80]
+        fname = f"estado_cuenta_{fname_seguro.replace('-', '_')}.pdf"
+
+        ok, err = send_email(
+            [dest],
+            asunto,
+            body_plain,
+            body_html=html_body,
+            attachments=[(fname, pdf_bytes)],
+            servicio="recibos",
+            tipo_tab="recibos",
+            respetar_destinos_manuales=True,
+        )
+        if ok:
+            return {
+                "success": True,
+                "mensaje": (
+                    "Muestra enviada: mismo HTML y PDF que Recibos, datos del primer cliente válido en la ventana; "
+                    f"destino solo {dest} (no se usó el correo del cliente como To)."
+                ),
+                "email_destino": dest,
+                "fecha_dia": fecha_dia.isoformat(),
+                "slot": RECIBOS_VENTANA_SLOT,
+                "cedula_normalizada": cedula_norm,
+                "cedula_muestra": cedula_pdf,
+                "nombre_cliente": nombre or None,
+                "emails_cliente_ficha": emails,
+                "pdf_bytes": len(pdf_bytes),
+            }
+        return {
+            "success": False,
+            "mensaje": err or "Error SMTP al enviar la muestra.",
+            "email_destino": dest,
+            "fecha_dia": fecha_dia.isoformat(),
+            "cedula_intento": cedula_norm,
+            "smtp_error": (err or "")[:500],
+        }
+
+    return {
+        "success": False,
+        "mensaje": (
+            "Ninguna cédula en la ventana pudo usarse como muestra (mismas reglas que el envío real: "
+            "datos de estado de cuenta, email en ficha, alineación de cédula, etc.)."
+        ),
+        "fecha_dia": fecha_dia.isoformat(),
+        "slot": RECIBOS_VENTANA_SLOT,
+        "cedulas_en_ventana": len(cedulas),
+        "intentos_resumen": intentos[:15],
+    }
+
+
 def job_recibos_1500(db: Session) -> None:
     """15:00 Caracas: Recibos (fecha_registro en las 24 h hasta las 15:00 de hoy)."""
     ejecutar_recibos_envio_slot(db, fecha_dia=hoy_negocio(), solo_simular=False)

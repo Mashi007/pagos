@@ -229,14 +229,21 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     }
     setProbando(true)
     try {
-      await emailConfigService.probarConfiguracionEmail(
+      const res = await emailConfigService.probarConfiguracionEmail(
         to,
-        'Prueba SMTP — Recibos (RapiCredit)',
-        'Si recibe este mensaje, la cuenta asignada al servicio «recibos» envía correctamente.',
         undefined,
-        { servicio: 'recibos', tipo_tab: 'recibos' }
+        undefined,
+        undefined,
+        { servicio: 'recibos', tipo_tab: 'recibos', recibos_prueba_datos_reales: true },
+        { timeout: 120_000 }
       )
-      toast.success('Correo de prueba enviado (servicio recibos).')
+      const ok = Boolean((res as { success?: boolean })?.success)
+      const msg = String((res as { mensaje?: string })?.mensaje || '').trim()
+      if (ok) {
+        toast.success(msg || 'Muestra Recibos enviada (HTML + PDF, datos reales del primer cliente en ventana).')
+      } else {
+        toast.error(msg || 'No se pudo enviar la muestra Recibos.')
+      }
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -488,8 +495,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           </CardTitle>
 
           <CardDescription>
-            Misma acción que en Configuración global → Probar, con servicio{' '}
-            <code className="rounded bg-gray-100 px-1 text-xs">recibos</code>.
+            Mismo HTML y PDF que el envío Recibos, con datos reales del primer cliente válido en la ventana de
+            hoy (Caracas). Solo se envía a «Correo destino»; el cliente no recibe To. Se aplican los CCO Recibos
+            guardados arriba.
           </CardDescription>
         </CardHeader>
 

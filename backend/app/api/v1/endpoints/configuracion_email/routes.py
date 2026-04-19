@@ -341,6 +341,9 @@ class ProbarEmailRequest(BaseModel):
     # Por defecto cobros (Cuenta 1), comportamiento historico.
     servicio: Optional[str] = None
     tipo_tab: Optional[str] = None
+    # Recibos: enviar muestra con HTML + PDF reales (primer cliente en ventana), solo a email_destino.
+    recibos_prueba_datos_reales: bool = False
+    fecha_caracas: Optional[str] = None
 
 
 def _destino_prueba(cfg: dict[str, Any], payload: ProbarEmailRequest) -> str:
@@ -373,6 +376,7 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
         "tickets",
         "campanas",
         "informe_pagos",
+        "recibos",
     ):
         raw_svc = "cobros"
     tipo_tab = (payload.tipo_tab or "").strip() or None
@@ -400,6 +404,34 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
             status_code=400,
             detail=f"El email '{destino}' no tiene formato válido. Verifica que el dominio esté completo (ej: .com, .net).",
         )
+
+    if raw_svc == "recibos" and payload.recibos_prueba_datos_reales:
+        from app.services.cuota_estado import hoy_negocio, parse_fecha_referencia_negocio
+        from app.services.recibos_conciliacion_email_job import enviar_correo_prueba_recibos_datos_reales
+
+        raw_fc = (payload.fecha_caracas or "").strip()
+        try:
+            d = parse_fecha_referencia_negocio(raw_fc) if raw_fc else hoy_negocio()
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        if d is None:
+            d = hoy_negocio()
+        out = enviar_correo_prueba_recibos_datos_reales(db, email_destino=destino, fecha_dia=d)
+        if not out.get("success"):
+            logger.warning("Recibos prueba datos reales: %s", out.get("mensaje"))
+            return {
+                "success": False,
+                "mensaje": out.get("mensaje") or "No se pudo enviar la muestra Recibos.",
+                "email_destino": destino,
+                "detalle": {k: v for k, v in out.items() if k not in ("success", "mensaje")},
+            }
+        logger.info("Recibos prueba datos reales enviada a %s", destino)
+        return {
+            "success": True,
+            "mensaje": out.get("mensaje") or "Muestra Recibos enviada.",
+            "email_destino": destino,
+            "detalle": {k: v for k, v in out.items() if k not in ("success", "mensaje")},
+        }
 
     subject = (payload.subject or "").strip() or "Prueba de email - RapiCredit"
     body = (payload.mensaje or "").strip() or "Este es un correo de prueba enviado desde la configuracion de email."

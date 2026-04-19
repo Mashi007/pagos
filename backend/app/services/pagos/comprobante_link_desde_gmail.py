@@ -24,9 +24,13 @@ def drive_raw_a_url(dlink: Any) -> str:
     s = (str(dlink) if dlink is not None else "").strip()
     if not s:
         return ""
-    if not s.lower().startswith(("http://", "https://")):
-        return "https://drive.google.com/file/d/" + s + "/view"
-    return s
+    low = s.lower()
+    if low.startswith(("http://", "https://")):
+        return s
+    # drive_link a veces guarda la ruta del comprobante en API, no un id de archivo Drive.
+    if "comprobante-imagen" in low or low.startswith("/api/") or low.startswith("api/"):
+        return s
+    return "https://drive.google.com/file/d/" + s + "/view"
 
 
 def comprobante_url_para_enlace_publico(

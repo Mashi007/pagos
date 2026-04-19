@@ -1362,23 +1362,38 @@ class EmailConfigService {
     subject?: string,
     mensaje?: string,
     emailCC?: string,
-    opts?: { servicio?: string; tipo_tab?: string }
+    opts?: {
+      servicio?: string
+      tipo_tab?: string
+      /** Recibos: HTML plantilla + PDF estado de cuenta del primer cliente en ventana; To = emailDestino. */
+      recibos_prueba_datos_reales?: boolean
+      fecha_caracas?: string
+    },
+    axiosConfig?: { timeout?: number }
   ): Promise<any> {
-    const params: Record<string, string> = {}
+    const body: Record<string, unknown> = {}
 
-    if (emailDestino) params.email_destino = emailDestino
+    if (emailDestino) body.email_destino = emailDestino
 
-    if (subject) params.subject = subject
+    if (subject) body.subject = subject
 
-    if (mensaje) params.mensaje = mensaje
+    if (mensaje) body.mensaje = mensaje
 
-    if (emailCC) params.email_cc = emailCC
+    if (emailCC) body.email_cc = emailCC
 
-    if (opts?.servicio) params.servicio = opts.servicio
+    if (opts?.servicio) body.servicio = opts.servicio
 
-    if (opts?.tipo_tab) params.tipo_tab = opts.tipo_tab
+    if (opts?.tipo_tab) body.tipo_tab = opts.tipo_tab
 
-    return await apiClient.post(`${this.baseUrl}/email/probar`, params)
+    if (opts?.recibos_prueba_datos_reales) body.recibos_prueba_datos_reales = true
+
+    if (opts?.fecha_caracas?.trim()) body.fecha_caracas = opts.fecha_caracas.trim()
+
+    return await apiClient.post(
+      `${this.baseUrl}/email/probar`,
+      body,
+      axiosConfig
+    )
   }
 
   /** Config por tipo (habilitado, cco, plantilla_id, campos legacy programador/dias_semana) + global: modo_pruebas, email_pruebas. */

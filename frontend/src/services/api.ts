@@ -913,6 +913,56 @@ class ApiClient {
     return response.data
   }
 
+  /**
+   * GET con respuesta binaria y la misma autenticación que el resto de la API.
+   * Útil para `<img>` cuando la URL directa devolvería 401 (p. ej. comprobante-imagen).
+   */
+  async getBlob(url: string, config?: AxiosRequestConfig): Promise<Blob> {
+    const response = await this.client.get(url, {
+      ...config,
+      responseType: 'blob',
+      timeout: config?.timeout ?? Math.max(DEFAULT_TIMEOUT_MS, 60000),
+    })
+    if (response.status >= 400 && response.status < 500) {
+      let backendMessage = `Request failed with status ${response.status}`
+      const blobErr = response.data as Blob
+      if (blobErr && typeof blobErr.text === 'function') {
+        try {
+          const txt = await blobErr.text()
+          try {
+            const j = JSON.parse(txt) as {
+              detail?: unknown
+              message?: string
+            }
+            if (typeof j.detail === 'string') {
+              backendMessage = j.detail
+            } else if (Array.isArray(j.detail)) {
+              backendMessage = j.detail
+                .map((x: { msg?: string }) =>
+                  typeof x?.msg === 'string' ? x.msg : JSON.stringify(x)
+                )
+                .join('; ')
+            } else if (j.message) {
+              backendMessage = j.message
+            }
+          } catch {
+            if (txt && txt.length > 0 && txt.length < 500) {
+              backendMessage = txt
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      const error = new Error(backendMessage) as any
+      error.response = response
+      error.isAxiosError = true
+      error.code = `ERR_HTTP_${response.status}`
+      throw error
+    }
+    return response.data as Blob
+  }
+
   async post<T>(
     url: string,
     data?: unknown,
@@ -938,7 +988,8 @@ class ApiClient {
         url.includes('/prestamos/candidatos-drive/refrescar') || // Recorre drive + prestamos + reescribe snapshot
         url.includes('/prestamos/candidatos-drive/guardar-validados-100') || // Crear préstamos por cada fila válida
         url.includes('/prestamos/candidatos-drive/guardar-fila') || // Una fila + mismas validaciones que el lote
-        url.includes('/clientes/drive-import/importar') // Lote: un commit por fila; cientos de filas >30s en Render
+        url.includes('/clientes/drive-import/importar') || // Lote: un commit por fila; cientos de filas >30s en Render
+        url.includes('/configuracion/email/probar') // Prueba SMTP; Recibos puede generar PDF + envío >30s
 
       // Auditoria cartera en Render: sincroniza decenas de miles de cuotas + cascadas masivas (siempre >30s).
       const isAuditoriaCarteraCorregir = url.includes(

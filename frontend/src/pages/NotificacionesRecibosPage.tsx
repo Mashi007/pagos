@@ -4,6 +4,7 @@ import {
   useMemo,
   useState,
   Fragment,
+  type MouseEvent,
 } from 'react'
 
 import { useSearchParams } from 'react-router-dom'
@@ -16,6 +17,7 @@ import {
   Eye,
   FileText,
   LayoutList,
+  Loader2,
   Mail,
   RefreshCw,
   Settings,
@@ -26,7 +28,6 @@ import { Button } from '../components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../components/ui/card'
@@ -41,6 +42,7 @@ import {
   notificacionService,
   type ReciboConciliacionFila,
 } from '../services/notificacionService'
+import { apiClient } from '../services/api'
 import { prestamoService } from '../services/prestamoService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../types/errors'
@@ -73,6 +75,18 @@ function pareceUrlImagenComprobante(u: string): boolean {
   return low.includes('googleusercontent')
 }
 
+/** Ruta `/api/v1/pagos/comprobante-imagen/{id}` para el cliente autenticado (desde URL absoluta o relativa). */
+function pathApiComprobanteImagenDesdeHref(href: string): string | null {
+  const t = String(href ?? '').trim()
+  if (!t) return null
+  const m = /(\/api\/v1\/pagos\/comprobante-imagen\/[^/?#\s]+)/i.exec(t)
+  return m ? m[1] : null
+}
+
+function esComprobanteImagenConAuth(href: string): boolean {
+  return pathApiComprobanteImagenDesdeHref(href) != null
+}
+
 const fmtMontoPagadoRecibo = new Intl.NumberFormat('es-VE', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -93,24 +107,99 @@ function textoFechaRegistroListado(s: string | null | undefined): string {
 function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
   const href = hrefComprobanteRecibo(row)
   const [thumbOk, setThumbOk] = useState(true)
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [blobCargando, setBlobCargando] = useState(false)
+  const [blobError, setBlobError] = useState(false)
+
+  const pathAuth = href ? pathApiComprobanteImagenDesdeHref(href) : null
+  const requiereAuth = Boolean(pathAuth)
+
+  useEffect(() => {
+    if (!href || !pathAuth) {
+      setBlobUrl(u => {
+        if (u) URL.revokeObjectURL(u)
+        return null
+      })
+      setBlobCargando(false)
+      setBlobError(false)
+      return
+    }
+    let cancelado = false
+    ;(async () => {
+      try {
+        setBlobCargando(true)
+        setBlobError(false)
+        const blob = await apiClient.getBlob(pathAuth)
+        if (cancelado) return
+        const objectUrl = URL.createObjectURL(blob)
+        setBlobUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev)
+          return objectUrl
+        })
+      } catch {
+        if (!cancelado) {
+          setBlobError(true)
+          setThumbOk(false)
+        }
+      } finally {
+        if (!cancelado) setBlobCargando(false)
+      }
+    })()
+    return () => {
+      cancelado = true
+      setBlobUrl(u => {
+        if (u) URL.revokeObjectURL(u)
+        return null
+      })
+    }
+  }, [href, pathAuth])
+
   if (!href) {
     return <span className="text-sm text-gray-400">-</span>
   }
-  const probarMiniatura = pareceUrlImagenComprobante(href) && thumbOk
+
+  const abrirEnNuevaPestana = async (e: MouseEvent<HTMLAnchorElement>) => {
+    if (!requiereAuth || !pathAuth) return
+    e.preventDefault()
+    try {
+      const blob = await apiClient.getBlob(pathAuth)
+      const url = URL.createObjectURL(blob)
+      const w = window.open(url, '_blank', 'noopener,noreferrer')
+      if (!w) {
+        URL.revokeObjectURL(url)
+      } else {
+        window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
+      }
+    } catch {
+      /* ya hay miniatura / estado; abrir pestaña sin blob falla silenciosamente */
+    }
+  }
+
+  const imgSrc = requiereAuth ? blobUrl : href
+  const probarMiniatura =
+    pareceUrlImagenComprobante(href) &&
+    thumbOk &&
+    (!requiereAuth || (blobUrl && !blobError))
+
   return (
     <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
+      href={requiereAuth ? '#' : href}
+      target={requiereAuth ? undefined : '_blank'}
+      rel={requiereAuth ? undefined : 'noopener noreferrer'}
+      onClick={requiereAuth ? abrirEnNuevaPestana : undefined}
       className="inline-flex max-w-[14rem] items-center gap-2 text-violet-700 hover:text-violet-900"
       title={
         String(row.documento_nombre ?? '').trim() ||
         'Abrir fotografía o comprobante de pago'
       }
     >
-      {probarMiniatura ? (
+      {blobCargando && requiereAuth ? (
+        <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded border border-gray-200 bg-slate-50">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-500" aria-hidden />
+        </span>
+      ) : probarMiniatura && imgSrc ? (
         <img
-          src={href}
+          src={imgSrc}
           alt=""
           className="h-12 w-12 shrink-0 rounded border border-gray-200 bg-white object-cover"
           onError={() => setThumbOk(false)}
@@ -126,9 +215,6 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
 }
 
 type TabId = 'listado' | 'configuracion'
-
-const VENTANA_RECIBOS_DESCRIPCION =
-  'Ventana de recepción (fecha_registro en Caracas): desde las 15:00 del día anterior hasta las 15:00 del día de referencia (24 h). Job automático: todos los días a las 15:00.'
 
 /** Día calendario America/Caracas en YYYY-MM-DD (alineado al backend). */
 function fechaHoyIsoCaracas(): string {
@@ -517,42 +603,7 @@ export default function NotificacionesRecibosPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Criterio en base de datos</CardTitle>
-              <CardDescription>
-                Se listan filas de <strong>pagos</strong> con <code>conciliado=true</code>,{' '}
-                <code>estado=PAGADO</code> y <code>fecha_registro</code> en la ventana indicada. Deben
-                estar aplicadas a cuotas (<code>cuotas.pago_id</code> o <code>cuota_pagos</code>). La
-                cédula del pago determina el cliente; el PDF es el mismo flujo que el portal (
-                <code>obtener_datos_estado_cuenta_cliente</code>).
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm text-slate-700">
-              <p>{VENTANA_RECIBOS_DESCRIPCION}</p>
-              <p>
-                Remitente From: variable de entorno <code>RECIBOS_FROM_EMAIL</code> (por defecto{' '}
-                <code>notificacion@rapicreditca.com</code>). Cuenta SMTP según pestaña Configuración
-                (asignación <code>recibos</code>).
-              </p>
-              <p>
-                Jobs automáticos: <code>ENABLE_AUTOMATIC_SCHEDULED_JOBS</code> y{' '}
-                <code>ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS</code> en el servidor.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle>Vista previa y ejecución</CardTitle>
-              <CardDescription>
-                Fecha de corte (día Caracas cuya ventana termina a las 15:00). Simulación: cualquier día
-                válido. Envío real de <strong>hoy</strong> (Caracas): deje la fecha vacía o use «Ejecutar
-                envío». Envío real de un <strong>día pasado</strong>: indique fecha, actualice el listado y use
-                «Enviar lote pasado (real)» (confirmación). No hay envío real para fechas futuras. «Solo
-                simular» genera el mismo PDF por cédula que el envío real y no escribe{' '}
-                <code>recibos_email_envio</code>. Si en Configuración &gt; Email tiene activo{' '}
-                <strong>modo pruebas Recibos</strong> y correos de prueba, la simulación también envía
-                una muestra por SMTP (mismo HTML y adjunto) hacia esos correos.
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="max-w-md space-y-2">
