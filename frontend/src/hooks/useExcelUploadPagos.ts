@@ -2506,17 +2506,15 @@ export function useExcelUploadPagos({
           const prestamoIdRaw =
             cols.prestamo >= 0 ? row[cols.prestamo] : undefined
 
-          const conciliacionRawCol4 = (
-            cols.prestamo >= 0 ? row[cols.prestamo] : ''
+          const conciliacionRawCol4 = String(
+            cols.prestamo >= 0 ? row[cols.prestamo] ?? '' : ''
           )
-            ?.toString()
             .trim()
             .toUpperCase()
 
-          const conciliacionRawCol5 = (
-            cols.conciliacion >= 0 ? row[cols.conciliacion] : ''
+          const conciliacionRawCol5 = String(
+            cols.conciliacion >= 0 ? row[cols.conciliacion] ?? '' : ''
           )
-            ?.toString()
             .trim()
             .toUpperCase()
 
