@@ -26,7 +26,9 @@ from app.models.drive import DRIVE_COL_COUNT, DRIVE_COLUMN_NAMES, DriveRow
 logger = logging.getLogger(__name__)
 
 SCOPES_SHEETS = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-# Tokens existentes suelen traer scope spreadsheets completo; si readonly falla, reintentar.
+# OAuth: muchos refresh_token se emitieron con `spreadsheets` (completo), no con el literal
+# `spreadsheets.readonly`; refrescar pidiendo solo readonly puede devolver invalid_scope.
+# Probamos primero el alcance que coincide con la mayoría de consentimientos; luego readonly.
 SCOPES_SHEETS_FALLBACK = ["https://www.googleapis.com/auth/spreadsheets"]
 
 MAX_SCAN_ROWS_FOR_HEADER = 80
@@ -235,16 +237,16 @@ def _get_sheets_credentials():
     """OAuth/SA con lectura Sheets; fallback a credenciales Gmail pipeline."""
     from app.core.google_credentials import get_google_credentials
 
-    creds = get_google_credentials(SCOPES_SHEETS)
-    if creds is not None:
-        logger.info(
-            "[conciliacion_sheet] credenciales Google: ruta principal (spreadsheets.readonly)"
-        )
-        return creds
     creds = get_google_credentials(SCOPES_SHEETS_FALLBACK)
     if creds is not None:
         logger.info(
-            "[conciliacion_sheet] credenciales Google: alcance spreadsheets (fallback)"
+            "[conciliacion_sheet] credenciales Google: alcance spreadsheets (principal; solo lectura en API)"
+        )
+        return creds
+    creds = get_google_credentials(SCOPES_SHEETS)
+    if creds is not None:
+        logger.info(
+            "[conciliacion_sheet] credenciales Google: spreadsheets.readonly (segundo intento)"
         )
         return creds
     try:

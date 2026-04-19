@@ -118,6 +118,12 @@ export default function NotificacionesClientesDrive() {
     [rows, hiddenRows]
   )
 
+  /** Solo filas que pasan validadores de esta pantalla (mismo criterio que `seleccionable` en API). */
+  const filasValidasVisibles = useMemo(
+    () => visibleRows.filter(r => r.seleccionable),
+    [visibleRows]
+  )
+
   const toggle = useCallback((sheetRow: number, checked: boolean) => {
     setSelected(prev => ({ ...prev, [sheetRow]: checked }))
   }, [])
@@ -170,28 +176,51 @@ export default function NotificacionesClientesDrive() {
     }
   }
 
+  const importarLote = useCallback(
+    async (sheet_row_numbers: number[], comentarioAuditoria: string | null) => {
+      setSaving(true)
+      try {
+        const res = await clienteService.postDriveImportImportar({
+          sheet_row_numbers,
+          comentario: comentarioAuditoria,
+        })
+        toast.success(
+          `Proceso terminado: ${res.insertados_ok} insertado(s), ${res.errores} error(es). Lote ${res.batch_id}`
+        )
+        setSelected({})
+        setComentario('')
+        await refetchCandidatosYAuditoria()
+      } catch (e) {
+        toast.error(getErrorMessage(e) || 'No se pudo importar')
+      } finally {
+        setSaving(false)
+      }
+    },
+    [refetchCandidatosYAuditoria]
+  )
+
   const onGuardar = async () => {
     if (!seleccionados.length) {
       toast.message('Seleccione al menos una fila.')
       return
     }
-    setSaving(true)
-    try {
-      const res = await clienteService.postDriveImportImportar({
-        sheet_row_numbers: seleccionados,
-        comentario: comentario.trim() || null,
-      })
-      toast.success(
-        `Proceso terminado: ${res.insertados_ok} insertado(s), ${res.errores} error(es). Lote ${res.batch_id}`
+    await importarLote(seleccionados, comentario.trim() || null)
+  }
+
+  /** Importa todas las filas 100% válidas en la vista (seleccionable), sin usar checkboxes. */
+  const onGuardarSoloValidasSinMarcar = async () => {
+    const nums = filasValidasVisibles.map(r => r.sheet_row_number)
+    if (!nums.length) {
+      toast.message(
+        'No hay filas que cumplan el 100% de validadores (cédula válida y no duplicada en hoja) en la lista visible.'
       )
-      setSelected({})
-      setComentario('')
-      await refetchCandidatosYAuditoria()
-    } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo importar')
-    } finally {
-      setSaving(false)
+      return
     }
+    const audit =
+      [comentario.trim(), 'Importación automática: solo filas que cumplen validadores (sin marcar).']
+        .filter(Boolean)
+        .join(' — ') || null
+    await importarLote(nums, audit)
   }
 
   const openEdit = (r: DriveCandidate) => {
@@ -382,8 +411,13 @@ export default function NotificacionesClientesDrive() {
                   const blocked = !r.seleccionable
                   const chk = !!selected[r.sheet_row_number]
                   const busy = savingRowId === r.sheet_row_number
+                  const rowTint = r.seleccionable
+                    ? 'bg-emerald-50/90 hover:bg-emerald-50 dark:bg-emerald-950/25 dark:hover:bg-emerald-950/35'
+                    : !r.cedula_valida
+                      ? 'bg-red-50/90 hover:bg-red-50 dark:bg-red-950/25 dark:hover:bg-red-950/35'
+                      : 'bg-amber-50/90 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
                   return (
-                    <tr key={r.sheet_row_number} className="border-t">
+                    <tr key={r.sheet_row_number} className={`border-t ${rowTint}`}>
                       <td className="px-3 py-2 align-top">
                         <input
                           type="checkbox"
@@ -492,15 +526,27 @@ export default function NotificacionesClientesDrive() {
               <p className="text-sm text-muted-foreground">
                 Se aplican las mismas reglas que «Nuevo cliente» / POST /clientes (duplicados por
                 cédula, nombre, correo, teléfono). Si una fila falla, las demás del mismo guardado
-                siguen. Cada fila puede editarse, guardarse sola o ocultarse solo en esta pantalla.
+                siguen. «Guardar» solo envía filas con cédula válida y sin duplicado en la hoja (no
+                incluye las marcadas en rojo o ámbar). Cada fila puede editarse, guardarse sola u
+                ocultarse solo en esta pantalla.
               </p>
-              <Button
-                type="button"
-                onClick={onGuardar}
-                disabled={saving || q.isFetching || manualSyncing || refreshing}
-              >
-                {saving ? 'Guardando…' : `Guardar seleccionados (${seleccionados.length})`}
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <Button
+                  type="button"
+                  onClick={() => void onGuardarSoloValidasSinMarcar()}
+                  disabled={saving || q.isFetching || manualSyncing || refreshing || filasValidasVisibles.length === 0}
+                >
+                  {saving ? 'Guardando…' : `Guardar (${filasValidasVisibles.length} válida(s))`}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onGuardar}
+                  disabled={saving || q.isFetching || manualSyncing || refreshing}
+                >
+                  {saving ? 'Guardando…' : `Guardar seleccionados (${seleccionados.length})`}
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>

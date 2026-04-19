@@ -2,7 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 
-import { CreditCard, Download, Loader2, RefreshCw } from 'lucide-react'
+import {
+  CreditCard,
+  Download,
+  Loader2,
+  Pencil,
+  RefreshCw,
+  Save,
+  Trash2,
+} from 'lucide-react'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
@@ -82,6 +90,80 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
   a.download = `candidatos-prestamos-drive-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/** Cuadrícula de acciones (iconos en botones cuadrados), alineada al patrón UI de revisión por fila. */
+function AccionesIconGrid({
+  onActualizacionManual,
+  manualUpdating,
+  disabled,
+}: {
+  onActualizacionManual: () => void
+  manualUpdating: boolean
+  disabled: boolean
+}) {
+  const iconBtn =
+    'h-10 w-10 shrink-0 rounded-md border border-slate-200 bg-white p-0 shadow-sm hover:bg-slate-50 disabled:opacity-50'
+
+  return (
+    <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <p className="mb-2 text-sm font-medium text-foreground">Acciones</p>
+      <div className="grid w-[5.5rem] grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={iconBtn}
+          title="Editar fila (próximamente)"
+          aria-label="Editar"
+          disabled={disabled}
+          onClick={() => toast.message('Edición de fila: próximamente.')}
+        >
+          <Pencil className="h-4 w-4 text-foreground" strokeWidth={2} aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={iconBtn}
+          title="Guardar en préstamos (próximamente)"
+          aria-label="Guardar"
+          disabled={disabled}
+          onClick={() => toast.message('Guardar en préstamos: próximamente.')}
+        >
+          <Save className="h-4 w-4 text-foreground" strokeWidth={2} aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={iconBtn}
+          title="Quitar de la lista (próximamente)"
+          aria-label="Borrar"
+          disabled={disabled}
+          onClick={() => toast.message('Borrar candidato: próximamente.')}
+        >
+          <Trash2 className="h-4 w-4 text-red-600" strokeWidth={2} aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={iconBtn}
+          title="Actualización manual del snapshot (tabla drive → BD)"
+          aria-label="Actualización manual"
+          disabled={disabled}
+          onClick={() => onActualizacionManual()}
+        >
+          <RefreshCw
+            className={`h-4 w-4 text-foreground ${manualUpdating ? 'animate-spin' : ''}`}
+            strokeWidth={2}
+            aria-hidden
+          />
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 function TableSkeletonRows({ n = 6 }: { n?: number }) {
@@ -240,49 +322,57 @@ export default function ActualizacionesPrestamosDrivePage() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-3 rounded-lg border border-blue-100 bg-blue-50/40 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <div className="space-y-1 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">Actualización</p>
-              <p>
-                Use <strong>Actualización manual</strong> para volver a calcular el snapshot desde la tabla{' '}
-                <code className="rounded bg-white/80 px-1">drive</code> (mismo proceso que el cron). Use{' '}
-                <strong>Refrescar lista</strong> solo para releer en pantalla lo ya guardado.
-              </p>
+          <div className="flex flex-col gap-4 rounded-lg border border-blue-100 bg-blue-50/40 p-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="space-y-1 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Actualización</p>
+                <p>
+                  Use <strong>Actualización manual</strong> para volver a calcular el snapshot desde la tabla{' '}
+                  <code className="rounded bg-white/80 px-1">drive</code> (mismo proceso que el cron). Use{' '}
+                  <strong>Refrescar lista</strong> solo para releer en pantalla lo ya guardado. En{' '}
+                  <strong>Acciones</strong> puede usar el mismo recálculo desde el icono de refresco.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void onRecalcular()}
+                  disabled={manualUpdating || isBusy}
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
+                    aria-hidden
+                  />
+                  Actualización manual
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void onRefrescarLista()}
+                  disabled={manualUpdating || listRefreshing}
+                >
+                  <Loader2 className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
+                  Refrescar lista
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportarCsvVistaActual(rows)}
+                  disabled={rows.length === 0 || manualUpdating || isBusy}
+                >
+                  <Download className="mr-2 h-4 w-4" aria-hidden />
+                  Exportar CSV
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void onRecalcular()}
-                disabled={manualUpdating || isBusy}
-              >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
-                  aria-hidden
-                />
-                Actualización manual
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void onRefrescarLista()}
-                disabled={manualUpdating || listRefreshing}
-              >
-                <Loader2 className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
-                Refrescar lista
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => exportarCsvVistaActual(rows)}
-                disabled={rows.length === 0 || manualUpdating || isBusy}
-              >
-                <Download className="mr-2 h-4 w-4" aria-hidden />
-                Exportar CSV
-              </Button>
-            </div>
+            <AccionesIconGrid
+              onActualizacionManual={() => void onRecalcular()}
+              manualUpdating={manualUpdating}
+              disabled={manualUpdating || isBusy}
+            />
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
