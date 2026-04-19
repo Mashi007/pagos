@@ -388,12 +388,20 @@ def send_email(
             )
             logger.warning(
                 "Modo Pruebas activo pero no hay correo de pruebas configurado. "
-                "Configure en Notificaciones > Configuracion (envios) o en Configuracion > Email."
+                + (
+                    "Configure correo(s) en Configuracion > Email (servicio recibos no usa notificaciones_envios)."
+                    if (servicio or "").strip().lower() == "recibos"
+                    else "Configure en Notificaciones > Configuracion (envios) o en Configuracion > Email."
+                )
             )
             if smtp_session_metadata is not None:
                 smtp_session_metadata.clear()
                 smtp_session_metadata.update(
                     {"resultado": "no_intentado", "motivo": "modo_pruebas_sin_correo_pruebas"}
+                )
+            if (servicio or "").strip().lower() == "recibos":
+                return False, (
+                    "En modo Pruebas (Recibos) debe configurar al menos un correo de prueba en Configuracion > Email."
                 )
             return False, (
                 "En modo Pruebas debe configurar el correo de pruebas en Notificaciones > Configuracion (envios) "

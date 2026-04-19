@@ -4,7 +4,15 @@ import { Link } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { Mail, RefreshCw, Save, Settings } from 'lucide-react'
+import {
+  Clock,
+  Mail,
+  RefreshCw,
+  Save,
+  Settings,
+  TestTube,
+  X,
+} from 'lucide-react'
 
 import {
   Card,
@@ -15,7 +23,13 @@ import {
 } from '../ui/card'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import { Label } from '../ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select'
 
 import {
   emailCuentasApi,
@@ -26,7 +40,11 @@ import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
 
-const QUERY_KEY = ['notificaciones', 'recibos', 'configEmailCuentas'] as const
+export const RECIBOS_CONFIG_EMAIL_CUENTAS_QUERY_KEY = [
+  'notificaciones',
+  'recibos',
+  'configEmailCuentas',
+] as const
 
 function buildPutPayload(
   cur: EmailCuentasResponse,
@@ -69,10 +87,51 @@ function buildPutPayload(
   }
 }
 
-export function ConfiguracionRecibos() {
+type Props = {
+  /** Incrementar desde la página (botón Cancelar) para limpiar estado local de operaciones. */
+  emergencyResetSeq?: number
+}
+
+function SwitchPill({
+  checked,
+  disabled,
+  onToggle,
+  onClass,
+  offClass,
+}: {
+  checked: boolean
+  disabled?: boolean
+  onToggle: () => void
+  onClass: string
+  offClass: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => {
+        if (disabled) return
+        onToggle()
+      }}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 ${
+        checked ? onClass : offClass
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${
+          checked ? 'translate-x-5' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  )
+}
+
+export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
   const qc = useQueryClient()
-  const { data, isFetching, refetch, isError, error } = useQuery({
-    queryKey: QUERY_KEY,
+  const { data, isFetching, refetch, isError, error, isPending } = useQuery({
+    queryKey: RECIBOS_CONFIG_EMAIL_CUENTAS_QUERY_KEY,
     queryFn: () => emailCuentasApi.get(),
   })
 
@@ -92,6 +151,20 @@ export function ConfiguracionRecibos() {
     )
   }, [data])
 
+  useEffect(() => {
+    if (emergencyResetSeq <= 0) return
+    setGuardando(false)
+    setProbando(false)
+  }, [emergencyResetSeq])
+
+  const puedeCancelarEmergencia = guardando || probando || isFetching
+
+  const cancelarEmergenciaConfig = () => {
+    setGuardando(false)
+    setProbando(false)
+    toast.info('Operación en pantalla restablecida. Si un envío sigue en el servidor, espere unos segundos.')
+  }
+
   const guardar = useCallback(async () => {
     if (!data) {
       toast.error('Cargue la configuración antes de guardar.')
@@ -106,7 +179,7 @@ export function ConfiguracionRecibos() {
           recibos_cuenta: cuentaRecibos,
         })
       )
-      toast.success('Configuración de Recibos guardada')
+      toast.success('Configuración guardada')
       await qc.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.emailEstado })
       await refetch()
     } catch (e) {
@@ -146,161 +219,246 @@ export function ConfiguracionRecibos() {
     }
   }
 
+  const enModoPruebasRecibos = modoPruebasRecibos
+
+  if (isPending && !data) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="text-center text-gray-500">
+          <Clock className="mx-auto mb-2 h-8 w-8 animate-pulse text-blue-500" aria-hidden />
+
+          <p>Cargando configuración...</p>
+        </div>
+      </div>
+    )
+  }
+
   if (isError) {
     return (
-      <Card>
-        <CardContent className="pt-6 text-sm text-red-700">
-          No se pudo cargar la configuración de email: {getErrorMessage(error)}
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <Card className="border-red-200 bg-red-50/40">
+          <CardContent className="pt-6 text-sm text-red-800">
+            No se pudo cargar la configuración de email: {getErrorMessage(error)}
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Settings className="h-5 w-5" />
-            Alcance del submódulo Recibos
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2">
+        <p className="max-w-xl text-sm text-red-900">
+          <strong>Emergencia:</strong> cancela guardado o prueba en curso o desbloquea si el formulario
+          quedó colgado (revise en red si el PUT siguió).
+        </p>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 border-red-400 text-red-800 hover:bg-red-100"
+          disabled={!puedeCancelarEmergencia}
+          onClick={cancelarEmergenciaConfig}
+          title="Restablece estado local de Guardar / Enviar prueba y deja de mostrar carga en esta pantalla."
+        >
+          <X className="mr-2 h-4 w-4" aria-hidden />
+          Cancelar
+        </Button>
+      </div>
+
+      <Card className="border-slate-200 bg-slate-50/40">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Settings className="h-5 w-5 text-blue-600" aria-hidden />
+            Configuración Recibos
           </CardTitle>
+
           <CardDescription>
-            Misma persistencia que en{' '}
+            Ajustes del servicio <strong>recibos</strong> en la misma persistencia que{' '}
             <Link
-              className="font-medium text-blue-600 underline"
               to="/configuracion?tab=email"
+              className="font-medium text-blue-600 underline underline-offset-2"
             >
               Configuración → Email (4 cuentas)
             </Link>
-            : clave <code className="rounded bg-muted px-1 text-xs">email_config</code>. Aquí solo
-            se ajustan interruptores y la cuenta SMTP del servicio <strong>recibos</strong>; credenciales
-            y el resto de servicios se editan en la pantalla global.
+            . El modo prueba y los envíos de Recibos no toman el JSON de Notificaciones → Envíos; solo sus
+            propias claves y el correo maestro global.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm text-slate-700">
-          <p>
-            Tras pagos <strong>conciliados</strong> y <code>fecha_registro</code> en franja Caracas, se
-            envía el <strong>estado de cuenta</strong> (PDF del portal) a los correos del cliente. No
-            usa plantillas de mora ni carta de cobranza.
-          </p>
-          <p>
-            Programación: <strong>11:05</strong>, <strong>17:05</strong> y <strong>23:55</strong>{' '}
-            (America/Caracas) si <code>ENABLE_AUTOMATIC_SCHEDULED_JOBS</code> y{' '}
-            <code>ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS</code> están activos en el servidor.
-          </p>
-          <p>
-            Remitente visible: variable <code>RECIBOS_FROM_EMAIL</code> en el backend (por defecto{' '}
-            <code>notificacion@rapicreditca.com</code>).
-          </p>
-        </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Envío por servicio «recibos»</CardTitle>
+      <Card
+        className={
+          enModoPruebasRecibos
+            ? 'border-amber-300 bg-amber-50/50'
+            : emailActivoRecibos
+              ? 'border-emerald-200 bg-emerald-50/30'
+              : 'border-slate-200 bg-slate-50/40'
+        }
+      >
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            {enModoPruebasRecibos ? (
+              <>
+                <TestTube className="h-4 w-4 text-amber-600" aria-hidden />
+                Modo prueba (solo Recibos)
+              </>
+            ) : emailActivoRecibos ? (
+              <>
+                <Mail className="h-4 w-4 text-emerald-600" aria-hidden />
+                Envío activo
+              </>
+            ) : (
+              <>
+                <Settings className="h-4 w-4 text-slate-600" aria-hidden />
+                Envío inactivo
+              </>
+            )}
+          </CardTitle>
+
           <CardDescription>
-            Si el correo maestro está apagado en Configuración global, no se envía ningún e-mail.
+            {enModoPruebasRecibos
+              ? 'Modo prueba de Recibos solo usa el interruptor «modo pruebas recibos» y los correos definidos en Configuración → Email; no lee Notificaciones → Envíos.'
+              : emailActivoRecibos
+                ? 'Los envíos de Recibos dependen de su propio interruptor y del correo maestro global; no usan plantillas ni modo prueba del módulo Notificaciones.'
+                : 'Con envío inactivo para Recibos, el job y la ejecución manual no envían correos de este servicio (independiente de otros servicios).'}
           </CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-4">
-          {isFetching && !data ? (
-            <p className="text-sm text-muted-foreground">Cargando…</p>
-          ) : null}
-          <div className="flex flex-col justify-between gap-2 rounded border p-3 sm:flex-row sm:items-center">
-            <div>
-              <p className="text-sm font-medium">Recibos: envío activo</p>
-              <p className="text-xs text-muted-foreground">
-                Desactivar evita SMTP y tabla de idempotencia (comportamiento actual del job).
-              </p>
-            </div>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                className="peer sr-only"
-                checked={emailActivoRecibos}
-                onChange={e => setEmailActivoRecibos(e.target.checked)}
-                disabled={!data}
-              />
-              <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white" />
-              <span className="ml-2 text-sm">{emailActivoRecibos ? 'Activo' : 'Inactivo'}</span>
-            </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Recibos: envío</span>
+
+            <SwitchPill
+              checked={emailActivoRecibos}
+              disabled={!data}
+              onToggle={() => setEmailActivoRecibos(p => !p)}
+              onClass="bg-emerald-600"
+              offClass="bg-gray-300"
+            />
+
+            <span className="text-sm text-gray-600">
+              {emailActivoRecibos ? 'Activado' : 'Desactivado'}
+            </span>
           </div>
 
-          <div className="flex flex-col justify-between gap-2 rounded border border-amber-100 bg-amber-50/40 p-3 sm:flex-row sm:items-center">
-            <div>
-              <p className="text-sm font-medium">Modo pruebas solo para Recibos</p>
-              <p className="text-xs text-muted-foreground">
-                Si está activo y hay correo(s) de prueba en la config global, los envíos de Recibos se
-                redirigen (salvo envío manual con destinos respetados en otros módulos).
-              </p>
-            </div>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                className="peer sr-only"
+          <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-gray-800">Modo prueba (Recibos)</span>
+
+              <SwitchPill
                 checked={modoPruebasRecibos}
-                onChange={e => setModoPruebasRecibos(e.target.checked)}
                 disabled={!data}
+                onToggle={() => setModoPruebasRecibos(p => !p)}
+                onClass="bg-amber-500"
+                offClass="bg-gray-300"
               />
-              <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-amber-600 peer-checked:after:translate-x-full peer-checked:after:border-white" />
-              <span className="ml-2 text-sm">{modoPruebasRecibos ? 'Activo' : 'Inactivo'}</span>
-            </label>
+
+              <span className="text-sm text-gray-600">
+                {modoPruebasRecibos ? 'Activado' : 'Desactivado'}
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="rec-cuenta">Cuenta SMTP (1–4) para Recibos</Label>
-            <select
-              id="rec-cuenta"
-              className="flex h-10 max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={cuentaRecibos}
-              onChange={e => setCuentaRecibos(Number(e.target.value))}
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+            <label
+              htmlFor="rec-cuenta-sel"
+              className="w-40 shrink-0 whitespace-nowrap text-sm font-medium text-gray-700"
+            >
+              Cuenta SMTP (1–4)
+            </label>
+
+            <Select
+              value={String(cuentaRecibos)}
+              onValueChange={v => setCuentaRecibos(Number(v))}
               disabled={!data}
             >
-              <option value={1}>Cuenta 1 (Cobros)</option>
-              <option value={2}>Cuenta 2 (Estado de cuenta)</option>
-              <option value={3}>Cuenta 3 (Notificaciones)</option>
-              <option value={4}>Cuenta 4 (Notificaciones)</option>
-            </select>
+              <SelectTrigger
+                id="rec-cuenta-sel"
+                className="h-9 max-w-xs border-gray-200 bg-white"
+              >
+                <SelectValue placeholder="Cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Cuenta 1 (Cobros)</SelectItem>
+                <SelectItem value="2">Cuenta 2 (Estado de cuenta)</SelectItem>
+                <SelectItem value="3">Cuenta 3 (Notificaciones)</SelectItem>
+                <SelectItem value="4">Cuenta 4 (Notificaciones)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => void refetch()} disabled={isFetching}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+          <div className="flex flex-wrap gap-2 border-t border-gray-200/80 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} aria-hidden />
               Recargar
             </Button>
-            <Button type="button" onClick={() => void guardar()} disabled={guardando || !data}>
-              <Save className="mr-2 h-4 w-4" />
+
+            <Button
+              type="button"
+              size="sm"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => void guardar()}
+              disabled={guardando || !data}
+            >
+              <Save className="mr-2 h-4 w-4" aria-hidden />
               {guardando ? 'Guardando…' : 'Guardar'}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-slate-200 bg-white">
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Mail className="h-5 w-5" />
+            <Mail className="h-4 w-4 text-blue-600" aria-hidden />
             Probar SMTP (servicio recibos)
           </CardTitle>
+
           <CardDescription>
-            Usa la misma ruta que Configuración → Email → Probar, con{' '}
-            <code className="rounded bg-muted px-1 text-xs">servicio=recibos</code>.
+            Misma acción que en Configuración global → Probar, con servicio{' '}
+            <code className="rounded bg-gray-100 px-1 text-xs">recibos</code>.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1 space-y-2">
-            <Label htmlFor="rec-mail-prueba">Correo destino</Label>
-            <Input
-              id="rec-mail-prueba"
-              type="email"
-              placeholder="destino@ejemplo.com"
-              value={emailPrueba}
-              onChange={e => setEmailPrueba(e.target.value)}
-            />
+
+        <CardContent className="space-y-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:gap-3">
+            <div className="flex max-w-md flex-1 flex-col gap-1">
+              <label
+                htmlFor="rec-mail-prueba"
+                className="text-xs font-medium text-gray-600"
+              >
+                Correo destino
+              </label>
+
+              <Input
+                id="rec-mail-prueba"
+                type="email"
+                placeholder="ejemplo@correo.com"
+                value={emailPrueba}
+                onChange={e => setEmailPrueba(e.target.value)}
+                className="h-9 max-w-md bg-white"
+                maxLength={120}
+              />
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={probando}
+              onClick={() => void probarCorreo()}
+            >
+              {probando ? 'Enviando…' : 'Enviar prueba'}
+            </Button>
           </div>
-          <Button type="button" variant="secondary" disabled={probando} onClick={() => void probarCorreo()}>
-            {probando ? 'Enviando…' : 'Enviar prueba'}
-          </Button>
         </CardContent>
       </Card>
     </div>

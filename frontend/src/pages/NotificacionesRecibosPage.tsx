@@ -8,7 +8,7 @@ import {
 
 import { useSearchParams } from 'react-router-dom'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   AlertTriangle,
@@ -18,6 +18,7 @@ import {
   Mail,
   RefreshCw,
   Settings,
+  X,
 } from 'lucide-react'
 
 import { Button } from '../components/ui/button'
@@ -31,7 +32,10 @@ import {
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
-import { ConfiguracionRecibos } from '../components/recibos/ConfiguracionRecibos'
+import {
+  ConfiguracionRecibos,
+  RECIBOS_CONFIG_EMAIL_CUENTAS_QUERY_KEY,
+} from '../components/recibos/ConfiguracionRecibos'
 import {
   notificacionService,
   type ClienteRetrasadoItem,
@@ -66,7 +70,9 @@ const SLOT_LABEL: Record<Slot, string> = {
 }
 
 export default function NotificacionesRecibosPage() {
+  const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [recibosCfgResetSeq, setRecibosCfgResetSeq] = useState(0)
   const tabRaw = (searchParams.get('tab') || '').trim().toLowerCase()
   const activeTab: TabId = tabRaw === 'configuracion' ? 'configuracion' : 'listado'
 
@@ -233,6 +239,99 @@ export default function NotificacionesRecibosPage() {
     )
   }
 
+  const tabNav = (
+    <div className="border-b border-gray-200">
+      <nav
+        role="tablist"
+        aria-label="Recibos: listado y configuración"
+        className="flex flex-wrap gap-2"
+      >
+        <button
+          type="button"
+          role="tab"
+          id="recibos-cfg-tab-listado"
+          aria-selected={activeTab === 'listado'}
+          aria-controls="recibos-cfg-panel-listado"
+          onClick={() => setActiveTab('listado')}
+          className={`flex items-center gap-2 rounded-t px-3 py-2 text-sm font-medium ${
+            activeTab === 'listado'
+              ? 'border border-b-0 border-gray-200 bg-white text-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <LayoutList className="h-4 w-4" aria-hidden />
+          Listado y ejecución
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="recibos-cfg-tab-configuracion"
+          aria-selected={activeTab === 'configuracion'}
+          aria-controls="recibos-cfg-panel-config"
+          onClick={() => setActiveTab('configuracion')}
+          className={`flex items-center gap-2 rounded-t px-3 py-2 text-sm font-medium ${
+            activeTab === 'configuracion'
+              ? 'border border-b-0 border-gray-200 bg-white text-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Settings className="h-4 w-4" aria-hidden />
+          Configuración
+        </button>
+      </nav>
+    </div>
+  )
+
+  if (activeTab === 'configuracion') {
+    return (
+      <div className="space-y-6">
+        <ModulePageHeader
+          icon={FileText}
+          title="Recibos"
+          description="Correo con PDF de estado de cuenta tras pagos conciliados (tabla pagos, vínculo cuotas). Zona America/Caracas."
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void qc.invalidateQueries({
+                    queryKey: [...RECIBOS_CONFIG_EMAIL_CUENTAS_QUERY_KEY],
+                  })
+                }}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" aria-hidden />
+                Actualización manual
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-red-400 text-red-800 hover:bg-red-50"
+                onClick={() => setRecibosCfgResetSeq(s => s + 1)}
+                title="Restablece la interfaz si Guardar o Prueba queda colgado (no cancela el servidor)."
+              >
+                <X className="mr-2 h-4 w-4" aria-hidden />
+                Cancelar
+              </Button>
+            </div>
+          }
+        />
+
+        {tabNav}
+
+        <div
+          role="tabpanel"
+          id="recibos-cfg-panel-config"
+          aria-labelledby="recibos-cfg-tab-configuracion"
+        >
+          <ConfiguracionRecibos emergencyResetSeq={recibosCfgResetSeq} />
+        </div>
+      </div>
+    )
+  }
+
   const ejecutar = async () => {
     if (!soloSimular && data !== undefined && totalPagosListado === 0) {
       toast.warning(
@@ -270,46 +369,9 @@ export default function NotificacionesRecibosPage() {
         description="Correo con PDF de estado de cuenta tras pagos conciliados (tabla pagos, vínculo cuotas). Zona America/Caracas."
       />
 
-      <div className="border-b border-gray-200">
-        <nav
-          role="tablist"
-          aria-label="Recibos: listado y configuración"
-          className="flex flex-wrap gap-2"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'listado'}
-            onClick={() => setActiveTab('listado')}
-            className={`flex items-center gap-2 rounded-t px-3 py-2 text-sm font-medium ${
-              activeTab === 'listado'
-                ? 'border border-b-0 border-gray-200 bg-white text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <LayoutList className="h-4 w-4" aria-hidden />
-            Listado y ejecución
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'configuracion'}
-            onClick={() => setActiveTab('configuracion')}
-            className={`flex items-center gap-2 rounded-t px-3 py-2 text-sm font-medium ${
-              activeTab === 'configuracion'
-                ? 'border border-b-0 border-gray-200 bg-white text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Settings className="h-4 w-4" aria-hidden />
-            Configuración
-          </button>
-        </nav>
-      </div>
+      {tabNav}
 
-      {activeTab === 'configuracion' ? (
-        <ConfiguracionRecibos />
-      ) : (
+      <div role="tabpanel" id="recibos-cfg-panel-listado" aria-labelledby="recibos-cfg-tab-listado">
         <>
           <Card>
             <CardHeader>
@@ -609,7 +671,7 @@ export default function NotificacionesRecibosPage() {
             </CardContent>
           </Card>
         </>
-      )}
+      </div>
     </div>
   )
 }

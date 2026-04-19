@@ -370,15 +370,20 @@ def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[s
     modo_pruebas True = redirigir todos los envï¿½os al correo(s) de pruebas.
     list_of_emails = direcciones a las que enviar en modo pruebas (puede ser 1 o mï¿½s).
 
-    Prioridad:
+    Prioridad (global, sin servicio):
     1. notificaciones_envios (clave en configuracion): si modo_pruebas=true y tiene emails_pruebas (array) o email_pruebas (string), usar esos.
     2. Fallback: email_config (email_pruebas como string ï¿½nico, convertido a lista de 1).
+
+    Servicio **recibos**: solo ``modo_pruebas_recibos`` + correos en ``email_config`` (no lee
+    ``notificaciones_envios``) para no acoplarse al módulo Notificaciones.
     """
     sync_from_db()
     if servicio:
         use_modo = get_modo_pruebas_servicio(servicio)
         if not use_modo:
             return (False, [])
+        if servicio == "recibos":
+            return (True, _get_emails_pruebas_solo_email_config())
         return (True, _get_emails_pruebas_list())
     # Modo global (legacy)
     envios = _load_notificaciones_envios()
@@ -407,8 +412,33 @@ def get_modo_pruebas_servicio(servicio: str) -> bool:
         return (str(v).lower() == "true" or v is True)
     if servicio == SERVICIO_FINIQUITO:
         return get_modo_pruebas_servicio(SERVICIO_ESTADO_CUENTA)
+    # Recibos: sin ``modo_pruebas_recibos`` explícito en email_config = desactivado (no heredar
+    # ``modo_pruebas`` de notificaciones_envios ni el legado global).
+    if servicio == "recibos":
+        return False
     raw = envios.get("modo_pruebas") or _current.get("modo_pruebas") or getattr(settings, "MODO_PRUEBAS_EMAIL", None) or "false"
     return (str(raw).lower() == "true" or raw is True)
+
+
+def _get_emails_pruebas_solo_email_config() -> List[str]:
+    """
+    Correos de prueba solo desde ``email_config`` (holder / 4 cuentas).
+    No usa ``notificaciones_envios`` (módulo Notificaciones), para desacoplar Recibos.
+    """
+    sync_from_db()
+    emails: List[str] = []
+    raw_emails = _current.get("emails_pruebas")
+    if isinstance(raw_emails, list):
+        emails = [
+            e.strip()
+            for e in raw_emails
+            if e and isinstance(e, str) and e.strip() and "@" in e.strip()
+        ]
+    if not emails:
+        single = (_current.get("email_pruebas") or "").strip()
+        if single and "@" in single:
+            emails = [single]
+    return emails
 
 
 def _get_emails_pruebas_list() -> List[str]:
