@@ -41,6 +41,9 @@ from sqlalchemy.orm import Session
 from app.models.cliente import Cliente
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
+from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
+    registrar_traza_gmail_abcd_cuotas_evento,
+)
 from app.services.pagos_gmail.pago_abcd_auto_service import (
     crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd,
 )
@@ -721,7 +724,7 @@ def run_pipeline(
                             rows_pairs = []
                         else:
                             _label_ids_len_before_comprobante = len(label_ids_for_message)
-                            comprobante_resueltos: list[tuple[str, str, dict]] = []
+                            comprobante_resueltos: list[tuple[str, str, dict, PagosGmailSyncItem]] = []
                             persist_ok = True
                             for si, gt, p in rows_pairs:
                                 sh_raw = p.get("sha256")
@@ -746,7 +749,9 @@ def run_pipeline(
                                     )
                                     break
                                 _uid, link_url = persisted
-                                comprobante_resueltos.append((_uid, link_url or "", p))
+                                comprobante_resueltos.append(
+                                    (_uid, link_url or "", p, si)
+                                )
                                 logger.info(
                                     "[PAGOS_GMAIL]   Comprobante en sesion OK: %s -> %s",
                                     p["filename"],
@@ -804,7 +809,7 @@ def run_pipeline(
                                         "[PAGOS_GMAIL]   Commit BD: %d fila(s) sync/temporal + comprobante enlazado",
                                         len(rows_pairs),
                                     )
-                                    for uid, link_url, p in comprobante_resueltos:
+                                    for uid, link_url, p, si in comprobante_resueltos:
                                         sh_raw = p.get("sha256")
                                         if isinstance(sh_raw, str) and len(sh_raw.strip()) == 64:
                                             k = sh_raw.strip().lower()
@@ -836,7 +841,23 @@ def run_pipeline(
                                                     resumen_log_linea_plantilla_abcd(),
                                                     dup_doc,
                                                 )
-                                                if not dup_doc:
+                                                sid = getattr(si, "id", None)
+                                                ssync = getattr(si, "sync_id", None)
+                                                if dup_doc:
+                                                    registrar_traza_gmail_abcd_cuotas_evento(
+                                                        db,
+                                                        sync_id=ssync,
+                                                        sync_item_id=sid,
+                                                        plantilla_fmt=fmt_row,
+                                                        cedula=p.get("c"),
+                                                        numero_referencia=p.get("r"),
+                                                        banco_excel=p.get("banco_excel"),
+                                                        archivo_adjunto=p.get("filename"),
+                                                        comprobante_imagen_id=uid,
+                                                        duplicado_documento=True,
+                                                        etapa_final="OMITIDO_DUPLICADO",
+                                                    )
+                                                else:
                                                     res_abcd = (
                                                         crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
                                                             db,
@@ -853,6 +874,9 @@ def run_pipeline(
                                                             link_comprobante=link_url,
                                                             fmt=fmt_row,
                                                             filename=p.get("filename"),
+                                                            sync_id=ssync,
+                                                            sync_item_id=sid,
+                                                            comprobante_imagen_id=uid,
                                                         )
                                                     )
                                                     if res_abcd.get("ok"):
@@ -867,11 +891,52 @@ def run_pipeline(
                                                             res_abcd.get("motivo"),
                                                             (res_abcd.get("detalle") or "")[:160],
                                                         )
+                                                        registrar_traza_gmail_abcd_cuotas_evento(
+                                                            db,
+                                                            sync_id=ssync,
+                                                            sync_item_id=sid,
+                                                            plantilla_fmt=fmt_row,
+                                                            cedula=p.get("c"),
+                                                            numero_referencia=p.get("r"),
+                                                            banco_excel=p.get("banco_excel"),
+                                                            archivo_adjunto=p.get("filename"),
+                                                            comprobante_imagen_id=uid,
+                                                            duplicado_documento=False,
+                                                            etapa_final="OMITIDO_NEGOCIO",
+                                                            motivo=str(
+                                                                res_abcd.get("motivo") or ""
+                                                            )[:80]
+                                                            or None,
+                                                            detalle=str(
+                                                                res_abcd.get("detalle") or ""
+                                                            )[:4000]
+                                                            or None,
+                                                        )
                                             except Exception as dup_exc:
                                                 logger.warning(
                                                     "[PAGOS_GMAIL] [REGLA_ABCD] Evaluacion duplicado documento: %s",
                                                     dup_exc,
                                                 )
+                                                try:
+                                                    registrar_traza_gmail_abcd_cuotas_evento(
+                                                        db,
+                                                        sync_id=getattr(
+                                                            si, "sync_id", None
+                                                        ),
+                                                        sync_item_id=getattr(si, "id", None),
+                                                        plantilla_fmt=fmt_row,
+                                                        cedula=p.get("c"),
+                                                        numero_referencia=p.get("r"),
+                                                        banco_excel=p.get("banco_excel"),
+                                                        archivo_adjunto=p.get("filename"),
+                                                        comprobante_imagen_id=uid,
+                                                        duplicado_documento=False,
+                                                        etapa_final="ERROR_PIPELINE",
+                                                        motivo="excepcion",
+                                                        detalle=str(dup_exc)[:4000],
+                                                    )
+                                                except Exception:
+                                                    pass
                                 except Exception as upd_err:
                                     logger.warning(
                                         "[PAGOS_GMAIL] Error commit filas + comprobante en BD: %s",

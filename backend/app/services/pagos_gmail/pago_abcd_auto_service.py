@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.documento import compose_numero_documento_almacenado
 from app.models.cliente import Cliente
 from app.models.pago import Pago
+from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
 from app.models.prestamo import Prestamo
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.services.pago_registro_moneda import resolver_monto_registro_pago
@@ -74,6 +75,9 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
     link_comprobante: Optional[str],
     fmt: str,
     filename: Optional[str] = None,
+    sync_id: Optional[int] = None,
+    sync_item_id: Optional[int] = None,
+    comprobante_imagen_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     Crea `Pago`, aplica cascada y hace `commit` en BD si todo OK.
@@ -240,6 +244,30 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
 
     pagos_ep._estado_conciliacion_post_cascada(pago, cc, cp)
 
+    etapa_traza = "CUOTAS_OK" if (cc > 0 or cp > 0) else "PAGO_SIN_CUOTAS"
+    cid_hex = (comprobante_imagen_id or "").strip()[:32] or None
+    traza = PagosGmailAbcdCuotasTraza(
+        sync_id=sync_id,
+        sync_item_id=sync_item_id,
+        plantilla_fmt=fmt_u,
+        cedula=(cedula_fk or "")[:50] or None,
+        numero_referencia=(ref_raw or "")[:200] or None,
+        banco_excel=ib,
+        archivo_adjunto=(filename or "")[:500] or None,
+        comprobante_imagen_id=cid_hex,
+        duplicado_documento=False,
+        etapa_final=etapa_traza,
+        motivo=None,
+        detalle=None,
+        pago_id=pago.id,
+        prestamo_id=prestamo_id,
+        cuotas_completadas=cc,
+        cuotas_parciales=cp,
+        conciliado_final=bool(pago.conciliado),
+        pago_estado_final=(pago.estado or "")[:30] or None,
+    )
+    db.add(traza)
+
     try:
         db.commit()
     except Exception as e:
@@ -265,4 +293,6 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
         "cuotas_parciales": cp,
         "conciliado": bool(pago.conciliado),
         "estado": pago.estado,
+        "etapa_final": etapa_traza,
+        "traza_id": getattr(traza, "id", None),
     }

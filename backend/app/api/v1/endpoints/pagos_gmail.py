@@ -6,6 +6,7 @@ Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no la
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD); query opcional plantilla A–D vs duplicado `pagos.numero_documento`
 - GET /pagos/gmail/status: ultima ejecucion; escaneo automatico cada N h (solo pending_identification) si esta habilitado en settings
+- GET /pagos/gmail/abcd-cuotas-traza: historial plantilla A–D → pago → cuotas (post-Gemini)
 - POST /pagos/gmail/confirmar-dia: confirmacion si/no; si si, borrado de datos acumulados
 """
 import io
@@ -22,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
+from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
 from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_ERROR_EMAIL
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
@@ -186,6 +188,70 @@ def status(db: Session = Depends(get_db)):
         "last_correos_marcados_revision": marcados,
         "last_run_summary": run_summary,
     }
+
+
+@router.get("/abcd-cuotas-traza")
+def list_abcd_cuotas_traza(
+    limit: int = Query(100, ge=1, le=500),
+    sync_id: Optional[int] = Query(None, ge=1),
+    etapa_final: Optional[str] = Query(
+        None,
+        description="Filtrar por etapa: CUOTAS_OK, PAGO_SIN_CUOTAS, OMITIDO_DUPLICADO, OMITIDO_NEGOCIO, ERROR_PIPELINE",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Historial de intentos **plantilla banco A–D** después del escaneo Gmail/Gemini: si el pago llegó a
+    `pagos`, cuántas cuotas se tocaron y el código de resultado.
+
+    **Cómo interpretar `etapa_final`:**
+    - **CUOTAS_OK**: se creó `pago` y la cascada aplicó al menos una operación a cuotas (`cuotas_completadas` + `cuotas_parciales` > 0).
+    - **PAGO_SIN_CUOTAS**: `pago` creado pero ninguna cuota recibió monto (revisar préstamo / cuotas pendientes).
+    - **OMITIDO_DUPLICADO**: serial ya existía en `pagos` / `pagos_con_errores`; no se duplicó el pago.
+    - **OMITIDO_NEGOCIO**: validación o regla de negocio (ver `motivo` / `detalle`: varios préstamos, huella, etc.).
+    - **ERROR_PIPELINE**: excepción al evaluar o procesar (ver `detalle`).
+    """
+    q = select(PagosGmailAbcdCuotasTraza).order_by(desc(PagosGmailAbcdCuotasTraza.created_at)).limit(limit)
+    if sync_id is not None:
+        q = q.where(PagosGmailAbcdCuotasTraza.sync_id == sync_id)
+    if etapa_final and etapa_final.strip():
+        q = q.where(PagosGmailAbcdCuotasTraza.etapa_final == etapa_final.strip()[:40])
+    try:
+        rows = db.execute(q).scalars().all()
+    except Exception as e:
+        logger.warning("[PAGOS_GMAIL] abcd-cuotas-traza lectura: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo leer la traza (¿migración 059 aplicada?). Ejecute alembic upgrade.",
+        ) from e
+
+    items = []
+    for r in rows:
+        items.append(
+            {
+                "id": r.id,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "sync_id": r.sync_id,
+                "sync_item_id": r.sync_item_id,
+                "plantilla_fmt": r.plantilla_fmt,
+                "cedula": r.cedula,
+                "numero_referencia": r.numero_referencia,
+                "banco_excel": r.banco_excel,
+                "archivo_adjunto": r.archivo_adjunto,
+                "comprobante_imagen_id": r.comprobante_imagen_id,
+                "duplicado_documento": bool(r.duplicado_documento),
+                "etapa_final": r.etapa_final,
+                "motivo": r.motivo,
+                "detalle": r.detalle,
+                "pago_id": r.pago_id,
+                "prestamo_id": r.prestamo_id,
+                "cuotas_completadas": int(r.cuotas_completadas or 0),
+                "cuotas_parciales": int(r.cuotas_parciales or 0),
+                "conciliado_final": r.conciliado_final,
+                "pago_estado_final": r.pago_estado_final,
+            }
+        )
+    return {"total": len(items), "items": items}
 
 
 def _get_sheet_date_for_download() -> datetime:

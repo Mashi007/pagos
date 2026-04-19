@@ -30,6 +30,7 @@ from app.models.conciliacion_temporal import ConciliacionTemporal
 from app.models.cliente_con_error import ClienteConError
 from app.models.prestamo_con_error import PrestamoConError
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
+from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.pago_reportado_exportado import PagoReportadoExportado
 from app.models.pago_pendiente_descargar import PagoPendienteDescargar
@@ -120,4 +121,5 @@ __all__ = [
     "AuditoriaClienteAltaDesdeDrive",
     "DriveClientesCandidatosCache",
     "ClientesDriveExportExcelAuditoria",
+    "PagosGmailAbcdCuotasTraza",
 ]
