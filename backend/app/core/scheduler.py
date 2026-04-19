@@ -16,6 +16,8 @@ Cuando esta activo:
 - lunes a sabado 03:40  Snapshot candidatos préstamo desde `drive` -> prestamo_candidatos_drive (UI /actualizaciones/prestamos), si ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY (hueco tras auditoría 03:00).
 
 Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
+
+Criterios al cambiar horarios (carga, colisiones, dependencias): docs/PROGRAMACION_JOBS_SCHEDULER.md
 """
 import logging
 from typing import Optional
