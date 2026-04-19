@@ -93,31 +93,30 @@ def fila_payload_grilla_verde(payload: Dict[str, Any], cedula_cmp_fila: str) -> 
     return bool(formato_ok and tabla_ok and hoja_ok)
 
 
-def conteos_aprueban_no_aprueban_snapshot(
+def conteos_listo_guardar_y_map_por_id(
     db: Session,
     *,
     cedula_cmp_contains: str | None,
-) -> Tuple[int, int]:
+) -> Tuple[int, int, Dict[int, bool]]:
     """
-    Recorre el snapshot (mismo filtro que el listado) y cuenta filas que pasan `_motivos_no_100`
-    (misma condición que `ejecutar_guardar_candidatos_drive_validados_100` antes de crear el préstamo).
-
-    Usa un solo `conteo_prestamos_por_cedula_norm` inicial (sin simular inserts secuenciales).
-
-    Returns:
-        (aprueban, no_aprueban)
+    Una sola pasada sobre el snapshot filtrado:
+    - cuenta guardables / no guardables (`_motivos_no_100`, igual que «Guardar (100%)»);
+    - devuelve mapa `id` → cumple validación previa al crear préstamo (para la UI por fila).
     """
     prestamo_counts = conteo_prestamos_por_cedula_norm(db)
-    stmt = select(PrestamoCandidatoDrive.payload, PrestamoCandidatoDrive.cedula_cmp)
+    stmt = select(PrestamoCandidatoDrive.id, PrestamoCandidatoDrive.payload, PrestamoCandidatoDrive.cedula_cmp)
     q = (cedula_cmp_contains or "").strip()
     if q:
         stmt = stmt.where(PrestamoCandidatoDrive.cedula_cmp.contains(q))
     rows = list(db.execute(stmt).all() or [])
+    listo_map: Dict[int, bool] = {}
     apr = 0
-    for payload, cmp in rows:
+    for rid, payload, cmp in rows:
         pl = payload if isinstance(payload, dict) else {}
         ok, _, pc = _motivos_no_100(pl, db, prestamo_counts)
-        if ok and pc is not None:
+        v = bool(ok and pc is not None)
+        listo_map[int(rid)] = v
+        if v:
             apr += 1
     total = len(rows)
-    return apr, total - apr
+    return apr, total - apr, listo_map

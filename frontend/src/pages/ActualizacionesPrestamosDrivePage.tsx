@@ -177,9 +177,12 @@ function filaCandidatoDriveTono(p: PrestamoCandidatoDriveFila['payload']): FilaC
   return 'plain'
 }
 
-/** Innegociable: solo filas en verde (100% de reglas de esta pantalla, incl. Q ≤ 30 días) pueden guardarse. */
-function filaCumpleCienParaGuardar(p: PrestamoCandidatoDriveFila['payload']): boolean {
-  return filaCandidatoDriveTono(p) === 'green'
+/** Solo filas que el servidor marcará como guardables (misma regla que «Guardar (100%)»). */
+function filaCumpleCienParaGuardar(fila: PrestamoCandidatoDriveFila): boolean {
+  if (typeof fila.listo_para_guardar === 'boolean') {
+    return fila.listo_para_guardar
+  }
+  return filaCandidatoDriveTono(fila.payload) === 'green'
 }
 
 const FILA_TONE_TR: Record<FilaCandidatoDriveTono, string> = {
@@ -280,8 +283,8 @@ function AccionesPorFilaCandidatoDrive({
   const saveTitle = puedeGuardarFila
     ? guardandoEstaFila
       ? `Guardando fila de hoja ${sr}…`
-      : `Guardar solo esta fila (cumple 100% de validadores).`
-    : `No se puede guardar: la fila debe cumplir el 100% de validadores (debe verse en verde).`
+      : `Guardar solo esta fila (cumple la validación de servidor, misma que «Guardar (100%)»).`
+    : `No se puede guardar: la fila no cumple la validación de servidor (cliente, N, R, Q, S, J, cédula, etc.).`
 
   return (
     <div className="flex min-w-0 flex-nowrap items-center justify-center gap-0.5 sm:gap-1">
@@ -424,8 +427,10 @@ export default function ActualizacionesPrestamosDrivePage() {
   const onGuardarUnaFila = useCallback(
     async (sheetRowNumber: number) => {
       const fila = rows.find(r => r.sheet_row_number === sheetRowNumber)
-      if (!fila || !filaCumpleCienParaGuardar(fila.payload)) {
-        toast.error('Solo se puede guardar una fila en verde (100% de validadores de esta pantalla).')
+      if (!fila || !filaCumpleCienParaGuardar(fila)) {
+        toast.error(
+          'Solo se puede guardar una fila que cumpla la validación de servidor (la misma que usa «Guardar (100%)»).'
+        )
         return
       }
       setGuardandoFilaSheet(sheetRowNumber)
@@ -454,12 +459,18 @@ export default function ActualizacionesPrestamosDrivePage() {
       const ins = Number(res.insertados_ok ?? 0)
       const om = Number(res.omitidos_no_100 ?? 0)
       const err = Number(res.errores_al_guardar ?? 0)
+      const msg =
+        res.mensaje ||
+        `Creados: ${ins}. Omitidos: ${om}. Errores: ${err}. Las no guardadas siguen en el snapshot para revisión.`
       if (err > 0) {
-        toast.warning(res.mensaje || `Creados: ${ins}. Omitidos: ${om}. Errores: ${err}.`)
+        toast.warning(msg)
       } else if (ins > 0) {
-        toast.success(res.mensaje || `${ins} préstamo(s) creado(s) (solo 100% validadores).`)
+        toast.success(msg)
       } else {
-        toast.message(res.mensaje || 'Ninguna fila cumplió el 100% de validadores; no se guardó nada.')
+        toast.message(
+          msg ||
+            'Ninguna fila cumplió la validación; no se guardó nada. Todas siguen en la lista para revisarlas y corregir.'
+        )
       }
       await qc.resetQueries({ queryKey: [...QK_BASE, cedulaDebounced] })
     } catch (e) {
@@ -657,22 +668,6 @@ export default function ActualizacionesPrestamosDrivePage() {
             </p>
           )}
 
-          <p className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-6 rounded-sm bg-emerald-200 ring-1 ring-emerald-300/60" aria-hidden />
-              Verde: cumple validadores 1·2·3 de esta pantalla
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-6 rounded-sm bg-amber-200 ring-1 ring-amber-300/60" aria-hidden />
-              Ámbar: cédula válida pero repetida en el snapshot Drive
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-6 rounded-sm bg-red-200 ring-1 ring-red-300/60" aria-hidden />
-              Rojo: cédula inválida; tipo V/E con ≥2 préstamos con esa cédula (J exento); o fecha aprobación (Q) con
-              más de 30 días
-            </span>
-          </p>
-
           <div className="overflow-x-auto rounded-md border">
             <table className="w-full min-w-[1280px] table-fixed text-left text-sm">
               <colgroup>
@@ -783,7 +778,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                           <AccionesPorFilaCandidatoDrive
                             fila={r}
                             disabled={accionesGlobalesDeshabilitadas}
-                            puedeGuardarFila={filaCumpleCienParaGuardar(r.payload)}
+                            puedeGuardarFila={filaCumpleCienParaGuardar(r)}
                             guardandoEstaFila={guardandoFilaSheet === r.sheet_row_number}
                             onGuardarFila={sr => void onGuardarUnaFila(sr)}
                           />

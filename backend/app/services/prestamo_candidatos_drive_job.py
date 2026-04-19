@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.models.drive import DriveRow
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
-from app.services.prestamo_candidatos_drive_kpis import conteos_aprueban_no_aprueban_snapshot
+from app.services.prestamo_candidatos_drive_kpis import conteos_listo_guardar_y_map_por_id
 from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
@@ -226,15 +226,16 @@ def listar_prestamo_candidatos_drive_snapshot(
     lim = max(1, min(int(limit), 2000))
     off = max(0, int(offset))
 
+    aprueban, no_aprueban, listo_por_id = conteos_listo_guardar_y_map_por_id(
+        db, cedula_cmp_contains=filt_norm or None
+    )
+
     stmt = select(PrestamoCandidatoDrive).order_by(PrestamoCandidatoDrive.sheet_row_number.asc())
     if base_filter:
         stmt = stmt.where(*base_filter)
     stmt = stmt.offset(off).limit(lim)
 
     rows = list(db.execute(stmt).scalars().all() or [])
-    aprueban, no_aprueban = conteos_aprueban_no_aprueban_snapshot(
-        db, cedula_cmp_contains=filt_norm or None
-    )
     computed_at = None
     if total > 0:
         max_stmt = select(func.max(PrestamoCandidatoDrive.computed_at))
@@ -264,6 +265,7 @@ def listar_prestamo_candidatos_drive_snapshot(
                 "cedula_cmp": r.cedula_cmp,
                 "payload": r.payload,
                 "computed_at": r.computed_at.isoformat() if r.computed_at else None,
+                "listo_para_guardar": bool(listo_por_id.get(int(r.id), False)),
             }
             for r in rows
         ],

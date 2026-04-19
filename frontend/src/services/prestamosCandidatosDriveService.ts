@@ -9,6 +9,8 @@ export type PrestamoCandidatoDriveFila = {
   sheet_row_number: number
   cedula_cmp: string
   payload: PrestamoCandidatoDrivePayload
+  /** Misma validación de servidor que «Guardar (100%)» antes de crear el préstamo. */
+  listo_para_guardar?: boolean
   computed_at: string | null
 }
 
@@ -51,6 +53,8 @@ export type PrestamoCandidatosDriveGuardarValidados100Response = {
   insertados_ok: number
   omitidos_no_100: number
   errores_al_guardar: number
+  /** Candidatos que siguen en el snapshot (no validaron o error al crear préstamo). */
+  pendientes_en_snapshot?: number
   omitidos: Array<{ sheet_row_number: number; cedula_cmp: string; motivos: string[] }>
   errores: Array<{ sheet_row_number: number; cedula_cmp: string; error: string }>
   mensaje: string

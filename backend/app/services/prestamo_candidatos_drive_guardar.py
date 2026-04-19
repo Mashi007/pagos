@@ -1,10 +1,9 @@
 """
-Guardado masivo desde snapshot `prestamo_candidatos_drive`: solo filas al 100% de validadores.
+Guardado masivo desde snapshot `prestamo_candidatos_drive`: solo filas que cumplen validación previa.
 
-No usa selección manual: recorre el snapshot y crea préstamo solo si cumple todas las comprobaciones
-(formato de cédula, no duplicada en hoja, regla tipo V/E vs tabla préstamos (J exento), cliente existente,
-montos/fechas/cuotas/modalidad/analista válidos, Pydantic PrestamoCreate, huella y cupo al crear
-vía la misma lógica que POST /prestamos).
+Solo se crean préstamos (y se borran del snapshot) las filas que pasan todas las comprobaciones.
+Las que no cumplen o fallan al crear el préstamo **permanecen en el snapshot** para revisarlas en pantalla,
+corregir la hoja Drive y volver a recalcular o guardar cuando estén listas.
 """
 from __future__ import annotations
 
@@ -258,8 +257,8 @@ def ejecutar_guardar_candidatos_drive_validados_100(
     current_user: UserResponse,
 ) -> Dict[str, Any]:
     """
-    Recorre `prestamo_candidatos_drive` y crea préstamos solo para filas al 100%.
-    Las filas insertadas correctamente se eliminan del snapshot.
+    Recorre `prestamo_candidatos_drive` y crea préstamos solo para filas que cumplen `_motivos_no_100`.
+    Cada inserción correcta elimina esa fila del snapshot. El resto queda intacto para revisión y pulido.
     """
     from app.api.v1.endpoints.prestamos import crear_prestamo_servicio_interno
 
@@ -327,15 +326,22 @@ def ejecutar_guardar_candidatos_drive_validados_100(
                 e,
             )
 
+    pendientes = len(omitidos) + len(errores)
     return {
         "insertados_ok": insertados,
         "omitidos_no_100": len(omitidos),
         "errores_al_guardar": len(errores),
+        "pendientes_en_snapshot": pendientes,
         "omitidos": omitidos,
         "errores": errores,
         "mensaje": (
-            f"Guardado automático (solo 100% validadores): {insertados} préstamo(s) creado(s), "
-            f"{len(omitidos)} omitido(s) por no cumplir criterios, {len(errores)} error(es) al crear."
+            f"Guardado: {insertados} préstamo(s) creado(s) y quitado(s) del snapshot; "
+            f"{len(omitidos)} omitido(s) por no cumplir validación; {len(errores)} error(es) al crear. "
+            + (
+                f"Quedan {pendientes} candidato(s) en el snapshot para revisar, corregir en Drive y seguir puliendo."
+                if pendientes
+                else "No quedan pendientes de este lote en el snapshot."
+            )
         ),
     }
 
@@ -347,8 +353,8 @@ def ejecutar_guardar_candidatos_drive_una_fila(
     sheet_row_number: int,
 ) -> Dict[str, Any]:
     """
-    Crea un préstamo solo para la fila del snapshot con ese `sheet_row_number` si cumple el 100%
-    de validadores (misma lógica que el guardado masivo). Si no cumple, no persiste nada.
+    Crea un préstamo solo si la fila cumple la misma validación que el guardado masivo.
+    Si no cumple o falla la creación, la candidatura **sigue en el snapshot** para revisión.
     """
     from app.api.v1.endpoints.prestamos import crear_prestamo_servicio_interno
 
@@ -376,7 +382,10 @@ def ejecutar_guardar_candidatos_drive_una_fila(
             "insertados_ok": 0,
             "sheet_row_number": int(sheet_row_number),
             "motivos": motivos,
-            "mensaje": "La fila no cumple el 100% de validadores; no se guardó nada.",
+            "mensaje": (
+                "La fila no cumple los requisitos para crear el préstamo; no se guardó nada. "
+                "Sigue en el snapshot para revisar motivos, corregir datos o la hoja Drive y volver a intentar."
+            ),
         }
 
     try:
@@ -399,7 +408,10 @@ def ejecutar_guardar_candidatos_drive_una_fila(
             "insertados_ok": 0,
             "sheet_row_number": int(sheet_row_number),
             "motivos": [msg],
-            "mensaje": "Error al crear el préstamo para esta fila.",
+            "mensaje": (
+                "Error al crear el préstamo; no se eliminó la fila del snapshot. "
+                "Revise el motivo, corrija y vuelva a guardar."
+            ),
         }
     except Exception as e:
         db.rollback()
@@ -413,7 +425,9 @@ def ejecutar_guardar_candidatos_drive_una_fila(
             "insertados_ok": 0,
             "sheet_row_number": int(sheet_row_number),
             "motivos": [str(e)],
-            "mensaje": "Error al crear el préstamo para esta fila.",
+            "mensaje": (
+                "Error al crear el préstamo; la candidatura sigue en el snapshot para revisión y corrección."
+            ),
         }
 
     return {
@@ -421,5 +435,8 @@ def ejecutar_guardar_candidatos_drive_una_fila(
         "insertados_ok": 1,
         "sheet_row_number": int(sheet_row_number),
         "motivos": [],
-        "mensaje": f"Préstamo creado para la fila de hoja {sheet_row_number} (validadores 100%).",
+        "mensaje": (
+            f"Préstamo creado para la fila de hoja {sheet_row_number}. "
+            "Esa fila se quitó del snapshot; las demás candidaturas permanecen para revisión."
+        ),
     }
