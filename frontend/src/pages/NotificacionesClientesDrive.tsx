@@ -2,7 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { ChevronLeft, ChevronRight, Download, Edit2, RefreshCw, Save, Trash2, User } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Edit2,
+  FileSpreadsheet,
+  RefreshCw,
+  Save,
+  Trash2,
+  User,
+} from 'lucide-react'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
@@ -50,6 +60,11 @@ function fechaInputFromDefaults(iso: string | undefined): string {
     /* ignore */
   }
   return '1990-01-01'
+}
+
+/** Regla alineada con el backend: solo filas «verdes» (cédula válida y no duplicada en snapshot Drive). */
+function filaCumpleValidadoresImportacion(r: DriveCandidate | undefined): r is DriveCandidate {
+  return r != null && r.seleccionable === true
 }
 
 /** Origen del estado en lista (antes de importar a `clientes`). */
@@ -169,8 +184,13 @@ export default function NotificacionesClientesDrive() {
 
   /** Solo filas que pasan validadores de esta pantalla (mismo criterio que `seleccionable` en API). */
   const filasValidasVisibles = useMemo(
-    () => visibleRows.filter(r => r.seleccionable),
+    () => visibleRows.filter(r => filaCumpleValidadoresImportacion(r)),
     [visibleRows]
+  )
+
+  const editSourceRow = useMemo(
+    () => (editDraft ? rows.find(r => r.sheet_row_number === editDraft.sheet_row_number) : undefined),
+    [rows, editDraft]
   )
 
   const totalCandidatosVisibles = visibleRows.length
@@ -202,10 +222,20 @@ export default function NotificacionesClientesDrive() {
     [selected]
   )
 
+  const seleccionadosTodosImportables = useMemo(() => {
+    if (seleccionados.length === 0) return false
+    return seleccionados.every(sr =>
+      filaCumpleValidadoresImportacion(rows.find(r => r.sheet_row_number === sr))
+    )
+  }, [seleccionados, rows])
+
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   /** Descarga la pestaña CONCILIACIÓN desde Google (POST /conciliacion-sheet/sync-now) y luego recalcula candidatos. */
   const [manualSyncing, setManualSyncing] = useState(false)
+  const [exportingModo, setExportingModo] = useState<
+    null | 'solo_no_seleccionable' | 'todos_candidatos'
+  >(null)
 
   const refetchCandidatosYAuditoria = useCallback(async () => {
     await qc.invalidateQueries({ queryKey: [...QK] })
@@ -287,6 +317,15 @@ export default function NotificacionesClientesDrive() {
       toast.message('Seleccione al menos una fila.')
       return
     }
+    const noImportables = seleccionados.filter(
+      sr => !filaCumpleValidadoresImportacion(rows.find(r => r.sheet_row_number === sr))
+    )
+    if (noImportables.length > 0) {
+      toast.error(
+        `No se puede guardar: ${noImportables.length} fila(s) no cumplen el 100% de validadores de esta pantalla (cédula válida y única en el snapshot de la hoja). Quite esas filas de la selección o corríjalas en Drive y sincronice.`
+      )
+      return
+    }
     await importarLote(seleccionados, comentario.trim() || null)
   }
 
@@ -348,8 +387,10 @@ export default function NotificacionesClientesDrive() {
   }
 
   const onGuardarFilaRapido = async (r: DriveCandidate) => {
-    if (!r.seleccionable) {
-      toast.message('Esta fila no se puede importar tal cual (cédula o duplicado en hoja).')
+    if (!filaCumpleValidadoresImportacion(r)) {
+      toast.error(
+        'No se puede guardar: la fila no cumple el 100% de validadores (cédula válida y no duplicada en el snapshot de la hoja). Corrija en Google Sheet y sincronice, o use Excel según su flujo.'
+      )
       return
     }
     setSavingRowId(r.sheet_row_number)
@@ -391,6 +432,24 @@ export default function NotificacionesClientesDrive() {
     }
   }
 
+  const onExportarExcel = async (modo: 'solo_no_seleccionable' | 'todos_candidatos') => {
+    setExportingModo(modo)
+    try {
+      await clienteService.postDriveImportExportarExcel(modo)
+      toast.success(
+        modo === 'solo_no_seleccionable'
+          ? 'Excel descargado. Las filas no válidas (rojo/ámbar) se eliminaron del snapshot en BD; vuelven con «Actualización manual» desde Google.'
+          : 'Excel descargado. Todas las filas exportadas se eliminaron del snapshot en BD; vuelven con «Actualización manual» desde Google.'
+      )
+      setSelected({})
+      await refetchCandidatosYAuditoria()
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo generar el Excel')
+    } finally {
+      setExportingModo(null)
+    }
+  }
+
   const onOcultarFila = (sheetRow: number) => {
     setHiddenRows(prev => {
       const n = new Set(prev)
@@ -414,7 +473,7 @@ export default function NotificacionesClientesDrive() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Clientes (Drive)"
-        description="Cédulas en la pestaña CONCILIACIÓN (columna E) que aún no están en la tabla clientes. Origen: snapshot en BD (D=nombres, F=teléfono, G=email). Use «Actualización manual» para traer la hoja desde Google ahora; «Actualizar lista» solo recalcula candidatos desde el snapshot ya en BD. Con jobs activos, la lista se materializa dom/mié 03:00 Caracas (tras el sync 02:00). Solo administradores."
+        description="Cédulas en la pestaña CONCILIACIÓN (columna E) que aún no están en la tabla clientes. Origen: snapshot en BD (D=nombres, F=teléfono, G=email). Regla fija: solo las filas en verde (100% validadores de hoja: cédula válida y no duplicada en el snapshot) pueden guardarse en clientes, en lote o por fila; las rojas o ámbar no permiten guardar hasta corregir en Drive y sincronizar. Puede exportarlas a Excel (cada exportación borra esas filas del snapshot en BD hasta el próximo sync). Use «Actualización manual» para traer la hoja desde Google ahora; «Actualizar lista» solo recalcula candidatos desde el snapshot ya en BD. Con jobs activos, la lista se materializa dom/mié 03:00 Caracas (tras el sync 02:00). Solo administradores."
         icon={User}
       />
 
@@ -468,6 +527,44 @@ export default function NotificacionesClientesDrive() {
                 className={`mr-2 h-4 w-4 ${refreshing || q.isFetching ? 'animate-spin' : ''}`}
               />
               Actualizar lista
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              title="Solo filas rojo/ámbar. Descarga Excel y elimina esas filas del snapshot drive en BD."
+              onClick={() => void onExportarExcel('solo_no_seleccionable')}
+              disabled={
+                manualSyncing ||
+                refreshing ||
+                q.isFetching ||
+                saving ||
+                exportingModo !== null
+              }
+            >
+              <FileSpreadsheet
+                className={`mr-2 h-4 w-4 ${exportingModo === 'solo_no_seleccionable' ? 'animate-pulse' : ''}`}
+              />
+              {exportingModo === 'solo_no_seleccionable' ? 'Excel…' : 'Excel no válidas'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              title="Toda la lista actual de candidatos. Descarga Excel y elimina esas filas del snapshot drive en BD."
+              onClick={() => void onExportarExcel('todos_candidatos')}
+              disabled={
+                manualSyncing ||
+                refreshing ||
+                q.isFetching ||
+                saving ||
+                exportingModo !== null
+              }
+            >
+              <FileSpreadsheet
+                className={`mr-2 h-4 w-4 ${exportingModo === 'todos_candidatos' ? 'animate-pulse' : ''}`}
+              />
+              {exportingModo === 'todos_candidatos' ? 'Excel…' : 'Excel todos'}
             </Button>
           </div>
         </CardHeader>
@@ -686,10 +783,11 @@ export default function NotificacionesClientesDrive() {
             <div className="flex flex-col justify-end gap-2">
               <p className="text-sm text-muted-foreground">
                 Se aplican las mismas reglas que «Nuevo cliente» / POST /clientes (duplicados por
-                cédula, nombre, correo, teléfono). Si una fila falla, las demás del mismo guardado
-                siguen. «Guardar» solo envía filas con cédula válida y sin duplicado en la hoja (no
-                incluye las marcadas en rojo o ámbar). Cada fila puede editarse, guardarse sola u
-                ocultarse solo en esta pantalla.
+                cédula, nombre, correo, teléfono). Además, en esta pantalla no se permite guardar ninguna
+                fila que no esté en verde: cédula válida y única en el snapshot de la hoja. Si una fila
+                del lote no cumple, no se envía el lote entero hasta que quite esas filas de la
+                selección. Cada fila puede editarse u ocultarse en esta sesión; el botón guardar por
+                fila solo actúa si la fila cumple el 100% de validadores de hoja.
               </p>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <Button
@@ -703,7 +801,19 @@ export default function NotificacionesClientesDrive() {
                   type="button"
                   variant="outline"
                   onClick={onGuardar}
-                  disabled={saving || q.isFetching || manualSyncing || refreshing}
+                  disabled={
+                    saving ||
+                    q.isFetching ||
+                    manualSyncing ||
+                    refreshing ||
+                    seleccionados.length === 0 ||
+                    !seleccionadosTodosImportables
+                  }
+                  title={
+                    seleccionados.length && !seleccionadosTodosImportables
+                      ? 'Hay filas seleccionadas que no cumplen el 100% de validadores de hoja; no se puede guardar.'
+                      : undefined
+                  }
                 >
                   {saving ? 'Guardando…' : `Guardar seleccionados (${seleccionados.length})`}
                 </Button>
@@ -960,7 +1070,15 @@ export default function NotificacionesClientesDrive() {
                 <Button
                   type="button"
                   onClick={() => onGuardarEdicion()}
-                  disabled={savingRowId === editDraft.sheet_row_number}
+                  disabled={
+                    savingRowId === editDraft.sheet_row_number ||
+                    !filaCumpleValidadoresImportacion(editSourceRow)
+                  }
+                  title={
+                    !filaCumpleValidadoresImportacion(editSourceRow)
+                      ? 'Solo se puede guardar si la fila cumple el 100% de validadores de hoja (fila en verde en la lista).'
+                      : undefined
+                  }
                 >
                   {savingRowId === editDraft.sheet_row_number ? 'Guardando…' : 'Guardar en clientes'}
                 </Button>

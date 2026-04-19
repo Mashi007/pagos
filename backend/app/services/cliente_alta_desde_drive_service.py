@@ -7,7 +7,9 @@ Teléfono columna F: dígitos solos, sin guión; quita 58 inicial si viene inter
 """
 from __future__ import annotations
 
+import json
 import logging
+from io import BytesIO
 import re
 import uuid
 from datetime import date, datetime, timezone
@@ -15,13 +17,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import desc, func, select
+from sqlalchemy import delete, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models.auditoria_cliente_alta_desde_drive import AuditoriaClienteAltaDesdeDrive
 from app.models.cliente import Cliente
 from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.models.drive import DriveRow
+from app.models.clientes_drive_export_excel_auditoria import ClientesDriveExportExcelAuditoria
 from app.models.drive_clientes_candidatos_cache import DriveClientesCandidatosCache
 from app.schemas.cliente import ClienteCreate, ClienteDriveImportarFilaBody
 
@@ -297,9 +300,9 @@ def importar_seleccion_desde_drive(
         if not info.get("seleccionable"):
             err += 1
             msg = (
-                "Fila bloqueada: cédula inválida o duplicada en la hoja."
+                "No se permite guardar: la fila no cumple el 100% de validadores (cédula inválida en el snapshot)."
                 if not info.get("cedula_valida")
-                else "Fila bloqueada: cédula repetida en el snapshot de Drive."
+                else "No se permite guardar: la fila no cumple el 100% de validadores (cédula duplicada en el snapshot de Drive)."
             )
             db.add(
                 AuditoriaClienteAltaDesdeDrive(
@@ -489,7 +492,7 @@ def importar_fila_desde_drive(
     if not info.get("seleccionable"):
         raise HTTPException(
             status_code=400,
-            detail="La fila no es importable: cédula inválida o duplicada en la hoja.",
+            detail="La fila no cumple el 100% de validadores de la hoja (cédula inválida o duplicada en el snapshot de Drive); no se permite guardar en clientes.",
         )
 
     cmp_expected = str(info.get("cedula_cmp") or "")
@@ -608,6 +611,113 @@ def importar_fila_desde_drive(
         "cliente_id": row.id,
         "cedula": row.cedula,
     }
+
+
+def exportar_candidatos_drive_excel_y_borrar_filas(
+    db: Session,
+    *,
+    usuario_email: str,
+    modo: str,
+) -> Tuple[bytes, str]:
+    """
+    Genera Excel con candidatos Drive y elimina de `drive` las filas exportadas (sheet_row_number).
+    modo=solo_no_seleccionable: filas que no cumplen validadores de pantalla (rojo/ámbar).
+    modo=todos_candidatos: todos los candidatos listados (incluye listos para revisión).
+    Tras borrar, recalcula caché de candidatos. Las filas vuelven a aparecer en el próximo sync Google → BD.
+    """
+    if modo not in ("solo_no_seleccionable", "todos_candidatos"):
+        raise HTTPException(status_code=400, detail="modo debe ser solo_no_seleccionable o todos_candidatos.")
+
+    data = listar_candidatos_desde_drive(db)
+    candidatos: List[Dict[str, Any]] = list(data.get("candidatos") or [])
+    if modo == "solo_no_seleccionable":
+        to_export = [c for c in candidatos if not c.get("seleccionable")]
+    else:
+        to_export = list(candidatos)
+
+    if not to_export:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay filas para exportar con ese criterio.",
+        )
+
+    try:
+        from openpyxl import Workbook
+    except ImportError as e:  # pragma: no cover
+        raise HTTPException(
+            status_code=503,
+            detail="Dependencia openpyxl no disponible en el servidor.",
+        ) from e
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "candidatos_drive"
+    headers = [
+        "sheet_row_number",
+        "col_d_nombres",
+        "col_e_cedula",
+        "col_f_telefono",
+        "col_g_email",
+        "cedula_valida",
+        "cedula_error",
+        "duplicada_en_hoja",
+        "seleccionable",
+        "motivo_estado",
+    ]
+    ws.append(headers)
+    for c in to_export:
+        defs = c.get("defaults") or {}
+        if not c.get("cedula_valida"):
+            motivo = "cedula_invalida"
+        elif c.get("duplicada_en_hoja"):
+            motivo = "duplicada_en_hoja"
+        elif c.get("seleccionable"):
+            motivo = "listo_revision"
+        else:
+            motivo = "otro"
+        ws.append(
+            [
+                c.get("sheet_row_number"),
+                c.get("col_d_nombres") or "",
+                c.get("col_e_cedula") or "",
+                defs.get("telefono") or "",
+                defs.get("email") or "",
+                bool(c.get("cedula_valida")),
+                c.get("cedula_error") or "",
+                bool(c.get("duplicada_en_hoja")),
+                bool(c.get("seleccionable")),
+                motivo,
+            ]
+        )
+
+    buf = BytesIO()
+    wb.save(buf)
+    raw_bytes = buf.getvalue()
+
+    nums = sorted({int(c["sheet_row_number"]) for c in to_export})
+    db.execute(delete(DriveRow).where(DriveRow.sheet_row_number.in_(nums)))
+    db.add(
+        ClientesDriveExportExcelAuditoria(
+            usuario_email=usuario_email,
+            modo=modo,
+            filas_count=len(nums),
+            sheet_rows_json=json.dumps(nums),
+        )
+    )
+    db.commit()
+
+    try:
+        refrescar_cache_candidatos_drive(db)
+    except Exception:
+        logger.warning(
+            "[drive_clientes_candidatos_cache] no se pudo refrescar tras exportar-excel modo=%s",
+            modo,
+            exc_info=True,
+        )
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    fname = f"drive_candidatos_{modo}_{stamp}.xlsx"
+    return raw_bytes, fname
 
 
 def listar_auditoria(db: Session, *, page: int = 1, per_page: int = 50) -> Dict[str, Any]:

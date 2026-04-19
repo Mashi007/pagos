@@ -2,12 +2,14 @@
 Refresco del snapshot `prestamo_candidatos_drive` desde la tabla `drive` (post sync CONCILIACIÓN).
 
 Criterio de filas en snapshot (columna E, misma normalización que carga masiva / check-cédulas):
-ningún préstamo previo en `prestamos` con esa cédula normalizada (candidatos = titular sin cartera aún).
+- **V** o **E**: no debe haber ya un préstamo con esa cédula (máximo un préstamo en cartera).
+- **J** (jurídico): puede haber ya uno o más préstamos; el candidato puede seguir figurando (dos o más créditos permitidos).
+- Otras letras: sin préstamo previo con esa cédula normalizada (mismo criterio que antes para no J).
 
 Validadores en cada payload:
 1) formato (`validate_cedula` / `cedula_valida`);
-2) cédula tipo **V**: a lo sumo un préstamo en tabla `prestamos` con esa cédula normalizada
-   (`validador_v_max_un_prestamo_ok`; en candidatos sin préstamo previo queda en true);
+2) cédula tipo **V** o **E**: a lo sumo un préstamo en tabla `prestamos` con esa cédula normalizada;
+   dos o más no cumplen (`validador_ve_max_un_prestamo_ok`; en candidatos V/E sin préstamo previo queda en true);
 3) no duplicada en hoja (`duplicada_en_hoja` / `validador_sin_duplicado_en_hoja_ok`).
 
 Job: domingo y miércoles 04:05 America/Caracas (tras sync hoja 04:00).
@@ -25,6 +27,8 @@ from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.models.drive import DriveRow
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
 from app.services.prestamo_candidatos_drive_validadores import (
+    cedula_cmp_es_tipo_j,
+    cedula_cmp_es_tipo_v_o_e,
     cedula_cmp_es_tipo_venezolano_v,
     conteo_prestamos_por_cedula_norm,
 )
@@ -116,14 +120,21 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     for r, cmp_e in tmp:
         n_prest = int(prestamo_counts.get(cmp_e, 0) or 0)
         es_v = cedula_cmp_es_tipo_venezolano_v(cmp_e)
-        if n_prest >= 1:
+        es_ve = cedula_cmp_es_tipo_v_o_e(cmp_e)
+        es_e = bool(es_ve and not es_v)
+        es_j = cedula_cmp_es_tipo_j(cmp_e)
+        if es_ve and n_prest >= 1:
+            continue
+        if not es_ve and not es_j and n_prest >= 1:
             continue
         raw_e = _cell(getattr(r, "col_e", None))
         dup_sheet = conteos.get(cmp_e, 0) > 1
         vced = validate_cedula(raw_e)
         cedula_valida = bool(vced.get("valido"))
         cedula_error = None if cedula_valida else (vced.get("error") or "Cédula inválida")
-        validador_v_max_un_prestamo_ok = not (es_v and n_prest >= 1)
+        # V y E: máximo un préstamo; dos o más con la misma cédula normalizada no cumplen.
+        validador_ve_max_un_prestamo_ok = not (es_ve and n_prest >= 2)
+        validador_v_max_un_prestamo_ok = validador_ve_max_un_prestamo_ok
 
         payload: Dict[str, Any] = {
             "col_e_cedula": raw_e or None,
@@ -141,7 +152,11 @@ def ejecutar_refresh_prestamo_candidatos_drive(
             "duplicada_en_hoja": dup_sheet,
             "prestamos_misma_cedula_norm_count": n_prest,
             "cedula_es_tipo_v_venezolano": es_v,
+            "cedula_es_tipo_e": es_e,
+            "cedula_es_tipo_ve": es_ve,
+            "cedula_es_tipo_j": es_j,
             "validador_formato_cedula_ok": cedula_valida,
+            "validador_ve_max_un_prestamo_ok": validador_ve_max_un_prestamo_ok,
             "validador_v_max_un_prestamo_ok": validador_v_max_un_prestamo_ok,
             "validador_sin_duplicado_en_hoja_ok": not dup_sheet,
             "drive_synced_at": drive_synced_at.isoformat() if drive_synced_at else None,

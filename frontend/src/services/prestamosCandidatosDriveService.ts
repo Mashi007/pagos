@@ -59,3 +59,20 @@ export async function postPrestamosCandidatosDriveGuardarValidados100(): Promise
     {}
   )
 }
+
+export type PrestamoCandidatosDriveGuardarFilaResponse = {
+  ok: boolean
+  insertados_ok: number
+  sheet_row_number: number
+  motivos: string[]
+  mensaje: string
+}
+
+/** Crea un préstamo solo para la fila indicada si cumple el 100% de validadores (misma regla que el lote). */
+export async function postPrestamosCandidatosDriveGuardarFila(
+  sheetRowNumber: number
+): Promise<PrestamoCandidatosDriveGuardarFilaResponse> {
+  return apiClient.post<PrestamoCandidatosDriveGuardarFilaResponse>(`${BASE}/guardar-fila`, {
+    sheet_row_number: sheetRowNumber,
+  })
+}

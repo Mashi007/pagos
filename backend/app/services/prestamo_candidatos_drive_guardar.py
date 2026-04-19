@@ -2,7 +2,7 @@
 Guardado masivo desde snapshot `prestamo_candidatos_drive`: solo filas al 100% de validadores.
 
 No usa selección manual: recorre el snapshot y crea préstamo solo si cumple todas las comprobaciones
-(formato de cédula, no duplicada en hoja, regla tipo V vs tabla préstamos, cliente existente,
+(formato de cédula, no duplicada en hoja, regla tipo V/E vs tabla préstamos (J exento), cliente existente,
 montos/fechas/cuotas/modalidad/analista válidos, Pydantic PrestamoCreate, huella y cupo al crear
 vía la misma lógica que POST /prestamos).
 """
@@ -23,7 +23,7 @@ from app.models.cliente import Cliente
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
 from app.schemas.auth import UserResponse
 from app.services.prestamo_candidatos_drive_validadores import (
-    cedula_cmp_es_tipo_venezolano_v,
+    cedula_cmp_es_tipo_v_o_e,
     conteo_prestamos_por_cedula_norm,
 )
 from app.schemas.prestamo import PrestamoCreate
@@ -171,11 +171,10 @@ def _motivos_no_100(
         motivos.append("sin clave de cédula normalizada")
 
     n_live = int(prestamo_counts.get(ced_cmp, 0) or 0) if ced_cmp else 0
-    es_v = cedula_cmp_es_tipo_venezolano_v(ced_cmp)
-    if es_v and n_live >= 1:
+    if cedula_cmp_es_tipo_v_o_e(ced_cmp) and n_live >= 1:
         motivos.append(
-            f"cédula tipo V: solo se permite un préstamo en cartera "
-            f"(hay {n_live} en tabla préstamos con esta cédula normalizada)"
+            "cédula tipo V o E: máximo un préstamo en cartera (innegociable). "
+            f"Hay {n_live} préstamo(s) en tabla con esta cédula normalizada."
         )
     cliente_id = _cliente_id_por_cedula_normalizada(db, ced_cmp) if ced_cmp else None
     if cliente_id is None:
@@ -199,6 +198,11 @@ def _motivos_no_100(
         req_d, ap_d = fechas
         if ap_d < req_d:
             motivos.append("fecha aprobación anterior a fecha requerimiento")
+        # Innegociable (alineado a UI): aprobación (Q) no puede ser anterior a hoy en más de 30 días.
+        if (date.today() - ap_d).days > 30:
+            motivos.append(
+                "fecha de aprobación (Q) supera 30 días de antigüedad; no se permite guardar (innegociable)"
+            )
 
     mod = _normalizar_modalidad(_cell_str(payload.get("col_s_modalidad_pago")))
     if mod is None:
@@ -326,4 +330,89 @@ def ejecutar_guardar_candidatos_drive_validados_100(
             f"Guardado automático (solo 100% validadores): {insertados} préstamo(s) creado(s), "
             f"{len(omitidos)} omitido(s) por no cumplir criterios, {len(errores)} error(es) al crear."
         ),
+    }
+
+
+def ejecutar_guardar_candidatos_drive_una_fila(
+    db: Session,
+    *,
+    current_user: UserResponse,
+    sheet_row_number: int,
+) -> Dict[str, Any]:
+    """
+    Crea un préstamo solo para la fila del snapshot con ese `sheet_row_number` si cumple el 100%
+    de validadores (misma lógica que el guardado masivo). Si no cumple, no persiste nada.
+    """
+    from app.api.v1.endpoints.prestamos import crear_prestamo_servicio_interno
+
+    prestamo_counts = conteo_prestamos_por_cedula_norm(db)
+    r = db.scalar(
+        select(PrestamoCandidatoDrive)
+        .where(PrestamoCandidatoDrive.sheet_row_number == int(sheet_row_number))
+        .order_by(PrestamoCandidatoDrive.id.desc())
+        .limit(1)
+    )
+    if r is None:
+        return {
+            "ok": False,
+            "insertados_ok": 0,
+            "sheet_row_number": int(sheet_row_number),
+            "motivos": [f"No hay candidato en snapshot para la fila de hoja {sheet_row_number}."],
+            "mensaje": "Fila no encontrada en el snapshot.",
+        }
+
+    payload = r.payload if isinstance(r.payload, dict) else {}
+    ok, motivos, pc = _motivos_no_100(payload, db, prestamo_counts)
+    if not ok or pc is None:
+        return {
+            "ok": False,
+            "insertados_ok": 0,
+            "sheet_row_number": int(sheet_row_number),
+            "motivos": motivos,
+            "mensaje": "La fila no cumple el 100% de validadores; no se guardó nada.",
+        }
+
+    try:
+        crear_prestamo_servicio_interno(db, pc, current_user)
+        db.delete(r)
+        db.commit()
+        cmp_upd = (_cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")).strip()
+        if cmp_upd:
+            prestamo_counts[cmp_upd] = int(prestamo_counts.get(cmp_upd, 0) or 0) + 1
+    except HTTPException as he:
+        db.rollback()
+        msg = str(he.detail) if he.detail else str(he)
+        logger.warning(
+            "[prestamo_candidatos_drive_guardar] fila única sheet_row=%s HTTP %s",
+            sheet_row_number,
+            msg,
+        )
+        return {
+            "ok": False,
+            "insertados_ok": 0,
+            "sheet_row_number": int(sheet_row_number),
+            "motivos": [msg],
+            "mensaje": "Error al crear el préstamo para esta fila.",
+        }
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "[prestamo_candidatos_drive_guardar] fila única sheet_row=%s: %s",
+            sheet_row_number,
+            e,
+        )
+        return {
+            "ok": False,
+            "insertados_ok": 0,
+            "sheet_row_number": int(sheet_row_number),
+            "motivos": [str(e)],
+            "mensaje": "Error al crear el préstamo para esta fila.",
+        }
+
+    return {
+        "ok": True,
+        "insertados_ok": 1,
+        "sheet_row_number": int(sheet_row_number),
+        "motivos": [],
+        "mensaje": f"Préstamo creado para la fila de hoja {sheet_row_number} (validadores 100%).",
     }

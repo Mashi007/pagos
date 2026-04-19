@@ -150,6 +150,12 @@ class Settings(BaseSettings):
     # ============================================
     # WhatsApp / Meta API
     # ============================================
+    # Si False: no se llama a Graph API para enviar mensajes (notificaciones/comunicaciones).
+    # Poner WHATSAPP_SEND_ENABLED=false en el entorno del servicio y reiniciar. Email y demás sin cambios.
+    WHATSAPP_SEND_ENABLED: bool = Field(
+        default=True,
+        description="False = desactiva solo el envío saliente por Cloud API hasta el próximo arranque con True.",
+    )
     WHATSAPP_VERIFY_TOKEN: Optional[str] = Field(
         None,
         description="Token de verificación del webhook de WhatsApp (Meta)"

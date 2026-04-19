@@ -596,6 +596,20 @@ class ClienteService {
     return apiClient.post(`${this.baseUrl}/drive-import/importar`, body)
   }
 
+  /**
+   * Excel de candidatos Drive; en servidor borra las filas exportadas de `drive` en BD
+   * (vuelven con el próximo sync desde Google). modo: solo_no_seleccionable = rojo/ámbar.
+   */
+  async postDriveImportExportarExcel(
+    modo: 'solo_no_seleccionable' | 'todos_candidatos'
+  ): Promise<void> {
+    await apiClient.postDownloadFile(
+      `${this.baseUrl}/drive-import/exportar-excel`,
+      { modo },
+      `drive_candidatos_${modo}.xlsx`
+    )
+  }
+
   async getDriveImportAuditoria(
     page: number = 1,
     per_page: number = 50

@@ -59,6 +59,7 @@ from app.models.conciliacion_sheet import (
 from app.models.drive import DriveRow
 from app.models.auditoria_cliente_alta_desde_drive import AuditoriaClienteAltaDesdeDrive
 from app.models.drive_clientes_candidatos_cache import DriveClientesCandidatosCache
+from app.models.clientes_drive_export_excel_auditoria import ClientesDriveExportExcelAuditoria
 
 __all__ = [
     "Base",
@@ -118,4 +119,5 @@ __all__ = [
     "DriveRow",
     "AuditoriaClienteAltaDesdeDrive",
     "DriveClientesCandidatosCache",
+    "ClientesDriveExportExcelAuditoria",
 ]

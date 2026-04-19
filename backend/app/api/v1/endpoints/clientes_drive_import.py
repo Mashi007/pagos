@@ -3,9 +3,9 @@ Altas de clientes desde snapshot Drive (pestaña CONCILIACIÓN, columnas D–G).
 
 Solo administradores. Los datos base provienen de la tabla `drive` (sync existente).
 """
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.core.deps import get_current_user, require_admin
 from app.schemas.auth import UserResponse
 from app.schemas.cliente import ClienteDriveImportarFilaBody
 from app.services.cliente_alta_desde_drive_service import (
+    exportar_candidatos_drive_excel_y_borrar_filas,
     importar_fila_desde_drive,
     importar_seleccion_desde_drive,
     listar_auditoria,
@@ -48,6 +49,34 @@ def post_drive_clientes_refresh_cache(
 class ImportarClientesDriveBody(BaseModel):
     sheet_row_numbers: List[int] = Field(default_factory=list)
     comentario: Optional[str] = None
+
+
+class ExportarCandidatosDriveExcelBody(BaseModel):
+    """Exporta filas a Excel y las borra de la tabla `drive` en BD (vuelven con el próximo sync desde Google)."""
+
+    modo: Literal["solo_no_seleccionable", "todos_candidatos"] = Field(
+        "solo_no_seleccionable",
+        description="solo_no_seleccionable = filas en rojo/ámbar; todos_candidatos = toda la lista actual de candidatos.",
+    )
+
+
+@router.post("/exportar-excel", summary="Excel candidatos Drive y borrado de filas en snapshot drive (admin)")
+def post_drive_clientes_exportar_excel(
+    body: ExportarCandidatosDriveExcelBody,
+    db: Session = Depends(get_db),
+    current: UserResponse = Depends(require_admin),
+):
+    email = (current.email or "").strip() or "admin@sistema"
+    content, filename = exportar_candidatos_drive_excel_y_borrar_filas(
+        db, usuario_email=email, modo=body.modo
+    )
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 @router.post("/importar", summary="Insertar clientes seleccionados (mismas reglas que POST /clientes)")

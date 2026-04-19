@@ -5,9 +5,14 @@ Usa configuración desde BD (whatsapp_config_holder) para integrar Configuració
 import logging
 import re
 
+from app.core.config import settings
 from app.core.whatsapp_config_holder import get_whatsapp_config, sync_from_db as whatsapp_sync_from_db
 
 logger = logging.getLogger(__name__)
+
+# Meta (#133010) "Account not registered": número WABA no registrado para Cloud API; evita WARNING por cada envío.
+_whatsapp_133010_logged = False
+_whatsapp_send_disabled_logged = False
 
 
 def _normalize_phone(phone: str) -> str:
@@ -31,6 +36,15 @@ def send_whatsapp_text(to_phone: str, body: str) -> tuple[bool, str | None]:
     if not phone or len(phone) < 10:
         logger.debug("Número WhatsApp inválido o vacío: %s", to_phone)
         return False, "Número inválido o vacío"
+    if not settings.WHATSAPP_SEND_ENABLED:
+        global _whatsapp_send_disabled_logged
+        if not _whatsapp_send_disabled_logged:
+            _whatsapp_send_disabled_logged = True
+            logger.info(
+                "WhatsApp envío desactivado (WHATSAPP_SEND_ENABLED=False). Sin llamadas a Meta hasta reiniciar "
+                "con la variable en true o sin definir."
+            )
+        return False, "WhatsApp desactivado en el servidor (WHATSAPP_SEND_ENABLED=False)"
     whatsapp_sync_from_db()
     cfg = get_whatsapp_config()
     token = (cfg.get("access_token") or "").strip()
@@ -66,9 +80,19 @@ def send_whatsapp_text(to_phone: str, body: str) -> tuple[bool, str | None]:
             return True, None
         # Extraer mensaje de Meta para plantilla requerida u otros errores
         error_detail: str | None = None
+        meta_code: int | None = None
+        fbtrace: str | None = None
         try:
             err = r.json()
-            msg = (err.get("error") or {}).get("message", "")
+            err_o = err.get("error") or {}
+            msg = (err_o.get("message") or "") if isinstance(err_o, dict) else ""
+            if isinstance(err_o, dict):
+                c = err_o.get("code")
+                if isinstance(c, int):
+                    meta_code = c
+                elif isinstance(c, str) and c.isdigit():
+                    meta_code = int(c)
+                fbtrace = err_o.get("fbtrace_id") if isinstance(err_o.get("fbtrace_id"), str) else None
             if msg:
                 error_detail = msg
                 if "template" in msg.lower() or "plantilla" in msg.lower() or "reusable" in msg.lower():
@@ -79,7 +103,29 @@ def send_whatsapp_text(to_phone: str, body: str) -> tuple[bool, str | None]:
                     )
         except Exception:
             error_detail = r.text[:200] if r.text else f"HTTP {r.status_code}"
-        logger.warning("WhatsApp API error %s: %s", r.status_code, error_detail or r.text[:200])
+        msg_l = (error_detail or "").lower()
+        is_133010 = meta_code == 133010 or "account not registered" in msg_l
+        if is_133010:
+            global _whatsapp_133010_logged
+            if not _whatsapp_133010_logged:
+                _whatsapp_133010_logged = True
+                logger.warning(
+                    "WhatsApp API error %s (#133010 Account not registered): el número de la app (phone_number_id) "
+                    "no está registrado en la plataforma WhatsApp Business / Cloud API. "
+                    "Revise Meta Business Suite: WhatsApp > API de configuración — registrar el número, "
+                    "o confirme que el Phone number ID y el token corresponden al mismo activo. "
+                    "Doc: developers.facebook.com/docs/whatsapp/cloud-api/reference/registration. "
+                    "fbtrace_id=%s",
+                    r.status_code,
+                    fbtrace or "—",
+                )
+            else:
+                logger.debug(
+                    "WhatsApp API error %s (#133010) omitido (ya se registró aviso operativo).",
+                    r.status_code,
+                )
+        else:
+            logger.warning("WhatsApp API error %s: %s", r.status_code, error_detail or r.text[:200])
         return False, error_detail or "Error al enviar"
     except Exception as e:
         logger.exception("Error enviando WhatsApp: %s", e)

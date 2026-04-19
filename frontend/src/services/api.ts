@@ -936,7 +936,8 @@ class ApiClient {
         url.includes('/clientes/check-cedulas') || // Pipeline Gmail: puede tardar si el backend es síncrono (credenciales OAuth)
         url.includes('/conciliacion-sheet/sync-now') || // Sheets API + escritura snapshot BD
         url.includes('/prestamos/candidatos-drive/refrescar') || // Recorre drive + prestamos + reescribe snapshot
-        url.includes('/prestamos/candidatos-drive/guardar-validados-100') // Crear préstamos por cada fila válida
+        url.includes('/prestamos/candidatos-drive/guardar-validados-100') || // Crear préstamos por cada fila válida
+        url.includes('/prestamos/candidatos-drive/guardar-fila') // Una fila + mismas validaciones que el lote
 
       // Auditoria cartera en Render: sincroniza decenas de miles de cuotas + cascadas masivas (siempre >30s).
       const isAuditoriaCarteraCorregir = url.includes(
@@ -1242,6 +1243,88 @@ class ApiClient {
 
     document.body.removeChild(link)
 
+    window.URL.revokeObjectURL(downloadUrl)
+  }
+
+  /** POST con cuerpo JSON; respuesta binaria (p. ej. xlsx). En 4xx intenta leer JSON desde el blob del error. */
+  async postDownloadFile(
+    url: string,
+    data?: unknown,
+    fallbackFilename: string = 'download.bin'
+  ): Promise<void> {
+    const response = await this.client.post(url, data ?? {}, {
+      responseType: 'blob',
+      timeout: Math.max(SLOW_ENDPOINT_TIMEOUT_MS, 120000),
+    })
+
+    if (response.status >= 400 && response.status < 500) {
+      let backendMessage = `Request failed with status ${response.status}`
+      const blobErr = response.data as Blob
+      if (blobErr && typeof blobErr.text === 'function') {
+        try {
+          const txt = await blobErr.text()
+          try {
+            const j = JSON.parse(txt) as {
+              detail?: unknown
+              message?: string
+            }
+            if (typeof j.detail === 'string') {
+              backendMessage = j.detail
+            } else if (Array.isArray(j.detail)) {
+              backendMessage = j.detail
+                .map((x: { msg?: string }) =>
+                  typeof x?.msg === 'string' ? x.msg : JSON.stringify(x)
+                )
+                .join('; ')
+            } else if (j.message) {
+              backendMessage = j.message
+            }
+          } catch {
+            if (txt && txt.length > 0 && txt.length < 500) {
+              backendMessage = txt
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      const error = new Error(backendMessage) as any
+      error.response = response
+      error.isAxiosError = true
+      error.code = `ERR_HTTP_${response.status}`
+      throw error
+    }
+
+    const rawCd =
+      (response.headers['content-disposition'] as string | undefined) ||
+      (response.headers['Content-Disposition'] as string | undefined)
+    let filename = fallbackFilename
+    if (rawCd) {
+      const mStar = /filename\*=UTF-8''([^;]+)/i.exec(rawCd)
+      if (mStar?.[1]) {
+        try {
+          filename = decodeURIComponent(mStar[1].trim())
+        } catch {
+          filename = mStar[1].trim()
+        }
+      } else {
+        const m =
+          /filename="([^"]+)"/i.exec(rawCd) ||
+          /filename=([^;\s]+)/i.exec(rawCd)
+        if (m?.[1]) {
+          filename = m[1].replace(/"/g, '')
+        }
+      }
+    }
+
+    const blob = new Blob([response.data])
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
     window.URL.revokeObjectURL(downloadUrl)
   }
 

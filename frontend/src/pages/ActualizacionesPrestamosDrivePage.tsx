@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import {
   getPrestamosCandidatosDriveSnapshot,
+  postPrestamosCandidatosDriveGuardarFila,
   postPrestamosCandidatosDriveGuardarValidados100,
   postPrestamosCandidatosDriveRefrescar,
   type PrestamoCandidatoDriveFila,
@@ -63,15 +64,136 @@ function escapeCsvCell(s: string): string {
   return t
 }
 
-/** 1 formato cédula · 2 regla V vs tabla préstamos · 3 sin duplicado en hoja */
+/** Cédula normalizada tipo V o E (regla innegociable: máximo un préstamo en cartera). */
+function cedulaEsTipoVeFromPayload(p: PrestamoCandidatoDriveFila['payload']): boolean {
+  if (p.cedula_es_tipo_ve === true) return true
+  const u = String(p.cedula_cmp ?? '')
+    .trim()
+    .toUpperCase()
+  if (u.length > 0 && (u[0] === 'V' || u[0] === 'E')) return true
+  return p.cedula_es_tipo_v_venezolano === true || p.cedula_es_tipo_e === true
+}
+
+/** Cédula tipo J (jurídico): pueden existir 2 o más préstamos; no aplica el tope V/E en columna 2. */
+function cedulaEsTipoJFromPayload(p: PrestamoCandidatoDriveFila['payload']): boolean {
+  if (p.cedula_es_tipo_j === true) return true
+  const u = String(p.cedula_cmp ?? '')
+    .trim()
+    .toUpperCase()
+  return u.length > 0 && u[0] === 'J'
+}
+
+/** 1 formato cédula · 2 regla V/E vs tabla préstamos (J exento) · 3 sin duplicado en hoja */
 function validadoresTresFlags(p: PrestamoCandidatoDriveFila['payload']) {
   const formatoOk = (p.validador_formato_cedula_ok ?? p.cedula_valida) === true
   const hojaOk = (p.validador_sin_duplicado_en_hoja_ok ?? p.duplicada_en_hoja !== true) === true
   const nPrest = Number(p.prestamos_misma_cedula_norm_count ?? 0)
   const esV = p.cedula_es_tipo_v_venezolano === true
-  const tablaVOk =
-    (p.validador_v_max_un_prestamo_ok ?? !(esV && nPrest >= 1)) === true
-  return { formatoOk, tablaVOk, hojaOk, nPrest, esV }
+  const esVe = cedulaEsTipoVeFromPayload(p)
+  const esJ = cedulaEsTipoJFromPayload(p)
+  const tablaVOk = esJ
+    ? true
+    : (p.validador_ve_max_un_prestamo_ok ??
+        p.validador_v_max_un_prestamo_ok ??
+        !(esVe && nPrest >= 2)) === true
+  return { formatoOk, tablaVOk, hojaOk, nPrest, esV, esVe, esJ }
+}
+
+/** Parseo ligero alineado a columna Q (DD/MM/YYYY o YYYY-MM-DD). */
+function parseFechaFlexible(s: string): Date | null {
+  const raw = (s || '').trim()
+  if (!raw) return null
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    const d = new Date(`${raw.slice(0, 10)}T12:00:00`)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (m) {
+    const day = Number(m[1])
+    const month = Number(m[2])
+    const year = Number(m[3])
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const d = new Date(year, month - 1, day, 12, 0, 0)
+      if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) return d
+    }
+  }
+  return null
+}
+
+/** Segunda parte de Q = aprobación si hay separador; si no, una sola fecha cuenta para ambas. */
+function fechaAprobacionDesdeColQ(qVal: string): Date | null {
+  const raw = (qVal || '').trim()
+  if (!raw) return null
+  for (const sep of ['|', ';', '\n']) {
+    if (raw.includes(sep)) {
+      const i = raw.indexOf(sep)
+      const a = raw.slice(0, i).trim()
+      const b = raw.slice(i + sep.length).trim()
+      if (a && b) {
+        const d2 = parseFechaFlexible(b)
+        if (d2) return d2
+      }
+      break
+    }
+  }
+  const multiSpace = /\s{2,}/
+  if (multiSpace.test(raw)) {
+    const parts = raw.split(multiSpace).map(x => x.trim()).filter(Boolean)
+    if (parts.length >= 2) {
+      const d2 = parseFechaFlexible(parts[1])
+      if (d2) return d2
+    }
+  }
+  return parseFechaFlexible(raw)
+}
+
+/** Fecha de aprobación (Q) con más de 30 días calendario respecto a hoy (zona local). */
+function aprobacionQMasDe30Dias(qVal: string): boolean {
+  const ap = fechaAprobacionDesdeColQ(qVal)
+  if (!ap) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const ap0 = new Date(ap)
+  ap0.setHours(0, 0, 0, 0)
+  const diffDays = Math.floor((today.getTime() - ap0.getTime()) / 86400000)
+  return diffDays > 30
+}
+
+type FilaCandidatoDriveTono = 'red' | 'amber' | 'green' | 'plain'
+
+/** Fondo de fila: rojo (prioridad), ámbar, verde, o neutro. */
+function filaCandidatoDriveTono(p: PrestamoCandidatoDriveFila['payload']): FilaCandidatoDriveTono {
+  const { formatoOk, tablaVOk, hojaOk, nPrest, esVe } = validadoresTresFlags(p)
+  const dup = p.duplicada_en_hoja === true
+  const qRaw = String(p.col_q_fecha ?? '').trim()
+
+  const redInvalida = !formatoOk
+  const redVeDosOMasCreditos = esVe && Number.isFinite(nPrest) && nPrest >= 2
+  const redFechaAntigua = aprobacionQMasDe30Dias(qRaw)
+
+  if (redInvalida || redVeDosOMasCreditos || redFechaAntigua) return 'red'
+  if (formatoOk && dup) return 'amber'
+  if (formatoOk && tablaVOk && hojaOk) return 'green'
+  return 'plain'
+}
+
+/** Innegociable: solo filas en verde (100% de reglas de esta pantalla, incl. Q ≤ 30 días) pueden guardarse. */
+function filaCumpleCienParaGuardar(p: PrestamoCandidatoDriveFila['payload']): boolean {
+  return filaCandidatoDriveTono(p) === 'green'
+}
+
+const FILA_TONE_TR: Record<FilaCandidatoDriveTono, string> = {
+  red: 'bg-red-50/95 hover:bg-red-50/90 border-b border-red-100',
+  amber: 'bg-amber-50/95 hover:bg-amber-50/90 border-b border-amber-100',
+  green: 'bg-emerald-50/95 hover:bg-emerald-50/90 border-b border-emerald-100',
+  plain: 'border-b border-border bg-background hover:bg-muted/25',
+}
+
+const FILA_TONE_STICKY_TD: Record<FilaCandidatoDriveTono, string> = {
+  red: 'bg-red-50/98 backdrop-blur-sm',
+  amber: 'bg-amber-50/98 backdrop-blur-sm',
+  green: 'bg-emerald-50/98 backdrop-blur-sm',
+  plain: 'bg-background/98 backdrop-blur-sm',
 }
 
 function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
@@ -79,9 +201,10 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
     'fila',
     'cedula_e',
     'prestamos_misma_cedula_n',
-    'es_tipo_v',
+    'es_tipo_ve',
+    'es_tipo_j',
     'val_formato',
-    'val_tabla_v',
+    'val_tabla_ve',
     'val_hoja',
     'total_n',
     'modalidad_s',
@@ -95,20 +218,21 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
   const lines = [headers.join(',')]
   for (const r of filas) {
     const p = r.payload
-    const { formatoOk, tablaVOk, hojaOk, nPrest, esV } = validadoresTresFlags(p)
+    const { formatoOk, tablaVOk, hojaOk, nPrest, esVe, esJ } = validadoresTresFlags(p)
     const ok = p.cedula_valida === true
     const dup = p.duplicada_en_hoja === true
     let estado = 'revisión'
     if (!ok) estado = `inválida: ${String(p.cedula_error ?? '')}`
     else if (dup) estado = 'repetida_hoja'
-    else if (!tablaVOk) estado = 'tipo_V: ya hay préstamo en tabla'
+    else if (!tablaVOk) estado = 'tipo_VE: más de un préstamo o no cumple tabla'
     else estado = 'listo'
     lines.push(
       [
         r.sheet_row_number,
         strPayload(p, 'col_e_cedula'),
         String(nPrest),
-        esV ? 'si' : 'no',
+        esVe ? 'si' : 'no',
+        esJ ? 'si' : 'no',
         formatoOk ? 'ok' : 'no',
         tablaVOk ? 'ok' : 'no',
         hojaOk ? 'ok' : 'no',
@@ -138,13 +262,25 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
 function AccionesPorFilaCandidatoDrive({
   fila,
   disabled,
+  puedeGuardarFila,
+  guardandoEstaFila,
+  onGuardarFila,
 }: {
   fila: PrestamoCandidatoDriveFila
   disabled: boolean
+  puedeGuardarFila: boolean
+  guardandoEstaFila: boolean
+  onGuardarFila: (sheetRowNumber: number) => void
 }) {
   const iconBtn =
     'h-8 w-8 shrink-0 rounded-md border border-slate-200 bg-white p-0 shadow-sm hover:bg-slate-50 disabled:opacity-50'
   const sr = fila.sheet_row_number
+  const saveDisabled = disabled || !puedeGuardarFila || guardandoEstaFila
+  const saveTitle = puedeGuardarFila
+    ? guardandoEstaFila
+      ? `Guardando fila de hoja ${sr}…`
+      : `Guardar solo esta fila (cumple 100% de validadores).`
+    : `No se puede guardar: la fila debe cumplir el 100% de validadores (debe verse en verde).`
 
   return (
     <div className="flex flex-nowrap items-center justify-end gap-1">
@@ -167,16 +303,16 @@ function AccionesPorFilaCandidatoDrive({
         variant="outline"
         size="icon"
         className={iconBtn}
-        title={`Guardar solo esta fila en préstamos (próximamente). Mientras tanto use «Guardar (100%)» arriba.`}
+        title={saveTitle}
         aria-label={`Guardar fila ${sr}`}
-        disabled={disabled}
-        onClick={() =>
-          toast.message(
-            `Guardar solo la fila ${sr}: próximamente. Use el botón «Guardar (100%)» para crear préstamos válidos en lote.`
-          )
-        }
+        disabled={saveDisabled}
+        onClick={() => onGuardarFila(sr)}
       >
-        <Save className="h-3.5 w-3.5 text-foreground" strokeWidth={2} aria-hidden />
+        <Save
+          className={`h-3.5 w-3.5 text-foreground ${guardandoEstaFila ? 'animate-pulse' : ''}`}
+          strokeWidth={2}
+          aria-hidden
+        />
       </Button>
       <Button
         type="button"
@@ -219,6 +355,7 @@ export default function ActualizacionesPrestamosDrivePage() {
   const [forzarVacio, setForzarVacio] = useState(false)
   const [manualUpdating, setManualUpdating] = useState(false)
   const [guardarValidosSaving, setGuardarValidosSaving] = useState(false)
+  const [guardandoFilaSheet, setGuardandoFilaSheet] = useState<number | null>(null)
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -283,6 +420,32 @@ export default function ActualizacionesPrestamosDrivePage() {
 
   const refetchLista = snapshotQuery.refetch
 
+  const onGuardarUnaFila = useCallback(
+    async (sheetRowNumber: number) => {
+      const fila = rows.find(r => r.sheet_row_number === sheetRowNumber)
+      if (!fila || !filaCumpleCienParaGuardar(fila.payload)) {
+        toast.error('Solo se puede guardar una fila en verde (100% de validadores de esta pantalla).')
+        return
+      }
+      setGuardandoFilaSheet(sheetRowNumber)
+      try {
+        const res = await postPrestamosCandidatosDriveGuardarFila(sheetRowNumber)
+        if (!res.ok) {
+          const m = (res.motivos && res.motivos.length > 0 ? res.motivos.join(' · ') : null) || res.mensaje
+          toast.error(m || 'No se pudo guardar la fila.')
+          return
+        }
+        toast.success(res.mensaje || `Fila ${sheetRowNumber} guardada.`)
+        await qc.resetQueries({ queryKey: [...QK_BASE, cedulaDebounced] })
+      } catch (e) {
+        toast.error(getErrorMessage(e) || 'No se pudo guardar la fila')
+      } finally {
+        setGuardandoFilaSheet(null)
+      }
+    },
+    [qc, cedulaDebounced, rows]
+  )
+
   const onGuardarValidos100 = useCallback(async () => {
     setGuardarValidosSaving(true)
     try {
@@ -325,6 +488,7 @@ export default function ActualizacionesPrestamosDrivePage() {
 
   const estadoFila = useCallback((p: PrestamoCandidatoDriveFila['payload']) => {
     const { formatoOk, tablaVOk, hojaOk } = validadoresTresFlags(p)
+    const qRaw = String(p.col_q_fecha ?? '').trim()
     if (!formatoOk) {
       return (
         <span className="text-red-600">
@@ -332,11 +496,18 @@ export default function ActualizacionesPrestamosDrivePage() {
         </span>
       )
     }
+    if (aprobacionQMasDe30Dias(qRaw)) {
+      return (
+        <span className="text-red-600">
+          (Q) Fecha de aprobación con más de 30 días; no se permite guardar.
+        </span>
+      )
+    }
     if (!hojaOk) return <span className="text-amber-700">(3) Repetida en hoja</span>
     if (!tablaVOk) {
       return (
         <span className="text-red-600">
-          (2) Cédula V: ya hay préstamo en tabla (máximo uno)
+          (2) Cédula V o E: máximo un préstamo en tabla (innegociable). J puede tener varios.
         </span>
       )
     }
@@ -346,12 +517,15 @@ export default function ActualizacionesPrestamosDrivePage() {
   const showSkeleton = snapshotQuery.isPending && !snapshotQuery.data
   const isBusy = snapshotQuery.isFetching
   const listRefreshing = isBusy && !manualUpdating
+  const accionesGlobalesDeshabilitadas =
+    manualUpdating || guardarValidosSaving || guardandoFilaSheet !== null || isBusy
+  const guardarMasivoDeshabilitado = accionesGlobalesDeshabilitadas || total === 0
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Préstamos"
-        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E) sin ningún préstamo en el sistema. Lista paginada (100 filas por página). El job programado recalcula domingo y miércoles ~04:05 (tras sync 04:00 Caracas). Solo administradores."
+        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Lista paginada (100 filas por página). Job dom/mié ~04:05 Caracas. Solo administradores."
         icon={CreditCard}
       />
 
@@ -385,11 +559,15 @@ export default function ActualizacionesPrestamosDrivePage() {
                   Use <strong>Actualización manual</strong> para volver a calcular el snapshot desde la tabla{' '}
                   <code className="rounded bg-white/80 px-1">drive</code> (mismo proceso que el cron). Use{' '}
                   <strong>Refrescar lista</strong> solo para releer en pantalla lo ya guardado.{' '}
-                  <strong>Guardar (100%)</strong> crea préstamos solo para filas que cumplen todos los validadores, sin
-                  marcar filas en la tabla. Validadores resumidos en columna <strong>Val. 1·2·3</strong>: (1) formato de
-                  cédula, (2) tipo V — a lo sumo un préstamo en tabla <code className="rounded bg-white/80 px-1">prestamos</code>, (3) no
-                  duplicada en la hoja. La columna <strong>Acciones</strong> de cada fila permite editar, guardar o
-                  borrar ese candidato (funciones por fila en desarrollo).
+                  <strong>Guardar (100%)</strong> recorre <strong>todo</strong> el snapshot y crea préstamos solo para
+                  las filas que cumplen el 100% de validadores (el servidor valida cada una; si falla un validador, esa
+                  fila no se guarda). <strong>Guardar por fila</strong> (icono disco) solo está activo en filas{' '}
+                  <strong>verdes</strong>. Validadores resumidos en columna <strong>Val. 1·2·3</strong>: (1) formato de
+                  cédula, (2) tipo <strong>V</strong> o <strong>E</strong> — a lo sumo un préstamo en tabla{' '}
+                  <code className="rounded bg-white/80 px-1">prestamos</code> (más de uno no cumple); tipo{' '}
+                  <strong>J</strong> puede tener dos o más préstamos (sin ese tope), (3) no duplicada en la hoja; además
+                  la fecha de aprobación en <strong>Q</strong> no puede superar 30 días (misma regla que el fondo rojo).
+                  La columna <strong>Acciones</strong> incluye editar y quitar (en desarrollo).
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -397,7 +575,12 @@ export default function ActualizacionesPrestamosDrivePage() {
                   type="button"
                   size="sm"
                   onClick={() => void onGuardarValidos100()}
-                  disabled={manualUpdating || guardarValidosSaving || isBusy}
+                  disabled={guardarMasivoDeshabilitado}
+                  title={
+                    total === 0
+                      ? 'No hay candidatos en el snapshot.'
+                      : 'Inserta en préstamos cada fila del snapshot que cumpla el 100% de validadores (las demás se omiten).'
+                  }
                 >
                   <Save
                     className={`mr-2 h-4 w-4 ${guardarValidosSaving ? 'animate-pulse' : ''}`}
@@ -409,7 +592,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                   type="button"
                   size="sm"
                   onClick={() => void onRecalcular()}
-                  disabled={manualUpdating || guardarValidosSaving || isBusy}
+                  disabled={accionesGlobalesDeshabilitadas}
                 >
                   <RefreshCw
                     className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
@@ -422,7 +605,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                   variant="outline"
                   size="sm"
                   onClick={() => void onRefrescarLista()}
-                  disabled={manualUpdating || guardarValidosSaving || listRefreshing}
+                  disabled={accionesGlobalesDeshabilitadas || listRefreshing}
                 >
                   <Loader2 className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
                   Refrescar lista
@@ -433,7 +616,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                   size="sm"
                   title="Exporta solo las filas de la página actual"
                   onClick={() => exportarCsvVistaActual(rows)}
-                  disabled={rows.length === 0 || manualUpdating || guardarValidosSaving || isBusy}
+                  disabled={rows.length === 0 || accionesGlobalesDeshabilitadas}
                 >
                   <Download className="mr-2 h-4 w-4" aria-hidden />
                   Exportar CSV
@@ -472,6 +655,22 @@ export default function ActualizacionesPrestamosDrivePage() {
             </p>
           )}
 
+          <p className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-6 rounded-sm bg-emerald-200 ring-1 ring-emerald-300/60" aria-hidden />
+              Verde: cumple validadores 1·2·3 de esta pantalla
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-6 rounded-sm bg-amber-200 ring-1 ring-amber-300/60" aria-hidden />
+              Ámbar: cédula válida pero repetida en el snapshot Drive
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-6 rounded-sm bg-red-200 ring-1 ring-red-300/60" aria-hidden />
+              Rojo: cédula inválida; tipo V/E con ≥2 préstamos con esa cédula (J exento); o fecha aprobación (Q) con
+              más de 30 días
+            </span>
+          </p>
+
           <div className="overflow-x-auto rounded-md border">
             <table className="w-full min-w-[1120px] text-left text-sm">
               <thead className="bg-muted/60">
@@ -480,7 +679,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                   <th className="px-3 py-2">Cédula (E)</th>
                   <th
                     className="px-3 py-2 whitespace-nowrap"
-                    title="1 formato · 2 tabla préstamos (V) · 3 hoja"
+                    title="1 formato · 2 tabla préstamos (V/E máx. 1; J puede varios) · 3 hoja"
                   >
                     Val. 1·2·3
                   </th>
@@ -502,14 +701,17 @@ export default function ActualizacionesPrestamosDrivePage() {
                 {!showSkeleton &&
                   rows.map(r => {
                     const { formatoOk, tablaVOk, hojaOk } = validadoresTresFlags(r.payload)
+                    const tono = filaCandidatoDriveTono(r.payload)
+                    const trTone = FILA_TONE_TR[tono]
+                    const stickyTone = FILA_TONE_STICKY_TD[tono]
                     const mk = (x: boolean) => (
                       <span className={x ? 'text-emerald-700' : 'text-red-600'}>{x ? '✓' : '✗'}</span>
                     )
                     return (
-                      <tr key={`${r.id}-${r.sheet_row_number}`} className="border-t">
+                      <tr key={`${r.id}-${r.sheet_row_number}`} className={trTone}>
                         <td className="px-3 py-2 font-mono">{r.sheet_row_number}</td>
                         <td className="px-3 py-2 font-mono">{strPayload(r.payload, 'col_e_cedula')}</td>
-                        <td className="px-3 py-2 font-mono text-xs" title="1 formato · 2 tabla V · 3 hoja">
+                        <td className="px-3 py-2 font-mono text-xs" title="1 formato · 2 tabla (V/E; J exento) · 3 hoja">
                           {mk(formatoOk)}
                           {mk(tablaVOk)}
                           {mk(hojaOk)}
@@ -529,10 +731,15 @@ export default function ActualizacionesPrestamosDrivePage() {
                           {strPayload(r.payload, 'col_i_modelo_vehiculo')}
                         </td>
                         <td className="px-3 py-2 text-xs">{estadoFila(r.payload)}</td>
-                        <td className="sticky right-0 z-[1] border-l border-border bg-background/95 px-2 py-1.5 text-right backdrop-blur-sm">
+                        <td
+                          className={`sticky right-0 z-[1] border-l border-border px-2 py-1.5 text-right shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)] ${stickyTone}`}
+                        >
                           <AccionesPorFilaCandidatoDrive
                             fila={r}
-                            disabled={manualUpdating || guardarValidosSaving || isBusy}
+                            disabled={accionesGlobalesDeshabilitadas}
+                            puedeGuardarFila={filaCumpleCienParaGuardar(r.payload)}
+                            guardandoEstaFila={guardandoFilaSheet === r.sheet_row_number}
+                            onGuardarFila={sr => void onGuardarUnaFila(sr)}
                           />
                         </td>
                       </tr>
@@ -541,8 +748,8 @@ export default function ActualizacionesPrestamosDrivePage() {
                 {!showSkeleton && !snapshotQuery.isPending && rows.length === 0 && (
                   <tr>
                     <td className="px-3 py-6 text-muted-foreground" colSpan={12}>
-                      No hay candidatos: todas las cédulas del Drive ya tienen al menos un préstamo, o el
-                      snapshot está vacío. Verifique la sincronización de CONCILIACIÓN en Configuración (Google)
+                      No hay candidatos: para V/E suele significar que ya tienen préstamo en cartera; el snapshot está
+                      vacío, o no hay filas que cumplan el criterio. Verifique CONCILIACIÓN en Configuración (Google)
                       y el job automático (dom/mié 04:00 sync + 04:05 snapshot si está activo en servidor).
                       {cedulaDebounced ? ' Pruebe otro filtro de cédula.' : ''}
                     </td>

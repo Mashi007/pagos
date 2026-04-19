@@ -6,12 +6,14 @@ Solo administradores. El refresco automático corre domingo y miércoles ~04:05 
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.schemas.auth import UserResponse
 from app.services.prestamo_candidatos_drive_guardar import (
+    ejecutar_guardar_candidatos_drive_una_fila,
     ejecutar_guardar_candidatos_drive_validados_100,
 )
 from app.services.prestamo_candidatos_drive_job import (
@@ -48,6 +50,24 @@ def post_prestamos_candidatos_drive_guardar_validados_100(
     current_user: UserResponse = Depends(require_admin),
 ):
     return ejecutar_guardar_candidatos_drive_validados_100(db, current_user=current_user)
+
+
+class PrestamoCandidatoDriveGuardarFilaBody(BaseModel):
+    sheet_row_number: int = Field(..., ge=1, le=1_000_000)
+
+
+@router.post(
+    "/guardar-fila",
+    summary="Crear préstamo solo para una fila del snapshot si cumple el 100% de validadores",
+)
+def post_prestamos_candidatos_drive_guardar_fila(
+    body: PrestamoCandidatoDriveGuardarFilaBody,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(require_admin),
+):
+    return ejecutar_guardar_candidatos_drive_una_fila(
+        db, current_user=current_user, sheet_row_number=body.sheet_row_number
+    )
 
 
 @router.post("/refrescar", summary="Recalcular snapshot ahora (misma lógica que el cron)")
