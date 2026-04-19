@@ -16,7 +16,7 @@
 
 
 
- * fecha (obligatoria, no futura, desde calendario), institución y nº documento (longitud), archivo (PDF, JPEG, PNG, HEIC/HEIF, WebP; máx 5 MB).
+ * fecha (obligatoria, no futura, desde calendario), institución y nº documento (longitud), archivo (PDF, JPEG, PNG, HEIC/HEIF, WebP; máx 10 MB).
 
 
 
@@ -72,7 +72,7 @@ const MIN_MONTO_BS_REPORTAR = 1
 
 const MAX_MONTO_BS_REPORTAR = 10_000_000
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
 const ALLOWED_FILE_TYPES = [
   'image/jpeg',
@@ -287,7 +287,7 @@ function validarArchivo(file: File | null): {
     return {
       valido: false,
       error:
-        'El comprobante no puede superar 5 MB. Reduzca el tamaño del archivo.',
+        'El comprobante no puede superar 10 MB. Reduzca el tamaño del archivo.',
     }
   }
 
@@ -835,7 +835,7 @@ export default function ReportePagoPage({
           {
             icon: 'file' as const,
             text: 'Comprobante',
-            desc: 'PDF, JPEG, PNG, HEIC o WebP, máx. 5 MB',
+            desc: 'PDF, JPEG, PNG, HEIC o WebP, máx. 10 MB',
           },
           {
             icon: 'check' as const,
@@ -857,7 +857,7 @@ export default function ReportePagoPage({
           {
             icon: 'file' as const,
             text: 'Comprobante',
-            desc: 'PDF, JPEG, PNG, HEIC o WebP, máx. 5 MB',
+            desc: 'PDF, JPEG, PNG, HEIC o WebP, máx. 10 MB',
           },
           {
             icon: 'check' as const,
@@ -1714,7 +1714,7 @@ export default function ReportePagoPage({
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                PDF, JPEG, PNG, HEIC (iPhone), WebP. Máximo 5 MB.
+                PDF, JPEG, PNG, HEIC (iPhone), WebP. Máximo 10 MB.
               </p>
             </CardHeader>
 

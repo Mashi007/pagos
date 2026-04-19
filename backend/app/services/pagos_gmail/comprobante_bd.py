@@ -20,7 +20,7 @@ from app.models.pago_comprobante_imagen import PagoComprobanteImagen
 
 logger = logging.getLogger(__name__)
 
-_MAX_COMPROBANTE_BYTES = 8 * 1024 * 1024
+_MAX_COMPROBANTE_BYTES = 10 * 1024 * 1024
 
 # Alineado con helpers.MIME_IMAGE_OR_PDF (adjuntos Gmail) para no fallar tras Gemini OK.
 _MIME_PERMITIDOS = frozenset(

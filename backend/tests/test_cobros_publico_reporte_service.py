@@ -156,13 +156,13 @@ class TestValidarAdjuntoComprobanteBytes:
         assert err is not None
         assert "Solo se permiten" in err
 
-    def test_supera_tamano_maximo(self, monkeypatch):
-        monkeypatch.setattr(cpr, "MAX_FILE_SIZE", 50)
-        body = b"x" * 51
+    def test_supera_tamano_maximo(self):
+        max_b = cpr.MAX_FILE_SIZE
+        body = b"x" * (max_b + 1)
         err, name = cpr.validar_adjunto_comprobante_bytes(
             body, "application/pdf", "big.pdf", mensaje_excel_largo=True
         )
-        assert err == "El comprobante no puede superar 5 MB."
+        assert err == "El comprobante no puede superar 10 MB."
         assert name == "big.pdf"
 
 

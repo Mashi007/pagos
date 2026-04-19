@@ -35,7 +35,7 @@ ALLOWED_COMPROBANTE_TYPES = frozenset(
         "application/pdf",
     }
 )
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 MAGIC_JPEG = bytes([0xFF, 0xD8, 0xFF])
 MAGIC_PNG = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
@@ -294,7 +294,7 @@ def validar_adjunto_comprobante_bytes(
     Valida tamaño, tipo declarado y magic bytes. Devuelve (error o None, nombre_sanitizado).
     """
     if len(content) > MAX_FILE_SIZE:
-        return "El comprobante no puede superar 5 MB.", sanitize_filename(filename_raw)
+        return "El comprobante no puede superar 10 MB.", sanitize_filename(filename_raw)
     if len(content) < 4:
         return "El archivo está vacío o no es válido.", sanitize_filename(filename_raw)
     ctype = mime_efectivo_comprobante_web(content_type or "", filename_raw)

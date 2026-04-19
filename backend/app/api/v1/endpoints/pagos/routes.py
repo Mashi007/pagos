@@ -258,7 +258,7 @@ async def upload_pago_comprobante_imagen(
     if len(data) > _MAX_COMPROBANTE_IMAGEN_BYTES:
         raise HTTPException(
             status_code=400,
-            detail="La imagen no puede superar 8 MB.",
+            detail="La imagen no puede superar 10 MB.",
         )
     uid = uuid.uuid4().hex
     row = PagoComprobanteImagen(

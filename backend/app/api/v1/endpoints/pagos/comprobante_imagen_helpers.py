@@ -17,7 +17,7 @@ _COMPROBANTE_IMG_CT = frozenset(
         "application/pdf",
     },
 )
-_MAX_COMPROBANTE_IMAGEN_BYTES = 8 * 1024 * 1024
+_MAX_COMPROBANTE_IMAGEN_BYTES = 10 * 1024 * 1024
 
 
 def _public_base_url_para_comprobante(request: Request) -> str:

@@ -774,7 +774,7 @@ export function RegistrarPagoForm({
               <div className="rounded border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
                 <p>
                   <strong>Comprobante obligatorio:</strong> suba una foto del
-                  comprobante (hasta 8 MB). Para flujos con moneda Bs., recibo
+                  comprobante (hasta 10 MB). Para flujos con moneda Bs., recibo
                   PDF de tasa u otros casos puede usar{' '}
                   <a
                     href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(
@@ -1388,7 +1388,7 @@ export function RegistrarPagoForm({
               </label>
 
               <p className="text-xs text-gray-600">
-                JPEG, PNG, WebP o GIF. Tamano maximo 8 MB. Obligatorio para
+                JPEG, PNG, WebP o GIF. Tamano maximo 10 MB. Obligatorio para
                 guardar; en edicion puede conservar el comprobante ya cargado o
                 subir uno nuevo.
               </p>
