@@ -141,15 +141,22 @@ def _normalizar_modalidad(s: str) -> Optional[str]:
 
 
 def _cliente_id_por_cedula_normalizada(db: Session, cedula_cmp: str) -> Optional[int]:
-    from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
+    """
+    Resuelve cliente por clave de cédula alineada a POST /clientes (sin cargar toda la tabla en memoria).
+    """
+    from app.api.v1.endpoints.clientes import (
+        _cedula_clave_comparacion_clientes,
+        _expr_cedula_normalizada_sql,
+    )
 
-    if not cedula_cmp:
+    if not (cedula_cmp or "").strip():
         return None
-    rows = db.execute(select(Cliente.id, Cliente.cedula)).all()
-    for cid, ced in rows or []:
-        if _normalizar_cedula_carga_masiva(ced or "") == cedula_cmp:
-            return int(cid)
-    return None
+    key = _cedula_clave_comparacion_clientes(cedula_cmp.strip())
+    if not key:
+        return None
+    ced_sql = _expr_cedula_normalizada_sql(Cliente.cedula)
+    row = db.execute(select(Cliente.id).where(ced_sql == key)).first()
+    return int(row[0]) if row else None
 
 
 def _motivos_no_100(

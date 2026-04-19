@@ -37,7 +37,7 @@ _PLACEHOLDER_EMAIL = "revisar@email.com"
 
 # Subir cuando cambien reglas de candidatos (cédula, teléfono, etc.) para no servir JSON obsoleto
 # desde `drive_clientes_candidatos_cache` aunque `synced_at` de la hoja no haya cambiado.
-CANDIDATOS_DRIVE_CACHE_RULES_VERSION = 3
+CANDIDATOS_DRIVE_CACHE_RULES_VERSION = 5
 
 
 def _cell(v: Any) -> str:
@@ -324,6 +324,7 @@ def importar_seleccion_desde_drive(
 
     from app.api.v1.endpoints.clientes import (
         _cedula_clave_comparacion_clientes,
+        _cliente_id_conflicto_email,
         _expr_cedula_normalizada_sql,
         _normalize_for_duplicate,
         create_cliente_from_payload,
@@ -372,24 +373,7 @@ def importar_seleccion_desde_drive(
         seen_cmp.add(cmp_k)
 
         defs = info.get("defaults") or {}
-        nombres_norm = _normalize_for_duplicate(str(defs.get("nombres") or ""))
-        if nombres_norm and nombres_norm in seen_nombres:
-            pre_errors.append(
-                {"sheet_row_number": sr, "error": "Nombre completo duplicado dentro del mismo lote enviado."}
-            )
-            continue
-        if nombres_norm:
-            seen_nombres.add(nombres_norm)
-
-        em_raw = (str(defs.get("email") or _PLACEHOLDER_EMAIL) or "").strip().lower()
         ph = _PLACEHOLDER_EMAIL.lower()
-        if em_raw and em_raw != ph:
-            if em_raw in seen_emails:
-                pre_errors.append(
-                    {"sheet_row_number": sr, "error": "Correo (columna G) duplicado dentro del mismo lote enviado."}
-                )
-                continue
-            seen_emails.add(em_raw)
 
         ced = str(info.get("cedula_para_crear") or "").strip()
         ck = _cedula_clave_comparacion_clientes(ced)
@@ -428,6 +412,55 @@ def importar_seleccion_desde_drive(
         except ValidationError as ve:
             pre_errors.append({"sheet_row_number": sr, "error": str(ve)})
             continue
+
+        nombres_post = _normalize_for_duplicate(payload.nombres or "")
+        if nombres_post and nombres_post in seen_nombres:
+            pre_errors.append(
+                {"sheet_row_number": sr, "error": "Nombre completo duplicado dentro del mismo lote enviado."}
+            )
+            continue
+
+        if nombres_post:
+            dup_nom = db.execute(select(Cliente.id).where(Cliente.nombres == nombres_post)).first()
+            if dup_nom:
+                pre_errors.append(
+                    {
+                        "sheet_row_number": sr,
+                        "error": (
+                            f"Ya existe un cliente con el mismo nombre completo en tabla clientes (ID {dup_nom[0]}). "
+                            "Corrija la columna D en Drive o el registro existente antes de importar."
+                        ),
+                    }
+                )
+                continue
+
+        em_post = _normalize_for_duplicate(payload.email or "")
+        em_cmp = em_post.strip().lower()
+        if em_cmp != ph:
+            if em_cmp in seen_emails:
+                pre_errors.append(
+                    {"sheet_row_number": sr, "error": "Correo (columna G) duplicado dentro del mismo lote enviado."}
+                )
+                continue
+
+        if em_cmp != ph:
+            ex_mail = _cliente_id_conflicto_email(db, em_post, None)
+            if ex_mail:
+                pre_errors.append(
+                    {
+                        "sheet_row_number": sr,
+                        "error": (
+                            f"Ya existe un cliente con el mismo correo en tabla clientes (ID {ex_mail[0]}). "
+                            "Corrija la columna G en Drive."
+                        ),
+                    }
+                )
+                continue
+
+        if nombres_post:
+            seen_nombres.add(nombres_post)
+        if em_cmp != ph:
+            seen_emails.add(em_cmp)
 
         carga.append((sr, info, payload))
 
