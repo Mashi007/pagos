@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 
-import { CreditCard, Download, RefreshCw } from 'lucide-react'
+import { CreditCard, Download, RefreshCw, RotateCw } from 'lucide-react'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
@@ -105,13 +105,14 @@ export default function ActualizacionesPrestamosDrivePage() {
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaDebounced, setCedulaDebounced] = useState('')
   const [forzarVacio, setForzarVacio] = useState(false)
+  const [manualUpdating, setManualUpdating] = useState(false)
 
   useEffect(() => {
     const t = window.setTimeout(() => setCedulaDebounced(cedulaInput.trim()), 400)
     return () => window.clearTimeout(t)
   }, [cedulaInput])
 
-  const q = useInfiniteQuery({
+  const infinite = useInfiniteQuery({
     queryKey: [...QK_BASE, cedulaDebounced],
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
@@ -130,14 +131,15 @@ export default function ActualizacionesPrestamosDrivePage() {
     },
   })
 
-  const rows = q.data?.pages.flatMap(p => p.filas) ?? []
-  const first = q.data?.pages[0]
+  const rows = infinite.data?.pages.flatMap(p => p.filas) ?? []
+  const first = infinite.data?.pages[0]
   const total = first?.total ?? 0
   const totalSinFiltro = first?.total_sin_filtro
   const loadedCount = rows.length
   const cappedByUi = loadedCount >= MAX_ROWS_UI && loadedCount < total
 
   const onRecalcular = useCallback(async () => {
+    setManualUpdating(true)
     try {
       const res = await postPrestamosCandidatosDriveRefrescar({
         forzar: forzarVacio,
@@ -161,8 +163,21 @@ export default function ActualizacionesPrestamosDrivePage() {
       await qc.resetQueries({ queryKey: [...QK_BASE, cedulaDebounced] })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo recalcular')
+    } finally {
+      setManualUpdating(false)
     }
   }, [qc, forzarVacio, cedulaDebounced])
+
+  const refetchLista = infinite.refetch
+
+  const onRefrescarLista = useCallback(async () => {
+    try {
+      await refetchLista()
+      toast.message('Lista actualizada desde el servidor.')
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo refrescar la lista')
+    }
+  }, [refetchLista])
 
   const onVolverInicio = useCallback(() => {
     void qc.resetQueries({ queryKey: [...QK_BASE, cedulaDebounced] })
@@ -191,8 +206,9 @@ export default function ActualizacionesPrestamosDrivePage() {
     return <span className="text-emerald-700">Listo para revisión</span>
   }, [])
 
-  const showSkeleton = q.isPending && !q.data
-  const isBusy = q.isFetching || q.isFetchingNextPage
+  const showSkeleton = infinite.isPending && !infinite.data
+  const isBusy = infinite.isFetching || infinite.isFetchingNextPage
+  const listRefreshing = isBusy && !manualUpdating
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
@@ -203,49 +219,72 @@ export default function ActualizacionesPrestamosDrivePage() {
       />
 
       <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+        <CardHeader className="space-y-1">
           <CardTitle className="text-lg">Candidatos desde Drive</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              {cedulaDebounced && totalSinFiltro != null ? (
-                <>
-                  Coincidencias: <strong>{total}</strong> de {totalSinFiltro} en snapshot
-                </>
-              ) : (
-                <>
-                  Total: <strong>{total}</strong>
-                </>
-              )}
-              {' · '}
-              Mostrando: <strong>{loadedCount}</strong>
-              {' · '}
-              Último sync hoja: {fmtCaracas(first?.drive_synced_at ?? null)}
-              {' · '}
-              Snapshot: {fmtCaracas(first?.computed_at ?? null)}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => exportarCsvVistaActual(rows)}
-              disabled={rows.length === 0 || isBusy}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Exportar CSV
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onRecalcular()}
-              disabled={isBusy}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${isBusy ? 'animate-spin' : ''}`} />
-              Recalcular ahora
-            </Button>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            {cedulaDebounced && totalSinFiltro != null ? (
+              <>
+                Coincidencias: <strong>{total}</strong> de {totalSinFiltro} en snapshot
+              </>
+            ) : (
+              <>
+                Total: <strong>{total}</strong>
+              </>
+            )}
+            {' · '}
+            Mostrando: <strong>{loadedCount}</strong>
+            {' · '}
+            Último sync hoja: {fmtCaracas(first?.drive_synced_at ?? null)}
+            {' · '}
+            Snapshot: {fmtCaracas(first?.computed_at ?? null)}
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 rounded-lg border border-blue-100 bg-blue-50/40 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Actualización</p>
+              <p>
+                Use <strong>Actualización manual</strong> para volver a calcular el snapshot desde la tabla{' '}
+                <code className="rounded bg-white/80 px-1">drive</code> (mismo proceso que el cron). Use{' '}
+                <strong>Refrescar lista</strong> solo para releer en pantalla lo ya guardado.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void onRecalcular()}
+                disabled={manualUpdating || isBusy}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
+                  aria-hidden
+                />
+                Actualización manual
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void onRefrescarLista()}
+                disabled={manualUpdating || listRefreshing}
+              >
+                <RotateCw className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
+                Refrescar lista
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => exportarCsvVistaActual(rows)}
+                disabled={rows.length === 0 || manualUpdating || isBusy}
+              >
+                <Download className="mr-2 h-4 w-4" aria-hidden />
+                Exportar CSV
+              </Button>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="min-w-[200px] flex-1 space-y-1">
               <label htmlFor="filtro-cedula" className="text-sm font-medium text-foreground">
@@ -277,9 +316,9 @@ export default function ActualizacionesPrestamosDrivePage() {
             </p>
           )}
 
-          {q.isError && (
+          {infinite.isError && (
             <p className="text-sm text-red-600" role="alert">
-              {getErrorMessage(q.error) || 'Error al cargar'}
+              {getErrorMessage(infinite.error) || 'Error al cargar'}
             </p>
           )}
 
@@ -325,7 +364,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                       <td className="px-3 py-2 text-xs">{estadoFila(r.payload)}</td>
                     </tr>
                   ))}
-                {!showSkeleton && !q.isPending && rows.length === 0 && (
+                {!showSkeleton && !infinite.isPending && rows.length === 0 && (
                   <tr>
                     <td className="px-3 py-6 text-muted-foreground" colSpan={11}>
                       No hay candidatos: todas las cédulas del Drive ya tienen al menos un préstamo, o el
@@ -340,15 +379,17 @@ export default function ActualizacionesPrestamosDrivePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {q.hasNextPage && (
+            {infinite.hasNextPage && (
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => void q.fetchNextPage()}
-                disabled={q.isFetchingNextPage || isBusy}
+                onClick={() => void infinite.fetchNextPage()}
+                disabled={infinite.isFetchingNextPage || isBusy}
               >
-                {q.isFetchingNextPage ? 'Cargando…' : `Cargar más (${PAGE_SIZE} filas, offset ${loadedCount})`}
+                {infinite.isFetchingNextPage
+                  ? 'Cargando…'
+                  : `Cargar más (${PAGE_SIZE} filas, offset ${loadedCount})`}
               </Button>
             )}
             {loadedCount > PAGE_SIZE && (

@@ -200,3 +200,24 @@ class ClienteResponse(BaseModel):
     def correo_2(self) -> Optional[str]:
         """Segundo correo opcional; None si no hay."""
         return self.email_secundario
+
+
+class ClienteDriveImportarFilaBody(BaseModel):
+    """Cuerpo para POST /clientes/drive-import/importar-fila (validación alineada a ClienteCreate)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sheet_row_number: int = Field(..., ge=1)
+    cedula: str
+    nombres: str
+    telefono: str
+    email: str = Field(..., validation_alias=AliasChoices("email", "correo_1"))
+    email_secundario: Optional[str] = Field(
+        None, validation_alias=AliasChoices("email_secundario", "correo_2")
+    )
+    direccion: str
+    fecha_nacimiento: date
+    ocupacion: str
+    estado: str = "ACTIVO"
+    notas: Optional[str] = None
+    comentario: Optional[str] = Field(None, description="Texto de auditoría (tabla auditoria_cliente_alta_desde_drive).")
