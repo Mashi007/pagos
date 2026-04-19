@@ -7,8 +7,6 @@ Create Date: 2026-04-19
 
 from __future__ import annotations
 
-import uuid
-
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import inspect, text
@@ -17,26 +15,6 @@ revision = "060_pagos_reportados_comprobante_imagen_unico"
 down_revision = "059_pagos_gmail_abcd_cuotas_traza"
 branch_labels = None
 depends_on = None
-
-_MIME_PERMITIDOS = frozenset(
-    {
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "image/gif",
-        "image/heic",
-        "application/pdf",
-    }
-)
-
-
-def _normalizar_mime(raw: str | None) -> str:
-    s = (raw or "").split(";")[0].strip().lower()
-    if s == "image/jpg":
-        s = "image/jpeg"
-    if s in _MIME_PERMITIDOS:
-        return s
-    return "application/octet-stream"
 
 
 def upgrade() -> None:
@@ -70,30 +48,61 @@ def upgrade() -> None:
             sa.Column("comprobante_imagen_id", sa.String(length=32), nullable=True),
         )
 
-    # Migrar binarios legacy a pago_comprobante_imagen
+    # Migrar binarios legacy a pago_comprobante_imagen (SQL por lotes: evita N round-trips).
     if "comprobante" in cols:
-        rows = bind.execute(
+        bind.execute(
             text(
-                "SELECT id, comprobante, comprobante_tipo FROM pagos_reportados "
-                "WHERE comprobante IS NOT NULL AND (comprobante_imagen_id IS NULL OR comprobante_imagen_id = '')"
+                """
+                CREATE TEMP TABLE _060_migrate_pr_img (
+                    pr_id integer NOT NULL,
+                    new_id varchar(32) NOT NULL,
+                    content_type varchar(80) NOT NULL,
+                    imagen_data bytea NOT NULL
+                ) ON COMMIT DROP
+                """
             )
-        ).fetchall()
-        for rid, blob, ctype in rows:
-            if not blob:
-                continue
-            uid = uuid.uuid4().hex
-            ct = _normalizar_mime(str(ctype) if ctype is not None else "")
-            bind.execute(
-                text(
-                    "INSERT INTO pago_comprobante_imagen (id, content_type, imagen_data) "
-                    "VALUES (:id, :ct, :data)"
-                ),
-                {"id": uid, "ct": ct, "data": blob},
+        )
+        bind.execute(
+            text(
+                """
+                INSERT INTO _060_migrate_pr_img (pr_id, new_id, content_type, imagen_data)
+                SELECT
+                    pr.id,
+                    md5(random()::text || clock_timestamp()::text || pr.id::text),
+                    CASE
+                        WHEN lower(trim(split_part(COALESCE(pr.comprobante_tipo, ''), ';', 1)))
+                            = 'image/jpg' THEN 'image/jpeg'
+                        WHEN lower(trim(split_part(COALESCE(pr.comprobante_tipo, ''), ';', 1))) IN (
+                            'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+                            'image/heic', 'application/pdf'
+                        ) THEN lower(trim(split_part(COALESCE(pr.comprobante_tipo, ''), ';', 1)))
+                        ELSE 'application/octet-stream'
+                    END,
+                    pr.comprobante
+                FROM pagos_reportados pr
+                WHERE pr.comprobante IS NOT NULL
+                  AND (pr.comprobante_imagen_id IS NULL OR pr.comprobante_imagen_id = '')
+                """
             )
-            bind.execute(
-                text("UPDATE pagos_reportados SET comprobante_imagen_id = :uid WHERE id = :rid"),
-                {"uid": uid, "rid": rid},
+        )
+        bind.execute(
+            text(
+                """
+                INSERT INTO pago_comprobante_imagen (id, content_type, imagen_data)
+                SELECT new_id, content_type, imagen_data FROM _060_migrate_pr_img
+                """
             )
+        )
+        bind.execute(
+            text(
+                """
+                UPDATE pagos_reportados pr
+                SET comprobante_imagen_id = m.new_id
+                FROM _060_migrate_pr_img m
+                WHERE pr.id = m.pr_id
+                """
+            )
+        )
 
     insp = inspect(bind)
     fk_names = {fk["name"] for fk in insp.get_foreign_keys("pagos_reportados")}
