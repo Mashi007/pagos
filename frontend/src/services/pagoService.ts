@@ -959,6 +959,10 @@ class PagoService {
       messages_skipped_drive_folder?: number
       list_error?: boolean
       pipeline_error?: boolean
+      comprobantes_digitados?: number
+      pagos_validos_alta_automatica?: number
+      pagos_invalidos_pendientes_revision?: number
+      gemini_model?: string
     } | null
   }> {
     return await apiClient.get(`${this.baseUrl}/gmail/status`)

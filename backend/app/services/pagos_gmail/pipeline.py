@@ -47,6 +47,43 @@ from app.models.cliente import Cliente
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 
 
+def _metricas_resumen_corrida_gmail_pagos(db: Session, sync_id: int) -> dict[str, int]:
+    """
+    Comprobantes insertados en esta sync vs altas automáticas exitosas (traza con pago_id).
+    Los pendientes de revisión / Excel ≈ comprobantes - válidos.
+    """
+    from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
+
+    n_items = int(
+        db.scalar(
+            select(func.count())
+            .select_from(PagosGmailSyncItem)
+            .where(PagosGmailSyncItem.sync_id == sync_id)
+        )
+        or 0
+    )
+    n_valid = int(
+        db.scalar(
+            select(func.count())
+            .select_from(PagosGmailAbcdCuotasTraza)
+            .where(
+                PagosGmailAbcdCuotasTraza.sync_id == sync_id,
+                PagosGmailAbcdCuotasTraza.etapa_final.in_(
+                    ("CUOTAS_OK", "PAGO_SIN_CUOTAS")
+                ),
+                PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
+            )
+        )
+        or 0
+    )
+    n_invalid = max(0, n_items - n_valid)
+    return {
+        "comprobantes_digitados": n_items,
+        "pagos_validos_alta_automatica": n_valid,
+        "pagos_invalidos_pendientes_revision": n_invalid,
+    }
+
+
 def _persistir_estado_sync_pipeline_terminal(
     db: Session,
     *,
@@ -91,12 +128,28 @@ from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
 from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
     registrar_traza_gmail_abcd_cuotas_evento,
 )
+from app.services.pagos_gmail.gmail_pipeline_evento import (
+    EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
+    EVT_DEDUPE_SHA_CORRIDA,
+    EVT_ERROR_PROCESAR_ADJUNTO,
+    EVT_NO_PLANTILLA_GEMINI,
+    EVT_OMISION_ETIQUETA_USUARIO,
+    EVT_REMITENTE_INVALIDO,
+    EVT_REMITENTE_NO_CLIENTE_CON_MEDIA,
+    EVT_SIN_ADJUNTOS_DIGITABLES,
+    EVT_SOLO_PDF_MULTIPAGINA,
+    registrar_pagos_gmail_pipeline_evento,
+)
 from app.services.pagos_gmail.pago_abcd_auto_service import (
     crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd,
+)
+from app.services.pagos_gmail.pago_nr_auto_service import (
+    crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr,
 )
 from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
     es_plantilla_banco_abcd,
     item_sync_abcd_candidato_revision_duplicado,
+    item_sync_nr_candidato_revision_duplicado,
     resumen_log_linea_plantilla_abcd,
 )
 from app.services.pagos_gmail.gmail_service import (
@@ -355,6 +408,12 @@ def run_pipeline(
     }
 
     try:
+        from app.core.config import settings as _settings_pipeline
+
+        _gemini_model_snapshot = (
+            (_settings_pipeline.GEMINI_MODEL or "").strip() or "gemini-2.5-flash"
+        )
+
         def fetch_sorted_batch() -> list[dict]:
             raw_messages = list_messages_by_filter(gmail_svc, scan_filter)
             messages = _dedupe_messages_pagos_gmail(raw_messages)
@@ -413,6 +472,27 @@ def run_pipeline(
 
             for msg_info in batch:
                 msg_id = msg_info["id"]
+                _tid_raw = (msg_info.get("thread_id") or "").strip()
+                gmail_thread_id: Optional[str] = _tid_raw[:100] if _tid_raw else None
+
+                def _pipeline_evt(
+                    motivo: str,
+                    *,
+                    sha256_hex: Optional[str] = None,
+                    filename: Optional[str] = None,
+                    detalle: Optional[str] = None,
+                ) -> None:
+                    registrar_pagos_gmail_pipeline_evento(
+                        db,
+                        sync_id=sync_id,
+                        gmail_message_id=msg_id,
+                        gmail_thread_id=gmail_thread_id,
+                        motivo=motivo,
+                        sha256_hex=sha256_hex,
+                        filename=filename,
+                        detalle=detalle,
+                    )
+
                 label_ids_snapshot = list(msg_info.get("label_ids") or [])
                 was_unread = "UNREAD" in label_ids_snapshot
                 msg_lids_set = frozenset(label_ids_snapshot)
@@ -438,6 +518,10 @@ def run_pipeline(
                         ", ".join(_hit_names),
                         msg_id,
                     )
+                    _pipeline_evt(
+                        EVT_OMISION_ETIQUETA_USUARIO,
+                        detalle=", ".join(_hit_names)[:8000],
+                    )
                     if was_unread:
                         mark_as_read(gmail_svc, msg_id)
                     continue
@@ -456,6 +540,7 @@ def run_pipeline(
                         sender_lc[:72] if sender_lc else "(vacio)",
                         msg_id,
                     )
+                    _pipeline_evt(EVT_REMITENTE_INVALIDO, detalle=(sender_lc[:200] or "(vacio)"))
                     run_stats["messages_skipped_invalid_sender"] += 1
                     if was_unread:
                         mark_as_read(gmail_svc, msg_id)
@@ -517,6 +602,13 @@ def run_pipeline(
                 any_etiqueta_calidad_imagen = False
                 if not candidatos:
                     any_incomplete_or_skipped = True
+                    if multipage_pdf_omitidos > 0:
+                        _pipeline_evt(
+                            EVT_SOLO_PDF_MULTIPAGINA,
+                            detalle=f"omitidos_pdf_2p={multipage_pdf_omitidos}",
+                        )
+                    else:
+                        _pipeline_evt(EVT_SIN_ADJUNTOS_DIGITABLES)
                 tiene_medio_pipeline = bool(candidatos) or multipage_pdf_omitidos > 0
 
                 if not remitente_en_clientes and candidatos:
@@ -524,6 +616,10 @@ def run_pipeline(
                         "[PAGOS_GMAIL]   Remitente no en clientes.email/email_secundario (o fallo al consultar): "
                         "sin Gemini ni filas Excel/BD; Gmail solo ERROR EMAIL (msg_id=%s).",
                         msg_id,
+                    )
+                    _pipeline_evt(
+                        EVT_REMITENTE_NO_CLIENTE_CON_MEDIA,
+                        detalle=f"de={sender_lc[:120]} adjuntos={len(candidatos)}",
                     )
 
                 def _campos_completos(fecha: str, cedula: str, monto: str, ref: str) -> bool:
@@ -563,6 +659,8 @@ def run_pipeline(
                             drive_link=None,
                             drive_email_link=None,
                             sheet_name=sheet_name,
+                            gmail_message_id=(msg_id or "")[:100] or None,
+                            gmail_thread_id=gmail_thread_id,
                         )
                         gt = GmailTemporal(
                             correo_origen=correo,
@@ -576,6 +674,8 @@ def run_pipeline(
                             drive_link=None,
                             drive_email_link=None,
                             sheet_name=sheet_name,
+                            gmail_message_id=(msg_id or "")[:100] or None,
+                            gmail_thread_id=gmail_thread_id,
                         )
                         db.add(si)
                         db.add(gt)
@@ -607,6 +707,11 @@ def run_pipeline(
                                 file_digest[:16],
                                 filename,
                             )
+                            _pipeline_evt(
+                                EVT_DEDUPE_SHA_CORRIDA,
+                                sha256_hex=file_digest,
+                                filename=filename,
+                            )
                             any_incomplete_or_skipped = True
                             continue
 
@@ -625,6 +730,11 @@ def run_pipeline(
                             logger.warning(
                                 "[PAGOS_GMAIL]   No es plantilla A/B/C/D - no BD: %s",
                                 filename,
+                            )
+                            _pipeline_evt(
+                                EVT_NO_PLANTILLA_GEMINI,
+                                filename=filename,
+                                detalle=(fmt or "?")[:500],
                             )
                             continue
 
@@ -700,6 +810,11 @@ def run_pipeline(
                                     "[PAGOS_GMAIL]   Formato NR pero fila incompleta (monto!=NR o cedula vacia) - no BD: %s",
                                     filename,
                                 )
+                                _pipeline_evt(
+                                    EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
+                                    filename=filename,
+                                    detalle="NR",
+                                )
                                 continue
                         elif not _campos_completos(f, c, m, r):
                             any_incomplete_or_skipped = True
@@ -710,6 +825,11 @@ def run_pipeline(
                                 "[PAGOS_GMAIL]   Plantilla %s pero columnas incompletas - no BD: %s",
                                 fmt,
                                 filename,
+                            )
+                            _pipeline_evt(
+                                EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
+                                filename=filename,
+                                detalle=(fmt or "?")[:80],
                             )
                             continue
 
@@ -728,6 +848,7 @@ def run_pipeline(
                                 "c": c,
                                 "m": m,
                                 "r": r,
+                                "monto_operacion": _v(data.get("monto_operacion")),
                                 "banco_excel": banco_excel,
                                 "filename": filename,
                                 "content": content,
@@ -737,6 +858,11 @@ def run_pipeline(
                         )
                     except Exception as e:
                         logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
+                        _pipeline_evt(
+                            EVT_ERROR_PROCESAR_ADJUNTO,
+                            filename=filename,
+                            detalle=str(e)[:800],
+                        )
                         any_incomplete_or_skipped = True
                         any_skipped_not_plantilla_o_campos = True
 
@@ -1020,6 +1146,173 @@ def run_pipeline(
                                                         etapa_final="ERROR_PIPELINE",
                                                         motivo="excepcion",
                                                         detalle=str(dup_exc)[:4000],
+                                                    )
+                                                except Exception:
+                                                    pass
+                                        elif fmt_row == "NR":
+                                            try:
+                                                m_op = (p.get("monto_operacion") or "").strip()
+                                                if (
+                                                    not m_op
+                                                    or m_op.upper() == PAGOS_NA
+                                                    or m_op.upper() == "NR"
+                                                ):
+                                                    registrar_traza_gmail_abcd_cuotas_evento(
+                                                        db,
+                                                        sync_id=getattr(
+                                                            si, "sync_id", None
+                                                        ),
+                                                        sync_item_id=getattr(si, "id", None),
+                                                        plantilla_fmt="NR",
+                                                        cedula=p.get("c"),
+                                                        numero_referencia=p.get("r"),
+                                                        banco_excel=p.get("banco_excel"),
+                                                        archivo_adjunto=p.get("filename"),
+                                                        comprobante_imagen_id=uid,
+                                                        duplicado_documento=False,
+                                                        etapa_final="OMITIDO_SIN_MONTO_OPERACION",
+                                                        motivo="monto_operacion",
+                                                        detalle="NA o vacio",
+                                                    )
+                                                else:
+                                                    dup_nr = (
+                                                        item_sync_nr_candidato_revision_duplicado(
+                                                            referencia=p.get("r"),
+                                                            db=db,
+                                                        )
+                                                    )
+                                                    sid = getattr(si, "id", None)
+                                                    ssync = getattr(si, "sync_id", None)
+                                                    if dup_nr:
+                                                        registrar_traza_gmail_abcd_cuotas_evento(
+                                                            db,
+                                                            sync_id=ssync,
+                                                            sync_item_id=sid,
+                                                            plantilla_fmt="NR",
+                                                            cedula=p.get("c"),
+                                                            numero_referencia=p.get("r"),
+                                                            banco_excel=p.get("banco_excel"),
+                                                            archivo_adjunto=p.get("filename"),
+                                                            comprobante_imagen_id=uid,
+                                                            duplicado_documento=True,
+                                                            etapa_final="OMITIDO_DUPLICADO",
+                                                        )
+                                                    else:
+                                                        res_nr = (
+                                                            crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
+                                                                db,
+                                                                cedula_columna=p.get("c")
+                                                                or "",
+                                                                fecha_pago_str=p.get("f")
+                                                                or "",
+                                                                monto_operacion_str=m_op,
+                                                                numero_referencia=p.get("r")
+                                                                or "",
+                                                                institucion_bancaria=p.get(
+                                                                    "banco_excel"
+                                                                ),
+                                                                link_comprobante=link_url,
+                                                                filename=p.get("filename"),
+                                                                sync_id=ssync,
+                                                                sync_item_id=sid,
+                                                                comprobante_imagen_id=uid,
+                                                            )
+                                                        )
+                                                        if res_nr.get("ok"):
+                                                            logger.info(
+                                                                "[PAGOS_GMAIL] [NR_PAGO] Alta pagos+cuotas OK: %s",
+                                                                res_nr,
+                                                            )
+                                                            _gt_del_id = None
+                                                            for _sii, _gt, _pp in rows_pairs:
+                                                                if (
+                                                                    getattr(_sii, "id", None)
+                                                                    is not None
+                                                                    and getattr(si, "id", None)
+                                                                    is not None
+                                                                    and int(_sii.id) == int(si.id)
+                                                                ):
+                                                                    _gt_del_id = getattr(
+                                                                        _gt, "id", None
+                                                                    )
+                                                                    break
+                                                            if _gt_del_id is not None:
+                                                                try:
+                                                                    db.execute(
+                                                                        delete(
+                                                                            GmailTemporal
+                                                                        ).where(
+                                                                            GmailTemporal.id
+                                                                            == int(_gt_del_id)
+                                                                        )
+                                                                    )
+                                                                    db.commit()
+                                                                    logger.info(
+                                                                        "[PAGOS_GMAIL] [NR_PAGO] "
+                                                                        "gmail_temporal id=%s omitida de Excel",
+                                                                        _gt_del_id,
+                                                                    )
+                                                                except Exception as _gt_exc:
+                                                                    logger.warning(
+                                                                        "[PAGOS_GMAIL] [NR_PAGO] "
+                                                                        "No se pudo eliminar gmail_temporal id=%s: %s",
+                                                                        _gt_del_id,
+                                                                        _gt_exc,
+                                                                    )
+                                                                    try:
+                                                                        db.rollback()
+                                                                    except Exception:
+                                                                        pass
+                                                        else:
+                                                            logger.warning(
+                                                                "[PAGOS_GMAIL] [NR_PAGO] Sin alta automatica: "
+                                                                "motivo=%s detalle=%s",
+                                                                res_nr.get("motivo"),
+                                                                (res_nr.get("detalle") or "")[:160],
+                                                            )
+                                                            registrar_traza_gmail_abcd_cuotas_evento(
+                                                                db,
+                                                                sync_id=ssync,
+                                                                sync_item_id=sid,
+                                                                plantilla_fmt="NR",
+                                                                cedula=p.get("c"),
+                                                                numero_referencia=p.get("r"),
+                                                                banco_excel=p.get("banco_excel"),
+                                                                archivo_adjunto=p.get("filename"),
+                                                                comprobante_imagen_id=uid,
+                                                                duplicado_documento=False,
+                                                                etapa_final="OMITIDO_NEGOCIO",
+                                                                motivo=str(
+                                                                    res_nr.get("motivo") or ""
+                                                                )[:80]
+                                                                or None,
+                                                                detalle=str(
+                                                                    res_nr.get("detalle") or ""
+                                                                )[:4000]
+                                                                or None,
+                                                            )
+                                            except Exception as nr_exc:
+                                                logger.warning(
+                                                    "[PAGOS_GMAIL] [REGLA_NR] %s",
+                                                    nr_exc,
+                                                )
+                                                try:
+                                                    registrar_traza_gmail_abcd_cuotas_evento(
+                                                        db,
+                                                        sync_id=getattr(
+                                                            si, "sync_id", None
+                                                        ),
+                                                        sync_item_id=getattr(si, "id", None),
+                                                        plantilla_fmt="NR",
+                                                        cedula=p.get("c"),
+                                                        numero_referencia=p.get("r"),
+                                                        banco_excel=p.get("banco_excel"),
+                                                        archivo_adjunto=p.get("filename"),
+                                                        comprobante_imagen_id=uid,
+                                                        duplicado_documento=False,
+                                                        etapa_final="ERROR_PIPELINE",
+                                                        motivo="excepcion",
+                                                        detalle=str(nr_exc)[:4000],
                                                     )
                                                 except Exception:
                                                     pass
@@ -1437,6 +1730,7 @@ def run_pipeline(
         else:
             process_message_batch(messages, "run")
 
+        _pagos_metrics = _metricas_resumen_corrida_gmail_pagos(db, sync_id)
         _run_summary_ok = {
             "scan_filter": scan_filter,
             "gmail_messages_listed": run_stats["gmail_messages_listed"],
@@ -1450,8 +1744,19 @@ def run_pipeline(
                 "messages_skipped_clasificacion_etiqueta"
             ],
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
+            "gemini_model": _gemini_model_snapshot,
+            **_pagos_metrics,
         }
-        logger.info("[PAGOS_GMAIL] FIN pipeline: emails=%d filas=%d", emails_ok, files_ok)
+        logger.info(
+            "[PAGOS_GMAIL] FIN pipeline: correos=%d comprobantes=%d archivos=%d | "
+            "alta_automatica_ok=%d pendientes_revision_excel=%d (sync_id=%s)",
+            emails_ok,
+            _pagos_metrics["comprobantes_digitados"],
+            files_ok,
+            _pagos_metrics["pagos_validos_alta_automatica"],
+            _pagos_metrics["pagos_invalidos_pendientes_revision"],
+            sync_id,
+        )
 
         _persistir_estado_sync_pipeline_terminal(
             db,
@@ -1470,6 +1775,7 @@ def run_pipeline(
             "[PAGOS_GMAIL] Fallo API Gmail al listar metadatos (sync=error; no es inbox vacio): %s",
             e,
         )
+        _pagos_metrics_err = _metricas_resumen_corrida_gmail_pagos(db, sync_id)
         _run_summary_list_err = {
             "scan_filter": scan_filter,
             "gmail_messages_listed": run_stats["gmail_messages_listed"],
@@ -1484,6 +1790,8 @@ def run_pipeline(
             ],
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "list_error": True,
+            "gemini_model": _gemini_model_snapshot,
+            **_pagos_metrics_err,
         }
         _persistir_estado_sync_pipeline_terminal(
             db,
@@ -1499,6 +1807,7 @@ def run_pipeline(
 
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Pipeline error inesperado: %s", e)
+        _pagos_metrics_pipe = _metricas_resumen_corrida_gmail_pagos(db, sync_id)
         _run_summary_pipe_err = {
             "scan_filter": scan_filter,
             "gmail_messages_listed": run_stats["gmail_messages_listed"],
@@ -1513,6 +1822,8 @@ def run_pipeline(
             ],
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "pipeline_error": True,
+            "gemini_model": _gemini_model_snapshot,
+            **_pagos_metrics_pipe,
         }
         _persistir_estado_sync_pipeline_terminal(
             db,

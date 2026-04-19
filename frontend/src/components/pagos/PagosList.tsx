@@ -705,9 +705,9 @@ export function PagosList() {
             </PopoverTrigger>
             <PopoverContent className="w-80 max-w-[90vw] p-3" align="end">
               <p className="mb-2 text-xs leading-snug text-muted-foreground">
-                Plantilla A–D que pasó validadores y generó pago en BD no aparece en
-                este Excel. Aquí solo quedan NR, duplicados, rechazos de negocio u
-                otros pendientes de revisión manual.
+                Plantilla A–D (y NR con alta automática) que pasó validadores y generó
+                pago en BD no aparece en este Excel. Aquí quedan duplicados, rechazos de
+                negocio, NR sin monto operativo legible u otros pendientes de revisión.
               </p>
               <Button
                 type="button"

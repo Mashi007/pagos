@@ -392,6 +392,7 @@ C: monto y numero_referencia desde la imagen; fecha_pago="NA"; cedula="NA"; emai
 FORMATO NR — comprobante bancario o de cajero **reconocible** (papel, tira, deposito, recaudacion, etc.) pero el **beneficiario / titular de la cuenta / empresa destino NO es RapiCredit** (ni RAPI-CREDIT, RAPI CREDIT, RAPICREDIT ni variantes OCR del Grupo 1) y **no** es nucleo C (Binance Pay):
   Usalo solo cuando en los pixeles se vea claramente un **deposito o recibo bancario** con monto o datos de operacion, pero el dinero va a **otra razon social** distinta de RapiCredit.
   Devuelve **exactamente** "monto":"NR" (literal NR, sin cifras inventadas). "cedula":"NA" y "email_cliente":"NA" (el backend usa el remitente del correo para la columna Cedula del Excel).
+  Campo adicional **"monto_operacion"**: monto **numerico** de la operacion impresa en el comprobante (misma regla de decimales que A/B/D: coma o punto, sin texto inventado). Si el monto total no es legible con certeza, **"NA"**. El backend lo usa solo para intentar alta automatica en `pagos` (el Excel exportado sigue mostrando columna Monto = NR).
   "fecha_pago" y "numero_referencia": copia lo legible del comprobante; si no hay certeza, "NA".
   "banco": nombre corto si se lee en el papel (ej. Mercantil, BNC, BDV, Banesco); si no, "NA".
   **Prohibido** usar NR para fotos sin comprobante (selfie, logo, pantalla de app no bancaria, borrosa sin datos) -> en ese caso **ninguno**.
@@ -400,7 +401,7 @@ FORMATO NR — comprobante bancario o de cajero **reconocible** (papel, tira, de
 Salida: solo JSON, sin markdown.
   A/B/D: {"formato":"A"|"B"|"D","fecha_pago":"...","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"Mercantil"|"BNC"|"BDV"|"..."}
   C: {"formato":"C","fecha_pago":"NA","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"NA"}
-  NR: {"formato":"NR","fecha_pago":"...|NA","cedula":"NA","monto":"NR","numero_referencia":"...|NA","email_cliente":"NA","banco":"..."}
+  NR: {"formato":"NR","fecha_pago":"...|NA","cedula":"NA","monto":"NR","monto_operacion":"123.45"|"NA","numero_referencia":"...|NA","email_cliente":"NA","banco":"..."}
   ninguno: {"formato":"ninguno","fecha_pago":"NA","cedula":"NA","monto":"NA","numero_referencia":"NA","email_cliente":"NA","banco":"NA"}
 """.strip()
 
@@ -729,6 +730,7 @@ def _parse_formato_y_pagos_json(
             "fecha_pago": _normalize_to_na(data.get("fecha_pago", PAGOS_NA)),
             "cedula": _normalize_to_na(data.get("cedula", PAGOS_NA)),
             "monto": _normalize_to_na(data.get("monto", PAGOS_NA)),
+            "monto_operacion": _normalize_to_na(data.get("monto_operacion", PAGOS_NA)),
             "numero_referencia": _normalize_to_na(data.get("numero_referencia", PAGOS_NA)),
             "email_cliente": _normalize_email_cliente_pagos_gmail(
                 data.get("email_cliente", PAGOS_NA)
@@ -739,6 +741,7 @@ def _parse_formato_y_pagos_json(
             "fecha_pago": PAGOS_NA,
             "cedula": PAGOS_NA,
             "monto": PAGOS_NA,
+            "monto_operacion": PAGOS_NA,
             "numero_referencia": PAGOS_NA,
             "email_cliente": PAGOS_NA,
             "banco": PAGOS_NA,
@@ -755,6 +758,7 @@ def _parse_formato_y_pagos_json(
             fields["cedula"] = PAGOS_NA
             fields["email_cliente"] = PAGOS_NA
             fields["monto"] = "NR"
+            fields["monto_operacion"] = _normalize_to_na(data.get("monto_operacion", PAGOS_NA))
             if not _pagos_gmail_nr_campos_completos(fields):
                 return "ninguno", na_fields.copy()
             return fmt, fields
@@ -1107,6 +1111,7 @@ def _empty_result(reason: str = "") -> Dict[str, str]:
         "fecha_pago": PAGOS_NA,
         "cedula": PAGOS_NA,
         "monto": PAGOS_NA,
+        "monto_operacion": PAGOS_NA,
         "numero_referencia": PAGOS_NA,
         "email_cliente": PAGOS_NA,
         "banco": PAGOS_NA,

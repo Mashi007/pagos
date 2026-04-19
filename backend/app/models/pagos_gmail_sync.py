@@ -40,6 +40,9 @@ class PagosGmailSyncItem(Base):
     drive_link = Column(Text, nullable=True)  # URL Drive o URL API comprobante en BD (sin limite practico)
     drive_email_link = Column(Text, nullable=True)  # link al .eml en Drive si aplica
     sheet_name = Column(String(100), nullable=True)
+    # Trazabilidad Gmail API (list/get); permite localizar el hilo en la bandeja. Índice vía migración 064.
+    gmail_message_id = Column(String(100), nullable=True)
+    gmail_thread_id = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
 
 
@@ -62,5 +65,7 @@ class GmailTemporal(Base):
     drive_link = Column(Text, nullable=True)
     drive_email_link = Column(Text, nullable=True)
     sheet_name = Column(String(100), nullable=True)
+    gmail_message_id = Column(String(100), nullable=True)
+    gmail_thread_id = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
 

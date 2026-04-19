@@ -13,6 +13,7 @@ Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no la
   Query opcional plantilla A–D vs duplicado `pagos.numero_documento`.
 - GET /pagos/gmail/status: ultima ejecucion; next_run_approx = proxima corrida programada Gmail si el scheduler tiene el job registrado
 - GET /pagos/gmail/abcd-cuotas-traza: historial plantilla A–D → pago → cuotas (post-Gemini)
+- GET /pagos/gmail/pipeline-eventos: eventos previos a fila sync (Gemini omitido, dedupe, etc.)
 - POST /pagos/gmail/confirmar-dia: confirmacion si/no; si si, borrado de datos acumulados
 """
 import io
@@ -30,6 +31,7 @@ from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
+from app.models.pagos_gmail_pipeline_evento import PagosGmailPipelineEvento
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
 from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_ERROR_EMAIL
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
@@ -222,6 +224,7 @@ def list_abcd_cuotas_traza(
     - **PAGO_SIN_CUOTAS**: `pago` creado pero ninguna cuota recibió monto (revisar préstamo / cuotas pendientes).
     - **OMITIDO_DUPLICADO**: serial ya existía en `pagos` / `pagos_con_errores`; no se duplicó el pago.
     - **OMITIDO_NEGOCIO**: validación o regla de negocio (ver `motivo` / `detalle`: varios préstamos, huella, etc.).
+    - **OMITIDO_SIN_MONTO_OPERACION**: plantilla NR sin `monto_operacion` legible (Gemini NA); queda revisión manual / Excel.
     - **ERROR_PIPELINE**: excepción al evaluar o procesar (ver `detalle`).
     """
     q = select(PagosGmailAbcdCuotasTraza).order_by(desc(PagosGmailAbcdCuotasTraza.created_at)).limit(limit)
@@ -238,14 +241,30 @@ def list_abcd_cuotas_traza(
             detail="No se pudo leer la traza (¿migración 059 aplicada?). Ejecute alembic upgrade.",
         ) from e
 
+    sync_item_ids = [int(x.sync_item_id) for x in rows if x.sync_item_id is not None]
+    si_map: dict[int, PagosGmailSyncItem] = {}
+    if sync_item_ids:
+        uniq = list(dict.fromkeys(sync_item_ids))
+        for si in db.execute(
+            select(PagosGmailSyncItem).where(PagosGmailSyncItem.id.in_(uniq))
+        ).scalars().all():
+            si_map[int(si.id)] = si
+
     items = []
     for r in rows:
+        si_row = si_map.get(int(r.sync_item_id)) if r.sync_item_id is not None else None
         items.append(
             {
                 "id": r.id,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
                 "sync_id": r.sync_id,
                 "sync_item_id": r.sync_item_id,
+                "gmail_message_id": getattr(si_row, "gmail_message_id", None)
+                if si_row
+                else None,
+                "gmail_thread_id": getattr(si_row, "gmail_thread_id", None)
+                if si_row
+                else None,
                 "plantilla_fmt": r.plantilla_fmt,
                 "cedula": r.cedula,
                 "numero_referencia": r.numero_referencia,
@@ -265,6 +284,51 @@ def list_abcd_cuotas_traza(
             }
         )
     return {"total": len(items), "items": items}
+
+
+@router.get("/pipeline-eventos")
+def list_pipeline_eventos(
+    limit: int = Query(200, ge=1, le=2000),
+    sync_id: Optional[int] = Query(None, ge=1),
+    motivo: Optional[str] = Query(
+        None,
+        description="Filtrar por motivo (ej. NO_PLANTILLA_GEMINI, DEDUPE_SHA_CORRIDA).",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Auditoría de pasos **antes** de crear fila en `pagos_gmail_sync_item` (rechazo plantilla, dedupe SHA en corrida, etc.).
+    Requiere migración **064**. Útil para enlazar con Gmail por `gmail_message_id` / `gmail_thread_id`.
+    """
+    q = select(PagosGmailPipelineEvento).order_by(desc(PagosGmailPipelineEvento.created_at)).limit(limit)
+    if sync_id is not None:
+        q = q.where(PagosGmailPipelineEvento.sync_id == sync_id)
+    if motivo and motivo.strip():
+        q = q.where(PagosGmailPipelineEvento.motivo == motivo.strip()[:64])
+    try:
+        rows = db.execute(q).scalars().all()
+    except Exception as e:
+        logger.warning("[PAGOS_GMAIL] pipeline-eventos lectura: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo leer eventos (¿migración 064 aplicada?). Ejecute alembic upgrade head.",
+        ) from e
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "id": r.id,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "sync_id": r.sync_id,
+                "gmail_message_id": r.gmail_message_id,
+                "gmail_thread_id": r.gmail_thread_id,
+                "sha256_hex": r.sha256_hex,
+                "filename": r.filename,
+                "motivo": r.motivo,
+                "detalle": r.detalle,
+            }
+        )
+    return {"total": len(out), "items": out}
 
 
 def _get_sheet_date_for_download() -> datetime:
@@ -568,6 +632,8 @@ def download_excel(
                 "Monto",
                 "Serial documento",
                 "Correo Pagador",
+                "Gmail message id",
+                "Gmail thread id",
             ]
         )
         for it in items:  # fila 1 = cabecera
@@ -579,6 +645,8 @@ def download_excel(
                     format_monto_excel_pagos_gmail(it.monto) or (it.monto or ""),
                     it.numero_referencia or "",
                     it.correo_origen or "",
+                    getattr(it, "gmail_message_id", None) or "",
+                    getattr(it, "gmail_thread_id", None) or "",
                 ]
             )
         buf = io.BytesIO()
@@ -665,6 +733,8 @@ def download_excel_temporal(
                 "Monto",
                 "Serial documento",
                 "Correo Pagador",
+                "Gmail message id",
+                "Gmail thread id",
             ]
         )
         for it in items:
@@ -676,6 +746,8 @@ def download_excel_temporal(
                     format_monto_excel_pagos_gmail(it.monto) or (it.monto or ""),
                     it.numero_referencia or "",
                     it.correo_origen or "",
+                    getattr(it, "gmail_message_id", None) or "",
+                    getattr(it, "gmail_thread_id", None) or "",
                 ]
             )
         buf = io.BytesIO()

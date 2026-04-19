@@ -346,9 +346,12 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
                 internal_date_ms = 0
             # labelIds: ids de sistema (INBOX, UNREAD) y de usuario; el pipeline puede leer ERROR EMAIL entre ellas.
             label_ids = list(meta.get("labelIds") or [])
+            _tid_raw = (msg.get("threadId") or meta.get("threadId") or "").strip()
+            thread_id = _tid_raw[:100] if _tid_raw else None
             out.append(
                 {
                     "id": mid,
+                    "thread_id": thread_id,
                     "payload": payload,
                     "headers": headers,
                     "internal_date_ms": internal_date_ms,

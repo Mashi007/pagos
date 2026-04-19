@@ -3,7 +3,8 @@
 Reglas de negocio **innegociables** para comprobantes Gmail plantilla **A / B / C / D**
 (mapeo fijo: **A → MERCANTIL**, **B → BNC**, **C → BINANCE**, **D → BNV**).
 
-Alcance **únicamente** esas plantillas. **NR** y otros flujos **no** entran en este documento.
+Alcance principal **A–D** en este documento. **NR** (no RapiCredit) comparte duplicado por documento;
+el alta automática NR está en `pago_nr_auto_service` (requiere `monto_operacion` desde Gemini).
 
 ---
 
@@ -53,6 +54,8 @@ Tras `commit` de sync/temporal + comprobante, si el serial **no** está duplicad
 invoca `pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd`
 (reutiliza `resolver_monto_registro_pago`, `conflicto_huella_para_creacion`,
 `_aplicar_pago_a_cuotas_interno` y `_estado_conciliacion_post_cascada` de `pagos.py`).
+Para **NR** con `monto_operacion` numérico (Gemini), invoca `pago_nr_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr`
+(mismas validaciones de préstamo único, documento, huella y cuotas).
 Requisito de préstamo: **un solo** crédito `APROBADO` por cédula (igual que carga masiva Excel);
 si hay 0 o varios, no se inserta `Pago` (revisión por Excel / manual).
 """
@@ -107,6 +110,15 @@ def referencia_ya_registrada_como_numero_documento(db: Session, referencia: str 
     con un `pagos.numero_documento` o `pagos_con_errores` ya almacenado.
     """
     return numero_documento_ya_registrado(db, referencia)
+
+
+def item_sync_nr_candidato_revision_duplicado(
+    *,
+    referencia: str | None,
+    db: Session,
+) -> bool:
+    """Plantilla NR: mismo criterio de duplicado por serial/referencia que A–D."""
+    return referencia_ya_registrada_como_numero_documento(db, referencia)
 
 
 def resumen_log_linea_plantilla_abcd() -> str:

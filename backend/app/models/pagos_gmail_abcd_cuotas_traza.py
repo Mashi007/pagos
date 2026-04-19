@@ -27,7 +27,7 @@ class PagosGmailAbcdCuotasTraza(Base):
         nullable=True,
         index=True,
     )
-    plantilla_fmt = Column(String(1), nullable=False)
+    plantilla_fmt = Column(String(4), nullable=False)
     cedula = Column(String(50), nullable=True)
     numero_referencia = Column(String(200), nullable=True)
     banco_excel = Column(String(50), nullable=True)

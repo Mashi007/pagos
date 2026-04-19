@@ -40,6 +40,14 @@ export type GmailRunSummary = {
   messages_skipped_drive_folder?: number
   list_error?: boolean
   pipeline_error?: boolean
+  /** Comprobantes con fila sync_item en esta corrida. */
+  comprobantes_digitados?: number
+  /** Altas automáticas exitosas (traza CUOTAS_OK / PAGO_SIN_CUOTAS con pago). */
+  pagos_validos_alta_automatica?: number
+  /** Comprobantes sin alta automática (revisión / Excel). */
+  pagos_invalidos_pendientes_revision?: number
+  /** Modelo Gemini usado en la corrida (settings GEMINI_MODEL). */
+  gemini_model?: string
 }
 
 interface GmailStatus {
@@ -138,6 +146,29 @@ function detalleCeroArchivosConCorreos(s: GmailStatus): string {
   return ' Ningún comprobante generó fila final (plantilla incompleta, regla «una sola pieza», dedupe de binario, etc.).'
 }
 
+/** Notificación final con conteos válidos / pendientes (backend run_summary). */
+function textoNotificacionFinProcesamientoGmail(s: GmailStatus): string | null {
+  const rs = s.last_run_summary
+  if (
+    !rs ||
+    typeof rs.pagos_validos_alta_automatica !== 'number' ||
+    typeof rs.pagos_invalidos_pendientes_revision !== 'number'
+  ) {
+    return null
+  }
+  const correos = s.last_emails ?? 0
+  const validos = rs.pagos_validos_alta_automatica
+  const invalidos = rs.pagos_invalidos_pendientes_revision
+  const comp =
+    typeof rs.comprobantes_digitados === 'number' ? rs.comprobantes_digitados : null
+  const compTxt = comp !== null ? ` Comprobantes digitalizados: ${comp}.` : ''
+  return (
+    `Procesamiento terminado. Se procesaron ${correos} correo(s).` +
+    ` Hay ${validos} pago(s) válido(s) (alta automática) y ${invalidos} pago(s) no válido(s) o pendientes de revisión.${compTxt}` +
+    ` Puede ver los pendientes en el Excel (botón Procesar manualmente → menú → Descargar Excel pendientes de revisión).`
+  )
+}
+
 export function useGmailPipeline({
   onDone,
   onStatusUpdate,
@@ -193,21 +224,22 @@ export function useGmailPipeline({
 
             if (s.last_status === 'error') {
               const errDetail = s.last_error ? `\n${s.last_error}` : ''
+              const resumenErr = textoNotificacionFinProcesamientoGmail(s)
+              const sufijoResumen = resumenErr ? `\n${resumenErr}` : ''
 
-              toast.error(`Error al procesar correos.${errDetail}`, {
-                duration: 10000,
+              toast.error(`Error al procesar correos.${errDetail}${sufijoResumen}`, {
+                duration: 14000,
               })
 
               // No abrir diálogo de descarga en caso de error
             } else if (emails === 0 && files === 0) {
               if (hasData) {
                 // Datos de una ejecución anterior disponibles para descargar
-
-                toast(
-                  `Sin correos procesados en esta ejecución (inbox con imagen/PDF según el filtro). Hay datos del ${s.latest_data_date} listos para descargar.`,
-
-                  { duration: 8000 }
-                )
+                const resumenCero = textoNotificacionFinProcesamientoGmail(s)
+                const baseCero = `Sin correos procesados en esta ejecución (inbox con imagen/PDF según el filtro). Hay datos del ${s.latest_data_date} listos para descargar.`
+                toast(resumenCero ? `${baseCero}\n${resumenCero}` : baseCero, {
+                  duration: 10000,
+                })
 
                 onDoneRef.current?.(s)
               } else {
@@ -224,11 +256,12 @@ export function useGmailPipeline({
               const dateHint = s.latest_data_date
                 ? ` (fecha correo: ${s.latest_data_date})`
                 : ''
+              const resumenFin = textoNotificacionFinProcesamientoGmail(s)
+              const cuerpo = resumenFin
+                ? `${resumenFin}${dateHint}${detalleCeroArchivosConCorreos(s)}`
+                : `Listo: se revisaron ${emails} correo(s) y ${files} archivo(s) procesados.${dateHint}${detalleCeroArchivosConCorreos(s)}`
 
-              toast.success(
-                `Listo: se revisaron ${emails} correo(s) y ${files} archivo(s) procesados.${dateHint}${detalleCeroArchivosConCorreos(s)}`,
-                { duration: 10000 }
-              )
+              toast.success(cuerpo, { duration: resumenFin ? 14000 : 10000 })
 
               onDoneRef.current?.(s)
             }
@@ -244,19 +277,19 @@ export function useGmailPipeline({
             const hasData = !!s.latest_data_date
 
             if (hasData) {
-              toast.success(
-                `Procesamiento en curso (${processed} correo(s) hasta ahora). Puede descargar ya los datos disponibles.`,
-
-                { duration: 8000 }
-              )
+              const resumenTope = textoNotificacionFinProcesamientoGmail(s)
+              const msgTope = resumenTope
+                ? `${resumenTope} Tiempo de espera máximo alcanzado; si aún corre en servidor, consulte estado o descargue Excel.`
+                : `Procesamiento en curso (${processed} correo(s) hasta ahora). Puede descargar ya los datos disponibles.`
+              toast.success(msgTope, { duration: resumenTope ? 14000 : 8000 })
 
               onDoneRef.current?.(s)
             } else {
-              toast(
-                `El procesamiento sigue en curso (${processed} correo(s)). Espere y vuelva a intentar descargar.`,
-
-                { duration: 10000 }
-              )
+              const resumenTope = textoNotificacionFinProcesamientoGmail(s)
+              const msgTope = resumenTope
+                ? `${resumenTope} Tiempo de espera máximo alcanzado en el navegador.`
+                : `El procesamiento sigue en curso (${processed} correo(s)). Espere y vuelva a intentar descargar.`
+              toast(msgTope, { duration: 10000 })
             }
 
             return

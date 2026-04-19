@@ -322,7 +322,25 @@ def _job_pagos_gmail_pending_scan() -> None:
             logger.info("[PAGOS_GMAIL] Escaneo programado omitido: sync en curso")
             return
         logger.info("[PAGOS_GMAIL] Escaneo programado: pending_identification")
-        run_pipeline(db, existing_sync_id=None, scan_filter="pending_identification")
+        sync_done_id, pipe_status = run_pipeline(
+            db, existing_sync_id=None, scan_filter="pending_identification"
+        )
+        if sync_done_id:
+            db.expire_all()
+            sync_row = db.execute(
+                select(PagosGmailSync).where(PagosGmailSync.id == sync_done_id)
+            ).scalars().first()
+            rs = (sync_row.run_summary or {}) if sync_row else {}
+            logger.info(
+                "[PAGOS_GMAIL] Escaneo programado finalizado (status=%s): correos=%s; "
+                "comprobantes=%s, pagos_validos_alta_auto=%s, pagos_pendientes_excel=%s — "
+                "pendientes en Excel (descarga temporal en UI Pagos).",
+                pipe_status,
+                getattr(sync_row, "emails_processed", 0) if sync_row else 0,
+                rs.get("comprobantes_digitados", 0),
+                rs.get("pagos_validos_alta_automatica", 0),
+                rs.get("pagos_invalidos_pendientes_revision", 0),
+            )
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Escaneo programado: %s", e)
     finally:

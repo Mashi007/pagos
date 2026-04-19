@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Registro en BD de la trazabilidad Gmail (plantilla A–D) → `pagos` → cuotas.
+Registro en BD de la trazabilidad Gmail (plantillas A–D y **NR**) → `pagos` → cuotas.
 
-Usado desde el pipeline y desde `pago_abcd_auto_service`. Los fallos al insertar la traza
+Usado desde el pipeline y desde `pago_abcd_auto_service` / `pago_nr_auto_service`. Los fallos al insertar la traza
 no deben interrumpir el pipeline (solo se registran en log).
 """
 from __future__ import annotations
@@ -40,7 +40,7 @@ def registrar_traza_gmail_abcd_cuotas_evento(
     pago_estado_final: Optional[str] = None,
 ) -> None:
     """Inserta una fila de auditoría y hace commit (transacción independiente de otras operaciones)."""
-    fmt = (plantilla_fmt or "?")[:1].upper()
+    fmt = (plantilla_fmt or "?").strip().upper()[:4] or "?"
     row = PagosGmailAbcdCuotasTraza(
         sync_id=sync_id,
         sync_item_id=sync_item_id,
