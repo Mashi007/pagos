@@ -49,9 +49,24 @@ def _cell_str(v: Any) -> str:
 
 
 def _parse_decimal_monto(s: str) -> Optional[Decimal]:
-    t = (s or "").strip().replace(" ", "").replace(",", ".")
+    """
+    Monto desde celda tipo hoja VE/EU: miles con punto y decimal con coma (ej. 1.575,00).
+    El reemplazo ingenuo coma→punto deja '1.575.00' y Decimal falla; por eso se normaliza antes.
+    """
+    t = (s or "").strip().replace(" ", "")
+    for sym in ("$", "€", "Bs.", "Bs", "USD", "VES"):
+        t = re.sub(re.escape(sym), "", t, flags=re.I).strip()
     if not t:
         return None
+    last_comma = t.rfind(",")
+    last_dot = t.rfind(".")
+    if "," in t and "." in t:
+        if last_comma > last_dot:
+            t = t.replace(".", "").replace(",", ".")
+        else:
+            t = t.replace(",", "")
+    elif "," in t:
+        t = t.replace(",", ".")
     try:
         d = Decimal(t)
         if d <= 0:
