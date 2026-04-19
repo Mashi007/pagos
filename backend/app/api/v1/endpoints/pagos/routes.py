@@ -174,6 +174,11 @@ from .payload_models import (
     PagoBatchBody,
     ValidarFilasBatchBody,
 )
+from app.services.cobros.cobros_publico_reporte_service import (
+    mime_efectivo_comprobante_web,
+    validate_file_magic,
+)
+
 from .comprobante_imagen_helpers import (
     _COMPROBANTE_IMG_CT,
     _MAX_COMPROBANTE_IMAGEN_BYTES,
@@ -235,15 +240,20 @@ async def upload_pago_comprobante_imagen(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    Sube una imagen de comprobante. Devuelve URL absoluta para persistir en pagos.link_comprobante.
+    Sube imagen o PDF de comprobante. Devuelve URL absoluta para persistir en pagos.link_comprobante.
     """
-    ct_raw = (file.content_type or "").split(";")[0].strip().lower()
+    ct_raw = mime_efectivo_comprobante_web(file.content_type or "", file.filename or "")
     if ct_raw not in _COMPROBANTE_IMG_CT:
         raise HTTPException(
             status_code=400,
-            detail="Solo se permiten imagenes JPEG, PNG, WebP o GIF.",
+            detail="Solo se permiten PDF, JPEG, PNG, HEIC, HEIF, WebP o GIF.",
         )
     data = await file.read()
+    if not validate_file_magic(data, ct_raw):
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo no corresponde a un PDF o imagen validos (firma de archivo).",
+        )
     if len(data) > _MAX_COMPROBANTE_IMAGEN_BYTES:
         raise HTTPException(
             status_code=400,

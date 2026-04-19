@@ -1,7 +1,8 @@
 """
 Servicio para manejar mensajes entrantes de WhatsApp (Meta API).
-Flujo cobranza: bienvenida → cédula (E, J o V + 6-11 dígitos) → foto papeleta (máx. 3 intentos) → guardar en Drive + OCR + digitalizar.
-Las imágenes se guardan en pagos_whatsapp con link_imagen (Google Drive).
+Flujo cobranza: bienvenida → cédula (E, J o V + 6-11 dígitos) → foto papeleta (máx. 3 intentos) → Drive + OCR + digitalizar.
+El binario del comprobante se persiste en `pago_comprobante_imagen` (FK en `pagos_whatsapp.comprobante_imagen_id`);
+`link_imagen` sigue siendo enlace humano (p. ej. Google Drive).
 Si la imagen no es clara tras 3 intentos se acepta igual, se crea un ticket automático con todo el respaldo y se envía copia al correo configurado (ej. itmaster@rapicreditca.com).
 Reglas de humanización: mensajes cortos, MESSAGE_DELAY entre envíos, emojis profesionales; INICIO → 3 mensajes de bienvenida → ESPERANDO_CEDULA; máx 3 intentos cédula → ERROR_MAX_INTENTOS.
 """
@@ -957,6 +958,7 @@ class WhatsAppService:
         if not token:
             logger.warning("%s %s | status=image_skipped note=Token WhatsApp no configurado telefono=%s", LOG_TAG_FALLO, "no_digitaliza", phone_mask)
             return {"status": "image_skipped", "note": "Token no configurado", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
+        image_mime: Optional[str] = None
         try:
             import httpx
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -970,6 +972,7 @@ class WhatsAppService:
                 r2 = await client.get(media_url, headers={"Authorization": f"Bearer {token}"})
                 r2.raise_for_status()
                 image_bytes = r2.content
+                image_mime = (r2.headers.get("content-type") or "").split(";")[0].strip() or None
         except Exception as e:
             logger.exception("%s %s | status=image_error note=descarga fallida telefono=%s error=%s", LOG_TAG_FALLO, "no_digitaliza", phone_mask, e)
             db.rollback()
@@ -1040,10 +1043,24 @@ class WhatsAppService:
             if not link_imagen:
                 logger.warning("%s Drive subida fallida o no configurada link_imagen=NA | telefono=%s", LOG_TAG_INFORME, phone_mask)
                 link_imagen = "NA"
+            from app.services.pagos_gmail.comprobante_bd import persistir_comprobante_gmail_en_bd
+
+            mime_in = (image_mime or "").strip() or "image/jpeg"
+            stored = persistir_comprobante_gmail_en_bd(db, image_bytes, mime_in)
+            comp_id = stored[0] if stored else None
+            blob_legacy = image_bytes if not comp_id else None
+            if not comp_id:
+                logger.warning(
+                    "%s Comprobante no insertado en pago_comprobante_imagen (MIME/tamaño); respaldo en pagos_whatsapp.imagen | telefono=%s mime=%s",
+                    LOG_TAG_INFORME,
+                    phone_mask,
+                    mime_in[:80],
+                )
             row_pw = PagosWhatsapp(
                 fecha=datetime.utcnow(),
                 cedula_cliente=conv.cedula,
-                imagen=image_bytes,
+                comprobante_imagen_id=comp_id,
+                imagen=blob_legacy,
                 link_imagen=link_imagen,
             )
             db.add(row_pw)

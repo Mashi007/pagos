@@ -1,8 +1,9 @@
 """
 Comprobantes binarios de pago en BD: tabla única `pago_comprobante_imagen` (imagen o PDF).
 
-Usado por: pipeline Gmail, alta manual `/pagos/comprobante-imagen`, e informes web
-(Infopagos / cobros público → `pagos_reportados.comprobante_imagen_id`).
+Usado por: pipeline Gmail, alta manual `/pagos/comprobante-imagen`, informes web
+(Infopagos / cobros público → `pagos_reportados.comprobante_imagen_id`), e imagen del
+flujo WhatsApp informe (`pagos_whatsapp.comprobante_imagen_id`).
 
 El enlace persistido en Gmail (drive_link / temporal) es URL al GET /pagos/comprobante-imagen/{id}.
 """
@@ -29,6 +30,7 @@ _MIME_PERMITIDOS = frozenset(
         "image/webp",
         "image/gif",
         "image/heic",
+        "image/heif",
         "application/pdf",
     }
 )
@@ -37,7 +39,10 @@ _MIME_PERMITIDOS = frozenset(
 def _normalizar_mime(mime: Optional[str]) -> str:
     if not mime:
         return ""
-    return mime.split(";")[0].strip().lower()
+    s = mime.split(";")[0].strip().lower()
+    if s == "image/jpg":
+        return "image/jpeg"
+    return s
 
 
 def url_comprobante_imagen_absoluta(imagen_id: str) -> str:

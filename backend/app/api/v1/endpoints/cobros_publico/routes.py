@@ -1,1595 +1,598 @@
 """
-
 Endpoints PÚBLICOS del módulo Cobros (formulario de reporte de pago).
 
 SEGURIDAD: Sin login de panel. Por defecto (COBROS_PUBLICO_OTP_DISABLED=True) rapicredit-cobros
-
 solo exige cedula valida + rate limit + honeypot; opcionalmente COBROS_PUBLICO_OTP_DISABLED=False
-
 activa OTP por correo y JWT cobros_public en validar-cedula y enviar-reporte (origen=infopagos sin OTP).
-
 """
 
-import os
-
-import random
-
-import re
-
-import string
-
 import logging
-
+import random
+import re
+import string
 from datetime import date, datetime, timedelta, timezone
-
 from typing import Optional
 
-
-
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Query
-
 from fastapi.responses import Response
-
 from pydantic import BaseModel
-
 from sqlalchemy.orm import Session
-
-from sqlalchemy import select, func, text, and_
-
-from sqlalchemy.exc import IntegrityError
-
-
+from sqlalchemy import select, and_
 
 from app.core.database import get_db
-
 from app.core.cobros_public_rate_limit import (
-
     get_client_ip,
-
     check_rate_limit_validar_cedula,
-
     check_rate_limit_enviar_reporte,
-
     check_rate_limit_cobros_public_solicitar,
-
     check_rate_limit_cobros_public_verificar,
-
 )
-
 from app.models.cliente import Cliente
-
-from app.models.prestamo import Prestamo
-
 from app.models.pago_reportado import PagoReportado
-
 from app.models.cobros_publico_codigo import CobrosPublicoCodigo
-
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
-
 from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_para_bs
-
-# Servicio Gemini del sistema (mismo GEMINI_API_KEY y GEMINI_MODEL que Pagos Gmail / health)
-
 from app.services.pagos_gmail.gemini_service import compare_form_with_image
-
-from app.services.pagos_gmail.comprobante_bd import persistir_comprobante_gmail_en_bd
-
 from app.services.cobros.recibo_pdf import (
     RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
     WHATSAPP_LINK,
 )
 from app.services.documentos_cliente_centro import generar_recibo_pdf_desde_pago_reportado
-from app.services.tasa_cambio_service import (
-    obtener_tasa_por_fecha,
-    fecha_hoy_caracas,
-)
-
 from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
-
+from app.services.cobros import cobros_publico_reporte_service as cpr
 from app.core.email import send_email
-from app.services.notificaciones_exclusion_desistimiento import (
-    cliente_bloqueado_por_desistimiento,
-)
-
-from app.core.security import (
-    decode_token,
-    create_recibo_infopagos_token,
-    create_cobros_public_token,
-)
-
+from app.services.notificaciones_exclusion_desistimiento import cliente_bloqueado_por_desistimiento
+from app.core.security import decode_token, create_recibo_infopagos_token, create_cobros_public_token
 from app.core.config import settings
-
 from app.core.email_config_holder import get_email_activo_servicio
-
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
-
-
 
 logger = logging.getLogger(__name__)
 
-
-
-
-def _validar_monto_reporte_publico(monto: float, moneda_upper: str) -> Optional[str]:
-    """Si moneda BS, rango Bs autorizado; si USD/USDT, limite general. None = OK."""
-    if moneda_upper == "BS":
-        if monto < MIN_MONTO_BS_REPORTAR or monto > MAX_MONTO_BS_REPORTAR:
-            return (
-                f"Monto en bolivares debe estar entre "
-                f"{MIN_MONTO_BS_REPORTAR:,.0f} y {MAX_MONTO_BS_REPORTAR:,.0f} Bs. "
-                "(cedula autorizada para pagos en bolivares)."
-            )
-        return None
-    if monto <= 0 or monto > 999_999_999.99:
-        return "Monto no valido."
-    return None
-
-def _referencia_display(referencia_interna: str) -> str:
-
-    ref = (referencia_interna or "").strip()
-
-    if not ref:
-
-        return "-"
-
-    return ref if ref.startswith("#") else f"#{ref}"
-
-
-
-
-
-def _prestamos_aprobados_del_cliente(db: Session, cliente_id: int) -> list:
-
-    """
-    Misma regla que importar reportados a pagos: solo préstamos en estado APROBADO.
-
-    Usa solo la columna id vía Core (Prestamo.__table__) para no disparar SELECT del mapper
-    completo; si en BD no existe prestamos.fecha_liquidado (migracion pendiente), ORM fallaria.
-    Los llamadores solo usan len() de la lista.
-    """
-
-    t = Prestamo.__table__
-
-    stmt = (
-
-        select(t.c.id)
-
-        .where(t.c.cliente_id == cliente_id, t.c.estado == "APROBADO")
-
-        .order_by(t.c.id)
-
-    )
-
-    return [row[0] for row in db.execute(stmt).all()]
-
-
-
-
-
-def _error_si_no_puede_reportar_en_web(prestamos_aprobados: list) -> Optional[str]:
-
-    """
-
-    El formulario web asigna el pago a un único préstamo APROBADO. Si hay 0 o >1, coherente con importación a pagos.
-
-    """
-
-    if len(prestamos_aprobados) == 0:
-
-        return (
-
-            "No tiene un crédito en estado APROBADO para reportar pagos en línea. "
-
-            "Si su crédito está en otro estado o ya fue liquidado, contacte a cobranza."
-
-        )
-
-    if len(prestamos_aprobados) > 1:
-
-        return (
-
-            "Su cédula tiene más de un crédito aprobado activo; el reporte en línea no está disponible. "
-
-            "Contacte a RapiCredit / cobranza para indicar a qué crédito corresponde el pago."
-
-        )
-
-    return None
-
-
-
-
-
-def _intentar_importar_reportado_automatico(
-
-    db: Session,
-
-    pr: PagoReportado,
-
-    referencia: str,
-
-    log_tag: str,
-
-) -> None:
-
-    """
-
-    Si el reporte quedó en estado aprobado: crea Pago (mismas reglas que importar-desde-cobros),
-
-    aplica a cuotas y marca el reporte como importado. Fallos solo en log (no rompe la respuesta al cliente).
-
-    """
-
-    if pr is None or getattr(pr, "estado", None) != "aprobado":
-
-        return
-
-    try:
-
-        from app.models.pago import Pago
-
-        from app.api.v1.endpoints.pagos import importar_un_pago_reportado_a_pagos, _aplicar_pago_a_cuotas_interno
-        from app.services.cobros.pago_reportado_documento import claves_documento_pago_para_reportado
-
-        db.refresh(pr)
-
-        claves_pr = claves_documento_pago_para_reportado(pr)
-
-        docs_bd: set[str] = set()
-
-        if claves_pr:
-
-            rows = db.execute(
-
-                select(Pago.numero_documento).where(Pago.numero_documento.in_(claves_pr))
-
-            ).scalars().all()
-
-            docs_bd = {str(x) for x in rows if x}
-
-        usuario = "infopagos@rapicredit" if log_tag == "INFOPAGOS" else "cobros-publico@rapicredit"
-
-        res = importar_un_pago_reportado_a_pagos(
-
-            db,
-
-            pr,
-
-            usuario_email=usuario,
-
-            documentos_ya_en_bd=docs_bd,
-
-            docs_en_lote=set(),
-
-            registrar_error_en_tabla=False,
-
-        )
-
-        if not res.get("ok"):
-
-            logger.warning("[%s] Auto-import ref=%s omitido: %s", log_tag, referencia, res.get("error"))
-
-            return
-
-        pago = res["pago"]
-
-        cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
-
-        if cc > 0 or cp > 0:
-
-            pago.estado = "PAGADO"
-
-        pr.estado = "importado"
-
-        db.commit()
-
-        logger.info("[%s] Auto-import OK ref=%s pago_id=%s", log_tag, referencia, getattr(pago, "id", None))
-
-    except Exception as e:
-
-        logger.warning("[%s] Auto-import fallo ref=%s: %s", log_tag, referencia, e)
-
-        try:
-
-            db.rollback()
-
-        except Exception:
-
-            pass
-
-
-
-
-
-
-
-router = APIRouter(dependencies=[])  # Sin get_current_user
-
-
-
-# Tipos de archivo permitidos para comprobante
-
-ALLOWED_COMPROBANTE_TYPES = {"image/jpeg", "image/jpg", "image/png", "application/pdf"}
-
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
-
-
-
-# Magic bytes (inicio de archivo) para validar tipo real
-
-MAGIC_JPEG = bytes([0xFF, 0xD8, 0xFF])
-
-MAGIC_PNG = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
-
-MAGIC_PDF = bytes([0x25, 0x50, 0x44, 0x46])  # %PDF
-
-
-
-
-
-def _sanitize_filename(name: str) -> str:
-
-    """Elimina path traversal y caracteres no seguros."""
-
-    if not name or not name.strip():
-
-        return "comprobante"
-
-    name = name.strip()
-
-    name = os.path.basename(name)  # sin rutas
-
-    name = re.sub(r"[^\w.\-]", "_", name)[:80]
-
-    return name or "comprobante"
-
-
-
-
-
-def _validate_file_magic(content: bytes, content_type: str) -> bool:
-
-    """Verifica que el contenido coincida con el tipo declarado (anti-spoofing)."""
-
-    if len(content) < 8:
-
-        return False
-
-    ctype = (content_type or "").lower()
-
-    if "jpeg" in ctype or "jpg" in ctype:
-
-        return content[:3] == MAGIC_JPEG
-
-    if "png" in ctype:
-
-        return content[:8] == MAGIC_PNG
-
-    if "pdf" in ctype:
-
-        return content[:4] == MAGIC_PDF
-
-    return False
-
-
-
-
-
-def _normalize_cedula_for_lookup(tipo: str, numero: str) -> str:
-
-    """Cédula para búsqueda en BD: V12345678 (sin guión)."""
-
-    t = (tipo or "").strip().upper()
-
-    n = (numero or "").strip()
-
-    if not n:
-
-        return ""
-
-    return f"{t}{n}"
-
-
-
-
-
-def _mask_email(email: str) -> str:
-
-    """Enmascara correo: r***z@gmail.com"""
-
-    if not email or "@" not in email:
-
-        return "***@***"
-
-    local, domain = email.rsplit("@", 1)
-
-    if len(local) <= 2:
-
-        return f"{local[0]}***@{domain}"
-
-    return f"{local[0]}***{local[-1]}@{domain}"
-
-
-
-
-
-def _generar_referencia_interna(db: Session) -> str:
-
-    """Formato RPC-YYYYMMDD-XXXXX con XXXXX secuencial del dia (atomico por tabla)."""
-
-    try:
-
-        db.execute(text("""
-
-            CREATE TABLE IF NOT EXISTS secuencia_referencia_cobros (
-
-                fecha DATE PRIMARY KEY,
-
-                siguiente INTEGER NOT NULL DEFAULT 1
-
-            )
-
-        """))
-
-    except Exception:
-
-        db.rollback()
-
-        raise
-
-    # Sincronizar con referencias ya existentes hoy (p. ej. tras migrar de COUNT a tabla)
-
-    try:
-
-        db.execute(text("""
-
-            INSERT INTO secuencia_referencia_cobros (fecha, siguiente)
-
-            SELECT CURRENT_DATE, COALESCE((
-
-                SELECT MAX(CAST(SUBSTRING(referencia_interna FROM 14 FOR 5) AS INTEGER))
-
-                FROM pagos_reportados
-
-                WHERE referencia_interna LIKE 'RPC-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-%'
-
-            ), 0)
-
-            ON CONFLICT (fecha) DO NOTHING
-
-        """))
-
-    except Exception:
-
-        db.rollback()
-
-        raise
-
-    row = db.execute(text("""
-
-        INSERT INTO secuencia_referencia_cobros (fecha, siguiente)
-
-        VALUES (CURRENT_DATE, 1)
-
-        ON CONFLICT (fecha) DO UPDATE SET siguiente = secuencia_referencia_cobros.siguiente + 1
-
-        RETURNING siguiente
-
-    """)).scalar_one()
-
-    hoy = fecha_hoy_caracas().strftime("%Y%m%d")
-
-    return f"RPC-{hoy}-{row:05d}"
-
-
-
+router = APIRouter(dependencies=[])
 
 
 class ValidarCedulaResponse(BaseModel):
-
     ok: bool
-
     nombre: Optional[str] = None
-
     """Correo completo para que el cliente lo compruebe en pantalla (no enmascarado)."""
-
     email: Optional[str] = None
-
     email_enmascarado: Optional[str] = None
-
     error: Optional[str] = None
-
     """True si esta cédula puede reportar pagos en Bolívares (Bs) en cobros/infopagos."""
-
     puede_reportar_bs: Optional[bool] = None
 
 
-
-
-
 class EnviarReporteResponse(BaseModel):
-
     ok: bool
-
     referencia_interna: Optional[str] = None
-
     mensaje: Optional[str] = None
-
     error: Optional[str] = None
-
-    # Metadatos para la UI: el envio puede ser ok=True aun con revision manual o sin recibo por correo.
     estado_reportado: Optional[str] = None
-
     recibo_enviado: Optional[bool] = None
 
 
-
-
-
 class EnviarReporteInfopagosResponse(BaseModel):
-
     """Respuesta de Infopagos. Token y recibo solo si quedo aprobado (misma politica que cobros publico)."""
 
     ok: bool
-
     referencia_interna: Optional[str] = None
-
     mensaje: Optional[str] = None
-
     error: Optional[str] = None
-
     recibo_descarga_token: Optional[str] = None
-
     pago_id: Optional[int] = None
-
     estado_reportado: Optional[str] = None
+    aplicado_a_cuotas: Optional[str] = None
 
-
-
-
-
-# Longitud máxima para evitar abuso (cédula venezolana: V/E/J + hasta 11 dígitos)
 
 MAX_CEDULA_LENGTH = 20
 
-
-
-# Mensaje de rechazo cuando intentan reportar en Bs sin estar en la lista (el usuario ve Observación: Bolívares)
-
-ERROR_TASA_BS_NO_REGISTRADA = (
-    "No hay tasa de cambio oficial para la fecha de pago {fp}. "
-    "Un administrador debe registrarla en Administracion > Tasas de cambio para esa fecha "
-    "antes de reportar en bolivares."
-)
-
-
-ERROR_BS_NO_AUTORIZADO = "Observación: Bolívares. No puede enviar pago en Bolívares; su cédula no está autorizada. Use USD."
-
-# Monto en bolivares (solo cedulas en cedulas_reportar_bs): 1 a 10_000_000 Bs.
-MIN_MONTO_BS_REPORTAR = 1.0
-MAX_MONTO_BS_REPORTAR = 10_000_000.0
-
-
 COBROS_CODIGO_EXPIRA_MINUTES = 120
-
 MAX_CODIGOS_COBROS_PUBLICO_POR_CEDULA = 3
 
 
 class SolicitarCodigoReporteRequest(BaseModel):
-
     cedula: str
-
     email: str
 
 
 class SolicitarCodigoReporteResponse(BaseModel):
-
     ok: bool
-
     mensaje: Optional[str] = None
-
     error: Optional[str] = None
-
     expira_en: Optional[str] = None
 
 
 class VerificarCodigoReporteRequest(BaseModel):
-
     cedula: str
-
     email: str
-
     codigo: str
 
 
 class VerificarCodigoReporteResponse(BaseModel):
-
     ok: bool
-
     error: Optional[str] = None
-
     access_token: Optional[str] = None
-
     expires_in: Optional[int] = None
-
     nombre: Optional[str] = None
-
     puede_reportar_bs: Optional[bool] = None
-
     email_enmascarado: Optional[str] = None
 
 
 def _cobros_public_otp_required(origen: Optional[str]) -> bool:
-
     if settings.COBROS_PUBLICO_OTP_DISABLED:
-
         return False
-
     if (origen or "").strip().lower() == "infopagos":
-
         return False
-
     return True
 
 
 def _validar_bearer_cobros_public(request: Request, cedula_lookup: str) -> Optional[str]:
-
     auth = (request.headers.get("Authorization") or "").strip()
-
     if not auth.lower().startswith("bearer "):
-
         return (
-
             "Debe verificar su correo con el codigo enviado antes de continuar. "
-
             "Use el paso anterior del formulario."
-
         )
-
     token = auth[7:].strip()
-
     payload = decode_token(token)
-
     if not payload or payload.get("type") != "cobros_public":
-
         return "La sesion de verificacion expiro o no es valida. Solicite un nuevo codigo."
-
     sub = (payload.get("sub") or "").strip().replace("-", "")
-
     if not sub or sub != cedula_lookup:
-
         return "La cedula no coincide con la verificacion por correo."
-
     return None
 
 
 def _norm_email_reporte_pub(e: str) -> str:
-
     return (e or "").strip().lower()
 
 
 def _generar_codigo_6_reporte_pub() -> str:
-
     return "".join(random.choices(string.digits, k=6))
 
 
+def _mask_email(email: str) -> str:
+    """Enmascara correo: r***z@gmail.com"""
+    if not email or "@" not in email:
+        return "***@***"
+    local, domain = email.rsplit("@", 1)
+    if len(local) <= 2:
+        return f"{local[0]}***@{domain}"
+    return f"{local[0]}***{local[-1]}@{domain}"
+
+
 @router.post("/solicitar-codigo-reporte", response_model=SolicitarCodigoReporteResponse)
-
 def cobros_public_solicitar_codigo_reporte(
-
     request: Request,
-
     body: SolicitarCodigoReporteRequest,
-
     db: Session = Depends(get_db),
-
 ):
-
     """
-
     Envia un codigo de 6 digitos al correo registrado del cliente si cedula y correo coinciden
-
     con la base de datos y el cliente puede reportar pago en web. Respuesta generica si no aplica.
-
     """
-
     ip = get_client_ip(request)
-
     try:
-
         check_rate_limit_cobros_public_solicitar(ip)
-
     except HTTPException:
-
         raise
 
     cedula_raw = (body.cedula or "").strip()
-
     email_in = _norm_email_reporte_pub(body.email or "")
-
     if not cedula_raw or not email_in:
-
-        return SolicitarCodigoReporteResponse(
-
-            ok=False, error="Ingrese cedula y correo electronico."
-
-        )
-
+        return SolicitarCodigoReporteResponse(ok=False, error="Ingrese cedula y correo electronico.")
     if len(cedula_raw) > MAX_CEDULA_LENGTH:
-
         return SolicitarCodigoReporteResponse(ok=False, error="Datos invalidos.")
 
     result = validate_cedula(cedula_raw)
-
     if not result.get("valido"):
-
-        return SolicitarCodigoReporteResponse(
-
-            ok=False, error=result.get("error", "Cedula invalida.")
-
-        )
+        return SolicitarCodigoReporteResponse(ok=False, error=result.get("error", "Cedula invalida."))
 
     valor = result.get("valor_formateado", "")
-
     cedula_lookup = valor.replace("-", "") if valor else ""
-
     if not cedula_lookup:
-
         return SolicitarCodigoReporteResponse(ok=False, error="Formato de cedula no reconocido.")
 
     cliente = db.execute(
-
-        select(Cliente).where(
-            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
-        )
-
+        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
     ).scalars().first()
-
     if not cliente:
-
-        logger.info(
-
-            "cobros_public solicitar-codigo: cedula no registrada ip=%s",
-
-            ip,
-
-        )
-
+        logger.info("cobros_public solicitar-codigo: cedula no registrada ip=%s", ip)
         return SolicitarCodigoReporteResponse(
-
             ok=True,
-
             mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
-
         )
 
     destinos_reg = emails_destino_desde_objeto(cliente)
-
     if not destinos_reg:
-
         logger.info(
-
             "cobros_public solicitar-codigo: cliente sin email cedula_suffix=***%s",
-
             cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
-
         )
-
         return SolicitarCodigoReporteResponse(
-
             ok=True,
-
             mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
-
         )
 
     if email_in.lower() not in {d.lower() for d in destinos_reg}:
-
         logger.info("cobros_public solicitar-codigo: email no coincide con BD")
-
         return SolicitarCodigoReporteResponse(
-
             ok=True,
-
             mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
-
         )
 
-    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
-
-    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
-
+    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
     if err_pres:
-
         logger.info("cobros_public solicitar-codigo: no puede reportar web")
-
         return SolicitarCodigoReporteResponse(
-
             ok=True,
-
             mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
-
         )
 
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-
     activos = (
-
         db.execute(
-
             select(CobrosPublicoCodigo)
-
             .where(
-
                 and_(
-
                     CobrosPublicoCodigo.cedula_normalizada == cedula_lookup,
-
                     CobrosPublicoCodigo.usado == False,
-
                     CobrosPublicoCodigo.expira_en > now_utc,
-
                 )
-
             )
-
             .order_by(CobrosPublicoCodigo.creado_en.desc())
-
         )
-
         .scalars()
-
         .all()
-
     )
-
     if len(activos) >= MAX_CODIGOS_COBROS_PUBLICO_POR_CEDULA:
-
         for item in activos[MAX_CODIGOS_COBROS_PUBLICO_POR_CEDULA - 1 :]:
-
             db.delete(item)
-
         db.flush()
 
     codigo = _generar_codigo_6_reporte_pub()
-
     expira_en = now_utc + timedelta(minutes=COBROS_CODIGO_EXPIRA_MINUTES)
-
     row = CobrosPublicoCodigo(
-
         cedula_normalizada=cedula_lookup,
-
         email=email_in,
-
         codigo=codigo,
-
         expira_en=expira_en,
-
         usado=False,
-
         creado_en=now_utc,
-
     )
-
     db.add(row)
-
     db.commit()
 
     nombre_c = (cliente.nombres or "").strip() or "Cliente"
-
     asunto = "[RapiCredit] Codigo para reportar su pago"
-
     cuerpo = (
-
         f"Estimado(a) {nombre_c},\n\n"
-
         f"Su codigo para continuar en el formulario de reporte de pago es: {codigo}\n\n"
-
         f"Valido por {COBROS_CODIGO_EXPIRA_MINUTES} minutos. No lo comparta.\n\n"
-
         "Si usted no solicito este codigo, ignore este mensaje.\n\n"
-
         "RapiCredit"
-
     )
 
     if not get_email_activo_servicio("estado_cuenta"):
-
         logger.warning(
-
             "cobros_public solicitar-codigo: servicio email estado_cuenta desactivado, codigo no enviado"
-
         )
-
         return SolicitarCodigoReporteResponse(
-
             ok=True,
-
             mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
-
             expira_en=expira_en.isoformat() + "Z",
-
         )
 
     if cliente_bloqueado_por_desistimiento(db, cedula=cedula_lookup, email=email_in):
-
         logger.info("cobros_public solicitar-codigo: bloqueo desistimiento")
-
         return SolicitarCodigoReporteResponse(
-
             ok=True,
-
             mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
-
             expira_en=expira_en.isoformat() + "Z",
-
         )
 
     ok_send, err_send = send_email(
-
         [email_in],
-
         asunto,
-
         cuerpo,
-
         servicio="estado_cuenta",
-
         respetar_destinos_manuales=True,
-
     )
-
     if not ok_send:
-
         logger.warning("cobros_public solicitar-codigo: SMTP fallo %s", err_send)
 
     return SolicitarCodigoReporteResponse(
-
         ok=True,
-
         mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
-
         expira_en=expira_en.isoformat() + "Z",
-
     )
 
 
 @router.post("/verificar-codigo-reporte", response_model=VerificarCodigoReporteResponse)
-
 def cobros_public_verificar_codigo_reporte(
-
     request: Request,
-
     body: VerificarCodigoReporteRequest,
-
     db: Session = Depends(get_db),
-
 ):
-
     """Verifica el codigo y devuelve JWT de sesion para validar-cedula y enviar-reporte."""
-
     ip = get_client_ip(request)
-
     try:
-
         check_rate_limit_cobros_public_verificar(ip)
-
     except HTTPException:
-
         raise
 
     cedula_raw = (body.cedula or "").strip()
-
     email_in = _norm_email_reporte_pub(body.email or "")
-
     codigo = (body.codigo or "").strip()
-
     if not cedula_raw or not email_in or not codigo:
-
-        return VerificarCodigoReporteResponse(
-
-            ok=False, error="Ingrese cedula, correo y codigo."
-
-        )
+        return VerificarCodigoReporteResponse(ok=False, error="Ingrese cedula, correo y codigo.")
 
     result = validate_cedula(cedula_raw)
-
     if not result.get("valido"):
-
-        return VerificarCodigoReporteResponse(
-
-            ok=False, error=result.get("error", "Cedula invalida.")
-
-        )
+        return VerificarCodigoReporteResponse(ok=False, error=result.get("error", "Cedula invalida."))
 
     cedula_lookup = (result.get("valor_formateado", "") or "").replace("-", "")
-
     if not cedula_lookup:
-
         return VerificarCodigoReporteResponse(ok=False, error="Formato de cedula no reconocido.")
 
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-
     fila = db.execute(
-
         select(CobrosPublicoCodigo).where(
-
             and_(
-
                 CobrosPublicoCodigo.cedula_normalizada == cedula_lookup,
-
                 CobrosPublicoCodigo.email == email_in,
-
                 CobrosPublicoCodigo.codigo == codigo.strip(),
-
                 CobrosPublicoCodigo.expira_en > now_utc,
-
                 CobrosPublicoCodigo.usado == False,
-
             )
-
         )
-
     ).scalars().first()
-
     if not fila:
-
-        return VerificarCodigoReporteResponse(
-
-            ok=False, error="Codigo invalido o expirado. Solicite uno nuevo.",
-
-        )
+        return VerificarCodigoReporteResponse(ok=False, error="Codigo invalido o expirado. Solicite uno nuevo.")
 
     fila.usado = True
-
     db.commit()
 
     cliente = db.execute(
-
-        select(Cliente).where(
-            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
-        )
-
+        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
     ).scalars().first()
-
     if not cliente:
-
         return VerificarCodigoReporteResponse(ok=False, error="Cliente no encontrado.")
 
-    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
-
-    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
-
+    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
     if err_pres:
-
         return VerificarCodigoReporteResponse(ok=False, error=err_pres)
 
     nombre = (cliente.nombres or "").strip()
-
     email_raw = ((fila.email or "").strip() or (cliente.email or "").strip())
-
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
-
-    token = create_cobros_public_token(
-
-        cedula_lookup, expire_minutes=COBROS_CODIGO_EXPIRA_MINUTES
-
-    )
+    token = create_cobros_public_token(cedula_lookup, expire_minutes=COBROS_CODIGO_EXPIRA_MINUTES)
 
     return VerificarCodigoReporteResponse(
-
         ok=True,
-
         access_token=token,
-
         expires_in=COBROS_CODIGO_EXPIRA_MINUTES * 60,
-
         nombre=nombre,
-
         puede_reportar_bs=puede_bs,
-
         email_enmascarado=_mask_email(email_raw) if email_raw else None,
-
     )
 
 
 @router.get("/validar-cedula", response_model=ValidarCedulaResponse)
-
 def validar_cedula_publico(
-
     request: Request,
-
     cedula: str,
-
     origen: Optional[str] = Query(None),
-
     db: Session = Depends(get_db),
-
 ):
-
     """
-
     Valida cédula (formato V/E/J + dígitos), existencia en clientes y un único préstamo APROBADO
-
     (misma regla que la importación a la tabla pagos).
 
     Público, sin auth. Rate limit: 30 req/min por IP. Retorna nombre y correo enmascarado si ok.
-
     Sin límite cuando origen=infopagos (ruta /pagos/infopagos, uso interno).
-
     """
-
     ip = get_client_ip(request)
-
     if (origen or "").strip().lower() != "infopagos":
-
         check_rate_limit_validar_cedula(ip)
 
     if not cedula or not cedula.strip():
-
         return ValidarCedulaResponse(ok=False, error="Ingrese el número de cédula.")
-
     if len(cedula.strip()) > MAX_CEDULA_LENGTH:
-
         return ValidarCedulaResponse(ok=False, error="Datos inválidos.")
 
     result = validate_cedula(cedula.strip())
-
     if not result.get("valido"):
-
         return ValidarCedulaResponse(ok=False, error=result.get("error", "Cédula inválida."))
 
-    # Valor formateado V-12345678 → para lookup en BD usamos V12345678
-
     valor = result.get("valor_formateado", "")
-
     cedula_lookup = valor.replace("-", "") if valor else ""
-
     if not cedula_lookup:
-
         return ValidarCedulaResponse(ok=False, error="Formato de cédula no reconocido.")
 
     if _cobros_public_otp_required(origen):
-
         token_err = _validar_bearer_cobros_public(request, cedula_lookup)
-
         if token_err:
-
             return ValidarCedulaResponse(ok=False, error=token_err)
 
-    # Búsqueda que acepta cédula con o sin guión en BD (normalizar para comparar)
-
     cliente = db.execute(
-
-        select(Cliente).where(
-            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
+        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
+    ).scalars().first()
+    if not cliente:
+        return ValidarCedulaResponse(
+            ok=False, error="La cédula ingresada no se encuentra registrada en nuestro sistema."
         )
 
-    ).scalars().first()
-
-    if not cliente:
-
-        return ValidarCedulaResponse(ok=False, error="La cédula ingresada no se encuentra registrada en nuestro sistema.")
-
-    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
-
-    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
-
+    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
     if err_pres:
-
         return ValidarCedulaResponse(ok=False, error=err_pres)
 
-    # ¿Puede reportar en Bs? (lista cargada desde Excel en /pagos/pagos)
-
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
-
     nombre = (cliente.nombres or "").strip()
-
     email = (cliente.email or "").strip()
-
     return ValidarCedulaResponse(
-
         ok=True,
-
         nombre=nombre,
-
         email=email or None,
-
         email_enmascarado=_mask_email(email),
-
         puede_reportar_bs=puede_bs,
-
     )
 
-
-
-
-
-# Honeypot: campo oculto que no debe rellenar el usuario. Si viene con valor = bot, rechazar.
 
 HONEYPOT_FIELD = "contact_website"
 
 
-
-
-
 @router.post("/enviar-reporte", response_model=EnviarReporteResponse)
-
 async def enviar_reporte_publico(
-
     request: Request,
-
     db: Session = Depends(get_db),
-
     tipo_cedula: str = Form(...),
-
     numero_cedula: str = Form(...),
-
     fecha_pago: date = Form(...),
-
     institucion_financiera: str = Form(...),
-
     numero_operacion: str = Form(...),
-
     monto: float = Form(...),
-
     moneda: str = Form("BS"),
-
     comprobante: UploadFile = File(...),
-
     observacion: Optional[str] = Form(None),
-
-    contact_website: Optional[str] = Form(None),  # honeypot: debe estar vacío
-
+    contact_website: Optional[str] = Form(None),
 ):
-
     """
-
     Recibe el reporte de pago del formulario público.
 
     Rate limit: 5 envíos/hora por IP. Honeypot anti-bot. Validación de archivo por magic bytes.
-
     """
-
     ip = get_client_ip(request)
-
     check_rate_limit_enviar_reporte(ip)
 
-    # Honeypot: si un bot rellenó el campo oculto, rechazar sin revelar motivo
-
     if contact_website and str(contact_website).strip():
-
         logger.warning("[COBROS_PUBLIC] Honeypot activado desde IP %s", ip)
-
         return EnviarReporteResponse(ok=False, error="No se pudo procesar el envío. Intente de nuevo.")
 
-    # Validar cédula de nuevo
-
     cedula_input = f"{tipo_cedula}{numero_cedula}"
-
     val = validate_cedula(cedula_input)
-
     if not val.get("valido"):
-
         return EnviarReporteResponse(ok=False, error=val.get("error", "Cédula inválida."))
 
     cedula_lookup = val.get("valor_formateado", "").replace("-", "")
-
     if _cobros_public_otp_required(None):
-
         token_err = _validar_bearer_cobros_public(request, cedula_lookup)
-
         if token_err:
-
             return EnviarReporteResponse(ok=False, error=token_err)
 
-    # Búsqueda que acepta cédula con o sin guión en BD
-
     cliente = db.execute(
-
-        select(Cliente).where(
-            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
-        )
-
+        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
     ).scalars().first()
-
     if not cliente:
-
         return EnviarReporteResponse(ok=False, error="La cédula no está registrada.")
 
-    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
-
-    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
-
+    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
     if err_pres:
-
         return EnviarReporteResponse(ok=False, error=err_pres)
 
+    err_campos, mon_norm = cpr.normalizar_y_validar_campos_formulario(
+        tipo_cedula=tipo_cedula,
+        numero_cedula=numero_cedula,
+        institucion_financiera=institucion_financiera,
+        numero_operacion=numero_operacion,
+        monto=monto,
+        moneda=moneda,
+        observacion=observacion,
+    )
+    if err_campos:
+        return EnviarReporteResponse(ok=False, error=err_campos)
 
-
-    # Límites de longitud para evitar inyección o abuso
-
-    if len(tipo_cedula.strip()) > 2 or len(numero_cedula.strip()) > 13:
-
-        return EnviarReporteResponse(ok=False, error="Datos inválidos.")
-
-    if len(institucion_financiera.strip()) > 100 or len(numero_operacion.strip()) > 100:
-
-        return EnviarReporteResponse(ok=False, error="Datos inválidos.")
-
-    if observacion and len(observacion) > 300:
-
-        observacion = observacion[:300]
-
-    if (moneda or "BS").strip().upper() not in ("BS", "USD", "USDT"):
-
-        return EnviarReporteResponse(ok=False, error="Moneda no válida.")
-
-    moneda_upper = (moneda or "BS").strip().upper()
-
-    # USDT = Dólares = USD = $; normalizar a USD para guardar
-
-    moneda_guardar = "USD" if moneda_upper in ("USD", "USDT") else moneda_upper
-
-    if moneda_upper == "BS":
-
-        if not cedula_autorizada_para_bs(db, cedula_lookup):
-
-            return EnviarReporteResponse(ok=False, error=ERROR_BS_NO_AUTORIZADO)
-
-        tasa_row = obtener_tasa_por_fecha(db, fecha_pago)
-
-        if tasa_row is None:
-
-            return EnviarReporteResponse(
-
-                ok=False,
-
-                error=ERROR_TASA_BS_NO_REGISTRADA.format(
-
-                    fp=fecha_pago.strftime("%d/%m/%Y"),
-
-                ),
-
-            )
-
-    err_monto = _validar_monto_reporte_publico(monto, moneda_upper)
-
-    if err_monto:
-
-        return EnviarReporteResponse(ok=False, error=err_monto)
-
-    if fecha_pago > fecha_hoy_caracas():
-
-        return EnviarReporteResponse(ok=False, error="La fecha de pago no puede ser futura.")
-
-
-
-    # Validar archivo
+    err_neg = cpr.validar_reglas_bs_tasa_monto_fecha(
+        db,
+        cedula_lookup=cedula_lookup,
+        fecha_pago=fecha_pago,
+        monto=monto,
+        mon=mon_norm,
+    )
+    if err_neg:
+        return EnviarReporteResponse(ok=False, error=err_neg)
 
     content = await comprobante.read()
-
-    if len(content) > MAX_FILE_SIZE:
-
-        return EnviarReporteResponse(ok=False, error="El comprobante no puede superar 5 MB.")
-
-    if len(content) < 4:
-
-        return EnviarReporteResponse(ok=False, error="El archivo está vacío o no es válido.")
-
-    ctype = (comprobante.content_type or "").lower()
-
-    if "excel" in ctype or "spreadsheet" in ctype or "xls" in ctype:
-
-        return EnviarReporteResponse(ok=False, error="El comprobante debe ser PDF o imagen (JPG, PNG). No se permiten archivos Excel.")
-
-
-
-    if ctype not in ALLOWED_COMPROBANTE_TYPES:
-
-        return EnviarReporteResponse(ok=False, error="Solo se permiten archivos JPG, PNG o PDF.")
-
-    if not _validate_file_magic(content, ctype):
-
-        return EnviarReporteResponse(ok=False, error="El archivo no corresponde a una imagen o PDF válido.")
-
-    filename = _sanitize_filename(comprobante.filename or "comprobante")
-
-
-
-
-
-    # Cada envio genera su propia referencia (RPC-YYYYMMDD-XXXXX). La misma persona puede subir varios
-
-    # pagos; si un envio no completa el proceso (recibo/email), puede reintentar y obtiene nueva referencia.
-
-
+    fn_comp = comprobante.filename or "comprobante"
+    ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
+    err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+        content,
+        ctype,
+        fn_comp,
+        mensaje_excel_largo=True,
+    )
+    if err_file:
+        return EnviarReporteResponse(ok=False, error=err_file)
 
     try:
-
-        pr = None
-
-        referencia = None
-
-        for _attempt in range(2):
-
-            try:
-
-                try:
-
-                    hoy_int = int(fecha_hoy_caracas().strftime("%Y%m%d"))
-
-                    db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": hoy_int})
-
-                except Exception:
-
-                    db.rollback()  # Dejar transacción limpia; continuar sin lock
-
-                referencia = _generar_referencia_interna(db)
-
-                nombres = (cliente.nombres or "").strip()
-
-                apellidos = ""  # clientes tiene solo nombres; si hay apellido en otro campo se puede mapear
-
-                if " " in nombres:
-
-                    parts = nombres.split(None, 1)
-
-                    nombres = parts[0]
-
-                    apellidos = parts[1] if len(parts) > 1 else ""
-
-                stored = persistir_comprobante_gmail_en_bd(db, content, ctype)
-                if not stored:
-                    return EnviarReporteResponse(
-                        ok=False,
-                        error="No se pudo almacenar el comprobante. Use PDF o imagen JPG/PNG válida.",
-                    )
-                img_id, _url = stored
-
-                pr = PagoReportado(
-
-                    referencia_interna=referencia,
-
-                    nombres=nombres,
-
-                    apellidos=apellidos,
-
-                    tipo_cedula=tipo_cedula.strip().upper(),
-
-                    numero_cedula=numero_cedula.strip(),
-
-                    fecha_pago=fecha_pago,
-
-                    institucion_financiera=institucion_financiera.strip()[:100],
-
-                    numero_operacion=numero_operacion.strip()[:100],
-
-                    monto=monto,
-
-                    moneda=moneda_guardar[:10],
-
-                    comprobante_imagen_id=img_id,
-
-                    comprobante_nombre=filename[:255],
-
-                    ruta_comprobante=None,
-
-                    observacion=observacion[:300] if observacion else None,
-
-                    correo_enviado_a=unir_destinatarios_log(emails_destino_desde_objeto(cliente)),
-
-                    estado="pendiente",
-
-                    canal_ingreso="cobros_publico",
-
-                )
-
-                db.add(pr)
-
-                db.commit()
-
-                db.refresh(pr)
-
-                break
-
-            except IntegrityError as ie:
-
-                db.rollback()
-
-                err_msg = str(ie.orig) if getattr(ie, "orig", None) else str(ie)
-
-                if _attempt == 0 and "referencia_interna" in err_msg:
-
-                    logger.warning("[COBROS_PUBLIC] Duplicate referencia_interna, retrying once: %s", ie)
-
-                    continue
-
-                return EnviarReporteResponse(
-
-                    ok=False,
-
-                    error="Ya existe un reporte con esa referencia. Si enviaste el formulario dos veces, no hace falta volver a enviar. Si no, intenta de nuevo en un momento.",
-
-                )
-
-
-
-        # Gemini: comparar formulario vs imagen del comprobante
+        pr, referencia, err_crear = cpr.crear_pago_reportado_con_referencia_o_retry(
+            db,
+            content=content,
+            ctype=ctype,
+            filename=filename,
+            cliente_nombres=(cliente.nombres or ""),
+            tipo_cedula=tipo_cedula,
+            numero_cedula=numero_cedula,
+            fecha_pago=fecha_pago,
+            institucion_financiera=institucion_financiera,
+            numero_operacion=numero_operacion,
+            monto=monto,
+            moneda_guardar=mon_norm.moneda_guardar,
+            observacion=mon_norm.observacion,
+            correo_enviado_a=unir_destinatarios_log(emails_destino_desde_objeto(cliente)),
+            canal_ingreso="cobros_publico",
+            log_tag_duplicate="COBROS_PUBLIC",
+        )
+        if err_crear or pr is None or referencia is None:
+            return EnviarReporteResponse(ok=False, error=err_crear or "No se pudo registrar el reporte.")
 
         form_data = {
-
             "fecha_pago": str(fecha_pago),
-
             "institucion_financiera": institucion_financiera,
-
             "numero_operacion": numero_operacion,
-
             "monto": str(monto),
-
-            # USDT se normaliza a USD para BD y para Gemini (misma moneda)
-            "moneda": moneda_guardar,
-
+            "moneda": mon_norm.moneda_guardar,
             "tipo_cedula": tipo_cedula,
-
             "numero_cedula": numero_cedula,
-
         }
 
         from app.core.config import settings as _s
 
         _gemini_configured = bool((getattr(_s, "GEMINI_API_KEY", None) or "").strip())
-
         if _gemini_configured:
-
             logger.info("[COBROS_PUBLIC] Usando servicio Gemini para validar comprobante ref=%s", referencia)
-
         else:
-
             logger.info("[COBROS_PUBLIC] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual", referencia)
 
         try:
             gemini_result = compare_form_with_image(form_data, content, filename)
-
             coincide = gemini_result.get("coincide_exacto", False)
-
             pr.gemini_coincide_exacto = "true" if coincide else "false"
-
             pr.gemini_comentario = gemini_result.get("comentario")
-
         except Exception as gemini_err:
-            # Si Gemini falla (incluso tras reintentos), enviar a revisión manual
             logger.warning(
                 "[COBROS_PUBLIC] Gemini error para ref=%s tras reintentos, enviando a revisión manual: %s",
-                referencia, str(gemini_err)
+                referencia,
+                str(gemini_err),
             )
             pr.gemini_coincide_exacto = "error"
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
-            coincide = False  # Por seguridad, no aprobar si hay error
+            coincide = False
 
-        if coincide:
-
-            pr.estado = "aprobado"
-
-        else:
-
-            pr.estado = "en_revision"
-
-
-
+        pr.estado = "aprobado" if coincide else "en_revision"
         db.commit()
 
         recibo_enviado_val = False
-
         if coincide:
-
-            _intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
-
+            cpr.intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
             db.refresh(pr)
-
             pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
-
             pr.recibo_pdf = pdf_bytes
 
             to_emails = emails_destino_desde_objeto(cliente)
@@ -1604,511 +607,238 @@ async def enviar_reporte_publico(
                 to_emails = []
 
             if to_emails:
-
                 body = (
-
                     f"Se ha recibido su reporte de pago.\n\n"
-
-                    f"Número de referencia: {_referencia_display(referencia)}\n\n"
-
+                    f"Número de referencia: {cpr.referencia_display(referencia)}\n\n"
                     f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
-
                     "RapiCredit C.A."
-
                 )
-
                 ok_mail, err_mail = send_email(
-
                     to_emails,
-
-                    f"Recibo de reporte de pago {_referencia_display(referencia)}",
-
+                    f"Recibo de reporte de pago {cpr.referencia_display(referencia)}",
                     body,
-
                     attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
-
                     servicio="cobros",
-
                     respetar_destinos_manuales=True,
-
                 )
-
                 recibo_enviado_val = bool(ok_mail)
-
                 if not ok_mail:
-
                     logger.error(
-
                         "[COBROS_PUBLIC] Recibo aprobado ref=%s: correo NO enviado a %s. Error: %s.",
-
-                        referencia, unir_destinatarios_log(to_emails), err_mail or "desconocido",
-
+                        referencia,
+                        unir_destinatarios_log(to_emails),
+                        err_mail or "desconocido",
                     )
-
             db.commit()
 
         db.refresh(pr)
-
         return EnviarReporteResponse(
-
             ok=True,
-
             referencia_interna=referencia,
-
             mensaje="Tu reporte de pago fue recibido exitosamente.",
-
             estado_reportado=(pr.estado or "").strip() or None,
-
             recibo_enviado=recibo_enviado_val,
-
         )
-
     except Exception as e:
-
         logger.exception("[COBROS_PUBLIC] Error en enviar-reporte: %s", e)
-
         db.rollback()
-
         return EnviarReporteResponse(
-
             ok=False,
-
             error="No se pudo procesar el reporte. Intente de nuevo o contacte por WhatsApp 424-4579934.",
-
         )
-
 
 
 @router.get("/recibo")
-
 def get_recibo_publico(
-
-    token: str = Query(None, description="Token en query (deprecated: usar Authorization header)"),
-
+    request: Request,
     pago_id: int = Query(..., description="ID del pago reportado"),
-
-    request: Request = None,
-
+    token: Optional[str] = Query(None, description="Token en query (deprecated: usar Authorization header)"),
     db: Session = Depends(get_db),
-
 ):
-
     """
-
     Devuelve el PDF del recibo del pago reportado. Requiere token valido (emitido al verificar codigo en estado de cuenta).
 
     Publico, sin auth; la seguridad es el token (cedula + expiracion).
-    
+
     Token puede venir en:
     - Header: Authorization: Bearer <token>
     - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
-
     """
-
-    auth_header = request.headers.get("Authorization", "") if request else ""
-    token_from_header = None
-    if auth_header.lower().startswith("bearer "):
-        token_from_header = auth_header[7:].strip()
-    
-    token_to_use = token_from_header or token
-    
+    token_to_use = cpr.token_bearer_o_query(request, token)
     if not token_to_use:
-        raise HTTPException(status_code=401, detail="Token requerido (Authorization header o query param ?token=...).")
+        raise HTTPException(
+            status_code=401,
+            detail="Token requerido (Authorization header o query param ?token=...).",
+        )
 
     payload = decode_token(token_to_use)
-
     if not payload or payload.get("type") != "recibo":
-
         raise HTTPException(status_code=401, detail="Token invalido o expirado.")
 
     cedula_token = (payload.get("sub") or "").strip()
-
     if not cedula_token:
-
         raise HTTPException(status_code=401, detail="Token invalido.")
 
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
-
     if not pr:
-
         raise HTTPException(status_code=404, detail="Recibo no encontrado.")
 
-    pr = pr[0] if hasattr(pr, "__getitem__") else pr
-
     cedula_pr = (getattr(pr, "tipo_cedula", "") or "") + (getattr(pr, "numero_cedula", "") or "")
-
     if cedula_pr.replace("-", "") != cedula_token.replace("-", ""):
-
         raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
 
     pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
-
     pr.recibo_pdf = pdf_bytes
-
     db.commit()
-
     ref = getattr(pr, "referencia_interna", "recibo") or "recibo"
-
     return Response(
-
         content=bytes(pdf_bytes),
-
         media_type="application/pdf",
-
         headers={"Content-Disposition": f'inline; filename="recibo_{ref}.pdf"'},
-
     )
 
 
-
-
-
-# --- Infopagos: mismo flujo que cobros público, sin token para el deudor; recibo al email y descarga para el colaborador ---
-
-
-
 @router.post("/infopagos/enviar-reporte", response_model=EnviarReporteInfopagosResponse)
-
 async def enviar_reporte_infopagos(
-
     request: Request,
-
     db: Session = Depends(get_db),
-
     tipo_cedula: str = Form(...),
-
     numero_cedula: str = Form(...),
-
     fecha_pago: date = Form(...),
-
     institucion_financiera: str = Form(...),
-
     numero_operacion: str = Form(...),
-
     monto: float = Form(...),
-
     moneda: str = Form("BS"),
-
     comprobante: UploadFile = File(...),
-
     observacion: Optional[str] = Form(None),
-
     contact_website: Optional[str] = Form(None),
-
 ):
-
     """
-
     Registro de pago a nombre del deudor (uso interno / personal). Misma política que enviar-reporte
-
     (cobros público): validación con comprobante; si coincide, aprobado, importación automática
-
     cuando aplique, recibo al email del deudor y token de descarga para el colaborador; si no,
-
     estado en revisión manual en Pagos reportados — sin recibo ni correo hasta aprobación.
-
     """
-
     ip = get_client_ip(request)
-
     if contact_website and str(contact_website).strip():
-
         logger.warning("[INFOPAGOS] Honeypot activado desde IP %s", ip)
-
         return EnviarReporteInfopagosResponse(ok=False, error="No se pudo procesar el envío. Intente de nuevo.")
 
     cedula_input = f"{tipo_cedula}{numero_cedula}"
-
     val = validate_cedula(cedula_input)
-
     if not val.get("valido"):
-
         return EnviarReporteInfopagosResponse(ok=False, error=val.get("error", "Cédula inválida."))
 
     cedula_lookup = val.get("valor_formateado", "").replace("-", "")
 
     cliente = db.execute(
-
-        select(Cliente).where(
-            expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
-        )
-
+        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
     ).scalars().first()
-
     if not cliente:
-
         return EnviarReporteInfopagosResponse(ok=False, error="La cédula no está registrada.")
 
-    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
-
-    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
-
+    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
     if err_pres:
-
         return EnviarReporteInfopagosResponse(ok=False, error=err_pres)
 
-    if len(tipo_cedula.strip()) > 2 or len(numero_cedula.strip()) > 13:
+    err_campos, mon_norm = cpr.normalizar_y_validar_campos_formulario(
+        tipo_cedula=tipo_cedula,
+        numero_cedula=numero_cedula,
+        institucion_financiera=institucion_financiera,
+        numero_operacion=numero_operacion,
+        monto=monto,
+        moneda=moneda,
+        observacion=observacion,
+    )
+    if err_campos:
+        return EnviarReporteInfopagosResponse(ok=False, error=err_campos)
 
-        return EnviarReporteInfopagosResponse(ok=False, error="Datos inválidos.")
-
-    if len(institucion_financiera.strip()) > 100 or len(numero_operacion.strip()) > 100:
-
-        return EnviarReporteInfopagosResponse(ok=False, error="Datos inválidos.")
-
-    if observacion and len(observacion) > 300:
-
-        observacion = observacion[:300]
-
-    if (moneda or "BS").strip().upper() not in ("BS", "USD", "USDT"):
-
-        return EnviarReporteInfopagosResponse(ok=False, error="Moneda no válida.")
-
-    moneda_upper = (moneda or "BS").strip().upper()
-
-    # USDT = Dólares = USD = $; normalizar a USD para guardar
-
-    moneda_guardar = "USD" if moneda_upper in ("USD", "USDT") else moneda_upper
-
-    if moneda_upper == "BS":
-
-        if not cedula_autorizada_para_bs(db, cedula_lookup):
-
-            return EnviarReporteInfopagosResponse(ok=False, error=ERROR_BS_NO_AUTORIZADO)
-
-        tasa_row = obtener_tasa_por_fecha(db, fecha_pago)
-
-        if tasa_row is None:
-
-            return EnviarReporteInfopagosResponse(
-
-                ok=False,
-
-                error=ERROR_TASA_BS_NO_REGISTRADA.format(
-
-                    fp=fecha_pago.strftime("%d/%m/%Y"),
-
-                ),
-
-            )
-
-    err_monto = _validar_monto_reporte_publico(monto, moneda_upper)
-
-    if err_monto:
-
-        return EnviarReporteInfopagosResponse(ok=False, error=err_monto)
-
-    if fecha_pago > fecha_hoy_caracas():
-
-        return EnviarReporteInfopagosResponse(ok=False, error="La fecha de pago no puede ser futura.")
+    err_neg = cpr.validar_reglas_bs_tasa_monto_fecha(
+        db,
+        cedula_lookup=cedula_lookup,
+        fecha_pago=fecha_pago,
+        monto=monto,
+        mon=mon_norm,
+    )
+    if err_neg:
+        return EnviarReporteInfopagosResponse(ok=False, error=err_neg)
 
     content = await comprobante.read()
-
-    if len(content) > MAX_FILE_SIZE:
-
-        return EnviarReporteInfopagosResponse(ok=False, error="El comprobante no puede superar 5 MB.")
-
-    if len(content) < 4:
-
-        return EnviarReporteInfopagosResponse(ok=False, error="El archivo está vacío o no es válido.")
-
-    ctype = (comprobante.content_type or "").lower()
-
-    if "excel" in ctype or "spreadsheet" in ctype or "xls" in ctype:
-
-        return EnviarReporteInfopagosResponse(ok=False, error="El comprobante debe ser PDF o imagen (JPG, PNG).")
-
-    if ctype not in ALLOWED_COMPROBANTE_TYPES:
-
-        return EnviarReporteInfopagosResponse(ok=False, error="Solo se permiten archivos JPG, PNG o PDF.")
-
-    if not _validate_file_magic(content, ctype):
-
-        return EnviarReporteInfopagosResponse(ok=False, error="El archivo no corresponde a una imagen o PDF válido.")
-
-    filename = _sanitize_filename(comprobante.filename or "comprobante")
+    fn_comp = comprobante.filename or "comprobante"
+    ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
+    err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+        content,
+        ctype,
+        fn_comp,
+        mensaje_excel_largo=False,
+    )
+    if err_file:
+        return EnviarReporteInfopagosResponse(ok=False, error=err_file)
 
     try:
-
-        pr = None
-
-        referencia = None
-
-        for _attempt in range(2):
-
-            try:
-
-                try:
-
-                    hoy_int = int(fecha_hoy_caracas().strftime("%Y%m%d"))
-
-                    db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": hoy_int})
-
-                except Exception:
-
-                    db.rollback()
-
-                referencia = _generar_referencia_interna(db)
-
-                nombres = (cliente.nombres or "").strip()
-
-                apellidos = ""
-
-                if " " in nombres:
-
-                    parts = nombres.split(None, 1)
-
-                    nombres = parts[0]
-
-                    apellidos = parts[1] if len(parts) > 1 else ""
-
-                stored = persistir_comprobante_gmail_en_bd(db, content, ctype)
-                if not stored:
-                    return EnviarReporteInfopagosResponse(
-                        ok=False,
-                        error="No se pudo almacenar el comprobante. Use PDF o imagen JPG/PNG válida.",
-                    )
-                img_id, _url = stored
-
-                pr = PagoReportado(
-
-                    referencia_interna=referencia,
-
-                    nombres=nombres,
-
-                    apellidos=apellidos,
-
-                    tipo_cedula=tipo_cedula.strip().upper(),
-
-                    numero_cedula=numero_cedula.strip(),
-
-                    fecha_pago=fecha_pago,
-
-                    institucion_financiera=institucion_financiera.strip()[:100],
-
-                    numero_operacion=numero_operacion.strip()[:100],
-
-                    monto=monto,
-
-                    moneda=moneda_guardar[:10],
-
-                    comprobante_imagen_id=img_id,
-
-                    comprobante_nombre=filename[:255],
-
-                    ruta_comprobante=None,
-
-                    observacion=observacion[:300] if observacion else None,
-
-                    correo_enviado_a=unir_destinatarios_log(emails_destino_desde_objeto(cliente)),
-
-                    estado="pendiente",
-
-                    canal_ingreso="infopagos",
-
-                )
-
-                db.add(pr)
-
-                db.commit()
-
-                db.refresh(pr)
-
-                break
-
-            except IntegrityError as ie:
-
-                db.rollback()
-
-                err_msg = str(ie.orig) if getattr(ie, "orig", None) else str(ie)
-
-                if _attempt == 0 and "referencia_interna" in err_msg:
-
-                    continue
-
-                return EnviarReporteInfopagosResponse(
-
-                    ok=False,
-
-                    error="Ya existe un reporte con esa referencia. Intente de nuevo en un momento.",
-
-                )
+        pr, referencia, err_crear = cpr.crear_pago_reportado_con_referencia_o_retry(
+            db,
+            content=content,
+            ctype=ctype,
+            filename=filename,
+            cliente_nombres=(cliente.nombres or ""),
+            tipo_cedula=tipo_cedula,
+            numero_cedula=numero_cedula,
+            fecha_pago=fecha_pago,
+            institucion_financiera=institucion_financiera,
+            numero_operacion=numero_operacion,
+            monto=monto,
+            moneda_guardar=mon_norm.moneda_guardar,
+            observacion=mon_norm.observacion,
+            correo_enviado_a=unir_destinatarios_log(emails_destino_desde_objeto(cliente)),
+            canal_ingreso="infopagos",
+            log_tag_duplicate="INFOPAGOS",
+        )
+        if err_crear or pr is None or referencia is None:
+            return EnviarReporteInfopagosResponse(ok=False, error=err_crear or "No se pudo registrar el reporte.")
 
         form_data = {
-
             "fecha_pago": str(fecha_pago),
-
             "institucion_financiera": institucion_financiera,
-
             "numero_operacion": numero_operacion,
-
             "monto": str(monto),
-
-            # USDT se normaliza a USD para BD y para Gemini (misma moneda)
-            "moneda": moneda_guardar,
-
+            "moneda": mon_norm.moneda_guardar,
             "tipo_cedula": tipo_cedula,
-
             "numero_cedula": numero_cedula,
-
         }
 
         from app.core.config import settings as _s
 
         _gemini_configured = bool((getattr(_s, "GEMINI_API_KEY", None) or "").strip())
-
         if _gemini_configured:
-
             logger.info("[INFOPAGOS] Usando servicio Gemini para validar comprobante ref=%s", referencia)
-
         else:
-
-            logger.info(
-
-                "[INFOPAGOS] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual",
-
-                referencia,
-
-            )
+            logger.info("[INFOPAGOS] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual", referencia)
 
         try:
             gemini_result = compare_form_with_image(form_data, content, filename)
-
             coincide = gemini_result.get("coincide_exacto", False)
-
             pr.gemini_coincide_exacto = "true" if coincide else "false"
-
             pr.gemini_comentario = gemini_result.get("comentario")
-
         except Exception as gemini_err:
-            # Si Gemini falla (incluso tras reintentos), enviar a revisión manual
             logger.warning(
                 "[INFOPAGOS] Gemini error para ref=%s tras reintentos, enviando a revisión manual: %s",
-                referencia, str(gemini_err)
+                referencia,
+                str(gemini_err),
             )
             pr.gemini_coincide_exacto = "error"
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
-            coincide = False  # Por seguridad, no aprobar si hay error
+            coincide = False
 
-        if coincide:
-
-            pr.estado = "aprobado"
-
-        else:
-
-            pr.estado = "en_revision"
-
+        pr.estado = "aprobado" if coincide else "en_revision"
         db.commit()
 
         if coincide:
-
-            _intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
-
+            cpr.intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
             db.refresh(pr)
-
             cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
-
             pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
-
             pr.recibo_pdf = pdf_bytes
 
             to_emails = emails_destino_desde_objeto(cliente)
@@ -2123,212 +853,114 @@ async def enviar_reporte_infopagos(
                 to_emails = []
 
             if to_emails:
-
                 body = (
-
                     f"Se ha registrado un pago a su nombre.\n\n"
-
-                    f"Número de referencia: {_referencia_display(referencia)}\n\n"
-
+                    f"Número de referencia: {cpr.referencia_display(referencia)}\n\n"
                     f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
-
                     "RapiCredit C.A."
-
                 )
-
                 ok_mail, err_mail = send_email(
-
                     to_emails,
-
-                    f"Recibo de pago {_referencia_display(referencia)}",
-
+                    f"Recibo de pago {cpr.referencia_display(referencia)}",
                     body,
-
                     attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
-
                     servicio="cobros",
-
                     respetar_destinos_manuales=True,
-
                 )
-
                 if not ok_mail:
-
                     logger.error(
-
                         "[INFOPAGOS] Recibo ref=%s: correo NO enviado a %s. Error: %s.",
-
                         referencia,
-
                         unir_destinatarios_log(to_emails),
-
                         err_mail or "desconocido",
-
                     )
-
                 else:
-
                     logger.info(
-
                         "[INFOPAGOS] Recibo ref=%s: correo enviado a %s.",
-
                         referencia,
-
                         unir_destinatarios_log(to_emails),
-
                     )
 
             recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
-
             db.commit()
-
             return EnviarReporteInfopagosResponse(
-
                 ok=True,
-
                 referencia_interna=referencia,
-
                 mensaje="Pago registrado. Se envió el recibo al correo del deudor. Puede descargar el recibo aquí.",
-
                 recibo_descarga_token=recibo_token,
-
                 pago_id=pr.id,
-
                 aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
-
                 estado_reportado="aprobado",
-
             )
 
         return EnviarReporteInfopagosResponse(
-
             ok=True,
-
             referencia_interna=referencia,
-
             mensaje=(
-
                 "Reporte recibido. El comprobante quedó en revisión manual (mismo flujo que Pagos reportados). "
-
                 "No se envía recibo al deudor ni descarga aquí hasta que cobranzas apruebe."
-
             ),
-
             recibo_descarga_token=None,
-
             pago_id=None,
-
             aplicado_a_cuotas=None,
-
             estado_reportado="en_revision",
-
         )
-
     except Exception as e:
-
         logger.exception("[INFOPAGOS] Error en enviar-reporte: %s", e)
-
         db.rollback()
-
         return EnviarReporteInfopagosResponse(
-
             ok=False,
-
             error="No se pudo procesar el reporte. Intente de nuevo o contacte por WhatsApp 424-4579934.",
-
         )
-
-
-
 
 
 @router.get("/infopagos/recibo")
-
 def get_recibo_infopagos(
-
-    token: str = Query(None, description="Token de descarga (deprecated: usar Authorization header)"),
-
+    request: Request,
     pago_id: int = Query(..., description="ID del pago reportado"),
-
-    request: Request = None,
-
+    token: Optional[str] = Query(None, description="Token de descarga (deprecated: usar Authorization header)"),
     db: Session = Depends(get_db),
-
 ):
-
     """
-
     Devuelve el PDF del recibo del pago registrado por Infopagos. Requiere el token devuelto
-
     en la respuesta de enviar-reporte (válido 2 horas) para que el colaborador descargue el recibo.
-    
+
     Token puede venir en:
     - Header: Authorization: Bearer <token>
     - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
-
     """
-
-    auth_header = request.headers.get("Authorization", "") if request else ""
-    token_from_header = None
-    if auth_header.lower().startswith("bearer "):
-        token_from_header = auth_header[7:].strip()
-    
-    token_to_use = token_from_header or token
-    
+    token_to_use = cpr.token_bearer_o_query(request, token)
     if not token_to_use:
-        raise HTTPException(status_code=401, detail="Token requerido (Authorization header o query param ?token=...).")
+        raise HTTPException(
+            status_code=401,
+            detail="Token requerido (Authorization header o query param ?token=...).",
+        )
 
     payload = decode_token(token_to_use)
-
     if not payload or payload.get("type") != "recibo_infopagos":
-
         raise HTTPException(status_code=401, detail="Token inválido o expirado.")
 
     token_pago_id = payload.get("pago_id") or payload.get("sub")
-
     if token_pago_id is None:
-
         raise HTTPException(status_code=401, detail="Token inválido.")
-
     try:
-
         token_pago_id = int(token_pago_id)
-
     except (TypeError, ValueError):
-
         raise HTTPException(status_code=401, detail="Token inválido.")
 
     if token_pago_id != pago_id:
-
         raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
 
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
-
     if not pr:
-
         raise HTTPException(status_code=404, detail="Recibo no encontrado.")
 
-    pr = pr[0] if hasattr(pr, "__getitem__") else pr
-
     pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
-
     pr.recibo_pdf = pdf_bytes
-
     db.commit()
-
     ref = getattr(pr, "referencia_interna", "recibo") or "recibo"
-
     return Response(
-
         content=bytes(pdf_bytes),
-
         media_type="application/pdf",
-
         headers={"Content-Disposition": f'attachment; filename="recibo_{ref}.pdf"'},
-
     )
-
-
-
-
-

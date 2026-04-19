@@ -4,8 +4,18 @@ from typing import Optional
 
 from fastapi import Request
 
+# Alineado con `cobros_publico_reporte_service.ALLOWED_COMPROBANTE_TYPES` (PDF + imágenes incl. HEIC).
 _COMPROBANTE_IMG_CT = frozenset(
-    {"image/jpeg", "image/png", "image/webp", "image/gif"},
+    {
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "image/heic",
+        "image/heif",
+        "application/pdf",
+    },
 )
 _MAX_COMPROBANTE_IMAGEN_BYTES = 8 * 1024 * 1024
 

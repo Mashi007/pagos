@@ -386,7 +386,7 @@ api_router.include_router(
     prefix="/crm/campanas",
     tags=["crm-campanas"],
 )
-# Comunicaciones (WhatsApp/Email). Config en configuracion?tab=whatsapp. Imágenes WhatsApp → pagos_whatsapp.
+# Comunicaciones (WhatsApp/Email). Config en configuracion?tab=whatsapp. Comprobante WhatsApp → pago_comprobante_imagen (FK pagos_whatsapp).
 
 api_router.include_router(
 

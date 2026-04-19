@@ -42,6 +42,24 @@ def _normalizar_mime(raw: str | None) -> str:
 def upgrade() -> None:
     bind = op.get_bind()
     insp = inspect(bind)
+    # Tabla canónica del binario (Gmail, Infopagos/cobros público, alta manual).
+    # Debe existir antes de migrar bytea desde `pagos_reportados` o de crear la FK.
+    if "pago_comprobante_imagen" not in insp.get_table_names():
+        op.create_table(
+            "pago_comprobante_imagen",
+            sa.Column("id", sa.String(length=32), nullable=False),
+            sa.Column("content_type", sa.String(length=80), nullable=False),
+            sa.Column("imagen_data", sa.LargeBinary(), nullable=False),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                nullable=False,
+                server_default=sa.text("CURRENT_TIMESTAMP"),
+            ),
+            sa.PrimaryKeyConstraint("id", name="pago_comprobante_imagen_pkey"),
+        )
+        insp = inspect(bind)
+
     if "pagos_reportados" not in insp.get_table_names():
         return
     cols = {c["name"] for c in insp.get_columns("pagos_reportados")}
