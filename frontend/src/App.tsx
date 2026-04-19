@@ -169,6 +169,8 @@ import ChatAI from './pages/ChatAI'
 
 import Notificaciones from './pages/Notificaciones'
 
+import NotificacionesClientesDrive from './pages/NotificacionesClientesDrive'
+
 import Analistas from './pages/Analistas'
 
 import PagosPage from './pages/PagosPage'
@@ -531,6 +533,15 @@ function App() {
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
                   <Notificaciones modulo="fecha" />
+                </SimpleProtectedRoute>
+              }
+            />
+
+            <Route
+              path="notificaciones/clientes-drive"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <NotificacionesClientesDrive />
                 </SimpleProtectedRoute>
               }
             />

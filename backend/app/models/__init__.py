@@ -57,6 +57,7 @@ from app.models.conciliacion_sheet import (
     ConciliacionSheetSyncRun,
 )
 from app.models.drive import DriveRow
+from app.models.auditoria_cliente_alta_desde_drive import AuditoriaClienteAltaDesdeDrive
 
 __all__ = [
     "Base",
@@ -114,4 +115,5 @@ __all__ = [
     "ConciliacionSheetRow",
     "ConciliacionSheetSyncRun",
     "DriveRow",
+    "AuditoriaClienteAltaDesdeDrive",
 ]

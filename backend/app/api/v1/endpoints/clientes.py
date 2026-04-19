@@ -613,16 +613,10 @@ def _digits_telefono(s: str) -> str:
     return re.sub(r"\D", "", (s or "").strip())
 
 
-@router.post("", response_model=ClienteResponse, status_code=201)
-def create_cliente(
-    payload: ClienteCreate,
-    db: Session = Depends(get_db),
-    _: UserResponse = Depends(forbid_operator_clientes_gestion),
-):
+def create_cliente_from_payload(db: Session, payload: ClienteCreate) -> Cliente:
     """
-    Crear cliente en la BD.
-    No permitido duplicados: misma cédula, mismo nombre, mismo correo 1/correo 2 o mismo teléfono -> 409.
-    Aplica a Nuevo Cliente y Carga masiva. JSON: email/email_secundario o correo_1/correo_2.
+    Inserta un cliente aplicando las mismas reglas que POST /clientes (duplicados, teléfono, correos).
+    Hace commit. Lanza HTTPException (409/400) si corresponde.
     """
     cedula_norm = (_normalize_for_duplicate(payload.cedula) or "Z999999999").upper()  # Uppercase para consistency
     nombres_norm = _normalize_for_duplicate(payload.nombres)
@@ -696,6 +690,21 @@ def create_cliente(
     db.add(row)
     db.commit()
     db.refresh(row)
+    return row
+
+
+@router.post("", response_model=ClienteResponse, status_code=201)
+def create_cliente(
+    payload: ClienteCreate,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(forbid_operator_clientes_gestion),
+):
+    """
+    Crear cliente en la BD.
+    No permitido duplicados: misma cédula, mismo nombre, mismo correo 1/correo 2 o mismo teléfono -> 409.
+    Aplica a Nuevo Cliente y Carga masiva. JSON: email/email_secundario o correo_1/correo_2.
+    """
+    row = create_cliente_from_payload(db, payload)
     return ClienteResponse.model_validate(row)
 
 

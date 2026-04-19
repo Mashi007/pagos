@@ -354,6 +354,15 @@ class Settings(BaseSettings):
             "para no omitir filas iniciales vacías y alinear la fila del marcador LOTE."
         ),
     )
+    CONCILIACION_SHEET_GOOGLE_HTTP_TIMEOUT_SECONDS: int = Field(
+        default=120,
+        ge=10,
+        le=600,
+        description=(
+            "Timeout de socket (segundos) para llamadas a Google Sheets API en sync/diagnóstico de conciliación. "
+            "Evita workers colgados si Google no responde; si faltan httplib2/google_auth_httplib2, se usa el cliente por defecto."
+        ),
+    )
     # Tasa USD/Bs Venezuela (reporte contable)
     # ============================================
     TASA_USD_BS_DEFAULT: Optional[float] = Field(

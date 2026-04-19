@@ -1,7 +1,7 @@
 """
 Persiste en `prestamos.fecha_entrega_q_aprobacion_cache` la comparación columna Q (hoja) vs fecha_aprobacion.
 
-Job programado (cada domingo 04:00 America/Caracas) y POST manual de refresco en notificaciones.
+Job programado (cada domingo 04:20 America/Caracas, tras sync CONCILIACIÓN 04:00) y POST manual de refresco en notificaciones.
 """
 from __future__ import annotations
 

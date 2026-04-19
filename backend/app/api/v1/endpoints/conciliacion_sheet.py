@@ -5,12 +5,12 @@ Sincronización de la hoja CONCILIACIÓN (Google Sheets) → BD.
 - POST /conciliacion-sheet/sync-now — mismo trabajo que /sync, pero con sesión staff (admin / operador / gerente).
 - GET /conciliacion-sheet/status — metadatos, última corrida y si el snapshot alcanza para GET …/exportar/fecha-drive.
 
-En Render u otro hosting: programar HTTP POST diario a la hora equivalente en UTC
-(03:00 Caracas ≈ 07:00 UTC, sin DST en Venezuela).
+En Render u otro hosting: puede programarse HTTP POST con secreto en domingo y miércoles 02:00 America/Caracas
+(≈ 06:00 UTC, sin DST en Venezuela).
 
 Por defecto solo se importan columnas A:S (variable CONCILIACION_SHEET_COLUMNS_RANGE).
 Cada sync exitoso también rellena la tabla drive (columnas col_a..col_s). Con ENABLE_AUTOMATIC_SCHEDULED_JOBS=true,
-el scheduler ejecuta ese sync a las 04:01 (America/Caracas); si no, use POST /sync (cron externo) o sync-now.
+el scheduler ejecuta ese sync domingo y miércoles a las 02:00 (America/Caracas); si no, use POST /sync (cron externo) o sync-now.
 """
 import logging
 from typing import Any, Dict, List, Optional, Tuple

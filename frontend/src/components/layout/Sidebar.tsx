@@ -38,6 +38,7 @@ import {
   TrendingUp,
   LayoutList,
   Calendar,
+  UserPlus,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -228,6 +229,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Fecha',
           href: '/notificaciones/fecha',
           icon: Calendar,
+        },
+        {
+          title: 'Clientes',
+          href: '/notificaciones/clientes-drive',
+          icon: UserPlus,
+          adminOnly: true,
         },
         {
           title: 'Día siguiente al vencimiento',

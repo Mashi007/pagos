@@ -513,6 +513,80 @@ class ClienteService {
   async eliminarPorDescarga(ids: number[]): Promise<{ deleted: number }> {
     return apiClient.post(this.baseUrl + '/revisar/eliminar-por-descarga', ids)
   }
+
+  /** Snapshot Drive (CONCILIACIÓN): candidatos a alta no presentes en tabla clientes. Solo admin. */
+  async getDriveImportCandidatos(): Promise<{
+    drive_synced_at: string | null
+    total_candidatos: number
+    candidatos: Array<{
+      sheet_row_number: number
+      col_d_nombres: string | null
+      col_e_cedula: string | null
+      col_f_telefono: string | null
+      col_g_email: string | null
+      cedula_cmp: string
+      cedula_valida: boolean
+      cedula_error: string | null
+      cedula_para_crear: string | null
+      duplicada_en_hoja: boolean
+      seleccionable: boolean
+      defaults: {
+        nombres: string
+        telefono: string
+        email: string
+        direccion: string
+        fecha_nacimiento: string
+        ocupacion: string
+        estado: string
+      }
+    }>
+  }> {
+    return apiClient.get(`${this.baseUrl}/drive-import/candidatos`)
+  }
+
+  async postDriveImportImportar(body: {
+    sheet_row_numbers: number[]
+    comentario?: string | null
+  }): Promise<{
+    batch_id: string
+    insertados_ok: number
+    errores: number
+    resultados: Array<{
+      sheet_row_number: number
+      ok: boolean
+      cliente_id?: number
+      error?: string
+    }>
+  }> {
+    return apiClient.post(`${this.baseUrl}/drive-import/importar`, body)
+  }
+
+  async getDriveImportAuditoria(
+    page: number = 1,
+    per_page: number = 50
+  ): Promise<{
+    total: number
+    page: number
+    per_page: number
+    items: Array<{
+      id: number
+      batch_id: string
+      sheet_row_number: number
+      cedula: string
+      nombres: string | null
+      telefono: string | null
+      email: string | null
+      comentario: string | null
+      usuario_email: string
+      estado: string
+      detalle_error: string | null
+      creado_en: string | null
+    }>
+  }> {
+    return apiClient.get(
+      `${this.baseUrl}/drive-import/auditoria?page=${page}&per_page=${per_page}`
+    )
+  }
 }
 
 // Instancia singleton del servicio

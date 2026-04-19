@@ -34,6 +34,53 @@ MAX_SCAN_ROWS_FOR_HEADER = 80
 MAX_HEADER_MARKER_COL_SCAN = 26
 
 
+def _build_sheets_service(creds: Any) -> Any:
+    """
+    Cliente Sheets v4 con timeout de socket cuando httplib2/google_auth_httplib2 están disponibles
+    (dependencias habituales de google-api-python-client). Si no, mismo comportamiento que antes.
+    """
+    from googleapiclient.discovery import build
+
+    timeout_sec = int(getattr(settings, "CONCILIACION_SHEET_GOOGLE_HTTP_TIMEOUT_SECONDS", 120) or 120)
+    try:
+        import httplib2
+        from google_auth_httplib2 import AuthorizedHttp
+
+        http = AuthorizedHttp(creds, http=httplib2.Http(timeout=timeout_sec))
+        return build("sheets", "v4", http=http, cache_discovery=False)
+    except ImportError:
+        logger.debug(
+            "[conciliacion_sheet] Sheets client sin timeout HTTP configurado (%ss): faltan httplib2/google_auth_httplib2",
+            timeout_sec,
+        )
+        return build("sheets", "v4", credentials=creds, cache_discovery=False)
+
+
+def _sheets_execute(request: Any) -> Any:
+    """Ejecuta una petición discovery con reintentos acotados ante 429/503 (solo lectura Sheets)."""
+    from googleapiclient.errors import HttpError
+
+    max_attempts = 4
+    for attempt in range(max_attempts):
+        try:
+            return request.execute()
+        except HttpError as e:
+            st = getattr(getattr(e, "resp", None), "status", None)
+            if st in (429, 503) and attempt < max_attempts - 1:
+                # backoff exponencial suave + jitter mínimo
+                delay = (0.75 * (2**attempt)) + (0.03 * attempt)
+                logger.warning(
+                    "[conciliacion_sheet] Sheets HttpError status=%s reintento %s/%s tras_s=%.2f",
+                    st,
+                    attempt + 1,
+                    max_attempts,
+                    delay,
+                )
+                time.sleep(delay)
+                continue
+            raise
+
+
 def _mask_spreadsheet_id(spreadsheet_id: str) -> str:
     """Evita volcar el ID completo en logs; basta para correlacionar en soporte."""
     s = (spreadsheet_id or "").strip()
@@ -162,10 +209,10 @@ def _row_to_cells(headers: List[str], row: List[Any]) -> Dict[str, Any]:
 
 
 def _resolve_sheet_title(service: Any, spreadsheet_id: str, expected_tab: str) -> str:
-    meta = (
-        service.spreadsheets()
-        .get(spreadsheetId=spreadsheet_id, fields="sheets(properties(title,sheetId))")
-        .execute()
+    meta = _sheets_execute(
+        service.spreadsheets().get(
+            spreadsheetId=spreadsheet_id, fields="sheets(properties(title,sheetId))"
+        )
     )
     sheets = meta.get("sheets") or []
     for s in sheets:
@@ -233,10 +280,8 @@ def fetch_sheet_values(
             "Sin credenciales Google (Sheets). Configure Informe de pagos / cuenta de servicio "
             "o tokens Gmail (GOOGLE_CLIENT_ID, GMAIL_TOKENS_PATH, etc.)."
         )
-    from googleapiclient.discovery import build
-
     col_a, col_b, ncols = _parse_columns_range(columns_range)
-    service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+    service = _build_sheets_service(creds)
     exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
     # Anclar fila 1 del sheet: usar A1:S (no A:S). Con A:S la API puede omitir filas iniciales sin
     # datos en A–S y el primer elemento deja de ser la fila 1 real; la cabecera con LOTE (p. ej. fila 11)
@@ -248,7 +293,7 @@ def fetch_sheet_values(
         exact_title,
         ncols,
     )
-    resp = (
+    resp = _sheets_execute(
         service.spreadsheets()
         .values()
         .get(
@@ -257,7 +302,6 @@ def fetch_sheet_values(
             majorDimension="ROWS",
             valueRenderOption="FORMATTED_VALUE",
         )
-        .execute()
     )
     values = resp.get("values") or []
     trimmed = [_trim_row_width(row, ncols) for row in values]
@@ -464,7 +508,6 @@ def ping_google_spreadsheet_metadata(spreadsheet_id: str) -> Dict[str, Any]:
     if not sid:
         return {"ok": False, "step": "no_spreadsheet_id"}
 
-    from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
 
     try:
@@ -472,11 +515,9 @@ def ping_google_spreadsheet_metadata(spreadsheet_id: str) -> Dict[str, Any]:
         if creds is None:
             return {"ok": False, "step": "no_credentials"}
 
-        service = build("sheets", "v4", credentials=creds, cache_discovery=False)
-        meta = (
-            service.spreadsheets()
-            .get(spreadsheetId=sid, fields="properties(title,locale,timeZone)")
-            .execute()
+        service = _build_sheets_service(creds)
+        meta = _sheets_execute(
+            service.spreadsheets().get(spreadsheetId=sid, fields="properties(title,locale,timeZone)")
         )
         props = meta.get("properties") or {}
         logger.info(
