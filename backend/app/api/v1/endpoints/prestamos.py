@@ -1380,6 +1380,8 @@ def listar_prestamos_por_cedulas_batch(
 
     db: Session = Depends(get_db),
 
+    current_user: UserResponse = Depends(get_current_user),
+
 ):
 
     """Consulta batch OPTIMIZADA: búsqueda rápida con normalización.
@@ -1439,6 +1441,11 @@ def listar_prestamos_por_cedulas_batch(
     
 
     for p_id, cli_id, p_estado, p_cedula, cli_cedula in db.execute(q_exacto):
+
+        if not usuario_puede_ver_prestamos_desistimiento(current_user) and prestamo_estado_es_desistimiento(
+            p_estado
+        ):
+            continue
 
         cedula_cli = (cli_cedula or p_cedula or "").strip()
 
@@ -1525,6 +1532,11 @@ def listar_prestamos_por_cedulas_batch(
         
 
         for p_id, cli_id, p_estado, p_cedula, cli_cedula in db.execute(q_faltantes):
+
+            if not usuario_puede_ver_prestamos_desistimiento(current_user) and prestamo_estado_es_desistimiento(
+                p_estado
+            ):
+                continue
 
             cedula_cli = (cli_cedula or p_cedula or "").strip()
 
@@ -1659,7 +1671,11 @@ def check_cupo_cedulas(
 
 @router.get("/cedula/{cedula}", response_model=dict)
 
-def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
+def listar_prestamos_por_cedula(
+    cedula: str,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Listado de préstamos por cédula del cliente (integrado con frontend).
 
@@ -1708,6 +1724,8 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
             .order_by(Prestamo.id.desc())
 
         )
+
+        q = q.where(filtro_prestamo_visible_listado(current_user))
 
         rows = db.execute(q).all()
 
@@ -1835,7 +1853,11 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
 @router.get("/cedula/{cedula}/resumen", response_model=dict)
 
-def resumen_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
+def resumen_prestamos_por_cedula(
+    cedula: str,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Resumen de préstamos por cédula: total, saldo pendiente, cuotas en mora (integrado con frontend)."""
 
@@ -1870,6 +1892,8 @@ def resumen_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
         .order_by(Prestamo.id.desc())
 
     )
+
+    q = q.where(filtro_prestamo_visible_listado(current_user))
 
     prestamos = db.execute(q).scalars().all()
 
@@ -2449,6 +2473,7 @@ def _recalcular_fechas_vencimiento_cuotas(db: Session, p: Prestamo, fecha_base: 
 def post_cuotas_by_prestamo_ids(
     body: PrestamoIdsCuotasBody,
     db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     """
     Devuelve en una lista plana todas las cuotas de los prestamos indicados (mismo shape que GET .../cuotas).
@@ -2460,6 +2485,9 @@ def post_cuotas_by_prestamo_ids(
         if pid in seen:
             continue
         seen.add(pid)
+        p_row = db.get(Prestamo, pid)
+        if p_row:
+            assert_lectura_prestamo_desistimiento(p_row, current_user)
         part = _listado_cuotas_prestamo_dicts(db, pid)
         if part:
             out.extend(part)
@@ -2517,11 +2545,19 @@ def delete_cuota_prestamo(
 
 @router.get("/{prestamo_id}/cuotas", response_model=list)
 
-def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+def get_cuotas_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
     """
     Lista las cuotas (tabla de amortizacion) de un prestamo, con info de pago conciliado.
     Aplica pagos pendientes, alinea columna `cuotas.estado` con la regla unificada y devuelve estado + etiqueta.
     """
+    p_row = db.get(Prestamo, prestamo_id)
+    if not p_row:
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+    assert_lectura_prestamo_desistimiento(p_row, current_user)
     out = _listado_cuotas_prestamo_dicts(db, prestamo_id)
     if out is None:
         raise HTTPException(status_code=404, detail="Prestamo no encontrado")
@@ -2537,7 +2573,12 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{prestamo_id}/cuotas/{cuota_id}/recibo.pdf")
 
-def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(get_db)):
+def get_recibo_cuota_pdf(
+    prestamo_id: int,
+    cuota_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Genera el recibo PDF de una cuota (mismo formato que cobros)."""
 
@@ -2546,6 +2587,8 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
     if not prestamo:
 
         raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+
+    assert_lectura_prestamo_desistimiento(prestamo, current_user)
 
     cuota = db.get(Cuota, cuota_id)
 
@@ -2960,7 +3003,11 @@ def _generar_pdf_amortizacion(cuotas: list, prestamo: Prestamo) -> bytes:
 
 @router.get("/{prestamo_id}/amortizacion/excel")
 
-def exportar_amortizacion_excel(prestamo_id: int, db: Session = Depends(get_db)):
+def exportar_amortizacion_excel(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Exporta la tabla de amortización del préstamo en formato Excel."""
 
@@ -2969,6 +3016,8 @@ def exportar_amortizacion_excel(prestamo_id: int, db: Session = Depends(get_db))
     if not prestamo:
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    assert_lectura_prestamo_desistimiento(prestamo, current_user)
 
     
 
@@ -2996,7 +3045,11 @@ def exportar_amortizacion_excel(prestamo_id: int, db: Session = Depends(get_db))
 
 @router.get("/{prestamo_id}/amortizacion/pdf")
 
-def exportar_amortizacion_pdf(prestamo_id: int, db: Session = Depends(get_db)):
+def exportar_amortizacion_pdf(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Exporta la tabla de amortización del préstamo en formato PDF."""
 
@@ -3005,6 +3058,8 @@ def exportar_amortizacion_pdf(prestamo_id: int, db: Session = Depends(get_db)):
     if not prestamo:
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    assert_lectura_prestamo_desistimiento(prestamo, current_user)
 
     
 
@@ -3032,7 +3087,11 @@ def exportar_amortizacion_pdf(prestamo_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{prestamo_id}/generar-amortizacion", response_model=dict)
 
-def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
+def generar_amortizacion(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Genera la tabla de amortización (cuotas) para el préstamo. No crea si ya existen cuotas."""
 
@@ -3041,6 +3100,8 @@ def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
     if not p:
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    assert_lectura_prestamo_desistimiento(p, current_user)
 
     existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
 
@@ -3332,7 +3393,12 @@ def reconstruir_tabla_cuotas_desde_prestamo(
 
 @router.post("/{prestamo_id}/aplicar-condiciones-aprobacion", response_model=PrestamoResponse)
 
-def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondicionesBody, db: Session = Depends(get_db)):
+def aplicar_condiciones_aprobacion(
+    prestamo_id: int,
+    payload: AplicarCondicionesBody,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Aplica condiciones de aprobación: actualiza préstamo y opcionalmente genera cuotas."""
 
@@ -3341,6 +3407,8 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
     if not p:
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    assert_lectura_prestamo_desistimiento(p, current_user)
 
     # [A3] Solo se pueden aplicar condiciones en estados permitidos
 
@@ -3463,7 +3531,12 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
 
 @router.post("/{prestamo_id}/evaluar-riesgo", response_model=PrestamoResponse)
 
-def evaluar_riesgo(prestamo_id: int, payload: EvaluarRiesgoBody, db: Session = Depends(get_db)):
+def evaluar_riesgo(
+    prestamo_id: int,
+    payload: EvaluarRiesgoBody,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Registra evaluación de riesgo manual (ML) y opcionalmente estado/requiere_revision."""
 
@@ -3472,6 +3545,8 @@ def evaluar_riesgo(prestamo_id: int, payload: EvaluarRiesgoBody, db: Session = D
     if not p:
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    assert_lectura_prestamo_desistimiento(p, current_user)
 
     if payload.ml_impago_nivel_riesgo_manual is not None:
 
@@ -3973,7 +4048,11 @@ def rechazar_prestamo(
 
 @router.get("/{prestamo_id}/evaluacion-riesgo", response_model=dict)
 
-def get_evaluacion_riesgo(prestamo_id: int, db: Session = Depends(get_db)):
+def get_evaluacion_riesgo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Devuelve datos de evaluación de riesgo (ML manual/calculado) del préstamo."""
 
@@ -3982,6 +4061,8 @@ def get_evaluacion_riesgo(prestamo_id: int, db: Session = Depends(get_db)):
     if not p:
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    assert_lectura_prestamo_desistimiento(p, current_user)
 
     return {
 
@@ -4003,7 +4084,11 @@ def get_evaluacion_riesgo(prestamo_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{prestamo_id}/auditoria", response_model=list)
 
-def get_auditoria_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+def get_auditoria_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Lista registros de auditoría asociados al préstamo (entidad=prestamos, entidad_id=prestamo_id)."""
 
@@ -4012,6 +4097,8 @@ def get_auditoria_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     if not p:
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    assert_lectura_prestamo_desistimiento(p, current_user)
 
     q = select(Auditoria).where(Auditoria.entidad == "prestamos", Auditoria.entidad_id == prestamo_id).order_by(Auditoria.fecha.desc())
 
@@ -5871,6 +5958,11 @@ def get_estado_cuenta_prestamo_json(
         serializar_estado_cuenta_payload_json,
     )
 
+    p_chk = db.get(Prestamo, prestamo_id)
+    if not p_chk:
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+    assert_lectura_prestamo_desistimiento(p_chk, current_user)
+
     datos = obtener_datos_estado_cuenta_prestamo(db, prestamo_id)
     if not datos:
         raise HTTPException(status_code=404, detail="Prestamo no encontrado")
@@ -5900,9 +5992,21 @@ def get_estado_cuenta_prestamo_pdf(
 
     
 
+    p_chk = db.get(Prestamo, prestamo_id)
+
+    if not p_chk:
+
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+
+    assert_lectura_prestamo_desistimiento(p_chk, current_user)
+
     try:
 
         datos = obtener_datos_estado_cuenta_prestamo(db, prestamo_id)
+
+    except HTTPException:
+
+        raise
 
     except Exception:
 

@@ -220,22 +220,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
-          title: 'General',
-          href: '/notificaciones/general',
-          icon: LayoutList,
-        },
-        {
-          title: 'Fecha',
-          href: '/notificaciones/fecha',
-          icon: Calendar,
-        },
-        {
-          title: 'Clientes',
-          href: '/notificaciones/clientes-drive',
-          icon: User,
-          adminOnly: true,
-        },
-        {
           title: 'Día siguiente al vencimiento',
           href: '/notificaciones',
           icon: Clock,
@@ -267,6 +251,22 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
 
       children: [
+        {
+          title: 'General',
+          href: '/notificaciones/general',
+          icon: LayoutList,
+        },
+        {
+          title: 'Fecha',
+          href: '/notificaciones/fecha',
+          icon: Calendar,
+        },
+        {
+          title: 'Clientes',
+          href: '/notificaciones/clientes-drive',
+          icon: User,
+          adminOnly: true,
+        },
         {
           title: 'Préstamos',
           href: '/actualizaciones/prestamos',
