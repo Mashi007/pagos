@@ -43,7 +43,6 @@ from app.services.cobros.pago_reportado_documento import (
     primer_pago_id_si_existe_para_claves_reportado,
     reportado_toca_claves_canonicas_en_pagos,
 )
-from app.services.cobros.pagos_pendiente_descargar_service import obtener_pagos_aprobados_pendientes, vaciar_tabla_pendiente_descargar, obtener_datos_excel
 from app.services.cobros.cedula_reportar_bs_service import (
     load_autorizados_bs_claves,
     cedula_coincide_autorizados_bs,
@@ -1988,94 +1987,6 @@ def marcar_pagos_reportados_exportados(
         )
 
     return _persist_marcar_exportados_y_cola(db, ids)
-
-
-@router.get("/descargar-pagos-aprobados-excel")
-def descargar_pagos_aprobados_excel(db: Session = Depends(get_db)):
-    """
-    [Deprecado] Descarga desde cola temporal y vacía toda la tabla.
-    Preferir GET /pagos-reportados/exportar-aprobados-excel (Excel de fallas de validación / carga masiva).
-    """
-    from io import BytesIO
-    from openpyxl import Workbook
-    from datetime import datetime
-    
-    # Obtener pagos pendientes de descargar
-    pagos = obtener_pagos_aprobados_pendientes(db)
-    
-    if not pagos:
-        raise HTTPException(status_code=204, detail="No hay pagos aprobados pendientes para descargar.")
-    
-    # Generar datos para Excel
-    datos = obtener_datos_excel(db, pagos)
-    
-    # Crear workbook
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Pagos Aprobados"
-    
-    # Encabezados
-    headers = [
-        "Cedula",
-        "Fecha",
-        "Monto",
-        "Moneda",
-        "Tasa cambio (Bs/USD)",
-        "Banco",
-        "Comentario",
-        "Numero de Documento",
-        "Monto USD",
-    ]
-    ws.append(headers)
-
-    # Datos
-    for row in datos:
-        ws.append(
-            [
-                row["Cedula"],
-                row["Fecha"],
-                row["Monto"],
-                row["Moneda"],
-                row["Tasa cambio (Bs/USD)"],
-                row["Banco"],
-                row["Comentario"],
-                row["Numero de Documento"],
-                row["Monto USD"],
-            ]
-        )
-
-    # Ajustar ancho de columnas
-    ws.column_dimensions["A"].width = 15
-    ws.column_dimensions["B"].width = 12
-    ws.column_dimensions["C"].width = 14
-    ws.column_dimensions["D"].width = 10
-    ws.column_dimensions["E"].width = 22
-    ws.column_dimensions["F"].width = 22
-    ws.column_dimensions["G"].width = 30
-    ws.column_dimensions["H"].width = 25
-    ws.column_dimensions["I"].width = 14
-    
-    # Bytes completos en memoria (StreamingResponse+BytesIO a veces entrega archivos corruptos al cliente)
-    output = BytesIO()
-    wb.save(output)
-    excel_bytes = output.getvalue()
-
-    # Vaciar tabla después de generar el Excel
-    vaciar_tabla_pendiente_descargar(db)
-
-    fecha = datetime.now().strftime("%Y%m%d")
-    filename = f"pagos_aprobados_{fecha}.xlsx"
-
-    return Response(
-        content=excel_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Length": str(len(excel_bytes)),
-            "Deprecation": "true",
-            "Warning": '299 - "Use GET /pagos-reportados/exportar-aprobados-excel (no validan)"',
-        },
-    )
 
 
 @router.post("/pagos-reportados/{pago_id}/re-analizar-gemini")

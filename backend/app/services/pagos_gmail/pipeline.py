@@ -40,7 +40,7 @@ def _finished_at_naive_utc() -> datetime:
     """Columnas pagos_gmail_sync.* son DateTime(timezone=False); naive UTC evita ambigüedad en drivers."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
@@ -931,6 +931,45 @@ def run_pipeline(
                                                             "[PAGOS_GMAIL] [ABCD_PAGO] Alta pagos+cuotas OK: %s",
                                                             res_abcd,
                                                         )
+                                                        _gt_del_id = None
+                                                        for _sii, _gt, _pp in rows_pairs:
+                                                            if (
+                                                                getattr(_sii, "id", None)
+                                                                is not None
+                                                                and getattr(si, "id", None)
+                                                                is not None
+                                                                and int(_sii.id) == int(si.id)
+                                                            ):
+                                                                _gt_del_id = getattr(
+                                                                    _gt, "id", None
+                                                                )
+                                                                break
+                                                        if _gt_del_id is not None:
+                                                            try:
+                                                                db.execute(
+                                                                    delete(GmailTemporal).where(
+                                                                        GmailTemporal.id
+                                                                        == int(_gt_del_id)
+                                                                    )
+                                                                )
+                                                                db.commit()
+                                                                logger.info(
+                                                                    "[PAGOS_GMAIL] [ABCD_PAGO] "
+                                                                    "gmail_temporal id=%s omitida de Excel "
+                                                                    "(validadores A-D OK, pago en BD)",
+                                                                    _gt_del_id,
+                                                                )
+                                                            except Exception as _gt_exc:
+                                                                logger.warning(
+                                                                    "[PAGOS_GMAIL] [ABCD_PAGO] "
+                                                                    "No se pudo eliminar gmail_temporal id=%s: %s",
+                                                                    _gt_del_id,
+                                                                    _gt_exc,
+                                                                )
+                                                                try:
+                                                                    db.rollback()
+                                                                except Exception:
+                                                                    pass
                                                     else:
                                                         logger.warning(
                                                             "[PAGOS_GMAIL] [ABCD_PAGO] Sin alta automatica: "

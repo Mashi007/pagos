@@ -8,7 +8,9 @@ Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF e
 Solo si el remitente coincide con `clientes.email` o `email_secundario`: digitalizacion (Gemini), filas Excel/BD y comprobante en `pago_comprobante_imagen`; etiquetas MERCANTIL/BNC/BINANCE/BNV segun plantilla. Sin match (o error BD al consultar clientes): solo etiqueta ERROR EMAIL en Gmail, sin filas ni comprobante. Sin subidas a Google Drive.
 Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no las toca el pipeline).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
-- GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD); query opcional plantilla A–D vs duplicado `pagos.numero_documento`
+- GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD); excluyen filas
+  ya autoconciliadas por plantilla A–D (traza CUOTAS_OK / PAGO_SIN_CUOTAS con pago_id). `gmail_temporal` solo conserva pendientes de revisión.
+  Query opcional plantilla A–D vs duplicado `pagos.numero_documento`.
 - GET /pagos/gmail/status: ultima ejecucion; next_run_approx = proxima corrida programada Gmail si el scheduler tiene el job registrado
 - GET /pagos/gmail/abcd-cuotas-traza: historial plantilla A–D → pago → cuotas (post-Gemini)
 - POST /pagos/gmail/confirmar-dia: confirmacion si/no; si si, borrado de datos acumulados
@@ -396,6 +398,39 @@ def _excluir_filas_cedula_error_email(items: list) -> list:
     ]
 
 
+def _excluir_sync_items_alta_gmail_abcd_automatica_ok(db: Session, items: list) -> list:
+    """
+    Ítems de sync cuyo comprobante A–D pasó validadores y generó `pago` (traza CUOTAS_OK o PAGO_SIN_CUOTAS):
+    no deben repetirse en Excel de revisión (el pago ya está en `pagos`).
+    """
+    ids: list[int] = []
+    for it in items:
+        raw = getattr(it, "id", None)
+        if raw is None:
+            continue
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return items
+    rows = (
+        db.execute(
+            select(PagosGmailAbcdCuotasTraza.sync_item_id).where(
+                PagosGmailAbcdCuotasTraza.sync_item_id.in_(ids),
+                PagosGmailAbcdCuotasTraza.etapa_final.in_(("CUOTAS_OK", "PAGO_SIN_CUOTAS")),
+                PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    excl = {int(x) for x in rows if x is not None}
+    if not excl:
+        return items
+    return [it for it in items if int(getattr(it, "id", 0) or 0) not in excl]
+
+
 def _filtrar_items_excel_duplicado_documento_abcd(
     db: Session,
     items: list,
@@ -470,6 +505,7 @@ def download_excel(
     Si no hay datos devuelve 404 (no se genera Excel vacío).
     Columnas: Banco, Cedula, Fecha, Monto, Serial documento, Correo Pagador.
     No incluye filas cuya cédula sea la literal **ERROR EMAIL** (reservada para fallo de remitente en clientes).
+    No incluye comprobantes plantilla A–D ya dados de alta automáticamente (conciliados y con traza de éxito en BD).
     Filtros opcionales (plantilla banco A–D, columna Banco): `solo_duplicados_documento`, `excluir_duplicados_documento`
     (no usar ambos a la vez).
     Para vaciar tablas usar POST /pagos/gmail/confirmar-dia con confirmado=true.
@@ -496,6 +532,7 @@ def download_excel(
         _, sheet_date, items = _find_most_recent_data(db)
 
     items = _excluir_filas_cedula_error_email(items)
+    items = _excluir_sync_items_alta_gmail_abcd_automatica_ok(db, items)
     items = _filtrar_items_excel_duplicado_documento_abcd(
         db,
         items,
@@ -507,6 +544,7 @@ def download_excel(
             status_code=404,
             detail=(
                 "Sin datos disponibles. "
+                "Si todo fue autoconciliado (plantilla A–D con validadores OK), no quedan filas para Excel. "
                 "Pulse «Generar Excel desde Gmail» para procesar correos no leídos con adjuntos (imagen/PDF) "
                 "y vuelva a descargar. Verifique que GEMINI_API_KEY esté configurado en el servidor."
                 + (f" (buscado: {fecha})" if fecha else "")
@@ -577,7 +615,9 @@ def download_excel_temporal(
     db: Session = Depends(get_db),
 ):
     """
-    Genera Excel desde la tabla temporal gmail_temporal (cada procesamiento Gmail inserta a continuacion).
+    Genera Excel desde la tabla temporal gmail_temporal: solo filas que siguieron en tabla tras el pipeline
+    (NR, duplicados, A–D que no pasaron validadores de negocio, etc.). Las filas A–D autoconciliadas se eliminan
+    de `gmail_temporal` al cerrar el alta en `pagos`.
     Excluye filas con cédula **ERROR EMAIL** (no deben exportarse).
     Filtros opcionales (misma semántica que download-excel): `solo_duplicados_documento`, `excluir_duplicados_documento`.
     NO vacia la tabla: los datos solo se borran al usar el boton "Vaciar tabla (Generar Excel desde Gmail)". Si no hay datos devuelve 404.
@@ -604,7 +644,8 @@ def download_excel_temporal(
         raise HTTPException(
             status_code=404,
             detail=(
-                "Sin datos en tabla temporal. Procese correos Gmail primero; cada procesamiento se almacena a continuacion en gmail_temporal."
+                "Sin datos en tabla temporal (o todo fue autoconciliado y ya no quedan filas pendientes). "
+                "Procese correos Gmail primero; los comprobantes A–D válidos pasan a `pagos` y se omiten del Excel."
                 + (
                     " Si usó filtros de duplicado por documento, pruebe sin ellos."
                     if (solo_duplicados_documento or excluir_duplicados_documento)

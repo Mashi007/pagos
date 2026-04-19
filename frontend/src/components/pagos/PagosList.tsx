@@ -154,6 +154,8 @@ export function PagosList() {
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
+  const [procesarGmailManualMenuOpen, setProcesarGmailManualMenuOpen] =
+    useState(false)
   const queryClient = useQueryClient()
 
   const {
@@ -190,6 +192,22 @@ export function PagosList() {
   const handleDetenerSeguimientoGmail = () => {
     stopGmailPolling()
     toast.info('Seguimiento detenido')
+  }
+
+  const handleDescargarExcelGmailPendientesRevision = async () => {
+    setProcesarGmailManualMenuOpen(false)
+    setIsDescargandoGmailExcel(true)
+    try {
+      await pagoService.downloadGmailExcelTemporal()
+      toast.success(
+        'Excel descargado: comprobantes que no pasaron validación automática (tabla temporal).'
+      )
+      void pagoService.getGmailStatus().then(setGmailStatus)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsDescargandoGmailExcel(false)
+    }
   }
 
   const textoProximoEscaneoGmailServidor = (iso: string | null | undefined) => {
@@ -651,22 +669,63 @@ export function PagosList() {
             Descargar Excel
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="lg"
-          type="button"
-          onClick={() => void runGmail('all')}
-          disabled={loadingGmail}
-          className="px-6 py-6 text-base font-semibold"
-          title="Ejecuta el pipeline Gmail (misma acción que Agregar pago → Generar Excel desde email → Procesar correos)"
-        >
-          {loadingGmail ? (
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          ) : (
-            <Mail className="mr-2 h-5 w-5" />
-          )}
-          Procesar manualmente
-        </Button>
+        <div className="inline-flex items-stretch rounded-xl border border-input bg-background shadow-sm">
+          <Button
+            variant="outline"
+            size="lg"
+            type="button"
+            onClick={() => void runGmail('all')}
+            disabled={loadingGmail}
+            className="rounded-none rounded-l-xl border-0 px-6 py-6 text-base font-semibold shadow-none hover:bg-accent"
+            title="Ejecuta el pipeline Gmail (misma acción que Agregar pago → Generar Excel desde email → Procesar correos)"
+          >
+            {loadingGmail ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Mail className="mr-2 h-5 w-5" />
+            )}
+            Procesar manualmente
+          </Button>
+          <Popover
+            open={procesarGmailManualMenuOpen}
+            onOpenChange={setProcesarGmailManualMenuOpen}
+          >
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="lg"
+                type="button"
+                disabled={isDescargandoGmailExcel}
+                className="rounded-none rounded-r-xl border-0 border-l border-input px-3 py-6 shadow-none hover:bg-accent"
+                aria-label="Más opciones: descargar Excel pendientes de revisión"
+                title="Descargar Excel solo con comprobantes pendientes de revisión (no autoconciliados)"
+              >
+                <ChevronDown className="h-5 w-5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 max-w-[90vw] p-3" align="end">
+              <p className="mb-2 text-xs leading-snug text-muted-foreground">
+                Plantilla A–D que pasó validadores y generó pago en BD no aparece en
+                este Excel. Aquí solo quedan NR, duplicados, rechazos de negocio u
+                otros pendientes de revisión manual.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-start gap-2"
+                disabled={isDescargandoGmailExcel}
+                onClick={() => void handleDescargarExcelGmailPendientesRevision()}
+              >
+                {isDescargandoGmailExcel ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 shrink-0" />
+                )}
+                Descargar Excel (pendientes de revisión)
+              </Button>
+            </PopoverContent>
+          </Popover>
+        </div>
         <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
           <PopoverTrigger asChild>
             <Button

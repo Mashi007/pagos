@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   Download,
+  Eye,
   FileText,
   LayoutList,
   Mail,
@@ -38,15 +39,12 @@ import {
 } from '../components/recibos/ConfiguracionRecibos'
 import {
   notificacionService,
-  type ClienteRetrasadoItem,
   type ReciboConciliacionFila,
 } from '../services/notificacionService'
 import { prestamoService } from '../services/prestamoService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../types/errors'
 import {
-  CompararAbonosDriveCuotasCell,
-  RevisionManualNotifCell,
   SortArrowsCuotas,
   filaCoincideFiltroCedulaNotif,
   type NotificacionesCuotasSortCol,
@@ -55,9 +53,62 @@ import {
   cuotasAtrasadasSortValue,
   fechaVencSortValue,
   numericTotalPendienteSort,
-  textoNumeroCreditoNotif,
-  textoTotalPendientePagar,
 } from './notificaciones/notificacionesListSort'
+
+function hrefComprobanteRecibo(row: ReciboConciliacionFila): string {
+  return (
+    String(row.link_comprobante ?? '').trim() ||
+    String(row.documento_ruta ?? '').trim()
+  )
+}
+
+function pareceUrlImagenComprobante(u: string): boolean {
+  if (!u) return false
+  const path = u.split('?')[0].toLowerCase()
+  if (/\.(jpe?g|png|gif|webp)$/i.test(path)) return true
+  return u.toLowerCase().includes('googleusercontent')
+}
+
+function textoFechaRegistroListado(s: string | null | undefined): string {
+  const t = String(s ?? '').trim()
+  if (!t) return '-'
+  return t.length >= 16 ? t.slice(0, 16).replace('T', ' ') : t
+}
+
+function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
+  const href = hrefComprobanteRecibo(row)
+  const [thumbOk, setThumbOk] = useState(true)
+  if (!href) {
+    return <span className="text-sm text-gray-400">-</span>
+  }
+  const probarMiniatura = pareceUrlImagenComprobante(href) && thumbOk
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex max-w-[14rem] items-center gap-2 text-violet-700 hover:text-violet-900"
+      title={
+        String(row.documento_nombre ?? '').trim() ||
+        'Abrir fotografía o comprobante de pago'
+      }
+    >
+      {probarMiniatura ? (
+        <img
+          src={href}
+          alt=""
+          className="h-12 w-12 shrink-0 rounded border border-gray-200 bg-white object-cover"
+          onError={() => setThumbOk(false)}
+        />
+      ) : (
+        <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded border border-gray-200 bg-slate-50">
+          <Eye className="h-6 w-6 text-slate-500" aria-hidden />
+        </span>
+      )}
+      <span className="text-xs font-medium">Abrir</span>
+    </a>
+  )
+}
 
 type Slot = 'manana' | 'tarde' | 'noche'
 
@@ -148,8 +199,20 @@ export default function NotificacionesRecibosPage() {
   const sortedList = useMemo(() => {
     if (!sortCol || list.length === 0) return list
 
-    const cmp = (a: ClienteRetrasadoItem, b: ClienteRetrasadoItem): number => {
+    const cmp = (a: ReciboConciliacionFila, b: ReciboConciliacionFila): number => {
       switch (sortCol) {
+        case 'nombre':
+          return String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es', {
+            sensitivity: 'base',
+          })
+        case 'cedula':
+          return String(a.cedula ?? '').localeCompare(String(b.cedula ?? ''), 'es', {
+            sensitivity: 'base',
+          })
+        case 'fecha_registro':
+          return String(a.fecha_registro ?? '').localeCompare(
+            String(b.fecha_registro ?? '')
+          )
         case 'numero_cuota': {
           const na = a.numero_cuota
           const nb = b.numero_cuota
@@ -186,7 +249,7 @@ export default function NotificacionesRecibosPage() {
     out.sort((a, b) => {
       const p = sortDir === 'asc' ? cmp(a, b) : -cmp(a, b)
       if (p !== 0) return p
-      return String(a.cliente_id).localeCompare(String(b.cliente_id))
+      return a.pago_id - b.pago_id
     })
     return out
   }, [list, sortCol, sortDir])
@@ -536,27 +599,16 @@ export default function NotificacionesRecibosPage() {
 
               <Fragment>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-sm">
+                  <table className="w-full min-w-[520px] text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold leading-tight">
-                          Número de
-                          <br />
-                          crédito
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                          Nombre
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                          Cédula
-                        </th>
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                           <div className="inline-flex items-center gap-1">
-                            <span>Nº cuota</span>
+                            <span>Nombre</span>
                             <SortArrowsCuotas
-                              column="numero_cuota"
-                              labelAsc="Orden ascendente: Nº cuota"
-                              labelDesc="Orden descendente: Nº cuota"
+                              column="nombre"
+                              labelAsc="Orden ascendente: nombre"
+                              labelDesc="Orden descendente: nombre"
                               sortCol={sortCol}
                               sortDir={sortDir}
                               onAsc={aplicarOrdenAsc}
@@ -566,11 +618,11 @@ export default function NotificacionesRecibosPage() {
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                           <div className="inline-flex items-center gap-1">
-                            <span>Fecha venc.</span>
+                            <span>Cédula</span>
                             <SortArrowsCuotas
-                              column="fecha_vencimiento"
-                              labelAsc="Orden ascendente: fecha de vencimiento"
-                              labelDesc="Orden descendente: fecha de vencimiento"
+                              column="cedula"
+                              labelAsc="Orden ascendente: cédula"
+                              labelDesc="Orden descendente: cédula"
                               sortCol={sortCol}
                               sortDir={sortDir}
                               onAsc={aplicarOrdenAsc}
@@ -578,13 +630,13 @@ export default function NotificacionesRecibosPage() {
                             />
                           </div>
                         </th>
-                        <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
-                          <div className="inline-flex w-full items-center justify-end gap-1">
-                            <span>Cuotas atrasadas</span>
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                          <div className="inline-flex items-center gap-1">
+                            <span>Fecha de registro</span>
                             <SortArrowsCuotas
-                              column="cuotas_atrasadas"
-                              labelAsc="Orden ascendente: cuotas atrasadas"
-                              labelDesc="Orden descendente: cuotas atrasadas"
+                              column="fecha_registro"
+                              labelAsc="Orden ascendente: fecha de registro"
+                              labelDesc="Orden descendente: fecha de registro"
                               sortCol={sortCol}
                               sortDir={sortDir}
                               onAsc={aplicarOrdenAsc}
@@ -592,30 +644,8 @@ export default function NotificacionesRecibosPage() {
                             />
                           </div>
                         </th>
-                        <th className="max-w-[12rem] whitespace-normal px-3 py-2 text-right font-semibold leading-tight">
-                          <div className="inline-flex items-start justify-end gap-1">
-                            <span>
-                              TOTAL PENDIENTE
-                              <br />A PAGAR
-                            </span>
-                            <SortArrowsCuotas
-                              column="total_pendiente"
-                              labelAsc="Orden ascendente: total pendiente"
-                              labelDesc="Orden descendente: total pendiente"
-                              sortCol={sortCol}
-                              sortDir={sortDir}
-                              onAsc={aplicarOrdenAsc}
-                              onDesc={aplicarOrdenDesc}
-                            />
-                          </div>
-                        </th>
-                        <th
-                          className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
-                          scope="col"
-                        >
-                          Revisión
-                          <br />
-                          manual
+                        <th className="min-w-[10rem] px-3 py-2 text-left font-semibold">
+                          Fotografía de pago
                         </th>
                         <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
                           <span title="Descargar PDF de estado de cuenta">Estado de cuenta</span>
@@ -625,7 +655,7 @@ export default function NotificacionesRecibosPage() {
                     <tbody>
                       {listaFiltradaCedula.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="py-8 text-center text-gray-500">
+                          <td colSpan={5} className="py-8 text-center text-gray-500">
                             <span className="block font-medium text-gray-600">
                               {list.length === 0
                                 ? 'Ningún registro en este criterio.'
@@ -636,29 +666,18 @@ export default function NotificacionesRecibosPage() {
                       ) : (
                         listaFiltradaCedula.map(row => (
                           <tr
-                            key={`rec-${row.pago_id}-${row.prestamo_id ?? 'np'}-${row.numero_cuota ?? 'nc'}`}
-                            className="border-b hover:bg-gray-50"
+                            key={`rec-${row.pago_id}`}
+                            className="border-b border-gray-200 bg-white hover:bg-gray-50"
                           >
-                            <td className="px-3 py-2 font-medium tabular-nums">
-                              {textoNumeroCreditoNotif(row)}
+                            <td className="px-3 py-3 font-medium">{row.nombre}</td>
+                            <td className="px-3 py-3">{row.cedula}</td>
+                            <td className="px-3 py-3 tabular-nums text-gray-800">
+                              {textoFechaRegistroListado(row.fecha_registro)}
                             </td>
-                            <td className="px-3 py-2 font-medium">{row.nombre}</td>
-                            <td className="px-3 py-2">{row.cedula}</td>
-                            <td className="px-3 py-2">{row.numero_cuota ?? '-'}</td>
-                            <td className="px-3 py-2">{row.fecha_vencimiento ?? '-'}</td>
-                            <td className="px-3 py-2 text-right font-medium text-red-600">
-                              {row.cuotas_atrasadas ?? row.total_cuotas_atrasadas ?? '-'}
+                            <td className="px-3 py-3 align-middle">
+                              <CeldaFotografiaPagoRecibo row={row} />
                             </td>
-                            <td className="px-3 py-2 text-right">
-                              {textoTotalPendientePagar(row)}
-                            </td>
-                            <td className="px-1 py-2 text-center align-middle">
-                              <div className="flex flex-wrap items-center justify-center gap-1">
-                                <RevisionManualNotifCell row={row} />
-                                <CompararAbonosDriveCuotasCell row={row} />
-                              </div>
-                            </td>
-                            <td className="px-2 py-2 text-center align-middle">
+                            <td className="px-2 py-3 text-center align-middle">
                               {estadoCuentaPdfCell(row.prestamo_id)}
                             </td>
                           </tr>

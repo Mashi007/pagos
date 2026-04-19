@@ -1,5 +1,7 @@
 ## Descarga de Pagos Aprobados desde Tabla Temporal
 
+> **Histórico:** el endpoint `GET /api/v1/cobros/descargar-pagos-aprobados-excel` y la función `descargarPagosAprobadosExcel` del frontend **se eliminaron**. Use el Excel de administración **`GET /api/v1/cobros/pagos-reportados/exportar-aprobados-excel`** (fallas de validadores / carga masiva) y el flujo actual de Cobros en la app.
+
 ### Funcionalidad Implementada
 
 Se ha desarrollado un sistema completo para:
@@ -38,23 +40,12 @@ Funciones:
 - `vaciar_tabla_pendiente_descargar(db)`: Elimina todos los registros
 - `obtener_datos_excel(db, pagos)`: Formatea datos para Excel (incluye tasa Bs/USD del día `fecha_pago` y equivalente USD)
 
-### 4. Endpoint Backend
-**Archivo:** `backend/app/api/v1/endpoints/cobros.py`
+### 4. Endpoint Backend (histórico)
+**Archivo:** `backend/app/api/v1/endpoints/cobros/routes.py`
 
-#### Endpoint de Descarga
-```
-GET /api/v1/cobros/descargar-pagos-aprobados-excel
-```
+El endpoint dedicado de descarga desde cola temporal fue **retirado**. La cola `pagos_pendiente_descargar` sigue usándose al aprobar y al exportar (se limpia por IDs al marcar exportados; ver `_persist_marcar_exportados_y_cola`).
 
-- Obtiene pagos pendientes
-- Genera archivo Excel con columnas:
-  - **Cédula**, **Fecha**, **Monto**, **Moneda**
-  - **Tasa cambio (Bs/USD)** (oficial del día `fecha_pago` en `tasas_cambio_diaria`; vacío si el pago es USD o no hay tasa)
-  - **Bs a USD (equiv.)** (monto en bolívares ÷ tasa; si moneda USD, el monto en dólares)
-  - **Banco**, **Comentario**, **Número de Documento**
-  - **Monto en USD (solo dólares)** (última columna; mismo valor en USD para totales en Excel)
-- Devuelve archivo con nombre: `pagos_aprobados_YYYYMMDD.xlsx`
-- **Vacía automáticamente la tabla** después de generar el Excel
+Para exportar hoy: **`GET /api/v1/cobros/pagos-reportados/exportar-aprobados-excel`** (parámetros opcionales `cedula`, `institucion`).
 
 #### Integración con Aprobación
 Se agregó lógica en dos puntos:
@@ -67,16 +58,10 @@ Ambos llaman a `agregar_a_pendiente_descargar(db, pago.id)` al aprobar.
 
 ## Arquitectura Frontend
 
-### 1. Función de Servicio
+### 1. Función de servicio (actual)
 **Archivo:** `frontend/src/services/cobrosService.ts`
 
-```typescript
-export async function descargarPagosAprobadosExcel(): Promise<void>
-```
-
-- Realiza fetch a `GET /api/v1/cobros/descargar-pagos-aprobados-excel`
-- Descarga automáticamente el archivo Excel
-- Nombre del archivo: `pagos_aprobados_YYYY-MM-DD.xlsx`
+Use la función que llama a **`GET /api/v1/cobros/pagos-reportados/exportar-aprobados-excel`** (exportar Excel de filas que no validan para carga masiva), no la descarga antigua desde cola temporal.
 
 ### 2. Página de Cobros
 **Archivo:** `frontend/src/pages/CobrosPagosReportadosPage.tsx`
@@ -117,22 +102,12 @@ const handleDescargarPagosTablaTemporalExcel = async () => {
    - ✨ INSERTA en pagos_pendiente_descargar
 ```
 
-### Descarga
+### Exportación (flujo actual)
+El botón o acción de la UI debe usar **`exportar-aprobados-excel`** (servicio TypeScript que ya consume ese `GET`). La cola temporal se actualiza al aprobar y al marcar exportados según la lógica vigente en `cobros/routes.py`.
 ```
-1. Usuario hace click en "Descargar de Tabla Temporal"
-2. Frontend:
-   - Muestra spinner de carga
-   - Envía GET a /descargar-pagos-aprobados-excel
-3. Backend:
-   - Obtiene pagos de pagos_pendiente_descargar
-   - Formatea datos (Cédula, Fecha, Comentario, Número Documento)
-   - Genera Excel con openpyxl
-   - ✨ VACÍA la tabla pagos_pendiente_descargar
-   - Retorna archivo como stream
-4. Frontend:
-   - Descarga automáticamente el archivo
-   - Muestra toast "Excel descargado"
-   - Recarga la lista de pagos
+1. Usuario exporta Excel de administración (fallas validadores / pendientes de exportar)
+2. Frontend: GET /api/v1/cobros/pagos-reportados/exportar-aprobados-excel
+3. Backend: genera .xlsx, marca exportados y limpia filas de cola asociadas a esos IDs
 ```
 
 ---

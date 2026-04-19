@@ -86,6 +86,13 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
     from zoneinfo import ZoneInfo
 
     from app.api.v1.endpoints import pagos as pagos_ep
+    from app.api.v1.endpoints.pagos.constants import (
+        _MAX_LEN_NUMERO_DOCUMENTO,
+        _MAX_MONTO_PAGADO,
+        _MIN_MONTO_PAGADO,
+    )
+    from app.services.pago_huella_funcional import conflicto_huella_para_creacion
+    from app.services.pago_huella_metricas import registrar_rechazo_huella_funcional
 
     def _fail(motivo: str, detalle: str = "") -> dict[str, Any]:
         try:
@@ -111,8 +118,8 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
 
     monto_dec_in = _monto_decimal_desde_gmail(
         monto_str,
-        float(pagos_ep._MIN_MONTO_PAGADO),
-        float(pagos_ep._MAX_MONTO_PAGADO),
+        float(_MIN_MONTO_PAGADO),
+        float(_MAX_MONTO_PAGADO),
     )
     if monto_dec_in is None:
         return _fail("monto_invalido", (monto_str or "")[:80])
@@ -169,7 +176,7 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
     if cedula_input and cn_body != cn_fk:
         return _fail("cedula_no_coincide_cliente", cedula_fk)
 
-    ref_pago = (numero_doc_norm or ref_raw or "Gmail")[: int(pagos_ep._MAX_LEN_NUMERO_DOCUMENTO)]
+    ref_pago = (numero_doc_norm or ref_raw or "Gmail")[: int(_MAX_LEN_NUMERO_DOCUMENTO)]
 
     try:
         monto_usd_g, moneda_fin_g, monto_bs_g, tasa_g, fecha_tasa_g = resolver_monto_registro_pago(
@@ -184,7 +191,7 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
         logger.warning("[PAGOS_GMAIL] [ABCD_PAGO] resolver_monto: %s", e)
         return _fail("resolver_monto", str(e)[:500])
 
-    msg_h = pagos_ep.conflicto_huella_para_creacion(
+    msg_h = conflicto_huella_para_creacion(
         db,
         prestamo_id=prestamo_id,
         fecha_pago=fecha_pago,
@@ -193,7 +200,7 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
         referencia_pago=ref_pago,
     )
     if msg_h:
-        pagos_ep.registrar_rechazo_huella_funcional()
+        registrar_rechazo_huella_funcional()
         return _fail("huella_funcional", msg_h[:500])
 
     ib = (institucion_bancaria or "").strip()[:255] or None

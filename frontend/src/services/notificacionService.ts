@@ -352,6 +352,15 @@ export type ReciboConciliacionFila = ClienteRetrasadoItem & {
   fecha_registro?: string | null
 
   monto_pagado?: number
+
+  /** URL o ruta del comprobante (tabla pagos). */
+  link_comprobante?: string | null
+
+  documento_ruta?: string | null
+
+  documento_nombre?: string | null
+
+  documento_tipo?: string | null
 }
 
 /** Un registro del historial de envíos por cédula (para reportes/legales). */

@@ -1,7 +1,7 @@
 """
-Filas enriquecidas para GET /notificaciones/recibos/listado: misma forma operativa que
-listados de notificaciones (crédito, nombre, cuota, vencimiento, atrasos, total pendiente,
-revisión manual, KPI correos desde envios_notificacion tipo_tab=recibos).
+Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana (Caracas),
+con nombre/cédula, fecha de registro, comprobante (link o documento) y préstamo para PDF.
+KPIs de correos desde envios_notificacion tipo_tab=recibos.
 """
 from __future__ import annotations
 
@@ -18,11 +18,6 @@ from app.models.cuota_pago import CuotaPago
 from app.models.envio_notificacion import EnvioNotificacion
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
-from app.services.notificacion_service import (
-    contar_cuotas_atraso_por_prestamos,
-    enriquecer_items_notificacion_revision_manual,
-    sum_saldo_pendiente_total_por_prestamos,
-)
 from app.services.recibos_conciliacion_email_job import (
     RecibosSlot,
     _bounds_fecha_registro_caracas,
@@ -133,32 +128,13 @@ def listar_recibos_ventana_con_ui(
     fecha_dia: date,
     slot: RecibosSlot,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int], int, int]:
-    """
-    Devuelve (filas para tabla + KPIs, total_pagos, cedulas_distintas).
-    Cada fila incluye campos compatibles con enriquecer_items_notificacion_revision_manual
-    y con el listado de notificaciones en frontend (prestamo_id, nombre, cuotas_atrasadas, …).
-    """
+    """Devuelve (filas para tabla + KPIs, total_pagos, cedulas_distintas)."""
     pagos_orm = _fetch_pagos_recibos_ventana_orm(db, fecha_dia=fecha_dia, slot=slot)
     if not pagos_orm:
         return [], _kpis_recibos_correo(db), 0, 0
 
     pago_ids = [int(p.id) for p in pagos_orm]
     cuotas_map = _cuotas_por_pago_id(db, pago_ids)
-
-    prestamos_ids: List[int] = []
-    for pg in pagos_orm:
-        cuotas = cuotas_map.get(int(pg.id), [])
-        ref = _pick_cuota_representativa(pg, cuotas)
-        pid = int(ref.prestamo_id) if ref else None
-        if pid is None and getattr(pg, "prestamo_id", None):
-            pid = int(pg.prestamo_id)
-        if pid is not None:
-            prestamos_ids.append(pid)
-
-    ca_map = contar_cuotas_atraso_por_prestamos(
-        db, sorted({p for p in prestamos_ids}), fecha_referencia=fecha_dia
-    )
-    tp_map = sum_saldo_pendiente_total_por_prestamos(db, sorted({p for p in prestamos_ids}))
 
     cedulas_display = sorted(
         {(p.cedula_cliente or "").strip() for p in pagos_orm if (p.cedula_cliente or "").strip()}
@@ -220,34 +196,28 @@ def listar_recibos_ventana_con_ui(
         if not nombre and ced:
             nombre = ced
 
-        n_cuota = int(ref.numero_cuota) if ref and ref.numero_cuota is not None else None
-        fv = ref.fecha_vencimiento.isoformat() if ref and ref.fecha_vencimiento else None
-        monto_cuota = float(ref.monto) if ref and ref.monto is not None else None
-
-        ca = ca_map.get(pid, 0) if pid is not None else 0
-        tp = tp_map.get(pid) if pid is not None else None
-
         cid_final = int(cliente_id) if cliente_id is not None else (int(cl.id) if cl is not None else 0)
+
+        lc = getattr(pg, "link_comprobante", None)
+        dr = getattr(pg, "documento_ruta", None)
+        dn = getattr(pg, "documento_nombre", None)
+        dt = getattr(pg, "documento_tipo", None)
 
         fila: Dict[str, Any] = {
             "pago_id": int(pg.id),
             "cedula": ced,
             "cedula_normalizada": ced_norm,
             "fecha_registro": pg.fecha_registro.isoformat() if pg.fecha_registro else None,
-            "monto_pagado": float(getattr(pg, "monto_pagado", 0) or 0),
             "prestamo_id": pid,
             "cliente_id": cid_final,
             "nombre": nombre,
-            "numero_cuota": n_cuota,
-            "fecha_vencimiento": fv,
-            "monto": monto_cuota,
-            "cuotas_atrasadas": int(ca) if ca is not None else 0,
+            "link_comprobante": (lc or "").strip() or None,
+            "documento_ruta": (dr or "").strip() or None,
+            "documento_nombre": (dn or "").strip() or None,
+            "documento_tipo": (dt or "").strip() or None,
         }
-        if tp is not None:
-            fila["total_pendiente_pagar"] = float(tp)
         filas.append(fila)
 
-    enriquecer_items_notificacion_revision_manual(db, filas)
     kpis = _kpis_recibos_correo(db)
     total = len(filas)
     cedulas_dist = len(ced_norms)

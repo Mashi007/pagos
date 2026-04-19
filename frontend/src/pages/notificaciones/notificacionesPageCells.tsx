@@ -48,6 +48,9 @@ export type NotificacionesCuotasSortCol =
   | 'cuotas_atrasadas'
   | 'total_pendiente'
   | 'diferencia_abono'
+  | 'nombre'
+  | 'cedula'
+  | 'fecha_registro'
 
 export function SortArrowsCuotas({
   column,
