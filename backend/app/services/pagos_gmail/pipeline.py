@@ -35,6 +35,11 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
+
+def _finished_at_naive_utc() -> datetime:
+    """Columnas pagos_gmail_sync.* son DateTime(timezone=False); naive UTC evita ambigüedad en drivers."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -261,7 +266,7 @@ def run_pipeline(
                 sync_row = db.execute(sa_select(PagosGmailSync).where(PagosGmailSync.id == existing_sync_id)).scalars().first()
                 if sync_row:
                     sync_row.status = "error"
-                    sync_row.finished_at = datetime.now(timezone.utc)
+                    sync_row.finished_at = _finished_at_naive_utc()
                     sync_row.error_message = "no_credentials"
                     db.commit()
             except Exception:
@@ -1351,7 +1356,7 @@ def run_pipeline(
         else:
             process_message_batch(messages, "run")
 
-        sync.finished_at = datetime.now(timezone.utc)
+        sync.finished_at = _finished_at_naive_utc()
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok
         sync.correos_marcados_revision = correos_marcados_revision
@@ -1381,7 +1386,7 @@ def run_pipeline(
             "[PAGOS_GMAIL] Fallo API Gmail al listar metadatos (sync=error; no es inbox vacio): %s",
             e,
         )
-        sync.finished_at = datetime.now(timezone.utc)
+        sync.finished_at = _finished_at_naive_utc()
         sync.status = "error"
         sync.error_message = str(e)[:2000]
         sync.emails_processed = emails_ok
@@ -1407,7 +1412,7 @@ def run_pipeline(
 
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Pipeline error inesperado: %s", e)
-        sync.finished_at = datetime.now(timezone.utc)
+        sync.finished_at = _finished_at_naive_utc()
         sync.status = "error"
         sync.error_message = str(e)[:2000]
         sync.emails_processed = emails_ok
