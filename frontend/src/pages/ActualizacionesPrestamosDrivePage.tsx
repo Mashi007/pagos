@@ -534,24 +534,24 @@ export default function ActualizacionesPrestamosDrivePage() {
         <CardHeader className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <CardTitle className="text-lg">Candidatos desde Drive</CardTitle>
-            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end" aria-label="Resumen validación">
+            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end" aria-label="Resumen validación guardado">
               <div
-                className="min-w-[5.5rem] rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-center shadow-sm"
-                title="Filas en verde: cumplen formato, tabla V/E, hoja sin duplicado y Q sin más de 30 días."
+                className="min-w-[6.25rem] rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-center shadow-sm"
+                title="Misma comprobación de servidor que «Guardar (100%)» antes de crear cada préstamo (cédula, cliente en BD, N, R, Q, S, J, V/E en cartera, etc.). Puede ser menor que las filas en verde en la tabla."
               >
                 <p className="text-lg font-semibold tabular-nums text-emerald-900">
                   {data?.kpis_aprueban ?? '—'}
                 </p>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-800/90">Aprueban</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-800/90">Guardables</p>
               </div>
               <div
-                className="min-w-[5.5rem] rounded-lg border border-border bg-muted/50 px-3 py-2 text-center shadow-sm"
-                title="Filas que no están en verde (revisión, repetidas en hoja, bloqueos o datos incompletos según reglas de la grilla)."
+                className="min-w-[6.25rem] rounded-lg border border-border bg-muted/50 px-3 py-2 text-center shadow-sm"
+                title="No cumplen esa validación de servidor; «Guardar (100%)» las omitirá."
               >
                 <p className="text-lg font-semibold tabular-nums text-foreground">
                   {data?.kpis_no_aprueban ?? '—'}
                 </p>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">No aprueban</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">No guardables</p>
               </div>
             </div>
           </div>
@@ -583,7 +583,7 @@ export default function ActualizacionesPrestamosDrivePage() {
               title={
                 total === 0
                   ? 'No hay candidatos en el snapshot.'
-                  : 'Inserta en préstamos cada fila del snapshot que cumpla el 100% de validadores (las demás se omiten).'
+                  : 'Crea préstamos solo para filas que pasan la misma validación de servidor que el contador «Guardables»; el resto se omite. Si falla la creación en BD, verá el detalle en el mensaje de resultado.'
               }
             >
               <Save

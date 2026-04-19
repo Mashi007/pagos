@@ -1,7 +1,8 @@
 """
-KPIs de candidatos Drive alineados a la grilla (fila verde = aprueban validadores de pantalla).
+KPIs de candidatos Drive alineados al guardado masivo (`_motivos_no_100`).
 
-Misma idea que `filaCandidatoDriveTono === 'green'` en ActualizacionesPrestamosDrivePage.
+Cuenta cuántas filas el botón «Guardar (100%)» intentaría crear (misma validación de servidor que al persistir),
+no solo el color verde de la grilla (la grilla puede verse verde y aún faltar cliente, N, R, S, J, etc.).
 """
 from __future__ import annotations
 
@@ -12,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
-from app.services.prestamo_candidatos_drive_guardar import _fechas_desde_col_q
+from app.services.prestamo_candidatos_drive_guardar import _fechas_desde_col_q, _motivos_no_100
+from app.services.prestamo_candidatos_drive_validadores import conteo_prestamos_por_cedula_norm
 
 
 def _cell(v: Any) -> str:
@@ -97,11 +99,15 @@ def conteos_aprueban_no_aprueban_snapshot(
     cedula_cmp_contains: str | None,
 ) -> Tuple[int, int]:
     """
-    Recorre el snapshot (mismo filtro que el listado) y cuenta filas en verde vs el resto.
+    Recorre el snapshot (mismo filtro que el listado) y cuenta filas que pasan `_motivos_no_100`
+    (misma condición que `ejecutar_guardar_candidatos_drive_validados_100` antes de crear el préstamo).
+
+    Usa un solo `conteo_prestamos_por_cedula_norm` inicial (sin simular inserts secuenciales).
 
     Returns:
         (aprueban, no_aprueban)
     """
+    prestamo_counts = conteo_prestamos_por_cedula_norm(db)
     stmt = select(PrestamoCandidatoDrive.payload, PrestamoCandidatoDrive.cedula_cmp)
     q = (cedula_cmp_contains or "").strip()
     if q:
@@ -110,8 +116,8 @@ def conteos_aprueban_no_aprueban_snapshot(
     apr = 0
     for payload, cmp in rows:
         pl = payload if isinstance(payload, dict) else {}
-        cmp_s = _cell(cmp)
-        if fila_payload_grilla_verde(pl, cmp_s):
+        ok, _, pc = _motivos_no_100(pl, db, prestamo_counts)
+        if ok and pc is not None:
             apr += 1
     total = len(rows)
     return apr, total - apr

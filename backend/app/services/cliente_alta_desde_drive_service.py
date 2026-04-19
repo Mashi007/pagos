@@ -37,7 +37,7 @@ _PLACEHOLDER_EMAIL = "revisar@email.com"
 
 # Subir cuando cambien reglas de candidatos (cédula, teléfono, etc.) para no servir JSON obsoleto
 # desde `drive_clientes_candidatos_cache` aunque `synced_at` de la hoja no haya cambiado.
-CANDIDATOS_DRIVE_CACHE_RULES_VERSION = 2
+CANDIDATOS_DRIVE_CACHE_RULES_VERSION = 3
 
 
 def _cell(v: Any) -> str:
@@ -80,13 +80,14 @@ def _cedula_cmp_unificada(raw: str) -> str:
 
 
 def _cedula_texto_columna_drive(raw: str, vced: Dict[str, Any]) -> str:
-    """Texto mostrado para columna E: formato V-… cuando aplica (igual que validadores con V implícita)."""
+    """Texto mostrado para columna E: V + dígitos sin guión (coherente con almacenamiento en clientes)."""
     s = _cell(raw)
     if vced.get("valido"):
-        return str(vced.get("valor_formateado") or s).strip()
+        vf = str(vced.get("valor_formateado") or s).strip()
+        return _cedula_para_bd_desde_validacion(vf) or vf
     digits = re.sub(r"\D", "", s)
     if digits and re.match(r"^\d{6,11}$", digits):
-        return f"V-{digits}"
+        return f"V{digits}"
     return s
 
 

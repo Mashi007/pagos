@@ -16,9 +16,9 @@ export type PrestamoCandidatosDriveSnapshot = {
   drive_synced_at: string | null
   computed_at: string | null
   total: number
-  /** Filas en verde (100% validadores de grilla, misma regla que la UI). */
+  /** Filas que pasan la misma validación de servidor que «Guardar (100%)» antes de crear el préstamo. */
   kpis_aprueban?: number
-  /** Filas que no están en verde (rojo, ámbar o neutro). */
+  /** Resto del snapshot (no pasan esa validación). */
   kpis_no_aprueban?: number
   total_sin_filtro?: number
   filtro_cedula?: string | null
