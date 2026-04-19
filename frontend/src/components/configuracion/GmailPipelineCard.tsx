@@ -265,7 +265,8 @@ export function GmailPipelineCard() {
 
             <p className="text-xs text-muted-foreground">
               Puedes descargar el Excel aunque siga «Generando…»: se incluirá lo
-              ya guardado en la tabla temporal. Al descargar, la tabla se vacía.
+              ya guardado en la tabla temporal. La tabla no se vacía al
+              descargar; use «Vaciar tabla» en Pagos si necesita limpiarla.
             </p>
           </>
         ) : (

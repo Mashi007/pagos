@@ -2314,6 +2314,8 @@ export function useExcelUploadPagos({
 
           let cedulaHeaderMatched = false
 
+          let conciliacionExplicit = false
+
           for (let i = 0; i < Math.max(headerRow.length, 10); i++) {
             if (
               !cedulaHeaderMatched &&
@@ -2340,12 +2342,19 @@ export function useExcelUploadPagos({
 
             if (match(i, 'monto', 'monto_pagado', 'amount')) monto = i
 
+            // No confundir «Código documento» (solo código) con el nº de comprobante.
+            const esSoloCodigoDocumento =
+              match(i, 'codigo documento', 'código documento') &&
+              !match(i, 'numero', 'número', 'serial', 'referencia', 'doc ', 'doc.')
+
             if (
+              !esSoloCodigoDocumento &&
               match(
                 i,
                 'documento',
                 'numero_documento',
                 'numero documento',
+                'serial documento',
                 'n documento',
                 'doc',
                 'referencia',
@@ -2367,7 +2376,12 @@ export function useExcelUploadPagos({
             )
               prestamo = i
 
-            if (match(i, 'conciliacion', 'conciliación')) conciliacion = i
+            if (
+              match(i, 'conciliacion', 'conciliación', 'conciliado', 'conciliada')
+            ) {
+              conciliacion = i
+              conciliacionExplicit = true
+            }
 
             if (match(i, 'moneda', 'currency')) monedaCol = i
 
@@ -2412,6 +2426,29 @@ export function useExcelUploadPagos({
               if (!hx.includes('postal') && !hx.includes('zip')) codigoCol = i
             }
           }
+
+          // Sin cabecera de conciliación: el default índice 5 leía «Correo pagador» (p. ej. Excel Gmail).
+          if (!conciliacionExplicit) conciliacion = -1
+          // Misma columna para documento y préstamo (defaults 3/4 tras detectar «Serial documento» en 4).
+          if (documento >= 0 && prestamo === documento) prestamo = -1
+          if (
+            prestamo >= 0 &&
+            (prestamo === cedula ||
+              prestamo === fecha ||
+              prestamo === monto ||
+              (bancoCol >= 0 && prestamo === bancoCol))
+          )
+            prestamo = -1
+          if (
+            conciliacion >= 0 &&
+            (conciliacion === cedula ||
+              conciliacion === fecha ||
+              conciliacion === monto ||
+              conciliacion === documento ||
+              (bancoCol >= 0 && conciliacion === bancoCol) ||
+              (prestamo >= 0 && conciliacion === prestamo))
+          )
+            conciliacion = -1
 
           return {
             cedula,
@@ -2466,13 +2503,20 @@ export function useExcelUploadPagos({
             if (!cedula || looksLikeDocumentNotCedula(cedula)) cedula = ''
           }
 
-          const prestamoIdRaw = row[cols.prestamo]
+          const prestamoIdRaw =
+            cols.prestamo >= 0 ? row[cols.prestamo] : undefined
 
-          const conciliacionRawCol4 = (row[cols.prestamo]?.toString() || '')
+          const conciliacionRawCol4 = (
+            cols.prestamo >= 0 ? row[cols.prestamo] : ''
+          )
+            ?.toString()
             .trim()
             .toUpperCase()
 
-          const conciliacionRawCol5 = (row[cols.conciliacion]?.toString() || '')
+          const conciliacionRawCol5 = (
+            cols.conciliacion >= 0 ? row[cols.conciliacion] : ''
+          )
+            ?.toString()
             .trim()
             .toUpperCase()
 

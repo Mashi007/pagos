@@ -5845,8 +5845,8 @@ def get_estado_cuenta_prestamo_json(
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):
-    """Mismo payload que el PDF de estado de cuenta, en JSON serializable. Fuente: estado_cuenta_datos."""
-    from app.services.estado_cuenta_datos import (
+    """Mismo payload que el PDF de estado de cuenta, en JSON serializable. Fuente: documentos_cliente_centro."""
+    from app.services.documentos_cliente_centro import (
         obtener_datos_estado_cuenta_prestamo,
         serializar_estado_cuenta_payload_json,
     )
@@ -5873,8 +5873,10 @@ def get_estado_cuenta_prestamo_pdf(
 
     """Genera PDF de estado de cuenta para un prestamo especifico."""
 
-    from app.services.estado_cuenta_datos import obtener_datos_estado_cuenta_prestamo
-    from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
+    from app.services.documentos_cliente_centro import (
+        generar_pdf_estado_cuenta,
+        obtener_datos_estado_cuenta_prestamo,
+    )
 
     
 

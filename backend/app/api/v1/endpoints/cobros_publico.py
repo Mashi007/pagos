@@ -77,7 +77,7 @@ from app.services.cobros.recibo_pdf import (
     RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
     WHATSAPP_LINK,
 )
-from app.services.cobros.recibo_pago_reportado_centro import generar_recibo_pdf_desde_pago_reportado
+from app.services.documentos_cliente_centro import generar_recibo_pdf_desde_pago_reportado
 from app.services.tasa_cambio_service import (
     obtener_tasa_por_fecha,
     fecha_hoy_caracas,

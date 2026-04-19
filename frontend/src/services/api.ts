@@ -934,7 +934,8 @@ class ApiClient {
         url.includes('/pagos/gmail/run-now') ||
         url.includes('/clientes/check-emails') ||
         url.includes('/clientes/check-cedulas') || // Pipeline Gmail: puede tardar si el backend es síncrono (credenciales OAuth)
-        url.includes('/conciliacion-sheet/sync-now') // Sheets API + escritura snapshot BD
+        url.includes('/conciliacion-sheet/sync-now') || // Sheets API + escritura snapshot BD
+        url.includes('/prestamos/candidatos-drive/refrescar') // Recorre drive + prestamos + reescribe snapshot
 
       // Auditoria cartera en Render: sincroniza decenas de miles de cuotas + cascadas masivas (siempre >30s).
       const isAuditoriaCarteraCorregir = url.includes(

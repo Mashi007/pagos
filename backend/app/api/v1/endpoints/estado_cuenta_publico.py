@@ -90,9 +90,9 @@ from app.services.estado_cuenta_datos import (
     obtener_pago_para_recibo_cuota,
     texto_institucion_recibo_cuota,
 )
-from app.services.cobros.recibo_pdf import _formato_monto_venezolano
+from app.services.cobros.recibo_pdf import _formato_decimal_ve, _formato_monto_venezolano
 from app.services.cobros.recibo_pago_cartera_pdf import generar_recibo_pago_cartera_pdf
-from app.services.estado_cuenta_pdf import (
+from app.services.documentos_cliente_centro import (
     generar_pdf_estado_cuenta,
     obtener_datos_estado_cuenta_cliente,
 )
@@ -626,6 +626,21 @@ def get_recibo_pago_cartera_publico(
         monto_pagado_texto = f"{_formato_monto_venezolano(float(monto_bs_val))} Bs."
     else:
         monto_pagado_texto = f"{_formato_monto_venezolano(monto_usd)} USD"
+    nota_tasa_bs = None
+    if es_bs:
+        tasa_val = getattr(pago, "tasa_cambio_bs_usd", None)
+        ftasa = getattr(pago, "fecha_tasa_referencia", None)
+        if tasa_val is not None:
+            try:
+                t = float(tasa_val)
+                fd = ftasa.strftime("%d/%m/%Y") if ftasa and hasattr(ftasa, "strftime") else "-"
+                t_txt = _formato_decimal_ve(t)
+                nota_tasa_bs = (
+                    f"Tasa BCV de referencia ({fd}): <b>{t_txt}</b> Bs. por 1 USD "
+                    "(registrada en cartera para este pago)."
+                )
+            except (TypeError, ValueError):
+                nota_tasa_bs = None
     pdf_bytes = generar_recibo_pago_cartera_pdf(
         referencia_documento=referencia,
         fecha_reporte_aprobacion_display=fecha_reporte_aprobacion_display,
@@ -636,6 +651,7 @@ def get_recibo_pago_cartera_publico(
         banco=banco,
         numero_operacion=num_op,
         monto_pagado_texto=monto_pagado_texto,
+        nota_tasa_bs=nota_tasa_bs,
     )
     return Response(
         content=bytes(pdf_bytes),

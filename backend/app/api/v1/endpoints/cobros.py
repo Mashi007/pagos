@@ -29,7 +29,7 @@ from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
 from app.services.cobros.recibo_pdf import WHATSAPP_LINK, WHATSAPP_DISPLAY
-from app.services.cobros.recibo_pago_reportado_centro import generar_recibo_pdf_desde_pago_reportado
+from app.services.documentos_cliente_centro import generar_recibo_pdf_desde_pago_reportado
 from app.core.email import send_email
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.services.notificaciones_exclusion_desistimiento import (

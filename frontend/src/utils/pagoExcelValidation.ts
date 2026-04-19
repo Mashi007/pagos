@@ -84,7 +84,7 @@ export interface PagoExcelRow {
 
   _pagoIdExistenteDuplicadoBD?: number | null
 
-  /** URL del comprobante (columna Link / Ver imagen en Excel desde Gmail). */
+  /** URL del comprobante (columna Link en plantillas; Gmail puede rellenarse vía BD al guardar). */
   link_comprobante?: string | null
 }
 
@@ -98,7 +98,7 @@ export function institucionBancariaDesdeExcel(
   return s ? s.slice(0, 255) : null
 }
 
-/** Misma regla que backend: id Drive sin https se convierte a URL de vista. */
+/** Id Drive sin https -> URL vista; rutas API (/api/.../comprobante-imagen/) se dejan tal cual. */
 export function normalizarLinkComprobanteDesdeExcel(
   v: string | null | undefined
 ): string | null {
@@ -106,6 +106,7 @@ export function normalizarLinkComprobanteDesdeExcel(
 
   if (!s) return null
   if (!/^https?:\/\//i.test(s)) {
+    if (s.includes('comprobante-imagen') || s.startsWith('/api/')) return s
     return `https://drive.google.com/file/d/${s}/view`
   }
   return s

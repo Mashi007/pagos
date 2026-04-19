@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.conciliacion_sheet import ConciliacionSheetMeta
@@ -33,10 +33,17 @@ def _cell(v: Any) -> str:
     return str(v).strip()
 
 
-def ejecutar_refresh_prestamo_candidatos_drive(db: Session) -> Dict[str, Any]:
+def ejecutar_refresh_prestamo_candidatos_drive(
+    db: Session,
+    *,
+    forzar: bool = False,
+) -> Dict[str, Any]:
     """
     Borra el snapshot anterior e inserta las filas candidatas actuales.
     Hace commit al finalizar (o rollback si falla).
+
+    Si la tabla `drive` está vacía: por defecto no modifica el snapshot (omitido=True).
+    Con forzar=True (solo uso manual vía API): vacía el snapshot y deja 0 filas.
     """
     # Import diferido: evita ciclo api.v1 -> este módulo -> clientes -> api.v1
     from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
@@ -55,6 +62,39 @@ def ejecutar_refresh_prestamo_candidatos_drive(db: Session) -> Dict[str, Any]:
         db.execute(select(DriveRow).order_by(DriveRow.sheet_row_number.asc())).scalars().all()
         or []
     )
+
+    if not drive_rows:
+        if not forzar:
+            logger.warning(
+                "[prestamo_candidatos_drive] refresh omitido: tabla drive sin filas "
+                "(se conserva el snapshot anterior si existía)."
+            )
+            return {
+                "filas_en_drive": 0,
+                "candidatos_insertados": 0,
+                "drive_synced_at": drive_synced_at.isoformat() if drive_synced_at else None,
+                "computed_at": None,
+                "omitido": True,
+                "motivo": "tabla_drive_sin_filas",
+            }
+        now_clear = datetime.now(timezone.utc)
+        try:
+            db.execute(delete(PrestamoCandidatoDrive))
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        logger.warning(
+            "[prestamo_candidatos_drive] refresh forzado: drive vacío; snapshot limpiado."
+        )
+        return {
+            "filas_en_drive": 0,
+            "candidatos_insertados": 0,
+            "drive_synced_at": drive_synced_at.isoformat() if drive_synced_at else None,
+            "computed_at": now_clear.isoformat(),
+            "omitido": False,
+            "motivo": "forzar_con_drive_vacio",
+        }
 
     conteos: Dict[str, int] = {}
     tmp: List[tuple[DriveRow, str]] = []
@@ -106,8 +146,8 @@ def ejecutar_refresh_prestamo_candidatos_drive(db: Session) -> Dict[str, Any]:
 
     try:
         db.execute(delete(PrestamoCandidatoDrive))
-        for row in to_insert:
-            db.add(row)
+        if to_insert:
+            db.add_all(to_insert)
         db.commit()
     except Exception:
         db.rollback()
@@ -124,33 +164,66 @@ def ejecutar_refresh_prestamo_candidatos_drive(db: Session) -> Dict[str, Any]:
         "candidatos_insertados": len(to_insert),
         "drive_synced_at": drive_synced_at.isoformat() if drive_synced_at else None,
         "computed_at": now.isoformat(),
+        "omitido": False,
+        "motivo": None,
     }
 
 
-def listar_prestamo_candidatos_drive_snapshot(db: Session) -> Dict[str, Any]:
-    """Último snapshot (tabla completa ordenada por fila de hoja)."""
+def listar_prestamo_candidatos_drive_snapshot(
+    db: Session,
+    *,
+    limit: int = 500,
+    offset: int = 0,
+    cedula_q: str | None = None,
+) -> Dict[str, Any]:
+    """Último snapshot ordenado por fila de hoja; paginado y filtro opcional por cédula (normalizada)."""
+    from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
+
     meta = db.get(ConciliacionSheetMeta, 1)
     drive_synced_at = meta.synced_at.isoformat() if meta and meta.synced_at else None
 
-    rows = list(
-        db.execute(
-            select(PrestamoCandidatoDrive).order_by(
-                PrestamoCandidatoDrive.sheet_row_number.asc()
-            )
-        )
-        .scalars()
-        .all()
-        or []
-    )
+    filt_norm = ""
+    if cedula_q is not None and str(cedula_q).strip():
+        filt_norm = _normalizar_cedula_carga_masiva(str(cedula_q).strip())
+
+    base_filter = []
+    if filt_norm:
+        base_filter.append(PrestamoCandidatoDrive.cedula_cmp.contains(filt_norm))
+
+    cnt_stmt = select(func.count(PrestamoCandidatoDrive.id))
+    if base_filter:
+        cnt_stmt = cnt_stmt.where(*base_filter)
+    total = int(db.scalar(cnt_stmt) or 0)
+
+    lim = max(1, min(int(limit), 2000))
+    off = max(0, int(offset))
+
+    stmt = select(PrestamoCandidatoDrive).order_by(PrestamoCandidatoDrive.sheet_row_number.asc())
+    if base_filter:
+        stmt = stmt.where(*base_filter)
+    stmt = stmt.offset(off).limit(lim)
+
+    rows = list(db.execute(stmt).scalars().all() or [])
     computed_at = None
-    if rows:
-        computed_at = max(r.computed_at for r in rows if r.computed_at)
-        computed_at = computed_at.isoformat() if computed_at else None
+    if total > 0:
+        max_stmt = select(func.max(PrestamoCandidatoDrive.computed_at))
+        if base_filter:
+            max_stmt = max_stmt.where(*base_filter)
+        last_ts = db.scalar(max_stmt)
+        computed_at = last_ts.isoformat() if last_ts else None
 
     return {
         "drive_synced_at": drive_synced_at,
         "computed_at": computed_at,
-        "total": len(rows),
+        "total": total,
+        "total_sin_filtro": (
+            int(db.scalar(select(func.count(PrestamoCandidatoDrive.id))) or 0)
+            if filt_norm
+            else total
+        ),
+        "filtro_cedula": filt_norm or None,
+        "limit": lim,
+        "offset": off,
         "filas": [
             {
                 "id": r.id,

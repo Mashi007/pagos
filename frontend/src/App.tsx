@@ -171,6 +171,8 @@ import Notificaciones from './pages/Notificaciones'
 
 import NotificacionesClientesDrive from './pages/NotificacionesClientesDrive'
 
+import ActualizacionesPrestamosDrivePage from './pages/ActualizacionesPrestamosDrivePage'
+
 import Analistas from './pages/Analistas'
 
 import PagosPage from './pages/PagosPage'
@@ -318,11 +320,7 @@ function App() {
               index
               element={
                 isAuthenticated ? (
-                  isOperatorRole(user?.rol) ? (
-                    <Navigate to="/clientes" replace />
-                  ) : (
-                    <Navigate to="/dashboard/menu" replace />
-                  )
+                  <Navigate to={defaultHomePathForRol(user?.rol)} replace />
                 ) : (
                   <Navigate to="/login" replace />
                 )
@@ -354,11 +352,7 @@ function App() {
               path="login"
               element={
                 isAuthenticated ? (
-                  isOperatorRole(user?.rol) ? (
-                    <Navigate to="/clientes" replace />
-                  ) : (
-                    <Navigate to="/dashboard/menu" replace />
-                  )
+                  <Navigate to={defaultHomePathForRol(user?.rol)} replace />
                 ) : (
                   <motion.div
                     key="login"
@@ -542,6 +536,15 @@ function App() {
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
                   <NotificacionesClientesDrive />
+                </SimpleProtectedRoute>
+              }
+            />
+
+            <Route
+              path="actualizaciones/prestamos"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <ActualizacionesPrestamosDrivePage />
                 </SimpleProtectedRoute>
               }
             />

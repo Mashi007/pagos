@@ -77,6 +77,8 @@ export default function NotificacionesClientesDrive() {
       setComentario('')
       await qc.invalidateQueries({ queryKey: [...QK] })
       await qc.invalidateQueries({ queryKey: [...QK_AUD] })
+      await qc.refetchQueries({ queryKey: [...QK] })
+      await qc.refetchQueries({ queryKey: [...QK_AUD, audPage] })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo importar')
     } finally {

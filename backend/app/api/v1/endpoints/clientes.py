@@ -27,6 +27,7 @@ from app.models.prestamo import Prestamo
 from app.schemas.auth import UserResponse
 from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
 from app.utils.cliente_emails import secundario_distinto_del_principal
+from app.utils.cedula_busqueda import cedula_busqueda_canonica
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -157,9 +158,21 @@ def get_clientes(
         count_q = select(func.count()).select_from(Cliente)
 
         if search and search.strip():
-            t = f"%{search.strip()}%"
+            raw_stripped = search.strip()
+            t = f"%{raw_stripped}%"
+            ced_canon = cedula_busqueda_canonica(raw_stripped)
+            cedula_preds = [Cliente.cedula.ilike(t)]
+            if ced_canon:
+                # BD puede guardar V-30.081.920; el front envía V30081920 → comparar cédula normalizada
+                ced_col_norm = func.regexp_replace(
+                    func.upper(func.coalesce(Cliente.cedula, "")),
+                    "[^VEGJ0-9]",
+                    "",
+                    "g",
+                )
+                cedula_preds.append(ced_col_norm == ced_canon)
             filtro = or_(
-                Cliente.cedula.ilike(t),
+                or_(*cedula_preds),
                 Cliente.nombres.ilike(t),
                 Cliente.email.ilike(t),
                 Cliente.email_secundario.ilike(t),

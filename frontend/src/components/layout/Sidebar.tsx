@@ -259,6 +259,23 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       ],
     },
 
+    {
+      title: 'Actualizaciones',
+
+      icon: RefreshCw,
+
+      isSubmenu: true,
+
+      children: [
+        {
+          title: 'Préstamos',
+          href: '/actualizaciones/prestamos',
+          icon: CreditCard,
+          adminOnly: true,
+        },
+      ],
+    },
+
     // Ventas: oculto y en pausa (no afectar otros procesos)
 
     {
