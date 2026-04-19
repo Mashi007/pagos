@@ -637,7 +637,7 @@ export default function CobrosPagosReportadosPage() {
           <button
             type="button"
             onClick={() => handleKpiClick('')}
-            title="Cola operativa: pendiente y en revisión no exportados al Excel de corrección (sin aprobados, importados ni rechazados en la vista por defecto)."
+            title="Cola operativa: solo reportes que no cumplen validadores (Gemini/reglas), no exportados al Excel; importados y rechazados no entran aquí."
             className={
               'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
               (estado === ''

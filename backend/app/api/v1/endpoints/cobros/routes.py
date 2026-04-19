@@ -441,9 +441,9 @@ def _query_reportados_falla_validadores_pendientes_exportar(
     cedula: Optional[str],
     institucion: Optional[str],
 ) -> List[PagoReportado]:
-    """Pendiente o en revisión, aún no exportados a Excel; sin fechas (mismos filtros opcionales que el front)."""
+    """Pendiente, en revisión o aprobado (legacy), aún no exportados a Excel; sin fechas (mismos filtros opcionales que el front)."""
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
-    q = select(PagoReportado).where(PagoReportado.estado.in_(("pendiente", "en_revision")))
+    q = select(PagoReportado).where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
     q = q.where(~PagoReportado.id.in_(exportados_subq))
     if cedula:
         ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
@@ -488,6 +488,17 @@ def _item_falla_validadores_cobros_excel(it: PagoReportadoListItem) -> bool:
     if gem in ("false", "error"):
         return True
     return bool((it.observacion or "").strip())
+
+
+def reportado_falla_validadores_cobros(db: Session, pr: PagoReportado) -> bool:
+    """
+    True si el reportado NO cumple los mismos validadores que el listado/Excel (Gemini + reglas de carga).
+    Usado al registrar desde formulario público / Infopagos para no mandar a revisión manual lo que ya cumple.
+    """
+    items = _pago_reportado_list_items_from_rows(db, [pr])
+    if not items:
+        return True
+    return _item_falla_validadores_cobros_excel(items[0])
 
 
 def _persist_marcar_exportados_y_cola(db: Session, ids: List[int]) -> dict:
@@ -582,39 +593,70 @@ def _list_pagos_reportados_payload(
     incluir_exportados: bool = False,
 ) -> dict:
     """Misma lógica que GET /pagos-reportados (reutilizada por listado-y-kpis)."""
-    q = select(PagoReportado)
-    count_q = select(func.count(PagoReportado.id))
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
-    if estado:
-        q = q.where(PagoReportado.estado == estado)
-        count_q = count_q.where(PagoReportado.estado == estado)
-        if estado in ("aprobado", "pendiente", "en_revision") and not incluir_exportados:
-            q = q.where(~PagoReportado.id.in_(exportados_subq))
-            count_q = count_q.where(~PagoReportado.id.in_(exportados_subq))
-    else:
-        # Por defecto: cola operativa (sin cerrados). Sin filas ya exportadas salvo incluir_exportados.
-        q = q.where(~PagoReportado.estado.in_(("aprobado", "importado", "rechazado")))
-        count_q = count_q.where(~PagoReportado.estado.in_(("aprobado", "importado", "rechazado")))
-        if not incluir_exportados:
-            q = q.where(~PagoReportado.id.in_(exportados_subq))
-            count_q = count_q.where(~PagoReportado.id.in_(exportados_subq))
-    for w in _filtros_fecha_cedula_institucion_reportados(
+    filtros = _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
-    ):
-        q = q.where(w)
-        count_q = count_q.where(w)
+    )
 
-    total = db.execute(count_q).scalar()
+    # Rechazado / importado: listado sin filtro de validadores (auditoría por estado).
+    if estado in ("rechazado", "importado"):
+        q = select(PagoReportado).where(PagoReportado.estado == estado)
+        count_q = select(func.count(PagoReportado.id)).where(PagoReportado.estado == estado)
+        for w in filtros:
+            q = q.where(w)
+            count_q = count_q.where(w)
+        total = int(db.execute(count_q).scalar() or 0)
+        q = q.order_by(
+            case((PagoReportado.estado == "rechazado", 1), else_=0),
+            PagoReportado.created_at.asc(),
+        ).offset((page - 1) * per_page).limit(per_page)
+        rows = db.execute(q).scalars().all()
+        items = _pago_reportado_list_items_from_rows(db, rows)
+        return {"items": items, "total": total, "page": page, "per_page": per_page}
+
+    # Cola operativa: solo filas que NO cumplen validadores (misma regla que Excel Cobros).
+    q = select(PagoReportado)
+    if estado:
+        q = q.where(PagoReportado.estado == estado)
+        if estado in ("aprobado", "pendiente", "en_revision") and not incluir_exportados:
+            q = q.where(~PagoReportado.id.in_(exportados_subq))
+    else:
+        q = q.where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
+        if not incluir_exportados:
+            q = q.where(~PagoReportado.id.in_(exportados_subq))
+    for w in filtros:
+        q = q.where(w)
     q = q.order_by(
         case((PagoReportado.estado == "rechazado", 1), else_=0),
         PagoReportado.created_at.asc(),
-    ).offset((page - 1) * per_page).limit(per_page)
-    rows = db.execute(q).scalars().all()
-    items = _pago_reportado_list_items_from_rows(db, rows)
-    return {"items": items, "total": total, "page": page, "per_page": per_page}
+    )
+
+    batch = 200
+    offset_scan = 0
+    skip_need = (page - 1) * per_page
+    take_need = per_page
+    page_items: List[PagoReportadoListItem] = []
+    total = 0
+    while True:
+        rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
+        if not rows:
+            break
+        for it in _pago_reportado_list_items_from_rows(db, rows):
+            if not _item_falla_validadores_cobros_excel(it):
+                continue
+            total += 1
+            if skip_need > 0:
+                skip_need -= 1
+                continue
+            if take_need > 0:
+                page_items.append(it)
+                take_need -= 1
+        offset_scan += len(rows)
+
+    return {"items": page_items, "total": total, "page": page, "per_page": per_page}
 
 
 def _kpis_pagos_reportados_payload(
@@ -628,34 +670,54 @@ def _kpis_pagos_reportados_payload(
 ) -> dict:
     """
     Conteos por estado con mismos filtros fecha/cédula/institución que el listado.
-    Con incluir_exportados=False, pendiente / en revisión / aprobado excluyen filas ya volcadas al Excel.
+    pendiente / en_revision / aprobado: solo los que NO cumplen validadores (como el listado).
+    importado / rechazado: totales SQL (estados terminales).
     """
-    if incluir_exportados:
-        base = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(True)
-    else:
-        exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
-        base = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(
-            or_(
-                PagoReportado.estado.in_(("importado", "rechazado")),
-                and_(
-                    PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")),
-                    ~PagoReportado.id.in_(exportados_subq),
-                ),
-            )
-        )
-    for w in _filtros_fecha_cedula_institucion_reportados(
+    filtros = _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
-    ):
-        base = base.where(w)
-    base = base.group_by(PagoReportado.estado)
-    rows = db.execute(base).all()
+    )
     counts = {"pendiente": 0, "en_revision": 0, "aprobado": 0, "rechazado": 0, "importado": 0}
-    for row in rows:
+
+    if incluir_exportados:
+        base_term = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(
+            PagoReportado.estado.in_(("importado", "rechazado"))
+        )
+    else:
+        base_term = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(
+            PagoReportado.estado.in_(("importado", "rechazado"))
+        )
+    for w in filtros:
+        base_term = base_term.where(w)
+    base_term = base_term.group_by(PagoReportado.estado)
+    for row in db.execute(base_term).all():
         if row.estado in counts:
-            counts[row.estado] = row.cnt
+            counts[row.estado] = int(row.cnt or 0)
+
+    exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
+    q_scan = select(PagoReportado).where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
+    if not incluir_exportados:
+        q_scan = q_scan.where(~PagoReportado.id.in_(exportados_subq))
+    for w in filtros:
+        q_scan = q_scan.where(w)
+    q_scan = q_scan.order_by(PagoReportado.created_at.asc())
+
+    batch = 200
+    offset_scan = 0
+    while True:
+        rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
+        if not rows_b:
+            break
+        for it in _pago_reportado_list_items_from_rows(db, rows_b):
+            if not _item_falla_validadores_cobros_excel(it):
+                continue
+            st = (it.estado or "").strip()
+            if st in ("pendiente", "en_revision", "aprobado"):
+                counts[st] += 1
+        offset_scan += len(rows_b)
+
     counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado", "importado"))
     return counts
 
@@ -676,11 +738,14 @@ def list_pagos_reportados(
     ),
 ):
     """
-    Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados, importados y rechazados
-    y los ya exportados al Excel de corrección (cola operativa).
+    Lista paginada de pagos reportados con filtros.
 
-    `incluir_exportados=true`: vuelven a listarse pendiente/en revisión/aprobado ya exportados, para seguir
-    gestionándolos desde Cobranzas (aprobar, editar, rechazar) sin depender del Excel.
+    Cola operativa (sin `estado`, o pendiente/en_revision/aprobado): solo filas que **no cumplen validadores**
+    (misma regla que el Excel Cobros: Gemini false/error u observación de reglas de carga).
+
+    `estado=importado` o `rechazado`: listado completo de ese estado (sin filtro de validadores).
+
+    `incluir_exportados=true`: incluye pendiente/en revisión/aprobado ya exportados al Excel de corrección.
 
     Incluye sin distincion reportes de Infopagos (`canal_ingreso=infopagos`) y del formulario publico del deudor
     (`cobros_publico`); mismas reglas de edicion, aprobacion, rechazo e import a `pagos`.
@@ -710,7 +775,7 @@ def kpis_pagos_reportados(
         description="Alinear conteos con listado cuando se incluyen exportados al Excel.",
     ),
 ):
-    """Conteos por estado; filtros fecha/cédula/institución compartidos con el listado (sin filtro de estado del listado)."""
+    """Conteos por estado; mismos filtros que el listado. pendiente/en_revision/aprobado solo cuentan fallas de validadores."""
     return _kpis_pagos_reportados_payload(
         db,
         fecha_desde=fecha_desde,
@@ -847,8 +912,8 @@ def exportar_pagos_aprobados_excel(
     institucion: Optional[str] = Query(None),
 ):
     """
-    Solo filas que no cumplen validadores (Gemini NO/error u observación de reglas), pendiente o en revisión,
-    aún no exportadas. Al descargar: van al Excel y se marcan en pagos_reportados_exportados; entonces dejan
+    Solo filas que no cumplen validadores (Gemini NO/error u observación de reglas), pendiente, en revisión
+    o aprobado (legacy), aún no exportadas. Al descargar: van al Excel y se marcan en pagos_reportados_exportados; entonces dejan
     de mostrarse en listado (hasta incluir_exportados=true). Si el usuario no descarga, esas filas siguen en pantalla.
     Filtros opcionales: cédula, institución; sin fechas.
     """
@@ -864,7 +929,7 @@ def exportar_pagos_aprobados_excel(
     if not rows:
         raise HTTPException(
             status_code=400,
-            detail="No hay pagos reportados pendientes o en revisión sin exportar (con los filtros indicados).",
+            detail="No hay pagos reportados pendientes, en revisión o aprobados sin exportar (con los filtros indicados).",
         )
 
     items = _pago_reportado_list_items_from_rows(db, rows)

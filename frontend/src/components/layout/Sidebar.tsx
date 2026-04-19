@@ -38,7 +38,6 @@ import {
   TrendingUp,
   LayoutList,
   Calendar,
-  Receipt,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -244,7 +243,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         {
           title: 'Recibos',
           href: '/notificaciones/recibos',
-          icon: Receipt,
+          icon: FileText,
         },
       ],
     },

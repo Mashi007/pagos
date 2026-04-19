@@ -47,6 +47,7 @@ from app.core.security import decode_token, create_recibo_infopagos_token, creat
 from app.core.config import settings
 from app.core.email_config_holder import get_email_activo_servicio
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
+from app.api.v1.endpoints.cobros.routes import reportado_falla_validadores_cobros
 
 logger = logging.getLogger(__name__)
 
@@ -585,11 +586,12 @@ async def enviar_reporte_publico(
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
 
-        pr.estado = "aprobado" if coincide else "en_revision"
+        falla_validadores = reportado_falla_validadores_cobros(db, pr)
+        pr.estado = "en_revision" if falla_validadores else "aprobado"
         db.commit()
 
         recibo_enviado_val = False
-        if coincide:
+        if not falla_validadores:
             cpr.intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
             db.refresh(pr)
             pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
@@ -831,10 +833,11 @@ async def enviar_reporte_infopagos(
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
 
-        pr.estado = "aprobado" if coincide else "en_revision"
+        falla_validadores = reportado_falla_validadores_cobros(db, pr)
+        pr.estado = "en_revision" if falla_validadores else "aprobado"
         db.commit()
 
-        if coincide:
+        if not falla_validadores:
             cpr.intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
             db.refresh(pr)
             cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)

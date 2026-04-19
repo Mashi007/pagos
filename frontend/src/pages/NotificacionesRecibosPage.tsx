@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 
-import { Receipt, RefreshCw, Send } from 'lucide-react'
+import { FileText, Mail, RefreshCw } from 'lucide-react'
 
 import { Button } from '../components/ui/button'
 import {
@@ -89,7 +89,7 @@ export default function NotificacionesRecibosPage() {
   return (
     <div className="space-y-6">
       <ModulePageHeader
-        icon={Receipt}
+        icon={FileText}
         title="Recibos"
         description="Correo con PDF de estado de cuenta tras pagos conciliados (tabla pagos, vínculo cuotas). Zona America/Caracas."
       />
@@ -173,7 +173,7 @@ export default function NotificacionesRecibosPage() {
                 (!soloSimular && data !== undefined && totalPagosListado === 0)
               }
             >
-              <Send className="mr-2 h-4 w-4" />
+              <Mail className="mr-2 h-4 w-4" />
               {soloSimular ? 'Simular envío' : 'Ejecutar envío'}
             </Button>
           </div>

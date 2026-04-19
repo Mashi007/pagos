@@ -15,9 +15,6 @@ from pathlib import Path
 from typing import List, Optional
 
 from app.services.cuota_estado import etiqueta_estado_cuota
-from app.services.pagos.comprobante_link_desde_gmail import (
-    comprobante_url_para_enlace_publico,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +293,7 @@ def generar_pdf_estado_cuenta(
                 Paragraph("Fecha de<br/>registro", _hdr),
                 Paragraph("Monto", _hdr),
                 Paragraph("Subtotal<br/>(USD)", _hdr),
-                Paragraph("Comprobante", _hdr),
+                Paragraph("Documento", _hdr),
                 Paragraph("Recibo", _hdr),
             ]
         ]
@@ -314,28 +311,15 @@ def generar_pdf_estado_cuenta(
                 )
             else:
                 rec_cell = Paragraph('<font color="#94a3b8">-</font>', styles["EC_Link"])
-            link_foto = comprobante_url_para_enlace_publico(
-                str(pr.get("link_comprobante") or ""),
-                base_url=base_url or "",
-            ).strip()
+            # Sin enlaces externos (Drive / URL): la imagen del comprobante va solo en el PDF del recibo
+            # (`/estado-cuenta/public/recibo-pago` o recibo por pago reportado).
             doc_raw = (
                 (pr.get("numero_documento") or "").strip()
                 or (pr.get("referencia_pago") or "").strip()
                 or (pr.get("referencia_tabla") or "").strip()
             )
             doc_esc = html.escape(doc_raw)[:56] if doc_raw else ""
-            low = link_foto.lower()
-            if low.startswith(("http://", "https://")):
-                url_f = link_foto.replace("&", "&amp;")
-                if doc_esc:
-                    foto_inner = (
-                        f'<font size="7.5" color="#1e293b">{doc_esc}</font><br/>'
-                        f'<a href="{url_f}" color="{COLOR_ACCENT}">Ver foto</a>'
-                    )
-                else:
-                    foto_inner = f'<a href="{url_f}" color="{COLOR_ACCENT}">Ver foto</a>'
-                foto_cell = Paragraph(foto_inner, styles["EC_Link"])
-            elif doc_esc:
+            if doc_esc:
                 foto_cell = Paragraph(
                     f'<font size="8" color="#1e293b">{doc_esc}</font>',
                     styles["EC_Link"],

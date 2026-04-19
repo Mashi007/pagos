@@ -134,7 +134,8 @@ def ejecutar_recibos_envio_slot(
 ) -> Dict[str, Any]:
     """
     Por cada cédula distinta con pagos en ventana: genera estado de cuenta y envía a correos del cliente.
-    Si ``solo_simular`` es True, no persiste ``recibos_email_envio`` ni envía SMTP.
+    Si ``solo_simular`` es True, no persiste ``recibos_email_envio`` ni envía SMTP ni genera PDF
+    (solo valida datos de cliente y destinatarios).
     """
     pagos = listar_pagos_recibos_ventana(db, fecha_dia=fecha_dia, slot=slot)
     cedulas = _cedulas_distintas_desde_pagos(pagos)
@@ -159,6 +160,7 @@ def ejecutar_recibos_envio_slot(
             "omitidos_ya_enviado": 0,
             "omitidos_desistimiento": 0,
             "omitidos_sin_datos": 0,
+            "omitidos_error_estado_cuenta": 0,
             "detalles": [],
         }
 
@@ -177,6 +179,7 @@ def ejecutar_recibos_envio_slot(
             "omitidos_ya_enviado": 0,
             "omitidos_desistimiento": 0,
             "omitidos_sin_datos": 0,
+            "omitidos_error_estado_cuenta": 0,
             "detalles": [],
         }
     enviados = 0
@@ -185,6 +188,7 @@ def ejecutar_recibos_envio_slot(
     omitidos_ya_enviado = 0
     omitidos_desistimiento = 0
     omitidos_sin_datos = 0
+    omitidos_error_estado_cuenta = 0
     detalles: List[Dict[str, Any]] = []
 
     for cedula_norm in cedulas:
@@ -193,7 +197,23 @@ def ejecutar_recibos_envio_slot(
             detalles.append({"cedula": cedula_norm, "motivo": "ya_enviado"})
             continue
 
-        datos = obtener_datos_estado_cuenta_cliente(db, cedula_norm)
+        try:
+            datos = obtener_datos_estado_cuenta_cliente(db, cedula_norm)
+        except Exception as e:
+            logger.exception(
+                "recibos: error cargando datos estado de cuenta (obtener_datos_estado_cuenta_cliente) cedula_norm=%s",
+                cedula_norm,
+            )
+            omitidos_error_estado_cuenta += 1
+            detalles.append(
+                {
+                    "cedula": cedula_norm,
+                    "motivo": "error_carga_datos_ec",
+                    "error": str(e)[:500],
+                }
+            )
+            continue
+
         if not datos:
             omitidos_sin_datos += 1
             detalles.append({"cedula": cedula_norm, "motivo": "sin_datos_estado_cuenta"})
@@ -219,19 +239,6 @@ def ejecutar_recibos_envio_slot(
         else:
             fecha_corte_d = fecha_corte if isinstance(fecha_corte, date) else fecha_dia
 
-        recibos = obtener_recibos_cliente_estado_cuenta(db, cedula_norm)
-        pdf_bytes = generar_pdf_estado_cuenta(
-            cedula=cedula_display,
-            nombre=nombre,
-            prestamos=datos.get("prestamos_list") or [],
-            fecha_corte=fecha_corte_d,
-            amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
-            pagos_realizados=datos.get("pagos_realizados") or [],
-            recibos=recibos,
-            recibo_token=None,
-            base_url="",
-        )
-        fname = f"estado_cuenta_{cedula_display.replace('-', '_')}.pdf"
         asunto = f"Estado de cuenta - {fecha_corte_d.isoformat()} (Recibos)"
         body = (
             f"Estimado(a) {nombre},\n\n"
@@ -250,6 +257,46 @@ def ejecutar_recibos_envio_slot(
                 }
             )
             continue
+
+        try:
+            recibos = obtener_recibos_cliente_estado_cuenta(db, cedula_norm)
+            pdf_bytes = generar_pdf_estado_cuenta(
+                cedula=cedula_display,
+                nombre=nombre,
+                prestamos=datos.get("prestamos_list") or [],
+                fecha_corte=fecha_corte_d,
+                amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
+                pagos_realizados=datos.get("pagos_realizados") or [],
+                recibos=recibos,
+                recibo_token=None,
+                base_url="",
+            )
+        except Exception as e:
+            logger.exception(
+                "recibos: error generando PDF estado de cuenta cedula_norm=%s",
+                cedula_norm,
+            )
+            omitidos_error_estado_cuenta += 1
+            detalles.append(
+                {
+                    "cedula": cedula_norm,
+                    "motivo": "error_generacion_pdf_ec",
+                    "error": str(e)[:500],
+                }
+            )
+            continue
+
+        if not pdf_bytes or len(pdf_bytes) < 8 or not pdf_bytes.startswith(b"%PDF"):
+            logger.error(
+                "recibos: PDF invalido o vacio cedula_norm=%s len=%s",
+                cedula_norm,
+                len(pdf_bytes or b""),
+            )
+            omitidos_error_estado_cuenta += 1
+            detalles.append({"cedula": cedula_norm, "motivo": "pdf_invalido_ec"})
+            continue
+
+        fname = f"estado_cuenta_{cedula_display.replace('-', '_')}.pdf"
 
         ok, err = send_email(
             [e.strip() for e in emails if e and isinstance(e, str) and "@" in e.strip()],
@@ -295,6 +342,7 @@ def ejecutar_recibos_envio_slot(
         "omitidos_ya_enviado": omitidos_ya_enviado,
         "omitidos_desistimiento": omitidos_desistimiento,
         "omitidos_sin_datos": omitidos_sin_datos,
+        "omitidos_error_estado_cuenta": omitidos_error_estado_cuenta,
         "detalles": detalles[:200],
     }
 
