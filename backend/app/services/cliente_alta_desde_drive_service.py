@@ -22,7 +22,7 @@ from app.models.cliente import Cliente
 from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.models.drive import DriveRow
 from app.models.drive_clientes_candidatos_cache import DriveClientesCandidatosCache
-from app.schemas.cliente import ClienteCreate
+from app.schemas.cliente import ClienteCreate, ClienteDriveImportarFilaBody
 
 logger = logging.getLogger(__name__)
 
@@ -414,6 +414,150 @@ def importar_seleccion_desde_drive(
         "insertados_ok": ok,
         "errores": err,
         "resultados": resultados,
+    }
+
+
+def importar_fila_desde_drive(
+    db: Session,
+    *,
+    usuario_email: str,
+    body: ClienteDriveImportarFilaBody,
+) -> Dict[str, Any]:
+    """Inserta un cliente con ClienteCreate + auditoría; la cédula normalizada debe coincidir con `cedula_cmp` de la fila."""
+    from app.api.v1.endpoints.clientes import (
+        _normalizar_cedula_carga_masiva,
+        create_cliente_from_payload,
+    )
+
+    snap = listar_candidatos_desde_drive(db)
+    by_row = {int(c["sheet_row_number"]): c for c in (snap.get("candidatos") or [])}
+    info = by_row.get(int(body.sheet_row_number))
+    if info is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Fila no disponible para importación (no está en candidatos o la lista cambió).",
+        )
+    if not info.get("seleccionable"):
+        raise HTTPException(
+            status_code=400,
+            detail="La fila no es importable: cédula inválida o duplicada en la hoja.",
+        )
+
+    cmp_expected = str(info.get("cedula_cmp") or "")
+    cmp_sent = _normalizar_cedula_carga_masiva(body.cedula or "")
+    if cmp_sent != cmp_expected:
+        raise HTTPException(
+            status_code=400,
+            detail="La cédula enviada no coincide con la columna E de esta fila (tras normalización).",
+        )
+
+    cedula_crear = str(info.get("cedula_para_crear") or body.cedula or "").strip()
+    notas_final = (body.notas or "").strip()
+    if not notas_final:
+        notas_final = (
+            f"Alta desde Notificaciones > Clientes (Drive CONCILIACIÓN). "
+            f"Fila hoja {body.sheet_row_number}. "
+            f"Email columna G: {info.get('col_g_email')!r}."
+        )
+
+    batch_id = str(uuid.uuid4())
+    comentario_final = (body.comentario or "").strip() or None
+
+    try:
+        payload = ClienteCreate(
+            cedula=cedula_crear,
+            nombres=body.nombres,
+            telefono=body.telefono,
+            email=body.email,
+            email_secundario=body.email_secundario,
+            direccion=body.direccion,
+            fecha_nacimiento=body.fecha_nacimiento,
+            ocupacion=body.ocupacion,
+            estado=(body.estado or "ACTIVO").strip().upper(),
+            usuario_registro=usuario_email,
+            notas=notas_final,
+        )
+    except ValidationError as ve:
+        raise HTTPException(status_code=422, detail=ve.errors()) from ve
+
+    try:
+        row = create_cliente_from_payload(db, payload)
+        db.add(
+            AuditoriaClienteAltaDesdeDrive(
+                batch_id=batch_id,
+                sheet_row_number=int(body.sheet_row_number),
+                cedula=str(row.cedula),
+                nombres=str(row.nombres),
+                telefono=str(row.telefono),
+                email=str(row.email),
+                comentario=comentario_final,
+                usuario_email=usuario_email,
+                estado="APROBADO_INSERTADO",
+                detalle_error=None,
+            )
+        )
+        db.commit()
+    except HTTPException as he:
+        err_detail = he.detail
+        if not isinstance(err_detail, str):
+            err_detail = str(err_detail)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        db.add(
+            AuditoriaClienteAltaDesdeDrive(
+                batch_id=batch_id,
+                sheet_row_number=int(body.sheet_row_number),
+                cedula=cedula_crear,
+                nombres=body.nombres,
+                telefono=body.telefono,
+                email=body.email,
+                comentario=comentario_final,
+                usuario_email=usuario_email,
+                estado="APROBADO_ERROR",
+                detalle_error=err_detail[:4000],
+            )
+        )
+        db.commit()
+        raise
+    except Exception as ex:  # pragma: no cover
+        logger.exception("importar_fila_desde_drive fila=%s: %s", body.sheet_row_number, ex)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        db.add(
+            AuditoriaClienteAltaDesdeDrive(
+                batch_id=batch_id,
+                sheet_row_number=int(body.sheet_row_number),
+                cedula=cedula_crear,
+                nombres=body.nombres,
+                telefono=body.telefono,
+                email=body.email,
+                comentario=comentario_final,
+                usuario_email=usuario_email,
+                estado="APROBADO_ERROR",
+                detalle_error=str(ex)[:4000],
+            )
+        )
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(ex)) from ex
+
+    try:
+        refrescar_cache_candidatos_drive(db)
+    except Exception:
+        logger.warning(
+            "[drive_clientes_candidatos_cache] no se pudo refrescar tras importar-fila batch_id=%s",
+            batch_id,
+            exc_info=True,
+        )
+
+    return {
+        "ok": True,
+        "batch_id": batch_id,
+        "cliente_id": row.id,
+        "cedula": row.cedula,
     }
 
 

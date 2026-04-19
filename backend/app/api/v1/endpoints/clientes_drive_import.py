@@ -5,14 +5,16 @@ Solo administradores. Los datos base provienen de la tabla `drive` (sync existen
 """
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.schemas.auth import UserResponse
+from app.schemas.cliente import ClienteDriveImportarFilaBody
 from app.services.cliente_alta_desde_drive_service import (
+    importar_fila_desde_drive,
     importar_seleccion_desde_drive,
     listar_auditoria,
     obtener_candidatos_drive_para_api,
@@ -61,6 +63,17 @@ def post_drive_clientes_importar(
         comentario=(body.comentario or "").strip() or None,
         sheet_rows=body.sheet_row_numbers or [],
     )
+
+
+@router.post("/importar-fila", summary="Insertar un candidato con payload tipo ClienteCreate (admin)")
+def post_drive_clientes_importar_fila(
+    body: ClienteDriveImportarFilaBody,
+    db: Session = Depends(get_db),
+    current: UserResponse = Depends(require_admin),
+):
+    """Validación Pydantic alineada a `ClienteCreate`; la cédula debe corresponder a la fila E del snapshot."""
+    email = (current.email or "").strip() or "admin@sistema"
+    return importar_fila_desde_drive(db, usuario_email=email, body=body)
 
 
 @router.get("/auditoria", summary="Historial de importaciones desde Drive")

@@ -205,7 +205,7 @@ class ClienteResponse(BaseModel):
 class ClienteDriveImportarFilaBody(BaseModel):
     """Cuerpo para POST /clientes/drive-import/importar-fila (validación alineada a ClienteCreate)."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     sheet_row_number: int = Field(..., ge=1)
     cedula: str

@@ -556,6 +556,29 @@ class ClienteService {
     return apiClient.post(`${this.baseUrl}/drive-import/refresh-cache`, {})
   }
 
+  /** Alta de una fila con payload validado como ClienteCreate (mismo POST /clientes). Solo admin. */
+  async postDriveImportImportarFila(body: {
+    sheet_row_number: number
+    cedula: string
+    nombres: string
+    telefono: string
+    email: string
+    email_secundario?: string | null
+    direccion: string
+    fecha_nacimiento: string
+    ocupacion: string
+    estado?: string
+    notas?: string | null
+    comentario?: string | null
+  }): Promise<{
+    ok: boolean
+    batch_id: string
+    cliente_id: number
+    cedula: string
+  }> {
+    return apiClient.post(`${this.baseUrl}/drive-import/importar-fila`, body)
+  }
+
   async postDriveImportImportar(body: {
     sheet_row_numbers: number[]
     comentario?: string | null
