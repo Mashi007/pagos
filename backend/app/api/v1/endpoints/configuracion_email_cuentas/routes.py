@@ -53,6 +53,7 @@ _DEFAULTS_EMAIL_V2_GLOBALS: dict[str, Any] = {
     "modo_pruebas_tickets": "false",
     "modo_pruebas_recibos": "false",
     "tickets_notify_emails": "",
+    "recibos_bcc_emails": [],
 }
 
 
@@ -63,6 +64,11 @@ def _email_v2_globals_for_api(data: dict) -> dict[str, Any]:
         out[k] = data.get(k, default)
     if data.get("emails_pruebas") is not None:
         out["emails_pruebas"] = data.get("emails_pruebas")
+    rbe = data.get("recibos_bcc_emails")
+    if isinstance(rbe, list):
+        out["recibos_bcc_emails"] = rbe
+    else:
+        out["recibos_bcc_emails"] = []
     return out
 
 
@@ -162,6 +168,35 @@ class EmailCuentasUpdate(BaseModel):
     modo_pruebas_tickets: Optional[str] = None
     modo_pruebas_recibos: Optional[str] = None
     emails_pruebas: Optional[List[str]] = None
+    recibos_bcc_emails: Optional[List[str]] = None
+
+
+def _normalizar_recibos_bcc_emails(raw: Any) -> List[str]:
+    """Hasta 2 correos válidos en CCO (BCC) para envíos Recibos; sin duplicados (case-insensitive)."""
+    parts: List[str] = []
+    if isinstance(raw, list):
+        for x in raw:
+            s = (str(x) if x is not None else "").strip()
+            if s:
+                parts.append(s)
+    elif isinstance(raw, str) and raw.strip():
+        for chunk in raw.replace(";", ",").split(","):
+            s = chunk.strip()
+            if s:
+                parts.append(s)
+    out: List[str] = []
+    seen_lower: set[str] = set()
+    for p in parts:
+        if "@" not in p or "." not in p.split("@", 1)[-1]:
+            continue
+        low = p.lower()
+        if low in seen_lower:
+            continue
+        seen_lower.add(low)
+        out.append(p)
+        if len(out) >= 2:
+            break
+    return out
 
 
 def _is_password_masked(v: Any) -> bool:
@@ -272,6 +307,8 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
     payload_data["version"] = 2
     payload_data["cuentas"] = cuentas_para_bd
     payload_data["asignacion"] = asignacion
+    if "recibos_bcc_emails" in body:
+        payload_data["recibos_bcc_emails"] = _normalizar_recibos_bcc_emails(body.get("recibos_bcc_emails"))
     for dk, dv in _DEFAULTS_EMAIL_V2_GLOBALS.items():
         if dk not in payload_data or payload_data[dk] is None:
             payload_data[dk] = dv

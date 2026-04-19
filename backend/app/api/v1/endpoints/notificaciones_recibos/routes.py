@@ -24,12 +24,20 @@ class RecibosEjecutarBody(BaseModel):
         None,
         description=(
             "Día calendario Caracas (YYYY-MM-DD). Listado y simulación: opcional (omisión = hoy). "
-            "Envío real: ignorado en servidor — solo hoy, alineado al job programado y fecha_registro."
+            "Envío real de hoy: opcional (omisión = hoy). "
+            "Envío real de un día pasado: obligatorio y además forzar_envio_fecha_pasada=true."
         ),
     )
     solo_simular: bool = Field(
         False,
         description="Si true: no envía correos ni escribe recibos_email_envio.",
+    )
+    forzar_envio_fecha_pasada: bool = Field(
+        False,
+        description=(
+            "Solo envío real: confirma envío SMTP para fecha_caracas estrictamente anterior a hoy Caracas. "
+            "Los jobs automáticos no usan este flag."
+        ),
     )
 
 
@@ -65,7 +73,10 @@ def get_recibos_listado(
 
 @router.post("/ejecutar")
 def post_recibos_ejecutar(body: RecibosEjecutarBody, db: Session = Depends(get_db)):
-    """Ejecuta el mismo lote que el job programado (admin). Envío real: solo fecha de hoy Caracas."""
+    """
+    Ejecuta el lote Recibos (admin). Simulación: cualquier fecha válida.
+    Envío real: hoy sin flag extra; día pasado solo con forzar_envio_fecha_pasada=true (no fechas futuras).
+    """
     hoy = hoy_negocio()
     try:
         d = parse_fecha_referencia_negocio(body.fecha_caracas) if body.fecha_caracas else hoy
@@ -73,18 +84,28 @@ def post_recibos_ejecutar(body: RecibosEjecutarBody, db: Session = Depends(get_d
         raise HTTPException(status_code=422, detail=str(e)) from e
     if d is None:
         d = hoy
-    if not body.solo_simular and d != hoy:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "El envío real de Recibos solo permite la fecha de hoy (America/Caracas), "
-                "la misma que usa el job programado para fecha_registro de recepción. "
-                "Use «Solo simular» para revisar otras fechas, u omita fecha_caracas al ejecutar hoy."
-            ),
-        )
+    if not body.solo_simular:
+        if d > hoy:
+            raise HTTPException(
+                status_code=422,
+                detail="No se permite envío real de Recibos para una fecha futura (America/Caracas).",
+            )
+        if d < hoy and not body.forzar_envio_fecha_pasada:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Envío real para un día pasado requiere forzar_envio_fecha_pasada=true en el cuerpo "
+                    "y fecha_caracas explícita. Use «Solo simular» para revisar sin SMTP, o el botón "
+                    "de envío manual de lote pasado en la interfaz."
+                ),
+            )
+    permite_pasado = bool(
+        not body.solo_simular and d < hoy and body.forzar_envio_fecha_pasada
+    )
     return ejecutar_recibos_envio_slot(
         db,
         fecha_dia=d,
         slot=body.slot,
         solo_simular=body.solo_simular,
+        permite_envio_real_fecha_no_hoy=permite_pasado,
     )

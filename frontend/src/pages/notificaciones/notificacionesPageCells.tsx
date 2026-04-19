@@ -51,6 +51,7 @@ export type NotificacionesCuotasSortCol =
   | 'nombre'
   | 'cedula'
   | 'fecha_registro'
+  | 'monto_pagado'
 
 export function SortArrowsCuotas({
   column,

@@ -40,13 +40,16 @@ def prestamo_muestra_tabla_amortizacion(estado_prestamo: str) -> bool:
 
 
 def obtener_recibos_cliente_estado_cuenta(db: Session, cedula_lookup: str) -> List[dict]:
-    """Pagos reportados del cliente (cedula sin guion) con recibo PDF, para enlaces en estado de cuenta."""
-    cedula_concat = func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula)
+    """Pagos reportados del cliente (cédula comparable a ``texto_cedula_comparable_bd``) con recibo PDF."""
+    cedula_concat = func.concat(
+        func.coalesce(PagoReportado.tipo_cedula, ""),
+        func.coalesce(PagoReportado.numero_cedula, ""),
+    )
     rows = db.execute(
         select(PagoReportado)
         .where(
             and_(
-                cedula_concat == cedula_lookup,
+                expr_cedula_normalizada_para_comparar(cedula_concat) == cedula_lookup,
                 PagoReportado.recibo_pdf.isnot(None),
             )
         )

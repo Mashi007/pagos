@@ -1,6 +1,7 @@
 """
 Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana (Caracas),
-con nombre/cédula, fecha de registro, comprobante (link o documento) y préstamo para PDF.
+con nombre/cédula, fecha de registro, monto pagado, comprobante (misma resolución de URL que GET /pagos)
+y préstamo para PDF.
 KPIs de correos desde envios_notificacion tipo_tab=recibos.
 """
 from __future__ import annotations
@@ -18,6 +19,14 @@ from app.models.cuota_pago import CuotaPago
 from app.models.envio_notificacion import EnvioNotificacion
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+from app.api.v1.endpoints.pagos.pago_serializacion_respuesta import (
+    _enriquecer_pagos_pago_reportado_id,
+    _pago_to_response,
+)
+from app.services.pagos.comprobante_link_desde_gmail import (
+    enriquecer_items_link_comprobante_desde_gmail,
+    enriquecer_items_link_comprobante_desde_pago_reportado,
+)
 from app.services.recibos_conciliacion_email_job import (
     RecibosSlot,
     _bounds_fecha_registro_caracas,
@@ -165,10 +174,15 @@ def listar_recibos_ventana_con_ui(
         for cl in db.scalars(select(Cliente).where(Cliente.id.in_(sorted(cliente_ids_needed)))).all():
             clientes[int(cl.id)] = cl
 
+    snapshots = [_pago_to_response(p) for p in pagos_orm]
+    _enriquecer_pagos_pago_reportado_id(db, snapshots)
+    enriquecer_items_link_comprobante_desde_gmail(db, snapshots)
+    enriquecer_items_link_comprobante_desde_pago_reportado(db, snapshots)
+
     filas: List[Dict[str, Any]] = []
     ced_norms: set[str] = set()
 
-    for pg in pagos_orm:
+    for pg, snap in zip(pagos_orm, snapshots):
         ced = (getattr(pg, "cedula_cliente", None) or "").strip()
         ced_norm = texto_cedula_comparable_bd(ced)
         if ced_norm:
@@ -198,23 +212,24 @@ def listar_recibos_ventana_con_ui(
 
         cid_final = int(cliente_id) if cliente_id is not None else (int(cl.id) if cl is not None else 0)
 
-        lc = getattr(pg, "link_comprobante", None)
-        dr = getattr(pg, "documento_ruta", None)
-        dn = getattr(pg, "documento_nombre", None)
-        dt = getattr(pg, "documento_tipo", None)
+        lc = (snap.get("link_comprobante") or "").strip() or None
+        dr = (snap.get("documento_ruta") or "").strip() or None
+        dn = (snap.get("documento_nombre") or "").strip() or None
+        dt = (snap.get("documento_tipo") or "").strip() or None
 
         fila: Dict[str, Any] = {
             "pago_id": int(pg.id),
             "cedula": ced,
             "cedula_normalizada": ced_norm,
             "fecha_registro": pg.fecha_registro.isoformat() if pg.fecha_registro else None,
+            "monto_pagado": float(getattr(pg, "monto_pagado", 0) or 0),
             "prestamo_id": pid,
             "cliente_id": cid_final,
             "nombre": nombre,
-            "link_comprobante": (lc or "").strip() or None,
-            "documento_ruta": (dr or "").strip() or None,
-            "documento_nombre": (dn or "").strip() or None,
-            "documento_tipo": (dt or "").strip() or None,
+            "link_comprobante": lc,
+            "documento_ruta": dr,
+            "documento_nombre": dn,
+            "documento_tipo": dt,
         }
         filas.append(fila)
 

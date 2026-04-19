@@ -111,6 +111,7 @@ from app.services.cobros.pago_reportado_documento import (
 )
 from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_gmail,
+    enriquecer_items_link_comprobante_desde_pago_reportado,
 )
 from app.services.cuota_pago_integridad import (
     pago_tiene_aplicaciones_cuotas,
@@ -519,6 +520,8 @@ def listar_pagos(
         _enriquecer_pagos_pago_reportado_id(db, items)
 
         enriquecer_items_link_comprobante_desde_gmail(db, items)
+
+        enriquecer_items_link_comprobante_desde_pago_reportado(db, items)
 
         total_pages = (total + per_page - 1) // per_page if total else 0
 

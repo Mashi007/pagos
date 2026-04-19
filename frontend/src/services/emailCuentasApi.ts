@@ -105,6 +105,10 @@ export interface EmailCuentasResponse {
   /** Lista opcional de correos de prueba (config avanzada). */
 
   emails_pruebas?: string[]
+
+  /** Hasta 2 correos en copia oculta (CCO/BCC) para envíos automáticos Recibos. */
+
+  recibos_bcc_emails?: string[]
 }
 
 const BASE = '/api/v1/configuracion'
@@ -160,6 +164,8 @@ export const emailCuentasApi = {
     tickets_notify_emails?: string
 
     emails_pruebas?: string[]
+
+    recibos_bcc_emails?: string[]
   }): Promise<{ message: string; version: number }> {
     return apiClient.put(`${BASE}/email/cuentas`, payload, { timeout: 60000 })
   },

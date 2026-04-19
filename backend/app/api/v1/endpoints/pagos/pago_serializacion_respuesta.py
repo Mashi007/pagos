@@ -14,6 +14,7 @@ from app.services.cobros.pago_reportado_documento import claves_documento_pago_d
 from app.services.cuota_pago_integridad import pago_tiene_aplicaciones_cuotas
 from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_gmail,
+    enriquecer_items_link_comprobante_desde_pago_reportado,
 )
 
 
@@ -156,4 +157,5 @@ def _pago_response_enriquecido(
     out["tiene_aplicacion_cuotas"] = pago_tiene_aplicaciones_cuotas(db, row.id)
     _enriquecer_pagos_pago_reportado_id(db, [out])
     enriquecer_items_link_comprobante_desde_gmail(db, [out])
+    enriquecer_items_link_comprobante_desde_pago_reportado(db, [out])
     return out

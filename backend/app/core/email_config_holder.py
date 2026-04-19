@@ -291,16 +291,42 @@ def update_from_api(data: dict[str, Any]) -> None:
             for k, v in data["cuentas"][0].items():
                 if k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl", "smtp_use_tls"):
                     _current[k] = v
-        for k in ("modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo", "tickets_notify_emails", "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta", "email_activo_finiquito", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets", "email_activo_recibos", "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta", "modo_pruebas_finiquito", "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets", "modo_pruebas_recibos"):
+        for k in (
+            "modo_pruebas",
+            "email_pruebas",
+            "emails_pruebas",
+            "email_activo",
+            "tickets_notify_emails",
+            "email_activo_notificaciones",
+            "email_activo_informe_pagos",
+            "email_activo_estado_cuenta",
+            "email_activo_finiquito",
+            "email_activo_cobros",
+            "email_activo_campanas",
+            "email_activo_tickets",
+            "email_activo_recibos",
+            "modo_pruebas_notificaciones",
+            "modo_pruebas_informe_pagos",
+            "modo_pruebas_estado_cuenta",
+            "modo_pruebas_finiquito",
+            "modo_pruebas_cobros",
+            "modo_pruebas_campanas",
+            "modo_pruebas_tickets",
+            "modo_pruebas_recibos",
+        ):
             if k in data and data[k] is not None:
                 _current[k] = data[k]
+        if "recibos_bcc_emails" in data:
+            v = data["recibos_bcc_emails"]
+            _current["recibos_bcc_emails"] = v if isinstance(v, list) else []
         if _current.get("smtp_port") is not None:
             _current["smtp_port"] = str(_current["smtp_port"])
         return
     """Actualiza el holder desde la API de configuraciï¿½n (PUT /configuracion/email/configuracion)."""
     keys = (
         "smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name",
-        "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo",
+        "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "recibos_bcc_emails",
+        "email_activo",
         "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta",
         "email_activo_finiquito", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets",
         "email_activo_recibos",
@@ -362,6 +388,28 @@ def prepare_for_api_response(data: dict[str, Any]) -> dict[str, Any]:
             result[field] = _mask_sensitive_value(result[field])
     
     return result
+
+
+def get_recibos_bcc_emails() -> List[str]:
+    """Correos en copia oculta (CCO/BCC) para envíos del servicio Recibos (máx. 2, desde email_config)."""
+    sync_from_db()
+    raw = _current.get("recibos_bcc_emails")
+    if not isinstance(raw, list):
+        return []
+    out: List[str] = []
+    seen: set[str] = set()
+    for x in raw:
+        s = (str(x) if x is not None else "").strip()
+        if not s or "@" not in s:
+            continue
+        low = s.lower()
+        if low in seen:
+            continue
+        seen.add(low)
+        out.append(s)
+        if len(out) >= 2:
+            break
+    return out
 
 
 def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[str]]:

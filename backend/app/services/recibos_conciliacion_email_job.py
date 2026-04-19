@@ -19,7 +19,9 @@ PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``gen
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from datetime import date, datetime, time
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -27,7 +29,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.email import send_email
-from app.core.email_config_holder import get_email_activo_servicio
+from app.core.email_config_holder import get_email_activo_servicio, get_modo_pruebas_email
 from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
@@ -45,6 +47,13 @@ from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 logger = logging.getLogger(__name__)
 
 RecibosSlot = Literal["manana", "tarde", "noche"]
+
+
+@lru_cache(maxsize=1)
+def _cuerpo_html_recibos_confirmacion() -> str:
+    """Plantilla HTML fija del correo Recibos (confirmación de pago + estado de cuenta adjunto)."""
+    path = Path(__file__).resolve().with_name("recibos_confirmacion_pago_email.html")
+    return path.read_text(encoding="utf-8")
 
 
 def _bounds_fecha_registro_caracas(
@@ -135,16 +144,26 @@ def ejecutar_recibos_envio_slot(
     fecha_dia: date,
     slot: RecibosSlot,
     solo_simular: bool = False,
+    permite_envio_real_fecha_no_hoy: bool = False,
 ) -> Dict[str, Any]:
     """
     Por cada cédula distinta con pagos en ventana: genera estado de cuenta y envía a correos del cliente.
-    Si ``solo_simular`` es True, no persiste ``recibos_email_envio`` ni envía SMTP ni genera PDF
-    (solo valida datos de cliente y destinatarios).
+    Si ``solo_simular`` es True: no persiste ``recibos_email_envio`` ni idempotencia de envío real;
+    sí genera el **mismo PDF** de estado de cuenta que el envío real. Si además está activo
+    **modo pruebas Recibos** (config Email) con correos de prueba, envía **una muestra por SMTP**
+    (mismo adjunto y HTML) redirigido a esos correos. Si modo pruebas está apagado, solo devuelve
+    detalle con tamaño del PDF y destinatarios del cliente (sin SMTP).
 
-    Envío real: ``fecha_dia`` debe coincidir con ``hoy_negocio()`` (recepción día actual = criterio del job programado).
+    Envío real: por defecto ``fecha_dia`` debe ser ``hoy_negocio()`` (jobs programados). El endpoint
+    admin puede pasar ``permite_envio_real_fecha_no_hoy=True`` para reenviar un lote de recepción de
+    un día anterior (misma ventana ``fecha_registro`` y ``slot``).
     """
     hoy = hoy_negocio()
-    if not solo_simular and fecha_dia != hoy:
+    if (
+        not solo_simular
+        and fecha_dia != hoy
+        and not permite_envio_real_fecha_no_hoy
+    ):
         logger.info(
             "recibos: envío real rechazado — fecha_dia=%s ≠ hoy Caracas %s (solo recepción del día del job).",
             fecha_dia.isoformat(),
@@ -166,6 +185,7 @@ def ejecutar_recibos_envio_slot(
             "omitidos_desistimiento": 0,
             "omitidos_sin_datos": 0,
             "omitidos_error_estado_cuenta": 0,
+            "omitidos_cedula_desalineada": 0,
             "detalles": [],
         }
 
@@ -193,6 +213,7 @@ def ejecutar_recibos_envio_slot(
             "omitidos_desistimiento": 0,
             "omitidos_sin_datos": 0,
             "omitidos_error_estado_cuenta": 0,
+            "omitidos_cedula_desalineada": 0,
             "detalles": [],
         }
 
@@ -212,6 +233,7 @@ def ejecutar_recibos_envio_slot(
             "omitidos_desistimiento": 0,
             "omitidos_sin_datos": 0,
             "omitidos_error_estado_cuenta": 0,
+            "omitidos_cedula_desalineada": 0,
             "detalles": [],
         }
     enviados = 0
@@ -221,6 +243,7 @@ def ejecutar_recibos_envio_slot(
     omitidos_desistimiento = 0
     omitidos_sin_datos = 0
     omitidos_error_estado_cuenta = 0
+    omitidos_cedula_desalineada = 0
     detalles: List[Dict[str, Any]] = []
 
     for cedula_norm in cedulas:
@@ -263,7 +286,36 @@ def ejecutar_recibos_envio_slot(
             detalles.append({"cedula": cedula_norm, "motivo": "desistimiento"})
             continue
 
+        cedula_raw_ventana = next(
+            (
+                (p.get("cedula") or "").strip()
+                for p in pagos
+                if (p.get("cedula_normalizada") or "").strip() == cedula_norm
+            ),
+            "",
+        )
         cedula_display = (datos.get("cedula_display") or "").strip()
+        cedula_para_comparar = cedula_display or cedula_raw_ventana
+        if texto_cedula_comparable_bd(cedula_para_comparar) != cedula_norm:
+            omitidos_cedula_desalineada += 1
+            logger.error(
+                "recibos: cédula del estado de cuenta no coincide con pagos en ventana (no se envía): "
+                "cedula_norm=%s cedula_cliente=%s cedula_pago_ventana=%s",
+                cedula_norm,
+                cedula_display or "(vacío)",
+                cedula_raw_ventana or "(vacío)",
+            )
+            detalles.append(
+                {
+                    "cedula": cedula_norm,
+                    "motivo": "cedula_desalineada",
+                    "cedula_cliente": cedula_display or None,
+                    "cedula_pago_ventana": cedula_raw_ventana or None,
+                }
+            )
+            continue
+
+        cedula_pdf = cedula_display or cedula_raw_ventana or cedula_norm
         nombre = (datos.get("nombre") or "").strip()
         fecha_corte = datos.get("fecha_corte") or fecha_dia
         if isinstance(fecha_corte, datetime):
@@ -272,28 +324,16 @@ def ejecutar_recibos_envio_slot(
             fecha_corte_d = fecha_corte if isinstance(fecha_corte, date) else fecha_dia
 
         asunto = f"Estado de cuenta - {fecha_corte_d.isoformat()} (Recibos)"
-        body = (
-            f"Estimado(a) {nombre},\n\n"
-            f"Adjuntamos su estado de cuenta actualizado a la fecha de corte {fecha_corte_d.isoformat()} "
-            f"por registro de pago(s) conciliado(s) en el sistema.\n\n"
-            f"Saludos,\nRapiCredit"
+        html_body = _cuerpo_html_recibos_confirmacion()
+        body_plain = (
+            "Confirmación de pago – RapiCredit. Adjunto: estado de cuenta actualizado (PDF). "
+            f"Cédula: {cedula_pdf}. Fecha de corte: {fecha_corte_d.isoformat()}."
         )
-
-        if solo_simular:
-            detalles.append(
-                {
-                    "cedula": cedula_norm,
-                    "motivo": "simulacion_ok",
-                    "emails": emails,
-                    "pagos_en_ventana": len([p for p in pagos if p.get("cedula_normalizada") == cedula_norm]),
-                }
-            )
-            continue
 
         try:
             recibos = obtener_recibos_cliente_estado_cuenta(db, cedula_norm)
             pdf_bytes = generar_pdf_estado_cuenta(
-                cedula=cedula_display,
+                cedula=cedula_pdf,
                 nombre=nombre,
                 prestamos=datos.get("prestamos_list") or [],
                 fecha_corte=fecha_corte_d,
@@ -328,18 +368,60 @@ def ejecutar_recibos_envio_slot(
             detalles.append({"cedula": cedula_norm, "motivo": "pdf_invalido_ec"})
             continue
 
-        fname = f"estado_cuenta_{cedula_display.replace('-', '_')}.pdf"
-
+        fname_seguro = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in cedula_pdf)[:80]
+        fname = f"estado_cuenta_{fname_seguro.replace('-', '_')}.pdf"
         to_list = [e.strip() for e in emails if e and isinstance(e, str) and "@" in e.strip()]
+
+        if solo_simular:
+            mp_prueba, emails_muestra = get_modo_pruebas_email(servicio="recibos")
+            n_pagos_ced = len([p for p in pagos if p.get("cedula_normalizada") == cedula_norm])
+            if mp_prueba and emails_muestra:
+                smtp_meta_sim: Dict[str, Any] = {}
+                ok_sim, err_sim = send_email(
+                    to_list,
+                    asunto,
+                    body_plain,
+                    body_html=html_body,
+                    attachments=[(fname, pdf_bytes)],
+                    servicio="recibos",
+                    tipo_tab="recibos",
+                    respetar_destinos_manuales=False,
+                    smtp_session_metadata=smtp_meta_sim,
+                )
+                detalles.append(
+                    {
+                        "cedula": cedula_norm,
+                        "motivo": "simulacion_muestra_smtp_ok" if ok_sim else "simulacion_muestra_smtp_fallo",
+                        "error": None if ok_sim else (err_sim or "")[:500],
+                        "pdf_bytes": len(pdf_bytes),
+                        "emails_cliente": emails,
+                        "emails_muestra_modo_pruebas": emails_muestra,
+                        "pagos_en_ventana": n_pagos_ced,
+                    }
+                )
+            else:
+                detalles.append(
+                    {
+                        "cedula": cedula_norm,
+                        "motivo": "simulacion_ok",
+                        "emails": emails,
+                        "pdf_bytes": len(pdf_bytes),
+                        "pagos_en_ventana": n_pagos_ced,
+                        "nota": "Active modo pruebas Recibos y correos de prueba en Configuración > Email para enviar muestra SMTP con el mismo PDF y HTML.",
+                    }
+                )
+            continue
+
         smtp_meta: Dict[str, Any] = {}
         ok, err = send_email(
             to_list,
             asunto,
-            body,
+            body_plain,
+            body_html=html_body,
             attachments=[(fname, pdf_bytes)],
             servicio="recibos",
             tipo_tab="recibos",
-            respetar_destinos_manuales=True,
+            respetar_destinos_manuales=False,
             smtp_session_metadata=smtp_meta,
         )
         email_log = ", ".join(to_list)[:255] if to_list else ""
@@ -362,7 +444,7 @@ def ejecutar_recibos_envio_slot(
                 error_mensaje=None if ok else (err or "")[:5000],
                 prestamo_id=pid_log,
                 correlativo=None,
-                mensaje_texto=(body or "")[:8000] if body else None,
+                mensaje_texto=(body_plain or "")[:8000] if body_plain else None,
                 metadata_tecnica=smtp_meta if smtp_meta else None,
             )
         )
@@ -402,6 +484,7 @@ def ejecutar_recibos_envio_slot(
         "omitidos_desistimiento": omitidos_desistimiento,
         "omitidos_sin_datos": omitidos_sin_datos,
         "omitidos_error_estado_cuenta": omitidos_error_estado_cuenta,
+        "omitidos_cedula_desalineada": omitidos_cedula_desalineada,
         "detalles": detalles[:200],
     }
 

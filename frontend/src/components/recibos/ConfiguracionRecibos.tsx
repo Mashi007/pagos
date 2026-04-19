@@ -46,12 +46,28 @@ export const RECIBOS_CONFIG_EMAIL_CUENTAS_QUERY_KEY = [
   'configEmailCuentas',
 ] as const
 
+function normalizarBccRecibosParaGuardar(a: string, b: string): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of [a, b]) {
+    const t = String(raw ?? '').trim()
+    if (!t || !t.includes('@')) continue
+    const low = t.toLowerCase()
+    if (seen.has(low)) continue
+    seen.add(low)
+    out.push(t)
+    if (out.length >= 2) break
+  }
+  return out
+}
+
 function buildPutPayload(
   cur: EmailCuentasResponse,
   patch: {
     email_activo_recibos: string
     modo_pruebas_recibos: string
     recibos_cuenta: number
+    recibos_bcc_emails: string[]
   }
 ) {
   const a = cur.asignacion ?? { cobros: 1, estado_cuenta: 2, notificaciones_tab: {} }
@@ -84,6 +100,7 @@ function buildPutPayload(
     modo_pruebas_tickets: cur.modo_pruebas_tickets,
     modo_pruebas_recibos: patch.modo_pruebas_recibos,
     tickets_notify_emails: cur.tickets_notify_emails,
+    recibos_bcc_emails: patch.recibos_bcc_emails,
   }
 }
 
@@ -141,6 +158,8 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
   const [guardando, setGuardando] = useState(false)
   const [emailPrueba, setEmailPrueba] = useState('')
   const [probando, setProbando] = useState(false)
+  const [recibosBcc1, setRecibosBcc1] = useState('')
+  const [recibosBcc2, setRecibosBcc2] = useState('')
 
   useEffect(() => {
     if (!data) return
@@ -149,6 +168,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     setCuentaRecibos(
       typeof data.asignacion?.recibos === 'number' ? data.asignacion.recibos : 3
     )
+    const bcc = Array.isArray(data.recibos_bcc_emails) ? data.recibos_bcc_emails : []
+    setRecibosBcc1(String(bcc[0] ?? '').trim())
+    setRecibosBcc2(String(bcc[1] ?? '').trim())
   }, [data])
 
   useEffect(() => {
@@ -177,6 +199,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           email_activo_recibos: emailActivoRecibos ? 'true' : 'false',
           modo_pruebas_recibos: modoPruebasRecibos ? 'true' : 'false',
           recibos_cuenta: cuentaRecibos,
+          recibos_bcc_emails: normalizarBccRecibosParaGuardar(recibosBcc1, recibosBcc2),
         })
       )
       toast.success('Configuración guardada')
@@ -192,6 +215,8 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     data,
     emailActivoRecibos,
     modoPruebasRecibos,
+    recibosBcc1,
+    recibosBcc2,
     qc,
     refetch,
   ])
@@ -387,6 +412,46 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 <SelectItem value="4">Cuenta 4 (Notificaciones)</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-slate-200 bg-white/80 p-3">
+            <p className="text-sm font-medium text-gray-800">Copia oculta (CCO) en envíos Recibos</p>
+            <p className="text-xs text-gray-600">
+              Opcional: hasta 2 correos que recibirán copia oculta de cada envío Recibos (mismo adjunto y
+              cuerpo). Se guardan en la configuración de email y se aplican al enviar por SMTP.
+            </p>
+            <div className="grid max-w-xl gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="rec-bcc-1" className="text-xs font-medium text-gray-600">
+                  CCO opción 1
+                </label>
+                <Input
+                  id="rec-bcc-1"
+                  type="email"
+                  autoComplete="off"
+                  placeholder="correo@ejemplo.com"
+                  value={recibosBcc1}
+                  onChange={e => setRecibosBcc1(e.target.value)}
+                  className="h-9 bg-white"
+                  maxLength={120}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="rec-bcc-2" className="text-xs font-medium text-gray-600">
+                  CCO opción 2
+                </label>
+                <Input
+                  id="rec-bcc-2"
+                  type="email"
+                  autoComplete="off"
+                  placeholder="correo@ejemplo.com"
+                  value={recibosBcc2}
+                  onChange={e => setRecibosBcc2(e.target.value)}
+                  className="h-9 bg-white"
+                  maxLength={120}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2 border-t border-gray-200/80 pt-4">

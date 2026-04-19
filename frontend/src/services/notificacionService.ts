@@ -1316,6 +1316,8 @@ class NotificacionService {
     slot: 'manana' | 'tarde' | 'noche'
     fecha_caracas?: string
     solo_simular?: boolean
+    /** Solo envío real: día pasado explícito (admin). */
+    forzar_envio_fecha_pasada?: boolean
   }): Promise<Record<string, unknown>> {
     return await apiClient.post(
       `${API_V1}/notificaciones/recibos/ejecutar`,
@@ -1323,6 +1325,7 @@ class NotificacionService {
         slot: body.slot,
         fecha_caracas: body.fecha_caracas,
         solo_simular: body.solo_simular ?? false,
+        forzar_envio_fecha_pasada: body.forzar_envio_fecha_pasada ?? false,
       },
       { timeout: TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL }
     )

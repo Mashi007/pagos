@@ -23,15 +23,30 @@ def texto_cedula_comparable_bd(value: Optional[str]) -> str:
     return re.sub(r"[^VEGJ0-9]", "", s)
 
 
+def _database_url_es_postgresql() -> bool:
+    """True si la URL de BD apunta a PostgreSQL (misma heurística que ``app.core.database``)."""
+    try:
+        from app.core.config import settings
+
+        u = (getattr(settings, "DATABASE_URL", None) or "").strip().lower()
+    except Exception:
+        return False
+    return u.startswith("postgresql") or u.startswith("postgres://")
+
+
 def expr_cedula_normalizada_para_comparar(column) -> ColumnElement:
     """
-    Expresión SQL para comparar cédulas con la misma lógica que validate_cedula / _cedula_lookup:
-    mayúsculas y sin guión, punto ni espacio (ej. V-20.235.335 y V20235335 coinciden).
+    Expresión SQL alineada con ``texto_cedula_comparable_bd`` (mayúsculas, solo V/E/G/J y dígitos).
+
+    En PostgreSQL se eliminan además otros separadores vía ``regexp_replace``; en SQLite (p. ej. tests)
+    se aplica solo guión, punto y espacio como antes.
     """
-    x = func.upper(column)
+    x = func.upper(func.trim(func.coalesce(column, "")))
     x = func.replace(x, "-", "")
     x = func.replace(x, ".", "")
     x = func.replace(x, " ", "")
+    if _database_url_es_postgresql():
+        return func.regexp_replace(x, "[^VEGJ0-9]", "", "g")
     return x
 
 

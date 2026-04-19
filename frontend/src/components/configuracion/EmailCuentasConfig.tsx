@@ -269,6 +269,10 @@ export function EmailCuentasConfig() {
         modo_pruebas_recibos: data.modo_pruebas_recibos,
 
         tickets_notify_emails: data.tickets_notify_emails,
+
+        recibos_bcc_emails: Array.isArray(data.recibos_bcc_emails)
+          ? data.recibos_bcc_emails
+          : [],
       })
 
       toast.success('Configuración de 4 cuentas guardada')

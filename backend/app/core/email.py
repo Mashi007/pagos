@@ -17,7 +17,13 @@ from email.utils import formatdate
 SMTP_TIMEOUT_SECONDS = 25
 IMAP_TIMEOUT_SECONDS = 25
 
-from app.core.email_config_holder import get_smtp_config, get_tickets_notify_emails, get_modo_pruebas_email, sync_from_db
+from app.core.email_config_holder import (
+    get_smtp_config,
+    get_tickets_notify_emails,
+    get_modo_pruebas_email,
+    get_recibos_bcc_emails,
+    sync_from_db,
+)
 from app.core.email_phases import (
     FASE_IMAP_COMPLETA,
     FASE_IMAP_CONEXION,
@@ -409,6 +415,20 @@ def send_email(
             )
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
+
+    if (servicio or "").strip().lower() == "recibos":
+        extra_bcc = get_recibos_bcc_emails()
+        if extra_bcc:
+            seen_b = {x.lower() for x in bcc_list}
+            for addr in extra_bcc:
+                a = (addr or "").strip()
+                if not a or "@" not in a:
+                    continue
+                low = a.lower()
+                if low in seen_b:
+                    continue
+                seen_b.add(low)
+                bcc_list.append(a)
 
     attachments_norm = _normalize_attachments_for_smtp(attachments)
     has_attachments = len(attachments_norm) > 0

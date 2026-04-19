@@ -64,9 +64,24 @@ function hrefComprobanteRecibo(row: ReciboConciliacionFila): string {
 
 function pareceUrlImagenComprobante(u: string): boolean {
   if (!u) return false
+  const low = u.toLowerCase()
+  if (/\/comprobante-imagen\//i.test(u) || low.includes('/pagos/comprobante-imagen/')) {
+    return true
+  }
   const path = u.split('?')[0].toLowerCase()
   if (/\.(jpe?g|png|gif|webp)$/i.test(path)) return true
-  return u.toLowerCase().includes('googleusercontent')
+  return low.includes('googleusercontent')
+}
+
+const fmtMontoPagadoRecibo = new Intl.NumberFormat('es-VE', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+function textoMontoPagadoRecibo(n: number | undefined | null): string {
+  const v = Number(n)
+  if (!Number.isFinite(v)) return '-'
+  return fmtMontoPagadoRecibo.format(v)
 }
 
 function textoFechaRegistroListado(s: string | null | undefined): string {
@@ -118,6 +133,16 @@ const SLOT_LABEL: Record<Slot, string> = {
   manana: 'Mañana (01:00–11:00) → envío programado 11:05',
   tarde: 'Tarde (11:01–17:00) → envío programado 17:05',
   noche: 'Noche (17:01–23:45) → envío programado 23:55',
+}
+
+/** Día calendario America/Caracas en YYYY-MM-DD (alineado al backend). */
+function fechaHoyIsoCaracas(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Caracas',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
 }
 
 export default function NotificacionesRecibosPage() {
@@ -213,6 +238,13 @@ export default function NotificacionesRecibosPage() {
           return String(a.fecha_registro ?? '').localeCompare(
             String(b.fecha_registro ?? '')
           )
+        case 'monto_pagado': {
+          const ma = Number(a.monto_pagado)
+          const mb = Number(b.monto_pagado)
+          const va = Number.isFinite(ma) ? ma : 0
+          const vb = Number.isFinite(mb) ? mb : 0
+          return va - vb
+        }
         case 'numero_cuota': {
           const na = a.numero_cuota
           const nb = b.numero_cuota
@@ -395,6 +427,9 @@ export default function NotificacionesRecibosPage() {
     )
   }
 
+  const hoyCaracasIso = fechaHoyIsoCaracas()
+  const fechaCaracasTrim = fechaCaracas.trim()
+
   const ejecutar = async () => {
     if (!soloSimular && data !== undefined && totalPagosListado === 0) {
       toast.warning(
@@ -402,12 +437,22 @@ export default function NotificacionesRecibosPage() {
       )
       return
     }
+    if (!soloSimular && fechaCaracasTrim && fechaCaracasTrim > hoyCaracasIso) {
+      toast.error('No se permite envío real para una fecha futura (Caracas).')
+      return
+    }
+    if (!soloSimular && fechaCaracasTrim && fechaCaracasTrim < hoyCaracasIso) {
+      toast.warning(
+        'Para envío real de un día pasado use el botón «Enviar lote pasado (real)» (confirmación explícita).'
+      )
+      return
+    }
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
         slot,
-        fecha_caracas:
-          soloSimular && fechaCaracas.trim() ? fechaCaracas.trim() : undefined,
+        fecha_caracas: fechaCaracasTrim || undefined,
         solo_simular: soloSimular,
+        forzar_envio_fecha_pasada: false,
       })
       if (out.sin_casos_en_ventana === true) {
         toast('Sin casos en la ventana: no se envió ningún correo.')
@@ -423,6 +468,49 @@ export default function NotificacionesRecibosPage() {
       toast.error(getErrorMessage(e))
     }
   }
+
+  const ejecutarLotePasadoReal = async () => {
+    if (soloSimular) return
+    if (data !== undefined && totalPagosListado === 0) {
+      toast.warning(
+        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie fecha/franja.'
+      )
+      return
+    }
+    if (!fechaCaracasTrim) {
+      toast.warning('Indique la fecha Caracas (YYYY-MM-DD) del lote pasado.')
+      return
+    }
+    if (fechaCaracasTrim >= hoyCaracasIso) {
+      toast.warning('El envío manual de lote pasado solo aplica a fechas anteriores a hoy (Caracas).')
+      return
+    }
+    const ok = window.confirm(
+      `¿Enviar correo REAL de Recibos?\n\nFecha recepción (Caracas): ${fechaCaracasTrim}\nFranja: ${slot}\n\n` +
+        'Se respeta idempotencia (recibos_email_envio por cédula/fecha/franja). Los destinatarios son los del cliente.'
+    )
+    if (!ok) return
+    try {
+      const out = await notificacionService.ejecutarRecibosEnvio({
+        slot,
+        fecha_caracas: fechaCaracasTrim,
+        solo_simular: false,
+        forzar_envio_fecha_pasada: true,
+      })
+      if (out.sin_casos_en_ventana === true) {
+        toast('Sin casos en la ventana: no se envió ningún correo.')
+        void refetch()
+        return
+      }
+      const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)}`
+      toast.success(`Lote pasado: ${resumen}`)
+      void refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    }
+  }
+
+  const esFechaPasadaReal = !soloSimular && Boolean(fechaCaracasTrim && fechaCaracasTrim < hoyCaracasIso)
 
   return (
     <div className="space-y-6">
@@ -465,9 +553,14 @@ export default function NotificacionesRecibosPage() {
             <CardHeader>
               <CardTitle>Vista previa y ejecución</CardTitle>
               <CardDescription>
-                Franja y fecha opcional para listado y simulación. El envío real solo usa hoy (Caracas),
-                igual que el job programado según fecha de recepción (<code>fecha_registro</code>); no
-                envía lotes de otro día. «Solo simular» no envía correos ni escribe idempotencia.
+                Franja y fecha para listado. Simulación: cualquier día válido. Envío real de{' '}
+                <strong>hoy</strong> (Caracas): deje la fecha vacía o use el botón «Ejecutar envío». Envío
+                real de un <strong>día pasado</strong>: indique fecha y franja, actualice el listado y use
+                «Enviar lote pasado (real)» (confirmación). No hay envío real para fechas futuras. «Solo
+                simular» genera el mismo PDF por cédula que el envío real y no escribe{' '}
+                <code>recibos_email_envio</code>. Si en Configuración &gt; Email tiene activo{' '}
+                <strong>modo pruebas Recibos</strong> y correos de prueba, la simulación también envía
+                una muestra por SMTP (mismo HTML y adjunto) hacia esos correos.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -491,14 +584,12 @@ export default function NotificacionesRecibosPage() {
                     id="fecha-rec"
                     placeholder="Vacío = hoy"
                     value={fechaCaracas}
-                    disabled={!soloSimular}
-                    title={
-                      soloSimular
-                        ? 'Opcional: otra fecha para listar o simular'
-                        : 'El envío real solo acepta hoy Caracas; active simulación para otra fecha'
-                    }
+                    title="Día de recepción (fecha_registro) en Caracas: listado, simulación y envío manual de lote pasado."
                     onChange={e => setFechaCaracas(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Hoy (Caracas): <span className="font-mono">{hoyCaracasIso}</span>
+                  </p>
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm">
@@ -506,12 +597,10 @@ export default function NotificacionesRecibosPage() {
                   type="checkbox"
                   checked={soloSimular}
                   onChange={e => {
-                    const v = e.target.checked
-                    setSoloSimular(v)
-                    if (!v) setFechaCaracas('')
+                    setSoloSimular(e.target.checked)
                   }}
                 />
-                Solo simular (sin SMTP ni tabla recibos_email_envio)
+                Solo simular (PDF real; sin tabla recibos_email_envio; SMTP solo si modo pruebas Recibos)
               </label>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -530,12 +619,36 @@ export default function NotificacionesRecibosPage() {
                   onClick={() => void ejecutar()}
                   disabled={
                     isFetching ||
-                    (!soloSimular && data !== undefined && totalPagosListado === 0)
+                    (!soloSimular && data !== undefined && totalPagosListado === 0) ||
+                    esFechaPasadaReal
+                  }
+                  title={
+                    esFechaPasadaReal
+                      ? 'Use «Enviar lote pasado (real)» para envío SMTP de una fecha anterior a hoy.'
+                      : undefined
                   }
                 >
                   <Mail className="mr-2 h-4 w-4" />
                   {soloSimular ? 'Simular envío' : 'Ejecutar envío'}
                 </Button>
+                {!soloSimular ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                    onClick={() => void ejecutarLotePasadoReal()}
+                    disabled={
+                      isFetching ||
+                      (data !== undefined && totalPagosListado === 0) ||
+                      !fechaCaracasTrim ||
+                      fechaCaracasTrim >= hoyCaracasIso
+                    }
+                    title="SMTP real para la fecha y franja seleccionadas (día anterior a hoy en Caracas)."
+                  >
+                    <Mail className="mr-2 h-4 w-4" />
+                    Enviar lote pasado (real)
+                  </Button>
+                ) : null}
               </div>
 
               {data ? (
@@ -599,7 +712,7 @@ export default function NotificacionesRecibosPage() {
 
               <Fragment>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[520px] text-sm">
+                  <table className="w-full min-w-[600px] text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
@@ -644,6 +757,20 @@ export default function NotificacionesRecibosPage() {
                             />
                           </div>
                         </th>
+                        <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
+                          <div className="inline-flex items-center justify-end gap-1">
+                            <span>Monto pagado</span>
+                            <SortArrowsCuotas
+                              column="monto_pagado"
+                              labelAsc="Orden ascendente: monto pagado"
+                              labelDesc="Orden descendente: monto pagado"
+                              sortCol={sortCol}
+                              sortDir={sortDir}
+                              onAsc={aplicarOrdenAsc}
+                              onDesc={aplicarOrdenDesc}
+                            />
+                          </div>
+                        </th>
                         <th className="min-w-[10rem] px-3 py-2 text-left font-semibold">
                           Fotografía de pago
                         </th>
@@ -655,7 +782,7 @@ export default function NotificacionesRecibosPage() {
                     <tbody>
                       {listaFiltradaCedula.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="py-8 text-center text-gray-500">
+                          <td colSpan={6} className="py-8 text-center text-gray-500">
                             <span className="block font-medium text-gray-600">
                               {list.length === 0
                                 ? 'Ningún registro en este criterio.'
@@ -673,6 +800,9 @@ export default function NotificacionesRecibosPage() {
                             <td className="px-3 py-3">{row.cedula}</td>
                             <td className="px-3 py-3 tabular-nums text-gray-800">
                               {textoFechaRegistroListado(row.fecha_registro)}
+                            </td>
+                            <td className="px-3 py-3 text-right font-medium tabular-nums text-gray-900">
+                              {textoMontoPagadoRecibo(row.monto_pagado)}
                             </td>
                             <td className="px-3 py-3 align-middle">
                               <CeldaFotografiaPagoRecibo row={row} />
