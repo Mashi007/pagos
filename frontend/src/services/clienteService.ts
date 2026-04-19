@@ -515,9 +515,11 @@ class ClienteService {
   }
 
   /** Snapshot Drive (CONCILIACIÓN): candidatos a alta no presentes en tabla clientes. Solo admin. */
-  async getDriveImportCandidatos(): Promise<{
+  async getDriveImportCandidatos(fresh?: boolean): Promise<{
     drive_synced_at: string | null
     total_candidatos: number
+    from_cache?: boolean
+    cache_computed_at?: string | null
     candidatos: Array<{
       sheet_row_number: number
       col_d_nombres: string | null
@@ -541,7 +543,17 @@ class ClienteService {
       }
     }>
   }> {
-    return apiClient.get(`${this.baseUrl}/drive-import/candidatos`)
+    const q = fresh ? '?fresh=true' : ''
+    return apiClient.get(`${this.baseUrl}/drive-import/candidatos${q}`)
+  }
+
+  async postDriveImportRefreshCache(): Promise<{
+    ok: boolean
+    total_candidatos?: number
+    drive_synced_at?: string | null
+    computed_at?: string | null
+  }> {
+    return apiClient.post(`${this.baseUrl}/drive-import/refresh-cache`, {})
   }
 
   async postDriveImportImportar(body: {

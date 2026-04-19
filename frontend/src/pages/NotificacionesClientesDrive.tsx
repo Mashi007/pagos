@@ -2,12 +2,11 @@ import { useCallback, useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { RefreshCw, UserPlus } from 'lucide-react'
+import { RefreshCw, User } from 'lucide-react'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Checkbox } from '../components/ui/checkbox'
 import { Textarea } from '../components/ui/textarea'
 import { clienteService } from '../services/clienteService'
 import { toast } from 'sonner'
@@ -44,6 +43,21 @@ export default function NotificacionesClientesDrive() {
   )
 
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const onActualizarLista = async () => {
+    setRefreshing(true)
+    try {
+      await clienteService.postDriveImportRefreshCache()
+      await qc.invalidateQueries({ queryKey: [...QK] })
+      await qc.refetchQueries({ queryKey: [...QK] })
+      toast.success('Lista recalculada y guardada en caché.')
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo actualizar la lista')
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const onGuardar = async () => {
     if (!seleccionados.length) {
@@ -64,7 +78,7 @@ export default function NotificacionesClientesDrive() {
       await qc.invalidateQueries({ queryKey: [...QK] })
       await qc.invalidateQueries({ queryKey: [...QK_AUD] })
     } catch (e) {
-      toast.error(getErrorMessage(e, 'No se pudo importar'))
+      toast.error(getErrorMessage(e) || 'No se pudo importar')
     } finally {
       setSaving(false)
     }
@@ -74,8 +88,8 @@ export default function NotificacionesClientesDrive() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Clientes (Drive)"
-        description="Cédulas en la pestaña CONCILIACIÓN (columna E) que aún no están en la tabla clientes. Origen: snapshot sincronizado a la BD (D=nombres, F=teléfono, G=email). Solo administradores."
-        icon={UserPlus}
+        description="Cédulas en la pestaña CONCILIACIÓN (columna E) que aún no están en la tabla clientes. Origen: snapshot en BD (D=nombres, F=teléfono, G=email). Con jobs activos, la lista se materializa dom/mié 03:00 Caracas (tras el sync 02:00). Solo administradores."
+        icon={User}
       />
 
       <Card>
@@ -89,22 +103,39 @@ export default function NotificacionesClientesDrive() {
                     timeZone: 'America/Caracas',
                   })
                 : '—'}
+              {q.data?.from_cache === true && (
+                <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-emerald-900">
+                  Lista en caché
+                  {q.data.cache_computed_at
+                    ? ` · ${new Date(q.data.cache_computed_at).toLocaleString('es-VE', { timeZone: 'America/Caracas' })}`
+                    : ''}
+                </span>
+              )}
+              {q.data?.from_cache === false && q.data?.cache_computed_at && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  Recalculado {new Date(q.data.cache_computed_at).toLocaleString('es-VE', { timeZone: 'America/Caracas' })}
+                </span>
+              )}
             </span>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => q.refetch()}
-              disabled={q.isFetching}
+              onClick={() => onActualizarLista()}
+              disabled={refreshing || q.isFetching}
             >
-              <RefreshCw className={`mr-2 h-4 w-4 ${q.isFetching ? 'animate-spin' : ''}`} />
-              Actualizar
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${refreshing || q.isFetching ? 'animate-spin' : ''}`}
+              />
+              Actualizar lista
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {q.isError && (
-            <p className="text-sm text-red-600">{getErrorMessage(q.error, 'Error al cargar')}</p>
+            <p className="text-sm text-red-600">
+              {getErrorMessage(q.error) || 'Error al cargar'}
+            </p>
           )}
           {q.isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}
 
@@ -128,10 +159,12 @@ export default function NotificacionesClientesDrive() {
                   return (
                     <tr key={r.sheet_row_number} className="border-t">
                       <td className="px-3 py-2 align-top">
-                        <Checkbox
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
                           checked={chk}
                           disabled={blocked}
-                          onCheckedChange={v => toggle(r.sheet_row_number, v === true)}
+                          onChange={e => toggle(r.sheet_row_number, e.target.checked)}
                           aria-label={`Seleccionar fila ${r.sheet_row_number}`}
                         />
                       </td>
@@ -158,8 +191,10 @@ export default function NotificacionesClientesDrive() {
                   <tr>
                     <td className="px-3 py-6 text-muted-foreground" colSpan={7}>
                       No hay filas pendientes: todas las cédulas del Drive ya existen en clientes, o el
-                      snapshot está vacío. Verifique la sincronización en Configuración (Google) o el
-                      cron dom/mié 02:00 Caracas.
+                      snapshot está vacío. Verifique la sincronización en Configuración (Google), el job interno
+                      (sync dom/mié 02:00 y caché de lista 03:00 Caracas si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) o
+                      un cron externo alineado (POST /api/v1/conciliacion-sheet/sync con secreto). Puede pulsar
+                      «Actualizar lista» para materializar ahora.
                     </td>
                   </tr>
                 )}
@@ -230,7 +265,9 @@ export default function NotificacionesClientesDrive() {
         <CardContent>
           {qa.isLoading && <p className="text-sm text-muted-foreground">Cargando auditoría…</p>}
           {qa.isError && (
-            <p className="text-sm text-red-600">{getErrorMessage(qa.error, 'Error al cargar')}</p>
+            <p className="text-sm text-red-600">
+              {getErrorMessage(qa.error) || 'Error al cargar'}
+            </p>
           )}
           <div className="overflow-x-auto rounded-md border">
             <table className="w-full min-w-[960px] text-left text-sm">

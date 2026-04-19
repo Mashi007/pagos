@@ -1,16 +1,17 @@
 """
 Sincronización de la hoja CONCILIACIÓN (Google Sheets) → BD.
 
-- POST /conciliacion-sheet/sync — para cron (ej. 03:00 America/Caracas). Header X-Conciliacion-Sheet-Sync-Secret.
+- POST /conciliacion-sheet/sync — cron externo (p. ej. Render Cron Jobs) con header X-Conciliacion-Sheet-Sync-Secret.
+  Horario recomendado alineado al job interno: domingo y miércoles 02:00 America/Caracas (≈ 06:00 UTC, sin DST).
+  Si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true, el APScheduler del backend ya ejecuta el mismo sync esos días a esa hora:
+  puede omitir el cron externo o dejarlo como respaldo (evite disparos redundantes minuto a minuto).
+  Tras ese snapshot, el backend (si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) materializa a las 03:00 la lista de
+  candidatos «Clientes (Drive)» en BD; cron externo no es necesario para esa lista (ver POST /clientes/drive-import/refresh-cache).
 - POST /conciliacion-sheet/sync-now — mismo trabajo que /sync, pero con sesión staff (admin / operador / gerente).
 - GET /conciliacion-sheet/status — metadatos, última corrida y si el snapshot alcanza para GET …/exportar/fecha-drive.
 
-En Render u otro hosting: puede programarse HTTP POST con secreto en domingo y miércoles 02:00 America/Caracas
-(≈ 06:00 UTC, sin DST en Venezuela).
-
 Por defecto solo se importan columnas A:S (variable CONCILIACION_SHEET_COLUMNS_RANGE).
-Cada sync exitoso también rellena la tabla drive (columnas col_a..col_s). Con ENABLE_AUTOMATIC_SCHEDULED_JOBS=true,
-el scheduler ejecuta ese sync domingo y miércoles a las 02:00 (America/Caracas); si no, use POST /sync (cron externo) o sync-now.
+Cada sync exitoso también rellena la tabla drive (columnas col_a..col_s).
 """
 import logging
 from typing import Any, Dict, List, Optional, Tuple

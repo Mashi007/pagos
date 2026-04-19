@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
@@ -17,15 +17,11 @@ from pydantic import ValidationError
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from app.api.v1.endpoints.clientes import (
-    _normalizar_cedula_carga_masiva,
-    create_cliente_from_payload,
-)
-from app.api.v1.endpoints.validadores import validate_cedula
 from app.models.auditoria_cliente_alta_desde_drive import AuditoriaClienteAltaDesdeDrive
 from app.models.cliente import Cliente
 from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.models.drive import DriveRow
+from app.models.drive_clientes_candidatos_cache import DriveClientesCandidatosCache
 from app.schemas.cliente import ClienteCreate
 
 logger = logging.getLogger(__name__)
@@ -55,7 +51,16 @@ def _cedula_para_bd_desde_validacion(valor_formateado: str) -> str:
     return s
 
 
+def _dt_trunc_seconds(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    return dt.replace(microsecond=0)
+
+
 def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
+    from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
+    from app.api.v1.endpoints.validadores import validate_cedula
+
     rows = db.execute(select(DriveRow).order_by(DriveRow.sheet_row_number.asc())).scalars().all()
     cedulas_bd = db.execute(select(Cliente.cedula)).scalars().all()
     en_bd: set[str] = set()
@@ -127,6 +132,71 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
     }
 
 
+def refrescar_cache_candidatos_drive(db: Session) -> Dict[str, Any]:
+    """
+    Recalcula candidatos desde tablas drive/clientes y persiste en drive_clientes_candidatos_cache (id=1).
+    Usado por el job dom/mié 03:00 y tras importaciones para alinear la lista sin depender del usuario.
+    """
+    data = listar_candidatos_desde_drive(db)
+    meta = db.get(ConciliacionSheetMeta, 1)
+    drive_at = meta.synced_at if meta else None
+    row = db.get(DriveClientesCandidatosCache, 1)
+    if row is None:
+        row = DriveClientesCandidatosCache(id=1)
+        db.add(row)
+    row.payload = data
+    row.drive_synced_at = drive_at
+    row.computed_at = datetime.now(timezone.utc)
+    db.commit()
+    logger.info(
+        "[drive_clientes_candidatos_cache] refrescado total=%s drive_synced_at=%s",
+        data.get("total_candidatos"),
+        drive_at.isoformat() if drive_at else None,
+    )
+    return {
+        "ok": True,
+        "total_candidatos": data.get("total_candidatos"),
+        "drive_synced_at": data.get("drive_synced_at"),
+        "computed_at": row.computed_at.isoformat() if row.computed_at else None,
+    }
+
+
+def obtener_candidatos_drive_para_api(db: Session, *, forzar_calculo: bool = False) -> Dict[str, Any]:
+    """
+    Sirve GET /clientes/drive-import/candidatos: usa caché si está alineada con conciliacion_sheet_meta.synced_at;
+    si no, recalcula, actualiza caché y devuelve (sin requerir acción manual del usuario).
+    """
+    meta = db.get(ConciliacionSheetMeta, 1)
+    drive_at = meta.synced_at if meta else None
+    cache = db.get(DriveClientesCandidatosCache, 1)
+
+    if (
+        not forzar_calculo
+        and cache is not None
+        and isinstance(cache.payload, dict)
+        and _dt_trunc_seconds(cache.drive_synced_at) == _dt_trunc_seconds(drive_at)
+        and drive_at is not None
+    ):
+        out = dict(cache.payload)
+        out["from_cache"] = True
+        out["cache_computed_at"] = cache.computed_at.isoformat() if cache.computed_at else None
+        return out
+
+    data = listar_candidatos_desde_drive(db)
+    row = cache
+    if row is None:
+        row = DriveClientesCandidatosCache(id=1)
+        db.add(row)
+    row.payload = data
+    row.drive_synced_at = drive_at
+    row.computed_at = datetime.now(timezone.utc)
+    db.commit()
+    out = dict(data)
+    out["from_cache"] = False
+    out["cache_computed_at"] = row.computed_at.isoformat() if row.computed_at else None
+    return out
+
+
 def importar_seleccion_desde_drive(
     db: Session,
     *,
@@ -136,6 +206,8 @@ def importar_seleccion_desde_drive(
 ) -> Dict[str, Any]:
     if not sheet_rows:
         raise HTTPException(status_code=400, detail="Debe enviar al menos una fila (sheet_row_number).")
+
+    from app.api.v1.endpoints.clientes import create_cliente_from_payload
 
     snap = listar_candidatos_desde_drive(db)
     by_row = {int(c["sheet_row_number"]): c for c in (snap.get("candidatos") or [])}
@@ -327,6 +399,15 @@ def importar_seleccion_desde_drive(
             )
             db.commit()
             resultados.append({"sheet_row_number": sheet_row, "ok": False, "error": str(ex)})
+
+    try:
+        refrescar_cache_candidatos_drive(db)
+    except Exception:
+        logger.warning(
+            "[drive_clientes_candidatos_cache] no se pudo refrescar tras importar lote batch_id=%s",
+            batch_id,
+            exc_info=True,
+        )
 
     return {
         "batch_id": batch_id,

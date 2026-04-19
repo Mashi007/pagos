@@ -1,7 +1,7 @@
 """
 Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
 Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822 (deduplicado).
-Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD/Drive; por cada OK: etiqueta IMAGEN 1/2/3 (sin modificar estrellas Gmail).
+Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD (imagen/PDF en pago_comprobante_imagen; enlace persiste en BD para import de pagos, no en el Excel); por cada OK: etiqueta IMAGEN 1/2/3 (sin modificar estrellas Gmail). El .eml puede seguir en Drive.
 Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no las toca el pipeline).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD)
@@ -111,7 +111,7 @@ def run_now(
     db: Session = Depends(get_db),
 ):
     """
-    Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
+    Inicia el pipeline en segundo plano (Gmail -> Gemini -> BD; comprobante en BD, .eml opcional en Drive) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto all).
     Listado: por defecto inbox con imagen/PDF (cualquier etiqueta, incluye ERROR EMAIL).
@@ -331,7 +331,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
       (cubre backlog de cualquier antigüedad; los correos se procesan mientras estén no leídos).
     - Con ?fecha=YYYY-MM-DD: descarga exactamente esa fecha.
     Si no hay datos devuelve 404 (no se genera Excel vacío).
-    Columnas A-E: Banco, Cedula, Fecha, Monto, Serial documento; luego Correo Pagador, Link, Ver email.
+    Columnas: Banco, Cedula, Fecha, Monto, Serial documento, Correo Pagador.
     Para vaciar tablas usar POST /pagos/gmail/confirmar-dia con confirmado=true.
     """
     from openpyxl import Workbook
@@ -361,8 +361,6 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
             ),
         )
 
-    from openpyxl.styles import Font
-
     try:
         wb = Workbook()
         ws = wb.active
@@ -375,20 +373,9 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
                 "Monto",
                 "Serial documento",
                 "Correo Pagador",
-                "Link",
-                "Ver email",
             ]
         )
-        link_font = Font(color="0563C1", underline="single")
-        for row_idx, it in enumerate(items, start=2):  # fila 1 = cabecera
-            link_url = (it.drive_link or "").strip()
-            if link_url and not link_url.startswith("http"):
-                link_url = "https://drive.google.com/file/d/" + link_url + "/view"
-            link_text = link_url or ""
-            email_url = (it.drive_email_link or "").strip()
-            if email_url and not email_url.startswith("http"):
-                email_url = "https://drive.google.com/file/d/" + email_url + "/view"
-            email_text = email_url or ("—" if link_url else "")
+        for it in items:  # fila 1 = cabecera
             ws.append(
                 [
                     it.banco or "",
@@ -397,20 +384,8 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
                     format_monto_excel_pagos_gmail(it.monto) or (it.monto or ""),
                     it.numero_referencia or "",
                     it.correo_origen or "",
-                    link_text,
-                    email_text,
                 ]
             )
-            if link_url:
-                c_link = ws.cell(row=row_idx, column=7)
-                c_link.hyperlink = link_url
-                c_link.value = link_url
-                c_link.font = link_font
-            if email_url:
-                c_eml = ws.cell(row=row_idx, column=8)
-                c_eml.hyperlink = email_url
-                c_eml.value = email_url
-                c_eml.font = link_font
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
@@ -439,7 +414,6 @@ def download_excel_temporal(db: Session = Depends(get_db)):
     NO vacia la tabla: los datos solo se borran al usar el boton "Vaciar tabla (Generar Excel desde Gmail)". Si no hay datos devuelve 404.
     """
     from openpyxl import Workbook
-    from openpyxl.styles import Font
 
     items = db.execute(
         select(GmailTemporal).order_by(GmailTemporal.created_at)
@@ -462,20 +436,9 @@ def download_excel_temporal(db: Session = Depends(get_db)):
                 "Monto",
                 "Serial documento",
                 "Correo Pagador",
-                "Link",
-                "Ver email",
             ]
         )
-        link_font = Font(color="0563C1", underline="single")
-        for row_idx, it in enumerate(items, start=2):
-            link_url = (it.drive_link or "").strip()
-            if link_url and not link_url.startswith("http"):
-                link_url = "https://drive.google.com/file/d/" + link_url + "/view"
-            link_text = link_url or ""
-            email_url = (it.drive_email_link or "").strip()
-            if email_url and not email_url.startswith("http"):
-                email_url = "https://drive.google.com/file/d/" + email_url + "/view"
-            email_text = email_url or ("—" if link_url else "")
+        for it in items:
             ws.append(
                 [
                     it.banco or "",
@@ -484,20 +447,8 @@ def download_excel_temporal(db: Session = Depends(get_db)):
                     format_monto_excel_pagos_gmail(it.monto) or (it.monto or ""),
                     it.numero_referencia or "",
                     it.correo_origen or "",
-                    link_text,
-                    email_text,
                 ]
             )
-            if link_url:
-                c_link = ws.cell(row=row_idx, column=7)
-                c_link.hyperlink = link_url
-                c_link.value = link_url
-                c_link.font = link_font
-            if email_url:
-                c_eml = ws.cell(row=row_idx, column=8)
-                c_eml.hyperlink = email_url
-                c_eml.value = email_url
-                c_eml.font = link_font
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)

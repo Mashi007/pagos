@@ -1,4 +1,4 @@
-"""Imagen de comprobante subida desde el formulario de registro de pago (contenido en BD; sin disco persistente en Render)."""
+"""Comprobante en BD (imagen o PDF): alta manual de pago o pipeline Gmail (sin guardar el binario del comprobante en Drive)."""
 
 from sqlalchemy import Column, DateTime, LargeBinary, String, func
 

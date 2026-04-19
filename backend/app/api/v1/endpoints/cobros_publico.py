@@ -74,10 +74,10 @@ from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_par
 from app.services.pagos_gmail.gemini_service import compare_form_with_image
 
 from app.services.cobros.recibo_pdf import (
-    generar_recibo_pago_reportado,
     RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
     WHATSAPP_LINK,
 )
+from app.services.cobros.recibo_pago_reportado_centro import generar_recibo_pdf_desde_pago_reportado
 from app.services.tasa_cambio_service import (
     obtener_tasa_por_fecha,
     fecha_hoy_caracas,
@@ -132,102 +132,6 @@ def _referencia_display(referencia_interna: str) -> str:
         return "-"
 
     return ref if ref.startswith("#") else f"#{ref}"
-
-
-
-
-
-def _monto_con_moneda(pr: PagoReportado) -> str:
-
-    monto = getattr(pr, "monto", "")
-
-    moneda = (getattr(pr, "moneda", "") or "").strip()
-
-    monto_str = str(monto).strip()
-
-    return f"{monto_str} {moneda}".strip()
-
-
-
-
-
-def _generar_recibo_desde_pago(db: Session, pr: PagoReportado) -> bytes:
-
-    cuotas_txt = texto_cuotas_aplicadas_pago_reportado(db, pr)
-
-    saldo_init, saldo_fin, num_cuota = None, None, None
-
-    try:
-
-        from app.services.cobros.recibo_cuotas_lookup import obtener_saldos_cuota_aplicada
-
-        saldo_init, saldo_fin, num_cuota = obtener_saldos_cuota_aplicada(db, pr)
-
-    except Exception:
-
-        pass
-
-    fecha_pago_display = pr.fecha_pago.strftime("%d/%m/%Y") if pr.fecha_pago else None
-
-    moneda = (pr.moneda or "BS").strip().upper()
-
-    tasa_cambio = None
-
-    if moneda == "BS" and pr.fecha_pago:
-
-        tasa_obj = obtener_tasa_por_fecha(db, pr.fecha_pago)
-
-        tasa_cambio = float(tasa_obj.tasa_oficial) if tasa_obj else None
-
-    elif moneda == "BS":
-
-        tasa_cambio = None
-
-    fecha_reporte_aprobacion_display = None
-
-    u = getattr(pr, "updated_at", None)
-
-    if u and hasattr(u, "strftime"):
-
-        fecha_reporte_aprobacion_display = u.strftime("%d/%m/%Y %H:%M")
-
-    return generar_recibo_pago_reportado(
-
-        referencia_interna=pr.referencia_interna,
-
-        nombres=pr.nombres,
-
-        apellidos=pr.apellidos,
-
-        tipo_cedula=pr.tipo_cedula,
-
-        numero_cedula=pr.numero_cedula,
-
-        institucion_financiera=pr.institucion_financiera,
-
-        monto=_monto_con_moneda(pr),
-
-        numero_operacion=pr.numero_operacion,
-
-        fecha_pago=pr.fecha_pago,
-
-        fecha_reporte_aprobacion_display=fecha_reporte_aprobacion_display,
-
-        aplicado_a_cuotas=cuotas_txt,
-
-        saldo_inicial=saldo_init,
-
-        saldo_final=saldo_fin,
-
-        numero_cuota=num_cuota,
-
-        fecha_pago_display=fecha_pago_display,
-
-        moneda=moneda,
-
-        tasa_cambio=tasa_cambio,
-
-    )
 
 
 
@@ -1678,7 +1582,7 @@ async def enviar_reporte_publico(
 
             db.refresh(pr)
 
-            pdf_bytes = _generar_recibo_desde_pago(db, pr)
+            pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
 
             pr.recibo_pdf = pdf_bytes
 
@@ -1831,7 +1735,7 @@ def get_recibo_publico(
 
         raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
 
-    pdf_bytes = _generar_recibo_desde_pago(db, pr)
+    pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
 
     pr.recibo_pdf = pdf_bytes
 
@@ -2191,7 +2095,7 @@ async def enviar_reporte_infopagos(
 
             cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
 
-            pdf_bytes = _generar_recibo_desde_pago(db, pr)
+            pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
 
             pr.recibo_pdf = pdf_bytes
 
@@ -2394,7 +2298,7 @@ def get_recibo_infopagos(
 
     pr = pr[0] if hasattr(pr, "__getitem__") else pr
 
-    pdf_bytes = _generar_recibo_desde_pago(db, pr)
+    pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
 
     pr.recibo_pdf = pdf_bytes
 

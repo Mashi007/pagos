@@ -15,7 +15,8 @@ from app.schemas.auth import UserResponse
 from app.services.cliente_alta_desde_drive_service import (
     importar_seleccion_desde_drive,
     listar_auditoria,
-    listar_candidatos_desde_drive,
+    obtener_candidatos_drive_para_api,
+    refrescar_cache_candidatos_drive,
 )
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -23,10 +24,23 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/candidatos", summary="Cédulas en Drive no registradas en clientes (admin)")
 def get_drive_clientes_candidatos(
+    fresh: bool = Query(
+        False,
+        description="Si true, ignora la caché materializada y recalcula al vuelo (luego persiste caché).",
+    ),
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_admin),
 ):
-    return listar_candidatos_desde_drive(db)
+    return obtener_candidatos_drive_para_api(db, forzar_calculo=bool(fresh))
+
+
+@router.post("/refresh-cache", summary="Recalcular y persistir lista candidatos Drive (admin)")
+def post_drive_clientes_refresh_cache(
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin),
+):
+    """Útil manualmente; el job dom/mié 03:00 Caracas hace lo mismo tras el sync de la hoja."""
+    return refrescar_cache_candidatos_drive(db)
 
 
 class ImportarClientesDriveBody(BaseModel):

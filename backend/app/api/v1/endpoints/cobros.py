@@ -28,8 +28,8 @@ from app.models.pago_pendiente_descargar import PagoPendienteDescargar
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
-from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK, WHATSAPP_DISPLAY
-from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
+from app.services.cobros.recibo_pdf import WHATSAPP_LINK, WHATSAPP_DISPLAY
+from app.services.cobros.recibo_pago_reportado_centro import generar_recibo_pdf_desde_pago_reportado
 from app.core.email import send_email
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.services.notificaciones_exclusion_desistimiento import (
@@ -176,56 +176,6 @@ def _referencia_display(referencia_interna: str) -> str:
     if not ref:
         return "-"
     return ref if ref.startswith("#") else f"#{ref}"
-
-
-def _monto_con_moneda(pr: PagoReportado) -> str:
-    monto = getattr(pr, "monto", "")
-    moneda = (getattr(pr, "moneda", "") or "").strip()
-    monto_str = str(monto).strip()
-    return f"{monto_str} {moneda}".strip()
-
-
-def _generar_recibo_desde_pago(db: Session, pr: PagoReportado) -> bytes:
-    cuotas_txt = texto_cuotas_aplicadas_pago_reportado(db, pr)
-    saldo_init, saldo_fin, num_cuota = None, None, None
-    try:
-        from app.services.cobros.recibo_cuotas_lookup import obtener_saldos_cuota_aplicada
-        saldo_init, saldo_fin, num_cuota = obtener_saldos_cuota_aplicada(db, pr)
-    except Exception:
-        pass
-    fecha_pago_display = pr.fecha_pago.strftime("%d/%m/%Y") if pr.fecha_pago else None
-    moneda = (pr.moneda or "BS").strip().upper()
-    tasa_cambio = None
-    if moneda == "BS":
-        try:
-            from app.services.tasa_cambio_service import obtener_tasa_hoy
-            tasa_obj = obtener_tasa_hoy(db)
-            tasa_cambio = float(tasa_obj.tasa_oficial) if tasa_obj else None
-        except Exception:
-            pass
-    fecha_reporte_aprobacion_display = None
-    u = getattr(pr, "updated_at", None)
-    if u and hasattr(u, "strftime"):
-        fecha_reporte_aprobacion_display = u.strftime("%d/%m/%Y %H:%M")
-    return generar_recibo_pago_reportado(
-        referencia_interna=pr.referencia_interna,
-        nombres=pr.nombres,
-        apellidos=pr.apellidos,
-        tipo_cedula=pr.tipo_cedula,
-        numero_cedula=pr.numero_cedula,
-        institucion_financiera=pr.institucion_financiera,
-        monto=_monto_con_moneda(pr),
-        numero_operacion=pr.numero_operacion,
-        fecha_pago=pr.fecha_pago,
-        fecha_reporte_aprobacion_display=fecha_reporte_aprobacion_display,
-        aplicado_a_cuotas=cuotas_txt,
-        saldo_inicial=saldo_init,
-        saldo_final=saldo_fin,
-        numero_cuota=num_cuota,
-        fecha_pago_display=fecha_pago_display,
-        moneda=moneda,
-        tasa_cambio=tasa_cambio,
-    )
 
 
 def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
@@ -1246,7 +1196,7 @@ def aprobar_pago_reportado(
         raise HTTPException(status_code=500, detail=f"Error al aprobar: {e!s}")
     db.refresh(pr)
     try:
-        pdf_bytes = _generar_recibo_desde_pago(db, pr)
+        pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
     except Exception as e:
         logger.exception("[COBROS] Aprobar ref=%s: error generando recibo PDF: %s", pr.referencia_interna, e)
         raise HTTPException(status_code=500, detail=f"Error al generar el recibo PDF: {e!s}")
@@ -1478,7 +1428,7 @@ def get_recibo_pdf(pago_id: int, db: Session = Depends(get_db)):
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
-    pdf_bytes = _generar_recibo_desde_pago(db, pr)
+    pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
     return Response(
@@ -1517,7 +1467,7 @@ def enviar_recibo_manual(
                 "Actívelo para poder enviar el recibo."
             ),
         )
-    pdf_bytes = _generar_recibo_desde_pago(db, pr)
+    pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
     body = (
@@ -1699,7 +1649,7 @@ def editar_pago_reportado(
             )
 
         if pr.recibo_pdf:
-            pr.recibo_pdf = _generar_recibo_desde_pago(db, pr)
+            pr.recibo_pdf = generar_recibo_pdf_desde_pago_reportado(db, pr)
         db.commit()
         logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
         return {"ok": True, "mensaje": mensaje}
@@ -1800,7 +1750,7 @@ def cambiar_estado_pago(
             )
 
         db.refresh(pr)
-        pdf_bytes = _generar_recibo_desde_pago(db, pr)
+        pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
         pr.recibo_pdf = pdf_bytes
         to_emails = _emails_cliente_pago_reportado(db, pr)
         cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"

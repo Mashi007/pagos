@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Resuelve URL de comprobante (Drive) desde pagos_gmail_sync_item cuando pagos.link_comprobante es NULL.
+Resuelve URL de comprobante desde pagos_gmail_sync_item cuando pagos.link_comprobante es NULL.
+
+La columna drive_link puede ser enlace de Google Drive o URL del API (/pagos/comprobante-imagen/…)
+cuando el comprobante se guardó en BD (pipeline Gmail).
 """
 from __future__ import annotations
 

@@ -29,17 +29,20 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Si True, el proceso lider puede iniciar APScheduler (finiquito, auditoria cartera, limpieza codigos, "
+            "hoja CONCILIACION a drive/conciliacion_sheet domingo y miércoles 02:00 Caracas, "
+            "caché lista Clientes (Drive) dom/mié 03:00, "
+            "snapshot candidatos préstamo desde drive dom/mié 04:05 si aplica, "
             "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
             "Los envios de notificaciones a clientes son solo manuales (POST desde la UI); no hay cron de correo. "
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
     )
-    # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada domingo 02:00 Caracas.
+    # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada domingo 04:10 Caracas.
     ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 02:00 America/Caracas se recalcula "
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 04:10 America/Caracas se recalcula "
             "prestamos.abonos_drive_cuotas_cache para préstamos no LIQUIDADO/DESISTIMIENTO (una pasada semanal)."
         ),
     )
@@ -47,8 +50,16 @@ class Settings(BaseSettings):
     ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 04:00 America/Caracas se recalcula "
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 04:20 America/Caracas se recalcula "
             "prestamos.fecha_entrega_q_aprobacion_cache (columna Q dentro de CONCILIACION_SHEET_COLUMNS_RANGE)."
+        ),
+    )
+    # Snapshot candidatos préstamo nuevo desde tabla `drive` (tras sync CONCILIACIÓN).
+    ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo y miércoles a las 04:05 America/Caracas "
+            "se recalcula la tabla prestamo_candidatos_drive (cédula columna E sin préstamo en BD; ver servicio)."
         ),
     )
 
@@ -284,7 +295,10 @@ class Settings(BaseSettings):
     # ============================================
     BACKEND_PUBLIC_URL: Optional[str] = Field(
         None,
-        description="URL pública del backend para OAuth redirect_uri (ej. https://rapicredit.onrender.com)"
+        description=(
+            "URL pública del backend para OAuth redirect_uri (ej. https://rapicredit.onrender.com). "
+            "También se usa para armar enlaces absolutos al comprobante guardado en BD tras el pipeline Gmail (columna Link en Excel)."
+        ),
     )
     FRONTEND_PUBLIC_URL: Optional[str] = Field(
         None,
@@ -327,7 +341,7 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Google Sheet CONCILIACIÓN → BD (snapshot diario vía cron, ej. 03:00 America/Caracas)
+    # Google Sheet CONCILIACIÓN → BD (snapshot dom/mié 02:00; caché lista Clientes Drive dom/mié 03:00 si ENABLE_AUTOMATIC_SCHEDULED_JOBS)
     CONCILIACION_SHEET_SPREADSHEET_ID: Optional[str] = Field(
         default=None,
         description="ID del documento (segmento entre /d/ e /edit en la URL de Google Sheets).",
@@ -345,7 +359,11 @@ class Settings(BaseSettings):
     )
     CONCILIACION_SHEET_SYNC_SECRET: Optional[str] = Field(
         default=None,
-        description="Secreto para POST /api/v1/conciliacion-sheet/sync (header X-Conciliacion-Sheet-Sync-Secret).",
+        description=(
+            "Secreto para POST /api/v1/conciliacion-sheet/sync (header X-Conciliacion-Sheet-Sync-Secret). "
+            "Cron externo (Render, etc.): alinear a domingo y miércoles 02:00 America/Caracas (antes del job 03:00 que "
+            "materializa la lista Clientes Drive), o omitir si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true."
+        ),
     )
     CONCILIACION_SHEET_COLUMNS_RANGE: str = Field(
         default="A:S",

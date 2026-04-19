@@ -6,12 +6,14 @@ Por defecto esta desactivado: ningun cron en servidor; la pantalla Configuracion
 
 Cuando esta activo:
 - 02:00  Finiquito: refrescar tabla finiquito_casos.
-- domingo y miércoles 04:00  Hoja CONCILIACION (Google Sheets) -> BD: conciliacion_sheet_* y tabla drive (columnas A..S).
+- domingo y miércoles 02:00  Hoja CONCILIACION (Google Sheets) -> BD: conciliacion_sheet_* y tabla drive (columnas A..S).
+- domingo y miércoles 03:00  Caché lista «Clientes (Drive)»: materializa candidatos en drive_clientes_candidatos_cache (tras el snapshot).
 - domingo 04:10  Notificaciones: caché «Diferencia abono» (ABONOS hoja vs cuotas) en prestamos, si ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY (tras el snapshot del Drive).
 - domingo 04:20  Notificaciones: caché columna Q vs fecha_aprobacion en prestamos, si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY (tras el snapshot del Drive).
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 04:00  Limpieza codigos estado de cuenta.
 - 04:00, 11:00, 20:00  Gmail (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
+- domingo y miércoles 04:05  Snapshot candidatos préstamo desde `drive` -> tabla prestamo_candidatos_drive, si ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY (tras sync 02:00).
 
 Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
 """
@@ -38,7 +40,7 @@ def scheduler_is_running() -> bool:
 
 
 def _job_abonos_drive_cuotas_cache_0200() -> None:
-    """Domingo 04:10 Caracas (tras sync Drive 04:00). Persiste comparación ABONOS (hoja) vs cuotas en prestamos (columna Notificaciones General)."""
+    """Domingo 04:10 Caracas (tras sync Drive 02:00). Persiste comparación ABONOS (hoja) vs cuotas en prestamos (columna Notificaciones General)."""
     if not getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
         return
     db = SessionLocal()
@@ -62,7 +64,7 @@ def _job_abonos_drive_cuotas_cache_0200() -> None:
 
 
 def _job_fecha_entrega_q_aprobacion_cache_dom_0400() -> None:
-    """Domingo 04:20 Caracas (tras sync Drive 04:00). Columna Q (hoja) vs fecha_aprobacion en prestamos (Notificaciones Fecha)."""
+    """Domingo 04:20 Caracas (tras sync Drive 02:00). Columna Q (hoja) vs fecha_aprobacion en prestamos (Notificaciones Fecha)."""
     if not getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
         return
     db = SessionLocal()
@@ -150,7 +152,7 @@ def _job_auditoria_cartera_prestamos() -> None:
 
 
 def _job_hoja_drive_conciliacion_sync() -> None:
-    """Domingo y miércoles 04:00 (America/Caracas): descarga pestaña CONCILIACIÓN A:S y rellena conciliacion_sheet_* + drive."""
+    """Domingo y miércoles 02:00 (America/Caracas): descarga pestaña CONCILIACIÓN A:S y rellena conciliacion_sheet_* + drive."""
     db = SessionLocal()
     try:
         from app.services.conciliacion_sheet_sync import run_sync_to_db
@@ -169,6 +171,47 @@ def _job_hoja_drive_conciliacion_sync() -> None:
         )
     except Exception as e:
         logger.exception("[drive/conciliacion_sheet] Sync programado error: %s", e)
+    finally:
+        db.close()
+
+
+def _job_prestamo_candidatos_drive_refresh() -> None:
+    """Domingo y miércoles 04:05 (America/Caracas): recalcula prestamo_candidatos_drive tras el snapshot de la hoja (sync 02:00)."""
+    if not getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
+        return
+    db = SessionLocal()
+    try:
+        from app.services.prestamo_candidatos_drive_job import (
+            ejecutar_refresh_prestamo_candidatos_drive,
+        )
+
+        res = ejecutar_refresh_prestamo_candidatos_drive(db)
+        logger.info(
+            "[prestamo_candidatos_drive] programado ok insertados=%s filas_drive=%s",
+            res.get("candidatos_insertados"),
+            res.get("filas_en_drive"),
+        )
+    except Exception as e:
+        logger.exception("[prestamo_candidatos_drive] programado error: %s", e)
+    finally:
+        db.close()
+
+
+def _job_drive_clientes_candidatos_cache_dom_mie_0300() -> None:
+    """Domingo y miércoles 03:00 (America/Caracas): materializa candidatos Clientes (Drive) en BD (tras sync 02:00)."""
+    db = SessionLocal()
+    try:
+        from app.services.cliente_alta_desde_drive_service import refrescar_cache_candidatos_drive
+
+        res = refrescar_cache_candidatos_drive(db)
+        logger.info(
+            "[drive_clientes_candidatos_cache] job programado OK total=%s drive_synced_at=%s computed_at=%s",
+            res.get("total_candidatos"),
+            res.get("drive_synced_at"),
+            res.get("computed_at"),
+        )
+    except Exception as e:
+        logger.exception("[drive_clientes_candidatos_cache] job programado error: %s", e)
     finally:
         db.close()
 
@@ -220,7 +263,7 @@ def _job_pagos_gmail_pending_scan() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: finiquito 02:00 diario; hoja Drive dom/mié 04:00; caché Diferencia abono domingo 04:10 (opcional); caché Q vs aprobación domingo 04:20 (opcional); auditoria 03:00; limpieza 04:00; Gmail 04/11/20 opcional."""
+    """Inicia el scheduler: finiquito 02:00 diario; hoja Drive dom/mié 02:00; caché Clientes Drive dom/mié 03:00; candidatos préstamo Drive dom/mié 04:05 (opcional); caché Diferencia abono domingo 04:10 (opcional); caché Q vs aprobación domingo 04:20 (opcional); auditoria 03:00; limpieza 04:00; Gmail 04/11/20 opcional."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
@@ -253,19 +296,45 @@ def start_scheduler() -> None:
         id="auditoria_cartera_prestamos_0300",
         name="Auditoria cartera prestamos 03:00",
     )
-    # domingo y miércoles 04:00 - Snapshot Google CONCILIACIÓN -> conciliacion_sheet_* + tabla drive (A..S)
+    # domingo y miércoles 02:00 - Snapshot Google CONCILIACIÓN -> conciliacion_sheet_* + tabla drive (A..S)
     _scheduler.add_job(
         _job_hoja_drive_conciliacion_sync,
-        CronTrigger(day_of_week="sun", hour=4, minute=0, timezone=SCHEDULER_TZ),
-        id="hoja_drive_conciliacion_dom_0400",
-        name="Hoja Drive CONCILIACION domingo 04:00 (A:S)",
+        CronTrigger(day_of_week="sun", hour=2, minute=0, timezone=SCHEDULER_TZ),
+        id="hoja_drive_conciliacion_dom_0200",
+        name="Hoja Drive CONCILIACION domingo 02:00 (A:S)",
     )
     _scheduler.add_job(
         _job_hoja_drive_conciliacion_sync,
-        CronTrigger(day_of_week="wed", hour=4, minute=0, timezone=SCHEDULER_TZ),
-        id="hoja_drive_conciliacion_mie_0400",
-        name="Hoja Drive CONCILIACION miercoles 04:00 (A:S)",
+        CronTrigger(day_of_week="wed", hour=2, minute=0, timezone=SCHEDULER_TZ),
+        id="hoja_drive_conciliacion_mie_0200",
+        name="Hoja Drive CONCILIACION miercoles 02:00 (A:S)",
     )
+    # domingo y miércoles 03:00 - Lista candidatos Clientes (Drive) materializada en BD
+    _scheduler.add_job(
+        _job_drive_clientes_candidatos_cache_dom_mie_0300,
+        CronTrigger(day_of_week="sun", hour=3, minute=0, timezone=SCHEDULER_TZ),
+        id="drive_clientes_candidatos_cache_dom_0300",
+        name="Clientes Drive: caché candidatos domingo 03:00",
+    )
+    _scheduler.add_job(
+        _job_drive_clientes_candidatos_cache_dom_mie_0300,
+        CronTrigger(day_of_week="wed", hour=3, minute=0, timezone=SCHEDULER_TZ),
+        id="drive_clientes_candidatos_cache_mie_0300",
+        name="Clientes Drive: caché candidatos miercoles 03:00",
+    )
+    if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
+        _scheduler.add_job(
+            _job_prestamo_candidatos_drive_refresh,
+            CronTrigger(day_of_week="sun", hour=4, minute=5, timezone=SCHEDULER_TZ),
+            id="prestamo_candidatos_drive_dom_0405",
+            name="Prestamos: snapshot candidatos desde Drive domingo 04:05",
+        )
+        _scheduler.add_job(
+            _job_prestamo_candidatos_drive_refresh,
+            CronTrigger(day_of_week="wed", hour=4, minute=5, timezone=SCHEDULER_TZ),
+            id="prestamo_candidatos_drive_mie_0405",
+            name="Prestamos: snapshot candidatos desde Drive miercoles 04:05",
+        )
     # 4:00 - Limpieza de cÃ³digos de estado de cuenta (expirados o usados > 24 h)
     _scheduler.add_job(
         _job_limpiar_estado_cuenta_codigos,
@@ -293,10 +362,15 @@ def start_scheduler() -> None:
         _caches_notif_log += "; caché Diferencia abono domingo 04:10"
     if getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
         _caches_notif_log += "; caché Q vs aprobación domingo 04:20"
+    _prest_cand_log = ""
+    if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
+        _prest_cand_log = "; candidatos prestamo Drive dom/mie 04:05"
     logger.info(
         "Scheduler iniciado: finiquito 02:00%s; auditoria 03:00; "
-        "hoja Drive CONCILIACION dom/mie 04:00; limpieza estado_cuenta_codigos 4:00%s (%s).",
+        "hoja Drive CONCILIACION dom/mie 02:00; caché Clientes Drive dom/mie 03:00%s; "
+        "limpieza estado_cuenta_codigos 4:00%s (%s).",
         _caches_notif_log,
+        _prest_cand_log,
         _gmail_log,
         SCHEDULER_TZ,
     )

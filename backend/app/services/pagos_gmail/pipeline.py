@@ -1,24 +1,24 @@
 """
-Orquestacion: Gmail -> Gemini/BD/Drive **solo** si el mensaje cumple regla inegociable **una sola pieza** (ver abajo); si no, sin escaneo ni filas comprobante.
-  -> commit BD (fila sin enlaces Drive) -> subida Drive -> commit enlaces en BD.
-  Asi no quedan archivos en Drive sin fila; los enlaces existen en BD justo despues del segundo commit.
-  Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni archivo en Drive para ese adjunto.
+Orquestacion: Gmail -> Gemini/BD **solo** si el mensaje cumple regla inegociable **una sola pieza** (ver abajo); si no, sin escaneo ni filas comprobante.
+  -> commit BD (fila sin enlace aun) -> comprobante imagen/PDF en tabla pago_comprobante_imagen + URL en drive_link -> commit.
+  El archivo del comprobante **no** se sube a Drive; el .eml del correo puede seguir guardandose en Drive (auditoria).
+  Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni comprobante en BD para ese adjunto.
 
 **Primera regla (remitente vs tabla clientes):** se compara el correo del **De (From)** con `clientes.email` y, si no coincide, con `clientes.email_secundario` (trim, minúsculas).
 Si **coincide** con alguno: aplican las reglas siguientes (Gemini/plantillas, **MERCANTIL**/**BNC**/**BINANCE**/**BNV**, **MASTER**, **MANUAL**, **OTROS**, etc., según corresponda).
-Si **no** coincide (o falla la consulta a clientes): en Gmail **únicamente** la etiqueta de usuario **ERROR EMAIL** — no se puede aplicar **ninguna otra** etiqueta de clasificación en ese mensaje (ni MERCANTIL, ni **MANUAL**, ni **OTROS**, etc.). Sí puede seguir la generación de fila Excel / Drive si el comprobante es plantilla válida (columna Cédula ERROR EMAIL / ERROR BD).
+Si **no** coincide (o falla la consulta a clientes): en Gmail **únicamente** la etiqueta de usuario **ERROR EMAIL** — no se puede aplicar **ninguna otra** etiqueta de clasificación en ese mensaje (ni MERCANTIL, ni **MANUAL**, ni **OTROS**, etc.). Sí puede seguir la generación de fila Excel / comprobante en BD si el comprobante es plantilla válida (columna Cédula ERROR EMAIL / ERROR BD).
 Si en un mensaje aplica **ERROR EMAIL** en Gmail (incluido remitente sin match pero con filas comprobante): **solo ERROR EMAIL** en ese paso, nunca combinada con otras etiquetas.
 Si **sí** hay coincidencia de remitente en clientes: aplican el resto de reglas (plantillas, MASTER para **master@rapicreditca.com**, etc.). Re-lectura cédula A/B desde la imagen: solo con **scan_filter=error_email_rescan** (no se añade etiqueta Gmail por ese re-escaneo).
 Remitente **master@rapicreditca.com** con fila en clientes: en Gmail solo etiqueta **MASTER** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
 Remitente **master@rapicreditca.com** **sin** fila en clientes: aplica la primera regla (**solo ERROR EMAIL** en Gmail; no **MASTER**).
-**Regla inegociable (una sola pieza):** tras expandir PDF, solo se procesa (Gemini, filas, Drive) si hay **exactamente un** candidato imagen/PDF **y** **ningún** PDF de más de una página omitido en ese mensaje. Si hay **0** candidatos pero sí PDF multipágina omitido(s), o **más de un** candidato, o **cualquier** PDF multipágina omitido junto a otros medios: **no** Gemini ni filas comprobante. En Gmail: con remitente en clientes **solo etiqueta MANUAL** (sin MERCANTIL/BNC/OTROS/MASTER ni otras); sin remitente en clientes **solo ERROR EMAIL** (sin MANUAL ni otras).
+**Regla inegociable (una sola pieza):** tras expandir PDF, solo se procesa (Gemini, filas, comprobante en BD) si hay **exactamente un** candidato imagen/PDF **y** **ningún** PDF de más de una página omitido en ese mensaje. Si hay **0** candidatos pero sí PDF multipágina omitido(s), o **más de un** candidato, o **cualquier** PDF multipágina omitido junto a otros medios: **no** Gemini ni filas comprobante. En Gmail: con remitente en clientes **solo etiqueta MANUAL** (sin MERCANTIL/BNC/OTROS/MASTER ni otras); sin remitente en clientes **solo ERROR EMAIL** (sin MANUAL ni otras).
 Si en un mismo correo hubiera **varios** comprobantes digitalizados OK de tipos distintos (**A**/**B**/**C**/**D**/**NR**), no MERCANTIL/BNC/BINANCE/BNV conjuntos y solo **MANUAL** (con cliente); con la regla **una sola pieza** ese caso no se da en el flujo actual (un solo candidato escaneable).
 Etiquetas Gmail MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo con remitente en clientes y si el correo cumple al 100%: cada candidato imagen/PDF debe ser
 plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
 fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From): primero `email`, luego `email_secundario`.
 Si hay cliente pero falla otro requisito de cédula en flujo normal: columna Cedula = ERROR EMAIL / ERROR BD según corresponda; en Gmail **solo ERROR EMAIL** (sin otras etiquetas en la misma aplicación).
 Si falla la consulta a clientes: ERROR BD (misma etiqueta Gmail que ERROR EMAIL) y se trata como remitente no válido para el resto de etiquetas.
-En ambos casos (3.3) igual se genera fila Excel y subida Drive si el comprobante es plantilla valida.
+En ambos casos (3.3) igual se genera fila Excel y comprobante en BD si el comprobante es plantilla valida.
 Si ninguna etiqueta de clasificacion aplica y el remitente está en clientes: etiqueta Gmail **OTROS** (con candidatos imagen/PDF).
 Si en cualquier archivo falta requisito o no es plantilla valida: no etiquetas de plantilla; con candidatos imagen/PDF
 se marca **no leido** en Gmail para reintento (no se modifican estrellas: las deja el usuario). No inventar datos: Gemini ya devuelve NA si no hay certeza.
@@ -81,6 +81,7 @@ from app.services.pagos_gmail.helpers import (
     normalizar_referencia,
     resolve_banco_para_excel_pagos_gmail,
 )
+from app.services.pagos_gmail.comprobante_bd import persistir_comprobante_gmail_en_bd
 
 logger = logging.getLogger(__name__)
 
@@ -420,7 +421,7 @@ def run_pipeline(
                 # True solo si un adjunto se descarta por formato/parse (no por cedula del remitente).
                 any_skipped_not_plantilla_o_campos = False
                 label_ids_for_message: list[str] = []
-                # Formatos A/B/C/D/NR subidos OK a Drive en este mensaje (para detectar mezcla -> MANUAL).
+                # Formatos A/B/C/D/NR digitalizados OK (comprobante en BD) en este mensaje (para detectar mezcla -> MANUAL).
                 bank_fmts_digitized: list[str] = []
                 gmail_etiqueta_clasificacion_aplicada = False
                 if not candidatos:
@@ -666,7 +667,7 @@ def run_pipeline(
                             db.commit()
                             committed_comprobante_rows = True
                             logger.info(
-                                "[PAGOS_GMAIL]   Commit BD inicial: %d fila(s) comprobante sin enlaces Drive aun",
+                                "[PAGOS_GMAIL]   Commit BD inicial: %d fila(s) comprobante sin enlace a comprobante aun",
                                 len(rows_pairs),
                             )
                             for _, _, p in rows_pairs:
@@ -675,7 +676,7 @@ def run_pipeline(
                                     seen_attachment_sha256.add(d)
                         except Exception as commit_err:
                             logger.warning(
-                                "[PAGOS_GMAIL] Error commit filas BD (antes de Drive): %s",
+                                "[PAGOS_GMAIL] Error commit filas BD (antes de enlazar comprobante): %s",
                                 commit_err,
                             )
                             db.rollback()
@@ -705,32 +706,30 @@ def run_pipeline(
                                     )
 
                             for si, gt, p in rows_pairs:
-                                up = upload_file(
-                                    drive_svc,
-                                    MediaIoBaseUpload,
-                                    folder_id,
-                                    p["filename"],
+                                persisted = persistir_comprobante_gmail_en_bd(
+                                    db,
                                     p["content"],
                                     p["mime_type"],
                                 )
-                                if not up:
+                                if not persisted:
                                     any_incomplete_or_skipped = True
                                     logger.warning(
-                                        "[PAGOS_GMAIL]   Drive fallo subida tras commit BD - fila sin link: %s",
+                                        "[PAGOS_GMAIL]   No se pudo guardar comprobante en BD tras commit inicial - "
+                                        "fila sin link: %s",
                                         p["filename"],
                                     )
                                     continue
-                                file_id, drive_link = up
+                                _uid, link_url = persisted
                                 logger.info(
-                                    "[PAGOS_GMAIL]   Drive OK: %s -> %s",
+                                    "[PAGOS_GMAIL]   Comprobante en BD OK: %s -> %s",
                                     p["filename"],
-                                    (drive_link or "")[:60],
+                                    (link_url or "")[:72],
                                 )
-                                si.drive_file_id = file_id
-                                si.drive_link = drive_link or None
+                                si.drive_file_id = None
+                                si.drive_link = link_url or None
                                 si.drive_email_link = drive_email_link
-                                gt.drive_file_id = file_id
-                                gt.drive_link = drive_link or None
+                                gt.drive_file_id = None
+                                gt.drive_link = link_url or None
                                 gt.drive_email_link = drive_email_link
                                 files_ok += 1
                                 had_complete_digitalization = True
@@ -774,7 +773,7 @@ def run_pipeline(
                                 db.commit()
                             except Exception as upd_err:
                                 logger.warning(
-                                    "[PAGOS_GMAIL] Error commit enlaces Drive en BD: %s",
+                                    "[PAGOS_GMAIL] Error commit enlaces comprobante (.eml / link) en BD: %s",
                                     upd_err,
                                 )
                                 db.rollback()
@@ -795,7 +794,7 @@ def run_pipeline(
                         )
                     elif any_cedula_lookup_failed:
                         logger.warning(
-                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; comprobantes reconocidos y subidos pero "
+                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; comprobantes reconocidos y guardados en BD pero "
                             "remitente sin match en clientes (columna Cedula ERROR EMAIL/BD). "
                             "En Gmail solo ERROR EMAIL (sin MERCANTIL/BNC/BINANCE/BNV).",
                             n_att,
@@ -804,12 +803,12 @@ def run_pipeline(
                         logger.warning(
                             "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C/D valida "
                             "o fallaron -> sin etiquetas plantilla ni leido (se exige 100%% OK en todos). "
-                            "Puede haber filas BD sin link Drive si fallo la subida tras el primer commit.",
+                            "Puede haber filas BD sin link si fallo el guardado del comprobante tras el primer commit.",
                             n_att,
                         )
                     else:
                         logger.warning(
-                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; incompleto por commit/subida Drive u otro fallo "
+                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; incompleto por commit/guardado comprobante u otro fallo "
                             "-> sin etiquetas plantilla ni leido (100%% en todos).",
                             n_att,
                         )

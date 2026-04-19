@@ -6,7 +6,7 @@ API v1
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet
 
 from app.api.v1.endpoints.dashboard import kpis
 
@@ -358,6 +358,11 @@ api_router.include_router(
     tags=["clientes"],
 )
 
+api_router.include_router(
+    prestamos_candidatos_drive.router,
+    prefix="/prestamos/candidatos-drive",
+    tags=["prestamos"],
+)
 
 
 # Tickets CRM (conectado a BD clientes + tabla tickets; notificación por correo)

@@ -38,7 +38,6 @@ import {
   TrendingUp,
   LayoutList,
   Calendar,
-  UserPlus,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -233,7 +232,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         {
           title: 'Clientes',
           href: '/notificaciones/clientes-drive',
-          icon: UserPlus,
+          icon: User,
           adminOnly: true,
         },
         {

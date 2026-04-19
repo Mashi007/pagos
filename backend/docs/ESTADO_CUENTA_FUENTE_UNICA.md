@@ -1,5 +1,7 @@
 ﻿# Estado de cuenta: fuente unica de datos y consumidores
 
+Panorama junto con recibos: `backend/docs/DOCUMENTOS_CLIENTE_CENTRO_UNICO.md`.
+
 ## Modulos
 
 | Archivo | Responsabilidad |
