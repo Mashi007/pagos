@@ -79,7 +79,10 @@ def post_drive_clientes_exportar_excel(
     )
 
 
-@router.post("/importar", summary="Insertar clientes seleccionados (mismas reglas que POST /clientes)")
+@router.post(
+    "/importar",
+    summary="Insertar clientes seleccionados (parcial: las filas válidas se guardan; las fallidas quedan para revisar)",
+)
 def post_drive_clientes_importar(
     body: ImportarClientesDriveBody,
     db: Session = Depends(get_db),

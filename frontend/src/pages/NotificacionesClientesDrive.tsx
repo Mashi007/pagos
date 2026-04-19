@@ -303,13 +303,17 @@ export default function NotificacionesClientesDrive() {
           sheet_row_numbers,
           comentario: comentarioAuditoria,
         })
-        if (res.lote_abortado && res.insertados_ok === 0 && res.errores > 0) {
+        if (res.insertados_ok === 0 && res.errores > 0) {
           toast.error(
-            `No se guardó ninguna fila del lote (regla atómica: si una falla, no se persiste ninguna). ${res.errores} error(es). Lote ${res.batch_id}`
+            `No se guardó ninguna fila. ${res.errores} error(es). Revise la lista y corrija en Drive o en edición. Lote ${res.batch_id}`
+          )
+        } else if (res.insertados_ok > 0 && res.errores > 0) {
+          toast.success(
+            `Guardados ${res.insertados_ok} cliente(s). Quedan ${res.errores} fila(s) sin guardar (siguen en la lista para revisar). Lote ${res.batch_id}`
           )
         } else {
           toast.success(
-            `Proceso terminado: ${res.insertados_ok} insertado(s), ${res.errores} error(es). Lote ${res.batch_id}`
+            `Proceso terminado: ${res.insertados_ok} insertado(s), sin errores. Lote ${res.batch_id}`
           )
         }
         if (res.errores > 0 && Array.isArray(res.resultados)) {
@@ -324,7 +328,13 @@ export default function NotificacionesClientesDrive() {
             { duration: 14000 }
           )
         }
-        setSelected({})
+        setSelected(prev => {
+          const next = { ...prev }
+          for (const r of res.resultados ?? []) {
+            if (r.ok) delete next[r.sheet_row_number]
+          }
+          return next
+        })
         setComentario('')
         await refetchCandidatosYAuditoria()
       } catch (e) {

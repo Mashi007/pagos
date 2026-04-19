@@ -401,8 +401,9 @@ def importar_seleccion_desde_drive(
     sheet_rows: List[int],
 ) -> Dict[str, Any]:
     """
-    Importa varias filas en un solo lote atómico: si una fila falla (validación previa o 409/500 al insertar),
-    no se persiste ningún cliente ni auditoría de insertado del lote (rollback completo).
+    Importa varias filas en modo **parcial**: cada fila que cumple preflight e inserta en BD se persiste
+    con su auditoría; las que fallan (preflight o error al insertar) no bloquean al resto.
+    Devuelve `resultados` en el orden de `sheet_row_numbers` con `ok` / `error` por fila.
     """
     if not sheet_rows:
         raise HTTPException(status_code=400, detail="Debe enviar al menos una fila (sheet_row_number).")
@@ -600,31 +601,12 @@ def importar_seleccion_desde_drive(
         carga.append((sr, info, payload))
 
     pre_errors = early_errors + late_errors
+    preflight_err: Dict[int, str] = {int(e["sheet_row_number"]): str(e["error"]) for e in pre_errors}
 
-    if pre_errors:
-        err_map = {int(e["sheet_row_number"]): str(e["error"]) for e in pre_errors}
-        gen = "Lote no guardado: una o más filas del mismo envío no cumplen validadores."
-        resultados: List[Dict[str, Any]] = []
-        for sheet_row in sheet_rows:
-            isr = int(sheet_row)
-            resultados.append(
-                {
-                    "sheet_row_number": isr,
-                    "ok": False,
-                    "error": err_map.get(isr, gen),
-                }
-            )
-        return {
-            "batch_id": batch_id,
-            "insertados_ok": 0,
-            "errores": len(resultados),
-            "resultados": resultados,
-            "lote_abortado": True,
-        }
-
-    resultados: List[Dict[str, Any]] = []
-    try:
-        for sr, _info, payload in carga:
+    insertados_por_fila: List[Dict[str, Any]] = []
+    insertados_ok = 0
+    for sr, _info, payload in carga:
+        try:
             row = create_cliente_from_payload(db, payload, commit=False)
             db.add(
                 AuditoriaClienteAltaDesdeDrive(
@@ -640,44 +622,58 @@ def importar_seleccion_desde_drive(
                     detalle_error=None,
                 )
             )
-            resultados.append({"sheet_row_number": sr, "ok": True, "cliente_id": row.id})
-        db.commit()
-    except HTTPException as he:
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        detail = he.detail if isinstance(he.detail, str) else str(he.detail)
-        raise HTTPException(
-            status_code=he.status_code,
-            detail=f"No se guardó ninguna fila del lote (todo revertido). {detail}",
-        ) from he
-    except Exception as ex:  # pragma: no cover
-        logger.exception("importar_seleccion_desde_drive lote: %s", ex)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        raise HTTPException(
-            status_code=500,
-            detail=f"No se guardó ninguna fila del lote (todo revertido). {ex!s}",
-        ) from ex
+            db.commit()
+            insertados_ok += 1
+            insertados_por_fila.append({"sheet_row_number": sr, "ok": True, "cliente_id": row.id})
+        except HTTPException as he:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            detail = he.detail if isinstance(he.detail, str) else str(he.detail)
+            insertados_por_fila.append({"sheet_row_number": sr, "ok": False, "error": detail})
+        except Exception as ex:  # pragma: no cover
+            logger.exception("importar_seleccion_desde_drive fila=%s: %s", sr, ex)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            insertados_por_fila.append({"sheet_row_number": sr, "ok": False, "error": str(ex)})
 
-    try:
-        refrescar_cache_candidatos_drive(db)
-    except Exception:
-        logger.warning(
-            "[drive_clientes_candidatos_cache] no se pudo refrescar tras importar lote batch_id=%s",
-            batch_id,
-            exc_info=True,
-        )
+    insert_map = {int(r["sheet_row_number"]): r for r in insertados_por_fila}
+    resultados: List[Dict[str, Any]] = []
+    for sheet_row in sheet_rows:
+        isr = int(sheet_row)
+        if isr in preflight_err:
+            resultados.append({"sheet_row_number": isr, "ok": False, "error": preflight_err[isr]})
+        elif isr in insert_map:
+            resultados.append(insert_map[isr])
+        else:
+            resultados.append(
+                {
+                    "sheet_row_number": isr,
+                    "ok": False,
+                    "error": "Fila no procesada (no estaba en candidatos válidos para este envío).",
+                }
+            )
+
+    errores = sum(1 for r in resultados if not r.get("ok"))
+    if insertados_ok > 0:
+        try:
+            refrescar_cache_candidatos_drive(db)
+        except Exception:
+            logger.warning(
+                "[drive_clientes_candidatos_cache] no se pudo refrescar tras importar lote batch_id=%s",
+                batch_id,
+                exc_info=True,
+            )
 
     return {
         "batch_id": batch_id,
-        "insertados_ok": len(carga),
-        "errores": 0,
+        "insertados_ok": insertados_ok,
+        "errores": errores,
         "resultados": resultados,
-        "lote_abortado": False,
+        "lote_abortado": insertados_ok == 0 and errores > 0,
     }
 
 
