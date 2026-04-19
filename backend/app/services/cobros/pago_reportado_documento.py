@@ -10,6 +10,7 @@ Criterio unificado (anti-duplicado / idempotencia):
 """
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Iterable, Optional
 
 from sqlalchemy import select
@@ -20,6 +21,42 @@ from app.models.pago_reportado import PagoReportado
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
+
+# Referencia interna automática (RPC-YYYYMMDD-NNNNN), con o sin prefijo COB-.
+_REF_INTERNA_RPC_RECIBO = re.compile(r"^(COB-)?RPC-\d{8}-\d{5}$", re.IGNORECASE)
+
+
+def _es_solo_referencia_interna_rpc_automatica(s: str) -> bool:
+    return bool((s or "").strip() and _REF_INTERNA_RPC_RECIBO.match((s or "").strip()))
+
+
+def texto_numero_documento_recibo_desde_reportado(pr: PagoReportado) -> str:
+    """
+    Valor del recibo PDF (voucher / Nº de documento del banco): ``numero_operacion`` del reporte,
+    excepto cuando es la misma cadena que ``referencia_interna`` o solo la clave RPC automática.
+    """
+    op = (getattr(pr, "numero_operacion", None) or "").strip()
+    refi = (getattr(pr, "referencia_interna", None) or "").strip()
+    if not op:
+        return ""
+    if refi and op == refi:
+        return ""
+    if _es_solo_referencia_interna_rpc_automatica(op):
+        return ""
+    return op[:100]
+
+
+def texto_numero_documento_recibo_desde_pago_cartera(
+    numero_documento: Optional[str],
+    referencia_pago: Optional[str],
+) -> str:
+    """Recibo cartera: preferir texto que no sea solo clave interna tipo RPC/COB-RPC."""
+    nd = (numero_documento or "").strip()
+    refp = (referencia_pago or "").strip()
+    for cand in (nd, refp):
+        if cand and not _es_solo_referencia_interna_rpc_automatica(cand):
+            return cand[:100]
+    return (refp or nd)[:100]
 
 
 def documento_numero_desde_pago_reportado(pr: PagoReportado) -> tuple[str, str]:

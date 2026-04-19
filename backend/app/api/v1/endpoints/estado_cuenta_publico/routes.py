@@ -91,6 +91,7 @@ from app.services.estado_cuenta_datos import (
     texto_institucion_recibo_cuota,
 )
 from app.services.cobros.recibo_pdf import _formato_decimal_ve, _formato_monto_venezolano
+from app.services.cobros.pago_reportado_documento import texto_numero_documento_recibo_desde_pago_cartera
 from app.services.cobros.recibo_pago_cartera_pdf import generar_recibo_pago_cartera_pdf
 from app.services.documentos_cliente_centro import (
     generar_pdf_estado_cuenta,
@@ -690,7 +691,8 @@ def get_recibo_pago_cartera_publico(
     ced_tit = (getattr(prestamo, "cedula", None) or "").strip() or "-"
     ced_comp = (getattr(pago, "cedula_cliente", None) or "").strip() or "-"
     banco = (getattr(pago, "institucion_bancaria", None) or "").strip() or "-"
-    num_op = (doc or refp or "-")[:100]
+    num_disp = texto_numero_documento_recibo_desde_pago_cartera(doc, refp).strip()
+    num_op = (num_disp or "-")[:100]
     moneda_raw = (getattr(pago, "moneda_registro", None) or "").strip().upper()
     es_bs = moneda_raw in ("BS", "BOLIVAR", "BOLIVARES")
     monto_usd = float(getattr(pago, "monto_pagado", 0) or 0)

@@ -18,6 +18,9 @@ from app.models.pago_reportado import PagoReportado
 from app.services.cobros.pago_reportado_comprobante_unico import (
     comprobante_bytes_y_content_type_desde_reportado,
 )
+from app.services.cobros.pago_reportado_documento import (
+    texto_numero_documento_recibo_desde_reportado,
+)
 from app.services.cobros.recibo_cuotas_lookup import (
     obtener_saldos_cuota_aplicada,
     texto_cuotas_aplicadas_pago_reportado,
@@ -81,7 +84,7 @@ def kwargs_recibo_pago_reportado(db: Session, pr: PagoReportado) -> Dict[str, An
         "numero_cedula": pr.numero_cedula,
         "institucion_financiera": pr.institucion_financiera,
         "monto": monto_texto_pago_reportado(pr),
-        "numero_operacion": pr.numero_operacion,
+        "numero_operacion": texto_numero_documento_recibo_desde_reportado(pr),
         "fecha_pago": pr.fecha_pago,
         "fecha_reporte_aprobacion_display": fecha_reporte_aprobacion_display,
         "aplicado_a_cuotas": cuotas_txt,

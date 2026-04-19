@@ -165,7 +165,7 @@ def generar_recibo_pago_cartera_pdf(
         [
             Paragraph("BANCO / INSTITUCION", label_style),
             Paragraph(banco or "-", value_style),
-            Paragraph("OPERACION", label_style),
+            Paragraph("NÚMERO DE DOCUMENTO", label_style),
             Paragraph(numero_operacion or "-", value_style),
         ],
         [

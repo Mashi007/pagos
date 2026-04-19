@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, desc, func, select
@@ -240,6 +241,69 @@ def _link_comprobante_es_url_http(val: Any) -> bool:
     return bool(s and s.lower().startswith(("http://", "https://")))
 
 
+# Referencia interna del reporte web (RPC-YYYYMMDD-NNNNN), con o sin prefijo COB- en cartera.
+_REF_INTERN_RPC = re.compile(r"^(COB-)?RPC-\d{8}-\d{5}$", re.IGNORECASE)
+
+
+def _es_referencia_interna_rpc_o_cob(val: str) -> bool:
+    s = (val or "").strip()
+    return bool(s and _REF_INTERN_RPC.match(s))
+
+
+def _referencia_interna_desde_numero_documento_pago(nd: str) -> Optional[str]:
+    """Si ``pagos.numero_documento`` enlaza un ``pagos_reportados``, devuelve ``referencia_interna``."""
+    s = (nd or "").strip()
+    if not s:
+        return None
+    if s.upper().startswith("COB-"):
+        s = s[4:].strip()
+    if _es_referencia_interna_rpc_o_cob(s):
+        return s
+    return None
+
+
+def _enriquecer_documento_columna_pagos_realizados(db: Session, filas: List[dict]) -> None:
+    """
+    Texto para columna «Documento» en PDF/API: número de operación / voucher del cliente.
+
+    Evita mostrar solo la referencia interna automática (RPC-…) cuando existe
+    ``pagos_reportados.numero_operacion`` para el mismo reporte.
+    """
+    refs: set[str] = set()
+    for r in filas:
+        nd = (r.get("numero_documento") or "").strip()
+        ri = _referencia_interna_desde_numero_documento_pago(nd)
+        if ri:
+            refs.add(ri)
+    by_ri: dict[str, PagoReportado] = {}
+    if refs:
+        prs = db.execute(
+            select(PagoReportado).where(PagoReportado.referencia_interna.in_(sorted(refs)))
+        ).scalars().all()
+        for obj in prs:
+            ri = (getattr(obj, "referencia_interna", None) or "").strip()
+            if ri:
+                by_ri[ri] = obj
+    for r in filas:
+        nd = (r.get("numero_documento") or "").strip()
+        refp = (r.get("referencia_pago") or "").strip()
+        tab = (r.get("referencia_tabla") or "").strip()
+        ri = _referencia_interna_desde_numero_documento_pago(nd)
+        op_rep = ""
+        if ri and ri in by_ri:
+            op_rep = (getattr(by_ri[ri], "numero_operacion", None) or "").strip()
+        r["numero_operacion_reportado"] = op_rep or None
+        if op_rep:
+            r["documento_columna"] = op_rep[:100]
+            continue
+        for cand in (nd, refp):
+            if cand and not _es_referencia_interna_rpc_o_cob(cand):
+                r["documento_columna"] = cand[:100]
+                break
+        else:
+            r["documento_columna"] = (nd or refp or tab)[:100] if (nd or refp or tab) else None
+
+
 def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) -> List[dict]:
     """Pagos PAGADO en tabla pagos; subtotal_usd = monto_pagado (USD cartera)."""
     if not prestamo_ids:
@@ -318,6 +382,7 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
                 "link_comprobante": (link_foto or None),
             }
         )
+    _enriquecer_documento_columna_pagos_realizados(db, resultado)
     pend = [r for r in resultado if not _link_comprobante_es_url_http(r.get("link_comprobante"))]
     if pend:
         pseudo = [

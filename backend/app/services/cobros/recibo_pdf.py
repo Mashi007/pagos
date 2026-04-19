@@ -499,7 +499,7 @@ def generar_recibo_pago_reportado(
         [
             Paragraph("BANCO", label_style),
             Paragraph(banco_valido or "-", value_style),
-            Paragraph("OPERACIÓN", label_style),
+            Paragraph("NÚMERO DE DOCUMENTO", label_style),
             Paragraph(numero_op or "-", value_style),
         ],
         [
@@ -532,7 +532,7 @@ def generar_recibo_pago_reportado(
     ]
 
     # Etiquetas (cols 0 y 2): ancho suficiente para no partir palabras largas (fecha de reporte, monto pagado, etc.).
-    # Col 3: valores largos (número de operación) pueden partirse; col 1: titular.
+    # Col 3: valores largos (número de documento / voucher) pueden partirse; col 1: titular.
     _info_col_w = [
         _content_w * 0.20,
         _content_w * 0.28,
@@ -610,14 +610,14 @@ def generar_recibo_pago_reportado(
             "Se confirma la recepcion de su reporte de pago, asociado al titular "
             f"<b>{nombre_completo or '-'}</b> (cedula <b>{cedula or '-'}</b>). "
             f"El pago fue reportado por <b>{monto_display or '-'}</b> en la institucion "
-            f"<b>{banco_valido}</b>, con numero de operacion <b>{numero_op or '-'}</b>."
+            f"<b>{banco_valido}</b>, con numero de documento <b>{numero_op or '-'}</b>."
         )
     else:
         cuerpo = (
             "Se confirma la recepcion de su reporte de pago, asociado al titular "
             f"<b>{nombre_completo or '-'}</b> (cedula <b>{cedula or '-'}</b>). "
             f"El pago fue reportado por <b>{monto_display or '-'}</b>, "
-            f"con numero de operacion <b>{numero_op or '-'}</b>."
+            f"con numero de documento <b>{numero_op or '-'}</b>."
         )
     if aplicado_a_cuotas and (aplicado_a_cuotas or "").strip():
         cuerpo += (

@@ -313,8 +313,10 @@ def generar_pdf_estado_cuenta(
                 rec_cell = Paragraph('<font color="#94a3b8">-</font>', styles["EC_Link"])
             # Sin enlaces externos (Drive / URL): la imagen del comprobante va solo en el PDF del recibo
             # (`/estado-cuenta/public/recibo-pago` o recibo por pago reportado).
+            # «Documento»: voucher / Nº operación (estado_cuenta_datos.documento_columna), no la ref. interna RPC sola.
             doc_raw = (
-                (pr.get("numero_documento") or "").strip()
+                (pr.get("documento_columna") or "").strip()
+                or (pr.get("numero_documento") or "").strip()
                 or (pr.get("referencia_pago") or "").strip()
                 or (pr.get("referencia_tabla") or "").strip()
             )
