@@ -3,6 +3,7 @@ Propuestas de alta de cliente desde snapshot `drive` (columnas D–G = nombres, 
 
 Comparación de cédulas: misma normalización que POST /clientes/check-cedulas (`_normalizar_cedula_carga_masiva`).
 Validación de formato de cédula: `validate_cedula` (mismas reglas que Validadores).
+Teléfono columna F: dígitos solos, sin guión; quita 58 inicial si viene internacional y un 0 inicial en números de 11 dígitos.
 """
 from __future__ import annotations
 
@@ -51,6 +52,56 @@ def _cedula_para_bd_desde_validacion(valor_formateado: str) -> str:
     return s
 
 
+def _cedula_cmp_unificada(raw: str) -> str:
+    """
+    Clave estable para comparar cédulas (hoja vs BD vs duplicados en snapshot).
+    Alinea con validate_cedula: si en la celda solo hay dígitos (6-11), se asume prefijo V.
+    Así «24861353» en Drive y «V24861353» en clientes comparten la misma clave.
+    """
+    from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
+    from app.api.v1.endpoints.validadores import validate_cedula
+
+    s = _cell(raw)
+    if not s:
+        return ""
+    vced = validate_cedula(s)
+    if vced.get("valido"):
+        vf = str(vced.get("valor_formateado") or "").strip()
+        bd = _cedula_para_bd_desde_validacion(vf)
+        return _normalizar_cedula_carga_masiva(bd)
+    return _normalizar_cedula_carga_masiva(s)
+
+
+def _cedula_texto_columna_drive(raw: str, vced: Dict[str, Any]) -> str:
+    """Texto mostrado para columna E: formato V-… cuando aplica (igual que validadores con V implícita)."""
+    s = _cell(raw)
+    if vced.get("valido"):
+        return str(vced.get("valor_formateado") or s).strip()
+    digits = re.sub(r"\D", "", s)
+    if digits and re.match(r"^\d{6,11}$", digits):
+        return f"V-{digits}"
+    return s
+
+
+def _telefono_normalizado_drive_col_f(raw: str) -> str:
+    """
+    Columna F: quita guiones/espacios y deja solo dígitos; quita prefijo 58 si aplica;
+    si quedan 11 dígitos y el primero es 0 (ej. 0412…), quita ese 0 inicial → 10 dígitos nacionales.
+    Ej.: 0412-9941999 → 4129941999
+    """
+    s = _cell(raw)
+    if not s:
+        return ""
+    digits = re.sub(r"\D", "", s)
+    if not digits:
+        return ""
+    if len(digits) >= 12 and digits.startswith("58"):
+        digits = digits[2:]
+    if len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    return digits
+
+
 def _dt_trunc_seconds(dt: Optional[datetime]) -> Optional[datetime]:
     if dt is None:
         return None
@@ -58,14 +109,13 @@ def _dt_trunc_seconds(dt: Optional[datetime]) -> Optional[datetime]:
 
 
 def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
-    from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
     from app.api.v1.endpoints.validadores import validate_cedula
 
     rows = db.execute(select(DriveRow).order_by(DriveRow.sheet_row_number.asc())).scalars().all()
     cedulas_bd = db.execute(select(Cliente.cedula)).scalars().all()
     en_bd: set[str] = set()
     for c in cedulas_bd or []:
-        n = _normalizar_cedula_carga_masiva(c or "")
+        n = _cedula_cmp_unificada(c or "")
         if n:
             en_bd.add(n)
 
@@ -73,7 +123,7 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
     tmp: List[Tuple[DriveRow, str]] = []
     for r in rows or []:
         raw_e = _cell(getattr(r, "col_e", None))
-        cmp_e = _normalizar_cedula_carga_masiva(raw_e)
+        cmp_e = _cedula_cmp_unificada(raw_e)
         if not cmp_e:
             continue
         conteos[cmp_e] = conteos.get(cmp_e, 0) + 1
@@ -99,13 +149,15 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
 
         email_propuesto = raw_g if _validate_email_basic(raw_g) else _PLACEHOLDER_EMAIL
         nombres_propuesto = raw_d if raw_d else "Revisar Nombres"
+        col_e_mostrar = _cedula_texto_columna_drive(raw_e, vced)
+        tel_norm = _telefono_normalizado_drive_col_f(raw_f)
 
         candidatos.append(
             {
                 "sheet_row_number": r.sheet_row_number,
                 "col_d_nombres": raw_d or None,
-                "col_e_cedula": raw_e or None,
-                "col_f_telefono": raw_f or None,
+                "col_e_cedula": col_e_mostrar or None,
+                "col_f_telefono": tel_norm or None,
                 "col_g_email": raw_g or None,
                 "cedula_cmp": cmp_e,
                 "cedula_valida": cedula_valida,
@@ -115,7 +167,7 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
                 "seleccionable": cedula_valida and not dup_sheet,
                 "defaults": {
                     "nombres": nombres_propuesto,
-                    "telefono": raw_f or "",
+                    "telefono": tel_norm,
                     "email": email_propuesto,
                     "direccion": _DEFAULT_DIRECCION,
                     "fecha_nacimiento": _DEFAULT_FECHA_NAC.isoformat(),
@@ -424,10 +476,7 @@ def importar_fila_desde_drive(
     body: ClienteDriveImportarFilaBody,
 ) -> Dict[str, Any]:
     """Inserta un cliente con ClienteCreate + auditoría; la cédula normalizada debe coincidir con `cedula_cmp` de la fila."""
-    from app.api.v1.endpoints.clientes import (
-        _normalizar_cedula_carga_masiva,
-        create_cliente_from_payload,
-    )
+    from app.api.v1.endpoints.clientes import create_cliente_from_payload
 
     snap = listar_candidatos_desde_drive(db)
     by_row = {int(c["sheet_row_number"]): c for c in (snap.get("candidatos") or [])}
@@ -444,7 +493,7 @@ def importar_fila_desde_drive(
         )
 
     cmp_expected = str(info.get("cedula_cmp") or "")
-    cmp_sent = _normalizar_cedula_carga_masiva(body.cedula or "")
+    cmp_sent = _cedula_cmp_unificada(body.cedula or "")
     if cmp_sent != cmp_expected:
         raise HTTPException(
             status_code=400,

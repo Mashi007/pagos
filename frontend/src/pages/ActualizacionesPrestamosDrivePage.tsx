@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   CreditCard,
@@ -27,10 +27,29 @@ import { getErrorMessage } from '../types/errors'
 
 const QK_BASE = ['actualizaciones', 'prestamos-drive', 'snapshot'] as const
 
-/** Filas por petición (offset crece de PAGE_SIZE en PAGE_SIZE). */
+/** Filas por página (offset en API = (página − 1) × PAGE_SIZE). */
 const PAGE_SIZE = 100
-/** Máximo de filas acumulables en pantalla (20 × 100); alineado al límite habitual del API. */
-const MAX_ROWS_UI = 2000
+/** Botones numéricos visibles a la vez (ventana deslizante). */
+const PAGE_WINDOW = 5
+
+/** Ventana de números de página centrada hacia `current`, acotada a `totalPages`. */
+function numerosPaginaVisibles(current: number, totalPages: number, maxButtons: number): number[] {
+  if (totalPages <= maxButtons) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1)
+  }
+  const half = Math.floor(maxButtons / 2)
+  let start = current - half
+  let end = start + maxButtons - 1
+  if (start < 1) {
+    start = 1
+    end = maxButtons
+  }
+  if (end > totalPages) {
+    end = totalPages
+    start = Math.max(1, end - maxButtons + 1)
+  }
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+}
 
 function strPayload(p: PrestamoCandidatoDriveFila['payload'], key: string): string {
   const v = p[key]
@@ -64,7 +83,6 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
     'val_formato',
     'val_tabla_v',
     'val_hoja',
-    'producto',
     'total_n',
     'modalidad_s',
     'fecha_q',
@@ -94,7 +112,6 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
         formatoOk ? 'ok' : 'no',
         tablaVOk ? 'ok' : 'no',
         hojaOk ? 'ok' : 'no',
-        strPayload(p, 'producto'),
         strPayload(p, 'col_n_total_financiamiento'),
         strPayload(p, 'col_s_modalidad_pago'),
         strPayload(p, 'col_q_fecha'),
@@ -117,84 +134,64 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
   URL.revokeObjectURL(url)
 }
 
-/** Cuadrícula de acciones (iconos en botones cuadrados), alineada al patrón UI de revisión por fila. */
-function AccionesIconGrid({
-  onActualizacionManual,
-  onGuardarValidos100,
-  manualUpdating,
-  guardarValidosSaving,
+/** Iconos de acción por fila (revisión tipo grilla). */
+function AccionesPorFilaCandidatoDrive({
+  fila,
   disabled,
 }: {
-  onActualizacionManual: () => void
-  onGuardarValidos100: () => void
-  manualUpdating: boolean
-  guardarValidosSaving: boolean
+  fila: PrestamoCandidatoDriveFila
   disabled: boolean
 }) {
   const iconBtn =
-    'h-10 w-10 shrink-0 rounded-md border border-slate-200 bg-white p-0 shadow-sm hover:bg-slate-50 disabled:opacity-50'
+    'h-8 w-8 shrink-0 rounded-md border border-slate-200 bg-white p-0 shadow-sm hover:bg-slate-50 disabled:opacity-50'
+  const sr = fila.sheet_row_number
 
   return (
-    <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-      <p className="mb-2 text-sm font-medium text-foreground">Acciones</p>
-      <div className="grid w-[5.5rem] grid-cols-2 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className={iconBtn}
-          title="Editar fila (próximamente)"
-          aria-label="Editar"
-          disabled={disabled}
-          onClick={() => toast.message('Edición de fila: próximamente.')}
-        >
-          <Edit2 className="h-4 w-4 text-foreground" strokeWidth={2} aria-hidden />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className={iconBtn}
-          title="Guardar en préstamos solo filas al 100% de validadores (sin marcar filas)"
-          aria-label="Guardar válidos al 100%"
-          disabled={disabled || guardarValidosSaving}
-          onClick={() => onGuardarValidos100()}
-        >
-          <Save
-            className={`h-4 w-4 text-foreground ${guardarValidosSaving ? 'animate-pulse' : ''}`}
-            strokeWidth={2}
-            aria-hidden
-          />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className={iconBtn}
-          title="Quitar de la lista (próximamente)"
-          aria-label="Borrar"
-          disabled={disabled}
-          onClick={() => toast.message('Borrar candidato: próximamente.')}
-        >
-          <Trash2 className="h-4 w-4 text-red-600" strokeWidth={2} aria-hidden />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className={iconBtn}
-          title="Actualización manual del snapshot (tabla drive → BD)"
-          aria-label="Actualización manual"
-          disabled={disabled}
-          onClick={() => onActualizacionManual()}
-        >
-          <RefreshCw
-            className={`h-4 w-4 text-foreground ${manualUpdating ? 'animate-spin' : ''}`}
-            strokeWidth={2}
-            aria-hidden
-          />
-        </Button>
-      </div>
+    <div className="flex flex-nowrap items-center justify-end gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className={iconBtn}
+        title={`Editar fila hoja ${sr} (próximamente)`}
+        aria-label={`Editar fila ${sr}`}
+        disabled={disabled}
+        onClick={() =>
+          toast.message(`Edición de fila ${sr} (hoja): próximamente.`)
+        }
+      >
+        <Edit2 className="h-3.5 w-3.5 text-foreground" strokeWidth={2} aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className={iconBtn}
+        title={`Guardar solo esta fila en préstamos (próximamente). Mientras tanto use «Guardar (100%)» arriba.`}
+        aria-label={`Guardar fila ${sr}`}
+        disabled={disabled}
+        onClick={() =>
+          toast.message(
+            `Guardar solo la fila ${sr}: próximamente. Use el botón «Guardar (100%)» para crear préstamos válidos en lote.`
+          )
+        }
+      >
+        <Save className="h-3.5 w-3.5 text-foreground" strokeWidth={2} aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className={iconBtn}
+        title={`Quitar candidato fila ${sr} (próximamente)`}
+        aria-label={`Borrar fila ${sr}`}
+        disabled={disabled}
+        onClick={() =>
+          toast.message(`Quitar candidato fila ${sr}: próximamente.`)
+        }
+      >
+        <Trash2 className="h-3.5 w-3.5 text-red-600" strokeWidth={2} aria-hidden />
+      </Button>
     </div>
   )
 }
@@ -222,37 +219,37 @@ export default function ActualizacionesPrestamosDrivePage() {
   const [forzarVacio, setForzarVacio] = useState(false)
   const [manualUpdating, setManualUpdating] = useState(false)
   const [guardarValidosSaving, setGuardarValidosSaving] = useState(false)
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     const t = window.setTimeout(() => setCedulaDebounced(cedulaInput.trim()), 400)
     return () => window.clearTimeout(t)
   }, [cedulaInput])
 
-  const infinite = useInfiniteQuery({
-    queryKey: [...QK_BASE, cedulaDebounced],
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
+  useEffect(() => {
+    setPage(1)
+  }, [cedulaDebounced])
+
+  const snapshotQuery = useQuery({
+    queryKey: [...QK_BASE, cedulaDebounced, page],
+    queryFn: () =>
       getPrestamosCandidatosDriveSnapshot(
         PAGE_SIZE,
-        pageParam as number,
+        (page - 1) * PAGE_SIZE,
         cedulaDebounced || undefined
       ),
-    getNextPageParam: (lastPage, allPages) => {
-      const loaded = allPages.reduce((sum, p) => sum + p.filas.length, 0)
-      const total = lastPage.total ?? 0
-      if (loaded >= total) return undefined
-      if (lastPage.filas.length === 0) return undefined
-      if (loaded >= MAX_ROWS_UI) return undefined
-      return loaded
-    },
   })
 
-  const rows = infinite.data?.pages.flatMap(p => p.filas) ?? []
-  const first = infinite.data?.pages[0]
-  const total = first?.total ?? 0
-  const totalSinFiltro = first?.total_sin_filtro
-  const loadedCount = rows.length
-  const cappedByUi = loadedCount >= MAX_ROWS_UI && loadedCount < total
+  const data = snapshotQuery.data
+  const rows = data?.filas ?? []
+  const total = data?.total ?? 0
+  const totalSinFiltro = data?.total_sin_filtro
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const pageNumbers = numerosPaginaVisibles(page, totalPages, PAGE_WINDOW)
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   const onRecalcular = useCallback(async () => {
     setManualUpdating(true)
@@ -284,7 +281,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     }
   }, [qc, forzarVacio, cedulaDebounced])
 
-  const refetchLista = infinite.refetch
+  const refetchLista = snapshotQuery.refetch
 
   const onGuardarValidos100 = useCallback(async () => {
     setGuardarValidosSaving(true)
@@ -317,10 +314,6 @@ export default function ActualizacionesPrestamosDrivePage() {
     }
   }, [refetchLista])
 
-  const onVolverInicio = useCallback(() => {
-    void qc.resetQueries({ queryKey: [...QK_BASE, cedulaDebounced] })
-  }, [qc, cedulaDebounced])
-
   const fmtCaracas = useCallback((iso: string | null | undefined) => {
     if (!iso) return '—'
     try {
@@ -350,15 +343,15 @@ export default function ActualizacionesPrestamosDrivePage() {
     return <span className="text-emerald-700">Listo (validadores 1·2·3 OK)</span>
   }, [])
 
-  const showSkeleton = infinite.isPending && !infinite.data
-  const isBusy = infinite.isFetching || infinite.isFetchingNextPage
+  const showSkeleton = snapshotQuery.isPending && !snapshotQuery.data
+  const isBusy = snapshotQuery.isFetching
   const listRefreshing = isBusy && !manualUpdating
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Préstamos"
-        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E) sin ningún préstamo en el sistema. Lista paginada por offset (100 filas por carga). El job programado recalcula domingo y miércoles ~04:05 (tras sync 04:00 Caracas). Solo administradores."
+        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E) sin ningún préstamo en el sistema. Lista paginada (100 filas por página). El job programado recalcula domingo y miércoles ~04:05 (tras sync 04:00 Caracas). Solo administradores."
         icon={CreditCard}
       />
 
@@ -376,16 +369,16 @@ export default function ActualizacionesPrestamosDrivePage() {
               </>
             )}
             {' · '}
-            Mostrando: <strong>{loadedCount}</strong>
+            Página <strong>{page}</strong> de {totalPages} · Esta página: <strong>{rows.length}</strong> filas
             {' · '}
-            Último sync hoja: {fmtCaracas(first?.drive_synced_at ?? null)}
+            Último sync hoja: {fmtCaracas(data?.drive_synced_at ?? null)}
             {' · '}
-            Snapshot: {fmtCaracas(first?.computed_at ?? null)}
+            Snapshot: {fmtCaracas(data?.computed_at ?? null)}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-4 rounded-lg border border-blue-100 bg-blue-50/40 p-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex flex-col gap-4 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+            <div className="min-w-0 space-y-3">
               <div className="space-y-1 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">Actualización</p>
                 <p>
@@ -395,8 +388,8 @@ export default function ActualizacionesPrestamosDrivePage() {
                   <strong>Guardar (100%)</strong> crea préstamos solo para filas que cumplen todos los validadores, sin
                   marcar filas en la tabla. Validadores resumidos en columna <strong>Val. 1·2·3</strong>: (1) formato de
                   cédula, (2) tipo V — a lo sumo un préstamo en tabla <code className="rounded bg-white/80 px-1">prestamos</code>, (3) no
-                  duplicada en la hoja. En <strong>Acciones</strong> puede usar el mismo recálculo desde el icono de
-                  refresco o el icono de guardar.
+                  duplicada en la hoja. La columna <strong>Acciones</strong> de cada fila permite editar, guardar o
+                  borrar ese candidato (funciones por fila en desarrollo).
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -438,6 +431,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                   type="button"
                   variant="outline"
                   size="sm"
+                  title="Exporta solo las filas de la página actual"
                   onClick={() => exportarCsvVistaActual(rows)}
                   disabled={rows.length === 0 || manualUpdating || guardarValidosSaving || isBusy}
                 >
@@ -446,13 +440,6 @@ export default function ActualizacionesPrestamosDrivePage() {
                 </Button>
               </div>
             </div>
-            <AccionesIconGrid
-              onActualizacionManual={() => void onRecalcular()}
-              onGuardarValidos100={() => void onGuardarValidos100()}
-              manualUpdating={manualUpdating}
-              guardarValidosSaving={guardarValidosSaving}
-              disabled={manualUpdating || guardarValidosSaving || isBusy}
-            />
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -479,16 +466,9 @@ export default function ActualizacionesPrestamosDrivePage() {
             </label>
           </div>
 
-          {cappedByUi && (
-            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Se muestran como máximo {MAX_ROWS_UI} filas en pantalla. Exporte el CSV por tramos o refine el
-              filtro de cédula. En total hay <strong>{total}</strong> coincidencias.
-            </p>
-          )}
-
-          {infinite.isError && (
+          {snapshotQuery.isError && (
             <p className="text-sm text-red-600" role="alert">
-              {getErrorMessage(infinite.error) || 'Error al cargar'}
+              {getErrorMessage(snapshotQuery.error) || 'Error al cargar'}
             </p>
           )}
 
@@ -504,7 +484,6 @@ export default function ActualizacionesPrestamosDrivePage() {
                   >
                     Val. 1·2·3
                   </th>
-                  <th className="px-3 py-2">Producto</th>
                   <th className="px-3 py-2">Total (N)</th>
                   <th className="px-3 py-2">Modalidad (S)</th>
                   <th className="px-3 py-2">Fecha (Q)</th>
@@ -513,6 +492,9 @@ export default function ActualizacionesPrestamosDrivePage() {
                   <th className="px-3 py-2">Concesionario (K)</th>
                   <th className="px-3 py-2">Modelo (I)</th>
                   <th className="px-3 py-2">Estado</th>
+                  <th className="sticky right-0 z-[1] bg-muted/95 px-3 py-2 text-right shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -532,7 +514,6 @@ export default function ActualizacionesPrestamosDrivePage() {
                           {mk(tablaVOk)}
                           {mk(hojaOk)}
                         </td>
-                        <td className="px-3 py-2 text-xs">{strPayload(r.payload, 'producto')}</td>
                         <td className="px-3 py-2">{strPayload(r.payload, 'col_n_total_financiamiento')}</td>
                         <td className="px-3 py-2">{strPayload(r.payload, 'col_s_modalidad_pago')}</td>
                         <td className="px-3 py-2 whitespace-nowrap">
@@ -548,10 +529,16 @@ export default function ActualizacionesPrestamosDrivePage() {
                           {strPayload(r.payload, 'col_i_modelo_vehiculo')}
                         </td>
                         <td className="px-3 py-2 text-xs">{estadoFila(r.payload)}</td>
+                        <td className="sticky right-0 z-[1] border-l border-border bg-background/95 px-2 py-1.5 text-right backdrop-blur-sm">
+                          <AccionesPorFilaCandidatoDrive
+                            fila={r}
+                            disabled={manualUpdating || guardarValidosSaving || isBusy}
+                          />
+                        </td>
                       </tr>
                     )
                   })}
-                {!showSkeleton && !infinite.isPending && rows.length === 0 && (
+                {!showSkeleton && !snapshotQuery.isPending && rows.length === 0 && (
                   <tr>
                     <td className="px-3 py-6 text-muted-foreground" colSpan={12}>
                       No hay candidatos: todas las cédulas del Drive ya tienen al menos un préstamo, o el
@@ -565,26 +552,55 @@ export default function ActualizacionesPrestamosDrivePage() {
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {infinite.hasNextPage && (
+          <nav
+            className="flex flex-col items-center gap-3 border-t border-border pt-4"
+            aria-label="Paginación de candidatos"
+          >
+            <div className="flex flex-wrap items-center justify-center gap-2">
               <Button
                 type="button"
-                variant="secondary"
+                variant="outline"
                 size="sm"
-                onClick={() => void infinite.fetchNextPage()}
-                disabled={infinite.isFetchingNextPage || isBusy}
+                className="min-w-[7.5rem] rounded-md border-slate-200 bg-white text-foreground shadow-sm hover:bg-slate-50 disabled:text-muted-foreground"
+                disabled={page <= 1 || snapshotQuery.isFetching}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
               >
-                {infinite.isFetchingNextPage
-                  ? 'Cargando…'
-                  : `Cargar más (${PAGE_SIZE} filas, offset ${loadedCount})`}
+                ← Anterior
               </Button>
-            )}
-            {loadedCount > PAGE_SIZE && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => onVolverInicio()}>
-                Volver al inicio (descartar páginas cargadas)
+              {pageNumbers.map(n => (
+                <Button
+                  key={n}
+                  type="button"
+                  variant={n === page ? 'default' : 'outline'}
+                  size="sm"
+                  className={
+                    n === page
+                      ? 'h-9 min-w-[2.25rem] rounded-md px-3 shadow-sm'
+                      : 'h-9 min-w-[2.25rem] rounded-md border-slate-200 bg-white px-3 text-foreground shadow-sm hover:bg-slate-50'
+                  }
+                  disabled={snapshotQuery.isFetching}
+                  onClick={() => setPage(n)}
+                  aria-label={`Ir a página ${n}`}
+                  aria-current={n === page ? 'page' : undefined}
+                >
+                  {n}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-w-[7.5rem] rounded-md border-slate-200 bg-white text-foreground shadow-sm hover:bg-slate-50 disabled:text-muted-foreground"
+                disabled={page >= totalPages || snapshotQuery.isFetching}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              >
+                Siguiente →
               </Button>
-            )}
-          </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Página {page} de {totalPages}
+            </p>
+          </nav>
         </CardContent>
       </Card>
     </div>

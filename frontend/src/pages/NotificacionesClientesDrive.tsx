@@ -480,17 +480,27 @@ export default function NotificacionesClientesDrive() {
           {q.isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}
 
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[920px] table-fixed border-collapse text-left text-sm">
+              <colgroup>
+                <col className="w-[4%]" />
+                <col className="w-[6%]" />
+                <col className="w-[12%]" />
+                <col className="w-[22%]" />
+                <col className="w-[11%]" />
+                <col className="w-[18%]" />
+                <col className="w-[19%]" />
+                <col className="w-[8%]" />
+              </colgroup>
               <thead className="bg-muted/60">
                 <tr>
-                  <th className="px-3 py-2 w-10"></th>
-                  <th className="px-3 py-2">Fila</th>
-                  <th className="px-3 py-2">Cédula (E)</th>
-                  <th className="px-3 py-2">Nombres (D)</th>
-                  <th className="px-3 py-2">Teléfono (F)</th>
-                  <th className="px-3 py-2">Email (G)</th>
-                  <th className="px-3 py-2">Estado</th>
-                  <th className="px-3 py-2 whitespace-nowrap">Acciones</th>
+                  <th className="px-2 py-2"></th>
+                  <th className="px-2 py-2">Fila</th>
+                  <th className="px-2 py-2">Cédula (E)</th>
+                  <th className="px-2 py-2">Nombres (D)</th>
+                  <th className="px-2 py-2">Teléfono (F)</th>
+                  <th className="px-2 py-2">Email (G)</th>
+                  <th className="px-2 py-2">Estado</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -505,7 +515,7 @@ export default function NotificacionesClientesDrive() {
                       : 'bg-amber-50/90 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
                   return (
                     <tr key={r.sheet_row_number} className={`border-t ${rowTint}`}>
-                      <td className="px-3 py-2 align-top">
+                      <td className="min-w-0 px-2 py-2 align-top">
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-primary"
@@ -515,12 +525,18 @@ export default function NotificacionesClientesDrive() {
                           aria-label={`Seleccionar fila ${r.sheet_row_number}`}
                         />
                       </td>
-                      <td className="px-3 py-2 align-top font-mono">{r.sheet_row_number}</td>
-                      <td className="px-3 py-2 align-top font-mono">{r.col_e_cedula ?? ''}</td>
-                      <td className="px-3 py-2 align-top">{r.defaults.nombres}</td>
-                      <td className="px-3 py-2 align-top">{r.defaults.telefono || '—'}</td>
-                      <td className="px-3 py-2 align-top break-all">{r.defaults.email}</td>
-                      <td className="px-3 py-2 align-top text-xs">
+                      <td className="min-w-0 px-2 py-2 align-top font-mono tabular-nums">
+                        {r.sheet_row_number}
+                      </td>
+                      <td className="min-w-0 px-2 py-2 align-top font-mono break-words">
+                        {r.col_e_cedula ?? ''}
+                      </td>
+                      <td className="min-w-0 px-2 py-2 align-top break-words">{r.defaults.nombres}</td>
+                      <td className="min-w-0 px-2 py-2 align-top font-mono break-words">
+                        {r.defaults.telefono || '—'}
+                      </td>
+                      <td className="min-w-0 px-2 py-2 align-top break-all">{r.defaults.email}</td>
+                      <td className="min-w-0 px-2 py-2 align-top text-xs break-words">
                         <div className="space-y-1">
                           {!r.cedula_valida && (
                             <div className="font-medium text-red-600">Inválida: {r.cedula_error}</div>
@@ -544,8 +560,8 @@ export default function NotificacionesClientesDrive() {
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2 align-top">
-                        <div className="flex flex-wrap gap-1">
+                      <td className="min-w-0 px-2 py-2 align-top">
+                        <div className="flex flex-wrap justify-center gap-1">
                           <Button
                             type="button"
                             variant="outline"
@@ -738,34 +754,45 @@ export default function NotificacionesClientesDrive() {
             </p>
           )}
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[960px] text-left text-sm">
+            <table className="w-full min-w-[900px] table-fixed border-collapse text-left text-sm">
+              <colgroup>
+                <col className="w-[13%]" />
+                <col className="w-[14%]" />
+                <col className="w-[9%]" />
+                <col className="w-[6%]" />
+                <col className="w-[10%]" />
+                <col className="w-[22%]" />
+                <col className="w-[26%]" />
+              </colgroup>
               <thead className="bg-muted/60">
                 <tr>
-                  <th className="px-3 py-2">Fecha</th>
-                  <th className="px-3 py-2">Usuario</th>
-                  <th className="px-3 py-2">Estado</th>
-                  <th className="px-3 py-2">Fila</th>
-                  <th className="px-3 py-2">Cédula</th>
-                  <th className="px-3 py-2">Comentario</th>
-                  <th className="px-3 py-2">Detalle</th>
+                  <th className="px-2 py-2">Fecha</th>
+                  <th className="px-2 py-2">Usuario</th>
+                  <th className="px-2 py-2">Estado</th>
+                  <th className="px-2 py-2">Fila</th>
+                  <th className="px-2 py-2">Cédula</th>
+                  <th className="px-2 py-2">Comentario</th>
+                  <th className="px-2 py-2">Detalle</th>
                 </tr>
               </thead>
               <tbody>
                 {(qa.data?.items ?? []).map(it => (
                   <tr key={it.id} className="border-t">
-                    <td className="px-3 py-2 whitespace-nowrap text-xs">
+                    <td className="min-w-0 whitespace-nowrap px-2 py-2 text-xs">
                       {it.creado_en
                         ? new Date(it.creado_en).toLocaleString('es-VE', {
                             timeZone: 'America/Caracas',
                           })
                         : '—'}
                     </td>
-                    <td className="px-3 py-2 break-all text-xs">{it.usuario_email}</td>
-                    <td className="px-3 py-2 text-xs">{it.estado}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{it.sheet_row_number}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{it.cedula}</td>
-                    <td className="px-3 py-2 text-xs break-all">{it.comentario ?? '—'}</td>
-                    <td className="px-3 py-2 text-xs text-red-700 break-all">
+                    <td className="min-w-0 break-words px-2 py-2 text-xs">{it.usuario_email}</td>
+                    <td className="min-w-0 break-words px-2 py-2 text-xs">{it.estado}</td>
+                    <td className="min-w-0 px-2 py-2 font-mono text-xs tabular-nums">
+                      {it.sheet_row_number}
+                    </td>
+                    <td className="min-w-0 break-words px-2 py-2 font-mono text-xs">{it.cedula}</td>
+                    <td className="min-w-0 break-words px-2 py-2 text-xs">{it.comentario ?? '—'}</td>
+                    <td className="min-w-0 break-words px-2 py-2 text-xs text-red-700">
                       {it.detalle_error ?? '—'}
                     </td>
                   </tr>

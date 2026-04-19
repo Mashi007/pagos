@@ -32,7 +32,7 @@ from app.services.prestamo_candidatos_drive_validadores import (
 logger = logging.getLogger(__name__)
 
 # Producto fijo acordado para propuesta desde Drive (submódulo préstamos / CONCILIACIÓN).
-PRODUCTO_PROPUESTO_DRIVE = "FINCAMIRETO"
+PRODUCTO_PROPUESTO_DRIVE = "FINANCIAMIENTO"
 
 
 def _cell(v: Any) -> str:

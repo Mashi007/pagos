@@ -32,6 +32,16 @@ logger = logging.getLogger(__name__)
 
 _MODALIDADES = frozenset({"MENSUAL", "QUINCENAL", "SEMANAL"})
 
+# Valor antiguo mal escrito en snapshots previos al refresh.
+_LEGACY_PRODUCTO_DRIVE_TYPOS = frozenset({"FINCAMIRETO"})
+
+
+def _producto_desde_payload(payload: Dict[str, Any]) -> str:
+    raw = _cell_str(payload.get("producto")) or "FINANCIAMIENTO"
+    if raw.upper() in _LEGACY_PRODUCTO_DRIVE_TYPOS:
+        return "FINANCIAMIENTO"
+    return raw
+
 
 def _cell_str(v: Any) -> str:
     if v is None:
@@ -218,7 +228,7 @@ def _motivos_no_100(
             fecha_aprobacion=ap_d,
             modalidad_pago=mod,
             numero_cuotas=ncu,
-            producto=_cell_str(payload.get("producto")) or "FINCAMIRETO",
+            producto=_producto_desde_payload(payload),
             analista=analista,
             concesionario=_cell_str(payload.get("col_k_concesionario")) or None,
             modelo=_cell_str(payload.get("col_i_modelo_vehiculo")) or None,
