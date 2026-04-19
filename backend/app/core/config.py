@@ -215,6 +215,18 @@ class Settings(BaseSettings):
             "Valor vacío en .env se sustituye por recuerda@rapicreditca.com en el holder SMTP."
         ),
     )
+    # Submódulo Recibos: estado de cuenta por correo tras pagos conciliados (scheduler 11:05 / 17:05 / 23:55 Caracas).
+    ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS: bool = Field(
+        default=False,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler envía correos Recibos "
+            "a las 11:05, 17:05 y 23:55 (America/Caracas). Por defecto False."
+        ),
+    )
+    RECIBOS_FROM_EMAIL: str = Field(
+        default="notificacion@rapicreditca.com",
+        description='Remitente From para envíos del submódulo Recibos (servicio SMTP "recibos").',
+    )
     # Correo(s) para notificaciones de tickets CRM (varios separados por coma). Incluye tickets automáticos por recibo no claro (3 intentos).
     TICKETS_NOTIFY_EMAIL: Optional[str] = Field(
         default="itmaster@rapicreditca.com",

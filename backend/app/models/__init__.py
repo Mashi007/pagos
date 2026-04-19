@@ -61,6 +61,7 @@ from app.models.drive import DriveRow
 from app.models.auditoria_cliente_alta_desde_drive import AuditoriaClienteAltaDesdeDrive
 from app.models.drive_clientes_candidatos_cache import DriveClientesCandidatosCache
 from app.models.clientes_drive_export_excel_auditoria import ClientesDriveExportExcelAuditoria
+from app.models.recibos_email_envio import RecibosEmailEnvio
 
 __all__ = [
     "Base",
@@ -121,5 +122,6 @@ __all__ = [
     "AuditoriaClienteAltaDesdeDrive",
     "DriveClientesCandidatosCache",
     "ClientesDriveExportExcelAuditoria",
+    "RecibosEmailEnvio",
     "PagosGmailAbcdCuotasTraza",
 ]

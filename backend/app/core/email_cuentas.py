@@ -14,6 +14,8 @@ NUM_CUENTAS = 4
 SERVICIO_COBROS = "cobros"
 SERVICIO_ESTADO_CUENTA = "estado_cuenta"
 SERVICIO_NOTIFICACIONES = "notificaciones"
+# Recibos: estado de cuenta por correo tras pagos conciliados (scheduler / POST manual).
+SERVICIO_RECIBOS = "recibos"
 # Portal Finiquito (OTP): misma cuenta SMTP que estado de cuenta salvo que se asigne otro indice en el futuro.
 SERVICIO_FINIQUITO = "finiquito"
 
@@ -27,6 +29,7 @@ ASIGNACION_DEFAULT = {
         "dias_10_retraso": 3,
         "prejudicial": 3,
     },
+    "recibos": 3,
 }
 
 CAMPOS_CUENTA = [
@@ -67,9 +70,12 @@ def migrar_config_v1_a_v2(data: Dict[str, Any]) -> Dict[str, Any]:
     for _ in range(NUM_CUENTAS - 1):
         cuentas.append(cuenta_vacia())
     asignacion = data.get("asignacion") or ASIGNACION_DEFAULT
-    if "notificaciones_tab" not in asignacion:
+    if "notificaciones_tab" not in asignacion or "recibos" not in asignacion:
         asignacion = dict(asignacion)
-        asignacion["notificaciones_tab"] = ASIGNACION_DEFAULT["notificaciones_tab"]
+        if "notificaciones_tab" not in asignacion:
+            asignacion["notificaciones_tab"] = ASIGNACION_DEFAULT["notificaciones_tab"]
+        if "recibos" not in asignacion:
+            asignacion["recibos"] = ASIGNACION_DEFAULT["recibos"]
     return {
         "version": 2,
         "cuentas": cuentas,
@@ -85,6 +91,7 @@ def migrar_config_v1_a_v2(data: Dict[str, Any]) -> Dict[str, Any]:
         "email_activo_cobros": data.get("email_activo_cobros", "true"),
         "email_activo_campanas": data.get("email_activo_campanas", "true"),
         "email_activo_tickets": data.get("email_activo_tickets", "true"),
+        "email_activo_recibos": data.get("email_activo_recibos", "true"),
         "modo_pruebas_notificaciones": data.get("modo_pruebas_notificaciones", "false"),
         "modo_pruebas_informe_pagos": data.get("modo_pruebas_informe_pagos", "false"),
         "modo_pruebas_estado_cuenta": data.get("modo_pruebas_estado_cuenta", "false"),
@@ -92,6 +99,7 @@ def migrar_config_v1_a_v2(data: Dict[str, Any]) -> Dict[str, Any]:
         "modo_pruebas_cobros": data.get("modo_pruebas_cobros", "false"),
         "modo_pruebas_campanas": data.get("modo_pruebas_campanas", "false"),
         "modo_pruebas_tickets": data.get("modo_pruebas_tickets", "false"),
+        "modo_pruebas_recibos": data.get("modo_pruebas_recibos", "false"),
         "tickets_notify_emails": data.get("tickets_notify_emails", ""),
     }
 
@@ -105,6 +113,8 @@ def obtener_indice_cuenta(servicio: Optional[str], tipo_tab: Optional[str], asig
         return int(asignacion.get("cobros", 1))
     if servicio in (SERVICIO_ESTADO_CUENTA, SERVICIO_FINIQUITO):
         return int(asignacion.get("estado_cuenta", 2))
+    if servicio == SERVICIO_RECIBOS:
+        return int(asignacion.get("recibos", 3))
     if servicio == SERVICIO_NOTIFICACIONES and tipo_tab:
         tab_map = asignacion.get("notificaciones_tab") or {}
         return int(tab_map.get(tipo_tab, 3))

@@ -6,7 +6,7 @@ API v1
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet
 
 from app.api.v1.endpoints.dashboard import kpis
 
@@ -220,6 +220,11 @@ api_router.include_router(
 
 )
 
+api_router.include_router(
+    notificaciones_recibos.router,
+    prefix="/notificaciones/recibos",
+    tags=["notificaciones-recibos"],
+)
 
 
 # Pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial) - datos reales BD + envío correo por cliente

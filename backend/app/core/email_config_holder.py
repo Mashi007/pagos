@@ -199,7 +199,12 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
         }
     else:
         cfg = _fallback_smtp_config()
-    if servicio == "notificaciones":
+    if servicio == "recibos":
+        raw_r = getattr(settings, "RECIBOS_FROM_EMAIL", None)
+        from_r = (raw_r.strip() if isinstance(raw_r, str) else "") or "notificacion@rapicreditca.com"
+        cfg["from_email"] = from_r
+        logger.info("[EMAIL] Servicio recibos: remitente From=%s.", cfg["from_email"])
+    elif servicio == "notificaciones":
         if (tipo_tab or "").strip() == "d_2_antes_vencimiento":
             # Siempre forzar From para «2 dias antes»; la cuenta SMTP sigue siendo la 3/4.
             # Fallback literal: si .env vacía o despliegue sin el campo en Settings, igual se aplica.
@@ -250,6 +255,7 @@ EMAIL_SERVICES = (
     "cobros",
     "campanas",
     "tickets",
+    "recibos",
 )
 MODO_PRUEBAS_SERVICES = tuple("modo_pruebas_" + s for s in EMAIL_SERVICES)
 
@@ -285,7 +291,7 @@ def update_from_api(data: dict[str, Any]) -> None:
             for k, v in data["cuentas"][0].items():
                 if k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl", "smtp_use_tls"):
                     _current[k] = v
-        for k in ("modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo", "tickets_notify_emails", "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta", "email_activo_finiquito", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets", "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta", "modo_pruebas_finiquito", "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets"):
+        for k in ("modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo", "tickets_notify_emails", "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta", "email_activo_finiquito", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets", "email_activo_recibos", "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta", "modo_pruebas_finiquito", "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets", "modo_pruebas_recibos"):
             if k in data and data[k] is not None:
                 _current[k] = data[k]
         if _current.get("smtp_port") is not None:
@@ -297,8 +303,10 @@ def update_from_api(data: dict[str, Any]) -> None:
         "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo",
         "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta",
         "email_activo_finiquito", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets",
+        "email_activo_recibos",
         "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta",
         "modo_pruebas_finiquito", "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets",
+        "modo_pruebas_recibos",
         "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl",
     )
     for k in keys:
