@@ -26,6 +26,9 @@ def generar_recibo_cuota_amortizacion(
     moneda: Optional[str] = None,
     tasa_cambio: Optional[float] = None,
     estado_cuota: Optional[str] = None,
+    comprobante_bytes: Optional[bytes] = None,
+    comprobante_tipo: Optional[str] = None,
+    comprobante_nombre: Optional[str] = None,
 ) -> bytes:
     """
     Genera el PDF del recibo para una cuota de la tabla de amortización.
@@ -62,4 +65,7 @@ def generar_recibo_cuota_amortizacion(
         moneda=moneda,
         tasa_cambio=tasa_cambio,
         estado_cuota=estado_cuota,
+        comprobante_bytes=comprobante_bytes,
+        comprobante_tipo=comprobante_tipo,
+        comprobante_nombre=comprobante_nombre,
     )

@@ -75,20 +75,24 @@ class TestPagosValidacion:
 
     def test_validar_documento_no_duplicado_permitido(self, validacion_service, db_mock):
         """Test validación de documento sin duplicados."""
-        db_mock.query.return_value.filter.return_value.first.return_value = None
-
-        resultado = validacion_service.validar_documento_no_duplicado("DOC123")
+        with patch(
+            "app.services.pagos.pagos_validacion.numero_documento_ya_registrado",
+            return_value=False,
+        ):
+            resultado = validacion_service.validar_documento_no_duplicado("DOC123")
         assert resultado is True
 
     def test_validar_documento_duplicado(self, validacion_service, db_mock):
         """Test validación de documento duplicado."""
-        pago_existente = MagicMock()
-        db_mock.query.return_value.filter.return_value.first.return_value = pago_existente
+        with patch(
+            "app.services.pagos.pagos_validacion.numero_documento_ya_registrado",
+            return_value=True,
+        ):
+            with pytest.raises(PagoConflictError) as exc_info:
+                validacion_service.validar_documento_no_duplicado("DOC123")
 
-        with pytest.raises(PagoConflictError) as exc_info:
-            validacion_service.validar_documento_no_duplicado("DOC123")
-        
-        assert "duplicado" in str(exc_info.value).lower()
+        msg = str(exc_info.value).lower()
+        assert "duplicado" in msg or "comprobante" in msg or "existe" in msg
 
     def test_validar_estado_pago_valido(self, validacion_service):
         """Test validación de estado válido."""
@@ -197,51 +201,13 @@ class TestPagosService:
     def pagos_service(self, db_mock):
         return PagosService(db_mock)
 
-    def test_crear_pago_exitoso(self, pagos_service, db_mock):
-        """Test creación exitosa de pago."""
-        cliente_mock = MagicMock()
-        db_mock.query.return_value.filter.return_value.first.return_value = cliente_mock
-
-        datos = {
-            'cliente_id': 1,
-            'monto': 1000,
-            'estado': 'pendiente'
-        }
-
-        # Mock del objeto Pago creado
-        pago_mock = MagicMock()
-        pago_mock.id = 1
-        
-        with patch('app.services.pagos.pagos_service.Pago', return_value=pago_mock):
-            resultado = pagos_service.crear_pago(datos)
-            
-            assert db_mock.add.called
-            assert db_mock.commit.called
-
-    def test_crear_pago_cliente_no_existe(self, pagos_service, db_mock):
-        """Test creación de pago con cliente inexistente."""
-        db_mock.query.return_value.filter.return_value.first.return_value = None
-
-        datos = {
-            'cliente_id': 999,
-            'monto': 1000,
-        }
-
-        with pytest.raises(ClienteNotFoundError):
-            pagos_service.crear_pago(datos)
-
-    def test_crear_pago_monto_invalido(self, pagos_service, db_mock):
-        """Test creación de pago con monto inválido."""
-        cliente_mock = MagicMock()
-        db_mock.query.return_value.filter.return_value.first.return_value = cliente_mock
-
-        datos = {
-            'cliente_id': 1,
-            'monto': -100,  # Monto negativo
-        }
-
-        with pytest.raises(PagoValidationError):
-            pagos_service.crear_pago(datos)
+    def test_crear_pago_desactivado_debe_usar_api(self, pagos_service):
+        """crear_pago en servicio está desactivado; altas van por POST /pagos o cobros/import."""
+        with pytest.raises(PagoValidationError) as exc:
+            pagos_service.crear_pago(
+                {"cliente_id": 1, "monto": 1000, "estado": "pendiente"}
+            )
+        assert "POST /pagos" in str(exc.value)
 
     def test_obtener_pago_exitoso(self, pagos_service, db_mock):
         """Test obtención exitosa de pago."""

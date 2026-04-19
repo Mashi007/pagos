@@ -8,7 +8,12 @@ import io
 from pathlib import Path
 from typing import Optional
 
-from app.services.cobros.recibo_pdf import CONTACTO_COBRANZA, WHATSAPP_DISPLAY, WHATSAPP_LINK
+from app.services.cobros.recibo_pdf import (
+    CONTACTO_COBRANZA,
+    WHATSAPP_DISPLAY,
+    WHATSAPP_LINK,
+    _append_comprobante_adjunto_recibo,
+)
 _LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "logo.png"
 
 
@@ -24,6 +29,9 @@ def generar_recibo_pago_cartera_pdf(
     numero_operacion: str,
     monto_pagado_texto: str,
     nota_tasa_bs: Optional[str] = None,
+    comprobante_bytes: Optional[bytes] = None,
+    comprobante_tipo: Optional[str] = None,
+    comprobante_nombre: Optional[str] = None,
 ) -> bytes:
     """Comprobante de pago reconocido en cartera (sin tabla de desglose por cuota)."""
     from reportlab.lib import colors
@@ -187,6 +195,15 @@ def generar_recibo_pago_cartera_pdf(
     if (nota_tasa_bs or "").strip():
         story.append(Paragraph((nota_tasa_bs or "").strip(), body_style))
         story.append(Spacer(1, 10))
+
+    _append_comprobante_adjunto_recibo(
+        story,
+        _content_w=_content_w,
+        section_style=section_style,
+        comprobante_bytes=comprobante_bytes,
+        comprobante_tipo=comprobante_tipo,
+        comprobante_nombre=comprobante_nombre,
+    )
 
     foot = Table(
         [

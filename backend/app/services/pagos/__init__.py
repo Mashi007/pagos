@@ -7,6 +7,7 @@ from .pagos_excepciones import (
     PagoNotFoundError,
     PagoValidationError,
     PagoConflictError,
+    ClienteNotFoundError,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "PagoNotFoundError",
     "PagoValidationError",
     "PagoConflictError",
+    "ClienteNotFoundError",
 ]

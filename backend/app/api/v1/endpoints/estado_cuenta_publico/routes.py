@@ -97,6 +97,7 @@ from app.services.documentos_cliente_centro import (
     obtener_datos_estado_cuenta_cliente,
 )
 
+from app.services.pagos.comprobante_adjunto_pago import comprobante_blob_para_pdf_desde_pago
 from app.services.pagos.comprobante_link_desde_gmail import (
     comprobante_url_para_enlace_publico,
 )
@@ -570,6 +571,10 @@ def get_recibo_cuota_publico(
 
     ctx = contexto_moneda_montos_recibo_cuota(db, prestamo, cuota, pago)
 
+    comp_bytes, comp_tipo, comp_nombre = (None, None, None)
+    if pago is not None:
+        comp_bytes, comp_tipo, comp_nombre = comprobante_blob_para_pdf_desde_pago(db, pago)
+
     pdf_bytes = generar_recibo_cuota_amortizacion(
 
         referencia_interna=referencia,
@@ -603,6 +608,12 @@ def get_recibo_cuota_publico(
         moneda=ctx.moneda,
 
         tasa_cambio=ctx.tasa_cambio,
+
+        comprobante_bytes=comp_bytes,
+
+        comprobante_tipo=comp_tipo,
+
+        comprobante_nombre=comp_nombre,
 
     )
 
@@ -703,6 +714,7 @@ def get_recibo_pago_cartera_publico(
                 )
             except (TypeError, ValueError):
                 nota_tasa_bs = None
+    comp_bytes, comp_tipo, comp_nombre = comprobante_blob_para_pdf_desde_pago(db, pago)
     pdf_bytes = generar_recibo_pago_cartera_pdf(
         referencia_documento=referencia,
         fecha_reporte_aprobacion_display=fecha_reporte_aprobacion_display,
@@ -714,6 +726,9 @@ def get_recibo_pago_cartera_publico(
         numero_operacion=num_op,
         monto_pagado_texto=monto_pagado_texto,
         nota_tasa_bs=nota_tasa_bs,
+        comprobante_bytes=comp_bytes,
+        comprobante_tipo=comp_tipo,
+        comprobante_nombre=comp_nombre,
     )
     return Response(
         content=bytes(pdf_bytes),

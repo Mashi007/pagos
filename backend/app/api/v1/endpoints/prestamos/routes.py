@@ -84,6 +84,7 @@ from app.api.v1.endpoints.pagos import (
 
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 from app.services.estado_cuenta_datos import obtener_pago_para_recibo_cuota, texto_institucion_recibo_cuota
+from app.services.pagos.comprobante_adjunto_pago import comprobante_blob_para_pdf_desde_pago
 from app.services.pagos_cuotas_reaplicacion import (
     integridad_cuotas_prestamo,
     reset_y_reaplicar_cascada_prestamo,
@@ -2631,6 +2632,10 @@ def get_recibo_cuota_pdf(
 
     ctx = contexto_moneda_montos_recibo_cuota(db, prestamo, cuota, pago)
 
+    comp_bytes, comp_tipo, comp_nombre = (None, None, None)
+    if pago is not None:
+        comp_bytes, comp_tipo, comp_nombre = comprobante_blob_para_pdf_desde_pago(db, pago)
+
     pdf_bytes = generar_recibo_cuota_amortizacion(
 
         referencia_interna=referencia,
@@ -2666,6 +2671,12 @@ def get_recibo_cuota_pdf(
         fecha_pago_display=fpd,
 
         estado_cuota=estado_cuota_lbl,
+
+        comprobante_bytes=comp_bytes,
+
+        comprobante_tipo=comp_tipo,
+
+        comprobante_nombre=comp_nombre,
 
     )
 

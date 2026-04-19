@@ -3,15 +3,22 @@
 ## 30-Second Setup
 
 ```bash
-# 1. Install test dependencies
-pip install pytest sqlalchemy psycopg2-binary pytest-cov
+# 1. Install test dependencies (incluye driver PostgreSQL)
+pip install -r requirements-test.txt
 
-# 2. Run all tests
+# 2. Variables minimas (Settings de la app carga al importar conftest)
+export PYTHONPATH="/ruta/al/repo/backend:$PYTHONPATH"
+export SECRET_KEY="cadena_aleatoria_de_al_menos_32_caracteres_distintos"
+export DATABASE_URL="postgresql+psycopg2://usuario:clave@127.0.0.1:5432/nombre_bd_test"
+
+# 3. Opcional: motor de pytest distinto al de la app
+# export TEST_DATABASE_URL="postgresql+psycopg2://..."
+
+# 4. Ejecutar tests
 pytest tests/ -v
-
-# 3. Run smoke tests only (pre-deploy check)
-pytest tests/smoke/ -v
 ```
+
+Solo tests unitarios que no usan `db_session` pueden correr sin `create_all`; smoke e integracion necesitan **PostgreSQL** (el modelo usa `JSONB`, incompatible con SQLite).
 
 ## One-Command Examples
 
@@ -84,15 +91,23 @@ chmod +x run_tests.sh
 
 ## Database Configuration
 
-### Default (SQLite in-memory - fastest)
-No configuration needed!
+### PostgreSQL (recomendado para smoke / integracion)
+
+`tests/conftest.py` usa, en este orden: **`TEST_DATABASE_URL`**, si no existe **`DATABASE_URL`** si ya es Postgres, y si no **SQLite en memoria** (fallara al crear tablas por tipos `JSONB`).
+
 ```bash
+export DATABASE_URL="postgresql+psycopg2://user:password@localhost:5432/pagos_test"
+export SECRET_KEY="..."   # minimo 32 caracteres, ver validador en Settings
+export PYTHONPATH="/abs/path/pagos/backend:$PYTHONPATH"
 pytest tests/
 ```
 
-### PostgreSQL
+Solo con Postgres (y `psycopg2-binary` instalado) `Base.metadata.create_all` suele completarse.
+
+### Motor de tests distinto al de la app
+
 ```bash
-export TEST_DATABASE_URL="postgresql://user:password@localhost:5432/test_db"
+export TEST_DATABASE_URL="postgresql+psycopg2://user:password@localhost:5432/otra_bd_solo_pytest"
 pytest tests/
 ```
 
@@ -100,7 +115,7 @@ pytest tests/
 
 ### "ModuleNotFoundError: No module named 'app'"
 ```bash
-export PYTHONPATH=".:$PYTHONPATH"
+export PYTHONPATH="/ruta/al/repo/backend:$PYTHONPATH"
 pytest tests/
 ```
 
@@ -112,11 +127,7 @@ pytest tests/
 ```
 
 ### Slow tests
-Use in-memory SQLite (default):
-```bash
-unset TEST_DATABASE_URL
-pytest tests/
-```
+Use una base dedicada en Postgres con datos minimos, o ejecute solo un archivo (`pytest tests/unit/...`).
 
 ## Pre-Deploy Checklist
 

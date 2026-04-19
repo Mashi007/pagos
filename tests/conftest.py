@@ -17,15 +17,17 @@ from app.core.database import Base
 from app.core.config import Settings
 
 
-# Test database URL - use in-memory SQLite or test PostgreSQL
+# Test database URL — el esquema usa JSONB (PostgreSQL). SQLite no puede crear todas las tablas.
 def get_test_db_url():
-    """Get test database URL from environment or use default."""
-    # Check for test database environment variable
-    test_db = os.getenv("TEST_DATABASE_URL")
+    """URL del motor de pytest: TEST_DATABASE_URL, luego DATABASE_URL si es Postgres, si no SQLite."""
+    test_db = (os.getenv("TEST_DATABASE_URL") or "").strip()
     if test_db:
         return test_db
-    
-    # Default: use in-memory SQLite for fast tests
+    app_db = (os.getenv("DATABASE_URL") or "").strip()
+    if app_db.startswith("postgres://"):
+        app_db = app_db.replace("postgres://", "postgresql://", 1)
+    if app_db.startswith("postgresql"):
+        return app_db
     return "sqlite:///:memory:"
 
 
