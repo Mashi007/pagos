@@ -47,8 +47,6 @@ from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, 
 
 from fastapi.responses import StreamingResponse, Response
 
-from pydantic import BaseModel, field_validator
-
 from sqlalchemy import and_, case, delete, desc, exists, func, not_, or_, select, text
 
 from sqlalchemy.orm import Session
@@ -170,73 +168,55 @@ from app.services.cobros.cedula_reportar_bs_service import (
 
 )
 
+from .payload_models import (
+    AgregarCedulaReportarBsBody,
+    ConsultarCedulasReportarBsBatchBody,
+    GuardarFilaEditableBody,
+    MoverRevisarPagosBody,
+    PagoBatchBody,
+    ValidarFilasBatchBody,
+)
+from .comprobante_imagen_helpers import (
+    _COMPROBANTE_IMG_CT,
+    _MAX_COMPROBANTE_IMAGEN_BYTES,
+    _normalizar_id_comprobante_imagen,
+    _public_base_url_para_comprobante,
+)
 
+from .constants import (
+    TZ_NEGOCIO,
+    _MAX_LEN_NUMERO_DOCUMENTO,
+    _MAX_MONTO_PAGADO,
+    _MIN_MONTO_PAGADO,
+    _PRESTAMO_ID_MAX,
+)
+from .cascada_estado import _estado_pago_tras_aplicar_cascada
+from .sql_where_pagos import (
+    _where_pago_elegible_reaplicacion_cascada,
+    _where_pago_excluido_operacion,
+)
+from .pago_integridad_db import _integridad_error_pgcode_y_constraint
+from .pago_normalizacion import (
+    _celda_a_string_documento,
+    _normalizar_ref_fingerprint,
+    _safe_float,
+    _validar_monto,
+)
+from .pago_zona_horaria import _calcular_dias_mora, _hoy_local
+from .pago_cuota_transiciones import _validar_transicion_estado_cuota
+from .pago_usuario_registro import _usuario_registro_desde_current_user
+from .pago_conciliacion_estado import (
+    _alinear_estado_si_toggle_conciliado_actualizar_pago,
+    _estado_conciliacion_post_cascada,
+)
+from .pago_cascada_reglas import _debe_aplicar_cascada_pago
+from .pago_serializacion_respuesta import (
+    _enriquecer_items_tiene_aplicacion_cuotas,
+    _enriquecer_pagos_pago_reportado_id,
+    _pago_response_enriquecido,
+    _pago_to_response,
+)
 
-class MoverRevisarPagosBody(BaseModel):
-
-    """IDs de pagos exportados a Excel para mover a tabla revisar_pagos."""
-
-    pago_ids: list[int]
-
-
-
-
-
-class GuardarFilaEditableBody(BaseModel):
-
-    """Datos de una fila editable validada para guardar como Pago."""
-
-    cedula: str
-
-    prestamo_id: Optional[int] = None
-
-    monto_pagado: float
-
-    fecha_pago: str  # formato "DD-MM-YYYY"
-
-    numero_documento: Optional[str] = None
-
-    codigo_documento: Optional[str] = None  # Desambigua mismo Nº comprobante (opcional)
-
-    moneda_registro: Optional[str] = "USD"
-
-    tasa_cambio_manual: Optional[float] = None
-
-
-
-
-
-class ValidarFilasBatchBody(BaseModel):
-
-    """Batch: cédulas contra préstamos; documentos compuestos (comprobante+código) contra pagos y pagos_con_errores."""
-
-    cedulas: list[str] = []
-
-    documentos: list[str] = []  # Solo los no vacíos
-
-
-
-
-
-class PagoBatchBody(BaseModel):
-
-    """Array de pagos para crear en una sola petición (Guardar todos). Máximo 500 ítems."""
-
-    pagos: list[PagoCreate]
-
-
-
-    @field_validator("pagos")
-
-    @classmethod
-
-    def pagos_limite(cls, v: list) -> list:
-
-        if len(v) > 500:
-
-            raise ValueError("Máximo 500 pagos por lote. Divida en varios envíos.")
-
-        return v
 
 
 
@@ -247,36 +227,6 @@ class PagoBatchBody(BaseModel):
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
-
-
-def _public_base_url_para_comprobante(request: Request) -> str:
-    xf_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
-    xf_host = (
-        (request.headers.get("x-forwarded-host") or request.headers.get("host") or "")
-        .split(",")[0]
-        .strip()
-    )
-    scheme = (xf_proto or request.url.scheme or "https").lower()
-    if xf_host:
-        return f"{scheme}://{xf_host}".rstrip("/")
-    return str(request.base_url).rstrip("/")
-
-
-def _normalizar_id_comprobante_imagen(raw: str) -> Optional[str]:
-    s = (raw or "").strip().lower()
-    if not s:
-        return None
-    s = s.split(".")[0]
-    s = s.replace("-", "")
-    if len(s) == 32 and all(c in "0123456789abcdef" for c in s):
-        return s
-    return None
-
-
-_COMPROBANTE_IMG_CT = frozenset(
-    {"image/jpeg", "image/png", "image/webp", "image/gif"},
-)
-_MAX_COMPROBANTE_IMAGEN_BYTES = 8 * 1024 * 1024
 
 
 @router.post("/comprobante-imagen", response_model=dict)
@@ -340,577 +290,6 @@ def get_pago_comprobante_imagen(
         },
     )
 
-
-# Límite de la columna numero_documento y referencia_pago en tabla pagos (String(100))
-
-_MAX_LEN_NUMERO_DOCUMENTO = 100
-
-# Validación de monto para NUMERIC(14, 2): máximo ~999,999,999,999.99 (12 dígitos antes del decimal)
-
-_MAX_MONTO_PAGADO = 999_999_999_999.99
-
-_MIN_MONTO_PAGADO = 0.01  # Monto mínimo válido (> 0)
-
-_PRESTAMO_ID_MAX = 2_147_483_647  # INT max en BD (32-bit signed)
-
-
-
-
-
-
-
-# Marca de sistema para auditoría cuando JWT no trae email (evita usuario_registro vacío en BD).
-
-_USUARIO_REGISTRO_FALLBACK = "import-masivo@sistema.rapicredit.com"
-
-
-
-
-
-def _normalizar_ref_fingerprint(valor: Optional[str]) -> str:
-
-    ref = (valor or "").strip().upper()
-
-    patrones = (
-
-        r"^(BS\.?\s*)?BNC\s*/\s*(REF\.?\s*)?",
-
-        r"^BINANCE\s*/\s*",
-
-        r"^BNC\s*/\s*",
-
-        r"^VE\s*/\s*",
-
-    )
-
-    for pat in patrones:
-
-        ref = re.sub(pat, "", ref)
-
-    return ref.strip()
-
-
-
-def _debe_aplicar_cascada_pago(pago: Pago) -> bool:
-
-    """Regla unica de seguridad para aplicar pagos en cascada."""
-
-    if not pago.prestamo_id:
-
-        return False
-
-    if float(pago.monto_pagado or 0) <= 0:
-
-        return False
-
-    if not bool(getattr(pago, "conciliado", False)):
-
-        return False
-
-    estado = str(getattr(pago, "estado", "") or "").upper()
-
-    if estado in ("DUPLICADO", "ANULADO_IMPORT"):
-
-        return False
-
-    return True
-
-
-def _where_pago_excluido_operacion():
-    """
-    Estados que no cuentan como pagos operativos (anulados, duplicado declarado, etc.).
-    Reutilizado en elegibilidad de cascada y en resúmenes diagnósticos.
-    """
-    est = func.upper(func.coalesce(func.trim(Pago.estado), ""))
-    est_lower = func.lower(func.coalesce(func.trim(Pago.estado), ""))
-    return or_(
-        est.in_(["ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO"]),
-        est.like("%ANUL%"),
-        est.like("%REVERS%"),
-        est_lower.in_(["cancelado", "rechazado"]),
-    )
-
-
-def _where_pago_elegible_reaplicacion_cascada():
-    """
-    Condicion SQLAlchemy para pagos que deben articularse al reconstruir la cascada
-    (reset cuota_pagos + aplicar_pagos_pendientes_prestamo).
-
-    Antes solo entraban conciliado o verificado_concordancia SI; muchos registros en PAGADO
-    (carga, migracion, revision manual) quedaban fuera y el control 15 marcaba huérfanos.
-
-    Incluye: conciliado, verificado SI, o estado PAGADO.
-    Excluye: mismo criterio que totales de cartera en auditoria (_sql_fragment_pago_excluido_cartera).
-    """
-    est = func.upper(func.coalesce(func.trim(Pago.estado), ""))
-    incl = or_(
-        Pago.conciliado.is_(True),
-        func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
-        est == "PAGADO",
-    )
-    return and_(incl, not_(_where_pago_excluido_operacion()))
-
-
-def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuotas_parciales: int) -> str:
-
-    estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
-
-    # Si no hubo aplicacion real, el pago no puede quedar conciliado en estado PENDIENTE.
-    if estado == "PENDIENTE" and bool(getattr(pago, "conciliado", False)):
-
-        pago.conciliado = False
-
-        pago.fecha_conciliacion = None
-
-        # Mantener verificado_concordancia "SI" si ya venía de alta conciliada: el criterio de
-        # elegibilidad para aplicar_pagos_pendientes_prestamo incluye verificado SI, y así el
-        # pago no queda bloqueado para «Aplicar a cuotas» masivo en revisión manual.
-
-    return estado
-
-
-def _integridad_error_pgcode_y_constraint(exc: BaseException) -> tuple[Optional[str], str]:
-    """Obtiene pgcode y nombre de restricción desde IntegrityError (psycopg2 vía SQLAlchemy)."""
-    orig = getattr(exc, "orig", None)
-    pgcode = getattr(orig, "pgcode", None) or getattr(exc, "pgcode", None)
-    if pgcode is not None and not isinstance(pgcode, str):
-        pgcode = str(pgcode)
-    cname = ""
-    diag = getattr(orig, "diag", None)
-    if diag is not None:
-        cname = str(getattr(diag, "constraint_name", "") or "")
-    return (pgcode if isinstance(pgcode, str) else None, cname.strip())
-
-
-def _alinear_estado_si_toggle_conciliado_actualizar_pago(row: Pago, conciliado_nuevo: bool) -> None:
-    """
-    Alinea pagos.estado con cambios de conciliado para cumplir CHECKs en BD:
-    - conciliado True: no dejar PENDIENTE/otros; pasar a PAGADO salvo excluidos o ya pagado.
-    - conciliado False: si estaba PAGADO/PAGO_ADELANTADO, bajar a PENDIENTE (evita PAGADO sin conciliar).
-    """
-    est_u = str(getattr(row, "estado", "") or "").strip().upper()
-    if conciliado_nuevo:
-        if est_u in ("PAGADO", "PAGO_ADELANTADO"):
-            return
-        if est_u in ("DUPLICADO", "ANULADO_IMPORT", "CANCELADO", "RECHAZADO", "REVERSADO"):
-            return
-        if "ANUL" in est_u or "REVERS" in est_u:
-            return
-        row.estado = "PAGADO"
-        return
-    if est_u in ("PAGADO", "PAGO_ADELANTADO"):
-        row.estado = "PENDIENTE"
-
-
-def _usuario_registro_desde_current_user(current_user: Optional[Any]) -> str:
-
-    """
-
-    Email del usuario o identificador estable para auditoría.
-
-    No devuelve cadena vacía (los lotes MER/BNC quedan trazables).
-
-    """
-
-    if current_user is None:
-
-        return _USUARIO_REGISTRO_FALLBACK
-
-    email = getattr(current_user, "email", None)
-
-    if email is None and isinstance(current_user, dict):
-
-        email = current_user.get("email")
-
-    if isinstance(email, str) and email.strip():
-
-        return email.strip()[:255]
-
-    uid = getattr(current_user, "id", None)
-
-    if uid is None and isinstance(current_user, dict):
-
-        uid = current_user.get("id")
-
-    if uid is not None:
-
-        return f"user_id:{uid}@{_USUARIO_REGISTRO_FALLBACK}"[:255]
-
-    return _USUARIO_REGISTRO_FALLBACK
-
-
-
-
-
-# Todas las funciones de normalización de documento están centralizadas en app.core.documento
-
-# Se usan ahora: normalize_documento() que consolidaba las 3 funciones anteriores.
-
-# Esto evita duplicación y facilita mantenimiento.
-
-
-
-
-
-
-
-def _validar_monto(monto_raw: Any) -> tuple[bool, float, str]:
-
-    """
-
-    Valida que el monto esté dentro de los rangos permitidos para NUMERIC(14, 2).
-
-    Retorna: (es_valido, monto_parseado, mensaje_error)
-
-    """
-
-    try:
-
-        monto = float(monto_raw) if monto_raw is not None else 0.0
-
-    except (TypeError, ValueError):
-
-        return (False, 0.0, f"No se puede parsear el monto: {monto_raw}")
-
-    
-
-    # Validar rango: debe estar entre 0.01 y 999,999,999,999.99
-
-    if monto < _MIN_MONTO_PAGADO:
-
-        return (False, monto, f"Monto debe ser mayor a {_MIN_MONTO_PAGADO}")
-
-    
-
-    if monto > _MAX_MONTO_PAGADO:
-
-        # Probablemente es una fecha convertida a número de Excel (días desde 1900)
-
-        # Las fechas en Excel típicamente son números entre 1 y ~50000
-
-        if monto < 100000:
-
-            return (False, monto, f"Monto sospechosamente pequeño para ser una cantidad; parece ser una fecha o número de secuencia: {monto}")
-
-        return (False, monto, f"Monto excede límite máximo ({_MAX_MONTO_PAGADO}): {monto}")
-
-    
-
-    return (True, monto, "")
-
-
-
-
-
-def _celda_a_string_documento(val: Any) -> str:
-
-    """
-
-    Convierte el valor de una celda Excel a string para Nº documento.
-
-    Acepta cualquier tipo: str, int, float (evita notación científica para números largos).
-
-    """
-
-    if val is None:
-
-        return ""
-
-    if isinstance(val, float):
-
-        if val != val:
-
-            return ""  # NaN
-
-        if val == int(val):
-
-            return str(int(val))  # 740087415441562.0 -> "740087415441562" (sin 7.4e+14)
-
-        return str(val)
-
-    if isinstance(val, int):
-
-        return str(val)
-
-    return str(val).strip()
-
-
-
-
-
-# Zona horaria del negocio para "hoy" e "inicio_mes" (Monto cobrado mes, Pagos hoy)
-
-TZ_NEGOCIO = "America/Caracas"
-
-
-
-
-
-def _hoy_local() -> date:
-
-    """
-
-    [MORA] Retorna la fecha actual en la zona horaria del negocio (America/Caracas).
-
-    Usada para calcular dias_mora, detectar vencimientos, y acciones automáticas.
-
-    """
-
-    tz = ZoneInfo(TZ_NEGOCIO)
-
-    return datetime.now(tz).date()
-
-
-
-
-
-def _validar_transicion_estado_cuota(estado_anterior: str, estado_nuevo: str) -> bool:
-
-    """
-
-    [validar_transiciones] Valida transiciones permitidas entre estados de cuota.
-
-    
-
-    Transiciones permitidas:
-
-    PENDIENTE â†’ PAGADO, PAGO_ADELANTADO
-
-    PAGO_ADELANTADO â†’ PAGADO
-
-    PAGADO â†’ PAGADO (idempotente)
-
-    """
-
-    transiciones_permitidas = {
-
-        "PENDIENTE": [
-            "PAGADO",
-            "PAGO_ADELANTADO",
-            "VENCIDO",
-            "MORA",
-            "PENDIENTE",
-            "PARCIAL",
-        ],
-
-        "PARCIAL": [
-            "PAGADO",
-            "PAGO_ADELANTADO",
-            "VENCIDO",
-            "MORA",
-            "PARCIAL",
-            "PENDIENTE",
-        ],
-
-        "VENCIDO": ["PAGADO", "PAGO_ADELANTADO", "VENCIDO", "MORA", "PARCIAL"],
-
-        "MORA": ["PAGADO", "PAGO_ADELANTADO", "VENCIDO", "MORA", "PARCIAL"],
-
-        "PAGO_ADELANTADO": ["PAGADO", "PAGO_ADELANTADO"],
-
-        "PAGADO": ["PAGADO"],
-
-    }
-
-    return estado_nuevo in transiciones_permitidas.get(estado_anterior, [])
-
-
-
-
-
-def _calcular_dias_mora(fecha_vencimiento: date) -> int:
-
-    """
-
-    Dias calendario desde fecha_vencimiento hasta hoy (America/Caracas), no negativos.
-
-    """
-
-    return dias_retraso_desde_vencimiento(fecha_vencimiento, _hoy_local())
-
-
-
-
-
-def _safe_float(val) -> float:
-
-    if val is None:
-
-        return 0.0
-
-    try:
-
-        return float(val)
-
-    except (TypeError, ValueError):
-
-        return 0.0
-
-
-
-
-
-def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict:
-
-    """Convierte fila Pago a dict para el frontend (campos en snake_case; fechas ISO)."""
-
-    fp = row.fecha_pago
-
-    if fp is None:
-        fecha_pago_str = ""
-    elif isinstance(fp, datetime):
-        fecha_pago_str = fp.date().isoformat()
-    elif isinstance(fp, date):
-        fecha_pago_str = fp.isoformat()
-    elif hasattr(fp, "isoformat"):
-        fecha_pago_str = fp.isoformat()
-    else:
-        fecha_pago_str = str(fp) if fp else ""
-
-    _nd_base, _nd_code = split_numero_documento_almacenado(row.numero_documento)
-
-    return {
-
-        "id": row.id,
-
-        "cedula_cliente": row.cedula_cliente or "",
-
-        "prestamo_id": row.prestamo_id,
-
-        "fecha_pago": fecha_pago_str,
-
-        "monto_pagado": float(row.monto_pagado) if row.monto_pagado is not None else 0,
-
-        "numero_documento": _nd_base or (row.numero_documento or ""),
-
-        "codigo_documento": _nd_code or "",
-
-        "institucion_bancaria": row.institucion_bancaria,
-
-        "estado": row.estado or "PENDIENTE",
-
-        "fecha_registro": row.fecha_registro.isoformat() if row.fecha_registro else None,
-
-        "fecha_conciliacion": row.fecha_conciliacion.isoformat() if row.fecha_conciliacion else None,
-
-        "conciliado": bool(row.conciliado),
-
-        "verificado_concordancia": getattr(row, "verificado_concordancia", None) or None,
-
-        "usuario_registro": row.usuario_registro or "",
-
-        "notas": row.notas,
-
-        "documento_nombre": getattr(row, "documento_nombre", None),
-
-        "documento_tipo": getattr(row, "documento_tipo", None),
-
-        "documento_ruta": getattr(row, "documento_ruta", None),
-
-        "link_comprobante": getattr(row, "link_comprobante", None),
-
-        "cuotas_atrasadas": cuotas_atrasadas,
-
-        "moneda_registro": getattr(row, "moneda_registro", None),
-
-        "monto_bs_original": float(row.monto_bs_original) if getattr(row, "monto_bs_original", None) is not None else None,
-
-        "tasa_cambio_bs_usd": float(row.tasa_cambio_bs_usd) if getattr(row, "tasa_cambio_bs_usd", None) is not None else None,
-
-        "fecha_tasa_referencia": row.fecha_tasa_referencia.isoformat() if getattr(row, "fecha_tasa_referencia", None) else None,
-
-    }
-
-
-def _enriquecer_items_tiene_aplicacion_cuotas(db: Session, items: list) -> None:
-    """Añade tiene_aplicacion_cuotas (filas en cuota_pagos) a cada ítem con id de pago."""
-    if not items:
-        return
-    ids: list[int] = []
-    for it in items:
-        pid = it.get("id")
-        if pid is not None:
-            try:
-                ids.append(int(pid))
-            except (TypeError, ValueError):
-                pass
-    if not ids:
-        for it in items:
-            it["tiene_aplicacion_cuotas"] = False
-        return
-    q = select(CuotaPago.pago_id).where(CuotaPago.pago_id.in_(ids)).distinct()
-    has_ids = {int(x[0]) for x in db.execute(q).all() if x[0] is not None}
-    for it in items:
-        pid = it.get("id")
-        try:
-            it["tiene_aplicacion_cuotas"] = int(pid) in has_ids if pid is not None else False
-        except (TypeError, ValueError):
-            it["tiene_aplicacion_cuotas"] = False
-
-
-def _enriquecer_pagos_pago_reportado_id(db: Session, items: list) -> None:
-    """
-    Si el Nº documento del pago coincide (normalizado) con alguna clave del reporte en Cobros
-    (numero_operacion, referencia_interna, formatos legacy COB-+RPC), expone pago_reportado_id
-    para enlazar al detalle / comprobante / recibo.
-
-    Optimización: solo lee pagos_reportados cuyo numero_operacion o referencia_interna aparece
-    en los documentos de la página (evita escanear toda la tabla en cada GET /pagos).
-    """
-    if not items:
-        return
-    cands: set[str] = set()
-    for it in items:
-        d = (it.get("numero_documento") or "").strip()
-        if d:
-            cands.add(d)
-            nd0 = normalize_documento(d)
-            if nd0:
-                cands.add(nd0)
-    by_nd: dict[str, int] = {}
-    _MAX_CANDS = 500
-    if not cands:
-        for it in items:
-            it["pago_reportado_id"] = None
-        return
-    cands_list = list(cands)
-    if len(cands_list) > _MAX_CANDS:
-        cands_list = cands_list[:_MAX_CANDS]
-    rows = db.execute(
-        select(
-            PagoReportado.id,
-            PagoReportado.referencia_interna,
-            PagoReportado.numero_operacion,
-        )
-        .where(
-            or_(
-                PagoReportado.numero_operacion.in_(cands_list),
-                PagoReportado.referencia_interna.in_(cands_list),
-            )
-        )
-        .order_by(PagoReportado.id.asc())
-    ).all()
-    for rid, ref_int, num_op in rows:
-        for k in claves_documento_pago_desde_campos(ref_int, num_op):
-            nd = normalize_documento(k)
-            if nd and nd not in by_nd:
-                by_nd[nd] = int(rid)
-    for it in items:
-        nd = normalize_documento(it.get("numero_documento"))
-        it["pago_reportado_id"] = by_nd.get(nd) if nd else None
-
-
-def _pago_response_enriquecido(
-    db: Session,
-    row: Pago,
-    cuotas_atrasadas: Optional[int] = None,
-) -> dict:
-    """Dict listo para API: base + enlace Cobros + link Gmail/Drive si aplica."""
-    out = _pago_to_response(row, cuotas_atrasadas)
-    out["tiene_aplicacion_cuotas"] = pago_tiene_aplicaciones_cuotas(db, row.id)
-    _enriquecer_pagos_pago_reportado_id(db, [out])
-    enriquecer_items_link_comprobante_desde_gmail(db, [out])
-    return out
 
 
 @router.get("", response_model=dict)
@@ -7101,28 +6480,6 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
 
 
 
-def _estado_pago_tras_aplicar_cascada(cuotas_completadas: int, cuotas_parciales: int) -> str:
-
-    """
-
-    Estado del pago según articulación real a cuotas.
-
-    Solo PAGADO si hubo aplicación (al menos un registro en cuota_pagos).
-
-    Evita marcar PAGADO sin cuota_pagos (inconsistencia y bloqueo del job en cascada).
-
-    """
-
-    if cuotas_completadas > 0 or cuotas_parciales > 0:
-
-        return "PAGADO"
-
-    return "PENDIENTE"
-
-
-
-
-
 def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
 
     """
@@ -7633,14 +6990,6 @@ def consultar_cedula_reportar_bs(
 
 
 
-class ConsultarCedulasReportarBsBatchBody(BaseModel):
-
-    cedulas: list[str]
-
-
-
-
-
 @router.post("/cedulas-reportar-bs/consultar-batch", response_model=dict)
 
 def consultar_cedulas_reportar_bs_batch(
@@ -7686,14 +7035,6 @@ def consultar_cedulas_reportar_bs_batch(
         }
 
     return {"total_en_lista": int(total), "por_cedula": por_cedula}
-
-
-
-
-
-class AgregarCedulaReportarBsBody(BaseModel):
-
-    cedula: str
 
 
 
