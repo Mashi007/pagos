@@ -13,6 +13,7 @@ from app.services.cobros.recibo_pdf import (
     WHATSAPP_DISPLAY,
     WHATSAPP_LINK,
     _append_comprobante_adjunto_recibo,
+    pie_pagina_recibo_centrada,
 )
 _LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "logo.png"
 
@@ -60,7 +61,7 @@ def generar_recibo_pago_cartera_pdf(
         buf,
         pagesize=letter,
         topMargin=0.5 * inch,
-        bottomMargin=0.55 * inch,
+        bottomMargin=0.65 * inch,
         leftMargin=0.65 * inch,
         rightMargin=0.65 * inch,
     )
@@ -234,5 +235,9 @@ def generar_recibo_pago_cartera_pdf(
     story.append(Spacer(1, 16))
     story.append(foot)
 
-    doc.build(story)
+    doc.build(
+        story,
+        onFirstPage=pie_pagina_recibo_centrada,
+        onLaterPages=pie_pagina_recibo_centrada,
+    )
     return buf.getvalue()

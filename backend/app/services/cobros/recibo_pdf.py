@@ -13,6 +13,23 @@ logger = logging.getLogger(__name__)
 
 from app.services.tasa_cambio_service import fecha_hoy_caracas
 
+
+def pie_pagina_recibo_centrada(canvas, doc) -> None:
+    """Numeración al pie, centrada (origen PDF abajo-izquierda). Página 1 = datos; Página 2 = comprobante si salta."""
+    from reportlab.lib import colors as _colors
+    from reportlab.lib.units import inch as _inch
+
+    canvas.saveState()
+    canvas.setFont("Helvetica", 9)
+    canvas.setFillColor(_colors.HexColor("#475569"))
+    w = float(doc.pagesize[0])
+    canvas.drawCentredString(
+        w / 2.0,
+        0.42 * _inch,
+        f"Página {canvas.getPageNumber()}",
+    )
+    canvas.restoreState()
+
 WHATSAPP_LINK = "https://wa.me/584244579934"
 WHATSAPP_DISPLAY = "424-4579934"
 CONTACTO_COBRANZA = "cobranza@rapicreditca.com"
@@ -246,15 +263,6 @@ def _append_comprobante_adjunto_recibo(
             bytes_para_imagen = raster
             tipo_para_imagen = "image/png"
             is_pdf = False
-            story.append(Paragraph("Comprobante digital (PDF — página 1)", section_style))
-            if name_esc:
-                story.append(
-                    Paragraph(
-                        f'<font size="8" color="#64748b">{name_esc}</font>',
-                        section_style,
-                    )
-                )
-            story.append(Spacer(1, 6))
         else:
             pdf_fallback_note = True
 
@@ -298,15 +306,7 @@ def _append_comprobante_adjunto_recibo(
         normalized.seek(0)
         im = RLImage(normalized)
         im._restrictSize(_content_w * 0.92, 4.8 * inch)
-        story.append(Paragraph("Imagen del comprobante", section_style))
-        if name_esc:
-            story.append(
-                Paragraph(
-                    f'<font size="8" color="#64748b">{name_esc}</font>',
-                    section_style,
-                )
-            )
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
         wrap = Table([[im]], colWidths=[_content_w])
         wrap.setStyle(
             TableStyle(
@@ -414,7 +414,7 @@ def generar_recibo_pago_reportado(
         buf,
         pagesize=letter,
         topMargin=0.5 * inch,
-        bottomMargin=0.55 * inch,
+        bottomMargin=0.65 * inch,
         leftMargin=0.65 * inch,
         rightMargin=0.65 * inch,
     )
@@ -774,5 +774,9 @@ def generar_recibo_pago_reportado(
     )
     story.append(_foot)
 
-    doc.build(story)
+    doc.build(
+        story,
+        onFirstPage=pie_pagina_recibo_centrada,
+        onLaterPages=pie_pagina_recibo_centrada,
+    )
     return buf.getvalue()
