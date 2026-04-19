@@ -1,5 +1,5 @@
 """
-Modelos para el pipeline Gmail -> Drive -> Gemini -> Sheets (módulo Pagos).
+Modelos para el pipeline Gmail -> Gemini -> BD (módulo Pagos; comprobante en BD, sin Drive).
 """
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.sql import func

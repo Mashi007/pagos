@@ -20,12 +20,14 @@ logger = logging.getLogger(__name__)
 
 _MAX_COMPROBANTE_BYTES = 8 * 1024 * 1024
 
+# Alineado con helpers.MIME_IMAGE_OR_PDF (adjuntos Gmail) para no fallar tras Gemini OK.
 _MIME_PERMITIDOS = frozenset(
     {
         "image/jpeg",
         "image/png",
         "image/webp",
         "image/gif",
+        "image/heic",
         "application/pdf",
     }
 )
@@ -48,13 +50,26 @@ def persistir_comprobante_gmail_en_bd(
     db: Session,
     content: bytes | bytearray,
     mime_type: Optional[str],
+    *,
+    sha256_hex: Optional[str] = None,
+    reuse_por_sha256: Optional[dict[str, Tuple[str, str]]] = None,
 ) -> Optional[Tuple[str, str]]:
     """
     Inserta fila en pago_comprobante_imagen (sesión actual; el caller hace commit).
 
+    Si ``reuse_por_sha256`` contiene ``sha256_hex`` (64 hex minúsculas), devuelve ese
+    (id, url) sin insertar de nuevo. El caller debe registrar en el dict **solo tras**
+    ``commit`` exitoso, para no reusar IDs revertidos por rollback.
+
     Returns:
         (id_hex_32, url_para_columna_link) o None si no se guardó (tamaño, MIME).
     """
+    sh = (sha256_hex or "").strip().lower()
+    if reuse_por_sha256 is not None and len(sh) == 64 and all(c in "0123456789abcdef" for c in sh):
+        hit = reuse_por_sha256.get(sh)
+        if hit is not None:
+            return hit
+
     body = bytes(content) if isinstance(content, bytearray) else content
     if len(body) > _MAX_COMPROBANTE_BYTES:
         logger.warning(

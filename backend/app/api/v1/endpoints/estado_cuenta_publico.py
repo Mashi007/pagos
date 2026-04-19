@@ -32,7 +32,7 @@ from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, Response
 
 from pydantic import BaseModel
 
@@ -385,6 +385,70 @@ def _obtener_datos_pdf(db: Session, cedula_lookup: str):
     return obtener_datos_estado_cuenta_cliente(db, cedula_lookup)
 
 
+# Abre el PDF sin poner el JWT en query string (no viaja al servidor → no queda en access logs).
+# El token va en el fragmento #t=...; este script hace GET a /recibo-cuota con Authorization.
+_RECIBO_CUOTA_ABRIR_JS = (
+    "(function(){"
+    'var msg=document.getElementById("recibo-cuota-msg");'
+    'var prestamo=document.body.getAttribute("data-prestamo-id")||"";'
+    'var cuota=document.body.getAttribute("data-cuota-id")||"";'
+    'var h=window.location.hash||"";'
+    'if(h.charAt(0)==="#"){h=h.slice(1);}'
+    "var token=\"\";"
+    'if(h.indexOf("t=")===0){token=decodeURIComponent(h.slice(2).split("&")[0]);}'
+    'else if(h.indexOf("token=")===0){token=decodeURIComponent(h.slice(6).split("&")[0]);}'
+    'if(!prestamo||!cuota||!token){if(msg){msg.textContent="Enlace inválido o incompleto.";}return;}'
+    "var pdfUrl;"
+    'try{pdfUrl=new URL("recibo-cuota",window.location.href);}catch(e){'
+    'if(msg){msg.textContent="No se pudo preparar el enlace.";}return;}'
+    'pdfUrl.searchParams.set("prestamo_id",prestamo);'
+    'pdfUrl.searchParams.set("cuota_id",cuota);'
+    'fetch(pdfUrl.toString(),{method:"GET",headers:{Authorization:"Bearer "+token},credentials:"same-origin"})'
+    ".then(function(r){if(!r.ok){throw new Error(\"http_\"+r.status);}return r.blob();})"
+    ".then(function(blob){var u=URL.createObjectURL(blob);window.location.replace(u);})"
+    '.catch(function(){if(msg){msg.textContent="No se pudo abrir el recibo. Puede haber expirado; solicite un nuevo código.";}});'
+    "})();"
+)
+
+
+@router.get(
+    "/recibo-cuota-abrir.js",
+    include_in_schema=False,
+    name="estado_cuenta_recibo_cuota_abrir_js",
+)
+def get_recibo_cuota_abrir_js():
+    return Response(
+        content=_RECIBO_CUOTA_ABRIR_JS,
+        media_type="application/javascript; charset=utf-8",
+    )
+
+
+@router.get("/recibo-cuota-abrir", response_class=HTMLResponse)
+def get_recibo_cuota_abrir_page(
+    request: Request,
+    prestamo_id: int = Query(..., description="ID del préstamo"),
+    cuota_id: int = Query(..., description="ID de la cuota"),
+):
+    """
+    Página mínima que lee el token en el fragmento URL (#t=JWT) y solicita el PDF con Authorization.
+    Así el JWT no aparece en query string ni en logs típicos de proxy (el fragmento no se envía al servidor).
+    """
+    script_src = request.url_for("estado_cuenta_recibo_cuota_abrir_js")
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Recibo de cuota</title>
+<script defer src="{script_src}"></script>
+</head>
+<body data-prestamo-id="{prestamo_id}" data-cuota-id="{cuota_id}">
+<p id="recibo-cuota-msg">Abriendo recibo...</p>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
 @router.get("/recibo-cuota")
 
 def get_recibo_cuota_publico(
@@ -412,9 +476,7 @@ def get_recibo_cuota_publico(
     - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
 
     """
-    
-    from fastapi import Header
-    
+
     auth_header = request.headers.get("Authorization", "") if request else ""
     token_from_header = None
     if auth_header.lower().startswith("bearer "):
@@ -1145,7 +1207,10 @@ def verificar_codigo_estado_cuenta(
 
                 continue
 
-            url = f"{base_url}/api/v1/estado-cuenta/public/recibo-cuota?token={recibo_token}&prestamo_id={prestamo_id}&cuota_id={c.get('id')}"
+            url = (
+                f"{base_url}/api/v1/estado-cuenta/public/recibo-cuota-abrir"
+                f"?prestamo_id={prestamo_id}&cuota_id={c.get('id')}#t={recibo_token}"
+            )
 
             recibos_cuotas.append({
 

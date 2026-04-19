@@ -1,7 +1,7 @@
 """
 Orquestacion: Gmail -> Gemini/BD **solo** si el mensaje cumple regla inegociable **una sola pieza** (ver abajo); si no, sin escaneo ni filas comprobante.
-  -> commit BD (fila sin enlace aun) -> comprobante imagen/PDF en tabla pago_comprobante_imagen + URL en drive_link -> commit.
-  El archivo del comprobante **no** se sube a Drive; el .eml del correo puede seguir guardandose en Drive (auditoria).
+  -> flush sync_item + temporal -> comprobante en pago_comprobante_imagen (reuso por SHA-256 en la misma corrida) + URL en drive_link -> un solo commit; si falla el binario, rollback de esas filas.
+  No hay subidas a Google Drive: el comprobante queda en BD; no se archiva .eml en Drive (drive_email_link sin uso).
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni comprobante en BD para ese adjunto.
 
 **Primera regla (remitente vs tabla clientes):** se compara el correo del **De (From)** con `clientes.email` y, si no coincide, con `clientes.email_secundario` (trim, minúsculas).
@@ -39,11 +39,6 @@ from sqlalchemy.orm import Session
 from app.models.cliente import Cliente
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
-from app.services.pagos_gmail.drive_service import (
-    build_drive_service,
-    get_or_create_folder,
-    upload_file,
-)
 from app.services.pagos_gmail.gmail_service import (
     add_message_user_labels_only,
     build_gmail_service,
@@ -51,7 +46,6 @@ from app.services.pagos_gmail.gmail_service import (
     get_pagos_gmail_image_pdf_files_for_pipeline,
     get_message_date,
     get_message_full_payload,
-    get_message_raw_bytes,
     get_or_create_pagos_gmail_plantilla_label_ids,
     list_messages_by_filter,
     mark_as_read,
@@ -75,7 +69,6 @@ from app.services.pagos_gmail.pdf_pages import expand_pipeline_pdf_tuples
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
     formatear_cedula,
-    get_folder_name_from_date,
     get_sheet_name_for_date,
     normalizar_fecha_pago,
     normalizar_referencia,
@@ -203,7 +196,7 @@ def _cedula_columna_desde_remitente(
     """
     Devuelve (valor columna cedula, es_cliente_valido).
     Si hay cliente con `email` o `email_secundario` = remitente (tras normalizar): cedula formateada.
-    Si no hay fila: ERROR EMAIL. Si falla la consulta: ERROR BD. (3.3 sigue generando fila Excel/Drive.)
+    Si no hay fila: ERROR EMAIL. Si falla la consulta: ERROR BD. (3.3 sigue generando fila en sync_item / comprobante en BD si plantilla OK.)
     """
     c_raw, motivo = _cedula_por_email_cliente(db, sender_lc)
     if c_raw:
@@ -219,7 +212,7 @@ def run_pipeline(
     scan_filter: str = "all",
 ) -> tuple[Optional[int], str]:
     """
-    Ejecuta el pipeline Gmail -> Gemini -> (Drive+BD si plantilla 1/2/3/4 y datos completos).
+    Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
     Solo se escanea (Gemini) si hay **exactamente un** candidato y **cero** PDFs multipagina omitidos; si no, sin escaneo ni filas: **solo MANUAL** (remitente en clientes) o **solo ERROR EMAIL** (sin cliente), sin otras etiquetas en ese caso.
     Por adjunto OK con remitente en tabla clientes: etiqueta IMAGEN 1 (A), 2 (B), 3 (C) o 4 (D) si **todo** el correo es del mismo tipo (A/B/C/D/NR);
     si hay **mas de un tipo** entre A, B, C, D y NR digitalizados OK: **MANUAL** en Gmail (sin MERCANTIL/BNC/BINANCE/BNV). Cierre: leido si hubo digitalizacion 100%% OK.
@@ -231,12 +224,12 @@ def run_pipeline(
       **unread** / **read**: mismo criterio base + ``is:unread`` / ``is:read`` en la búsqueda Gmail.
       **error_email_rescan**: lista Gmail con etiqueta ERROR EMAIL + media; Gemini en modo A/B leyendo cédula desde imagen.
       pending_identification es alias del listado base (nombre conservado para scheduler/API).
-    Orden comprobantes OK: insert pagos_gmail_sync_item + gmail_temporal (sin Drive) -> commit -> subida Drive -> commit enlaces.
+    Orden comprobantes OK: insert sync_item + gmail_temporal -> flush -> persistir binario (o reuso SHA-256 en corrida) y URL en drive_link -> commit atomico.
     Los mensajes de cada lote se ordenan por fecha del correo de mas antiguo a mas reciente antes de procesar.
     Una sola pasada de listado+proceso por ejecucion (salvo reintentos manuales).
     Tras listar **todos** los mensajes que cumplen el filtro (paginacion completa), se ordenan siempre del **mas antiguo al mas reciente**
     y se procesan en ese orden estricto (primer correo de la lista primero, ultimo al final).
-    Dedupe en la misma corrida: mismo binario de adjunto (SHA-256) tras un commit BD previo en ese run omite Gemini/BD/Drive
+    Dedupe en la misma corrida: mismo binario de adjunto (SHA-256) tras un commit BD previo en ese run omite Gemini/BD/enlace
     (reenvios o mensajes duplicados con el mismo JPG/PDF).
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
@@ -257,10 +250,9 @@ def run_pipeline(
         logger.warning("[PAGOS_GMAIL] Sin credenciales; pipeline abortado")
         return existing_sync_id, "no_credentials"
 
-    logger.info("[PAGOS_GMAIL] Credenciales OK; construyendo servicios Google")
-    drive_svc, MediaIoBaseUpload = build_drive_service(creds)
+    logger.info("[PAGOS_GMAIL] Credenciales OK; construyendo servicio Gmail")
     gmail_svc = build_gmail_service(creds)
-    logger.info("[PAGOS_GMAIL] Servicios Drive/Gmail construidos (Sheets eliminado)")
+    logger.info("[PAGOS_GMAIL] Servicio Gmail construido (pipeline sin Google Drive)")
 
     if existing_sync_id:
         from sqlalchemy import select as sa_select
@@ -279,13 +271,14 @@ def run_pipeline(
     sync_id = sync.id
     emails_ok = 0
     files_ok = 0
-    drive_errors = 0
     # Correos con digitalizacion 100%% y etiquetas de plantilla aplicadas + marcados leidos en Gmail.
     correos_marcados_revision = 0
     plantilla_label_cache: Dict[str, Optional[str]] = {}
     error_email_rescan = (scan_filter or "").strip().lower() == "error_email_rescan"
-    # Mismo binario de comprobante en varios mensajes Gmail (reenvíos / hilos duplicados): una sola pasada Gemini+BD+Drive por corrida.
+    # Mismo binario de comprobante en varios mensajes Gmail (reenvíos / hilos duplicados): una sola pasada Gemini+BD por corrida.
     seen_attachment_sha256: set[str] = set()
+    # Misma corrida: varias filas Excel apuntando al mismo BLOB (mismo SHA-256) sin duplicar pago_comprobante_imagen.
+    comprobante_reuse_por_sha256: dict[str, tuple[str, str]] = {}
     # Métricas para GET /pagos/gmail/status → last_run_summary (diagnóstico en toast UI).
     run_stats: dict[str, int] = {
         "gmail_messages_listed": 0,
@@ -324,7 +317,7 @@ def run_pipeline(
             return ordered
 
         def process_message_batch(batch: list[dict], label: str) -> None:
-            nonlocal emails_ok, files_ok, drive_errors, correos_marcados_revision
+            nonlocal emails_ok, files_ok, correos_marcados_revision
             if batch:
                     logger.info(
                     "[PAGOS_GMAIL] Procesando lote %s: %d correos (imagen/PDF pipeline, formatos A/B/C/D)",
@@ -356,7 +349,6 @@ def run_pipeline(
                 subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
                 msg_date = get_message_date(headers)
                 sheet_name = get_sheet_name_for_date(msg_date)
-                folder_name = get_folder_name_from_date(msg_date)
 
                 # Mercantil/BNC (A/B): cédula desde imagen solo con scan_filter **error_email_rescan**.
                 modo_ab_cedula_desde_imagen = error_email_rescan
@@ -375,31 +367,9 @@ def run_pipeline(
                     subject[:50],
                 )
 
-                folder_id = get_or_create_folder(drive_svc, folder_name)
-                if not folder_id:
-                    drive_errors += 1
-                    run_stats["messages_skipped_drive_folder"] += 1
-                    logger.warning(
-                        "[PAGOS_GMAIL] No se pudo crear carpeta Drive '%s' - omitiendo msg %s",
-                        folder_name,
-                        msg_id,
-                    )
-                    continue
-
-                logger.info("[PAGOS_GMAIL]   folder_id=%s", folder_id)
-
                 full_payload = get_message_full_payload(gmail_svc, msg_id)
                 if not full_payload and payload.get("parts"):
                     full_payload = payload
-
-                drive_email_link: Optional[str] = None
-                raw_eml = get_message_raw_bytes(gmail_svc, msg_id)
-                if not raw_eml:
-                    logger.warning(
-                        "[PAGOS_GMAIL]   Email .eml no obtenido (msg_id=%s) - columna Ver email vacia",
-                        msg_id,
-                    )
-                # .eml a Drive solo despues del primer commit de filas de comprobante (misma carpeta).
 
                 attachments = get_pagos_gmail_image_pdf_files_for_pipeline(
                     gmail_svc, msg_id, full_payload or {}
@@ -437,7 +407,7 @@ def run_pipeline(
                     any_incomplete_or_skipped = True
                     logger.info(
                         "[PAGOS_GMAIL]   Regla una sola pieza: candidatos=%d multipag_omitidos=%d -> "
-                        "sin Gemini ni filas comprobante/Drive; Gmail solo MANUAL (cliente) o solo ERROR EMAIL (sin cliente).",
+                        "sin Gemini ni filas comprobante; Gmail solo MANUAL (cliente) o solo ERROR EMAIL (sin cliente).",
                         len(candidatos),
                         multipage_pdf_omitidos,
                     )
@@ -519,7 +489,7 @@ def run_pipeline(
                         if file_digest in seen_attachment_sha256:
                             logger.info(
                                 "[PAGOS_GMAIL]   Dedupe: bytes identicos a comprobante ya digitalizado antes en esta corrida "
-                                "(sha256=%s…) — sin Gemini/BD/Drive: %s",
+                                "(sha256=%s…) — sin Gemini/BD: %s",
                                 file_digest[:16],
                                 filename,
                             )
@@ -538,7 +508,7 @@ def run_pipeline(
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             logger.warning(
-                                "[PAGOS_GMAIL]   No es plantilla A/B/C/D - no Drive/BD: %s",
+                                "[PAGOS_GMAIL]   No es plantilla A/B/C/D - no BD: %s",
                                 filename,
                             )
                             continue
@@ -603,7 +573,7 @@ def run_pipeline(
                                 any_incomplete_or_skipped = True
                                 any_skipped_not_plantilla_o_campos = True
                                 logger.warning(
-                                    "[PAGOS_GMAIL]   Formato NR pero fila incompleta (monto!=NR o cedula vacia) - no Drive/BD: %s",
+                                    "[PAGOS_GMAIL]   Formato NR pero fila incompleta (monto!=NR o cedula vacia) - no BD: %s",
                                     filename,
                                 )
                                 continue
@@ -611,7 +581,7 @@ def run_pipeline(
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             logger.warning(
-                                "[PAGOS_GMAIL]   Plantilla %s pero columnas incompletas - no Drive/BD: %s",
+                                "[PAGOS_GMAIL]   Plantilla %s pero columnas incompletas - no BD: %s",
                                 fmt,
                                 filename,
                             )
@@ -664,78 +634,55 @@ def run_pipeline(
 
                     if rows_pairs:
                         try:
-                            db.commit()
-                            committed_comprobante_rows = True
-                            logger.info(
-                                "[PAGOS_GMAIL]   Commit BD inicial: %d fila(s) comprobante sin enlace a comprobante aun",
-                                len(rows_pairs),
-                            )
-                            for _, _, p in rows_pairs:
-                                d = p.get("sha256")
-                                if isinstance(d, str) and len(d) == 64:
-                                    seen_attachment_sha256.add(d)
-                        except Exception as commit_err:
+                            db.flush()
+                        except Exception as flush_err:
                             logger.warning(
-                                "[PAGOS_GMAIL] Error commit filas BD (antes de enlazar comprobante): %s",
-                                commit_err,
+                                "[PAGOS_GMAIL] Error flush filas sync/temporal antes de comprobante: %s",
+                                flush_err,
                             )
                             db.rollback()
                             any_incomplete_or_skipped = True
                             rows_pairs = []
                         else:
-                            if raw_eml:
-                                eml_name = f"email_{msg_id}.eml"
-                                up_eml = upload_file(
-                                    drive_svc,
-                                    MediaIoBaseUpload,
-                                    folder_id,
-                                    eml_name,
-                                    raw_eml,
-                                    "message/rfc822",
-                                )
-                                if up_eml:
-                                    _, drive_email_link = up_eml
-                                    logger.info(
-                                        "[PAGOS_GMAIL]   Email guardado en Drive: %s",
-                                        eml_name,
-                                    )
-                                else:
-                                    logger.warning(
-                                        "[PAGOS_GMAIL]   Email .eml no subido (msg_id=%s)",
-                                        msg_id,
-                                    )
-
+                            _label_ids_len_before_comprobante = len(label_ids_for_message)
+                            comprobante_resueltos: list[tuple[str, str, dict]] = []
+                            persist_ok = True
                             for si, gt, p in rows_pairs:
+                                sh_raw = p.get("sha256")
+                                sh_key: Optional[str] = None
+                                if isinstance(sh_raw, str) and len(sh_raw.strip()) == 64:
+                                    cand = sh_raw.strip().lower()
+                                    if all(c in "0123456789abcdef" for c in cand):
+                                        sh_key = cand
                                 persisted = persistir_comprobante_gmail_en_bd(
                                     db,
                                     p["content"],
                                     p["mime_type"],
+                                    sha256_hex=sh_key,
+                                    reuse_por_sha256=comprobante_reuse_por_sha256,
                                 )
                                 if not persisted:
-                                    any_incomplete_or_skipped = True
+                                    persist_ok = False
                                     logger.warning(
-                                        "[PAGOS_GMAIL]   No se pudo guardar comprobante en BD tras commit inicial - "
-                                        "fila sin link: %s",
+                                        "[PAGOS_GMAIL]   No se pudo guardar comprobante en BD — "
+                                        "rollback de filas de este correo: %s",
                                         p["filename"],
                                     )
-                                    continue
+                                    break
                                 _uid, link_url = persisted
+                                comprobante_resueltos.append((_uid, link_url or "", p))
                                 logger.info(
-                                    "[PAGOS_GMAIL]   Comprobante en BD OK: %s -> %s",
+                                    "[PAGOS_GMAIL]   Comprobante en sesion OK: %s -> %s",
                                     p["filename"],
                                     (link_url or "")[:72],
                                 )
                                 si.drive_file_id = None
                                 si.drive_link = link_url or None
-                                si.drive_email_link = drive_email_link
+                                si.drive_email_link = None
                                 gt.drive_file_id = None
                                 gt.drive_link = link_url or None
-                                gt.drive_email_link = drive_email_link
-                                files_ok += 1
-                                had_complete_digitalization = True
+                                gt.drive_email_link = None
                                 fmt = p["fmt"]
-                                if fmt in ("A", "B", "C", "D", "NR"):
-                                    bank_fmts_digitized.append(fmt)
                                 id_a, id_b, id_c, id_d = get_or_create_pagos_gmail_plantilla_label_ids(
                                     gmail_svc, plantilla_label_cache
                                 )
@@ -769,15 +716,38 @@ def run_pipeline(
                                     p["filename"],
                                 )
 
-                            try:
-                                db.commit()
-                            except Exception as upd_err:
-                                logger.warning(
-                                    "[PAGOS_GMAIL] Error commit enlaces comprobante (.eml / link) en BD: %s",
-                                    upd_err,
-                                )
+                            if not persist_ok:
                                 db.rollback()
+                                del label_ids_for_message[_label_ids_len_before_comprobante:]
                                 any_incomplete_or_skipped = True
+                            else:
+                                try:
+                                    db.commit()
+                                    committed_comprobante_rows = True
+                                    logger.info(
+                                        "[PAGOS_GMAIL]   Commit BD: %d fila(s) sync/temporal + comprobante enlazado",
+                                        len(rows_pairs),
+                                    )
+                                    for uid, link_url, p in comprobante_resueltos:
+                                        sh_raw = p.get("sha256")
+                                        if isinstance(sh_raw, str) and len(sh_raw.strip()) == 64:
+                                            k = sh_raw.strip().lower()
+                                            if all(c in "0123456789abcdef" for c in k):
+                                                seen_attachment_sha256.add(k)
+                                                comprobante_reuse_por_sha256[k] = (uid, link_url)
+                                        files_ok += 1
+                                        had_complete_digitalization = True
+                                        fmt = p["fmt"]
+                                        if fmt in ("A", "B", "C", "D", "NR"):
+                                            bank_fmts_digitized.append(fmt)
+                                except Exception as upd_err:
+                                    logger.warning(
+                                        "[PAGOS_GMAIL] Error commit filas + comprobante en BD: %s",
+                                        upd_err,
+                                    )
+                                    db.rollback()
+                                    del label_ids_for_message[_label_ids_len_before_comprobante:]
+                                    any_incomplete_or_skipped = True
 
                 n_att = len(candidatos)
                 if (
@@ -803,7 +773,7 @@ def run_pipeline(
                         logger.warning(
                             "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C/D valida "
                             "o fallaron -> sin etiquetas plantilla ni leido (se exige 100%% OK en todos). "
-                            "Puede haber filas BD sin link si fallo el guardado del comprobante tras el primer commit.",
+                            "Si fallo el guardado del comprobante, las filas de ese correo se revierten (sin huerfanas).",
                             n_att,
                         )
                     else:
@@ -1115,19 +1085,10 @@ def run_pipeline(
                 "messages_skipped_drive_folder"
             ],
         }
-        logger.info("[PAGOS_GMAIL] FIN pipeline: emails=%d filas=%d drive_errors=%d",
-            emails_ok, files_ok, drive_errors)
+        logger.info("[PAGOS_GMAIL] FIN pipeline: emails=%d filas=%d", emails_ok, files_ok)
 
-        if drive_errors > 0 and emails_ok == 0:
-            sync.status = "error"
-            sync.error_message = (
-                f"Fallo Drive en {drive_errors} correo(s): no se pudo crear carpeta. "
-                "Verifica permisos de la cuenta de servicio en Google Drive."
-            )
-        else:
-            sync.status = "success"
-            if drive_errors > 0:
-                logger.warning("[PAGOS_GMAIL] %d correos omitidos por fallo Drive; %d procesados OK", drive_errors, emails_ok)
+        sync.status = "success"
+        sync.error_message = None
         db.commit()
         return sync_id, sync.status
 

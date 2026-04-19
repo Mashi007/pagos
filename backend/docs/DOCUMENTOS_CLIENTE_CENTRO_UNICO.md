@@ -17,7 +17,7 @@ Detalle de consumidores: `backend/docs/ESTADO_CUENTA_FUENTE_UNICA.md`.
 |------|--------|
 | Ensamblaje desde `PagoReportado` + BD (cuotas, saldos, tasa BS/USD) | `app/services/cobros/recibo_pago_reportado_centro.py` → `generar_recibo_pdf_desde_pago_reportado` |
 | Texto de cuotas / saldos (mismo enlace pago que importacion) | `app/services/cobros/recibo_cuotas_lookup.py` |
-| Plantilla PDF (ReportLab) | `app/services/cobros/recibo_pdf.py` → `generar_recibo_pago_reportado` |
+| Plantilla PDF (ReportLab) | `app/services/cobros/recibo_pdf.py` → `generar_recibo_pago_reportado` (si `pagos_reportados.comprobante` tiene imagen, se incrusta; si es PDF, nota de texto) |
 
 **Regla de tasa en el recibo:** misma que API/Excel de pagos reportados (`tasa_y_equivalente_usd_excel`): en BS, tasa del dia **`fecha_pago`** si hay fila en `tasas_cambio_diaria`; si no hay tasa para esa fecha, el recibo no inventa otra (queda sin tasa en el PDF). En USD no aplica tasa Bs.
 

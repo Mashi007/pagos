@@ -1,7 +1,7 @@
 """
-Endpoints para el pipeline Gmail -> Drive -> Gemini (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
+Endpoints para el pipeline Gmail -> Gemini -> BD (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
 Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822 (deduplicado).
-Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD (imagen/PDF en pago_comprobante_imagen; enlace persiste en BD para import de pagos, no en el Excel); por cada OK: etiqueta IMAGEN 1/2/3 (sin modificar estrellas Gmail). El .eml puede seguir en Drive.
+Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD (imagen/PDF en pago_comprobante_imagen; enlace persiste en BD para import de pagos, no en el Excel); por cada OK: etiqueta IMAGEN 1/2/3 (sin modificar estrellas Gmail). Sin subidas a Google Drive.
 Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no las toca el pipeline).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD)

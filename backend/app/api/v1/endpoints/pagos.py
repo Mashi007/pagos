@@ -334,6 +334,10 @@ def get_pago_comprobante_imagen(
     return Response(
         content=row.imagen_data,
         media_type=(row.content_type or "application/octet-stream"),
+        headers={
+            "Cache-Control": "private, no-store",
+            "Pragma": "no-cache",
+        },
     )
 
 

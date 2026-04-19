@@ -2,10 +2,14 @@
 Generacion del recibo PDF para reportes de pago (modulo Cobros).
 Diseno profesional con encabezado, resumen estructurado y bloque narrativo.
 """
+import html
 import io
+import logging
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Any, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from app.services.tasa_cambio_service import fecha_hoy_caracas
 
@@ -139,6 +143,94 @@ def _monto_tabla_y_cuerpo(monto: str, moneda: Optional[str]) -> tuple[str, str]:
     return (t or "-"), sym
 
 
+def _append_comprobante_adjunto_recibo(
+    story: List[Any],
+    *,
+    _content_w: float,
+    section_style: Any,
+    comprobante_bytes: Optional[bytes],
+    comprobante_tipo: Optional[str],
+    comprobante_nombre: Optional[str],
+) -> None:
+    """
+    Incrusta en el PDF la imagen guardada en BD (pagos_reportados.comprobante) cuando es raster.
+    Si el archivo es PDF, solo se anade nota (ReportLab no incrusta PDF aqui).
+    """
+    if not comprobante_bytes or len(comprobante_bytes) < 12:
+        return
+    from io import BytesIO
+
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Image as RLImage, Paragraph, Spacer, Table, TableStyle
+
+    ct = (comprobante_tipo or "").lower()
+    is_pdf = "pdf" in ct or comprobante_bytes[:5] == b"%PDF-"
+    name_esc = html.escape((comprobante_nombre or "").strip()[:160]) if (comprobante_nombre or "").strip() else ""
+
+    if is_pdf:
+        story.append(Paragraph("Comprobante digital (PDF)", section_style))
+        if name_esc:
+            story.append(
+                Paragraph(
+                    f'<font size="8" color="#64748b">Archivo registrado en sistema: {name_esc}</font>',
+                    section_style,
+                )
+            )
+        else:
+            story.append(
+                Paragraph(
+                    '<font size="8" color="#64748b">Copia digital disponible en el sistema (PDF).</font>',
+                    section_style,
+                )
+            )
+        story.append(Spacer(1, 12))
+        return
+
+    try:
+        from PIL import Image as PILImage
+
+        pil = PILImage.open(BytesIO(comprobante_bytes))
+        pil.load()
+        if pil.mode in ("RGBA", "P", "PA"):
+            pil = pil.convert("RGB")
+        elif pil.mode != "RGB" and pil.mode != "L":
+            pil = pil.convert("RGB")
+        normalized = BytesIO()
+        pil.save(normalized, format="PNG", optimize=True)
+        normalized.seek(0)
+        im = RLImage(normalized)
+        im._restrictSize(_content_w * 0.92, 4.8 * inch)
+        story.append(Paragraph("Imagen del comprobante", section_style))
+        if name_esc:
+            story.append(
+                Paragraph(
+                    f'<font size="8" color="#64748b">{name_esc}</font>',
+                    section_style,
+                )
+            )
+        story.append(Spacer(1, 6))
+        wrap = Table([[im]], colWidths=[_content_w])
+        wrap.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        story.append(wrap)
+        story.append(Spacer(1, 14))
+    except Exception:
+        logger.warning(
+            "Recibo Cobros: no se pudo embeber comprobante como imagen (tipo=%s, bytes=%s)",
+            (comprobante_tipo or "")[:80],
+            len(comprobante_bytes),
+            exc_info=True,
+        )
+
+
 def _cedula_display(tipo_cedula: str, numero_cedula: str) -> str:
     tipo = (tipo_cedula or "").strip().upper()
     numero = (numero_cedula or "").strip().upper().replace("-", "").replace(" ", "")
@@ -167,6 +259,9 @@ def generar_recibo_pago_reportado(
     moneda: Optional[str] = None,
     tasa_cambio: Optional[float] = None,
     estado_cuota: Optional[str] = None,
+    comprobante_bytes: Optional[bytes] = None,
+    comprobante_tipo: Optional[str] = None,
+    comprobante_nombre: Optional[str] = None,
 ) -> bytes:
     """Genera el PDF del recibo con datos reales del pago reportado."""
     from reportlab.lib import colors
@@ -449,6 +544,15 @@ def generar_recibo_pago_reportado(
 
     story.append(table)
     story.append(Spacer(1, 18))
+
+    _append_comprobante_adjunto_recibo(
+        story,
+        _content_w=_content_w,
+        section_style=section_style,
+        comprobante_bytes=comprobante_bytes,
+        comprobante_tipo=comprobante_tipo,
+        comprobante_nombre=comprobante_nombre,
+    )
 
     # Tabla de saldos si hay cuota
     if numero_cuota:

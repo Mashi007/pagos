@@ -69,6 +69,10 @@ def kwargs_recibo_pago_reportado(db: Session, pr: PagoReportado) -> Dict[str, An
     u = getattr(pr, "updated_at", None)
     if u and hasattr(u, "strftime"):
         fecha_reporte_aprobacion_display = u.strftime("%d/%m/%Y %H:%M")
+    raw_comp = getattr(pr, "comprobante", None)
+    comp_bytes: Optional[bytes] = bytes(raw_comp) if raw_comp is not None else None
+    if comp_bytes is not None and len(comp_bytes) == 0:
+        comp_bytes = None
     return {
         "referencia_interna": pr.referencia_interna,
         "nombres": pr.nombres,
@@ -87,6 +91,9 @@ def kwargs_recibo_pago_reportado(db: Session, pr: PagoReportado) -> Dict[str, An
         "fecha_pago_display": fecha_pago_display,
         "moneda": moneda,
         "tasa_cambio": tasa_cambio,
+        "comprobante_bytes": comp_bytes,
+        "comprobante_tipo": (getattr(pr, "comprobante_tipo", None) or "").strip() or None,
+        "comprobante_nombre": (getattr(pr, "comprobante_nombre", None) or "").strip() or None,
     }
 
 
