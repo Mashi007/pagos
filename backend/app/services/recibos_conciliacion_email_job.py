@@ -15,7 +15,9 @@ salvo reenvío admin con ``permite_envio_real_fecha_no_hoy``.
 
 Idempotencia en BD: columna ``slot`` fija ``RECIBOS_VENTANA_SLOT`` (histórico puede tener valores antiguos).
 
-PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``).
+PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``),
+con ``recibo_token`` y ``base_url`` desde ``BACKEND_PUBLIC_URL`` para que la columna «Recibo» tenga enlaces
+como en la descarga tras OTP (si la variable no está definida, el PDF va sin esos enlaces).
 """
 from __future__ import annotations
 
@@ -49,6 +51,25 @@ logger = logging.getLogger(__name__)
 
 # Valor fijo en recibos_email_envio.slot (misma ventana 24h hasta 15:00; antes existían manana/tarde/noche).
 RECIBOS_VENTANA_SLOT = "hasta_15_24h"
+
+# PDF adjunto: enlaces «Ver recibo» (GET …/estado-cuenta/public/recibo-pago) requieren URL absoluta + JWT,
+# igual que en verificar-código del portal. Sin BACKEND_PUBLIC_URL los enlaces no pueden armarse (Render: definir .env).
+
+
+def _base_url_publico_recibos_pdf() -> str:
+    from app.core.config import settings
+
+    return (getattr(settings, "BACKEND_PUBLIC_URL", None) or "").strip().rstrip("/")
+
+
+def _recibo_token_para_pdf_recibos(cedula_lookup_norm: str) -> Optional[str]:
+    """Mismo tipo `recibo` que `create_recibo_token` en estado de cuenta público; sub = cédula comparable."""
+    from app.core.security import create_recibo_token
+
+    ced = (cedula_lookup_norm or "").strip()
+    if not ced:
+        return None
+    return create_recibo_token(ced, expire_hours=168)
 
 
 @lru_cache(maxsize=1)
@@ -239,6 +260,7 @@ def ejecutar_recibos_envio_slot(
     omitidos_error_estado_cuenta = 0
     omitidos_cedula_desalineada = 0
     detalles: List[Dict[str, Any]] = []
+    recibos_pdf_sin_base_url_logged = False
 
     for cedula_norm in cedulas:
         if not solo_simular and _ya_enviado_recibo(db, cedula_norm, fecha_dia):
@@ -324,6 +346,15 @@ def ejecutar_recibos_envio_slot(
             f"Cédula: {cedula_pdf}. Fecha de corte: {fecha_corte_d.isoformat()}."
         )
 
+        base_pdf = _base_url_publico_recibos_pdf()
+        tok_pdf = _recibo_token_para_pdf_recibos(cedula_norm) if base_pdf else None
+        if not base_pdf and not recibos_pdf_sin_base_url_logged:
+            logger.info(
+                "recibos: BACKEND_PUBLIC_URL no definido: el PDF adjunto no incluirá enlaces «Ver recibo» "
+                "(defina la URL pública del backend en el entorno, p. ej. https://su-servicio.onrender.com)."
+            )
+            recibos_pdf_sin_base_url_logged = True
+
         try:
             recibos = obtener_recibos_cliente_estado_cuenta(db, cedula_norm)
             pdf_bytes = generar_pdf_estado_cuenta(
@@ -334,8 +365,8 @@ def ejecutar_recibos_envio_slot(
                 amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
                 pagos_realizados=datos.get("pagos_realizados") or [],
                 recibos=recibos,
-                recibo_token=None,
-                base_url="",
+                recibo_token=tok_pdf,
+                base_url=base_pdf,
             )
         except Exception as e:
             logger.exception(
@@ -514,6 +545,7 @@ def enviar_correo_prueba_recibos_datos_reales(
         }
 
     intentos: List[Dict[str, Any]] = []
+    prueba_pdf_sin_base_logged = False
 
     for cedula_norm in cedulas:
         try:
@@ -565,6 +597,14 @@ def enviar_correo_prueba_recibos_datos_reales(
             f"Cédula: {cedula_pdf}. Fecha de corte: {fecha_corte_d.isoformat()}."
         )
 
+        base_pdf = _base_url_publico_recibos_pdf()
+        tok_pdf = _recibo_token_para_pdf_recibos(cedula_norm) if base_pdf else None
+        if not base_pdf and not prueba_pdf_sin_base_logged:
+            logger.info(
+                "recibos (prueba PDF): BACKEND_PUBLIC_URL no definido: sin enlaces «Ver recibo» en el adjunto."
+            )
+            prueba_pdf_sin_base_logged = True
+
         try:
             recibos = obtener_recibos_cliente_estado_cuenta(db, cedula_norm)
             pdf_bytes = generar_pdf_estado_cuenta(
@@ -575,8 +615,8 @@ def enviar_correo_prueba_recibos_datos_reales(
                 amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
                 pagos_realizados=datos.get("pagos_realizados") or [],
                 recibos=recibos,
-                recibo_token=None,
-                base_url="",
+                recibo_token=tok_pdf,
+                base_url=base_pdf,
             )
         except Exception as e:
             intentos.append(

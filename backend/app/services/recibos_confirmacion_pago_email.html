@@ -226,88 +226,10 @@
       margin: 28px 0;
     }
 
-    /* ── SIGNATURE / FOOTER ── */
-    .signature {
-      background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
-      padding: 28px 36px;
-    }
-    .sig-top {
-      display: flex;
-      align-items: center;
-      gap: 18px;
-      margin-bottom: 20px;
-      padding-bottom: 20px;
-      border-bottom: 1px solid rgba(255,255,255,0.12);
-    }
-    .sig-avatar {
-      width: 52px; height: 52px;
-      background: linear-gradient(135deg, #e63946, #c1121f);
-      border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 800;
-      font-size: 22px;
-      color: #fff;
-      flex-shrink: 0;
-    }
-    .sig-info h3 {
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 800;
-      font-size: 15px;
-      color: #fff;
-      letter-spacing: 0.3px;
-    }
-    .sig-info p {
-      font-size: 11.5px;
-      color: rgba(255,255,255,0.50);
-      font-weight: 500;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-    .sig-brand {
-      margin-left: auto;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 800;
-      font-size: 18px;
-      color: #fff;
-      letter-spacing: -0.3px;
-    }
-    .sig-brand span { color: #e63946; }
-
-    .sig-details {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .sig-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-    }
-    .sig-item .s-icon {
-      font-size: 15px;
-      margin-top: 1px;
-      flex-shrink: 0;
-      opacity: 0.8;
-    }
-    .sig-item .s-label {
-      font-size: 10.5px;
-      color: rgba(255,255,255,0.40);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      display: block;
-      margin-bottom: 1px;
-    }
-    .sig-item .s-value {
-      font-size: 12.5px;
-      color: rgba(255,255,255,0.85);
-      font-weight: 500;
-    }
-    .sig-item a {
-      color: #e63946;
-      text-decoration: none;
-      font-weight: 600;
+    /* Firma: la maquetación principal va en tablas inline (Gmail/Outlook); aquí solo contenedor */
+    .signature-wrap {
+      padding: 0;
+      background: #fff;
     }
 
     /* ── LEGAL ── */
@@ -388,51 +310,74 @@
     </p>
   </div>
 
-  <!-- SIGNATURE -->
-  <div class="signature">
-    <div class="sig-top">
-      <div class="sig-avatar">AF</div>
-      <div class="sig-info">
-        <h3>Angelica Fuentes</h3>
-        <p>Cobranza</p>
-      </div>
-      <div class="sig-brand"><span>R</span>APICREDIT</div>
-    </div>
-    <div class="sig-details">
-      <div class="sig-item">
-        <span class="s-icon">✉️</span>
-        <div>
-          <span class="s-label">Email</span>
-          <a class="s-value" href="mailto:cobranza@rapicreditca.com">cobranza@rapicreditca.com</a>
-        </div>
-      </div>
-      <div class="sig-item">
-        <span class="s-icon">📲</span>
-        <div>
-          <span class="s-label">WhatsApp</span>
-          <a class="s-value" href="https://wa.me/584244579934">+58.424-4579934</a>
-        </div>
-      </div>
-      <div class="sig-item">
-        <span class="s-icon">📍</span>
-        <div>
-          <span class="s-label">Dirección</span>
-          <span class="s-value">Guacara Plaza, Local PB-12,<br/>Guacara – Carabobo</span>
-        </div>
-      </div>
-      <div class="sig-item">
-        <span class="s-icon">🌐</span>
-        <div>
-          <span class="s-label">Sitio Web</span>
-          <a class="s-value" href="https://www.rapicreditca.com" target="_blank">www.rapicreditca.com</a>
-        </div>
-      </div>
-    </div>
+  <!-- SIGNATURE (tablas + estilos inline: mejor soporte en clientes de correo) -->
+  <div class="signature-wrap">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;background:#ffffff;">
+      <tr>
+        <td rowspan="2" valign="top" width="84" bgcolor="#152a45" style="width:84px;min-width:84px;background-color:#152a45;background:#152a45;padding:0;vertical-align:top;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" height="100%" style="border-collapse:collapse;min-height:168px;">
+            <tr>
+              <td align="center" valign="middle" style="padding:28px 0 6px 0;font-family:'Montserrat',Arial,sans-serif;font-size:40px;font-weight:800;line-height:1;color:#ffffff;">R</td>
+            </tr>
+            <tr>
+              <td align="left" style="padding:0 0 20px 18px;vertical-align:top;">
+                <span style="display:inline-block;width:7px;height:7px;background:#f57c24;border-radius:50%;line-height:0;font-size:0;">&nbsp;</span>
+              </td>
+            </tr>
+          </table>
+        </td>
+        <td valign="top" bgcolor="#3d6fa3" style="background-color:#3d6fa3;background:linear-gradient(118deg,#2d5a8c 0%,#3d6fa3 38%,#2a5580 72%,#356899 100%);padding:22px 24px 20px 24px;vertical-align:middle;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+            <tr>
+              <td valign="middle" style="font-family:'Montserrat',Arial,sans-serif;">
+                <div style="font-size:17px;font-weight:800;color:#ffffff;letter-spacing:0.08em;text-transform:uppercase;line-height:1.25;">Angelica Fuentes</div>
+                <div style="margin-top:6px;font-size:14px;font-weight:500;color:rgba(255,255,255,0.95);">Cobranza</div>
+              </td>
+              <td align="right" valign="middle" style="font-family:'Montserrat',Arial,sans-serif;white-space:nowrap;">
+                <span style="display:inline-block;vertical-align:middle;color:#f57c24;font-size:18px;line-height:1;margin-right:4px;">&#9679;</span><span style="display:inline-block;vertical-align:middle;font-size:22px;font-weight:800;color:#ffffff;">R</span><span style="display:inline-block;vertical-align:middle;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:0.12em;margin-left:2px;">APICREDIT</span>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td valign="top" style="background:#ffffff;padding:22px 24px 26px 24px;border-top:1px solid #e8ecf1;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+            <tr>
+              <td valign="top" width="58%" style="font-family:'Open Sans',Arial,sans-serif;padding-right:16px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-bottom:16px;">
+                  <tr>
+                    <td width="4" style="width:4px;background:#f57c24;border-radius:2px;font-size:0;line-height:0;">&nbsp;</td>
+                    <td style="padding-left:14px;">
+                      <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Email Address :</div>
+                      <a href="mailto:cobranza@rapicreditca.com" style="font-size:14px;color:#334155;font-weight:600;text-decoration:none;">cobranza@rapicreditca.com</a>
+                    </td>
+                  </tr>
+                </table>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+                  <tr>
+                    <td width="4" style="width:4px;background:#f57c24;border-radius:2px;font-size:0;line-height:0;">&nbsp;</td>
+                    <td style="padding-left:14px;">
+                      <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Office Address :</div>
+                      <div style="font-size:14px;color:#334155;font-weight:500;line-height:1.45;">Guacara Plaza, Local PB-12, Guacara- Carabobo</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+              <td valign="top" align="right" width="42%" style="font-family:'Montserrat',Arial,sans-serif;">
+                <a href="https://wa.me/584244579934" style="display:inline-block;background:#f57c24;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 22px;border-radius:999px;margin-bottom:12px;letter-spacing:0.02em;">+58 424-4579934</a><br/>
+                <a href="https://www.rapicreditca.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#e8eaed;color:#334155;text-decoration:none;font-weight:600;font-size:13px;padding:11px 20px;border-radius:999px;">www.rapicreditca.com</a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </div>
 
   <!-- LEGAL -->
   <div class="legal">
-    <p>Este correo y sus adjuntos son confidenciales y están dirigidos exclusivamente al destinatario. Si recibió este mensaje por error, por favor notifíquenos y elimínelo de inmediato. © 2025 RapiCredit C.A. Todos los derechos reservados.</p>
+    <p>Este correo y sus adjuntos son confidenciales y están dirigidos exclusivamente al destinatario. Si recibió este mensaje por error, por favor notifíquenos y elimínelo de inmediato. © 2026 RapiCredit C.A. Todos los derechos reservados.</p>
   </div>
 
 </div>

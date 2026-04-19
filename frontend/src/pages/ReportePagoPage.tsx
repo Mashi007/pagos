@@ -36,7 +36,9 @@
 
  */
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
+
+import { Calendar } from 'lucide-react'
 
 import {
   validarCedulaPublico,
@@ -262,6 +264,300 @@ function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
   return { valido: true }
 }
 
+const MESES_ES = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+] as const
+
+function pad2MesDia(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+/** Comprueba que y-m-d existe en calendario gregoriano (m 1-12). */
+function fechaYmdCalendarioValida(y: number, m: number, d: number): boolean {
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false
+  const t = new Date(y, m - 1, d)
+  return t.getFullYear() === y && t.getMonth() === m - 1 && t.getDate() === d
+}
+
+function focusInputAlSiguienteTick(el: HTMLInputElement | null) {
+  if (!el) return
+  requestAnimationFrame(() => {
+    el.focus()
+    try {
+      const len = el.value.length
+      el.setSelectionRange(len, len)
+    } catch {
+      /* noop */
+    }
+  })
+}
+
+/**
+ * Fecha en tres segmentos (día / mes / año) para escritura rápida:
+ * un dígito de día 4-9 → 04-09 y salto a mes; mes numérico 2-9 en un dígito o 01-12 en dos → nombre del mes y salto al año.
+ * El valor expuesto sigue siendo YYYY-MM-DD para el backend.
+ */
+function segmentosInicialesDesdeYmd(value: string): {
+  dia: string
+  mesCommitted: number | null
+  mesDigits: string
+  anio: string
+} {
+  const v = value.trim()
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    return { dia: '', mesCommitted: null, mesDigits: '', anio: '' }
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v)
+  if (!m) return { dia: '', mesCommitted: null, mesDigits: '', anio: '' }
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  if (!fechaYmdCalendarioValida(y, mo, d)) {
+    return { dia: '', mesCommitted: null, mesDigits: '', anio: '' }
+  }
+  return { dia: m[3], mesCommitted: mo, mesDigits: '', anio: m[1] }
+}
+
+function FechaPagoTecladoRapido({
+  value,
+  onChange,
+  maxYmd,
+}: {
+  value: string
+  onChange: (ymd: string) => void
+  maxYmd: string
+}) {
+  const ini = segmentosInicialesDesdeYmd(value)
+  const [dia, setDia] = useState(ini.dia)
+  const [mesCommitted, setMesCommitted] = useState<number | null>(ini.mesCommitted)
+  const [mesDigits, setMesDigits] = useState(ini.mesDigits)
+  const [anio, setAnio] = useState(ini.anio)
+
+  const mesRef = useRef<HTMLInputElement>(null)
+  const anioRef = useRef<HTMLInputElement>(null)
+  const nativePickerRef = useRef<HTMLInputElement>(null)
+
+  const emitYmd = useCallback(
+    (d: string, mesNum: number | null, y: string) => {
+      if (d.length === 2 && mesNum != null && y.length === 4) {
+        const yi = Number(y)
+        const di = Number(d)
+        if (
+          !Number.isFinite(yi) ||
+          !Number.isFinite(di) ||
+          !fechaYmdCalendarioValida(yi, mesNum, di)
+        ) {
+          onChange('')
+          return
+        }
+        const ymd = `${yi}-${pad2MesDia(mesNum)}-${d}`
+        if (ymd > maxYmd) {
+          onChange('')
+          return
+        }
+        onChange(ymd)
+      } else {
+        onChange('')
+      }
+    },
+    [maxYmd, onChange]
+  )
+
+  /** Sincronizar solo cuando hay un YMD completo válido (p. ej. calendario nativo); no vaciar al pasar a ''. */
+  useEffect(() => {
+    const s = segmentosInicialesDesdeYmd(value)
+    if (!s.dia || s.mesCommitted == null || !s.anio) return
+    setDia(s.dia)
+    setMesCommitted(s.mesCommitted)
+    setMesDigits('')
+    setAnio(s.anio)
+  }, [value])
+
+  const mesMostrado =
+    mesCommitted != null ? MESES_ES[mesCommitted - 1] : mesDigits
+
+  const abrirCalendarioNativo = () => {
+    const el = nativePickerRef.current
+    if (!el) return
+    const anyEl = el as HTMLInputElement & { showPicker?: () => void }
+    if (typeof anyEl.showPicker === 'function') {
+      anyEl.showPicker()
+    } else {
+      el.click()
+    }
+  }
+
+  const onDiaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value.replace(/\D/g, '').slice(0, 2)
+    if (raw.length === 1 && raw >= '4' && raw <= '9') {
+      raw = `0${raw}`
+      setDia(raw)
+      emitYmd(raw, mesCommitted, anio)
+      focusInputAlSiguienteTick(mesRef.current)
+      return
+    }
+    if (raw.length === 2) {
+      const n = Number(raw)
+      if (n < 1 || n > 31) {
+        return
+      }
+      setDia(raw)
+      emitYmd(raw, mesCommitted, anio)
+      focusInputAlSiguienteTick(mesRef.current)
+      return
+    }
+    setDia(raw)
+    emitYmd(raw, mesCommitted, anio)
+  }
+
+  const onMesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (mesCommitted != null) return
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 2)
+    if (digits.length === 1) {
+      const c = digits[0]!
+      if (c >= '2' && c <= '9') {
+        const mn = Number(c)
+        setMesCommitted(mn)
+        setMesDigits('')
+        emitYmd(dia, mn, anio)
+        focusInputAlSiguienteTick(anioRef.current)
+        return
+      }
+      setMesDigits(digits)
+      emitYmd(dia, null, anio)
+      return
+    }
+    if (digits.length === 2) {
+      const mn = Number(digits)
+      if (mn >= 1 && mn <= 12) {
+        setMesCommitted(mn)
+        setMesDigits('')
+        emitYmd(dia, mn, anio)
+        focusInputAlSiguienteTick(anioRef.current)
+        return
+      }
+      setMesDigits(digits)
+      emitYmd(dia, null, anio)
+      return
+    }
+    setMesDigits('')
+    emitYmd(dia, null, anio)
+  }
+
+  const onMesKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (mesCommitted == null) return
+    if (e.key.length === 1 && e.key >= '0' && e.key <= '9') {
+      e.preventDefault()
+      setMesCommitted(null)
+      setMesDigits(e.key)
+      emitYmd(dia, null, anio)
+    }
+  }
+
+  const onAnioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 4)
+    setAnio(raw)
+    emitYmd(dia, mesCommitted, raw)
+  }
+
+  const onPickerNative = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value
+    if (!v) {
+      onChange('')
+      return
+    }
+    onChange(v)
+  }
+
+  return (
+    <div className="relative">
+      <input
+        ref={nativePickerRef}
+        type="date"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        value={value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ''}
+        max={maxYmd}
+        onChange={onPickerNative}
+      />
+      <div
+        className="flex min-h-[48px] w-full items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-base touch-manipulation focus-within:border-slate-900 focus-within:ring-1 focus-within:ring-slate-900"
+        role="group"
+        aria-label="Fecha de pago: día, mes y año"
+      >
+        <input
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={2}
+          placeholder="dd"
+          aria-label="Día"
+          className="w-9 flex-shrink-0 border-0 bg-transparent p-2 text-center font-medium text-slate-900 outline-none placeholder:text-slate-400"
+          value={dia}
+          onChange={onDiaChange}
+        />
+        <span className="text-slate-400" aria-hidden>
+          |
+        </span>
+        <input
+          ref={mesRef}
+          type="text"
+          inputMode={mesCommitted != null ? 'text' : 'numeric'}
+          autoComplete="off"
+          placeholder="mm"
+          aria-label="Mes (número o nombre)"
+          className="min-w-0 flex-1 border-0 bg-transparent p-2 font-medium text-slate-900 outline-none placeholder:text-slate-400"
+          value={mesMostrado}
+          onChange={onMesChange}
+          onKeyDown={onMesKeyDown}
+          onFocus={() => {
+            if (mesCommitted != null) {
+              setMesCommitted(null)
+              setMesDigits('')
+              emitYmd(dia, null, anio)
+            }
+          }}
+        />
+        <span className="text-slate-400" aria-hidden>
+          |
+        </span>
+        <input
+          ref={anioRef}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={4}
+          placeholder="aaaa"
+          aria-label="Año"
+          className="w-14 flex-shrink-0 border-0 bg-transparent p-2 text-center font-medium text-slate-900 outline-none placeholder:text-slate-400"
+          value={anio}
+          onChange={onAnioChange}
+        />
+        <button
+          type="button"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+          onClick={abrirCalendarioNativo}
+          aria-label="Abrir calendario"
+        >
+          <Calendar className="h-5 w-5" aria-hidden />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function validarArchivo(file: File | null): {
   valido: boolean
   error?: string
@@ -449,8 +745,6 @@ export default function ReportePagoPage({
 
   const [descargandoRecibo, setDescargandoRecibo] = useState(false)
 
-  const [aplicadoCuotas, setAplicadoCuotas] = useState<string | null>(null)
-
   const [infopagosEnRevision, setInfopagosEnRevision] = useState(false)
 
   const [messageForScreenReader, setMessageForScreenReader] = useState('')
@@ -547,8 +841,6 @@ export default function ReportePagoPage({
     setReciboToken(null)
 
     setPagoId(null)
-
-    setAplicadoCuotas(null)
 
     setInfopagosEnRevision(false)
 
@@ -723,8 +1015,6 @@ export default function ReportePagoPage({
         showNotification('success', res.mensaje || 'Pago registrado.')
 
         setReferencia(res.referencia_interna || '')
-
-        setAplicadoCuotas(res.aplicado_a_cuotas ?? null)
 
         setInfopagosEnRevision(
           String(res.estado_reportado ?? '')
@@ -1461,13 +1751,10 @@ export default function ReportePagoPage({
                 <label className="mb-2 block text-sm font-semibold text-slate-900">
                   Fecha de pago
                 </label>
-                <Input
-                  type="date"
-                  className="min-h-[48px] w-full touch-manipulation border-slate-200 bg-slate-50"
+                <FechaPagoTecladoRapido
                   value={fechaPago}
-                  onChange={e => setFechaPago(e.target.value)}
-                  max={new Date().toISOString().slice(0, 10)}
-                  aria-label="Seleccione la fecha en el calendario"
+                  onChange={setFechaPago}
+                  maxYmd={new Date().toISOString().slice(0, 10)}
                 />
                 <p className="mt-1 text-xs text-slate-500">
                   No puede ser una fecha futura
@@ -2008,18 +2295,6 @@ export default function ReportePagoPage({
               Guarda este número para seguimiento
             </p>
           </div>
-
-          {/* Cuotas info */}
-          {isInfopagos && aplicadoCuotas ? (
-            <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-3">
-              <p className="text-xs font-semibold text-blue-900">
-                Abono aplicado a:
-              </p>
-              <p className="mt-1 font-mono text-sm text-blue-900">
-                {aplicadoCuotas}
-              </p>
-            </div>
-          ) : null}
 
           {/* Status message */}
           {isInfopagos ? (

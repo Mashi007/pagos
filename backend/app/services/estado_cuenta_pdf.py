@@ -288,7 +288,7 @@ def generar_pdf_estado_cuenta(
         story.append(Paragraph("Pagos realizados", styles["EC_Section"]))
         rows_p = [
             [
-                Paragraph("Número<br/>de pago", _hdr),
+                Paragraph("#", _hdr),
                 Paragraph("Fecha de<br/>pago", _hdr),
                 Paragraph("Fecha de<br/>registro", _hdr),
                 Paragraph("Monto", _hdr),
@@ -354,12 +354,12 @@ def generar_pdf_estado_cuenta(
         tp = Table(
             rows_p,
             colWidths=[
-                0.52 * inch,
+                0.38 * inch,
                 1.05 * inch,
                 1.02 * inch,
                 1.08 * inch,
                 1.05 * inch,
-                1.58 * inch,
+                1.72 * inch,
                 1.05 * inch,
             ],
         )

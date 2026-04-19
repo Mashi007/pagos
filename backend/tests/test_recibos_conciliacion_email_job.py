@@ -186,6 +186,69 @@ def test_ejecutar_envio_mockea_smtp_y_pdf_valido():
     db.commit.assert_called_once()
 
 
+def test_ejecutar_pasa_base_url_y_recibo_token_al_pdf_cuando_hay_base_publica():
+    """El PDF adjunto debe poder incluir «Ver recibo» como en el portal (base + JWT)."""
+    db = MagicMock()
+    pagos = [
+        {
+            "pago_id": 900010,
+            "cedula": "V-12345678",
+            "cedula_normalizada": "V12345678",
+            "fecha_registro": "2026-04-19T10:00:00",
+            "monto_pagado": 1.0,
+        }
+    ]
+    datos = {
+        "cedula_display": "V-12345678",
+        "nombre": "Cliente",
+        "fecha_corte": date(2026, 4, 19),
+        "prestamos_list": [{"id": 1, "producto": "X", "total_financiamiento": 100.0, "estado": "APROBADO"}],
+        "amortizaciones_por_prestamo": [],
+        "pagos_realizados": [],
+        "emails": ["c@example.com"],
+    }
+    pdf_ok = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
+    fixed = date(2026, 4, 19)
+    with patch(
+        "app.services.recibos_conciliacion_email_job.hoy_negocio",
+        return_value=fixed,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
+        return_value=pagos,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.get_email_activo_servicio",
+        return_value=True,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job._ya_enviado_recibo",
+        return_value=False,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.obtener_datos_estado_cuenta_cliente",
+        return_value=datos,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.cliente_bloqueado_por_desistimiento",
+        return_value=False,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.obtener_recibos_cliente_estado_cuenta",
+        return_value=[],
+    ), patch(
+        "app.services.recibos_conciliacion_email_job._base_url_publico_recibos_pdf",
+        return_value="https://api.example.com",
+    ), patch(
+        "app.services.recibos_conciliacion_email_job._recibo_token_para_pdf_recibos",
+        return_value="jwt-recibo-test",
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.generar_pdf_estado_cuenta",
+        return_value=pdf_ok,
+    ) as m_pdf, patch(
+        "app.services.recibos_conciliacion_email_job.send_email",
+        return_value=(True, None),
+    ):
+        ejecutar_recibos_envio_slot(db, fecha_dia=fixed, solo_simular=False)
+    kw = m_pdf.call_args.kwargs
+    assert kw.get("base_url") == "https://api.example.com"
+    assert kw.get("recibo_token") == "jwt-recibo-test"
+
+
 def test_ejecutar_email_recibos_desactivado_no_smtp():
     db = MagicMock()
     pagos = [
