@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { Edit2, RefreshCw, Save, Trash2, User } from 'lucide-react'
+import { Download, Edit2, RefreshCw, Save, Trash2, User } from 'lucide-react'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
@@ -11,6 +11,7 @@ import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 import { clienteService } from '../services/clienteService'
+import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../types/errors'
 
@@ -128,6 +129,8 @@ export default function NotificacionesClientesDrive() {
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  /** Descarga la pestaña CONCILIACIÓN desde Google (POST /conciliacion-sheet/sync-now) y luego recalcula candidatos. */
+  const [manualSyncing, setManualSyncing] = useState(false)
 
   const refetchCandidatosYAuditoria = useCallback(async () => {
     await qc.invalidateQueries({ queryKey: [...QK] })
@@ -147,6 +150,23 @@ export default function NotificacionesClientesDrive() {
       toast.error(getErrorMessage(e) || 'No se pudo actualizar la lista')
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  const onActualizacionManualDesdeGoogle = async () => {
+    setManualSyncing(true)
+    try {
+      const syncRes = await reporteService.syncConciliacionSheetDesdeDrive()
+      await clienteService.postDriveImportRefreshCache()
+      await qc.invalidateQueries({ queryKey: [...QK] })
+      await qc.refetchQueries({ queryKey: [...QK] })
+      const n = syncRes?.row_count
+      const filas = typeof n === 'number' ? `${n} fila(s) en snapshot. ` : ''
+      toast.success(`${filas}Hoja CONCILIACIÓN traída desde Drive y lista de candidatos actualizada.`)
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo sincronizar la hoja desde Google')
+    } finally {
+      setManualSyncing(false)
     }
   }
 
@@ -278,7 +298,7 @@ export default function NotificacionesClientesDrive() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Clientes (Drive)"
-        description="Cédulas en la pestaña CONCILIACIÓN (columna E) que aún no están en la tabla clientes. Origen: snapshot en BD (D=nombres, F=teléfono, G=email). Con jobs activos, la lista se materializa dom/mié 03:00 Caracas (tras el sync 02:00). Solo administradores."
+        description="Cédulas en la pestaña CONCILIACIÓN (columna E) que aún no están en la tabla clientes. Origen: snapshot en BD (D=nombres, F=teléfono, G=email). Use «Actualización manual» para traer la hoja desde Google ahora; «Actualizar lista» solo recalcula candidatos desde el snapshot ya en BD. Con jobs activos, la lista se materializa dom/mié 03:00 Caracas (tras el sync 02:00). Solo administradores."
         icon={User}
       />
 
@@ -314,10 +334,19 @@ export default function NotificacionesClientesDrive() {
             )}
             <Button
               type="button"
+              size="sm"
+              onClick={() => void onActualizacionManualDesdeGoogle()}
+              disabled={manualSyncing || refreshing || q.isFetching || saving}
+            >
+              <Download className={`mr-2 h-4 w-4 ${manualSyncing ? 'animate-pulse' : ''}`} />
+              {manualSyncing ? 'Sincronizando…' : 'Actualización manual'}
+            </Button>
+            <Button
+              type="button"
               variant="outline"
               size="sm"
               onClick={() => onActualizarLista()}
-              disabled={refreshing || q.isFetching}
+              disabled={manualSyncing || refreshing || q.isFetching}
             >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${refreshing || q.isFetching ? 'animate-spin' : ''}`}
@@ -360,7 +389,7 @@ export default function NotificacionesClientesDrive() {
                           type="checkbox"
                           className="h-4 w-4 accent-primary"
                           checked={chk}
-                          disabled={blocked}
+                          disabled={blocked || manualSyncing || refreshing}
                           onChange={e => toggle(r.sheet_row_number, e.target.checked)}
                           aria-label={`Seleccionar fila ${r.sheet_row_number}`}
                         />
@@ -390,7 +419,7 @@ export default function NotificacionesClientesDrive() {
                             className="h-8 w-8"
                             title="Editar y guardar con validación (tabla clientes)"
                             onClick={() => openEdit(r)}
-                            disabled={busy || q.isFetching}
+                            disabled={busy || q.isFetching || manualSyncing || refreshing}
                             aria-label={`Editar fila ${r.sheet_row_number}`}
                           >
                             <Edit2 className="h-4 w-4" />
@@ -402,7 +431,7 @@ export default function NotificacionesClientesDrive() {
                             className="h-8 w-8"
                             title="Guardar esta fila con los valores sugeridos (mismo POST /clientes)"
                             onClick={() => onGuardarFilaRapido(r)}
-                            disabled={blocked || busy || q.isFetching}
+                            disabled={blocked || busy || q.isFetching || manualSyncing || refreshing}
                             aria-label={`Guardar fila ${r.sheet_row_number}`}
                           >
                             <Save className="h-4 w-4" />
@@ -414,7 +443,7 @@ export default function NotificacionesClientesDrive() {
                             className="h-8 w-8 text-destructive hover:text-destructive"
                             title="Ocultar fila en esta sesión"
                             onClick={() => onOcultarFila(r.sheet_row_number)}
-                            disabled={busy}
+                            disabled={busy || manualSyncing}
                             aria-label={`Ocultar fila ${r.sheet_row_number}`}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -465,7 +494,11 @@ export default function NotificacionesClientesDrive() {
                 cédula, nombre, correo, teléfono). Si una fila falla, las demás del mismo guardado
                 siguen. Cada fila puede editarse, guardarse sola o ocultarse solo en esta pantalla.
               </p>
-              <Button type="button" onClick={onGuardar} disabled={saving || q.isFetching}>
+              <Button
+                type="button"
+                onClick={onGuardar}
+                disabled={saving || q.isFetching || manualSyncing || refreshing}
+              >
                 {saving ? 'Guardando…' : `Guardar seleccionados (${seleccionados.length})`}
               </Button>
             </div>

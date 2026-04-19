@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 
-import { CreditCard, Download, RefreshCw, RotateCw } from 'lucide-react'
+import { CreditCard, Download, Loader2, RefreshCw } from 'lucide-react'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
@@ -269,7 +269,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                 onClick={() => void onRefrescarLista()}
                 disabled={manualUpdating || listRefreshing}
               >
-                <RotateCw className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
+                <Loader2 className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
                 Refrescar lista
               </Button>
               <Button
