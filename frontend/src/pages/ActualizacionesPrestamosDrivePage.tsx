@@ -161,7 +161,10 @@ function aprobacionQMasDe30Dias(qVal: string): boolean {
 
 type FilaCandidatoDriveTono = 'red' | 'amber' | 'green' | 'plain'
 
-/** Fondo de fila: rojo (prioridad), ámbar, verde, o neutro. */
+/** Tono de fila en tabla: incluye `partial` = ✓✓✓ en pantalla pero aún no guardable en servidor. */
+type FilaTablaTono = FilaCandidatoDriveTono | 'partial'
+
+/** Fondo de fila: rojo (prioridad), ámbar, verde pantalla, o neutro (solo reglas 1·2·3 + Q en UI). */
 function filaCandidatoDriveTono(p: PrestamoCandidatoDriveFila['payload']): FilaCandidatoDriveTono {
   const { formatoOk, tablaVOk, hojaOk, nPrest, esVe } = validadoresTresFlags(p)
   const dup = p.duplicada_en_hoja === true
@@ -185,18 +188,32 @@ function filaCumpleCienParaGuardar(fila: PrestamoCandidatoDriveFila): boolean {
   return filaCandidatoDriveTono(fila.payload) === 'green'
 }
 
-const FILA_TONE_TR: Record<FilaCandidatoDriveTono, string> = {
+/** Verde intenso solo si el servidor marca guardable; si solo pasan 1·2·3 en pantalla → `partial` (azul). */
+function filaTonoTabla(fila: PrestamoCandidatoDriveFila): FilaTablaTono {
+  const base = filaCandidatoDriveTono(fila.payload)
+  if (fila.listo_para_guardar === true) {
+    return 'green'
+  }
+  if (fila.listo_para_guardar === false && base === 'green') {
+    return 'partial'
+  }
+  return base
+}
+
+const FILA_TONE_TR: Record<FilaTablaTono, string> = {
   red: 'bg-red-50/95 hover:bg-red-50/90 border-b border-red-100',
   amber: 'bg-amber-50/95 hover:bg-amber-50/90 border-b border-amber-100',
   green: 'bg-emerald-50/95 hover:bg-emerald-50/90 border-b border-emerald-100',
+  partial: 'bg-sky-50/95 hover:bg-sky-50/90 border-b border-sky-100',
   plain: 'border-b border-border bg-background hover:bg-muted/25',
 }
 
 /** Fondos opacos en la celda sticky para que no se transparente el texto de la columna anterior al hacer scroll. */
-const FILA_TONE_STICKY_TD: Record<FilaCandidatoDriveTono, string> = {
+const FILA_TONE_STICKY_TD: Record<FilaTablaTono, string> = {
   red: 'bg-red-50',
   amber: 'bg-amber-50',
   green: 'bg-emerald-50',
+  partial: 'bg-sky-50',
   plain: 'bg-background',
 }
 
@@ -283,7 +300,7 @@ function AccionesPorFilaCandidatoDrive({
   const saveTitle = puedeGuardarFila
     ? guardandoEstaFila
       ? `Guardando fila de hoja ${sr}…`
-      : `Guardar solo esta fila (cumple la validación de servidor, misma que «Guardar (100%)»).`
+      : `Guardar solo esta fila (misma validación de servidor que «Guardar válidas»).`
     : `No se puede guardar: la fila no cumple la validación de servidor (cliente, N, R, Q, S, J, cédula, etc.).`
 
   return (
@@ -429,7 +446,7 @@ export default function ActualizacionesPrestamosDrivePage() {
       const fila = rows.find(r => r.sheet_row_number === sheetRowNumber)
       if (!fila || !filaCumpleCienParaGuardar(fila)) {
         toast.error(
-          'Solo se puede guardar una fila que cumpla la validación de servidor (la misma que usa «Guardar (100%)»).'
+          'Solo se puede guardar una fila que cumpla la validación de servidor (la misma que usa «Guardar válidas»).'
         )
         return
       }
@@ -498,7 +515,8 @@ export default function ActualizacionesPrestamosDrivePage() {
     }
   }, [])
 
-  const estadoFila = useCallback((p: PrestamoCandidatoDriveFila['payload']) => {
+  const estadoFila = useCallback((fila: PrestamoCandidatoDriveFila) => {
+    const p = fila.payload
     const { formatoOk, tablaVOk, hojaOk } = validadoresTresFlags(p)
     const qRaw = String(p.col_q_fecha ?? '').trim()
     if (!formatoOk) {
@@ -523,7 +541,17 @@ export default function ActualizacionesPrestamosDrivePage() {
         </span>
       )
     }
-    return <span className="text-emerald-700">Listo (validadores 1·2·3 OK)</span>
+    if (fila.listo_para_guardar === true) {
+      return <span className="text-emerald-700">Listo para guardar (servidor)</span>
+    }
+    if (fila.listo_para_guardar === false) {
+      return (
+        <span className="text-sky-900">
+          ✓✓✓ solo en pantalla: revise cliente en BD, montos/fechas (N, R, Q), modalidad (S), analista (J), etc.
+        </span>
+      )
+    }
+    return <span className="text-emerald-700">Listo en pantalla (1·2·3); validación servidor no recibida aún.</span>
   }, [])
 
   const showSkeleton = snapshotQuery.isPending && !snapshotQuery.data
@@ -531,7 +559,12 @@ export default function ActualizacionesPrestamosDrivePage() {
   const listRefreshing = isBusy && !manualUpdating
   const accionesGlobalesDeshabilitadas =
     manualUpdating || guardarValidosSaving || guardandoFilaSheet !== null || isBusy
-  const guardarMasivoDeshabilitado = accionesGlobalesDeshabilitadas || total === 0
+  const guardables =
+    typeof data?.kpis_aprueban === 'number' ? data.kpis_aprueban : null
+  const guardarMasivoDeshabilitado =
+    accionesGlobalesDeshabilitadas ||
+    total === 0 ||
+    (guardables === 0 && total > 0)
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
@@ -548,7 +581,7 @@ export default function ActualizacionesPrestamosDrivePage() {
             <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end" aria-label="Resumen validación guardado">
               <div
                 className="min-w-[6.25rem] rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-center shadow-sm"
-                title="Misma comprobación de servidor que «Guardar (100%)» antes de crear cada préstamo (cédula, cliente en BD, N, R, Q, S, J, V/E en cartera, etc.). Puede ser menor que las filas en verde en la tabla."
+                title="Filas que pasan la validación completa de servidor para crear préstamo (cédula, cliente en BD, N, R, Q, S, J, V/E en cartera, etc.). No es un porcentaje del total: es un conteo."
               >
                 <p className="text-lg font-semibold tabular-nums text-emerald-900">
                   {data?.kpis_aprueban ?? '—'}
@@ -556,16 +589,40 @@ export default function ActualizacionesPrestamosDrivePage() {
                 <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-800/90">Guardables</p>
               </div>
               <div
-                className="min-w-[6.25rem] rounded-lg border border-border bg-muted/50 px-3 py-2 text-center shadow-sm"
-                title="No cumplen esa validación de servidor; «Guardar (100%)» las omitirá."
+                className={`min-w-[6.25rem] rounded-lg border px-3 py-2 text-center shadow-sm ${
+                  typeof data?.kpis_no_aprueban === 'number' && data.kpis_no_aprueban > 0
+                    ? 'border-rose-200/90 bg-rose-50/80'
+                    : 'border-border bg-muted/50'
+                }`}
+                title="No pasan esa validación de servidor; no se crearán préstamos hasta corregir datos o la hoja y recalcular. El fondo rojo/ámbar de la tabla es una guía rápida y puede no coincidir 1:1 con este número."
               >
-                <p className="text-lg font-semibold tabular-nums text-foreground">
+                <p
+                  className={`text-lg font-semibold tabular-nums ${
+                    typeof data?.kpis_no_aprueban === 'number' && data.kpis_no_aprueban > 0
+                      ? 'text-rose-900'
+                      : 'text-foreground'
+                  }`}
+                >
                   {data?.kpis_no_aprueban ?? '—'}
                 </p>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">No guardables</p>
+                <p
+                  className={`text-[11px] font-medium uppercase tracking-wide ${
+                    typeof data?.kpis_no_aprueban === 'number' && data.kpis_no_aprueban > 0
+                      ? 'text-rose-800/95'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  No guardables
+                </p>
               </div>
             </div>
           </div>
+          <p className="max-w-3xl text-xs leading-snug text-muted-foreground">
+            <strong className="font-medium text-foreground">Aclaración:</strong> «Guardar válidas» solo persiste las
+            filas «Guardables». Los tres ✓ de la columna Val. son solo reglas en pantalla: si faltan datos para el
+            servidor, la fila puede verse en <strong className="font-medium text-sky-900">azul claro</strong> con ✓✓✓;
+            el <strong className="font-medium text-emerald-900">verde intenso</strong> indica listo para guardar.
+          </p>
           <p className="text-sm text-muted-foreground">
             {cedulaDebounced && totalSinFiltro != null ? (
               <>
@@ -594,14 +651,16 @@ export default function ActualizacionesPrestamosDrivePage() {
               title={
                 total === 0
                   ? 'No hay candidatos en el snapshot.'
-                  : 'Crea préstamos solo para filas que pasan la misma validación de servidor que el contador «Guardables»; el resto se omite. Si falla la creación en BD, verá el detalle en el mensaje de resultado.'
+                  : guardables === 0
+                    ? 'Ninguna fila cumple la validación de servidor (0 «Guardables»). Corrija datos o la hoja Drive, use Actualización manual y vuelva a intentar.'
+                    : 'Crea préstamos solo para las filas «Guardables» (misma validación que el contador). El resto permanece en el snapshot. Si falla la creación en BD, verá el detalle en el resultado.'
               }
             >
               <Save
                 className={`mr-2 h-4 w-4 ${guardarValidosSaving ? 'animate-pulse' : ''}`}
                 aria-hidden
               />
-              Guardar (100%)
+              Guardar válidas
             </Button>
             <Button
               type="button"
@@ -690,7 +749,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                   <th className="px-2 py-2.5 align-middle text-xs font-semibold">Cédula (E)</th>
                   <th
                     className="px-2 py-2.5 align-middle text-xs font-semibold whitespace-nowrap"
-                    title="1 formato · 2 tabla préstamos (V/E máx. 1; J puede varios) · 3 hoja"
+                    title="Tres ítems = solo validadores en pantalla (formato, tabla V/E, hoja). Pueden estar ✓✓✓ y la fila seguir en azul claro hasta cumplir la validación completa de servidor (columna Estado)."
                   >
                     Val. 1·2·3
                   </th>
@@ -712,7 +771,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                 {!showSkeleton &&
                   rows.map(r => {
                     const { formatoOk, tablaVOk, hojaOk } = validadoresTresFlags(r.payload)
-                    const tono = filaCandidatoDriveTono(r.payload)
+                    const tono = filaTonoTabla(r)
                     const trTone = FILA_TONE_TR[tono]
                     const stickyTone = FILA_TONE_STICKY_TD[tono]
                     const mk = (x: boolean) => (
@@ -728,7 +787,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                         </td>
                         <td
                           className="px-2 py-2 align-middle text-center font-mono text-xs"
-                          title="1 formato · 2 tabla (V/E; J exento) · 3 hoja"
+                          title="Solo reglas 1·2·3 en pantalla; no implica solo el fondo verde intenso (ver Estado / servidor)."
                         >
                           <span className="inline-flex gap-0.5">
                             {mk(formatoOk)}
@@ -770,7 +829,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                           {strPayload(r.payload, 'col_i_modelo_vehiculo')}
                         </td>
                         <td className="max-w-0 overflow-hidden px-2 py-2 align-middle text-xs leading-snug">
-                          <div className="line-clamp-2 break-words">{estadoFila(r.payload)}</div>
+                          <div className="line-clamp-2 break-words">{estadoFila(r)}</div>
                         </td>
                         <td
                           className={`sticky right-0 z-10 min-w-[7.5rem] border-l border-border px-1 py-1.5 text-center align-middle shadow-[-6px_0_12px_-8px_rgba(0,0,0,0.08)] ${stickyTone}`}
