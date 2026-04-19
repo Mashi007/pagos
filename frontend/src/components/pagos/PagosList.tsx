@@ -651,6 +651,22 @@ export function PagosList() {
             Descargar Excel
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="lg"
+          type="button"
+          onClick={() => void runGmail('all')}
+          disabled={loadingGmail}
+          className="px-6 py-6 text-base font-semibold"
+          title="Ejecuta el pipeline Gmail (misma acción que Agregar pago → Generar Excel desde email → Procesar correos)"
+        >
+          {loadingGmail ? (
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          ) : (
+            <Mail className="mr-2 h-5 w-5" />
+          )}
+          Procesar manualmente
+        </Button>
         <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
           <PopoverTrigger asChild>
             <Button
