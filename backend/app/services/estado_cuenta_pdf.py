@@ -57,6 +57,7 @@ def generar_pdf_estado_cuenta(
 ) -> bytes:
     """PDF estado de cuenta: layout corporativo, tablas homogeneas, datos desde parametros."""
     from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
@@ -142,6 +143,18 @@ def generar_pdf_estado_cuenta(
             leading=10,
         )
     )
+    _hdr_nm = f"EC_TblHdr_{_pfx}"
+    styles.add(
+        ParagraphStyle(
+            name=_hdr_nm,
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            leading=10,
+            alignment=TA_CENTER,
+            textColor=colors.white,
+        )
+    )
+    _hdr = styles[_hdr_nm]
 
     story = []
 
@@ -217,17 +230,24 @@ def generar_pdf_estado_cuenta(
     # ----- Préstamos -----
     if prestamos:
         story.append(Paragraph("Préstamos", styles["EC_Section"]))
-        rows = [["Id", "Producto", "Total financiamiento", "Estado"]]
+        rows = [
+            [
+                Paragraph("Id", _hdr),
+                Paragraph("Producto", _hdr),
+                Paragraph("Total<br/>financiamiento", _hdr),
+                Paragraph("Estado", _hdr),
+            ]
+        ]
         for p in prestamos:
             rows.append(
                 [
                     str(p.get("id", "")),
-                    (p.get("producto") or "-")[:42],
+                    (p.get("producto") or "-")[:48],
                     f"{float(p.get('total_financiamiento') or 0):,.2f}",
-                    (p.get("estado") or "-")[:22],
+                    (p.get("estado") or "-")[:24],
                 ]
             )
-        t = Table(rows, colWidths=[42, 188, 92, 82])
+        t = Table(rows, colWidths=[0.52 * inch, 3.88 * inch, 1.45 * inch, 1.50 * inch])
         t.setStyle(
             tbl_style(
                 len(rows),
@@ -247,27 +267,37 @@ def generar_pdf_estado_cuenta(
     if pagos_realizados:
         # Ordenar por fecha de pago descendente (más actual a más vieja)
         from datetime import datetime as dt_parse
-        def parse_fecha(fecha_str):
+
+        def _orden_pago_pdf(pr: dict):
+            raw = (pr.get("fecha_pago_orden") or "").strip()
+            if raw:
+                try:
+                    return dt_parse.fromisoformat(raw.replace("Z", "+00:00"))
+                except (ValueError, AttributeError):
+                    pass
             try:
-                if fecha_str and len(fecha_str) >= 10:
-                    return dt_parse.strptime(fecha_str[:10], "%Y-%m-%d")
-            except (ValueError, AttributeError):
+                disp = str(pr.get("fecha_pago_display") or "").strip()
+                if len(disp) >= 16:
+                    return dt_parse.strptime(disp[:16], "%d/%m/%Y %H:%M")
+            except (ValueError, TypeError):
                 pass
             return dt_parse.min
+
         pagos_realizados = sorted(
             pagos_realizados,
-            key=lambda x: parse_fecha(x.get("fecha_pago") or ""),
-            reverse=True
+            key=lambda x: (_orden_pago_pdf(x), int(x.get("pago_id") or 0)),
+            reverse=True,
         )
         story.append(Paragraph("Pagos realizados", styles["EC_Section"]))
         rows_p = [
             [
-                "Fecha de pago",
-                "F. ingreso",
-                "Monto",
-                "Subtotal (USD)",
-                "Comprobante",
-                "Recibo",
+                Paragraph("Número<br/>de pago", _hdr),
+                Paragraph("Fecha de<br/>pago", _hdr),
+                Paragraph("Fecha de<br/>registro", _hdr),
+                Paragraph("Monto", _hdr),
+                Paragraph("Subtotal<br/>(USD)", _hdr),
+                Paragraph("Comprobante", _hdr),
+                Paragraph("Recibo", _hdr),
             ]
         ]
         total_usd = 0.0
@@ -314,6 +344,7 @@ def generar_pdf_estado_cuenta(
                 foto_cell = Paragraph('<font color="#94a3b8">-</font>', styles["EC_Link"])
             rows_p.append(
                 [
+                    str(int(pr.get("numero_pago") or 0) or ""),
                     str(pr.get("fecha_pago_display") or "-")[:16],
                     str(pr.get("fecha_registro_display") or "-")[:16],
                     str(pr.get("monto_display") or "-")[:22],
@@ -327,6 +358,7 @@ def generar_pdf_estado_cuenta(
                 Paragraph("<b>Total pagado (USD)</b>", styles["Normal"]),
                 "",
                 "",
+                "",
                 Paragraph(f"<b>{total_usd:,.2f}</b>", styles["Normal"]),
                 "",
                 "",
@@ -336,40 +368,83 @@ def generar_pdf_estado_cuenta(
         tp = Table(
             rows_p,
             colWidths=[
+                0.52 * inch,
                 1.05 * inch,
-                0.95 * inch,
+                1.02 * inch,
+                1.08 * inch,
                 1.05 * inch,
-                1.0 * inch,
-                1.0 * inch,
-                0.78 * inch,
+                1.58 * inch,
+                1.05 * inch,
             ],
         )
         extras_p = [
-            ("ALIGN", (3, 0), (3, nrp - 2), "RIGHT"),
-            ("ALIGN", (3, nrp - 1), (3, nrp - 1), "RIGHT"),
-            ("SPAN", (0, nrp - 1), (2, nrp - 1)),
-            ("ALIGN", (0, nrp - 1), (2, nrp - 1), "RIGHT"),
+            ("ALIGN", (0, 1), (0, nrp - 2), "CENTER"),
+            ("ALIGN", (4, 0), (4, nrp - 2), "RIGHT"),
+            ("ALIGN", (4, nrp - 1), (4, nrp - 1), "RIGHT"),
+            ("SPAN", (0, nrp - 1), (3, nrp - 1)),
+            ("ALIGN", (0, nrp - 1), (3, nrp - 1), "RIGHT"),
             ("FONTNAME", (0, nrp - 1), (-1, nrp - 1), "Helvetica-Bold"),
             ("BACKGROUND", (0, nrp - 1), (-1, nrp - 1), surf),
         ]
-        tp.setStyle(tbl_style(nrp, hf=8, bf=7, extras=extras_p))
+        tp.setStyle(tbl_style(nrp, hf=9, bf=7, extras=extras_p))
         story.append(tp)
         story.append(Spacer(1, 10))
 
-    # Indice: numero_cuota -> lista de pagos que la cubrieron (para cruzar con Plan de pago)
-    _cuota_pagos_idx: dict = {}  # {numero_cuota: [{"fecha": str, "ref": str, "monto": float}]}
-    for _pr in (pagos_realizados or []):
+    # Indice: numero_cuota -> fragmentos de pago (para columna Pagado en Plan de pago).
+    # Etiqueta "Pago N": N = numero_pago (1 = mas antiguo); mismo N si un pago cubre varias cuotas.
+    _cuota_pagos_idx: dict = {}  # {numero_cuota: [{"fecha": str, "numero_pago": int, "monto": float}]}
+    _pr_all = list(pagos_realizados or [])
+    from datetime import datetime as dt_parse2
+
+    def _orden_pr_idx(pr: dict):
+        raw = (str(pr.get("fecha_pago_orden") or "")).strip()
+        if raw:
+            try:
+                return dt_parse2.fromisoformat(raw.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                pass
+        try:
+            disp = str(pr.get("fecha_pago_display") or "").strip()
+            if len(disp) >= 16:
+                return dt_parse2.strptime(disp[:16], "%d/%m/%Y %H:%M")
+        except (ValueError, TypeError):
+            pass
+        return dt_parse2.min
+
+    _uniq_por_pid: dict[int, dict] = {}
+    for _pr in _pr_all:
+        _pid_u = int(_pr.get("pago_id") or 0)
+        if _pid_u:
+            _uniq_por_pid[_pid_u] = _pr
+    _chrono_pagos = sorted(
+        _uniq_por_pid.values(),
+        key=lambda x: (_orden_pr_idx(x), int(x.get("pago_id") or 0)),
+    )
+    _numero_por_pago_id = {
+        int(p.get("pago_id") or 0): i for i, p in enumerate(_chrono_pagos, start=1)
+    }
+
+    def _resolver_numero_pago_pdf(pr: dict) -> int:
+        _pid_r = int(pr.get("pago_id") or 0)
+        _n_ex = int(pr.get("numero_pago") or 0)
+        if _n_ex > 0:
+            return _n_ex
+        return int(_numero_por_pago_id.get(_pid_r, 0))
+
+    for _pr in _pr_all:
         _fecha_pr = (str(_pr.get("fecha_pago_display") or ""))[:10]
-        _ref_pr   = (str(_pr.get("referencia_tabla") or _pr.get("numero_documento") or "") or f"Pago #{_pr.get('pago_id','')}").strip()[:20]
+        _npr = _resolver_numero_pago_pdf(_pr)
         for _apl in (_pr.get("aplicacion_cuotas") or []):
-            _nc  = int(_apl.get("numero_cuota") or 0)
+            _nc = int(_apl.get("numero_cuota") or 0)
             _apl_m = float(_apl.get("monto_aplicado") or 0)
             if _nc and _apl_m > 0:
-                _cuota_pagos_idx.setdefault(_nc, []).append({
-                    "fecha": _fecha_pr,
-                    "ref":   _ref_pr,
-                    "monto": _apl_m,
-                })
+                _cuota_pagos_idx.setdefault(_nc, []).append(
+                    {
+                        "fecha": _fecha_pr,
+                        "numero_pago": _npr,
+                        "monto": _apl_m,
+                    }
+                )
 
     # ----- Plan de pago (didactico con barra de progreso) -----
     if amortizaciones_por_prestamo:
@@ -583,7 +658,16 @@ def generar_pdf_estado_cuenta(
             story.append(Spacer(1, 4))
 
             # --- Tabla ---
-            rows = [["#", "Vence", "Cuota (USD)", "Pagado (USD)", "Saldo (USD)", "Estado"]]
+            rows = [
+                [
+                    Paragraph("#", _hdr),
+                    Paragraph("Vence", _hdr),
+                    Paragraph("Cuota<br/>(USD)", _hdr),
+                    Paragraph("Pagado<br/>(USD)", _hdr),
+                    Paragraph("Saldo<br/>(USD)", _hdr),
+                    Paragraph("Estado", _hdr),
+                ]
+            ]
             for c in cuotas:
                 estado_codigo = (c.get("estado") or "").strip().upper()
                 estado_etiqueta = (c.get("estado_etiqueta") or "").strip() or etiqueta_estado_cuota(estado_codigo)
@@ -605,12 +689,18 @@ def generar_pdf_estado_cuenta(
                 es_parcial = (not es_pagada) and total_aplicado > 0
 
                 _nc_key = int(c.get('numero_cuota') or 0)
-                _orig_pagos = _cuota_pagos_idx.get(_nc_key, [])
-                # Lineas de origen: fecha + referencia del pago que cubrió esta cuota
-                _orig_lines = ''
+                _orig_pagos = sorted(
+                    _cuota_pagos_idx.get(_nc_key, []),
+                    key=lambda x: (int(x.get("numero_pago") or 999999),),
+                )
+                # Detalle: fecha del pago y etiqueta "Pago N" (sin documento; N = cronologico del prestamo).
+                _orig_lines = ""
                 for _op in _orig_pagos:
-                    _op_txt = f"{_op['fecha']}  {_op['ref']}  ({_op['monto']:,.2f})"
-                    _orig_lines += f'<br/><font size="6" color="{COLOR_TEXT_MUTED}">{_op_txt}</font>'
+                    _fe = html.escape(str(_op.get("fecha") or ""))
+                    _np = int(_op.get("numero_pago") or 0)
+                    _lbl = f"Pago {_np}" if _np > 0 else "Pago"
+                    _orig_lines += f'<br/><font size="6" color="{COLOR_TEXT_MUTED}">{_fe}</font>'
+                    _orig_lines += f'<br/><font size="6" color="{COLOR_TEXT_MUTED}">{html.escape(_lbl)}</font>'
 
                 cell_link = ParagraphStyle(name=f"EC_CL_{_pfx}_{prestamo_id}_{c.get('numero_cuota','x')}", fontSize=8, leading=10)
                 if es_pagada:
@@ -654,15 +744,15 @@ def generar_pdf_estado_cuenta(
             t_amort = Table(
                 rows,
                 colWidths=[
-                    0.38 * inch,
-                    0.80 * inch,
-                    1.00 * inch,
-                    1.20 * inch,
-                    1.00 * inch,
-                    1.20 * inch,
+                    0.42 * inch,
+                    0.92 * inch,
+                    1.22 * inch,
+                    1.48 * inch,
+                    1.22 * inch,
+                    2.09 * inch,
                 ],
             )
-            t_amort.setStyle(tbl_style(len(rows), hf=8, bf=8, extras=tbl_extras, no_rowbg=True))
+            t_amort.setStyle(tbl_style(len(rows), hf=9, bf=8, extras=tbl_extras, no_rowbg=True))
             story.append(t_amort)
             story.append(Spacer(1, 8))
 
@@ -670,7 +760,14 @@ def generar_pdf_estado_cuenta(
     recibos = recibos or []
     if recibos and base_url:
         story.append(Paragraph("Pagos reportados (recibos)", styles["EC_Section"]))
-        rows = [["Referencia", "Fecha", "Monto", "Recibo"]]
+        rows = [
+            [
+                Paragraph("Referencia", _hdr),
+                Paragraph("Fecha", _hdr),
+                Paragraph("Monto", _hdr),
+                Paragraph("Recibo", _hdr),
+            ]
+        ]
         for r in recibos:
             ref = (r.get("referencia_interna") or "")[:22]
             fecha = (r.get("fecha_pago") or "")[:10]
@@ -695,10 +792,15 @@ def generar_pdf_estado_cuenta(
             else:
                 link_cell = Paragraph('<font color="#94a3b8">—</font>', styles["EC_Link"])
             rows.append([ref, fecha, monto, link_cell])
-        t = Table(rows, colWidths=[108, 72, 88, 78])
+        t = Table(
+            rows,
+            colWidths=[1.85 * inch, 1.15 * inch, 1.45 * inch, 1.90 * inch],
+        )
         t.setStyle(
             tbl_style(
                 len(rows),
+                hf=9,
+                bf=8,
                 extras=[
                     ("ALIGN", (2, 1), (2, -1), "RIGHT"),
                 ],

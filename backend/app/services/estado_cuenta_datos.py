@@ -298,6 +298,7 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
                 "pago_id": pago_id,
                 "prestamo_id": int(prestamo_id) if prestamo_id is not None else None,
                 "banco": banco,
+                "fecha_pago_orden": fp.isoformat() if fp is not None else "",
                 "fecha_pago_display": _fmt_fecha_hora_pago_estado_cuenta(fp),
                 "fecha_registro_display": _fmt_fecha_hora_pago_estado_cuenta(fr),
                 "monto_display": monto_display,
@@ -329,6 +330,9 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
             u = (p.get("link_comprobante") or "").strip()
             if u:
                 r["link_comprobante"] = comprobante_url_para_enlace_publico(u)
+    # 1 = pago más antiguo (cronológico); la consulta ya viene más reciente primero.
+    for num, r in enumerate(reversed(resultado), start=1):
+        r["numero_pago"] = num
     return resultado
 
 
@@ -714,5 +718,8 @@ def serializar_estado_cuenta_payload_json(datos: Optional[Dict[str, Any]]) -> Op
     fc = payload.get("fecha_corte")
     if hasattr(fc, "isoformat"):
         payload["fecha_corte"] = fc.isoformat()
+    for pr in payload.get("pagos_realizados") or []:
+        if isinstance(pr, dict):
+            pr.pop("fecha_pago_orden", None)
     return payload
 
