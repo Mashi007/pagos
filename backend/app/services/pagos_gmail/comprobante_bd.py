@@ -1,9 +1,10 @@
 """
-Comprobantes del pipeline Gmail: guardar imagen/PDF en BD (tabla pago_comprobante_imagen)
-en lugar de subir el archivo del comprobante a Google Drive.
+Comprobantes binarios de pago en BD: tabla única `pago_comprobante_imagen` (imagen o PDF).
 
-El enlace que se persiste en pagos_gmail_sync_item.drive_link / gmail_temporal.drive_link
-es una URL al GET /pagos/comprobante-imagen/{id} (misma tabla que el alta manual de pago).
+Usado por: pipeline Gmail, alta manual `/pagos/comprobante-imagen`, e informes web
+(Infopagos / cobros público → `pagos_reportados.comprobante_imagen_id`).
+
+El enlace persistido en Gmail (drive_link / temporal) es URL al GET /pagos/comprobante-imagen/{id}.
 """
 from __future__ import annotations
 

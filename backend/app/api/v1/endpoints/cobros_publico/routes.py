@@ -73,6 +73,8 @@ from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_par
 
 from app.services.pagos_gmail.gemini_service import compare_form_with_image
 
+from app.services.pagos_gmail.comprobante_bd import persistir_comprobante_gmail_en_bd
+
 from app.services.cobros.recibo_pdf import (
     RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
     WHATSAPP_LINK,
@@ -1438,7 +1440,13 @@ async def enviar_reporte_publico(
 
                     apellidos = parts[1] if len(parts) > 1 else ""
 
-
+                stored = persistir_comprobante_gmail_en_bd(db, content, ctype)
+                if not stored:
+                    return EnviarReporteResponse(
+                        ok=False,
+                        error="No se pudo almacenar el comprobante. Use PDF o imagen JPG/PNG válida.",
+                    )
+                img_id, _url = stored
 
                 pr = PagoReportado(
 
@@ -1462,11 +1470,9 @@ async def enviar_reporte_publico(
 
                     moneda=moneda_guardar[:10],
 
-                    comprobante=content,
+                    comprobante_imagen_id=img_id,
 
                     comprobante_nombre=filename[:255],
-
-                    comprobante_tipo=ctype,
 
                     ruta_comprobante=None,
 
@@ -1955,6 +1961,14 @@ async def enviar_reporte_infopagos(
 
                     apellidos = parts[1] if len(parts) > 1 else ""
 
+                stored = persistir_comprobante_gmail_en_bd(db, content, ctype)
+                if not stored:
+                    return EnviarReporteInfopagosResponse(
+                        ok=False,
+                        error="No se pudo almacenar el comprobante. Use PDF o imagen JPG/PNG válida.",
+                    )
+                img_id, _url = stored
+
                 pr = PagoReportado(
 
                     referencia_interna=referencia,
@@ -1977,11 +1991,9 @@ async def enviar_reporte_infopagos(
 
                     moneda=moneda_guardar[:10],
 
-                    comprobante=content,
+                    comprobante_imagen_id=img_id,
 
                     comprobante_nombre=filename[:255],
-
-                    comprobante_tipo=ctype,
 
                     ruta_comprobante=None,
 

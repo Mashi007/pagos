@@ -4,6 +4,8 @@ Reportes de pago web (misma tabla para todo canal de entrada).
 - Formulario publico del deudor y Infopagos escriben aqui; la cola en Cobros > Pagos reportados
   lista y gestiona todos por igual (aprobar, rechazar, editar, import a `pagos`).
 - `canal_ingreso`: infopagos | cobros_publico | NULL (historico).
+- Binario del comprobante: solo en `pago_comprobante_imagen` (FK `comprobante_imagen_id`);
+  `comprobante_nombre` conserva el nombre original del archivo.
 """
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Date, LargeBinary
 from sqlalchemy.sql import func
@@ -26,10 +28,13 @@ class PagoReportado(Base):
     numero_operacion = Column(String(100), nullable=False)
     monto = Column(Numeric(15, 2), nullable=False)
     moneda = Column(String(10), nullable=False, server_default="'BS'")  # BS, USD
-    # Comprobante e imagen/PDF en BD
-    comprobante = Column(LargeBinary, nullable=True)
+    comprobante_imagen_id = Column(
+        String(32),
+        ForeignKey("pago_comprobante_imagen.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     comprobante_nombre = Column(String(255), nullable=True)
-    comprobante_tipo = Column(String(100), nullable=True)
     recibo_pdf = Column(LargeBinary, nullable=True)
     # Rutas legacy (opcionales si antes se guardaba en filesystem)
     ruta_comprobante = Column(String(512), nullable=True)

@@ -55,6 +55,11 @@ from app.services.tasa_cambio_service import (
     tasa_y_equivalente_usd_excel,
 )
 from app.services.pagos_gmail.gemini_service import compare_form_with_image
+from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
+from app.services.cobros.pago_reportado_comprobante_unico import (
+    comprobante_bytes_y_content_type_desde_reportado,
+    nombre_adjunto_email_desde_reportado,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -425,7 +430,7 @@ def _pago_reportado_list_items_from_rows(
             observacion=observacion,
             correo_enviado_a=r.correo_enviado_a,
             tiene_recibo_pdf=bool(r.recibo_pdf),
-            tiene_comprobante=bool(r.comprobante),
+            tiene_comprobante=bool(getattr(r, "comprobante_imagen_id", None)),
             canal_ingreso=getattr(r, "canal_ingreso", None),
         ))
     return items
@@ -978,7 +983,7 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         tasa_cambio_bs_usd=tasa_x,
         equivalente_usd=eq_usd,
         ruta_comprobante=pr.ruta_comprobante,
-        tiene_comprobante=bool(pr.comprobante),
+        tiene_comprobante=bool(getattr(pr, "comprobante_imagen_id", None)),
         tiene_recibo_pdf=bool(pr.recibo_pdf),
         observacion=pr.observacion,
         correo_enviado_a=pr.correo_enviado_a,
@@ -1114,6 +1119,9 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
     notas_pago = None
     if rpc_tr and num_doc_raw and rpc_tr != num_doc_raw:
         notas_pago = f"Ref. interna reporte: {rpc_tr}"
+    img_id = (getattr(pr, "comprobante_imagen_id", None) or "").strip()
+    link_comp = url_comprobante_imagen_absoluta(img_id) if img_id else None
+    doc_nom = ((pr.comprobante_nombre or "").strip()[:255] or None) if img_id else None
     row = Pago(
         cedula_cliente=cedula_norm,
         prestamo_id=prestamo.id,
@@ -1133,6 +1141,8 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
         monto_bs_original=Decimal(str(round(monto_bs_original, 2))) if monto_bs_original is not None else None,
         tasa_cambio_bs_usd=Decimal(str(tasa_aplicada)) if tasa_aplicada is not None else None,
         fecha_tasa_referencia=fecha_tasa_ref,
+        link_comprobante=link_comp,
+        documento_nombre=doc_nom,
     )
     db.add(row)
     db.flush()
@@ -1302,12 +1312,10 @@ def rechazar_pago_reportado(
             "RapiCredit C.A."
         )
         attachments: List[Tuple[str, bytes]] = []
-        if pr.comprobante:
-            nombre_adj = (pr.comprobante_nombre or "comprobante").strip() or "comprobante"
-            if not nombre_adj or "." not in nombre_adj:
-                ext = "pdf" if (pr.comprobante_tipo or "").lower().find("pdf") >= 0 else "jpg"
-                nombre_adj = f"comprobante_{pr.referencia_interna}.{ext}"
-            attachments.append((nombre_adj, bytes(pr.comprobante)))
+        bcomp, ct_comp = comprobante_bytes_y_content_type_desde_reportado(db, pr)
+        if bcomp:
+            nombre_adj = nombre_adjunto_email_desde_reportado(pr, ct_comp)
+            attachments.append((nombre_adj, bcomp))
         ok_mail, err_mail = send_email(
             to_emails,
             f"Reporte de pago no aprobado #{pr.referencia_interna}",
@@ -1415,11 +1423,15 @@ def get_comprobante(pago_id: int, db: Session = Depends(get_db)):
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
-    if not pr.comprobante:
+    bcomp, media = comprobante_bytes_y_content_type_desde_reportado(db, pr)
+    if not bcomp:
         raise HTTPException(status_code=404, detail="No hay comprobante almacenado.")
-    media = (pr.comprobante_tipo or "application/octet-stream").split(";")[0].strip()
     nombre = pr.comprobante_nombre or "comprobante"
-    return Response(content=bytes(pr.comprobante), media_type=media, headers={"Content-Disposition": f'inline; filename="{nombre}"'})
+    return Response(
+        content=bcomp,
+        media_type=(media or "application/octet-stream").split(";")[0].strip(),
+        headers={"Content-Disposition": f'inline; filename="{nombre}"'},
+    )
 
 
 @router.get("/pagos-reportados/{pago_id}/recibo.pdf")
@@ -1832,12 +1844,10 @@ def cambiar_estado_pago(
                 "RapiCredit C.A."
             )
             attachments_rech: List[Tuple[str, bytes]] = []
-            if pr.comprobante:
-                nombre_adj = (pr.comprobante_nombre or "comprobante").strip() or "comprobante"
-                if not nombre_adj or "." not in nombre_adj:
-                    ext = "pdf" if (pr.comprobante_tipo or "").lower().find("pdf") >= 0 else "jpg"
-                    nombre_adj = f"comprobante_{pr.referencia_interna}.{ext}"
-                attachments_rech.append((nombre_adj, bytes(pr.comprobante)))
+            bcr, ct_cr = comprobante_bytes_y_content_type_desde_reportado(db, pr)
+            if bcr:
+                nombre_adj = nombre_adjunto_email_desde_reportado(pr, ct_cr)
+                attachments_rech.append((nombre_adj, bcr))
             ok_mail, err_mail = send_email(
                 to_emails,
                 f"Reporte de pago no aprobado #{pr.referencia_interna}",
@@ -2025,7 +2035,8 @@ def reanalizar_pago_con_gemini(
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     
     # Verificar que hay comprobante guardado
-    if not pr.comprobante:
+    bcomp, _ct = comprobante_bytes_y_content_type_desde_reportado(db, pr)
+    if not bcomp:
         raise HTTPException(
             status_code=400,
             detail="No hay comprobante guardado para este pago. No se puede re-analizar."
@@ -2053,7 +2064,7 @@ def reanalizar_pago_con_gemini(
     try:
         gemini_result = compare_form_with_image(
             form_data,
-            pr.comprobante,
+            bcomp,
             filename=f"comprobante_{pago_id}.jpg"
         )
         

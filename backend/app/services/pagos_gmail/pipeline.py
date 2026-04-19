@@ -63,7 +63,7 @@ def _persistir_estado_sync_pipeline_terminal(
     Evita filas success con finished_at NULL cuando la instancia ORM `sync` queda
     desalineada tras muchos commit/rollback en el mismo Session.
     """
-    db.execute(
+    res = db.execute(
         update(PagosGmailSync)
         .where(PagosGmailSync.id == sync_id)
         .values(
@@ -76,7 +76,17 @@ def _persistir_estado_sync_pipeline_terminal(
             error_message=error_message,
         )
     )
+    rc = int(getattr(res, "rowcount", -1) or -1)
+    if rc != 1:
+        logging.getLogger(__name__).warning(
+            "[PAGOS_GMAIL] Cierre sync: UPDATE rowcount=%s (esperado 1) sync_id=%s status=%s",
+            rc,
+            sync_id,
+            status,
+        )
     db.commit()
+    # Evita instancia ORM `sync` (status=running en memoria) confundiendo flush posterior en la misma sesión.
+    db.expire_all()
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
 from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
     registrar_traza_gmail_abcd_cuotas_evento,

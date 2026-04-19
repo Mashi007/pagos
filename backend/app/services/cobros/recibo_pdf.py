@@ -153,7 +153,7 @@ def _append_comprobante_adjunto_recibo(
     comprobante_nombre: Optional[str],
 ) -> None:
     """
-    Incrusta en el PDF la imagen guardada en BD (pagos_reportados.comprobante) cuando es raster.
+    Incrusta en el PDF la imagen/PDF del comprobante (bytes + tipo MIME) cuando es raster.
     Si el archivo es PDF, solo se anade nota (ReportLab no incrusta PDF aqui).
     """
     if not comprobante_bytes or len(comprobante_bytes) < 12:

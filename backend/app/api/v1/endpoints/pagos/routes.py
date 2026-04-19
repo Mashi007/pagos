@@ -180,6 +180,7 @@ from .comprobante_imagen_helpers import (
     _normalizar_id_comprobante_imagen,
     _public_base_url_para_comprobante,
 )
+from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
 
 from .constants import (
     TZ_NEGOCIO,
@@ -2444,6 +2445,10 @@ def importar_un_pago_reportado_a_pagos(
     if rpc_tr and numero_doc_raw and rpc_tr != numero_doc_raw:
         notas_pago = f"Ref. interna reporte: {rpc_tr}"
 
+    img_id = (getattr(pr, "comprobante_imagen_id", None) or "").strip()
+    link_comp = url_comprobante_imagen_absoluta(img_id) if img_id else None
+    doc_nom = ((pr.comprobante_nombre or "").strip()[:255] or None) if img_id else None
+
     p = Pago(
 
         cedula_cliente=cedula_raw,
@@ -2478,6 +2483,10 @@ def importar_un_pago_reportado_a_pagos(
         tasa_cambio_bs_usd=Decimal(str(tasa_aplicada)) if tasa_aplicada is not None else None,
 
         fecha_tasa_referencia=fecha_tasa_ref,
+
+        link_comprobante=link_comp,
+
+        documento_nombre=doc_nom,
 
     )
 
