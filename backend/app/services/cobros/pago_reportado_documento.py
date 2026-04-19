@@ -11,7 +11,8 @@ Criterio unificado (anti-duplicado / idempotencia):
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Iterable, Optional
+from datetime import datetime
+from typing import TYPE_CHECKING, Dict, Iterable, Optional, Set
 
 from sqlalchemy import select
 
@@ -125,6 +126,69 @@ def primer_pago_id_si_existe_para_claves_reportado(db: "Session", pr: PagoReport
     if not claves:
         return None
     return db.execute(select(Pago.id).where(Pago.numero_documento.in_(claves)).limit(1)).scalar()
+
+
+_ESTADOS_REPORTADO_DUP_PEER = ("pendiente", "en_revision", "aprobado")
+
+
+def primer_reportado_id_por_norm_batch(
+    db: "Session",
+    norms: Set[str],
+    *,
+    created_at_desde: Optional[datetime] = None,
+    max_rows_scan: int = 60_000,
+) -> Dict[str, int]:
+    """
+    Para cada documento normalizado en `norms`, devuelve el id del `PagoReportado` mas antiguo
+    (created_at asc, id asc) entre estados pendiente / en_revision / aprobado con ese documento.
+
+    Sirve para marcar DUPLICADO solo a reenvios del mismo comprobante: el primero en tiempo no
+    se considera duplicado frente a otros reportados; los posteriores si.
+
+    Escaneo acotado por `created_at_desde` (p. ej. min(created_at del lote) - 30 dias) y por
+    `max_rows_scan` filas leidas en total por fase.
+    """
+    first: Dict[str, int] = {}
+    if not norms:
+        return first
+    pending: Set[str] = set(norms)
+
+    def _scan_phase(desde: Optional[datetime], cap: int) -> None:
+        if not pending:
+            return
+        stmt = (
+            select(PagoReportado)
+            .where(PagoReportado.estado.in_(_ESTADOS_REPORTADO_DUP_PEER))
+            .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
+        )
+        if desde is not None:
+            stmt = stmt.where(PagoReportado.created_at >= desde)
+        seen = 0
+        offset = 0
+        batch = 800
+        while pending and seen < cap:
+            chunk = db.execute(stmt.offset(offset).limit(batch)).scalars().all()
+            if not chunk:
+                break
+            for pr in chunk:
+                seen += 1
+                if seen > cap:
+                    return
+                _, n_eff = documento_numero_desde_pago_reportado(pr)
+                if not n_eff or n_eff not in pending:
+                    continue
+                first[n_eff] = pr.id
+                pending.discard(n_eff)
+                if not pending:
+                    return
+            offset += len(chunk)
+            if len(chunk) < batch:
+                break
+
+    _scan_phase(created_at_desde, max_rows_scan)
+    if pending:
+        _scan_phase(None, max(10_000, max_rows_scan // 2))
+    return first
 
 
 def reportado_toca_claves_canonicas_en_pagos(

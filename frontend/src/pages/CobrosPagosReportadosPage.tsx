@@ -637,7 +637,7 @@ export default function CobrosPagosReportadosPage() {
           <button
             type="button"
             onClick={() => handleKpiClick('')}
-            title="Cola operativa: solo reportes que no cumplen validadores (Gemini/reglas), no exportados al Excel; importados y rechazados no entran aquí."
+            title="Cola de análisis manual: pendiente, en revisión y aprobados que aún no cumplen validadores (Gemini/reglas). Si Gemini es correcto y no hay observación, no entra en cola."
             className={
               'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
               (estado === ''
@@ -650,7 +650,7 @@ export default function CobrosPagosReportadosPage() {
             </span>
 
             <span className="text-2xl font-bold">
-              {kpis.pendiente + kpis.en_revision}
+              {kpis.pendiente + kpis.en_revision + kpis.aprobado}
             </span>
           </button>
 

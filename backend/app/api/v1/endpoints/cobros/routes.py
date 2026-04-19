@@ -41,6 +41,7 @@ from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
 from app.services.cobros.pago_reportado_documento import (
     documento_numero_desde_pago_reportado,
     primer_pago_id_si_existe_para_claves_reportado,
+    primer_reportado_id_por_norm_batch,
     reportado_toca_claves_canonicas_en_pagos,
 )
 from app.services.cobros.cedula_reportar_bs_service import (
@@ -337,8 +338,15 @@ def _observacion_reglas_carga(
     cedulas_bolivares: frozenset,
     claves_doc_en_pagos: frozenset,
     conteo_norm_en_pagina: Counter,
+    primer_id_por_norm: Dict[str, int],
 ) -> list:
-    """Para cada fila: NO CLIENTES, No pag Bs., DUPLICADO (tabla pagos o mismo listado)."""
+    """
+    Para cada fila: NO CLIENTES, No pag Bs., DUPLICADO.
+
+    DUPLICADO entre reportados: solo si no es el primer reporte con ese documento normalizado
+    (primer id global por created_at/id). Si falta en el mapa (escaneo acotado), se usa el
+    conteo del lote actual como respaldo (mismo criterio antiguo para esa pagina).
+    """
     result = []
     for r in rows:
         partes = []
@@ -360,8 +368,14 @@ def _observacion_reglas_carga(
             partes.append("No pag Bs.")
         dup_pagos = reportado_toca_claves_canonicas_en_pagos(r, claves_doc_en_pagos)
         n_doc_eff = documento_numero_desde_pago_reportado(r)[1]
-        dup_misma_vista = bool(n_doc_eff and conteo_norm_en_pagina.get(n_doc_eff, 0) > 1)
-        if dup_pagos or dup_misma_vista:
+        dup_entre_reportados = False
+        if n_doc_eff:
+            pid = primer_id_por_norm.get(n_doc_eff)
+            if pid is not None:
+                dup_entre_reportados = r.id != pid
+            elif conteo_norm_en_pagina.get(n_doc_eff, 0) > 1:
+                dup_entre_reportados = True
+        if dup_pagos or dup_entre_reportados:
             partes.append("DUPLICADO")
         result.append(partes)
     return result
@@ -397,8 +411,26 @@ def _pago_reportado_list_items_from_rows(
         norm_por_fila.append(n_eff if n_eff else None)
     conteo_norm_en_pagina = Counter(n for n in norm_por_fila if n)
 
+    norms_en_batch = {n for n in norm_por_fila if n}
+    created_at_desde = None
+    if rows:
+        fechas_c = [r.created_at for r in rows if getattr(r, "created_at", None) is not None]
+        if fechas_c:
+            created_at_desde = min(fechas_c) - timedelta(days=45)
+    primer_id_por_norm = primer_reportado_id_por_norm_batch(
+        db,
+        norms_en_batch,
+        created_at_desde=created_at_desde,
+    )
+
     partes_por_fila = _observacion_reglas_carga(
-        db, rows, cedulas_en_clientes, cedulas_bolivares, claves_doc_en_pagos, conteo_norm_en_pagina
+        db,
+        rows,
+        cedulas_en_clientes,
+        cedulas_bolivares,
+        claves_doc_en_pagos,
+        conteo_norm_en_pagina,
+        primer_id_por_norm,
     )
 
     items: List[PagoReportadoListItem] = []
@@ -479,13 +511,17 @@ def _estado_label_excel(estado: str) -> str:
 
 def _item_falla_validadores_cobros_excel(it: PagoReportadoListItem) -> bool:
     """
-    Criterio "no cumple validadores" para el Excel Cobros: Gemini NO/error u observación de reglas
-    (NO CLIENTES, duplicado, Bs., discrepancias). Regla de pantalla: mientras no se descargue el Excel,
-    siguen listándose; al descargar (solo esas filas) pasan a exportados y dejan la cola por defecto.
+    True = requiere análisis manual (cola en pantalla / Excel "no validan").
+
+    Falla si: Gemini NO o error, **o** hay observación de reglas (DUPLICADO, NO CLIENTES, etc.).
+    Si Gemini es explícitamente true y no hay observación, **cumple** y no debe listarse en cola
+    (sigue el flujo automático fuera de esta pantalla).
     """
     gem = (it.gemini_coincide_exacto or "").strip().lower()
     if gem in ("false", "error"):
         return True
+    if gem == "true" and not (it.observacion or "").strip():
+        return False
     return bool((it.observacion or "").strip())
 
 
@@ -616,11 +652,16 @@ def _list_pagos_reportados_payload(
         items = _pago_reportado_list_items_from_rows(db, rows)
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 
-    # Cola operativa: solo filas que NO cumplen validadores (misma regla que Excel Cobros).
+    # Cola manual: pendiente / en_revision / aprobado que NO cumplen validadores (misma regla que Excel Cobros).
+    # Cumplen 100% (Gemini true sin observación) → no entran aquí; siguen el flujo automático fuera de la cola.
     q = select(PagoReportado)
-    if estado:
+    if estado == "aprobado":
+        q = q.where(PagoReportado.estado == "aprobado")
+        if not incluir_exportados:
+            q = q.where(~PagoReportado.id.in_(exportados_subq))
+    elif estado in ("pendiente", "en_revision"):
         q = q.where(PagoReportado.estado == estado)
-        if estado in ("aprobado", "pendiente", "en_revision") and not incluir_exportados:
+        if not incluir_exportados:
             q = q.where(~PagoReportado.id.in_(exportados_subq))
     else:
         q = q.where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
@@ -669,7 +710,7 @@ def _kpis_pagos_reportados_payload(
 ) -> dict:
     """
     Conteos por estado con mismos filtros fecha/cédula/institución que el listado.
-    pendiente / en_revision / aprobado: solo los que NO cumplen validadores (como el listado).
+    pendiente / en_revision / aprobado: solo los que NO cumplen validadores (cola de análisis manual).
     importado / rechazado: totales SQL (estados terminales).
     """
     filtros = _filtros_fecha_cedula_institucion_reportados(
@@ -696,7 +737,9 @@ def _kpis_pagos_reportados_payload(
             counts[row.estado] = int(row.cnt or 0)
 
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
-    q_scan = select(PagoReportado).where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
+    q_scan = select(PagoReportado).where(
+        PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado"))
+    )
     if not incluir_exportados:
         q_scan = q_scan.where(~PagoReportado.id.in_(exportados_subq))
     for w in filtros:
@@ -739,8 +782,9 @@ def list_pagos_reportados(
     """
     Lista paginada de pagos reportados con filtros.
 
-    Cola operativa (sin `estado`, o pendiente/en_revision/aprobado): solo filas que **no cumplen validadores**
-    (misma regla que el Excel Cobros: Gemini false/error u observación de reglas de carga).
+    Sin `estado` o con `pendiente` / `en_revision` / `aprobado`: solo filas que **no cumplen validadores**
+    (Excel Cobros: Gemini false/error u observación de reglas; si Gemini es true y no hay observación, cumple 100%
+    y no se lista — sigue el proceso automático fuera de esta cola).
 
     `estado=importado` o `rechazado`: listado completo de ese estado (sin filtro de validadores).
 
