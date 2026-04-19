@@ -384,6 +384,30 @@ def _normalizar_cedula_carga_masiva(s: str) -> str:
     return t
 
 
+def _expr_cedula_normalizada_sql(column):
+    """
+    Normalización superficial de la columna cédula en SQL (PostgreSQL), alineada con
+    `_normalizar_cedula_carga_masiva` / POST check-cedulas.
+    """
+    return func.regexp_replace(
+        func.regexp_replace(func.upper(func.trim(column)), r"[[:space:]]", "", "g"),
+        r"[-_.:]",
+        "",
+        "g",
+    )
+
+
+def _cedula_clave_comparacion_clientes(s: str) -> str:
+    """
+    Clave para comparar con `_expr_cedula_normalizada_sql(Cliente.cedula)`.
+    Si solo hay 6-11 dígitos, antepone V (misma regla que validate_cedula).
+    """
+    t = _normalizar_cedula_carga_masiva(s or "")
+    if re.fullmatch(r"\d{6,11}", t):
+        t = "V" + t
+    return t
+
+
 class CheckEmailsRequest(BaseModel):
     """Lista de emails a comprobar (p. ej. desde carga masiva)."""
     emails: list[str] = []
@@ -534,25 +558,19 @@ def check_cedulas(
     incoming_set: set[str] = set()
     incoming_order: list[str] = []
     for c in payload.cedulas:
-        n = _normalizar_cedula_carga_masiva(c or "")
+        n = _cedula_clave_comparacion_clientes(c or "")
         if n and n not in incoming_set:
             incoming_set.add(n)
             incoming_order.append(n)
     if not incoming_order:
         return CheckCedulasResponse(existing_cedulas=[])
 
-    # Misma lógica que _normalizar_cedula_carga_masiva vía SQL (PostgreSQL POSIX).
-    ced_norm_sql = func.regexp_replace(
-        func.regexp_replace(func.upper(func.trim(Cliente.cedula)), r"[[:space:]]", "", "g"),
-        r"[-_.:]",
-        "",
-        "g",
-    )
+    ced_norm_sql = _expr_cedula_normalizada_sql(Cliente.cedula)
     rows = db.execute(select(Cliente.cedula).where(ced_norm_sql.in_(incoming_order))).scalars().all()
     found: list[str] = []
     seen_found: set[str] = set()
     for raw in rows or []:
-        n = _normalizar_cedula_carga_masiva(raw or "")
+        n = _cedula_clave_comparacion_clientes(raw or "")
         if n in incoming_set and n not in seen_found:
             seen_found.add(n)
             found.append(n)
@@ -626,20 +644,20 @@ def _digits_telefono(s: str) -> str:
     return re.sub(r"\D", "", (s or "").strip())
 
 
-def create_cliente_from_payload(db: Session, payload: ClienteCreate) -> Cliente:
+def create_cliente_from_payload(db: Session, payload: ClienteCreate, *, commit: bool = True) -> Cliente:
     """
     Inserta un cliente aplicando las mismas reglas que POST /clientes (duplicados, teléfono, correos).
-    Hace commit. Lanza HTTPException (409/400) si corresponde.
+    Si commit=True (defecto), hace commit al final. Si commit=False, solo flush (p. ej. lote atómico).
+    Lanza HTTPException (409/400) si corresponde.
     """
-    cedula_norm = (_normalize_for_duplicate(payload.cedula) or "Z999999999").upper()  # Uppercase para consistency
+    cedula_norm = _cedula_clave_comparacion_clientes(_normalize_for_duplicate(payload.cedula) or "") or "Z999999999"
     nombres_norm = _normalize_for_duplicate(payload.nombres)
     email_norm = _normalize_for_duplicate(payload.email)
     telefono_dig = _digits_telefono(payload.telefono)
 
-    # Prohibir duplicado por cédula (única para todos los valores)
-    existing_cedula = db.execute(
-        select(Cliente.id).where(Cliente.cedula == cedula_norm)
-    ).first()
+    # Prohibir duplicado por cédula (misma cédula en cualquier formato en tabla clientes)
+    ced_norm_sql = _expr_cedula_normalizada_sql(Cliente.cedula)
+    existing_cedula = db.execute(select(Cliente.id).where(ced_norm_sql == cedula_norm)).first()
     if existing_cedula:
         raise HTTPException(
             status_code=409,
@@ -701,8 +719,12 @@ def create_cliente_from_payload(db: Session, payload: ClienteCreate) -> Cliente:
         notas=payload.notas,
     )
     db.add(row)
-    db.commit()
-    db.refresh(row)
+    if commit:
+        db.commit()
+        db.refresh(row)
+    else:
+        db.flush()
+        db.refresh(row)
     return row
 
 
@@ -739,11 +761,17 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
 
     # Validar duplicados: no permitir cédula, nombre, email ni teléfono igual a otro cliente
     if "cedula" in data:
-        cedula_norm = (_normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "") or "Z999999999").upper()
+        cedula_norm = (
+            _cedula_clave_comparacion_clientes(
+                _normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "") or ""
+            )
+            or "Z999999999"
+        )
         data["cedula"] = cedula_norm
         if cedula_norm:
+            ced_norm_sql = _expr_cedula_normalizada_sql(Cliente.cedula)
             existing = db.execute(
-                select(Cliente.id).where(Cliente.cedula == cedula_norm, Cliente.id != cliente_id)
+                select(Cliente.id).where(ced_norm_sql == cedula_norm, Cliente.id != cliente_id)
             ).first()
             if existing:
                 raise HTTPException(

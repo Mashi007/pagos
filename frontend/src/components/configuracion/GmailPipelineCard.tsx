@@ -182,8 +182,12 @@ export function GmailPipelineCard() {
 
         <CardDescription>
           El procesamiento de Gmail es manual: use Pagos → Agregar pago →
-          Generar Excel desde email → Procesar correos. Aquí puede ver el último
-          resultado y descargar Excel temporal.
+          Generar Excel desde email → Procesar correos. Solo se digitalizan y
+          vuelcan al Excel correos cuyo remitente coincida con un email en la
+          tabla de clientes; si no hay coincidencia, solo se etiqueta ERROR
+          EMAIL en Gmail. PDF con más de una página no se digitaliza y se
+          etiqueta PAGINAS. Aquí puede ver el último resultado y descargar Excel
+          temporal.
         </CardDescription>
       </CardHeader>
 

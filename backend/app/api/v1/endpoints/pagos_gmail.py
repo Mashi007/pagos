@@ -1,7 +1,7 @@
 """
 Endpoints para el pipeline Gmail -> Gemini -> BD (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
 Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822 (deduplicado).
-Comprobantes plantilla 1 (A), 2 (B) o 3 (C Binance) con datos completos -> BD (imagen/PDF en pago_comprobante_imagen; enlace persiste en BD para import de pagos, no en el Excel); por cada OK: etiqueta IMAGEN 1/2/3 (sin modificar estrellas Gmail). Sin subidas a Google Drive.
+Solo si el remitente coincide con `clientes.email` o `email_secundario`: digitalizacion (Gemini), filas Excel/BD y comprobante en `pago_comprobante_imagen`; etiquetas MERCANTIL/BNC/BINANCE/BNV segun plantilla. Sin match (o error BD al consultar clientes): solo etiqueta ERROR EMAIL en Gmail, sin filas ni comprobante. Sin subidas a Google Drive.
 Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no las toca el pipeline).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD)
@@ -23,6 +23,7 @@ from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
+from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_ERROR_EMAIL
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
 from app.services.pagos_gmail.pipeline import run_pipeline
 
@@ -114,10 +115,11 @@ def run_now(
     Inicia el pipeline en segundo plano (Gmail -> Gemini -> BD; comprobante en BD, .eml opcional en Drive) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto all).
-    Listado: por defecto inbox con imagen/PDF (cualquier etiqueta, incluye ERROR EMAIL).
+    Listado: por defecto inbox con imagen/PDF. Solo se digitalizan mensajes **sin etiquetas de usuario** Gmail, salvo modo **error_email_rescan** con **solo** la etiqueta ERROR EMAIL.
     **unread** / **read**: añade is:unread / is:read a la búsqueda.
-    **error_email_rescan**: inbox con etiqueta ERROR EMAIL + media (re-lectura A/B con cédula en imagen).
-    Procesamiento en orden de fecha del correo: mas antiguo primero, mas reciente al final.
+    **error_email_rescan**: re-escaneo A/B; procesa si la unica etiqueta de usuario es ERROR EMAIL; otras etiquetas de usuario implican omitir.
+    Listado completo por paginacion Gmail; procesamiento en orden bandeja (mas reciente primero, mas antiguo al final).
+    Los mensajes no leidos quedan leidos al procesarlos en la corrida.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """
@@ -308,6 +310,15 @@ def _find_sheet_by_fecha(db: Session, fecha_date: datetime) -> tuple[Optional[st
     return (sheet_name, list(items)) if items else (sheet_name, [])
 
 
+def _excluir_filas_cedula_error_email(items: list) -> list:
+    """La columna cédula 'ERROR EMAIL' no debe aparecer en Excel ni contarse como dato exportable."""
+    return [
+        it
+        for it in items
+        if (getattr(it, "cedula", None) or "").strip() != PAGOS_GMAIL_LABEL_ERROR_EMAIL
+    ]
+
+
 def _get_latest_date_with_data(db: Session) -> Optional[str]:
     """Devuelve la fecha del correo (YYYY-MM-DD) del ítem más reciente en BD, para guiar al usuario."""
     from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
@@ -332,6 +343,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     - Con ?fecha=YYYY-MM-DD: descarga exactamente esa fecha.
     Si no hay datos devuelve 404 (no se genera Excel vacío).
     Columnas: Banco, Cedula, Fecha, Monto, Serial documento, Correo Pagador.
+    No incluye filas cuya cédula sea la literal **ERROR EMAIL** (reservada para fallo de remitente en clientes).
     Para vaciar tablas usar POST /pagos/gmail/confirmar-dia con confirmado=true.
     """
     from openpyxl import Workbook
@@ -350,6 +362,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
         logger.info("[PAGOS_GMAIL] [ETAPA] download-excel sin fecha items=%s", len(items))
         _, sheet_date, items = _find_most_recent_data(db)
 
+    items = _excluir_filas_cedula_error_email(items)
     if not items:
         raise HTTPException(
             status_code=404,
@@ -411,6 +424,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
 def download_excel_temporal(db: Session = Depends(get_db)):
     """
     Genera Excel desde la tabla temporal gmail_temporal (cada procesamiento Gmail inserta a continuacion).
+    Excluye filas con cédula **ERROR EMAIL** (no deben exportarse).
     NO vacia la tabla: los datos solo se borran al usar el boton "Vaciar tabla (Generar Excel desde Gmail)". Si no hay datos devuelve 404.
     """
     from openpyxl import Workbook
@@ -418,7 +432,7 @@ def download_excel_temporal(db: Session = Depends(get_db)):
     items = db.execute(
         select(GmailTemporal).order_by(GmailTemporal.created_at)
     ).scalars().all()
-    items = list(items)
+    items = _excluir_filas_cedula_error_email(list(items))
     if not items:
         raise HTTPException(
             status_code=404,

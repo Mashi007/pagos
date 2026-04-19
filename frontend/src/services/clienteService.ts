@@ -531,6 +531,8 @@ class ClienteService {
       cedula_error: string | null
       cedula_para_crear: string | null
       duplicada_en_hoja: boolean
+      telefono_valida?: boolean
+      telefono_error?: string | null
       seleccionable: boolean
       defaults: {
         nombres: string
@@ -586,6 +588,7 @@ class ClienteService {
     batch_id: string
     insertados_ok: number
     errores: number
+    lote_abortado?: boolean
     resultados: Array<{
       sheet_row_number: number
       ok: boolean

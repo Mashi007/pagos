@@ -3,7 +3,7 @@ Propuestas de alta de cliente desde snapshot `drive` (columnas D–G = nombres, 
 
 Comparación de cédulas: misma normalización que POST /clientes/check-cedulas (`_normalizar_cedula_carga_masiva`).
 Validación de formato de cédula: `validate_cedula` (mismas reglas que Validadores).
-Teléfono columna F: dígitos solos, sin guión; quita 58 inicial si viene internacional y un 0 inicial en números de 11 dígitos.
+Teléfono columna F: rechaza correos en F; normalización + `validate_phone` (04xx / 02xx, 11 dígitos).
 """
 from __future__ import annotations
 
@@ -86,11 +86,50 @@ def _cedula_texto_columna_drive(raw: str, vced: Dict[str, Any]) -> str:
     return s
 
 
+def _telefono_candidato_para_validate_phone(tel_norm: str) -> Optional[str]:
+    """Pasa de 10 dígitos nacionales (412…) a 0412… para validate_phone, o devuelve None si no aplica."""
+    if not tel_norm:
+        return None
+    if len(tel_norm) == 11 and tel_norm.startswith("0") and tel_norm[1] in ("2", "4"):
+        return tel_norm
+    if len(tel_norm) == 10 and tel_norm[0] in ("2", "4"):
+        return "0" + tel_norm
+    return None
+
+
+def _telefono_col_f_validacion_estricta(raw_f: str) -> Tuple[bool, str, Optional[str]]:
+    """
+    Columna F obligatoria para marcar fila importable (salvo vacía → placeholder en alta).
+    Rechaza correos en F y exige teléfono venezolano validate_phone (04xxxxxxxx / 02xxxxxxxx).
+    Devuelve (válido, dígitos normalizados 10 para defaults/UI, mensaje_error).
+    """
+    raw = _cell(raw_f)
+    if not raw:
+        return True, "", None
+    if "@" in raw:
+        return False, "", "Columna F contiene «@»; parece un correo, no un teléfono."
+    if _validate_email_basic(raw):
+        return False, "", "Columna F tiene formato de correo; debe ser teléfono venezolano (04xx / 02xx)."
+    tel_norm = _telefono_normalizado_drive_col_f(raw_f)
+    if not tel_norm:
+        return False, "", "Columna F no contiene un teléfono reconocible (solo dígitos 04… / 02…)."
+    cand = _telefono_candidato_para_validate_phone(tel_norm)
+    if not cand:
+        return False, tel_norm, "Teléfono inválido: se esperan 10 dígitos nacionales tras normalizar (móvil 4… o fijo 2…)."
+    from app.api.v1.endpoints.validadores import validate_phone
+
+    vp = validate_phone(cand)
+    if not vp.get("valido"):
+        return False, tel_norm, str(vp.get("error") or "Teléfono inválido.")
+    return True, tel_norm, None
+
+
 def _telefono_normalizado_drive_col_f(raw: str) -> str:
     """
-    Columna F: quita guiones/espacios y deja solo dígitos; quita prefijo 58 si aplica;
-    si quedan 11 dígitos y el primero es 0 (ej. 0412…), quita ese 0 inicial → 10 dígitos nacionales.
-    Ej.: 0412-9941999 → 4129941999
+    Columna F: quita guiones, espacios y demás no dígitos; quita prefijo 58 si aplica;
+    quita ceros a la izquierda mientras quede más de un bloque «extra» (p. ej. 00412… → 412…).
+    Resultado típico: 10 dígitos nacionales (412… / 212…).
+    Ej.: «0412 - 5443460» → 4125443460 ; 0412-9941999 → 4129941999
     """
     s = _cell(raw)
     if not s:
@@ -100,7 +139,7 @@ def _telefono_normalizado_drive_col_f(raw: str) -> str:
         return ""
     if len(digits) >= 12 and digits.startswith("58"):
         digits = digits[2:]
-    if len(digits) == 11 and digits.startswith("0"):
+    while len(digits) > 10 and digits.startswith("0"):
         digits = digits[1:]
     return digits
 
@@ -154,23 +193,27 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
         nombres_propuesto = raw_d if raw_d else "Revisar Nombres"
         col_e_mostrar = _cedula_texto_columna_drive(raw_e, vced)
         tel_norm = _telefono_normalizado_drive_col_f(raw_f)
+        tel_ok, tel_val, tel_err = _telefono_col_f_validacion_estricta(raw_f)
+        tel_display = tel_val if tel_ok else (tel_norm or raw_f or None)
 
         candidatos.append(
             {
                 "sheet_row_number": r.sheet_row_number,
                 "col_d_nombres": raw_d or None,
                 "col_e_cedula": col_e_mostrar or None,
-                "col_f_telefono": tel_norm or None,
+                "col_f_telefono": tel_display,
                 "col_g_email": raw_g or None,
                 "cedula_cmp": cmp_e,
                 "cedula_valida": cedula_valida,
                 "cedula_error": cedula_error,
                 "cedula_para_crear": cedula_sugerida_bd if cedula_valida else None,
                 "duplicada_en_hoja": dup_sheet,
-                "seleccionable": cedula_valida and not dup_sheet,
+                "telefono_valida": tel_ok,
+                "telefono_error": tel_err,
+                "seleccionable": cedula_valida and not dup_sheet and tel_ok,
                 "defaults": {
                     "nombres": nombres_propuesto,
-                    "telefono": tel_norm,
+                    "telefono": tel_val if tel_ok else (tel_norm or ""),
                     "email": email_propuesto,
                     "direccion": _DEFAULT_DIRECCION,
                     "fecha_nacimiento": _DEFAULT_FECHA_NAC.isoformat(),
@@ -259,94 +302,97 @@ def importar_seleccion_desde_drive(
     comentario: Optional[str],
     sheet_rows: List[int],
 ) -> Dict[str, Any]:
+    """
+    Importa varias filas en un solo lote atómico: si una fila falla (validación previa o 409/500 al insertar),
+    no se persiste ningún cliente ni auditoría de insertado del lote (rollback completo).
+    """
     if not sheet_rows:
         raise HTTPException(status_code=400, detail="Debe enviar al menos una fila (sheet_row_number).")
 
-    from app.api.v1.endpoints.clientes import create_cliente_from_payload
+    from app.api.v1.endpoints.clientes import (
+        _cedula_clave_comparacion_clientes,
+        _expr_cedula_normalizada_sql,
+        _normalize_for_duplicate,
+        create_cliente_from_payload,
+    )
 
     snap = listar_candidatos_desde_drive(db)
     by_row = {int(c["sheet_row_number"]): c for c in (snap.get("candidatos") or [])}
 
     batch_id = str(uuid.uuid4())
-    resultados: List[Dict[str, Any]] = []
-    ok = 0
-    err = 0
+    comentario_final = (comentario or "").strip() or None
 
+    pre_errors: List[Dict[str, Any]] = []
     seen_cmp: set[str] = set()
+    seen_nombres: set[str] = set()
+    seen_emails: set[str] = set()
+    carga: List[Tuple[int, Dict[str, Any], ClienteCreate]] = []
+    ced_sql_tabla = _expr_cedula_normalizada_sql(Cliente.cedula)
 
     for sheet_row in sheet_rows:
-        info = by_row.get(int(sheet_row))
+        sr = int(sheet_row)
+        info = by_row.get(sr)
         if info is None:
-            err += 1
-            msg = "Fila no disponible para importación (no está en candidatos: ya existe en clientes o sin cédula en E)."
-            db.add(
-                AuditoriaClienteAltaDesdeDrive(
-                    batch_id=batch_id,
-                    sheet_row_number=int(sheet_row),
-                    cedula="",
-                    nombres=None,
-                    telefono=None,
-                    email=None,
-                    comentario=comentario,
-                    usuario_email=usuario_email,
-                    estado="ERROR",
-                    detalle_error=msg,
-                )
+            pre_errors.append(
+                {
+                    "sheet_row_number": sr,
+                    "error": "Fila no disponible para importación (no está en candidatos: ya existe en clientes o sin cédula en E).",
+                }
             )
-            db.commit()
-            resultados.append({"sheet_row_number": sheet_row, "ok": False, "error": msg})
             continue
-
         if not info.get("seleccionable"):
-            err += 1
-            msg = (
-                "No se permite guardar: la fila no cumple el 100% de validadores (cédula inválida en el snapshot)."
-                if not info.get("cedula_valida")
-                else "No se permite guardar: la fila no cumple el 100% de validadores (cédula duplicada en el snapshot de Drive)."
-            )
-            db.add(
-                AuditoriaClienteAltaDesdeDrive(
-                    batch_id=batch_id,
-                    sheet_row_number=int(sheet_row),
-                    cedula=str(info.get("col_e_cedula") or ""),
-                    nombres=str(info.get("col_d_nombres") or ""),
-                    telefono=str(info.get("col_f_telefono") or ""),
-                    email=str(info.get("col_g_email") or ""),
-                    comentario=comentario,
-                    usuario_email=usuario_email,
-                    estado="ERROR",
-                    detalle_error=msg,
-                )
-            )
-            db.commit()
-            resultados.append({"sheet_row_number": sheet_row, "ok": False, "error": msg})
+            if not info.get("cedula_valida"):
+                msg = "No se permite guardar: la fila no cumple el 100% de validadores (cédula inválida en el snapshot)."
+            elif info.get("duplicada_en_hoja"):
+                msg = "No se permite guardar: la fila no cumple el 100% de validadores (cédula duplicada en el snapshot de Drive)."
+            elif not info.get("telefono_valida", True):
+                msg = str(info.get("telefono_error") or "No se permite guardar: teléfono columna F inválido.")
+            else:
+                msg = "No se permite guardar: la fila no cumple el 100% de validadores de la hoja."
+            pre_errors.append({"sheet_row_number": sr, "error": msg})
             continue
 
         cmp_k = str(info.get("cedula_cmp") or "")
         if cmp_k in seen_cmp:
-            err += 1
-            msg = "Cédula duplicada en la selección enviada."
-            db.add(
-                AuditoriaClienteAltaDesdeDrive(
-                    batch_id=batch_id,
-                    sheet_row_number=int(sheet_row),
-                    cedula=str(info.get("cedula_para_crear") or info.get("col_e_cedula") or ""),
-                    nombres=str(info.get("defaults", {}).get("nombres") or ""),
-                    telefono=str(info.get("defaults", {}).get("telefono") or ""),
-                    email=str(info.get("defaults", {}).get("email") or ""),
-                    comentario=comentario,
-                    usuario_email=usuario_email,
-                    estado="ERROR",
-                    detalle_error=msg,
-                )
-            )
-            db.commit()
-            resultados.append({"sheet_row_number": sheet_row, "ok": False, "error": msg})
+            pre_errors.append({"sheet_row_number": sr, "error": "Cédula duplicada en la selección enviada."})
             continue
         seen_cmp.add(cmp_k)
 
-        ced = str(info.get("cedula_para_crear") or "").strip()
         defs = info.get("defaults") or {}
+        nombres_norm = _normalize_for_duplicate(str(defs.get("nombres") or ""))
+        if nombres_norm and nombres_norm in seen_nombres:
+            pre_errors.append(
+                {"sheet_row_number": sr, "error": "Nombre completo duplicado dentro del mismo lote enviado."}
+            )
+            continue
+        if nombres_norm:
+            seen_nombres.add(nombres_norm)
+
+        em_raw = (str(defs.get("email") or _PLACEHOLDER_EMAIL) or "").strip().lower()
+        ph = _PLACEHOLDER_EMAIL.lower()
+        if em_raw and em_raw != ph:
+            if em_raw in seen_emails:
+                pre_errors.append(
+                    {"sheet_row_number": sr, "error": "Correo (columna G) duplicado dentro del mismo lote enviado."}
+                )
+                continue
+            seen_emails.add(em_raw)
+
+        ced = str(info.get("cedula_para_crear") or "").strip()
+        ck = _cedula_clave_comparacion_clientes(ced)
+        if ck and ck != "Z999999999":
+            dup = db.execute(select(Cliente.id).where(ced_sql_tabla == ck)).first()
+            if dup:
+                pre_errors.append(
+                    {
+                        "sheet_row_number": sr,
+                        "error": (
+                            f"La cédula ya existe en tabla clientes (ID {dup[0]}). "
+                            "No se permite guardar duplicados."
+                        ),
+                    }
+                )
+                continue
         notas = (
             f"Alta aprobada desde Notificaciones > Clientes (Drive CONCILIACIÓN). "
             f"Fila hoja {info.get('sheet_row_number')}. "
@@ -367,93 +413,72 @@ def importar_seleccion_desde_drive(
                 notas=notas,
             )
         except ValidationError as ve:
-            err += 1
-            msg = str(ve)
-            db.add(
-                AuditoriaClienteAltaDesdeDrive(
-                    batch_id=batch_id,
-                    sheet_row_number=int(sheet_row),
-                    cedula=ced,
-                    nombres=str(defs.get("nombres") or ""),
-                    telefono=str(defs.get("telefono") or ""),
-                    email=str(defs.get("email") or ""),
-                    comentario=comentario,
-                    usuario_email=usuario_email,
-                    estado="ERROR",
-                    detalle_error=f"Validación: {msg}"[:4000],
-                )
-            )
-            db.commit()
-            resultados.append({"sheet_row_number": sheet_row, "ok": False, "error": msg})
+            pre_errors.append({"sheet_row_number": sr, "error": str(ve)})
             continue
 
-        try:
-            row = create_cliente_from_payload(db, payload)
-            ok += 1
+        carga.append((sr, info, payload))
+
+    if pre_errors:
+        err_map = {int(e["sheet_row_number"]): str(e["error"]) for e in pre_errors}
+        gen = "Lote no guardado: una o más filas del mismo envío no cumplen validadores."
+        resultados: List[Dict[str, Any]] = []
+        for sheet_row in sheet_rows:
+            isr = int(sheet_row)
+            resultados.append(
+                {
+                    "sheet_row_number": isr,
+                    "ok": False,
+                    "error": err_map.get(isr, gen),
+                }
+            )
+        return {
+            "batch_id": batch_id,
+            "insertados_ok": 0,
+            "errores": len(resultados),
+            "resultados": resultados,
+            "lote_abortado": True,
+        }
+
+    resultados: List[Dict[str, Any]] = []
+    try:
+        for sr, _info, payload in carga:
+            row = create_cliente_from_payload(db, payload, commit=False)
             db.add(
                 AuditoriaClienteAltaDesdeDrive(
                     batch_id=batch_id,
-                    sheet_row_number=int(sheet_row),
+                    sheet_row_number=sr,
                     cedula=str(row.cedula),
                     nombres=str(row.nombres),
                     telefono=str(row.telefono),
                     email=str(row.email),
-                    comentario=comentario,
+                    comentario=comentario_final,
                     usuario_email=usuario_email,
                     estado="APROBADO_INSERTADO",
                     detalle_error=None,
                 )
             )
-            db.commit()
-            resultados.append({"sheet_row_number": sheet_row, "ok": True, "cliente_id": row.id})
-        except HTTPException as he:
-            err += 1
-            detail = he.detail
-            if not isinstance(detail, str):
-                detail = str(detail)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            db.add(
-                AuditoriaClienteAltaDesdeDrive(
-                    batch_id=batch_id,
-                    sheet_row_number=int(sheet_row),
-                    cedula=ced,
-                    nombres=str(defs.get("nombres") or ""),
-                    telefono=str(defs.get("telefono") or ""),
-                    email=str(defs.get("email") or ""),
-                    comentario=comentario,
-                    usuario_email=usuario_email,
-                    estado="APROBADO_ERROR",
-                    detalle_error=detail[:4000],
-                )
-            )
-            db.commit()
-            resultados.append({"sheet_row_number": sheet_row, "ok": False, "error": detail})
-        except Exception as ex:  # pragma: no cover
-            err += 1
-            logger.exception("importar_seleccion_desde_drive fila=%s: %s", sheet_row, ex)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            db.add(
-                AuditoriaClienteAltaDesdeDrive(
-                    batch_id=batch_id,
-                    sheet_row_number=int(sheet_row),
-                    cedula=ced,
-                    nombres=str(defs.get("nombres") or ""),
-                    telefono=str(defs.get("telefono") or ""),
-                    email=str(defs.get("email") or ""),
-                    comentario=comentario,
-                    usuario_email=usuario_email,
-                    estado="APROBADO_ERROR",
-                    detalle_error=str(ex)[:4000],
-                )
-            )
-            db.commit()
-            resultados.append({"sheet_row_number": sheet_row, "ok": False, "error": str(ex)})
+            resultados.append({"sheet_row_number": sr, "ok": True, "cliente_id": row.id})
+        db.commit()
+    except HTTPException as he:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        detail = he.detail if isinstance(he.detail, str) else str(he.detail)
+        raise HTTPException(
+            status_code=he.status_code,
+            detail=f"No se guardó ninguna fila del lote (todo revertido). {detail}",
+        ) from he
+    except Exception as ex:  # pragma: no cover
+        logger.exception("importar_seleccion_desde_drive lote: %s", ex)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se guardó ninguna fila del lote (todo revertido). {ex!s}",
+        ) from ex
 
     try:
         refrescar_cache_candidatos_drive(db)
@@ -466,9 +491,10 @@ def importar_seleccion_desde_drive(
 
     return {
         "batch_id": batch_id,
-        "insertados_ok": ok,
-        "errores": err,
+        "insertados_ok": len(carga),
+        "errores": 0,
         "resultados": resultados,
+        "lote_abortado": False,
     }
 
 
@@ -479,7 +505,11 @@ def importar_fila_desde_drive(
     body: ClienteDriveImportarFilaBody,
 ) -> Dict[str, Any]:
     """Inserta un cliente con ClienteCreate + auditoría; la cédula normalizada debe coincidir con `cedula_cmp` de la fila."""
-    from app.api.v1.endpoints.clientes import create_cliente_from_payload
+    from app.api.v1.endpoints.clientes import (
+        _cedula_clave_comparacion_clientes,
+        _expr_cedula_normalizada_sql,
+        create_cliente_from_payload,
+    )
 
     snap = listar_candidatos_desde_drive(db)
     by_row = {int(c["sheet_row_number"]): c for c in (snap.get("candidatos") or [])}
@@ -490,9 +520,21 @@ def importar_fila_desde_drive(
             detail="Fila no disponible para importación (no está en candidatos o la lista cambió).",
         )
     if not info.get("seleccionable"):
+        if not info.get("cedula_valida"):
+            det = "La fila no cumple validadores (cédula inválida en el snapshot de Drive)."
+        elif info.get("duplicada_en_hoja"):
+            det = "La fila no cumple validadores (cédula duplicada en el snapshot de Drive)."
+        elif not info.get("telefono_valida", True):
+            det = str(info.get("telefono_error") or "Teléfono columna F inválido.")
+        else:
+            det = "La fila no cumple el 100% de validadores de la hoja."
+        raise HTTPException(status_code=400, detail=det + " No se permite guardar en clientes.")
+
+    tel_body_ok, _, tel_body_err = _telefono_col_f_validacion_estricta(body.telefono or "")
+    if not tel_body_ok:
         raise HTTPException(
             status_code=400,
-            detail="La fila no cumple el 100% de validadores de la hoja (cédula inválida o duplicada en el snapshot de Drive); no se permite guardar en clientes.",
+            detail=tel_body_err or "Teléfono inválido (columna F / formulario).",
         )
 
     cmp_expected = str(info.get("cedula_cmp") or "")
@@ -504,6 +546,19 @@ def importar_fila_desde_drive(
         )
 
     cedula_crear = str(info.get("cedula_para_crear") or body.cedula or "").strip()
+    ced_key = _cedula_clave_comparacion_clientes(cedula_crear)
+    if ced_key and ced_key != "Z999999999":
+        dup = db.execute(
+            select(Cliente.id).where(_expr_cedula_normalizada_sql(Cliente.cedula) == ced_key)
+        ).first()
+        if dup:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Ya existe un cliente con la misma cédula en tabla clientes (ID {dup[0]}). "
+                    "No se permite guardar."
+                ),
+            )
     notas_final = (body.notas or "").strip()
     if not notas_final:
         notas_final = (
@@ -671,6 +726,8 @@ def exportar_candidatos_drive_excel_y_borrar_filas(
             motivo = "cedula_invalida"
         elif c.get("duplicada_en_hoja"):
             motivo = "duplicada_en_hoja"
+        elif not c.get("telefono_valida", True):
+            motivo = "telefono_invalido"
         elif c.get("seleccionable"):
             motivo = "listo_revision"
         else:

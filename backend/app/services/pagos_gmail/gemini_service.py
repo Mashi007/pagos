@@ -61,8 +61,7 @@ REGLA CEDULA (SISTEMA — obligatoria imagen 1, 2, 3 y 4 / formatos A, B, C, D, 
   REGLA BACKEND — comparacion email (De / From) vs tabla `clientes` (misma regla para A, B, C, D y NR):
     (1) Comparar con `clientes.email` (predeterminado), trim y minusculas.
     (2) Si no coincide, comparar con `clientes.email_secundario` (correo 2) si no esta vacio.
-    (3) Si no coincide ninguno: la **columna Cedula** del Excel (export) quedara con el texto **ERROR EMAIL** y el backend aplicara en Gmail **solo** la etiqueta de usuario **ERROR EMAIL** (sin combinar con MERCANTIL/BNC/etc. en ese paso); el modelo no inventa cedula (no es tu tarea rellenar cedula).
-  Si falla la consulta a la base de datos, el backend escribe **ERROR BD** en esa misma columna Cedula (misma etiqueta Gmail de error).
+    (3) Si no coincide ninguno, o si falla la consulta a la base de datos: la **columna Cedula** del Excel (export) quedara con el texto **ERROR EMAIL** y el backend aplicara en Gmail **solo** la etiqueta de usuario **ERROR EMAIL** (sin combinar con MERCANTIL/BNC/etc. en ese paso); el modelo no inventa cedula (no es tu tarea rellenar cedula).
   Puedes usar lineas DP:, Cedula Dep., casillas de cedula en papel, RIF depositante, etc. **solo** para **clasificar** plantilla (A vs B, etc.);
     **nunca** escribas esos digitos en el campo "cedula" del JSON.
 

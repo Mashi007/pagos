@@ -1,7 +1,9 @@
 """
 Gmail: listar correos con adjunto o parte con nombre de imagen/PDF (has:attachment OR filename:png|jpg|...).
-Pipeline Pagos: extrae candidatos imagen/PDF (adjunto, cuerpo, .eml); **Gemini solo si queda exactamente 1 candidato**
-tras expandir PDF (1 página); con 2+ candidatos no hay escaneo. Plantilla A/B/C/D la decide Gemini en ese único binario.
+Pipeline Pagos: extrae candidatos imagen/PDF (adjunto, cuerpo, .eml); **Gemini solo si el remitente está en tabla clientes**
+(email o email_secundario). Cada adjunto de **una sola página** (imagen o PDF de 1 pág.) es un candidato y puede generar **una fila**;
+los PDF con **2+ páginas** no se digitalizan y el hilo recibe etiqueta de usuario **PAGINAS**; si la imagen es ilegible o Gemini no inventa datos, **CALIDAD**; si no hay ningún binario imagen/PDF de comprobante (solo texto u otros adjuntos), **TEXTO** (ver pipeline).
+Plantilla A/B/C/D la decide Gemini por binario.
 """
 import base64
 import hashlib
@@ -19,6 +21,100 @@ from app.services.pagos_gmail.helpers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Una sola respuesta de users.labels.list por instancia de servicio hasta invalidar (p. ej. tras crear etiqueta).
+_gmail_labels_list_by_service_id: Dict[int, List[dict]] = {}
+
+
+def invalidate_gmail_labels_list_cache(service: Any) -> None:
+    """Quita la cache de etiquetas para este cliente Gmail (tras crear/borrar etiqueta)."""
+    _gmail_labels_list_by_service_id.pop(id(service), None)
+
+
+def _fetch_gmail_labels_list_raw(service: Any) -> Optional[List[dict]]:
+    """
+    Lista completa de etiquetas Gmail (sistema + usuario). Cacheada por id(service) si la API responde OK.
+    Si falla la API, devuelve None (no cachea; el caller puede reintentar o degradar).
+    """
+    key = id(service)
+    if key in _gmail_labels_list_by_service_id:
+        return _gmail_labels_list_by_service_id[key]
+    try:
+        resp = service.users().labels().list(userId="me").execute()
+        labels = list(resp.get("labels", []))
+        _gmail_labels_list_by_service_id[key] = labels
+        return labels
+    except Exception as e:
+        logger.warning("_fetch_gmail_labels_list_raw: %s", e)
+        return None
+
+
+# Gmail admite hasta 100 peticiones por batch; margen por timeouts parciales.
+_GMAIL_BATCH_METADATA_CHUNK = 50
+
+
+def batch_get_messages_metadata(
+    service: Any,
+    message_ids: List[str],
+    metadata_headers: Optional[List[str]] = None,
+) -> Dict[str, dict]:
+    """
+    Obtiene ``messages.get`` en formato metadata por lotes (BatchHttpRequest).
+    Reintenta con GET individual si una entrada del batch falla o falta respuesta.
+    """
+    from googleapiclient.http import BatchHttpRequest
+
+    headers = metadata_headers or ["From", "Date", "Subject"]
+    out: Dict[str, dict] = {}
+    if not message_ids:
+        return out
+
+    def _single_get(mid: str) -> None:
+        try:
+            meta = service.users().messages().get(
+                userId="me",
+                id=mid,
+                format="metadata",
+                metadataHeaders=headers,
+            ).execute()
+            out[mid] = meta
+        except Exception as ex:
+            logger.warning("batch_get_messages_metadata get individual msg=%s: %s", mid, ex)
+
+    def _batch_callback(mid: str):
+        def _cb(request_id: str, response: Optional[dict], exception: Optional[BaseException]) -> None:
+            rid = request_id or mid
+            if exception is not None:
+                logger.warning(
+                    "batch_get_messages_metadata batch msg=%s: %s", rid, exception
+                )
+                _single_get(mid)
+            elif response is not None:
+                out[mid] = response
+            else:
+                _single_get(mid)
+
+        return _cb
+
+    for i in range(0, len(message_ids), _GMAIL_BATCH_METADATA_CHUNK):
+        chunk = message_ids[i : i + _GMAIL_BATCH_METADATA_CHUNK]
+        batch = service.new_batch_http_request()
+        for mid in chunk:
+            req = service.users().messages().get(
+                userId="me",
+                id=mid,
+                format="metadata",
+                metadataHeaders=headers,
+            )
+            batch.add(req, callback=_batch_callback(mid), request_id=mid)
+        try:
+            batch.execute()
+        except Exception as ex:
+            logger.warning("batch_get_messages_metadata execute chunk: %s", ex)
+        for mid in chunk:
+            if mid not in out:
+                _single_get(mid)
+    return out
 
 
 class PagosGmailGmailListError(RuntimeError):
@@ -43,8 +139,14 @@ PAGOS_GMAIL_LABEL_IMAGEN_5 = PAGOS_GMAIL_LABEL_MASTER
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 # Ninguna plantilla A/B/C/D reconocida (o no se aplico otra etiqueta de clasificacion).
 PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
-# Correos con candidatos imagen/PDF pero sin MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL.
+# Correos con candidatos imagen/PDF pero sin plantilla A/B/C/D digitalizada (MERCANTIL/BNC/BINANCE/BNV) ni otra clasificacion previa.
 PAGOS_GMAIL_LABEL_OTROS = "OTROS"
+# PDF adjunto con 2+ paginas: no se digitaliza el PDF completo; el pipeline etiqueta el hilo para revision.
+PAGOS_GMAIL_LABEL_PAGINAS = "PAGINAS"
+# Imagen ilegible o no inventar: Gemini no clasifica o no lee bien cedula/referencia desde pixeles.
+PAGOS_GMAIL_LABEL_CALIDAD = "CALIDAD"
+# Sin captura/PDF de comprobante: cuerpo u adjuntos no extraen imagen/PDF de pago (no hay columnas desde pixeles).
+PAGOS_GMAIL_LABEL_TEXTO = "TEXTO"
 
 
 def pagos_gmail_label_exclusions_query() -> str:
@@ -61,7 +163,10 @@ def pagos_gmail_label_exclusions_query() -> str:
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY}" '
         f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
         f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_OTROS}"'
+        f'-label:"{PAGOS_GMAIL_LABEL_OTROS}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_PAGINAS}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_CALIDAD}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"'
     )
 
 
@@ -190,16 +295,22 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
     Por defecto (**all** / **pending_identification**): inbox + imagen/PDF, leidos y no leidos, con cualquier etiqueta
     (incluye **ERROR EMAIL**; no se excluye por -label:).
     **unread** / **read**: mismo criterio + ``is:unread`` / ``is:read`` en la consulta Gmail.
-    **error_email_rescan**: inbox con etiqueta ERROR EMAIL + media (reintento cédula A/B en imagen vía Gemini).
-    Cada elemento incluye **internal_date_ms** (epoch ms de Gmail) para ordenar el pipeline del mas antiguo al mas reciente,
-    y **label_ids** (ids Gmail del mensaje) para metadatos del mensaje.
+    **error_email_rescan**: inbox con etiqueta ERROR EMAIL + media; el pipeline puede procesar si **solo** esa etiqueta de usuario (ver omision por etiquetas en ``pipeline.py``).
+    Pagina con **maxResults** 500 hasta que no haya **nextPageToken** (todos los mensajes que cumplen **q**).
+    Metadata de mensajes: **batch** ``messages.get`` (chunks de 50) para reducir llamadas HTTP frente a un get por id.
+    Cada elemento incluye **internal_date_ms** (epoch ms de Gmail) y **label_ids** (incluye UNREAD si aplica);
+    el pipeline ordena y procesa del primero al ultimo de la bandeja (mas reciente primero) y marca **leido** si entraba no leido.
     """
     from googleapiclient.errors import HttpError
 
     def _fetch() -> List[dict]:
         all_msg_refs: List[dict] = []
         page_token: Optional[str] = None
-        params_base: dict = {"userId": "me", "maxResults": 500}
+        params_base: dict = {
+            "userId": "me",
+            "maxResults": 500,
+            "includeSpamTrash": False,
+        }
         params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type)
 
         while True:
@@ -212,12 +323,20 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
             page_token = result.get("nextPageToken")
             if not page_token:
                 break
+        ids_ordered = [m["id"] for m in all_msg_refs]
+        meta_by_id = batch_get_messages_metadata(
+            service, ids_ordered, metadata_headers=["From", "Date", "Subject"]
+        )
         out = []
         for msg in all_msg_refs:
             mid = msg["id"]
-            meta = service.users().messages().get(
-                userId="me", id=mid, format="metadata", metadataHeaders=["From", "Date", "Subject"]
-            ).execute()
+            meta = meta_by_id.get(mid)
+            if not meta:
+                logger.warning(
+                    "[PAGOS_GMAIL] list_messages_by_filter: sin metadata para msg id=%s (omitido)",
+                    mid,
+                )
+                continue
             payload = meta.get("payload", {})
             headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
             raw_internal = meta.get("internalDate")
@@ -289,7 +408,11 @@ def count_messages_by_filter(service: Any, filter_type: str = "all") -> int:
     def _count() -> int:
         total = 0
         page_token: Optional[str] = None
-        params_base: dict = {"userId": "me", "maxResults": 500}
+        params_base: dict = {
+            "userId": "me",
+            "maxResults": 500,
+            "includeSpamTrash": False,
+        }
         params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type)
         while True:
             params = dict(params_base)
@@ -976,15 +1099,73 @@ def extract_forwarded_sender(full_payload: dict) -> Optional[str]:
     return None
 
 
+def list_gmail_user_label_ids(
+    service: Any,
+) -> tuple[frozenset[str], dict[str, str], bool]:
+    """
+    Lista etiquetas de Gmail con type **user** (creadas por el usuario o por la API como etiquetas de usuario).
+    No incluye etiquetas de sistema (INBOX, UNREAD, CATEGORY_*, STARRED, etc.).
+    Reutiliza la misma respuesta cacheada que ``get_existing_user_label_id`` / ``ensure_user_label_id``.
+
+    Returns:
+        (conjunto de label id, mapa id -> nombre para logs, catalogo_ok).
+        Si ``catalogo_ok`` es False, fallo al listar etiquetas: el pipeline no debe confiar en la omision por etiqueta.
+    """
+    raw = _fetch_gmail_labels_list_raw(service)
+    if raw is None:
+        return frozenset(), {}, False
+    try:
+        ids: list[str] = []
+        id_to_name: dict[str, str] = {}
+        for lb in raw:
+            if (lb.get("type") or "").lower() != "user":
+                continue
+            lid = lb.get("id")
+            if not lid:
+                continue
+            ids.append(lid)
+            id_to_name[str(lid)] = str(lb.get("name") or lid)
+        return frozenset(ids), id_to_name, True
+    except Exception as e:
+        logger.warning("list_gmail_user_label_ids: %s", e)
+        return frozenset(), {}, False
+
+
+def get_existing_user_label_id(service: Any, label_name: str) -> Optional[str]:
+    """
+    Devuelve el id de una etiqueta de usuario por nombre exacto si ya existe en Gmail.
+    No crea la etiqueta (para comprobar si un mensaje debe omitirse sin efectos colaterales).
+    """
+    try:
+        raw = _fetch_gmail_labels_list_raw(service)
+        if raw is None:
+            try:
+                resp = service.users().labels().list(userId="me").execute()
+                raw = list(resp.get("labels", []))
+                _gmail_labels_list_by_service_id[id(service)] = raw
+            except Exception as e2:
+                logger.warning(
+                    "get_existing_user_label_id recuperacion directa %s: %s",
+                    label_name,
+                    e2,
+                )
+                return None
+        for lb in raw:
+            if lb.get("name") == label_name:
+                return lb.get("id")
+    except Exception as e:
+        logger.warning("get_existing_user_label_id %s: %s", label_name, e)
+    return None
+
+
 def ensure_user_label_id(service: Any, label_name: str) -> Optional[str]:
     """
     Obtiene el id de una etiqueta de usuario por nombre exacto; la crea si no existe.
     """
     try:
-        resp = service.users().labels().list(userId="me").execute()
-        for lb in resp.get("labels", []):
-            if lb.get("name") == label_name:
-                return lb.get("id")
+        existing = get_existing_user_label_id(service, label_name)
+        if existing:
+            return existing
         created = service.users().labels().create(
             userId="me",
             body={
@@ -993,6 +1174,7 @@ def ensure_user_label_id(service: Any, label_name: str) -> Optional[str]:
                 "messageListVisibility": "show",
             },
         ).execute()
+        invalidate_gmail_labels_list_cache(service)
         return created.get("id")
     except Exception as e:
         logger.warning("ensure_user_label_id %s: %s", label_name, e)

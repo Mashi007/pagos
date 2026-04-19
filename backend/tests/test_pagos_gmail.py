@@ -436,21 +436,21 @@ def test_expand_pipeline_pdf_tuples_imagen_pasa_y_multipage_pdf_omite():
     assert out_p == []
 
 
-def test_sort_messages_by_date_asc_mas_antiguo_primero():
-    from app.services.pagos_gmail.pipeline import _sort_messages_by_date_asc
+def test_sort_messages_inbox_mas_reciente_primero():
+    from app.services.pagos_gmail.pipeline import _sort_messages_inbox_primero_a_ultimo
 
     msgs = [
         {"id": "old", "headers": {"date": "Mon, 1 Jan 2024 12:00:00 +0000"}},
         {"id": "new", "headers": {"date": "Mon, 15 Mar 2024 12:00:00 +0000"}},
         {"id": "mid", "headers": {"date": "Mon, 1 Feb 2024 12:00:00 +0000"}},
     ]
-    out = _sort_messages_by_date_asc(msgs)
-    assert [m["id"] for m in out] == ["old", "mid", "new"]
+    out = _sort_messages_inbox_primero_a_ultimo(msgs)
+    assert [m["id"] for m in out] == ["new", "mid", "old"]
 
 
 def test_sort_messages_internal_date_ms_gana_sobre_date_header():
     """internalDate (recepcion Gmail) define el orden aunque la cabecera Date diga otra cosa."""
-    from app.services.pagos_gmail.pipeline import _sort_messages_by_date_asc
+    from app.services.pagos_gmail.pipeline import _sort_messages_inbox_primero_a_ultimo
 
     msgs = [
         {
@@ -464,8 +464,8 @@ def test_sort_messages_internal_date_ms_gana_sobre_date_header():
             "headers": {"date": "Mon, 1 Jan 2030 12:00:00 +0000"},
         },
     ]
-    out = _sort_messages_by_date_asc(msgs)
-    assert [m["id"] for m in out] == ["a", "b"]
+    out = _sort_messages_inbox_primero_a_ultimo(msgs)
+    assert [m["id"] for m in out] == ["b", "a"]
 
 
 def test_pagos_gmail_error_email_rescan_query_incluye_error_email_y_media():
@@ -534,6 +534,9 @@ def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
         PAGOS_GMAIL_LABEL_MANUAL,
         PAGOS_GMAIL_LABEL_MASTER,
         PAGOS_GMAIL_LABEL_OTROS,
+        PAGOS_GMAIL_LABEL_PAGINAS,
+        PAGOS_GMAIL_LABEL_CALIDAD,
+        PAGOS_GMAIL_LABEL_TEXTO,
         pagos_gmail_label_exclusions_query,
     )
 
@@ -544,5 +547,8 @@ def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
     assert f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_OTROS}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_PAGINAS}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_CALIDAD}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"' in q
 
 
