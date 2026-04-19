@@ -29,4 +29,7 @@ export const REPORTES_TOAST = {
 
   prestamosDrive:
     'Reporte Préstamos Drive (11 columnas, filtro por LOTE) descargado',
+
+  pagosGmail:
+    'Reporte Pagos Gmail (auditoría ABCD → pagos → cuotas) descargado',
 } as const

@@ -75,10 +75,7 @@ function filaCumpleValidadoresImportacion(r: DriveCandidate | undefined): r is D
 /** Origen del estado en lista (antes de importar a `clientes`). */
 function etiquetaValidadorPantalla(r: DriveCandidate): string {
   if (!r.cedula_valida) {
-    if (r.cedula_solo_digitos_sin_letra_hoja) {
-      return 'Regla hoja CONCILIACIÓN: en la columna E debe figurar la letra V, E, G o J además del número (no solo dígitos).'
-    }
-    return 'Validador: validate_cedula (backend /validadores, formato V|E|G|J + 6–11 dígitos)'
+    return 'Validador: validate_cedula (backend /validadores; solo números 6–11 dígitos → V implícita)'
   }
   if (r.duplicada_en_hoja) {
     return 'Regla: cédula normalizada repetida en más de una fila del snapshot Drive (columna E)'
@@ -192,6 +189,12 @@ export default function NotificacionesClientesDrive() {
     () => rows.filter(r => !hiddenRows.has(r.sheet_row_number)),
     [rows, hiddenRows]
   )
+
+  const kpiAprueban = useMemo(
+    () => visibleRows.filter(r => r.seleccionable === true).length,
+    [visibleRows]
+  )
+  const kpiNoAprueban = useMemo(() => visibleRows.length - kpiAprueban, [visibleRows, kpiAprueban])
 
   /** Solo filas que pasan validadores de esta pantalla (mismo criterio que `seleccionable` en API). */
   const filasValidasVisibles = useMemo(
@@ -488,7 +491,36 @@ export default function NotificacionesClientesDrive() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
-      <ModulePageHeader title="Clientes (Drive)" icon={User} />
+      <ModulePageHeader
+        title="Clientes (Drive)"
+        icon={User}
+        description={
+          q.isLoading ? (
+            <span className="text-sm text-muted-foreground">Cargando resumen…</span>
+          ) : q.isError ? (
+            <span className="text-sm text-destructive">No se pudo cargar la lista de candidatos.</span>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+                Aprueban
+                <span className="tabular-nums font-semibold">{kpiAprueban}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-sm font-medium text-red-900 dark:border-red-900/60 dark:bg-red-950/35 dark:text-red-100">
+                No aprueban
+                <span className="tabular-nums font-semibold">{kpiNoAprueban}</span>
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Total en vista: <span className="tabular-nums font-medium text-foreground">{visibleRows.length}</span>
+                {hiddenRows.size > 0 && (
+                  <span className="ml-1">
+                    ({rows.length} con ocultas)
+                  </span>
+                )}
+              </span>
+            </div>
+          )
+        }
+      />
 
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">

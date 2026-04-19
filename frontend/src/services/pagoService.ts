@@ -932,7 +932,7 @@ class PagoService {
     )
   }
 
-  /** Pagos Gmail: estado última ejecución, próxima y última fecha con datos disponibles. */
+  /** Pagos Gmail: estado última ejecución, última fecha con datos; next_run_approx = próximo job programado en servidor (si aplica). */
 
   async getGmailStatus(): Promise<{
     last_run: string | null

@@ -334,7 +334,8 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler ejecuta el pipeline Gmail "
-            "a las 4:00, 11:00 y 20:00 (America/Caracas). Por defecto False: solo ejecucion manual."
+            "de lunes a viernes cada hora a los :30 entre 06:30 y 19:30 (America/Caracas); no sabado ni domingo. "
+            "Por defecto False: solo ejecucion manual."
         ),
     )
     PAGOS_GMAIL_UNREAD_MAX_PASSES: int = Field(

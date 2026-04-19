@@ -192,6 +192,14 @@ export function PagosList() {
     toast.info('Seguimiento detenido')
   }
 
+  const textoProximoEscaneoGmailServidor = (iso: string | null | undefined) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })
+  }
+
   const handleGenerarExcelDesdeGmail = () => {
     setAgregarPagoOpen(false)
     runGmail('all')
@@ -673,6 +681,14 @@ export function PagosList() {
                       Reintente con &quot;Procesar correos&quot; o revise OAuth
                       en Configuración → Informe de pagos.
                     </span>
+                    {gmailStatus.next_run_approx ? (
+                      <span className="mt-1.5 block border-t border-amber-100 pt-1.5 text-[11px] leading-snug text-gray-600 dark:text-gray-400">
+                        Próximo escaneo en servidor:{' '}
+                        {textoProximoEscaneoGmailServidor(
+                          gmailStatus.next_run_approx
+                        )}
+                      </span>
+                    ) : null}
                   </span>
                 ) : gmailStatus.last_status === 'running' ? (
                   <>
@@ -696,9 +712,27 @@ export function PagosList() {
                         </span>
                       </>
                     ) : null}
+                    {gmailStatus.next_run_approx ? (
+                      <span className="mt-1 block border-t border-gray-100 pt-1 text-[11px] leading-snug text-gray-500">
+                        Próximo escaneo en servidor:{' '}
+                        {textoProximoEscaneoGmailServidor(
+                          gmailStatus.next_run_approx
+                        )}
+                      </span>
+                    ) : null}
                   </>
                 ) : (
-                  <span className="text-gray-500">Sin sync Gmail aún</span>
+                  <>
+                    <span className="text-gray-500">Sin sync Gmail aún</span>
+                    {gmailStatus.next_run_approx ? (
+                      <span className="mt-1 block border-t border-gray-100 pt-1 text-[11px] leading-snug text-gray-500">
+                        Próximo escaneo en servidor:{' '}
+                        {textoProximoEscaneoGmailServidor(
+                          gmailStatus.next_run_approx
+                        )}
+                      </span>
+                    ) : null}
+                  </>
                 )}
               </p>
             )}

@@ -38,6 +38,11 @@ export interface FiltrosReporte {
 
   /** Clientes (hoja): filtro por columna LOTE en la hoja sincronizada. */
   lotes?: number[]
+
+  /** Rango calendario YYYY-MM-DD (reporte Pagos Gmail). */
+  fecha_desde?: string
+
+  fecha_hasta?: string
 }
 
 interface DialogReporteFiltrosProps {
@@ -49,8 +54,8 @@ interface DialogReporteFiltrosProps {
 
   tituloReporte: string
 
-  /** `lotes`: un paso, números de lote separados por coma (columna LOTE). */
-  variant?: 'periodo' | 'lotes'
+  /** `lotes`: un paso, números de lote separados por coma (columna LOTE). `rango_fechas`: desde/hasta día. */
+  variant?: 'periodo' | 'lotes' | 'rango_fechas'
 }
 
 export function DialogReporteFiltros({
@@ -76,6 +81,19 @@ export function DialogReporteFiltros({
 
   const [lotesTexto, setLotesTexto] = useState('')
 
+  const defaultFechaDesde = () => {
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    return `${y}-${m}-01`
+  }
+
+  const defaultFechaHasta = () => new Date().toISOString().slice(0, 10)
+
+  const [fechaDesde, setFechaDesde] = useState(defaultFechaDesde)
+
+  const [fechaHasta, setFechaHasta] = useState(defaultFechaHasta)
+
   /** Solo al pasar de cerrado → abierto: evita borrar el texto si el efecto corre tarde tras pegar. */
   const lotesDialogEstabaAbiertoRef = useRef(false)
 
@@ -84,6 +102,10 @@ export function DialogReporteFiltros({
     lotesDialogEstabaAbiertoRef.current = open
     if (open && !estaba && variant === 'lotes') {
       setLotesTexto('')
+    }
+    if (open && !estaba && variant === 'rango_fechas') {
+      setFechaDesde(defaultFechaDesde())
+      setFechaHasta(defaultFechaHasta())
     }
   }, [open, variant])
 
@@ -195,7 +217,73 @@ export function DialogReporteFiltros({
     handleAbrir(false)
   }
 
+  const handleDescargarRangoFechas = () => {
+    const d0 = (fechaDesde || '').trim()
+    const d1 = (fechaHasta || '').trim()
+    if (!d0 || !d1) return
+    onConfirm({
+      años: [],
+      meses: [],
+      fecha_desde: d0,
+      fecha_hasta: d1,
+    })
+    handleAbrir(false)
+  }
+
   const lotesPreview = parseLotesDesdeTexto(lotesTexto)
+
+  if (variant === 'rango_fechas') {
+    return (
+      <Dialog open={open} onOpenChange={handleAbrir}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tituloReporte}</DialogTitle>
+            <DialogDescription>
+              Filtra por día de registro en auditoría (fecha/hora guardada en el servidor).
+              Rango máximo 366 días.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-800" htmlFor="fecha-desde-reporte">
+                Fecha desde
+              </label>
+              <Input
+                id="fecha-desde-reporte"
+                type="date"
+                value={fechaDesde}
+                onChange={e => setFechaDesde(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-800" htmlFor="fecha-hasta-reporte">
+                Fecha hasta
+              </label>
+              <Input
+                id="fecha-hasta-reporte"
+                type="date"
+                value={fechaHasta}
+                onChange={e => setFechaHasta(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <div className="flex-1" />
+            <Button type="button" variant="outline" onClick={() => handleAbrir(false)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDescargarRangoFechas}
+              disabled={!fechaDesde.trim() || !fechaHasta.trim()}
+            >
+              Descargar Excel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   if (variant === 'lotes') {
     return (

@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.models.drive import DriveRow
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
+from app.services.prestamo_candidatos_drive_kpis import conteos_aprueban_no_aprueban_snapshot
 from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
@@ -231,6 +232,9 @@ def listar_prestamo_candidatos_drive_snapshot(
     stmt = stmt.offset(off).limit(lim)
 
     rows = list(db.execute(stmt).scalars().all() or [])
+    aprueban, no_aprueban = conteos_aprueban_no_aprueban_snapshot(
+        db, cedula_cmp_contains=filt_norm or None
+    )
     computed_at = None
     if total > 0:
         max_stmt = select(func.max(PrestamoCandidatoDrive.computed_at))
@@ -242,6 +246,8 @@ def listar_prestamo_candidatos_drive_snapshot(
     return {
         "drive_synced_at": drive_synced_at,
         "computed_at": computed_at,
+        "kpis_aprueban": aprueban,
+        "kpis_no_aprueban": no_aprueban,
         "total": total,
         "total_sin_filtro": (
             int(db.scalar(select(func.count(PrestamoCandidatoDrive.id))) or 0)

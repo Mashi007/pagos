@@ -33,6 +33,45 @@ export function validateFiltrosReporte(filtros: FiltrosReporte): string | null {
   return validarAniosMeses(filtros.años, filtros.meses)
 }
 
+function parseYMD(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((s || '').trim())
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  const dt = new Date(Date.UTC(y, mo - 1, d))
+  if (
+    dt.getUTCFullYear() !== y ||
+    dt.getUTCMonth() !== mo - 1 ||
+    dt.getUTCDate() !== d
+  ) {
+    return null
+  }
+  return dt
+}
+
+/** Filtro fecha desde / hasta (reporte Pagos Gmail). */
+export function validateFiltrosRangoFechasReporte(
+  filtros: FiltrosReporte
+): string | null {
+  const a = (filtros.fecha_desde || '').trim()
+  const b = (filtros.fecha_hasta || '').trim()
+  if (!a || !b) {
+    return 'Indique fecha desde y fecha hasta.'
+  }
+  const da = parseYMD(a)
+  const db = parseYMD(b)
+  if (!da) return 'Fecha desde inválida; use el formato AAAA-MM-DD.'
+  if (!db) return 'Fecha hasta inválida; use el formato AAAA-MM-DD.'
+  if (da > db) return 'La fecha desde no puede ser posterior a la fecha hasta.'
+  const maxDays = 366
+  const diff = (db.getTime() - da.getTime()) / (24 * 60 * 60 * 1000)
+  if (diff > maxDays) {
+    return `El rango no puede superar ${maxDays} días.`
+  }
+  return null
+}
+
 const LOTE_MIN = 0
 
 const LOTE_MAX = 999_999

@@ -342,6 +342,7 @@ export function usePermissions() {
 
     const allowedForOperativos = [
       'PAGOS',
+      'PAGOS_GMAIL',
       'MOROSIDAD',
       'VENCIMIENTO',
       'CEDULA',

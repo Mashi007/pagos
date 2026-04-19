@@ -30,6 +30,9 @@ from app.api.v1.endpoints.reportes.reportes_clientes_hoja import (
 from app.api.v1.endpoints.reportes.reportes_prestamos_drive import (
     router as router_prestamos_drive,
 )
+from app.api.v1.endpoints.reportes.reportes_pagos_gmail_abcd import (
+    router as router_pagos_gmail_abcd,
+)
 
 router = APIRouter()
 
@@ -49,4 +52,5 @@ router.include_router(router_fecha_drive, tags=["reportes"])
 router.include_router(router_analisis_financiamiento, tags=["reportes"])
 router.include_router(router_clientes_hoja, tags=["reportes"])
 router.include_router(router_prestamos_drive, tags=["reportes"])
+router.include_router(router_pagos_gmail_abcd, tags=["reportes"])
 

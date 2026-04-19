@@ -1375,6 +1375,27 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /**
+   * Excel Pagos Gmail: tabla `pagos_gmail_abcd_cuotas_traza` (plantilla A–D, Gemini, cuotas).
+   * @param fechaDesde YYYY-MM-DD inclusive
+   * @param fechaHasta YYYY-MM-DD inclusive
+   */
+  async exportarReportePagosGmailAbcd(
+    fechaDesde: string,
+    fechaHasta: string
+  ): Promise<Blob> {
+    const params = new URLSearchParams({
+      fecha_desde: fechaDesde.trim(),
+      fecha_hasta: fechaHasta.trim(),
+    })
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/pagos-gmail-abcd?${params.toString()}`,
+      { responseType: 'blob', timeout: 120000 }
+    )
+    return response.data as Blob
+  }
+
   /** Excel Fecha Drive: hoja CONCILIACIÓN sincronizada vs préstamos (cedula, fechas aprobación). */
   async exportarReporteFechaDrive(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()

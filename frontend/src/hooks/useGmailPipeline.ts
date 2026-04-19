@@ -16,7 +16,7 @@
 
 
 
- * hace polling a /status cada 4s hasta que last_status sea "success" o "error".
+ * hace polling a /status cada 5s hasta que last_status sea "success" o "error".
 
 
 

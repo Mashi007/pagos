@@ -76,6 +76,7 @@ import {
 import {
   validateFiltrosReporte,
   validateFiltrosReporteContable,
+  validateFiltrosRangoFechasReporte,
   validateLotesClientesHoja,
 } from '../utils/reportesFiltros'
 
@@ -129,6 +130,15 @@ const tiposReporte: TipoReporteItem[] = [
   { value: 'VENCIMIENTO', label: 'Vencimiento', icon: FileText },
 
   { value: 'PAGOS', label: 'Pagos', icon: Users },
+
+  {
+    value: 'PAGOS_GMAIL',
+    label: 'Pagos Gmail',
+    icon: Mail,
+    subtitle: 'Auditoría ABCD → pagos → cuotas',
+    titleExtra:
+      'Desde la tabla pagos_gmail_abcd_cuotas_traza: resultado tras escaneo Gmail/Gemini y aplicación a cuotas. Filtro por rango de fechas (día).',
+  },
 
   {
     value: 'FECHAS',
@@ -190,6 +200,7 @@ const REPORTES_COBRANZA = [
   'MOROSIDAD',
   'VENCIMIENTO',
   'PAGOS',
+  'PAGOS_GMAIL',
   'FECHAS',
   'ASESORES',
 ]
@@ -646,7 +657,13 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      if (tipo === 'CLIENTES_HOJA' || tipo === 'PRESTAMOS_DRIVE') {
+      if (tipo === 'PAGOS_GMAIL') {
+        const errG = validateFiltrosRangoFechasReporte(filtros)
+        if (errG) {
+          toast.error(errG)
+          return
+        }
+      } else if (tipo === 'CLIENTES_HOJA' || tipo === 'PRESTAMOS_DRIVE') {
         const errL = validateLotesClientesHoja(filtros.lotes)
         if (errL) {
           toast.error(errL)
@@ -657,7 +674,8 @@ export function Reportes() {
         tipo !== 'MOROSIDAD' &&
         tipo !== 'FECHAS' &&
         tipo !== 'FECHA_DRIVE' &&
-        tipo !== 'ANALISIS_FINANCIAMIENTO'
+        tipo !== 'ANALISIS_FINANCIAMIENTO' &&
+        tipo !== 'PAGOS_GMAIL'
       ) {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
@@ -711,6 +729,18 @@ export function Reportes() {
         toast.dismiss(toastId)
 
         toast.success(REPORTES_TOAST.pagos)
+
+        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
+      } else if (tipo === 'PAGOS_GMAIL') {
+        const fd = (filtros.fecha_desde || '').trim()
+        const fh = (filtros.fecha_hasta || '').trim()
+        const blob = await reporteService.exportarReportePagosGmailAbcd(fd, fh)
+
+        descargarBlob(blob, `reporte_pagos_gmail_${fd}_${fh}.xlsx`)
+
+        toast.dismiss(toastId)
+
+        toast.success(REPORTES_TOAST.pagosGmail)
 
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'MOROSIDAD') {
@@ -1761,7 +1791,9 @@ export function Reportes() {
           reporteSeleccionado === 'CLIENTES_HOJA' ||
           reporteSeleccionado === 'PRESTAMOS_DRIVE'
             ? 'lotes'
-            : 'periodo'
+            : reporteSeleccionado === 'PAGOS_GMAIL'
+              ? 'rango_fechas'
+              : 'periodo'
         }
         tituloReporte={
           reporteSeleccionado && reporteSeleccionado !== 'CONTABLE'

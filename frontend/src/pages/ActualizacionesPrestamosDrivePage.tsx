@@ -531,8 +531,30 @@ export default function ActualizacionesPrestamosDrivePage() {
       />
 
       <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-lg">Candidatos desde Drive</CardTitle>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <CardTitle className="text-lg">Candidatos desde Drive</CardTitle>
+            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end" aria-label="Resumen validación">
+              <div
+                className="min-w-[5.5rem] rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-center shadow-sm"
+                title="Filas en verde: cumplen formato, tabla V/E, hoja sin duplicado y Q sin más de 30 días."
+              >
+                <p className="text-lg font-semibold tabular-nums text-emerald-900">
+                  {data?.kpis_aprueban ?? '—'}
+                </p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-800/90">Aprueban</p>
+              </div>
+              <div
+                className="min-w-[5.5rem] rounded-lg border border-border bg-muted/50 px-3 py-2 text-center shadow-sm"
+                title="Filas que no están en verde (revisión, repetidas en hoja, bloqueos o datos incompletos según reglas de la grilla)."
+              >
+                <p className="text-lg font-semibold tabular-nums text-foreground">
+                  {data?.kpis_no_aprueban ?? '—'}
+                </p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">No aprueban</p>
+              </div>
+            </div>
+          </div>
           <p className="text-sm text-muted-foreground">
             {cedulaDebounced && totalSinFiltro != null ? (
               <>

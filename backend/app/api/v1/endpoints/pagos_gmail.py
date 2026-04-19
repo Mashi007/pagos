@@ -1,11 +1,15 @@
 """
-Endpoints para el pipeline Gmail -> Gemini -> BD (modulo Pagos). Ejecucion solo manual (POST run-now desde la UI).
+Endpoints para el pipeline Gmail -> Gemini -> BD (modulo Pagos).
+Ejecucion manual: POST /pagos/gmail/run-now desde la UI (Pagos > Agregar pago > Generar Excel desde email).
+Ejecucion automatica opcional: scheduler lun-vie cada hora :30 entre 06:30 y 19:30 (America/Caracas), filtro
+pending_identification, si ENABLE_AUTOMATIC_SCHEDULED_JOBS y PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED en settings.
+Manual y automatico comparten la misma regla de exclusion: no se inicia otra corrida si hay sync en estado running (ventana 2 h).
 Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822 (deduplicado).
 Solo si el remitente coincide con `clientes.email` o `email_secundario`: digitalizacion (Gemini), filas Excel/BD y comprobante en `pago_comprobante_imagen`; etiquetas MERCANTIL/BNC/BINANCE/BNV segun plantilla. Sin match (o error BD al consultar clientes): solo etiqueta ERROR EMAIL en Gmail, sin filas ni comprobante. Sin subidas a Google Drive.
 Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no las toca el pipeline).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD); query opcional plantilla A–D vs duplicado `pagos.numero_documento`
-- GET /pagos/gmail/status: ultima ejecucion; escaneo automatico cada N h (solo pending_identification) si esta habilitado en settings
+- GET /pagos/gmail/status: ultima ejecucion; next_run_approx = proxima corrida programada Gmail si el scheduler tiene el job registrado
 - GET /pagos/gmail/abcd-cuotas-traza: historial plantilla A–D → pago → cuotas (post-Gemini)
 - POST /pagos/gmail/confirmar-dia: confirmacion si/no; si si, borrado de datos acumulados
 """
@@ -170,20 +174,27 @@ def run_now(
 
 @router.get("/status")
 def status(db: Session = Depends(get_db)):
-    """Ultima ejecucion manual; sin proxima ejecucion programada (pipeline solo desde la UI)."""
+    """Ultima ejecucion (manual o programada); next_run_approx solo si el escaneo Gmail programado esta registrado en el scheduler."""
     last = db.execute(select(PagosGmailSync).order_by(desc(PagosGmailSync.started_at)).limit(1)).scalars().first()
     latest_data_date = _get_latest_date_with_data(db)
     marcados = 0
     if last is not None:
         marcados = int(getattr(last, "correos_marcados_revision", 0) or 0)
     run_summary = getattr(last, "run_summary", None) if last is not None else None
+    next_run_approx: Optional[str] = None
+    try:
+        from app.core.scheduler import get_pagos_gmail_scan_next_run_iso
+
+        next_run_approx = get_pagos_gmail_scan_next_run_iso()
+    except Exception:
+        logger.debug("No se pudo obtener next_run_approx del scheduler Gmail", exc_info=True)
     return {
         "last_run": last.started_at.isoformat() if last and last.started_at else None,
         "last_status": last.status if last else None,
         "last_emails": last.emails_processed if last else 0,
         "last_files": last.files_processed if last else 0,
         "last_error": last.error_message if last and last.status == "error" else None,
-        "next_run_approx": None,
+        "next_run_approx": next_run_approx,
         "latest_data_date": latest_data_date,
         "last_correos_marcados_revision": marcados,
         "last_run_summary": run_summary,
