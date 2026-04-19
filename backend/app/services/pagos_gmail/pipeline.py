@@ -40,11 +40,43 @@ def _finished_at_naive_utc() -> datetime:
     """Columnas pagos_gmail_sync.* son DateTime(timezone=False); naive UTC evita ambigüedad en drivers."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
+
+
+def _persistir_estado_sync_pipeline_terminal(
+    db: Session,
+    *,
+    sync_id: int,
+    status: str,
+    emails_ok: int,
+    files_ok: int,
+    correos_marcados_revision: int,
+    run_summary: dict,
+    error_message: Optional[str],
+) -> None:
+    """
+    Persiste cierre de corrida en una sola sentencia UPDATE.
+    Evita filas success con finished_at NULL cuando la instancia ORM `sync` queda
+    desalineada tras muchos commit/rollback en el mismo Session.
+    """
+    db.execute(
+        update(PagosGmailSync)
+        .where(PagosGmailSync.id == sync_id)
+        .values(
+            finished_at=_finished_at_naive_utc(),
+            status=status,
+            emails_processed=emails_ok,
+            files_processed=files_ok,
+            correos_marcados_revision=correos_marcados_revision,
+            run_summary=run_summary,
+            error_message=error_message,
+        )
+    )
+    db.commit()
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
 from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
     registrar_traza_gmail_abcd_cuotas_evento,
@@ -1356,11 +1388,7 @@ def run_pipeline(
         else:
             process_message_batch(messages, "run")
 
-        sync.finished_at = _finished_at_naive_utc()
-        sync.emails_processed = emails_ok
-        sync.files_processed = files_ok
-        sync.correos_marcados_revision = correos_marcados_revision
-        sync.run_summary = {
+        _run_summary_ok = {
             "scan_filter": scan_filter,
             "gmail_messages_listed": run_stats["gmail_messages_listed"],
             "messages_skipped_invalid_sender": run_stats[
@@ -1376,23 +1404,24 @@ def run_pipeline(
         }
         logger.info("[PAGOS_GMAIL] FIN pipeline: emails=%d filas=%d", emails_ok, files_ok)
 
-        sync.status = "success"
-        sync.error_message = None
-        db.commit()
-        return sync_id, sync.status
+        _persistir_estado_sync_pipeline_terminal(
+            db,
+            sync_id=sync_id,
+            status="success",
+            emails_ok=emails_ok,
+            files_ok=files_ok,
+            correos_marcados_revision=correos_marcados_revision,
+            run_summary=_run_summary_ok,
+            error_message=None,
+        )
+        return sync_id, "success"
 
     except PagosGmailGmailListError as e:
         logger.error(
             "[PAGOS_GMAIL] Fallo API Gmail al listar metadatos (sync=error; no es inbox vacio): %s",
             e,
         )
-        sync.finished_at = _finished_at_naive_utc()
-        sync.status = "error"
-        sync.error_message = str(e)[:2000]
-        sync.emails_processed = emails_ok
-        sync.files_processed = files_ok
-        sync.correos_marcados_revision = correos_marcados_revision
-        sync.run_summary = {
+        _run_summary_list_err = {
             "scan_filter": scan_filter,
             "gmail_messages_listed": run_stats["gmail_messages_listed"],
             "messages_skipped_invalid_sender": run_stats[
@@ -1407,18 +1436,21 @@ def run_pipeline(
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "list_error": True,
         }
-        db.commit()
+        _persistir_estado_sync_pipeline_terminal(
+            db,
+            sync_id=sync_id,
+            status="error",
+            emails_ok=emails_ok,
+            files_ok=files_ok,
+            correos_marcados_revision=correos_marcados_revision,
+            run_summary=_run_summary_list_err,
+            error_message=str(e)[:2000],
+        )
         return sync_id, "error"
 
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Pipeline error inesperado: %s", e)
-        sync.finished_at = _finished_at_naive_utc()
-        sync.status = "error"
-        sync.error_message = str(e)[:2000]
-        sync.emails_processed = emails_ok
-        sync.files_processed = files_ok
-        sync.correos_marcados_revision = correos_marcados_revision
-        sync.run_summary = {
+        _run_summary_pipe_err = {
             "scan_filter": scan_filter,
             "gmail_messages_listed": run_stats["gmail_messages_listed"],
             "messages_skipped_invalid_sender": run_stats[
@@ -1433,5 +1465,14 @@ def run_pipeline(
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "pipeline_error": True,
         }
-        db.commit()
+        _persistir_estado_sync_pipeline_terminal(
+            db,
+            sync_id=sync_id,
+            status="error",
+            emails_ok=emails_ok,
+            files_ok=files_ok,
+            correos_marcados_revision=correos_marcados_revision,
+            run_summary=_run_summary_pipe_err,
+            error_message=str(e)[:2000],
+        )
         return sync_id, "error"
