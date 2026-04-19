@@ -9,8 +9,6 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
-
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -23,10 +21,7 @@ from app.services.cuota_estado import clasificar_estado_cuota, dias_retraso_desd
 from app.services.cuota_pago_integridad import pago_tiene_aplicaciones_cuotas, validar_suma_aplicada_vs_monto_pago
 from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquidado
 
-from app.api.v1.endpoints.pagos.pago_cuota_transiciones import _validar_transicion_estado_cuota
-
-if TYPE_CHECKING:
-    pass
+from app.services.cuota_transiciones_pago import validar_transicion_estado_cuota
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +238,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
                 else:
                     estado_nuevo = "PAGADO"
 
-                if not _validar_transicion_estado_cuota(c.estado, estado_nuevo):
+                if not validar_transicion_estado_cuota(c.estado, estado_nuevo):
                     logger.warning(
                         "Transición de estado inválida en cuota %s: %s -> %s",
                         c.id,
@@ -262,7 +257,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
 
                 estado_nuevo = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
 
-                if not _validar_transicion_estado_cuota(c.estado, estado_nuevo):
+                if not validar_transicion_estado_cuota(c.estado, estado_nuevo):
                     logger.warning(
                         "Transición de estado inválida en cuota %s: %s -> %s",
                         c.id,

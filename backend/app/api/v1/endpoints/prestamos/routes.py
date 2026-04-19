@@ -58,8 +58,6 @@ from app.models.pago_con_error import PagoConError
 
 from app.models.prestamo import Prestamo
 
-from app.models.analista import Analista
-
 from app.models.user import User
 
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
@@ -94,8 +92,9 @@ from app.services.pagos_cuotas_reaplicacion import (
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
 from app.services.cobros.recibo_cuota_moneda import contexto_moneda_montos_recibo_cuota
 
-from app.services.analistas_catalogo_sync import (
-    sincronizar_analistas_desde_prestamos_si_catalogo_vacio,
+from app.services.prestamos.prestamos_endpoint_helpers import (
+    _escape_ilike_pattern,
+    _resolver_analista_para_prestamo,
 )
 
 from app.services.notificacion_service import (
@@ -163,45 +162,6 @@ from app.services.prestamos.prestamo_desistimiento_acceso import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
-
-
-def _escape_ilike_pattern(fragment: str) -> str:
-    """Escape LIKE metacharacters for ILIKE with escape backslash (PostgreSQL)."""
-    return fragment.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
-def _resolver_analista_para_prestamo(
-    db: Session,
-    analista: Optional[str],
-    analista_id: Optional[int],
-) -> tuple[str, Optional[int]]:
-    """
-    Catálogo analistas: prioriza analista_id; si solo viene texto y existe en catálogo, enlaza id.
-    Texto sin coincidencia se guarda en prestamos.analista sin id (cargas legacy / Excel).
-    """
-    sincronizar_analistas_desde_prestamos_si_catalogo_vacio(db)
-    if analista_id is not None:
-        row_a = db.get(Analista, analista_id)
-        if not row_a:
-            raise HTTPException(status_code=400, detail="analista_id no existe en el catálogo")
-        if not row_a.activo:
-            raise HTTPException(
-                status_code=400,
-                detail="El analista está inactivo; reactívelo en Analistas o elija otro.",
-            )
-        return row_a.nombre, row_a.id
-    if analista is not None and str(analista).strip():
-        n = str(analista).strip()
-        found = db.execute(select(Analista).where(Analista.nombre == n)).scalar_one_or_none()
-        if found:
-            if not found.activo:
-                raise HTTPException(
-                    status_code=400,
-                    detail="El analista está inactivo; reactívelo en Analistas o elija otro.",
-                )
-            return found.nombre, found.id
-        return n, None
-    return "", None
 
 
 class PrestamoIdsCuotasBody(BaseModel):
