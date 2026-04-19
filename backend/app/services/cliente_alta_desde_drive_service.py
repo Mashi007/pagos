@@ -325,7 +325,7 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
 def refrescar_cache_candidatos_drive(db: Session) -> Dict[str, Any]:
     """
     Recalcula candidatos desde tablas drive/clientes y persiste en drive_clientes_candidatos_cache (id=1).
-    Usado por el job dom/mié 03:00 y tras importaciones para alinear la lista sin depender del usuario.
+    Usado por el job lun-sab 02:30 (scheduler) y tras importaciones para alinear la lista sin depender del usuario.
     """
     data = listar_candidatos_desde_drive(db)
     meta = db.get(ConciliacionSheetMeta, 1)
