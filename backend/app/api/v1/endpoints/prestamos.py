@@ -151,6 +151,12 @@ from app.services.prestamo_db_compat import (
     fetch_prestamos_fecha_desistimiento_map,
     prestamos_tiene_columna_fecha_desistimiento,
 )
+from app.services.prestamos.prestamo_desistimiento_acceso import (
+    assert_lectura_prestamo_desistimiento,
+    filtro_prestamo_visible_listado,
+    prestamo_estado_es_desistimiento,
+    usuario_puede_ver_prestamos_desistimiento,
+)
 
 
 
@@ -617,6 +623,8 @@ def listar_prestamos(
             "en_espera, revisado, rechazado, o sin_registro (sin fila en esa tabla)."
         ),
     ),
+
+    current_user: UserResponse = Depends(get_current_user),
 
     db: Session = Depends(get_db),
 
