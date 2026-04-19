@@ -130,6 +130,11 @@ import {
 } from './notificaciones/notificacionesPage.tabs'
 
 import {
+  tituloEncabezadoNotificaciones,
+  tituloDocumentoNotificaciones,
+} from './notificaciones/notificacionesPage.header'
+
+import {
   fechaHoyCaracasISO,
   toastErrorTrasEnvioManual,
   toastResultadoEnvioNotificaciones,
@@ -147,6 +152,38 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const esListaCombinadaMoras = modulo === 'general' || modulo === 'fecha'
 
   const listadoDefault = tabListadoDefault(modulo)
+
+  const pageTitle = useMemo(
+    () => tituloEncabezadoNotificaciones(modulo),
+    [modulo]
+  )
+
+  const descripcionModulo = useMemo(() => {
+    if (modulo === 'fecha') {
+      return 'Solo consulta: mismas listas combinadas que General (día siguiente, prejudicial 5+ cuotas, 2 días antes). La columna «Diferencia fecha» compara la columna Q de la hoja CONCILIACIÓN (entrega) con fecha_aprobacion del préstamo en BD; caché en servidor (cada domingo 04:00 Caracas o Recalcular; luego Actualización manual). Sin envío de correos desde esta pantalla.'
+    }
+    if (modulo === 'general') {
+      return 'Solo consulta: listas unificadas (día siguiente al vencimiento, prejudicial 5+ cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
+    }
+    if (modulo === 'a3cuotas') {
+      return 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+    }
+    if (modulo === 'd2antes') {
+      return 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 2 días (hoy + 2, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
+    }
+    if (modulo === 'a10dias') {
+      return 'Solo cuotas pendientes cuya fecha de vencimiento está exactamente a 10 días calendario en el pasado respecto de la fecha de referencia (America/Caracas), con saldo pendiente, y el préstamo con exactamente entre 2 y 3 cuotas en mora (inclusive). Con 1 cuota o con 4 o más no aplica este listado. No mezcla otros días de mora.'
+    }
+    return 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+  }, [modulo])
+
+  useEffect(() => {
+    const prev = document.title
+    document.title = tituloDocumentoNotificaciones(modulo)
+    return () => {
+      document.title = prev
+    }
+  }, [modulo])
 
   useEffect(() => {
     marcarReturnRevisionDesdeNotificaciones()
@@ -424,6 +461,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     kind: 'prejudicial' | 'd2antes' | 'pago1dia' | 'pago10dias'
     n: number
   }>(null)
+
+  /** Obligatorio si la lista visible tiene 0 filas y aun así se quiere disparar el POST al servidor. */
+  const [ackEnvioConListaVacia, setAckEnvioConListaVacia] = useState(false)
+
+  useEffect(() => {
+    if (confirmEnvio == null) return
+    setAckEnvioConListaVacia(false)
+  }, [confirmEnvio])
 
   const operacionListaAbortRef = useRef<AbortController | null>(null)
 
@@ -1207,8 +1252,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       <div className="space-y-6">
         <ModulePageHeader
           icon={Bell}
-          title="Notificaciones"
-          description="Clientes retrasados por fecha de vencimiento y mora"
+          title={pageTitle}
+          description={descripcionModulo}
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {controlFechaReferenciaCaracas}
@@ -1221,7 +1266,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <RefreshCw
                   className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
                 />
-                Actualizacion manual
+                Actualización manual
               </Button>
 
               <Button
@@ -1241,10 +1286,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         />
 
         <div className="border-b border-gray-200">
-          <nav className="flex flex-wrap gap-2">
+          <nav
+            role="tablist"
+            aria-label="Secciones: listado y configuración"
+            className="flex flex-wrap gap-2"
+          >
             {TABS.map(tab => (
               <button
                 key={tab.id}
+                type="button"
+                role="tab"
+                id={`notif-cfg-tab-${tab.id}`}
+                aria-selected={activeTab === tab.id}
+                aria-controls={
+                  tab.id === 'configuracion'
+                    ? 'notif-cfg-panel-config'
+                    : 'notif-cfg-panel-listado'
+                }
+                tabIndex={0}
                 onClick={() => setActiveTabAndUrl(tab.id)}
                 className={`flex items-center gap-2 rounded-t px-3 py-2 text-sm font-medium ${
                   activeTab === tab.id
@@ -1252,7 +1311,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <tab.icon className="h-4 w-4" />
+                <tab.icon className="h-4 w-4" aria-hidden />
 
                 {tab.label}
               </button>
@@ -1261,7 +1320,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         </div>
 
         {/* Cada submenú: una fila de envíos / adjuntos por tipo en BD. */}
-        <ConfiguracionNotificaciones
+        <div
+          role="tabpanel"
+          id={
+            activeTab === 'configuracion'
+              ? 'notif-cfg-panel-config'
+              : 'notif-cfg-panel-listado'
+          }
+          aria-labelledby={`notif-cfg-tab-${activeTab}`}
+        >
+          <ConfiguracionNotificaciones
           alcance={
             modulo === 'a1dia'
               ? 'solo_pago_1_dia'
@@ -1272,6 +1340,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   : 'solo_prejudicial'
           }
         />
+        </div>
       </div>
     )
   }
@@ -1284,20 +1353,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       >
         <ModulePageHeader
           icon={Bell}
-          title="Notificaciones"
-          description={
-            modulo === 'fecha'
-              ? 'Solo consulta: mismas listas combinadas que General (día siguiente, prejudicial 5+ cuotas, 2 días antes). La columna «Diferencia fecha» compara la columna Q de la hoja CONCILIACIÓN (entrega) con fecha_aprobacion del préstamo en BD; caché en servidor (cada domingo 04:00 Caracas o Recalcular; luego Actualización manual). Sin envío de correos desde esta pantalla.'
-              : modulo === 'general'
-                ? 'Solo consulta: listas unificadas (día siguiente al vencimiento, prejudicial 5+ cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
-              : modulo === 'a3cuotas'
-                ? 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
-                : modulo === 'd2antes'
-                  ? 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 2 días (hoy + 2, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
-                  : modulo === 'a10dias'
-                    ? 'Solo cuotas pendientes cuya fecha de vencimiento está exactamente a 10 días calendario en el pasado respecto de la fecha de referencia (America/Caracas), con saldo pendiente, y el préstamo con exactamente entre 2 y 3 cuotas en mora (inclusive). Con 1 cuota o con 4 o más no aplica este listado. No mezcla otros días de mora.'
-                    : 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
-          }
+          title={pageTitle}
+          description={descripcionModulo}
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {controlFechaReferenciaCaracas}
@@ -1310,7 +1367,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <RefreshCw
                   className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
                 />
-                Actualizacion manual
+                Actualización manual
               </Button>
 
               {modulo === 'general' ? (
@@ -1368,7 +1425,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
       {!esListaCombinadaMoras ? (
         <div className="border-b border-gray-200">
-          <nav className="flex flex-wrap gap-1">
+          <nav
+            role="tablist"
+            aria-label="Vistas del submódulo de notificaciones"
+            className="flex flex-wrap gap-1"
+          >
             {TABS.filter(t => t.id !== 'configuracion').map(tab => {
               const count =
                 tab.id === 'general_todos'
@@ -1386,6 +1447,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               return (
                 <button
                   key={tab.id}
+                  type="button"
+                  role="tab"
+                  id={`notif-tab-${tab.id}`}
+                  aria-selected={activeTab === tab.id}
+                  aria-controls="notif-panel-principal"
+                  tabIndex={0}
                   onClick={() => setActiveTabAndUrl(tab.id)}
                   className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${
                     activeTab === tab.id
@@ -1393,7 +1460,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <tab.icon className="h-4 w-4" />
+                  <tab.icon className="h-4 w-4" aria-hidden />
 
                   {tab.label}
 
@@ -1407,10 +1474,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             })}
 
             <button
+              type="button"
+              role="tab"
+              id="notif-tab-configuracion"
+              aria-selected={activeTab === 'configuracion'}
+              aria-controls="notif-panel-principal"
+              tabIndex={0}
               onClick={() => setActiveTabAndUrl('configuracion')}
               className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700"
             >
-              <Settings className="h-4 w-4" />
+              <Settings className="h-4 w-4" aria-hidden />
               Configuración
             </button>
           </nav>
@@ -1426,15 +1499,25 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         </p>
       )}
 
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.2 }}
+      <div
+        role={esListaCombinadaMoras ? 'region' : 'tabpanel'}
+        id="notif-panel-principal"
+        aria-label={
+          esListaCombinadaMoras ? 'Listados de mora combinados' : undefined
+        }
+        aria-labelledby={
+          esListaCombinadaMoras ? undefined : `notif-tab-${activeTab}`
+        }
       >
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
               {(() => {
                 const TabIcon = TABS.find(t => t.id === activeTab)?.icon
 
@@ -1491,7 +1574,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <RefreshCw
                   className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
                 />
-                Actualizacion manual
+                Actualización manual
               </Button>
 
               {modulo === 'general' ? (
@@ -2496,7 +2579,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             </Fragment>
           </CardContent>
         </Card>
-      </motion.div>
+        </motion.div>
+      </div>
 
       <Dialog
         open={confirmEnvio != null}
@@ -2541,6 +2625,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </p>
               ) : null}
 
+              {confirmEnvio != null && confirmEnvio.n === 0 ? (
+                <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-200 bg-amber-50/90 p-3 text-gray-800">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 accent-blue-600"
+                    checked={ackEnvioConListaVacia}
+                    onChange={e =>
+                      setAckEnvioConListaVacia(e.target.checked)
+                    }
+                  />
+                  <span>
+                    Confirmo enviar igualmente: la lista en pantalla tiene 0
+                    filas y entiendo que el servidor recalcula el criterio (el
+                    envío puede quedar vacío).
+                  </span>
+                </label>
+              ) : null}
+
               <p className="font-medium text-gray-900">
                 Pulse «Enviar correos» para llamar al servidor (aparecerá la
                 petición POST en la red). «No enviar» cierra sin enviar.
@@ -2560,6 +2662,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             <Button
               type="button"
               className="bg-blue-600 text-white hover:bg-blue-700"
+              disabled={
+                confirmEnvio != null &&
+                confirmEnvio.n === 0 &&
+                !ackEnvioConListaVacia
+              }
               onClick={confirmarEnvioManualYEnviar}
             >
               Enviar correos

@@ -34,13 +34,9 @@ from app.services.notificacion_service import (
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
     build_cuotas_pendiente_2_dias_antes_items,
-    contar_cuotas_atraso_por_prestamos,
     enriquecer_items_notificacion_revision_manual,
     format_cuota_item,
-    get_cuotas_pendientes_por_vencimientos,
-    prestamo_aplica_listado_10_dias_por_cuotas_atrasadas,
     sum_saldo_pendiente_total_por_prestamos,
-    _item,
     _item_tab,
 )
 from app.models.cuota import Cuota
@@ -1796,12 +1792,17 @@ def get_clientes_retrasados(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     hoy = ref_opt or hoy_negocio()
-    fechas_retraso = (
-        hoy - timedelta(days=1),
-        hoy - timedelta(days=10),
-    )
     try:
-        rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
+        from app.services.notificaciones_listados_motor import (
+            build_items_retraso_uno_y_diez_dias,
+        )
+
+        dias_1_atraso, dias_10_atraso = build_items_retraso_uno_y_diez_dias(
+            db,
+            hoy,
+            formato="item",
+            con_enriquecimiento_revision_manual=True,
+        )
     except Exception as e:
         logger.exception("clientes-retrasados: error cargando cuotas pendientes: %s", e)
         raise HTTPException(
@@ -1813,53 +1814,6 @@ def get_clientes_retrasados(
     dias_3: List[dict] = []
     dias_1: List[dict] = []
     hoy_list: List[dict] = []
-    dias_1_atraso: List[dict] = []   # 1 día atrasado (cuota vencida ayer)
-    dias_10_atraso: List[dict] = []  # 10 dias de atraso (cuota vencida hace 10 dias calendario)
-
-    pids_retraso = [c.prestamo_id for c, _ in rows]
-    counts_retraso = contar_cuotas_atraso_por_prestamos(
-        db, pids_retraso, fecha_referencia=hoy
-    )
-    totales_pendiente_retraso = sum_saldo_pendiente_total_por_prestamos(
-        db, pids_retraso
-    )
-
-    for (cuota, cliente) in rows:
-        fv = cuota.fecha_vencimiento
-        if not fv:
-            continue
-        delta = (fv - hoy).days
-
-        # No notificar antes ni el dia del vencimiento; solo desde el dia siguiente.
-        if delta < 0:
-            dias_atraso = -delta
-            ca = counts_retraso.get(cuota.prestamo_id, 0)
-            tp = totales_pendiente_retraso.get(cuota.prestamo_id)
-            if dias_atraso == 1:
-                dias_1_atraso.append(
-                    _item(
-                        cliente,
-                        cuota,
-                        dias_atraso=1,
-                        cuotas_atrasadas=ca,
-                        total_pendiente_pagar=tp,
-                    )
-                )
-            elif dias_atraso == 10:
-                if prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(ca):
-                    dias_10_atraso.append(
-                        _item(
-                            cliente,
-                            cuota,
-                            dias_atraso=10,
-                            cuotas_atrasadas=ca,
-                            total_pendiente_pagar=tp,
-                        )
-                    )
-
-    enriquecer_items_notificacion_revision_manual(
-        db, dias_1_atraso + dias_10_atraso
-    )
 
     # Crédito pagado: préstamos en estado LIQUIDADO (alineado con prestamos.estado).
     subq = (
@@ -2177,55 +2131,21 @@ def get_notificaciones_tabs_data(
     saldo pendiente; préstamo no liquidado/desistimiento.
     """
     hoy = fecha_referencia or hoy_negocio()
-    fechas_retraso = (
-        hoy - timedelta(days=1),
-        hoy - timedelta(days=10),
+    from app.services.notificaciones_listados_motor import (
+        build_items_retraso_uno_y_diez_dias,
     )
-    rows = get_cuotas_pendientes_por_vencimientos(db, fechas_retraso)
-    pids_tabs = [c.prestamo_id for c, _ in rows]
-    counts_tabs = contar_cuotas_atraso_por_prestamos(
-        db, pids_tabs, fecha_referencia=hoy
+
+    dias_1_retraso, dias_10_retraso = build_items_retraso_uno_y_diez_dias(
+        db,
+        hoy,
+        formato="item_tab",
+        con_enriquecimiento_revision_manual=False,
     )
-    totales_pendiente_tabs = sum_saldo_pendiente_total_por_prestamos(db, pids_tabs)
 
     dias_5: List[dict] = []
     dias_3: List[dict] = []
     dias_1: List[dict] = []
     hoy_list: List[dict] = []
-    dias_1_retraso: List[dict] = []
-    dias_10_retraso: List[dict] = []
-
-    for (cuota, cliente) in rows:
-        fv = cuota.fecha_vencimiento
-        if not fv:
-            continue
-        delta = (fv - hoy).days
-
-        if delta < 0:
-            dias_atraso = -delta
-            ca = counts_tabs.get(cuota.prestamo_id, 0)
-            tp = totales_pendiente_tabs.get(cuota.prestamo_id)
-            if dias_atraso == 1:
-                dias_1_retraso.append(
-                    _item_tab(
-                        cliente,
-                        cuota,
-                        dias_atraso=1,
-                        cuotas_atrasadas=ca,
-                        total_pendiente_pagar=tp,
-                    )
-                )
-            elif dias_atraso == 10:
-                if prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(ca):
-                    dias_10_retraso.append(
-                        _item_tab(
-                            cliente,
-                            cuota,
-                            dias_atraso=10,
-                            cuotas_atrasadas=ca,
-                            total_pendiente_pagar=tp,
-                        )
-                    )
 
     prejudicial = build_prejudicial_items(db, fecha_referencia=hoy)
     enriquecer_items_notificacion_revision_manual(

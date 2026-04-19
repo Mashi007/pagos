@@ -361,11 +361,11 @@ def test_cfg_incluir_pdf_anexo_sin_clave_en_dict_es_true():
     assert _cfg_incluir_pdf_anexo({"incluir_pdf_anexo": "true"}) is True
 
 
-@patch("app.api.v1.endpoints.notificaciones_tabs.settings")
-@patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
-@patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
-@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjunto_fijo_cobranza_bytes")
-@patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
+@patch("app.services.notificaciones_envio_pipeline.settings")
+@patch("app.services.notificaciones_envio_pipeline.send_email")
+@patch("app.services.notificaciones_envio_pipeline.generar_carta_cobranza_pdf")
+@patch("app.services.notificaciones_envio_pipeline.get_adjunto_fijo_cobranza_bytes")
+@patch("app.services.notificaciones_envio_pipeline.sync_email_config_from_db")
 def test_envio_cobranza_respeta_incluir_pdf_anexo_false(
     mock_sync,
     mock_adjunto_fijo,
@@ -404,7 +404,7 @@ def test_envio_cobranza_respeta_incluir_pdf_anexo_false(
         return "COBRANZA"
 
     with patch(
-        "app.api.v1.endpoints.notificaciones_tabs.get_plantilla_asunto_cuerpo",
+        "app.services.notificaciones_envio_pipeline.get_plantilla_asunto_cuerpo",
         return_value=("Asunto", "<p>Cuerpo</p>"),
     ):
         plantilla = MagicMock()
@@ -435,12 +435,12 @@ def test_envio_cobranza_respeta_incluir_pdf_anexo_false(
     assert call_kw.get("attachments") is None
 
 
-@patch("app.api.v1.endpoints.notificaciones_tabs.settings")
-@patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
-@patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
-@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjunto_fijo_cobranza_bytes")
-@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjuntos_fijos_por_caso")
-@patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
+@patch("app.services.notificaciones_envio_pipeline.settings")
+@patch("app.services.notificaciones_envio_pipeline.send_email")
+@patch("app.services.notificaciones_envio_pipeline.generar_carta_cobranza_pdf")
+@patch("app.services.notificaciones_envio_pipeline.get_adjunto_fijo_cobranza_bytes")
+@patch("app.services.notificaciones_envio_pipeline.get_adjuntos_fijos_por_caso")
+@patch("app.services.notificaciones_envio_pipeline.sync_email_config_from_db")
 def test_paquete_estricto_pdf_carta_sin_cabecera_pdf_no_envia_smtp(
     mock_sync,
     mock_adjuntos_caso,
@@ -482,7 +482,7 @@ def test_paquete_estricto_pdf_carta_sin_cabecera_pdf_no_envia_smtp(
         return "COBRANZA"
 
     with patch(
-        "app.api.v1.endpoints.notificaciones_tabs.get_plantilla_asunto_cuerpo",
+        "app.services.notificaciones_envio_pipeline.get_plantilla_asunto_cuerpo",
         return_value=("Asunto", "<p>Cuerpo</p>"),
     ):
         plantilla = MagicMock()
@@ -505,10 +505,10 @@ def test_paquete_estricto_pdf_carta_sin_cabecera_pdf_no_envia_smtp(
     mock_send_email.assert_not_called()
 
 
-@patch("app.api.v1.endpoints.notificaciones_tabs.settings")
-@patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
-@patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
-@patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
+@patch("app.services.notificaciones_envio_pipeline.settings")
+@patch("app.services.notificaciones_envio_pipeline.send_email")
+@patch("app.services.notificaciones_envio_pipeline.generar_carta_cobranza_pdf")
+@patch("app.services.notificaciones_envio_pipeline.sync_email_config_from_db")
 def test_pago_2_dias_antes_estricto_sin_plantilla_id_envia_correo_sin_pdf_obligatorio(
     mock_sync,
     mock_pdf,
@@ -542,7 +542,7 @@ def test_pago_2_dias_antes_estricto_sin_plantilla_id_envia_correo_sin_pdf_obliga
     }
 
     with patch(
-        "app.api.v1.endpoints.notificaciones_tabs.get_plantilla_asunto_cuerpo",
+        "app.services.notificaciones_envio_pipeline.get_plantilla_asunto_cuerpo",
         return_value=("Asunto 2d", "Cuerpo 2d"),
     ):
         out = _enviar_correos_items(
@@ -561,11 +561,11 @@ def test_pago_2_dias_antes_estricto_sin_plantilla_id_envia_correo_sin_pdf_obliga
     assert mock_send_email.call_args[1].get("attachments") is None
 
 
-@patch("app.api.v1.endpoints.notificaciones_tabs.settings")
-@patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
-@patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
-@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjunto_fijo_cobranza_bytes")
-@patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
+@patch("app.services.notificaciones_envio_pipeline.settings")
+@patch("app.services.notificaciones_envio_pipeline.send_email")
+@patch("app.services.notificaciones_envio_pipeline.generar_carta_cobranza_pdf")
+@patch("app.services.notificaciones_envio_pipeline.get_adjunto_fijo_cobranza_bytes")
+@patch("app.services.notificaciones_envio_pipeline.sync_email_config_from_db")
 def test_envio_cobranza_respeta_incluir_adjuntos_fijos_false(
     mock_sync,
     mock_adjunto_fijo,
@@ -604,7 +604,7 @@ def test_envio_cobranza_respeta_incluir_adjuntos_fijos_false(
         return "COBRANZA"
 
     with patch(
-        "app.api.v1.endpoints.notificaciones_tabs.get_plantilla_asunto_cuerpo",
+        "app.services.notificaciones_envio_pipeline.get_plantilla_asunto_cuerpo",
         return_value=("Asunto", "<p>Cuerpo</p>"),
     ):
         plantilla = MagicMock()
@@ -629,10 +629,10 @@ def test_envio_cobranza_respeta_incluir_adjuntos_fijos_false(
     assert not any("adjunto" in n.lower() or "fijo" in n.lower() for n in names)
 
 
-@patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
-@patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
-@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjunto_fijo_cobranza_bytes")
-@patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
+@patch("app.services.notificaciones_envio_pipeline.send_email")
+@patch("app.services.notificaciones_envio_pipeline.generar_carta_cobranza_pdf")
+@patch("app.services.notificaciones_envio_pipeline.get_adjunto_fijo_cobranza_bytes")
+@patch("app.services.notificaciones_envio_pipeline.sync_email_config_from_db")
 def test_envio_cobranza_con_ambos_flags_true_adjunta_pdf_y_fijo(
     mock_sync,
     mock_adjunto_fijo,
@@ -670,7 +670,7 @@ def test_envio_cobranza_con_ambos_flags_true_adjunta_pdf_y_fijo(
         return "COBRANZA"
 
     with patch(
-        "app.api.v1.endpoints.notificaciones_tabs.get_plantilla_asunto_cuerpo",
+        "app.services.notificaciones_envio_pipeline.get_plantilla_asunto_cuerpo",
         return_value=("Asunto", "<p>Cuerpo</p>"),
     ):
         plantilla = MagicMock()
@@ -700,11 +700,11 @@ def test_envio_cobranza_con_ambos_flags_true_adjunta_pdf_y_fijo(
     assert "Documento.pdf" in names
 
 
-@patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
-@patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
-@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjunto_fijo_cobranza_bytes")
-@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjuntos_fijos_por_caso")
-@patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
+@patch("app.services.notificaciones_envio_pipeline.send_email")
+@patch("app.services.notificaciones_envio_pipeline.generar_carta_cobranza_pdf")
+@patch("app.services.notificaciones_envio_pipeline.get_adjunto_fijo_cobranza_bytes")
+@patch("app.services.notificaciones_envio_pipeline.get_adjuntos_fijos_por_caso")
+@patch("app.services.notificaciones_envio_pipeline.sync_email_config_from_db")
 def test_notificacion_llega_a_rapicreditca_con_dos_anexos(
     mock_sync,
     mock_adjuntos_por_caso,
@@ -749,7 +749,7 @@ def test_notificacion_llega_a_rapicreditca_con_dos_anexos(
         return "PAGO_1_DIA_ATRASADO"
 
     with patch(
-        "app.api.v1.endpoints.notificaciones_tabs.get_plantilla_asunto_cuerpo",
+        "app.services.notificaciones_envio_pipeline.get_plantilla_asunto_cuerpo",
         return_value=("Asunto prueba", "<p>Cuerpo</p>"),
     ):
         plantilla = MagicMock()
