@@ -38,11 +38,11 @@ class Settings(BaseSettings):
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
     )
-    # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada domingo 04:10 Caracas.
+    # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada domingo (horario en scheduler).
     ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 04:10 America/Caracas se recalcula "
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 04:35 America/Caracas se recalcula "
             "prestamos.abonos_drive_cuotas_cache para préstamos no LIQUIDADO/DESISTIMIENTO (una pasada semanal)."
         ),
     )
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 04:20 America/Caracas se recalcula "
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 05:10 America/Caracas se recalcula "
             "prestamos.fecha_entrega_q_aprobacion_cache (columna Q dentro de CONCILIACION_SHEET_COLUMNS_RANGE)."
         ),
     )
@@ -58,8 +58,8 @@ class Settings(BaseSettings):
     ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo y miércoles a las 04:05 America/Caracas "
-            "se recalcula la tabla prestamo_candidatos_drive (cédula columna E sin préstamo en BD; ver servicio)."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada lunes a sábado a las 03:40 America/Caracas "
+            "se recalcula la tabla prestamo_candidatos_drive (cédula columna E; ver servicio y scheduler)."
         ),
     )
 

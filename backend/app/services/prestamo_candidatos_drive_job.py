@@ -12,7 +12,7 @@ Validadores en cada payload:
    dos o más no cumplen (`validador_ve_max_un_prestamo_ok`; en candidatos V/E sin préstamo previo queda en true);
 3) no duplicada en hoja (`duplicada_en_hoja` / `validador_sin_duplicado_en_hoja_ok`).
 
-Job programado: lunes a sabado 03:15 America/Caracas (APScheduler; tras auditoría 03:00; depende del snapshot en tabla `drive` tras sync CONCILIACIÓN dom/mié 02:00).
+Job programado: lunes a sabado 03:40 America/Caracas (APScheduler; tras auditoría 03:00; lee tabla `drive` tras sync CONCILIACIÓN dom/mié 02:00).
 """
 from __future__ import annotations
 
