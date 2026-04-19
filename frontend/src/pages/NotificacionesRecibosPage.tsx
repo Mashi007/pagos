@@ -66,7 +66,8 @@ export default function NotificacionesRecibosPage() {
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
         slot,
-        fecha_caracas: fechaCaracas.trim() || undefined,
+        fecha_caracas:
+          soloSimular && fechaCaracas.trim() ? fechaCaracas.trim() : undefined,
         solo_simular: soloSimular,
       })
       if (out.sin_casos_en_ventana === true) {
@@ -123,8 +124,9 @@ export default function NotificacionesRecibosPage() {
         <CardHeader>
           <CardTitle>Vista previa y ejecución</CardTitle>
           <CardDescription>
-            Elija franja y fecha de referencia (opcional). «Solo simular» no envía correos ni escribe
-            idempotencia.
+            Franja y fecha opcional para listado y simulación. El envío real solo usa hoy (Caracas),
+            igual que el job programado según fecha de recepción (<code>fecha_registro</code>); no
+            envía lotes de otro día. «Solo simular» no envía correos ni escribe idempotencia.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -148,6 +150,12 @@ export default function NotificacionesRecibosPage() {
                 id="fecha-rec"
                 placeholder="Vacío = hoy"
                 value={fechaCaracas}
+                disabled={!soloSimular}
+                title={
+                  soloSimular
+                    ? 'Opcional: otra fecha para listar o simular'
+                    : 'El envío real solo acepta hoy Caracas; active simulación para otra fecha'
+                }
                 onChange={e => setFechaCaracas(e.target.value)}
               />
             </div>
@@ -156,7 +164,11 @@ export default function NotificacionesRecibosPage() {
             <input
               type="checkbox"
               checked={soloSimular}
-              onChange={e => setSoloSimular(e.target.checked)}
+              onChange={e => {
+                const v = e.target.checked
+                setSoloSimular(v)
+                if (!v) setFechaCaracas('')
+              }}
             />
             Solo simular (sin SMTP ni tabla recibos_email_envio)
           </label>

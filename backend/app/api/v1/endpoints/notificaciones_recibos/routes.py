@@ -22,7 +22,10 @@ class RecibosEjecutarBody(BaseModel):
     slot: Literal["manana", "tarde", "noche"]
     fecha_caracas: Optional[str] = Field(
         None,
-        description="Día calendario Caracas (YYYY-MM-DD). Por defecto hoy.",
+        description=(
+            "Día calendario Caracas (YYYY-MM-DD). Listado y simulación: opcional (omisión = hoy). "
+            "Envío real: ignorado en servidor — solo hoy, alineado al job programado y fecha_registro."
+        ),
     )
     solo_simular: bool = Field(
         False,
@@ -60,13 +63,23 @@ def get_recibos_listado(
 
 @router.post("/ejecutar")
 def post_recibos_ejecutar(body: RecibosEjecutarBody, db: Session = Depends(get_db)):
-    """Ejecuta el mismo lote que el job programado (admin)."""
+    """Ejecuta el mismo lote que el job programado (admin). Envío real: solo fecha de hoy Caracas."""
+    hoy = hoy_negocio()
     try:
-        d = parse_fecha_referencia_negocio(body.fecha_caracas) if body.fecha_caracas else hoy_negocio()
+        d = parse_fecha_referencia_negocio(body.fecha_caracas) if body.fecha_caracas else hoy
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     if d is None:
-        d = hoy_negocio()
+        d = hoy
+    if not body.solo_simular and d != hoy:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "El envío real de Recibos solo permite la fecha de hoy (America/Caracas), "
+                "la misma que usa el job programado para fecha_registro de recepción. "
+                "Use «Solo simular» para revisar otras fechas, u omita fecha_caracas al ejecutar hoy."
+            ),
+        )
     return ejecutar_recibos_envio_slot(
         db,
         fecha_dia=d,

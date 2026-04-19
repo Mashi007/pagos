@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,6 +17,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import SessionLocal
+from app.services.cuota_estado import hoy_negocio
 from app.services.recibos_conciliacion_email_job import (
     _bounds_fecha_registro_caracas,
     ejecutar_recibos_envio_slot,
@@ -51,12 +52,16 @@ def test_bounds_manana_tarde_noche_naive_caracas():
 
 def test_ejecutar_sin_casos_en_ventana():
     db = MagicMock()
+    fixed = date(2026, 4, 19)
     with patch(
+        "app.services.recibos_conciliacion_email_job.hoy_negocio",
+        return_value=fixed,
+    ), patch(
         "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
         return_value=[],
     ):
         out = ejecutar_recibos_envio_slot(
-            db, fecha_dia=date(2026, 4, 19), slot="manana", solo_simular=False
+            db, fecha_dia=fixed, slot="manana", solo_simular=False
         )
     assert out["sin_casos_en_ventana"] is True
     assert out["pagos_en_ventana"] == 0
@@ -83,6 +88,7 @@ def test_ejecutar_simulacion_no_llama_pdf_ni_smtp():
         "pagos_realizados": [],
         "emails": ["cliente@example.com"],
     }
+    fixed = date(2026, 4, 19)
     with patch(
         "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
         return_value=pagos,
@@ -104,7 +110,7 @@ def test_ejecutar_simulacion_no_llama_pdf_ni_smtp():
         "app.services.recibos_conciliacion_email_job.send_email",
     ) as m_send:
         out = ejecutar_recibos_envio_slot(
-            db, fecha_dia=date(2026, 4, 19), slot="manana", solo_simular=True
+            db, fecha_dia=fixed, slot="manana", solo_simular=True
         )
     m_pdf.assert_not_called()
     m_send.assert_not_called()
@@ -137,7 +143,11 @@ def test_ejecutar_envio_mockea_smtp_y_pdf_valido():
     }
     pdf_ok = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
 
+    fixed = date(2026, 4, 19)
     with patch(
+        "app.services.recibos_conciliacion_email_job.hoy_negocio",
+        return_value=fixed,
+    ), patch(
         "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
         return_value=pagos,
     ), patch(
@@ -163,7 +173,7 @@ def test_ejecutar_envio_mockea_smtp_y_pdf_valido():
         return_value=(True, None),
     ) as m_send:
         out = ejecutar_recibos_envio_slot(
-            db, fecha_dia=date(2026, 4, 19), slot="manana", solo_simular=False
+            db, fecha_dia=fixed, slot="manana", solo_simular=False
         )
 
     assert out["enviados"] == 1
@@ -193,7 +203,11 @@ def test_ejecutar_email_recibos_desactivado_no_smtp():
             "monto_pagado": 1.0,
         }
     ]
+    fixed = date(2026, 4, 19)
     with patch(
+        "app.services.recibos_conciliacion_email_job.hoy_negocio",
+        return_value=fixed,
+    ), patch(
         "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
         return_value=pagos,
     ), patch(
@@ -203,11 +217,27 @@ def test_ejecutar_email_recibos_desactivado_no_smtp():
         "app.services.recibos_conciliacion_email_job.send_email",
     ) as m_send:
         out = ejecutar_recibos_envio_slot(
-            db, fecha_dia=date(2026, 4, 19), slot="tarde", solo_simular=False
+            db, fecha_dia=fixed, slot="tarde", solo_simular=False
         )
     m_send.assert_not_called()
     assert out.get("error") == "email_activo_recibos_desactivado"
     assert out["pagos_en_ventana"] == 1
+
+
+def test_ejecutar_real_rechaza_fecha_distinta_a_hoy_sin_consultar_bd():
+    """Envío real si fecha_dia ≠ hoy Caracas: no listar pagos ni enviar (regla job programado)."""
+    db = MagicMock()
+    ayer = hoy_negocio() - timedelta(days=1)
+    with patch(
+        "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
+    ) as m_listar:
+        out = ejecutar_recibos_envio_slot(
+            db, fecha_dia=ayer, slot="manana", solo_simular=False
+        )
+    m_listar.assert_not_called()
+    assert out.get("error") == "envio_real_solo_fecha_recepcion_hoy_caracas"
+    assert out.get("hoy_negocio") == hoy_negocio().isoformat()
+    assert out["enviados"] == 0
 
 
 def test_listar_pagos_recibos_ventana_estructura_si_hay_datos(db):

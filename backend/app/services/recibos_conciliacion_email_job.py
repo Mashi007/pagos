@@ -4,7 +4,10 @@ Recibos: correo con PDF de estado de cuenta tras pagos conciliados (tabla pagos)
 Criterio de negocio (alineado a BD real):
 - Conciliación y marca de pago están en ``pagos`` (``conciliado``, ``fecha_registro``, ``estado``).
 - Vínculo con cuotas: ``cuotas.pago_id = pagos.id`` o fila en ``cuota_pagos`` (pagos aplicados a cuotas).
-- Ventanas por **fecha_registro** en America/Caracas (naive = reloj Caracas, coherente con cuota_estado).
+- Ventanas por **fecha_registro** (recepción/registro en sistema) en America/Caracas (naive = reloj Caracas).
+
+Regla: el **envío real** (no simulación) solo corre si ``fecha_dia`` es **hoy** ``hoy_negocio()``,
+igual que los jobs 11:05 / 17:05 / 23:55; no se envía correo para lotes de otro día calendario.
 
 Franjas diarias (mismo día Caracas, ``fecha_registro`` inclusive en fin de ventana):
 - ``manana``: 01:00–11:00:59 → envío programado 11:05
@@ -136,7 +139,35 @@ def ejecutar_recibos_envio_slot(
     Por cada cédula distinta con pagos en ventana: genera estado de cuenta y envía a correos del cliente.
     Si ``solo_simular`` es True, no persiste ``recibos_email_envio`` ni envía SMTP ni genera PDF
     (solo valida datos de cliente y destinatarios).
+
+    Envío real: ``fecha_dia`` debe coincidir con ``hoy_negocio()`` (recepción día actual = criterio del job programado).
     """
+    hoy = hoy_negocio()
+    if not solo_simular and fecha_dia != hoy:
+        logger.info(
+            "recibos: envío real rechazado — fecha_dia=%s ≠ hoy Caracas %s (solo recepción del día del job).",
+            fecha_dia.isoformat(),
+            hoy.isoformat(),
+        )
+        return {
+            "fecha_dia": fecha_dia.isoformat(),
+            "hoy_negocio": hoy.isoformat(),
+            "slot": slot,
+            "solo_simular": solo_simular,
+            "sin_casos_en_ventana": False,
+            "error": "envio_real_solo_fecha_recepcion_hoy_caracas",
+            "pagos_en_ventana": 0,
+            "cedulas_distintas": 0,
+            "enviados": 0,
+            "fallidos": 0,
+            "omitidos_sin_email": 0,
+            "omitidos_ya_enviado": 0,
+            "omitidos_desistimiento": 0,
+            "omitidos_sin_datos": 0,
+            "omitidos_error_estado_cuenta": 0,
+            "detalles": [],
+        }
+
     pagos = listar_pagos_recibos_ventana(db, fecha_dia=fecha_dia, slot=slot)
     cedulas = _cedulas_distintas_desde_pagos(pagos)
 
