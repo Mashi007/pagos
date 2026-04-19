@@ -4,6 +4,7 @@ Propuestas de alta de cliente desde snapshot `drive` (columnas D–G = nombres, 
 Comparación de cédulas: misma normalización que POST /clientes/check-cedulas (`_normalizar_cedula_carga_masiva`).
 Validación de formato de cédula: `validate_cedula` (mismas reglas que Validadores).
 Nombre columna D: no seleccionable si el texto (tras strip, misma regla que POST /clientes) ya existe en `clientes.nombres`.
+Correo columna G: no seleccionable si el mismo texto (tras strip) ya está en `clientes.email` o `clientes.email_secundario` (incluye placeholder si ya está ocupado).
 Teléfono columna F: rechaza correos en F; normalización + `validate_phone` (04xx / 02xx, 11 dígitos).
 """
 from __future__ import annotations
@@ -38,7 +39,7 @@ _PLACEHOLDER_EMAIL = "revisar@email.com"
 
 # Subir cuando cambien reglas de candidatos (cédula, teléfono, etc.) para no servir JSON obsoleto
 # desde `drive_clientes_candidatos_cache` aunque `synced_at` de la hoja no haya cambiado.
-CANDIDATOS_DRIVE_CACHE_RULES_VERSION = 6
+CANDIDATOS_DRIVE_CACHE_RULES_VERSION = 7
 
 
 def _cell(v: Any) -> str:
@@ -204,6 +205,7 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
         tel_ok, tel_val, tel_err = _telefono_col_f_validacion_estricta(raw_f)
         tel_display = tel_val if tel_ok else (tel_norm or raw_f or None)
         nombres_norm = _normalize_for_duplicate(nombres_propuesto)
+        email_key = _normalize_for_duplicate(str(email_propuesto))
 
         pending.append(
             {
@@ -220,6 +222,7 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
                 "telefono_valida": tel_ok,
                 "telefono_error": tel_err,
                 "_nombres_norm": nombres_norm,
+                "_email_key": email_key,
                 "defaults": {
                     "nombres": nombres_propuesto,
                     "telefono": tel_val if tel_ok else (tel_norm or ""),
@@ -245,6 +248,30 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
             if ns and ns not in nom_hit:
                 nom_hit[ns] = int(rid)
 
+    em_keys_buscar = {str(p.get("_email_key") or "").strip() for p in pending if (p.get("_email_key") or "").strip()}
+    email_hit_lista: Dict[str, int] = {}
+    if em_keys_buscar:
+        em_list = list(em_keys_buscar)
+        rows_p = db.execute(select(Cliente.id, Cliente.email).where(Cliente.email.in_(em_list))).all()
+        for rid, mail in rows_p or []:
+            if mail is None:
+                continue
+            m = str(mail).strip()
+            if m and m not in email_hit_lista:
+                email_hit_lista[m] = int(rid)
+        rows_s = db.execute(
+            select(Cliente.id, Cliente.email_secundario).where(
+                Cliente.email_secundario.isnot(None),
+                Cliente.email_secundario.in_(em_list),
+            )
+        ).all()
+        for rid, mail2 in rows_s or []:
+            if mail2 is None:
+                continue
+            m = str(mail2).strip()
+            if m and m not in email_hit_lista:
+                email_hit_lista[m] = int(rid)
+
     candidatos: List[Dict[str, Any]] = []
     for p in pending:
         nn = str(p.pop("_nombres_norm", "") or "")
@@ -258,17 +285,31 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
                 "Corrija la columna D en Drive o el registro existente antes de importar."
             )
         )
+        ek = str(p.pop("_email_key", "") or "").strip()
+        ex_mail = email_hit_lista.get(ek) if ek else None
+        email_valido = not (ek and ex_mail is not None)
+        email_error = (
+            None
+            if email_valido
+            else (
+                f"Ya existe un cliente con el mismo correo en tabla clientes (ID {ex_mail}). "
+                "Corrija la columna G en Drive o use otro correo."
+            )
+        )
         seleccionable = (
             bool(p["cedula_valida"])
             and not p["duplicada_en_hoja"]
             and bool(p["telefono_valida"])
             and nombres_valido
+            and email_valido
         )
         candidatos.append(
             {
                 **p,
                 "nombres_valido": nombres_valido,
                 "nombres_error": nombres_error,
+                "email_valido": email_valido,
+                "email_error": email_error,
                 "seleccionable": seleccionable,
             }
         )
@@ -382,7 +423,6 @@ def importar_seleccion_desde_drive(
     early_errors: List[Dict[str, Any]] = []
     seen_cmp: set[str] = set()
     ced_sql_tabla = _expr_cedula_normalizada_sql(Cliente.cedula)
-    ph = _PLACEHOLDER_EMAIL.lower()
 
     # Fase 1: validación + ClienteCreate; sin consultas por fila a BD (duplicados se resuelven en fase 2).
     staged: List[Tuple[int, Dict[str, Any], ClienteCreate, str, str, str, str]] = []
@@ -406,6 +446,11 @@ def importar_seleccion_desde_drive(
                 msg = str(
                     info.get("nombres_error")
                     or "No se permite guardar: el nombre completo (columna D) ya existe en tabla clientes."
+                )
+            elif not info.get("email_valido", True):
+                msg = str(
+                    info.get("email_error")
+                    or "No se permite guardar: el correo (columna G) ya existe en tabla clientes."
                 )
             elif not info.get("telefono_valida", True):
                 msg = str(info.get("telefono_error") or "No se permite guardar: teléfono columna F inválido.")
@@ -470,7 +515,8 @@ def importar_seleccion_desde_drive(
             if n and n not in nom_hit:
                 nom_hit[str(n)] = int(rid)
 
-    em_set = {t[6] for t in staged if t[5] != ph}
+    # Misma condición que create_cliente_from_payload: cualquier email no vacío (incl. placeholder) vs BD.
+    em_set = {(t[6] or "").strip() for t in staged if (t[6] or "").strip()}
     email_hit: Dict[str, int] = {}
     if em_set:
         em_list = list(em_set)
@@ -496,7 +542,7 @@ def importar_seleccion_desde_drive(
 
     late_errors: List[Dict[str, Any]] = []
     seen_nombres: set[str] = set()
-    seen_emails: set[str] = set()
+    seen_email_lower: set[str] = set()
     carga: List[Tuple[int, Dict[str, Any], ClienteCreate]] = []
     for sr, info, payload, ck, nombres_post, em_cmp, em_post in staged:
         if ck and ck != "Z999999999" and ck in ced_hit:
@@ -526,13 +572,14 @@ def importar_seleccion_desde_drive(
                 }
             )
             continue
-        if em_cmp != ph and em_cmp in seen_emails:
+        em_key = (em_post or "").strip()
+        em_low = em_key.lower()
+        if em_key and em_low in seen_email_lower:
             late_errors.append(
                 {"sheet_row_number": sr, "error": "Correo (columna G) duplicado dentro del mismo lote enviado."}
             )
             continue
-        if em_cmp != ph:
-            em_key = (em_post or "").strip()
+        if em_key:
             ex_id = email_hit.get(em_key)
             if ex_id is not None:
                 late_errors.append(
@@ -548,8 +595,8 @@ def importar_seleccion_desde_drive(
 
         if nombres_post:
             seen_nombres.add(nombres_post)
-        if em_cmp != ph:
-            seen_emails.add(em_cmp)
+        if em_key:
+            seen_email_lower.add(em_low)
         carga.append((sr, info, payload))
 
     pre_errors = early_errors + late_errors
@@ -664,6 +711,11 @@ def importar_fila_desde_drive(
             det = str(
                 info.get("nombres_error")
                 or "El nombre completo (columna D) ya existe en tabla clientes (misma regla que POST /clientes)."
+            )
+        elif not info.get("email_valido", True):
+            det = str(
+                info.get("email_error")
+                or "El correo (columna G) ya existe en tabla clientes (correo 1 o 2; misma regla que POST /clientes)."
             )
         elif not info.get("telefono_valida", True):
             det = str(info.get("telefono_error") or "Teléfono columna F inválido.")
@@ -869,6 +921,8 @@ def exportar_candidatos_drive_excel_y_borrar_filas(
             motivo = "duplicada_en_hoja"
         elif not c.get("nombres_valido", True):
             motivo = "nombre_duplicado_en_clientes"
+        elif not c.get("email_valido", True):
+            motivo = "email_duplicado_en_clientes"
         elif not c.get("telefono_valida", True):
             motivo = "telefono_invalido"
         elif c.get("seleccionable"):
