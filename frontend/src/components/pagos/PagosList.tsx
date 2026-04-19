@@ -90,6 +90,10 @@ import {
   claveDocumentoPagoListaNormalizada,
   textoDocumentoPagoParaListado,
 } from '../../utils/pagoExcelValidation'
+import {
+  abrirStaffComprobanteDesdeHref,
+  esUrlComprobanteImagenConAuth,
+} from '../../utils/comprobanteImagenAuth'
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
@@ -1623,16 +1627,48 @@ export function PagosList() {
                                     const u =
                                       (pago.link_comprobante || '').trim() ||
                                       (pago.documento_ruta || '').trim()
+                                    const requiereSesion =
+                                      u && esUrlComprobanteImagenConAuth(u)
                                     return u ? (
                                       <a
-                                        href={u}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
-                                        title="Comprobante en Drive (import Gmail)"
+                                        href={requiereSesion ? '#' : u}
+                                        target={
+                                          requiereSesion ? undefined : '_blank'
+                                        }
+                                        rel={
+                                          requiereSesion
+                                            ? undefined
+                                            : 'noopener noreferrer'
+                                        }
+                                        className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
+                                        title={
+                                          requiereSesion
+                                            ? 'Comprobante en el sistema (requiere sesión)'
+                                            : 'Comprobante en Drive u otro enlace externo'
+                                        }
+                                        onClick={
+                                          requiereSesion
+                                            ? e => {
+                                                e.preventDefault()
+                                                void (async () => {
+                                                  try {
+                                                    await abrirStaffComprobanteDesdeHref(
+                                                      u
+                                                    )
+                                                  } catch {
+                                                    toast.error(
+                                                      'No se pudo abrir el comprobante. Compruebe su sesión.'
+                                                    )
+                                                  }
+                                                })()
+                                              }
+                                            : undefined
+                                        }
                                       >
                                         <Eye className="h-4 w-4" />
-                                        Ver en Drive
+                                        {requiereSesion
+                                          ? 'Ver comprobante'
+                                          : 'Ver en Drive'}
                                       </a>
                                     ) : (
                                       <span className="text-sm text-gray-500">

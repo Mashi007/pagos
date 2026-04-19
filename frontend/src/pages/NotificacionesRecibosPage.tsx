@@ -43,6 +43,7 @@ import {
   type ReciboConciliacionFila,
 } from '../services/notificacionService'
 import { apiClient } from '../services/api'
+import { pathApiComprobanteImagenDesdeHref } from '../utils/comprobanteImagenAuth'
 import { prestamoService } from '../services/prestamoService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../types/errors'
@@ -73,18 +74,6 @@ function pareceUrlImagenComprobante(u: string): boolean {
   const path = u.split('?')[0].toLowerCase()
   if (/\.(jpe?g|png|gif|webp)$/i.test(path)) return true
   return low.includes('googleusercontent')
-}
-
-/** Ruta `/api/v1/pagos/comprobante-imagen/{id}` para el cliente autenticado (desde URL absoluta o relativa). */
-function pathApiComprobanteImagenDesdeHref(href: string): string | null {
-  const t = String(href ?? '').trim()
-  if (!t) return null
-  const m = /(\/api\/v1\/pagos\/comprobante-imagen\/[^/?#\s]+)/i.exec(t)
-  return m ? m[1] : null
-}
-
-function esComprobanteImagenConAuth(href: string): boolean {
-  return pathApiComprobanteImagenDesdeHref(href) != null
 }
 
 const fmtMontoPagadoRecibo = new Intl.NumberFormat('es-VE', {

@@ -143,6 +143,69 @@ def _monto_tabla_y_cuerpo(monto: str, moneda: Optional[str]) -> tuple[str, str]:
     return (t or "-"), sym
 
 
+def _bytes_pdf_desde_buffer(raw: bytes) -> Optional[bytes]:
+    """
+    Devuelve bytes listos para fitz.open(stream=..., filetype='pdf').
+    Acepta BOM UTF-8 y basura antes de %PDF- (algunos escáneres / apps tipo PDFReader).
+    """
+    if not raw or len(raw) < 12:
+        return None
+    b = raw
+    if b.startswith(b"\xef\xbb\xbf"):
+        b = b[3:]
+    if b.startswith(b"\xfe\xff") or b.startswith(b"\xff\xfe"):
+        return None
+    pos = b.find(b"%PDF-")
+    if pos < 0:
+        return None
+    if pos > 0:
+        b = b[pos:]
+    if len(b) < 12:
+        return None
+    return b
+
+
+def rasterizar_pdf_comprobante_primera_pagina_png(pdf_bytes: bytes) -> Optional[bytes]:
+    """
+    Convierte la primera página de un PDF a PNG (para incrustar en recibos ReportLab).
+    Requiere PyMuPDF (pymupdf). None si falla o no hay páginas.
+    """
+    pdf_norm = _bytes_pdf_desde_buffer(pdf_bytes)
+    if not pdf_norm:
+        return None
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        logger.warning(
+            "Recibo: PyMuPDF no disponible; no se puede rasterizar comprobante PDF."
+        )
+        return None
+    doc = None
+    try:
+        doc = fitz.open(stream=pdf_norm, filetype="pdf")
+        if doc.page_count < 1:
+            return None
+        page = doc.load_page(0)
+        # ~144–168 dpi según ancho carta; suficiente legibilidad sin inflar demasiado el PDF final
+        mat = fitz.Matrix(2.25, 2.25)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        out = pix.tobytes("png")
+        return out if out and len(out) > 32 else None
+    except Exception:
+        logger.warning(
+            "Recibo: error rasterizando primera página de comprobante PDF (bytes=%s)",
+            len(pdf_bytes),
+            exc_info=True,
+        )
+        return None
+    finally:
+        if doc is not None:
+            try:
+                doc.close()
+            except Exception:
+                pass
+
+
 def _append_comprobante_adjunto_recibo(
     story: List[Any],
     *,
@@ -153,8 +216,8 @@ def _append_comprobante_adjunto_recibo(
     comprobante_nombre: Optional[str],
 ) -> None:
     """
-    Incrusta en el PDF la imagen/PDF del comprobante (bytes + tipo MIME) cuando es raster.
-    Si el archivo es PDF, solo se anade nota (ReportLab no incrusta PDF aqui).
+    Incrusta en el PDF la imagen del comprobante (JPEG/PNG/WebP/GIF/PDF rasterizado).
+    Los PDF se muestran rasterizando la primera página (regla: el recibo incluye la imagen del comprobante).
     """
     if not comprobante_bytes or len(comprobante_bytes) < 12:
         return
@@ -164,10 +227,38 @@ def _append_comprobante_adjunto_recibo(
     from reportlab.platypus import Image as RLImage, Paragraph, Spacer, Table, TableStyle
 
     ct = (comprobante_tipo or "").lower()
-    is_pdf = "pdf" in ct or comprobante_bytes[:5] == b"%PDF-"
+    nom_l = (comprobante_nombre or "").strip().lower()
+    pref = comprobante_bytes[: min(4096, len(comprobante_bytes))]
+    is_pdf = (
+        "pdf" in ct
+        or comprobante_bytes[:5] == b"%PDF-"
+        or b"%PDF-" in pref
+        or nom_l.endswith(".pdf")
+    )
     name_esc = html.escape((comprobante_nombre or "").strip()[:160]) if (comprobante_nombre or "").strip() else ""
 
+    bytes_para_imagen = comprobante_bytes
+    tipo_para_imagen = comprobante_tipo
+    pdf_fallback_note = False
     if is_pdf:
+        raster = rasterizar_pdf_comprobante_primera_pagina_png(comprobante_bytes)
+        if raster:
+            bytes_para_imagen = raster
+            tipo_para_imagen = "image/png"
+            is_pdf = False
+            story.append(Paragraph("Comprobante digital (PDF — página 1)", section_style))
+            if name_esc:
+                story.append(
+                    Paragraph(
+                        f'<font size="8" color="#64748b">{name_esc}</font>',
+                        section_style,
+                    )
+                )
+            story.append(Spacer(1, 6))
+        else:
+            pdf_fallback_note = True
+
+    if pdf_fallback_note:
         story.append(Paragraph("Comprobante digital (PDF)", section_style))
         if name_esc:
             story.append(
@@ -183,13 +274,20 @@ def _append_comprobante_adjunto_recibo(
                     section_style,
                 )
             )
+        story.append(
+            Paragraph(
+                '<font size="8" color="#b45309">No se pudo generar la vista de la primera página; '
+                "instale PyMuPDF (pymupdf) o suba el comprobante como imagen.</font>",
+                section_style,
+            )
+        )
         story.append(Spacer(1, 12))
         return
 
     try:
         from PIL import Image as PILImage
 
-        pil = PILImage.open(BytesIO(comprobante_bytes))
+        pil = PILImage.open(BytesIO(bytes_para_imagen))
         pil.load()
         if pil.mode in ("RGBA", "P", "PA"):
             pil = pil.convert("RGB")
@@ -225,8 +323,8 @@ def _append_comprobante_adjunto_recibo(
     except Exception:
         logger.warning(
             "Recibo Cobros: no se pudo embeber comprobante como imagen (tipo=%s, bytes=%s)",
-            (comprobante_tipo or "")[:80],
-            len(comprobante_bytes),
+            (tipo_para_imagen or "")[:80],
+            len(bytes_para_imagen or b""),
             exc_info=True,
         )
 

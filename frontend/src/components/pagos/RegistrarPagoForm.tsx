@@ -14,6 +14,7 @@ import {
   CheckCircle,
   AlertCircle,
   Info,
+  Eye,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -92,6 +93,13 @@ import { hoyYmdCaracas } from '../../utils/fechaZona'
 
 import { splitNumeroDocumentoAlmacenado } from '../../utils/documentoPago'
 
+import { apiClient } from '../../services/api'
+
+import {
+  abrirStaffComprobanteDesdeHref,
+  pathApiComprobanteImagenDesdeHref,
+} from '../../utils/comprobanteImagenAuth'
+
 import {
   formatMontoBsVe,
   parseMontoLatam,
@@ -103,6 +111,85 @@ const DUPLICADO_DOCUMENTO_UI =
 
 const DUPLICADO_HUELLA_UI =
   'Pago duplicado detectado para este prestamo, fecha, monto y referencia.'
+
+function pareceUrlImagenComprobanteExterna(u: string): boolean {
+  if (!u) return false
+  const low = u.toLowerCase()
+  const path = u.split('?')[0].toLowerCase()
+  if (/\.(jpe?g|png|gif|webp)$/i.test(path)) return true
+  return low.includes('googleusercontent')
+}
+
+/**
+ * Miniatura del comprobante ya guardado: interno vía sesión (blob); externo con <img> si parece imagen.
+ */
+function useVistaPreviaComprobanteGuardado(
+  hrefInicial: string,
+  activo: boolean
+): { src: string | null; cargando: boolean; error: boolean } {
+  const pathAuth = activo ? pathApiComprobanteImagenDesdeHref(hrefInicial) : null
+  const requiereSesion = Boolean(pathAuth)
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    if (!activo || !hrefInicial.trim()) {
+      setBlobUrl(u => {
+        if (u) URL.revokeObjectURL(u)
+        return null
+      })
+      setCargando(false)
+      setError(false)
+      return
+    }
+    if (!requiereSesion || !pathAuth) {
+      setBlobUrl(u => {
+        if (u) URL.revokeObjectURL(u)
+        return null
+      })
+      setCargando(false)
+      setError(false)
+      return
+    }
+    let cancelado = false
+    ;(async () => {
+      try {
+        setCargando(true)
+        setError(false)
+        const blob = await apiClient.getBlob(pathAuth)
+        if (cancelado) return
+        const objectUrl = URL.createObjectURL(blob)
+        setBlobUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev)
+          return objectUrl
+        })
+      } catch {
+        if (!cancelado) setError(true)
+      } finally {
+        if (!cancelado) setCargando(false)
+      }
+    })()
+    return () => {
+      cancelado = true
+      setBlobUrl(u => {
+        if (u) URL.revokeObjectURL(u)
+        return null
+      })
+    }
+  }, [activo, hrefInicial, pathAuth, requiereSesion])
+
+  if (!activo || !hrefInicial.trim()) {
+    return { src: null, cargando: false, error: false }
+  }
+  if (requiereSesion) {
+    return { src: blobUrl, cargando, error }
+  }
+  if (pareceUrlImagenComprobanteExterna(hrefInicial)) {
+    return { src: hrefInicial, cargando: false, error: false }
+  }
+  return { src: null, cargando: false, error: false }
+}
 
 /** Texto inicial del campo monto: vacío en alta (evita 0 + dígitos → 013). */
 function montoInicialTextoDesdeNumero(
@@ -200,7 +287,7 @@ export function RegistrarPagoForm({
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
 
-  const { isAdmin } = usePermissions()
+  const { revisionManualFullEdit } = usePermissions()
 
   const codigoDocumentoInputRef = useRef<HTMLInputElement>(null)
 
@@ -213,6 +300,22 @@ export function RegistrarPagoForm({
   const [archivoComprobante, setArchivoComprobante] = useState<File | null>(
     null
   )
+
+  const [objUrlVistaArchivoNuevo, setObjUrlVistaArchivoNuevo] = useState<
+    string | null
+  >(null)
+
+  useEffect(() => {
+    if (!archivoComprobante) {
+      setObjUrlVistaArchivoNuevo(null)
+      return
+    }
+    const u = URL.createObjectURL(archivoComprobante)
+    setObjUrlVistaArchivoNuevo(u)
+    return () => {
+      URL.revokeObjectURL(u)
+    }
+  }, [archivoComprobante])
 
   const [vistoRevisionManualOpen, setVistoRevisionManualOpen] = useState(false)
 
@@ -289,6 +392,16 @@ export function RegistrarPagoForm({
       : 0
 
   const { data: prestamoContextoRevisionManual } = usePrestamo(pidRevisionCtx)
+
+  const linkComprobanteParaVista = (formData.link_comprobante || '').trim()
+
+  const vistaPreviaComprobanteActiva =
+    isEditing && Boolean(linkComprobanteParaVista) && !archivoComprobante
+
+  const vistaPreviaComprobante = useVistaPreviaComprobanteGuardado(
+    linkComprobanteParaVista,
+    vistaPreviaComprobanteActiva
+  )
 
   /** Incluye el préstamo cargado por ID si la lista por cédula aún no lo trae (evita placeholder "Seleccione el crédito" con valor 478). */
   const opcionesBancoSelect = useMemo(
@@ -691,7 +804,13 @@ export function RegistrarPagoForm({
 
   /** Visto (revisión manual): desambigua con código A####/P#### en el campo Código y guarda (BD almacena comprobante + §CD: + código). */
   const handleVistoRellenarCodigoYGuardar = async () => {
-    if (isSubmitting || !mostrarCampoCodigoDocumento || !isAdmin) return
+    if (
+      isSubmitting ||
+      !mostrarCampoCodigoDocumento ||
+      !revisionManualFullEdit
+    ) {
+      return
+    }
 
     const msg = [errors.general, errors.numero_documento]
       .filter(Boolean)
@@ -1329,19 +1448,19 @@ export function RegistrarPagoForm({
                     type="text"
                     readOnly
                     aria-readonly="true"
-                    title="Este campo no se escribe a mano. Un administrador lo rellena con el botón Visto."
+                    title="Este campo no se escribe a mano. Se rellena con el botón Visto (revisión manual)."
                     value={String(formData.codigo_documento ?? '')}
                     maxLength={24}
                     className={`cursor-default bg-slate-50 text-slate-800 ${
                       errors.codigo_documento ? 'border-red-500' : ''
                     }`}
-                    placeholder="Pendiente: use Visto (admin)"
+                    placeholder="Pendiente: use Visto"
                   />
 
                   <p className="text-xs text-gray-600">
                     No se puede teclear aquí. El token (formato A#### / P####)
                     lo genera y guarda el sistema al pulsar{' '}
-                    <strong>Visto</strong> (admin), igual que en carga masiva.
+                    <strong>Visto</strong> (mismo criterio que en carga masiva).
                   </p>
 
                   {errors.codigo_documento && (
@@ -1353,11 +1472,11 @@ export function RegistrarPagoForm({
               ) : null}
             </div>
 
-            {mostrarCampoCodigoDocumento && isAdmin ? (
+            {mostrarCampoCodigoDocumento && revisionManualFullEdit ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200/70 bg-violet-50 px-3 py-2">
                 <p className="min-w-0 flex-1 text-xs text-violet-900">
-                  <span className="font-medium">Admin:</span> Visto pone el
-                  código y guarda.
+                  <span className="font-medium">Revisión manual:</span> Visto
+                  pone el código y guarda.
                 </p>
                 <div className="flex shrink-0 items-center gap-2">
                   <button
@@ -1442,24 +1561,113 @@ export function RegistrarPagoForm({
               </div>
 
               {archivoComprobante ? (
-                <p
-                  className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900"
-                  role="status"
-                >
-                  Imagen cargada. Se subirá al guardar el pago.
-                </p>
+                <div className="space-y-2" role="status">
+                  <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+                    Imagen nueva lista. Se subirá al guardar el pago.
+                  </p>
+                  {objUrlVistaArchivoNuevo ? (
+                    <div className="flex flex-wrap items-end gap-3">
+                      <img
+                        src={objUrlVistaArchivoNuevo}
+                        alt="Vista previa del comprobante nuevo"
+                        className="max-h-64 max-w-full rounded border border-gray-200 object-contain"
+                      />
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
 
               {isEditing &&
-              (linkComprobanteInicialRef.current || '').trim() &&
+              linkComprobanteParaVista &&
               !archivoComprobante ? (
-                <p
-                  className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-                  role="status"
-                >
-                  Comprobante ya registrado (sin vista previa). Suba otra imagen
-                  solo si desea reemplazarlo.
-                </p>
+                <div className="space-y-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                  <p className="font-medium text-slate-900">
+                    Comprobante ya registrado
+                  </p>
+                  {vistaPreviaComprobante.cargando ? (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Loader2
+                        className="h-5 w-5 shrink-0 animate-spin"
+                        aria-hidden
+                      />
+                      <span>Cargando vista previa…</span>
+                    </div>
+                  ) : null}
+                  {vistaPreviaComprobante.error ? (
+                    <p className="text-red-600">
+                      No se pudo cargar la imagen. Compruebe su sesión o abra el
+                      comprobante en una pestaña nueva.
+                    </p>
+                  ) : null}
+                  {vistaPreviaComprobante.src ? (
+                    <div className="flex flex-wrap items-end gap-3">
+                      <img
+                        src={vistaPreviaComprobante.src}
+                        alt="Comprobante registrado"
+                        className="max-h-64 max-w-full rounded border border-gray-200 bg-white object-contain"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              await abrirStaffComprobanteDesdeHref(
+                                linkComprobanteParaVista
+                              )
+                            } catch {
+                              toast.error(
+                                'No se pudo abrir el comprobante en una pestaña nueva.'
+                              )
+                            }
+                          })()
+                        }}
+                      >
+                        <Eye className="h-4 w-4" aria-hidden />
+                        Abrir
+                      </Button>
+                    </div>
+                  ) : null}
+                  {!vistaPreviaComprobante.cargando &&
+                  !vistaPreviaComprobante.src &&
+                  !vistaPreviaComprobante.error &&
+                  linkComprobanteParaVista &&
+                  !pathApiComprobanteImagenDesdeHref(
+                    linkComprobanteParaVista
+                  ) ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-slate-700">
+                        Enlace externo (p. ej. Drive). Puede abrirlo para
+                        revisar el archivo.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              await abrirStaffComprobanteDesdeHref(
+                                linkComprobanteParaVista
+                              )
+                            } catch {
+                              toast.error('No se pudo abrir el enlace.')
+                            }
+                          })()
+                        }}
+                      >
+                        <Eye className="h-4 w-4" aria-hidden />
+                        Abrir enlace
+                      </Button>
+                    </div>
+                  ) : null}
+                  <p className="text-xs text-slate-600">
+                    Suba otra imagen solo si desea reemplazar el comprobante.
+                  </p>
+                </div>
               ) : null}
 
               {errors.link_comprobante && (

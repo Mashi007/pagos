@@ -501,7 +501,7 @@ export function TablaEditablePagos({
 
   onEliminarFila,
 }: FilaEditableProps) {
-  const { isAdmin } = usePermissions()
+  const { revisionManualFullEdit } = usePermissions()
 
   const [vistoPagoIdCargando, setVistoPagoIdCargando] = useState<number | null>(
     null
@@ -1075,7 +1075,7 @@ export function TablaEditablePagos({
                           esDupBDAccion)
 
                       const mostrarAutorizarDupArchivoSinSufijo =
-                        isAdmin &&
+                        revisionManualFullEdit &&
                         esDupArchivoFila &&
                         !archivoDupJustificado &&
                         !!onMarcarDocumentoRepetidoArchivoJustificado &&
@@ -1150,9 +1150,9 @@ export function TablaEditablePagos({
                             <button
                               type="button"
                               onClick={async () => {
-                                if (!isAdmin) {
+                                if (!revisionManualFullEdit) {
                                   toast.error(
-                                    'Solo un usuario administrador puede aplicar Visto.'
+                                    'No tiene permiso para aplicar Visto en esta vista.'
                                   )
                                   return
                                 }
@@ -1165,18 +1165,18 @@ export function TablaEditablePagos({
                                 }
                               }}
                               disabled={
-                                !isAdmin ||
+                                !revisionManualFullEdit ||
                                 vistoPagoIdCargando != null ||
                                 isSaving(row._rowIndex) ||
                                 serviceStatus === 'offline'
                               }
                               title={
-                                isAdmin
+                                revisionManualFullEdit
                                   ? 'Control 5 (auditoría): si el comprobante ya termina en _A####/_P#### (carga masiva), Visto marca exclusión sin exigir duplicado fecha+monto. Si no hay sufijo, aplica el flujo clásico (grupo misma fecha y monto) o use el ícono de ojo para desambiguar.'
-                                  : 'Visto: solo administradores.'
+                                  : 'Visto: requiere permiso de edición en revisión manual (administrador, gerente u operador).'
                               }
                               className={`inline-flex items-center justify-center gap-0.5 rounded border p-1.5 text-[10px] font-semibold disabled:opacity-60 ${
-                                isAdmin
+                                revisionManualFullEdit
                                   ? 'border-violet-400 bg-violet-100 text-violet-950 hover:bg-violet-200'
                                   : 'cursor-not-allowed border-gray-300 bg-gray-100 text-gray-500'
                               }`}

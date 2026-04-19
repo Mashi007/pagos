@@ -30,8 +30,8 @@ const OPERATOR_PREFIXES = [
   '/prestamos',
   '/revision-manual',
   '/infopagos',
-  /** Solo esta ruta de Pagos (cédulas Bs), no el listado general /pagos */
-  '/pagos/pago-bs',
+  /** Listado y registro de pagos (misma vista que gerente/administrador). */
+  '/pagos',
   '/finiquitos',
 ]
 

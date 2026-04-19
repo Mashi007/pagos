@@ -1724,7 +1724,10 @@ def editar_pago_reportado(
                 "Datos guardados. El reporte pasó a pendiente: ya puede aprobarlo o rechazarlo de nuevo desde el detalle."
             )
 
-        if pr.recibo_pdf:
+        # Misma generación que GET recibo público / staff: alinear snapshot en BD con el comprobante
+        # actual (pago_comprobante_imagen), no solo cuando ya existía recibo_pdf.
+        _img_id = (getattr(pr, "comprobante_imagen_id", None) or "").strip()
+        if pr.recibo_pdf or _img_id:
             pr.recibo_pdf = generar_recibo_pdf_desde_pago_reportado(db, pr)
         db.commit()
         logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)

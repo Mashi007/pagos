@@ -4,6 +4,12 @@ Fuente unica: armar el recibo PDF de un pago reportado (Cobros).
 Todos los endpoints (autenticado, publico, guardado en recibo_pdf) deben usar
 `generar_recibo_pdf_desde_pago_reportado` para que el PDF muestre la misma informacion.
 
+Paridad cliente (enlace publico con token), operador y administrador: ninguno
+"inyecta" el comprobante en el PDF por otro camino; todos leen el binario desde
+`pago_comprobante_imagen` vía `comprobante_bytes_y_content_type_desde_reportado`.
+Quien sube el archivo (formulario publico / Infopagos o flujos internos que
+persistan la misma tabla) determina lo que vera el recibo al generarse.
+
 Plantilla visual: `recibo_pdf.generar_recibo_pago_reportado`.
 Ver `backend/docs/DOCUMENTOS_CLIENTE_CENTRO_UNICO.md`.
 """
