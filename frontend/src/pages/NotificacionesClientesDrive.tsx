@@ -67,7 +67,7 @@ function fechaInputFromDefaults(iso: string | undefined): string {
   return '1990-01-01'
 }
 
-/** Regla alineada con el backend: solo filas «verdes» (cédula, teléfono F y duplicados en snapshot Drive). */
+/** Regla alineada con el backend: solo filas «verdes» (cédula, nombre D, teléfono F y duplicados en snapshot Drive). */
 function filaCumpleValidadoresImportacion(r: DriveCandidate | undefined): r is DriveCandidate {
   return r != null && r.seleccionable === true
 }
@@ -80,10 +80,13 @@ function etiquetaValidadorPantalla(r: DriveCandidate): string {
   if (r.duplicada_en_hoja) {
     return 'Regla: cédula normalizada repetida en más de una fila del snapshot Drive (columna E)'
   }
+  if (r.nombres_valido === false) {
+    return `Validador columna D: ${r.nombres_error || 'nombre completo ya existe en tabla clientes (misma regla que POST /clientes).'}`
+  }
   if (r.telefono_valida === false) {
     return `Validador columna F: ${r.telefono_error || 'teléfono inválido'} (validate_phone 04xx/02xx; no correo en F).`
   }
-  return 'Pantalla OK: cédula, teléfono F y unicidad en hoja · al guardar: ClienteCreate + anti-duplicados en clientes'
+  return 'Pantalla OK: cédula, nombre D, teléfono F y unicidad en hoja · al guardar: ClienteCreate + anti-duplicados en clientes'
 }
 
 function mensajeErrorImportCliente(error: unknown, contexto: string): string {
@@ -342,7 +345,7 @@ export default function NotificacionesClientesDrive() {
     )
     if (noImportables.length > 0) {
       toast.error(
-        `No se puede guardar: ${noImportables.length} fila(s) no cumplen el 100% de validadores (cédula E, teléfono F, sin duplicados en hoja). Quite esas filas de la selección o corríjalas en Drive y sincronice.`
+        `No se puede guardar: ${noImportables.length} fila(s) no cumplen el 100% de validadores (cédula E, nombre D, teléfono F, sin duplicados en hoja). Quite esas filas de la selección o corríjalas en Drive y sincronice.`
       )
       return
     }
@@ -354,7 +357,7 @@ export default function NotificacionesClientesDrive() {
     const nums = filasValidasVisibles.map(r => r.sheet_row_number)
     if (!nums.length) {
       toast.message(
-        'No hay filas que cumplan el 100% de validadores (cédula E, teléfono F, no duplicada en hoja) en la lista visible.'
+        'No hay filas que cumplan el 100% de validadores (cédula E, nombre D sin duplicar en clientes, teléfono F, no duplicada en hoja) en la lista visible.'
       )
       return
     }
@@ -409,7 +412,7 @@ export default function NotificacionesClientesDrive() {
   const onGuardarFilaRapido = async (r: DriveCandidate) => {
     if (!filaCumpleValidadoresImportacion(r)) {
       toast.error(
-        'No se puede guardar: la fila no cumple el 100% de validadores (cédula E, teléfono F, duplicados en hoja). Corrija en Google Sheet y sincronice, o use Excel según su flujo.'
+        'No se puede guardar: la fila no cumple el 100% de validadores (cédula E, nombre D, teléfono F, duplicados en hoja). Corrija en Google Sheet y sincronice, o use Excel según su flujo.'
       )
       return
     }
@@ -651,6 +654,7 @@ export default function NotificacionesClientesDrive() {
                   const chk = !!selected[r.sheet_row_number]
                   const busy = savingRowId === r.sheet_row_number
                   const telefonoOk = r.telefono_valida !== false
+                  const nombresOk = r.nombres_valido !== false
                   const telMostrar =
                     normalizarTelefonoColumnaDrive(r.col_f_telefono ?? r.defaults.telefono ?? '') || '—'
                   const rowTint = r.seleccionable
@@ -659,9 +663,11 @@ export default function NotificacionesClientesDrive() {
                       ? 'bg-red-50/90 hover:bg-red-50 dark:bg-red-950/25 dark:hover:bg-red-950/35'
                       : r.duplicada_en_hoja
                         ? 'bg-amber-50/90 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
-                        : !telefonoOk
+                        : !nombresOk
                           ? 'bg-[#ffe5dc] hover:bg-[#ffd5ce] dark:bg-orange-950/35 dark:hover:bg-orange-950/45'
-                          : 'bg-amber-50/90 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
+                          : !telefonoOk
+                            ? 'bg-[#ffe5dc] hover:bg-[#ffd5ce] dark:bg-orange-950/35 dark:hover:bg-orange-950/45'
+                            : 'bg-amber-50/90 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
                   return (
                     <tr key={r.sheet_row_number} className={`border-t ${rowTint}`}>
                       <td className="min-w-0 px-2 py-2 align-top">
@@ -693,12 +699,17 @@ export default function NotificacionesClientesDrive() {
                               Repetida en hoja (no importable)
                             </div>
                           )}
-                          {r.cedula_valida && !r.duplicada_en_hoja && !telefonoOk && (
+                          {r.cedula_valida && !r.duplicada_en_hoja && !nombresOk && (
+                            <div className="font-medium text-red-600">
+                              Nombres (D): {r.nombres_error || 'No válido para importar'}
+                            </div>
+                          )}
+                          {r.cedula_valida && !r.duplicada_en_hoja && nombresOk && !telefonoOk && (
                             <div className="font-medium text-red-600">
                               Teléfono (F): {r.telefono_error || 'No válido para importar'}
                             </div>
                           )}
-                          {r.cedula_valida && !r.duplicada_en_hoja && telefonoOk && (
+                          {r.cedula_valida && !r.duplicada_en_hoja && nombresOk && telefonoOk && (
                             <div className="font-medium text-emerald-700">Listo para revisión</div>
                           )}
                           <p className="text-[11px] leading-snug text-muted-foreground">
@@ -858,7 +869,7 @@ export default function NotificacionesClientesDrive() {
                   }
                   title={
                     seleccionados.length && !seleccionadosTodosImportables
-                      ? 'Hay filas seleccionadas que no cumplen validadores de hoja (cédula E, teléfono F, duplicados); no se puede guardar.'
+                      ? 'Hay filas seleccionadas que no cumplen validadores de hoja (cédula E, nombre D, teléfono F, duplicados); no se puede guardar.'
                       : undefined
                   }
                 >

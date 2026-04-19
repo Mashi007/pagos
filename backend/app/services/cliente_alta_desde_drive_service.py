@@ -3,6 +3,7 @@ Propuestas de alta de cliente desde snapshot `drive` (columnas D–G = nombres, 
 
 Comparación de cédulas: misma normalización que POST /clientes/check-cedulas (`_normalizar_cedula_carga_masiva`).
 Validación de formato de cédula: `validate_cedula` (mismas reglas que Validadores).
+Nombre columna D: no seleccionable si el texto (tras strip, misma regla que POST /clientes) ya existe en `clientes.nombres`.
 Teléfono columna F: rechaza correos en F; normalización + `validate_phone` (04xx / 02xx, 11 dígitos).
 """
 from __future__ import annotations
@@ -37,7 +38,7 @@ _PLACEHOLDER_EMAIL = "revisar@email.com"
 
 # Subir cuando cambien reglas de candidatos (cédula, teléfono, etc.) para no servir JSON obsoleto
 # desde `drive_clientes_candidatos_cache` aunque `synced_at` de la hoja no haya cambiado.
-CANDIDATOS_DRIVE_CACHE_RULES_VERSION = 5
+CANDIDATOS_DRIVE_CACHE_RULES_VERSION = 6
 
 
 def _cell(v: Any) -> str:
@@ -156,6 +157,7 @@ def _dt_trunc_seconds(dt: Optional[datetime]) -> Optional[datetime]:
 
 
 def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
+    from app.api.v1.endpoints.clientes import _normalize_for_duplicate
     from app.api.v1.endpoints.validadores import validate_cedula
 
     rows = db.execute(select(DriveRow).order_by(DriveRow.sheet_row_number.asc())).scalars().all()
@@ -179,7 +181,7 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
     meta = db.get(ConciliacionSheetMeta, 1)
     synced_at = meta.synced_at.isoformat() if meta and meta.synced_at else None
 
-    candidatos: List[Dict[str, Any]] = []
+    pending: List[Dict[str, Any]] = []
     for r, cmp_e in tmp:
         if cmp_e in en_bd:
             continue
@@ -201,8 +203,9 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
         tel_norm = _telefono_normalizado_drive_col_f(raw_f)
         tel_ok, tel_val, tel_err = _telefono_col_f_validacion_estricta(raw_f)
         tel_display = tel_val if tel_ok else (tel_norm or raw_f or None)
+        nombres_norm = _normalize_for_duplicate(nombres_propuesto)
 
-        candidatos.append(
+        pending.append(
             {
                 "sheet_row_number": r.sheet_row_number,
                 "col_d_nombres": raw_d or None,
@@ -216,7 +219,7 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
                 "duplicada_en_hoja": dup_sheet,
                 "telefono_valida": tel_ok,
                 "telefono_error": tel_err,
-                "seleccionable": cedula_valida and not dup_sheet and tel_ok,
+                "_nombres_norm": nombres_norm,
                 "defaults": {
                     "nombres": nombres_propuesto,
                     "telefono": tel_val if tel_ok else (tel_norm or ""),
@@ -226,6 +229,47 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
                     "ocupacion": _DEFAULT_OCUPACION,
                     "estado": "ACTIVO",
                 },
+            }
+        )
+
+    noms_buscar = {p["_nombres_norm"] for p in pending if p.get("_nombres_norm")}
+    nom_hit: Dict[str, int] = {}
+    if noms_buscar:
+        rows_nm = db.execute(
+            select(Cliente.id, Cliente.nombres).where(Cliente.nombres.in_(list(noms_buscar)))
+        ).all()
+        for rid, n in rows_nm or []:
+            if n is None:
+                continue
+            ns = str(n)
+            if ns and ns not in nom_hit:
+                nom_hit[ns] = int(rid)
+
+    candidatos: List[Dict[str, Any]] = []
+    for p in pending:
+        nn = str(p.pop("_nombres_norm", "") or "")
+        ex_id = nom_hit.get(nn) if nn else None
+        nombres_valido = not (nn and ex_id is not None)
+        nombres_error = (
+            None
+            if nombres_valido
+            else (
+                f"Ya existe un cliente con el mismo nombre completo en tabla clientes (ID {ex_id}). "
+                "Corrija la columna D en Drive o el registro existente antes de importar."
+            )
+        )
+        seleccionable = (
+            bool(p["cedula_valida"])
+            and not p["duplicada_en_hoja"]
+            and bool(p["telefono_valida"])
+            and nombres_valido
+        )
+        candidatos.append(
+            {
+                **p,
+                "nombres_valido": nombres_valido,
+                "nombres_error": nombres_error,
+                "seleccionable": seleccionable,
             }
         )
 
@@ -324,7 +368,6 @@ def importar_seleccion_desde_drive(
 
     from app.api.v1.endpoints.clientes import (
         _cedula_clave_comparacion_clientes,
-        _cliente_id_conflicto_email,
         _expr_cedula_normalizada_sql,
         _normalize_for_duplicate,
         create_cliente_from_payload,
@@ -336,18 +379,18 @@ def importar_seleccion_desde_drive(
     batch_id = str(uuid.uuid4())
     comentario_final = (comentario or "").strip() or None
 
-    pre_errors: List[Dict[str, Any]] = []
+    early_errors: List[Dict[str, Any]] = []
     seen_cmp: set[str] = set()
-    seen_nombres: set[str] = set()
-    seen_emails: set[str] = set()
-    carga: List[Tuple[int, Dict[str, Any], ClienteCreate]] = []
     ced_sql_tabla = _expr_cedula_normalizada_sql(Cliente.cedula)
+    ph = _PLACEHOLDER_EMAIL.lower()
 
+    # Fase 1: validación + ClienteCreate; sin consultas por fila a BD (duplicados se resuelven en fase 2).
+    staged: List[Tuple[int, Dict[str, Any], ClienteCreate, str, str, str, str]] = []
     for sheet_row in sheet_rows:
         sr = int(sheet_row)
         info = by_row.get(sr)
         if info is None:
-            pre_errors.append(
+            early_errors.append(
                 {
                     "sheet_row_number": sr,
                     "error": "Fila no disponible para importación (no está en candidatos: ya existe en clientes o sin cédula en E).",
@@ -359,37 +402,28 @@ def importar_seleccion_desde_drive(
                 msg = "No se permite guardar: la fila no cumple el 100% de validadores (cédula inválida en el snapshot)."
             elif info.get("duplicada_en_hoja"):
                 msg = "No se permite guardar: la fila no cumple el 100% de validadores (cédula duplicada en el snapshot de Drive)."
+            elif not info.get("nombres_valido", True):
+                msg = str(
+                    info.get("nombres_error")
+                    or "No se permite guardar: el nombre completo (columna D) ya existe en tabla clientes."
+                )
             elif not info.get("telefono_valida", True):
                 msg = str(info.get("telefono_error") or "No se permite guardar: teléfono columna F inválido.")
             else:
                 msg = "No se permite guardar: la fila no cumple el 100% de validadores de la hoja."
-            pre_errors.append({"sheet_row_number": sr, "error": msg})
+            early_errors.append({"sheet_row_number": sr, "error": msg})
             continue
 
         cmp_k = str(info.get("cedula_cmp") or "")
         if cmp_k in seen_cmp:
-            pre_errors.append({"sheet_row_number": sr, "error": "Cédula duplicada en la selección enviada."})
+            early_errors.append({"sheet_row_number": sr, "error": "Cédula duplicada en la selección enviada."})
             continue
         seen_cmp.add(cmp_k)
 
         defs = info.get("defaults") or {}
-        ph = _PLACEHOLDER_EMAIL.lower()
 
         ced = str(info.get("cedula_para_crear") or "").strip()
         ck = _cedula_clave_comparacion_clientes(ced)
-        if ck and ck != "Z999999999":
-            dup = db.execute(select(Cliente.id).where(ced_sql_tabla == ck)).first()
-            if dup:
-                pre_errors.append(
-                    {
-                        "sheet_row_number": sr,
-                        "error": (
-                            f"La cédula ya existe en tabla clientes (ID {dup[0]}). "
-                            "No se permite guardar duplicados."
-                        ),
-                    }
-                )
-                continue
         notas = (
             f"Alta aprobada desde Notificaciones > Clientes (Drive CONCILIACIÓN). "
             f"Fila hoja {info.get('sheet_row_number')}. "
@@ -410,47 +444,102 @@ def importar_seleccion_desde_drive(
                 notas=notas,
             )
         except ValidationError as ve:
-            pre_errors.append({"sheet_row_number": sr, "error": str(ve)})
+            early_errors.append({"sheet_row_number": sr, "error": str(ve)})
             continue
 
         nombres_post = _normalize_for_duplicate(payload.nombres or "")
+        em_post = _normalize_for_duplicate(payload.email or "")
+        em_cmp = em_post.strip().lower()
+        staged.append((sr, info, payload, ck, nombres_post, em_cmp, em_post))
+
+    ced_keys = {t[3] for t in staged if t[3] and t[3] != "Z999999999"}
+    ced_hit: Dict[str, int] = {}
+    if ced_keys:
+        rows = db.execute(
+            select(Cliente.id, ced_sql_tabla).where(ced_sql_tabla.in_(list(ced_keys)))
+        ).all()
+        for rid, k in rows or []:
+            if k and k not in ced_hit:
+                ced_hit[str(k)] = int(rid)
+
+    nom_set = {t[4] for t in staged if t[4]}
+    nom_hit: Dict[str, int] = {}
+    if nom_set:
+        rows = db.execute(select(Cliente.id, Cliente.nombres).where(Cliente.nombres.in_(list(nom_set)))).all()
+        for rid, n in rows or []:
+            if n and n not in nom_hit:
+                nom_hit[str(n)] = int(rid)
+
+    em_set = {t[6] for t in staged if t[5] != ph}
+    email_hit: Dict[str, int] = {}
+    if em_set:
+        em_list = list(em_set)
+        rows_p = db.execute(select(Cliente.id, Cliente.email).where(Cliente.email.in_(em_list))).all()
+        for rid, mail in rows_p or []:
+            if mail is None:
+                continue
+            m = (str(mail)).strip()
+            if m and m not in email_hit:
+                email_hit[m] = int(rid)
+        rows_s = db.execute(
+            select(Cliente.id, Cliente.email_secundario).where(
+                Cliente.email_secundario.isnot(None),
+                Cliente.email_secundario.in_(em_list),
+            )
+        ).all()
+        for rid, mail2 in rows_s or []:
+            if mail2 is None:
+                continue
+            m = (str(mail2)).strip()
+            if m and m not in email_hit:
+                email_hit[m] = int(rid)
+
+    late_errors: List[Dict[str, Any]] = []
+    seen_nombres: set[str] = set()
+    seen_emails: set[str] = set()
+    carga: List[Tuple[int, Dict[str, Any], ClienteCreate]] = []
+    for sr, info, payload, ck, nombres_post, em_cmp, em_post in staged:
+        if ck and ck != "Z999999999" and ck in ced_hit:
+            late_errors.append(
+                {
+                    "sheet_row_number": sr,
+                    "error": (
+                        f"La cédula ya existe en tabla clientes (ID {ced_hit[ck]}). "
+                        "No se permite guardar duplicados."
+                    ),
+                }
+            )
+            continue
         if nombres_post and nombres_post in seen_nombres:
-            pre_errors.append(
+            late_errors.append(
                 {"sheet_row_number": sr, "error": "Nombre completo duplicado dentro del mismo lote enviado."}
             )
             continue
-
-        if nombres_post:
-            dup_nom = db.execute(select(Cliente.id).where(Cliente.nombres == nombres_post)).first()
-            if dup_nom:
-                pre_errors.append(
+        if nombres_post and nombres_post in nom_hit:
+            late_errors.append(
+                {
+                    "sheet_row_number": sr,
+                    "error": (
+                        f"Ya existe un cliente con el mismo nombre completo en tabla clientes (ID {nom_hit[nombres_post]}). "
+                        "Corrija la columna D en Drive o el registro existente antes de importar."
+                    ),
+                }
+            )
+            continue
+        if em_cmp != ph and em_cmp in seen_emails:
+            late_errors.append(
+                {"sheet_row_number": sr, "error": "Correo (columna G) duplicado dentro del mismo lote enviado."}
+            )
+            continue
+        if em_cmp != ph:
+            em_key = (em_post or "").strip()
+            ex_id = email_hit.get(em_key)
+            if ex_id is not None:
+                late_errors.append(
                     {
                         "sheet_row_number": sr,
                         "error": (
-                            f"Ya existe un cliente con el mismo nombre completo en tabla clientes (ID {dup_nom[0]}). "
-                            "Corrija la columna D en Drive o el registro existente antes de importar."
-                        ),
-                    }
-                )
-                continue
-
-        em_post = _normalize_for_duplicate(payload.email or "")
-        em_cmp = em_post.strip().lower()
-        if em_cmp != ph:
-            if em_cmp in seen_emails:
-                pre_errors.append(
-                    {"sheet_row_number": sr, "error": "Correo (columna G) duplicado dentro del mismo lote enviado."}
-                )
-                continue
-
-        if em_cmp != ph:
-            ex_mail = _cliente_id_conflicto_email(db, em_post, None)
-            if ex_mail:
-                pre_errors.append(
-                    {
-                        "sheet_row_number": sr,
-                        "error": (
-                            f"Ya existe un cliente con el mismo correo en tabla clientes (ID {ex_mail[0]}). "
+                            f"Ya existe un cliente con el mismo correo en tabla clientes (ID {ex_id}). "
                             "Corrija la columna G en Drive."
                         ),
                     }
@@ -461,8 +550,9 @@ def importar_seleccion_desde_drive(
             seen_nombres.add(nombres_post)
         if em_cmp != ph:
             seen_emails.add(em_cmp)
-
         carga.append((sr, info, payload))
+
+    pre_errors = early_errors + late_errors
 
     if pre_errors:
         err_map = {int(e["sheet_row_number"]): str(e["error"]) for e in pre_errors}
@@ -570,6 +660,11 @@ def importar_fila_desde_drive(
             det = "La fila no cumple validadores (cédula inválida en el snapshot de Drive)."
         elif info.get("duplicada_en_hoja"):
             det = "La fila no cumple validadores (cédula duplicada en el snapshot de Drive)."
+        elif not info.get("nombres_valido", True):
+            det = str(
+                info.get("nombres_error")
+                or "El nombre completo (columna D) ya existe en tabla clientes (misma regla que POST /clientes)."
+            )
         elif not info.get("telefono_valida", True):
             det = str(info.get("telefono_error") or "Teléfono columna F inválido.")
         else:
@@ -772,6 +867,8 @@ def exportar_candidatos_drive_excel_y_borrar_filas(
             motivo = "cedula_invalida"
         elif c.get("duplicada_en_hoja"):
             motivo = "duplicada_en_hoja"
+        elif not c.get("nombres_valido", True):
+            motivo = "nombre_duplicado_en_clientes"
         elif not c.get("telefono_valida", True):
             motivo = "telefono_invalido"
         elif c.get("seleccionable"):
