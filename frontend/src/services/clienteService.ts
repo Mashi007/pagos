@@ -531,6 +531,9 @@ class ClienteService {
       cedula_error: string | null
       cedula_para_crear: string | null
       duplicada_en_hoja: boolean
+      /** Columna D: nombre completo no duplicado en `clientes.nombres` (misma regla que POST /clientes). */
+      nombres_valido?: boolean
+      nombres_error?: string | null
       telefono_valida?: boolean
       telefono_error?: string | null
       seleccionable: boolean
