@@ -937,7 +937,8 @@ class ApiClient {
         url.includes('/conciliacion-sheet/sync-now') || // Sheets API + escritura snapshot BD
         url.includes('/prestamos/candidatos-drive/refrescar') || // Recorre drive + prestamos + reescribe snapshot
         url.includes('/prestamos/candidatos-drive/guardar-validados-100') || // Crear préstamos por cada fila válida
-        url.includes('/prestamos/candidatos-drive/guardar-fila') // Una fila + mismas validaciones que el lote
+        url.includes('/prestamos/candidatos-drive/guardar-fila') || // Una fila + mismas validaciones que el lote
+        url.includes('/clientes/drive-import/importar') // Lote: un commit por fila; cientos de filas >30s en Render
 
       // Auditoria cartera en Render: sincroniza decenas de miles de cuotas + cascadas masivas (siempre >30s).
       const isAuditoriaCarteraCorregir = url.includes(
@@ -958,20 +959,22 @@ class ApiClient {
       } else if (isAuditoriaCarteraSyncCuotas) {
         defaultTimeout = 120000 // alinear muchas cuotas
       } else if (isSlowEndpoint) {
-        defaultTimeout = url.includes('/prestamos/cedula/batch')
-          ? 60000
-          : url.includes('/aplicar-pagos-cuotas')
-            ? 120000 // 2 min: cascada por préstamo puede exceder 30s en producción
-            : url.includes('/pagos/upload')
-              ? 120000
-              : url.includes('/pagos/batch')
-                ? 180000 // 3 min: Render frío + muchas filas
-                : url.includes('/pagos/gmail/run-now')
-                  ? 90000 // 90s: cubre credenciales OAuth + margen para backend síncrono viejo
-                  : url.includes('/clientes/check-emails') ||
-                      url.includes('/clientes/check-cedulas')
-                    ? 60000
-                    : 300000
+        defaultTimeout = url.includes('/clientes/drive-import/importar')
+          ? 600000 // 10 min: import parcial muchas filas (commit por fila + Render frío)
+          : url.includes('/prestamos/cedula/batch')
+            ? 60000
+            : url.includes('/aplicar-pagos-cuotas')
+              ? 120000 // 2 min: cascada por préstamo puede exceder 30s en producción
+              : url.includes('/pagos/upload')
+                ? 120000
+                : url.includes('/pagos/batch')
+                  ? 180000 // 3 min: Render frío + muchas filas
+                  : url.includes('/pagos/gmail/run-now')
+                    ? 90000 // 90s: cubre credenciales OAuth + margen para backend síncrono viejo
+                    : url.includes('/clientes/check-emails') ||
+                        url.includes('/clientes/check-cedulas')
+                      ? 60000
+                      : 300000
       }
 
       // Priorizar timeout explícito si se proporciona, sino usar el calculado
