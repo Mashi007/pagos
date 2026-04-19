@@ -26,6 +26,10 @@ import { toast } from 'sonner'
 import { getErrorMessage, isAxiosError } from '../types/errors'
 import { cn } from '../utils'
 import {
+  extraerCaracteresCedulaPublica,
+  normalizarCedulaParaProcesar,
+} from '../utils/cedulaConsultaPublica'
+import {
   normalizarTelefonoColumnaDrive,
   telefonoColumnaFDriveValidoTrasNormalizar,
 } from '../utils/telefonoDrive'
@@ -70,6 +74,56 @@ function fechaInputFromDefaults(iso: string | undefined): string {
 /** Regla alineada con el backend: solo filas «verdes» (cédula, nombre D, correo G, teléfono F y duplicados en snapshot Drive). */
 function filaCumpleValidadoresImportacion(r: DriveCandidate | undefined): r is DriveCandidate {
   return r != null && r.seleccionable === true
+}
+
+function emailFormularioBasicoValido(email: string): boolean {
+  const t = (email || '').trim()
+  if (!t) return false
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)
+}
+
+/** Clave alineada con `cedula_cmp` del snapshot para comparar con el input del modal. */
+function cedulaCmpDesdeInputFormulario(cedula: string): string {
+  const v = normalizarCedulaParaProcesar(cedula)
+  if (!v.valido || !v.valorParaEnviar) return ''
+  return extraerCaracteresCedulaPublica(v.valorParaEnviar).toUpperCase()
+}
+
+type DriveEditDraftState = {
+  sheet_row_number: number
+  cedula: string
+  nombres: string
+  telefono: string
+  email: string
+  email_secundario: string
+  direccion: string
+  fecha_nacimiento: string
+  ocupacion: string
+  estado: string
+  notas: string
+  comentario: string
+}
+
+/** Permite guardar desde el modal si el borrador cumple reglas mínimas y la cédula sigue siendo la de la fila Drive. */
+function edicionPuedeGuardarEnClientes(
+  draft: DriveEditDraftState,
+  source: DriveCandidate | undefined
+): boolean {
+  if (!source) return false
+  if (source.duplicada_en_hoja) return false
+  const cmpEsperado = (source.cedula_cmp || '').trim().toUpperCase()
+  const cmpIngresada = cedulaCmpDesdeInputFormulario(draft.cedula)
+  if (!cmpIngresada || cmpIngresada !== cmpEsperado) return false
+  if (!(draft.nombres || '').trim()) return false
+  if (!emailFormularioBasicoValido(draft.email)) return false
+  const sec = (draft.email_secundario || '').trim()
+  if (sec && !emailFormularioBasicoValido(sec)) return false
+  const telNorm = normalizarTelefonoColumnaDrive(draft.telefono)
+  if (!telefonoColumnaFDriveValidoTrasNormalizar(telNorm)) return false
+  if (!(draft.direccion || '').trim()) return false
+  if (!(draft.ocupacion || '').trim()) return false
+  if (!(draft.fecha_nacimiento || '').trim()) return false
+  return true
 }
 
 /** Origen del estado en lista (antes de importar a `clientes`). */
@@ -211,6 +265,11 @@ export default function NotificacionesClientesDrive() {
   const editSourceRow = useMemo(
     () => (editDraft ? rows.find(r => r.sheet_row_number === editDraft.sheet_row_number) : undefined),
     [rows, editDraft]
+  )
+
+  const puedeGuardarEdicion = useMemo(
+    () => (editDraft ? edicionPuedeGuardarEnClientes(editDraft, editSourceRow) : false),
+    [editDraft, editSourceRow]
   )
 
   const totalCandidatosVisibles = visibleRows.length
@@ -1158,13 +1217,10 @@ export default function NotificacionesClientesDrive() {
                 <Button
                   type="button"
                   onClick={() => onGuardarEdicion()}
-                  disabled={
-                    savingRowId === editDraft.sheet_row_number ||
-                    !filaCumpleValidadoresImportacion(editSourceRow)
-                  }
+                  disabled={savingRowId === editDraft.sheet_row_number || !puedeGuardarEdicion}
                   title={
-                    !filaCumpleValidadoresImportacion(editSourceRow)
-                      ? 'Solo se puede guardar si la fila está en verde (cédula E, teléfono F y sin duplicado en hoja).'
+                    !puedeGuardarEdicion
+                      ? 'Revise: cédula debe coincidir con la columna E de esta fila, teléfono F válido (04/02…), correo con formato válido, nombre y campos obligatorios. Si la cédula está duplicada en la hoja Drive, corríjala allí.'
                       : undefined
                   }
                 >

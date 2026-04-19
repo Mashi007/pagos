@@ -683,7 +683,11 @@ def importar_fila_desde_drive(
     usuario_email: str,
     body: ClienteDriveImportarFilaBody,
 ) -> Dict[str, Any]:
-    """Inserta un cliente con ClienteCreate + auditoría; la cédula normalizada debe coincidir con `cedula_cmp` de la fila."""
+    """
+    Inserta un cliente con ClienteCreate + auditoría.
+    La cédula enviada debe coincidir con `cedula_cmp` de la fila Drive (no se puede cambiar a otra identidad).
+    No exige que la fila sea `seleccionable`: el formulario puede corregir nombre, correo y teléfono.
+    """
     from app.api.v1.endpoints.clientes import (
         _cedula_clave_comparacion_clientes,
         _expr_cedula_normalizada_sql,
@@ -698,26 +702,16 @@ def importar_fila_desde_drive(
             status_code=404,
             detail="Fila no disponible para importación (no está en candidatos o la lista cambió).",
         )
-    if not info.get("seleccionable"):
-        if not info.get("cedula_valida"):
-            det = "La fila no cumple validadores (cédula inválida en el snapshot de Drive)."
-        elif info.get("duplicada_en_hoja"):
-            det = "La fila no cumple validadores (cédula duplicada en el snapshot de Drive)."
-        elif not info.get("nombres_valido", True):
-            det = str(
-                info.get("nombres_error")
-                or "El nombre completo (columna D) ya existe en tabla clientes (misma regla que POST /clientes)."
-            )
-        elif not info.get("email_valido", True):
-            det = str(
-                info.get("email_error")
-                or "El correo (columna G) ya existe en tabla clientes (correo 1 o 2; misma regla que POST /clientes)."
-            )
-        elif not info.get("telefono_valida", True):
-            det = str(info.get("telefono_error") or "Teléfono columna F inválido.")
-        else:
-            det = "La fila no cumple el 100% de validadores de la hoja."
-        raise HTTPException(status_code=400, detail=det + " No se permite guardar en clientes.")
+    # Desde edición se pueden corregir nombre, correo y teléfono: no exigir `seleccionable` del snapshot.
+    # Sí bloquear cédula repetida en la misma hoja (no desambiguable por este flujo).
+    if info.get("duplicada_en_hoja"):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "La cédula está repetida en más de una fila del snapshot Drive (columna E). "
+                "Corrija la hoja antes de importar esta fila."
+            ),
+        )
 
     tel_body_ok, _, tel_body_err = _telefono_col_f_validacion_estricta(body.telefono or "")
     if not tel_body_ok:
