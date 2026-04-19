@@ -534,6 +534,9 @@ class ClienteService {
       /** Columna D: nombre completo no duplicado en `clientes.nombres` (misma regla que POST /clientes). */
       nombres_valido?: boolean
       nombres_error?: string | null
+      /** Columna G: correo no duplicado en `clientes.email` ni `email_secundario`. */
+      email_valido?: boolean
+      email_error?: string | null
       telefono_valida?: boolean
       telefono_error?: string | null
       seleccionable: boolean
