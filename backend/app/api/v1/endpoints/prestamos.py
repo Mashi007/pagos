@@ -674,6 +674,12 @@ def listar_prestamos(
 
     count_q = select(func.count()).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id)
 
+    vis = filtro_prestamo_visible_listado(current_user)
+
+    q = q.where(vis)
+
+    count_q = count_q.where(vis)
+
 
 
     if cliente_id is not None:
@@ -1963,7 +1969,11 @@ def resumen_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
 @router.get("/{prestamo_id}", response_model=PrestamoResponse)
 
-def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+def get_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Obtiene un préstamo por ID desde BD. Incluye cedula/nombres del cliente (join si faltan en prestamo)."""
 
@@ -1984,6 +1994,8 @@ def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
     p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
+
+    assert_lectura_prestamo_desistimiento(p, current_user)
 
     resp = PrestamoResponse.model_validate(p)
 
