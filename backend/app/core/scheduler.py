@@ -12,7 +12,7 @@ Cuando esta activo:
 - domingo 04:20  Notificaciones: caché columna Q vs fecha_aprobacion en prestamos, si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY (tras el snapshot del Drive).
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 04:00  Limpieza codigos estado de cuenta.
-- lun-vie cada hora a :30 entre 06:30 y 19:30  Gmail pendientes (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true); no sabado ni domingo.
+- todos los dias cada hora a :30 entre 06:30 y 19:30  Gmail pendientes (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
 - domingo y miércoles 04:05  Snapshot candidatos préstamo desde `drive` -> tabla prestamo_candidatos_drive, si ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY (tras sync 02:00).
 
 Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 # Zona horaria por defecto (Venezuela). Configurable vÃ­a env si se aÃ±ade SCHEDULER_TZ.
 SCHEDULER_TZ = "America/Caracas"
 
-# Debe coincidir con el id en add_job (Gmail pendientes lun-vie :30).
-PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_weekdays_0630_1930"
+# Debe coincidir con el id en add_job (Gmail pendientes diario :30).
+PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_daily_0630_1930"
 
 _scheduler: Optional[BackgroundScheduler] = None
 
@@ -243,7 +243,7 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
 
 
 def _job_pagos_gmail_pending_scan() -> None:
-    """Lun-vie cada hora :30 entre 06:30 y 19:30 (America/Caracas): pipeline Gmail correos pendientes de identificacion."""
+    """Todos los dias cada hora :30 entre 06:30 y 19:30 (America/Caracas): pipeline Gmail correos pendientes de identificacion."""
     from datetime import datetime, timedelta
 
     from sqlalchemy import and_, select
@@ -276,7 +276,7 @@ def _job_pagos_gmail_pending_scan() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: finiquito 02:00 diario; hoja Drive dom/mié 02:00; caché Clientes Drive dom/mié 03:00; candidatos préstamo Drive dom/mié 04:05 (opcional); caché Diferencia abono domingo 04:10 (opcional); caché Q vs aprobación domingo 04:20 (opcional); auditoria 03:00; limpieza 04:00; Gmail lun-vie cada hora :30 06:30-19:30 opcional."""
+    """Inicia el scheduler: finiquito 02:00 diario; hoja Drive dom/mié 02:00; caché Clientes Drive dom/mié 03:00; candidatos préstamo Drive dom/mié 04:05 (opcional); caché Diferencia abono domingo 04:10 (opcional); caché Q vs aprobación domingo 04:20 (opcional); auditoria 03:00; limpieza 04:00; Gmail todos los dias cada hora :30 06:30-19:30 opcional."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya estÃ¡ iniciado.")
@@ -360,16 +360,15 @@ def start_scheduler() -> None:
         _scheduler.add_job(
             _job_pagos_gmail_pending_scan,
             CronTrigger(
-                day_of_week="mon-fri",
                 hour="6-19",
                 minute=30,
                 timezone=SCHEDULER_TZ,
             ),
             id=PAGOS_GMAIL_PENDING_SCAN_JOB_ID,
-            name="Gmail Pagos pendientes lun-vie cada hora :30 (06:30-19:30)",
+            name="Gmail Pagos pendientes cada dia :30 (06:30-19:30 Caracas)",
         )
         _gmail_log = (
-            "; Gmail pagos pendientes lun-vie cada hora :30 entre 06:30 y 19:30"
+            "; Gmail pagos pendientes todos los dias cada hora :30 entre 06:30 y 19:30"
         )
     _scheduler.start()
     _caches_notif_log = ""
