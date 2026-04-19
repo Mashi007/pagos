@@ -4,15 +4,16 @@ Recibos: correo con PDF de estado de cuenta tras pagos conciliados (tabla pagos)
 Criterio de negocio (alineado a BD real):
 - Conciliación y marca de pago están en ``pagos`` (``conciliado``, ``fecha_registro``, ``estado``).
 - Vínculo con cuotas: ``cuotas.pago_id = pagos.id`` o fila en ``cuota_pagos`` (pagos aplicados a cuotas).
-- Ventanas por **fecha_registro** (recepción/registro en sistema) en America/Caracas (naive = reloj Caracas).
+- Ventana por **fecha_registro** (recepción/registro en sistema) en America/Caracas (naive = reloj Caracas).
+
+Ventana única (por día de referencia ``fecha_dia``): **desde las 15:00 del día anterior hasta las 15:00
+del día de referencia** (24 horas, fin inclusive). El job programado corre **todos los días a las 15:00**
+Caracas con ``fecha_dia = hoy_negocio()`` (últimas 24 h hasta ese corte).
 
 Regla: el **envío real** (no simulación) solo corre si ``fecha_dia`` es **hoy** ``hoy_negocio()``,
-igual que los jobs 11:05 / 17:05 / 23:55; no se envía correo para lotes de otro día calendario.
+salvo reenvío admin con ``permite_envio_real_fecha_no_hoy``.
 
-Franjas diarias (mismo día Caracas, ``fecha_registro`` inclusive en fin de ventana):
-- ``manana``: 01:00–11:00:59 → envío programado 11:05
-- ``tarde``:  11:01–17:00:59 → envío programado 17:05
-- ``noche``:  17:01–23:45:59 → envío programado 23:55
+Idempotencia en BD: columna ``slot`` fija ``RECIBOS_VENTANA_SLOT`` (histórico puede tener valores antiguos).
 
 PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``).
 """
@@ -20,9 +21,9 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, select
@@ -46,7 +47,8 @@ from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 logger = logging.getLogger(__name__)
 
-RecibosSlot = Literal["manana", "tarde", "noche"]
+# Valor fijo en recibos_email_envio.slot (misma ventana 24h hasta 15:00; antes existían manana/tarde/noche).
+RECIBOS_VENTANA_SLOT = "hasta_15_24h"
 
 
 @lru_cache(maxsize=1)
@@ -56,20 +58,14 @@ def _cuerpo_html_recibos_confirmacion() -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _bounds_fecha_registro_caracas(
-    fecha_dia: date, slot: RecibosSlot
-) -> Tuple[datetime, datetime]:
-    """Inicio y fin inclusive (naive Caracas) para filtrar ``pagos.fecha_registro``."""
+def bounds_fecha_registro_recibos_24h_hasta_15(fecha_dia: date) -> Tuple[datetime, datetime]:
+    """
+    Inicio y fin inclusive (naive Caracas) para ``pagos.fecha_registro``:
+    [fecha_dia 15:00 - 24h, fecha_dia 15:00].
+    """
     tz = ZoneInfo(TZ_NEGOCIO)
-    if slot == "manana":
-        start = datetime.combine(fecha_dia, time(1, 0, 0), tzinfo=tz)
-        end = datetime.combine(fecha_dia, time(11, 0, 59), tzinfo=tz)
-    elif slot == "tarde":
-        start = datetime.combine(fecha_dia, time(11, 1, 0), tzinfo=tz)
-        end = datetime.combine(fecha_dia, time(17, 0, 59), tzinfo=tz)
-    else:
-        start = datetime.combine(fecha_dia, time(17, 1, 0), tzinfo=tz)
-        end = datetime.combine(fecha_dia, time(23, 45, 59), tzinfo=tz)
+    end = datetime.combine(fecha_dia, time(15, 0, 0), tzinfo=tz)
+    start = end - timedelta(hours=24)
     return start.replace(tzinfo=None), end.replace(tzinfo=None)
 
 
@@ -83,10 +79,9 @@ def listar_pagos_recibos_ventana(
     db: Session,
     *,
     fecha_dia: date,
-    slot: RecibosSlot,
 ) -> List[Dict[str, Any]]:
-    """Pagos conciliados PAGADO en la ventana, con enlace a cuotas (pago_id o cuota_pagos)."""
-    start_naive, end_naive = _bounds_fecha_registro_caracas(fecha_dia, slot)
+    """Pagos conciliados PAGADO en la ventana 24h hasta 15:00 Caracas del día de referencia."""
+    start_naive, end_naive = bounds_fecha_registro_recibos_24h_hasta_15(fecha_dia)
     rows = db.execute(
         select(Pago)
         .where(
@@ -127,12 +122,12 @@ def _cedulas_distintas_desde_pagos(rows: List[Dict[str, Any]]) -> List[str]:
     return ordered
 
 
-def _ya_enviado_recibo(db: Session, cedula_norm: str, fecha_dia: date, slot: RecibosSlot) -> bool:
+def _ya_enviado_recibo(db: Session, cedula_norm: str, fecha_dia: date) -> bool:
     row = db.execute(
         select(RecibosEmailEnvio.id).where(
             RecibosEmailEnvio.cedula_normalizada == cedula_norm,
             RecibosEmailEnvio.fecha_dia == fecha_dia,
-            RecibosEmailEnvio.slot == slot,
+            RecibosEmailEnvio.slot == RECIBOS_VENTANA_SLOT,
         ).limit(1)
     ).scalar_one_or_none()
     return row is not None
@@ -142,7 +137,6 @@ def ejecutar_recibos_envio_slot(
     db: Session,
     *,
     fecha_dia: date,
-    slot: RecibosSlot,
     solo_simular: bool = False,
     permite_envio_real_fecha_no_hoy: bool = False,
 ) -> Dict[str, Any]:
@@ -156,7 +150,7 @@ def ejecutar_recibos_envio_slot(
 
     Envío real: por defecto ``fecha_dia`` debe ser ``hoy_negocio()`` (jobs programados). El endpoint
     admin puede pasar ``permite_envio_real_fecha_no_hoy=True`` para reenviar un lote de recepción de
-    un día anterior (misma ventana ``fecha_registro`` y ``slot``).
+    un día anterior (misma ventana ``fecha_registro`` de 24h hasta las 15:00 de ese día).
     """
     hoy = hoy_negocio()
     if (
@@ -172,7 +166,7 @@ def ejecutar_recibos_envio_slot(
         return {
             "fecha_dia": fecha_dia.isoformat(),
             "hoy_negocio": hoy.isoformat(),
-            "slot": slot,
+            "slot": RECIBOS_VENTANA_SLOT,
             "solo_simular": solo_simular,
             "sin_casos_en_ventana": False,
             "error": "envio_real_solo_fecha_recepcion_hoy_caracas",
@@ -189,19 +183,19 @@ def ejecutar_recibos_envio_slot(
             "detalles": [],
         }
 
-    pagos = listar_pagos_recibos_ventana(db, fecha_dia=fecha_dia, slot=slot)
+    pagos = listar_pagos_recibos_ventana(db, fecha_dia=fecha_dia)
     cedulas = _cedulas_distintas_desde_pagos(pagos)
 
     if not pagos or not cedulas:
         logger.info(
             "recibos: sin casos en ventana (no se envía correo a nadie): fecha_dia=%s slot=%s pagos=%s",
             fecha_dia.isoformat(),
-            slot,
+            RECIBOS_VENTANA_SLOT,
             len(pagos),
         )
         return {
             "fecha_dia": fecha_dia.isoformat(),
-            "slot": slot,
+            "slot": RECIBOS_VENTANA_SLOT,
             "solo_simular": solo_simular,
             "sin_casos_en_ventana": True,
             "pagos_en_ventana": len(pagos),
@@ -220,7 +214,7 @@ def ejecutar_recibos_envio_slot(
     if not solo_simular and not get_email_activo_servicio("recibos"):
         return {
             "fecha_dia": fecha_dia.isoformat(),
-            "slot": slot,
+            "slot": RECIBOS_VENTANA_SLOT,
             "solo_simular": solo_simular,
             "sin_casos_en_ventana": False,
             "error": "email_activo_recibos_desactivado",
@@ -247,7 +241,7 @@ def ejecutar_recibos_envio_slot(
     detalles: List[Dict[str, Any]] = []
 
     for cedula_norm in cedulas:
-        if not solo_simular and _ya_enviado_recibo(db, cedula_norm, fecha_dia, slot):
+        if not solo_simular and _ya_enviado_recibo(db, cedula_norm, fecha_dia):
             omitidos_ya_enviado += 1
             detalles.append({"cedula": cedula_norm, "motivo": "ya_enviado"})
             continue
@@ -454,7 +448,7 @@ def ejecutar_recibos_envio_slot(
                 RecibosEmailEnvio(
                     cedula_normalizada=cedula_norm,
                     fecha_dia=fecha_dia,
-                    slot=slot,
+                    slot=RECIBOS_VENTANA_SLOT,
                 )
             )
             detalles.append({"cedula": cedula_norm, "motivo": "enviado", "emails": emails})
@@ -472,7 +466,7 @@ def ejecutar_recibos_envio_slot(
 
     return {
         "fecha_dia": fecha_dia.isoformat(),
-        "slot": slot,
+        "slot": RECIBOS_VENTANA_SLOT,
         "solo_simular": solo_simular,
         "sin_casos_en_ventana": False,
         "pagos_en_ventana": len(pagos),
@@ -489,13 +483,6 @@ def ejecutar_recibos_envio_slot(
     }
 
 
-def job_recibos_manana_1105(db: Session) -> None:
-    ejecutar_recibos_envio_slot(db, fecha_dia=hoy_negocio(), slot="manana", solo_simular=False)
-
-
-def job_recibos_tarde_1705(db: Session) -> None:
-    ejecutar_recibos_envio_slot(db, fecha_dia=hoy_negocio(), slot="tarde", solo_simular=False)
-
-
-def job_recibos_noche_2355(db: Session) -> None:
-    ejecutar_recibos_envio_slot(db, fecha_dia=hoy_negocio(), slot="noche", solo_simular=False)
+def job_recibos_1500(db: Session) -> None:
+    """15:00 Caracas: Recibos (fecha_registro en las 24 h hasta las 15:00 de hoy)."""
+    ejecutar_recibos_envio_slot(db, fecha_dia=hoy_negocio(), solo_simular=False)

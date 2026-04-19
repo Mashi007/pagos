@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.core.database import SessionLocal
 from app.services.cuota_estado import hoy_negocio
 from app.services.recibos_conciliacion_email_job import (
-    _bounds_fecha_registro_caracas,
+    bounds_fecha_registro_recibos_24h_hasta_15,
     ejecutar_recibos_envio_slot,
     listar_pagos_recibos_ventana,
 )
@@ -35,19 +35,11 @@ def db():
         session.close()
 
 
-def test_bounds_manana_tarde_noche_naive_caracas():
+def test_bounds_recibos_24h_hasta_15_naive_caracas():
     d = date(2026, 4, 19)
-    s_m, e_m = _bounds_fecha_registro_caracas(d, "manana")
-    assert s_m == datetime(2026, 4, 19, 1, 0, 0)
-    assert e_m == datetime(2026, 4, 19, 11, 0, 59)
-
-    s_t, e_t = _bounds_fecha_registro_caracas(d, "tarde")
-    assert s_t == datetime(2026, 4, 19, 11, 1, 0)
-    assert e_t == datetime(2026, 4, 19, 17, 0, 59)
-
-    s_n, e_n = _bounds_fecha_registro_caracas(d, "noche")
-    assert s_n == datetime(2026, 4, 19, 17, 1, 0)
-    assert e_n == datetime(2026, 4, 19, 23, 45, 59)
+    s, e = bounds_fecha_registro_recibos_24h_hasta_15(d)
+    assert s == datetime(2026, 4, 18, 15, 0, 0)
+    assert e == datetime(2026, 4, 19, 15, 0, 0)
 
 
 def test_ejecutar_sin_casos_en_ventana():
@@ -60,9 +52,7 @@ def test_ejecutar_sin_casos_en_ventana():
         "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
         return_value=[],
     ):
-        out = ejecutar_recibos_envio_slot(
-            db, fecha_dia=fixed, slot="manana", solo_simular=False
-        )
+        out = ejecutar_recibos_envio_slot(db, fecha_dia=fixed, solo_simular=False)
     assert out["sin_casos_en_ventana"] is True
     assert out["pagos_en_ventana"] == 0
     assert out["enviados"] == 0
@@ -117,9 +107,7 @@ def test_ejecutar_simulacion_genera_pdf_sin_smtp_si_no_modo_pruebas():
     ), patch(
         "app.services.recibos_conciliacion_email_job.send_email",
     ) as m_send:
-        out = ejecutar_recibos_envio_slot(
-            db, fecha_dia=fixed, slot="manana", solo_simular=True
-        )
+        out = ejecutar_recibos_envio_slot(db, fecha_dia=fixed, solo_simular=True)
     m_pdf.assert_called_once()
     m_send.assert_not_called()
     assert out["sin_casos_en_ventana"] is False
@@ -180,9 +168,7 @@ def test_ejecutar_envio_mockea_smtp_y_pdf_valido():
         "app.services.recibos_conciliacion_email_job.send_email",
         return_value=(True, None),
     ) as m_send:
-        out = ejecutar_recibos_envio_slot(
-            db, fecha_dia=fixed, slot="manana", solo_simular=False
-        )
+        out = ejecutar_recibos_envio_slot(db, fecha_dia=fixed, solo_simular=False)
 
     assert out["enviados"] == 1
     assert out["fallidos"] == 0
@@ -224,9 +210,7 @@ def test_ejecutar_email_recibos_desactivado_no_smtp():
     ), patch(
         "app.services.recibos_conciliacion_email_job.send_email",
     ) as m_send:
-        out = ejecutar_recibos_envio_slot(
-            db, fecha_dia=fixed, slot="tarde", solo_simular=False
-        )
+        out = ejecutar_recibos_envio_slot(db, fecha_dia=fixed, solo_simular=False)
     m_send.assert_not_called()
     assert out.get("error") == "email_activo_recibos_desactivado"
     assert out["pagos_en_ventana"] == 1
@@ -239,9 +223,7 @@ def test_ejecutar_real_rechaza_fecha_distinta_a_hoy_sin_consultar_bd():
     with patch(
         "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
     ) as m_listar:
-        out = ejecutar_recibos_envio_slot(
-            db, fecha_dia=ayer, slot="manana", solo_simular=False
-        )
+        out = ejecutar_recibos_envio_slot(db, fecha_dia=ayer, solo_simular=False)
     m_listar.assert_not_called()
     assert out.get("error") == "envio_real_solo_fecha_recepcion_hoy_caracas"
     assert out.get("hoy_negocio") == hoy_negocio().isoformat()
@@ -263,7 +245,6 @@ def test_ejecutar_real_fecha_pasada_con_permite_lista_pagos():
         out = ejecutar_recibos_envio_slot(
             db,
             fecha_dia=ayer,
-            slot="manana",
             solo_simular=False,
             permite_envio_real_fecha_no_hoy=True,
         )
@@ -275,7 +256,7 @@ def test_ejecutar_real_fecha_pasada_con_permite_lista_pagos():
 
 def test_listar_pagos_recibos_ventana_estructura_si_hay_datos(db):
     """Integración ligera: si la BD tiene filas que cumplen el criterio, validar claves."""
-    rows = listar_pagos_recibos_ventana(db, fecha_dia=date(2020, 1, 1), slot="manana")
+    rows = listar_pagos_recibos_ventana(db, fecha_dia=date(2020, 1, 1))
     assert isinstance(rows, list)
     if not rows:
         pytest.skip("Sin pagos conciliados PAGADO en ventana de prueba (BD vacía o sin coincidencias)")

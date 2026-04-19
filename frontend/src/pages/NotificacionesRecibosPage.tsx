@@ -125,15 +125,10 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
   )
 }
 
-type Slot = 'manana' | 'tarde' | 'noche'
-
 type TabId = 'listado' | 'configuracion'
 
-const SLOT_LABEL: Record<Slot, string> = {
-  manana: 'Mañana (01:00–11:00) → envío programado 11:05',
-  tarde: 'Tarde (11:01–17:00) → envío programado 17:05',
-  noche: 'Noche (17:01–23:45) → envío programado 23:55',
-}
+const VENTANA_RECIBOS_DESCRIPCION =
+  'Ventana de recepción (fecha_registro en Caracas): desde las 15:00 del día anterior hasta las 15:00 del día de referencia (24 h). Job automático: todos los días a las 15:00.'
 
 /** Día calendario America/Caracas en YYYY-MM-DD (alineado al backend). */
 function fechaHoyIsoCaracas(): string {
@@ -175,7 +170,6 @@ export default function NotificacionesRecibosPage() {
     }
   }, [])
 
-  const [slot, setSlot] = useState<Slot>('manana')
   const [fechaCaracas, setFechaCaracas] = useState('')
   const [soloSimular, setSoloSimular] = useState(true)
   const [filtroCedula, setFiltroCedula] = useState('')
@@ -186,15 +180,14 @@ export default function NotificacionesRecibosPage() {
   >(null)
 
   const listadoKey = useMemo(
-    () => ['notificaciones', 'recibos', 'listado', slot, fechaCaracas || 'hoy'],
-    [slot, fechaCaracas]
+    () => ['notificaciones', 'recibos', 'listado', fechaCaracas || 'hoy'],
+    [fechaCaracas]
   )
 
   const { data, isFetching, refetch } = useQuery({
     queryKey: listadoKey,
     queryFn: () =>
       notificacionService.listarRecibosConciliacion({
-        slot,
         fecha_caracas: fechaCaracas.trim() || undefined,
       }),
     enabled: activeTab === 'listado',
@@ -209,7 +202,7 @@ export default function NotificacionesRecibosPage() {
     setFiltroCedula('')
     setSortCol(null)
     setSortDir('asc')
-  }, [slot, fechaCaracas])
+  }, [fechaCaracas])
 
   const aplicarOrdenAsc = useCallback((c: NotificacionesCuotasSortCol) => {
     setSortCol(c)
@@ -449,7 +442,6 @@ export default function NotificacionesRecibosPage() {
     }
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
-        slot,
         fecha_caracas: fechaCaracasTrim || undefined,
         solo_simular: soloSimular,
         forzar_envio_fecha_pasada: false,
@@ -486,13 +478,12 @@ export default function NotificacionesRecibosPage() {
       return
     }
     const ok = window.confirm(
-      `¿Enviar correo REAL de Recibos?\n\nFecha recepción (Caracas): ${fechaCaracasTrim}\nFranja: ${slot}\n\n` +
-        'Se respeta idempotencia (recibos_email_envio por cédula/fecha/franja). Los destinatarios son los del cliente.'
+      `¿Enviar correo REAL de Recibos?\n\nDía de corte (Caracas): ${fechaCaracasTrim}\nVentana: 24 h hasta las 15:00 de ese día.\n\n` +
+        'Se respeta idempotencia (recibos_email_envio por cédula y día). Los destinatarios son los del cliente.'
     )
     if (!ok) return
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
-        slot,
         fecha_caracas: fechaCaracasTrim,
         solo_simular: false,
         forzar_envio_fecha_pasada: true,
@@ -536,7 +527,7 @@ export default function NotificacionesRecibosPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-slate-700">
-              <p>{SLOT_LABEL[slot]}</p>
+              <p>{VENTANA_RECIBOS_DESCRIPCION}</p>
               <p>
                 Remitente From: variable de entorno <code>RECIBOS_FROM_EMAIL</code> (por defecto{' '}
                 <code>notificacion@rapicreditca.com</code>). Cuenta SMTP según pestaña Configuración
@@ -553,9 +544,9 @@ export default function NotificacionesRecibosPage() {
             <CardHeader>
               <CardTitle>Vista previa y ejecución</CardTitle>
               <CardDescription>
-                Franja y fecha para listado. Simulación: cualquier día válido. Envío real de{' '}
-                <strong>hoy</strong> (Caracas): deje la fecha vacía o use el botón «Ejecutar envío». Envío
-                real de un <strong>día pasado</strong>: indique fecha y franja, actualice el listado y use
+                Fecha de corte (día Caracas cuya ventana termina a las 15:00). Simulación: cualquier día
+                válido. Envío real de <strong>hoy</strong> (Caracas): deje la fecha vacía o use «Ejecutar
+                envío». Envío real de un <strong>día pasado</strong>: indique fecha, actualice el listado y use
                 «Enviar lote pasado (real)» (confirmación). No hay envío real para fechas futuras. «Solo
                 simular» genera el mismo PDF por cédula que el envío real y no escribe{' '}
                 <code>recibos_email_envio</code>. Si en Configuración &gt; Email tiene activo{' '}
@@ -564,33 +555,18 @@ export default function NotificacionesRecibosPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="slot-rec">Franja</Label>
-                  <select
-                    id="slot-rec"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={slot}
-                    onChange={e => setSlot(e.target.value as Slot)}
-                  >
-                    <option value="manana">Mañana (01:00–11:00)</option>
-                    <option value="tarde">Tarde (11:01–17:00)</option>
-                    <option value="noche">Noche (17:01–23:45)</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fecha-rec">Fecha Caracas (YYYY-MM-DD)</Label>
-                  <Input
-                    id="fecha-rec"
-                    placeholder="Vacío = hoy"
-                    value={fechaCaracas}
-                    title="Día de recepción (fecha_registro) en Caracas: listado, simulación y envío manual de lote pasado."
-                    onChange={e => setFechaCaracas(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Hoy (Caracas): <span className="font-mono">{hoyCaracasIso}</span>
-                  </p>
-                </div>
+              <div className="max-w-md space-y-2">
+                <Label htmlFor="fecha-rec">Día de corte Caracas (YYYY-MM-DD)</Label>
+                <Input
+                  id="fecha-rec"
+                  placeholder="Vacío = hoy — ventana: 24 h hasta las 15:00 de ese día"
+                  value={fechaCaracas}
+                  title="Define el fin de la ventana (15:00 Caracas de ese día); el inicio es 24 h antes."
+                  onChange={e => setFechaCaracas(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Hoy (Caracas): <span className="font-mono">{hoyCaracasIso}</span>
+                </p>
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <input

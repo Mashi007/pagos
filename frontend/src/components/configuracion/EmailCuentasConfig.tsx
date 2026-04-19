@@ -200,7 +200,7 @@ export function EmailCuentasConfig() {
 
     {
       key: 'email_activo_recibos',
-      label: 'Recibos (estado de cuenta tras conciliación, jobs 11:05 / 17:05 / 23:55)',
+      label: 'Recibos (estado de cuenta tras conciliación, job diario 15:00 Caracas)',
       cuenta: 3,
     },
   ]

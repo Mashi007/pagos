@@ -1293,7 +1293,6 @@ class NotificacionService {
 
   /** Submódulo Recibos: vista previa de pagos conciliados en la franja (fecha_registro en Caracas). */
   async listarRecibosConciliacion(params: {
-    slot: 'manana' | 'tarde' | 'noche'
     fecha_caracas?: string
   }): Promise<{
     fecha_dia: string
@@ -1304,7 +1303,6 @@ class NotificacionService {
     pagos: ReciboConciliacionFila[]
   }> {
     const q = new URLSearchParams()
-    q.set('slot', params.slot)
     if (params.fecha_caracas) q.set('fecha_caracas', params.fecha_caracas)
     return await apiClient.get(
       `${API_V1}/notificaciones/recibos/listado?${q.toString()}`
@@ -1313,7 +1311,6 @@ class NotificacionService {
 
   /** Ejecuta envío Recibos (mismo criterio que el job programado). */
   async ejecutarRecibosEnvio(body: {
-    slot: 'manana' | 'tarde' | 'noche'
     fecha_caracas?: string
     solo_simular?: boolean
     /** Solo envío real: día pasado explícito (admin). */
@@ -1322,7 +1319,6 @@ class NotificacionService {
     return await apiClient.post(
       `${API_V1}/notificaciones/recibos/ejecutar`,
       {
-        slot: body.slot,
         fecha_caracas: body.fecha_caracas,
         solo_simular: body.solo_simular ?? false,
         forzar_envio_fecha_pasada: body.forzar_envio_fecha_pasada ?? false,

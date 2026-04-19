@@ -1,5 +1,5 @@
 """
-Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana (Caracas),
+Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana 24h hasta 15:00 (Caracas),
 con nombre/cédula, fecha de registro, monto pagado, comprobante (misma resolución de URL que GET /pagos)
 y préstamo para PDF.
 KPIs de correos desde envios_notificacion tipo_tab=recibos.
@@ -28,17 +28,14 @@ from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_pago_reportado,
 )
 from app.services.recibos_conciliacion_email_job import (
-    RecibosSlot,
-    _bounds_fecha_registro_caracas,
+    bounds_fecha_registro_recibos_24h_hasta_15,
     _pago_aplicado_a_cuota_exists,
 )
 from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 
-def _fetch_pagos_recibos_ventana_orm(
-    db: Session, *, fecha_dia: date, slot: RecibosSlot
-) -> List[Pago]:
-    start_naive, end_naive = _bounds_fecha_registro_caracas(fecha_dia, slot)
+def _fetch_pagos_recibos_ventana_orm(db: Session, *, fecha_dia: date) -> List[Pago]:
+    start_naive, end_naive = bounds_fecha_registro_recibos_24h_hasta_15(fecha_dia)
     return list(
         db.execute(
             select(Pago)
@@ -135,10 +132,9 @@ def listar_recibos_ventana_con_ui(
     db: Session,
     *,
     fecha_dia: date,
-    slot: RecibosSlot,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int], int, int]:
     """Devuelve (filas para tabla + KPIs, total_pagos, cedulas_distintas)."""
-    pagos_orm = _fetch_pagos_recibos_ventana_orm(db, fecha_dia=fecha_dia, slot=slot)
+    pagos_orm = _fetch_pagos_recibos_ventana_orm(db, fecha_dia=fecha_dia)
     if not pagos_orm:
         return [], _kpis_recibos_correo(db), 0, 0
 

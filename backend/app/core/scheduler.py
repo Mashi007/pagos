@@ -14,7 +14,7 @@ Cuando esta activo:
 - 04:00  Limpieza codigos estado de cuenta.
 - todos los dias cada hora a :30 entre 06:30 y 19:30  Gmail pendientes (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
 - lunes a sabado 03:40  Snapshot candidatos préstamo desde `drive` -> prestamo_candidatos_drive (UI /actualizaciones/prestamos), si ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY (hueco tras auditoría 03:00).
-- todos los dias 11:05, 17:05 y 23:55  Recibos: correo con estado de cuenta (pagos conciliados por ventana fecha_registro), si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS=true.
+- todos los dias 15:00  Recibos: correo con estado de cuenta (pagos conciliados, ventana 24h hasta 15:00 fecha_registro), si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS=true.
 
 Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
 
@@ -251,47 +251,17 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
         db.close()
 
 
-def _job_recibos_email_manana_1105() -> None:
-    """11:05 Caracas: Recibos (pagos conciliados con fecha_registro entre 01:00 y 11:00)."""
+def _job_recibos_email_1500() -> None:
+    """15:00 Caracas: Recibos (fecha_registro en las 24 h hasta las 15:00 de hoy)."""
     if not getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
         return
     db = SessionLocal()
     try:
-        from app.services.recibos_conciliacion_email_job import job_recibos_manana_1105
+        from app.services.recibos_conciliacion_email_job import job_recibos_1500
 
-        job_recibos_manana_1105(db)
+        job_recibos_1500(db)
     except Exception as e:
-        logger.exception("Error en job recibos_email_manana_1105: %s", e)
-    finally:
-        db.close()
-
-
-def _job_recibos_email_tarde_1705() -> None:
-    """17:05 Caracas: Recibos (fecha_registro 11:01-17:00)."""
-    if not getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
-        return
-    db = SessionLocal()
-    try:
-        from app.services.recibos_conciliacion_email_job import job_recibos_tarde_1705
-
-        job_recibos_tarde_1705(db)
-    except Exception as e:
-        logger.exception("Error en job recibos_email_tarde_1705: %s", e)
-    finally:
-        db.close()
-
-
-def _job_recibos_email_noche_2355() -> None:
-    """23:55 Caracas: Recibos (fecha_registro 17:01-23:45)."""
-    if not getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
-        return
-    db = SessionLocal()
-    try:
-        from app.services.recibos_conciliacion_email_job import job_recibos_noche_2355
-
-        job_recibos_noche_2355(db)
-    except Exception as e:
-        logger.exception("Error en job recibos_email_noche_2355: %s", e)
+        logger.exception("Error en job recibos_email_1500: %s", e)
     finally:
         db.close()
 
@@ -472,22 +442,10 @@ def start_scheduler() -> None:
         )
     if getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
         _scheduler.add_job(
-            _job_recibos_email_manana_1105,
-            CronTrigger(hour=11, minute=5, timezone=SCHEDULER_TZ),
-            id="recibos_email_manana_1105",
-            name="Recibos: email estado cuenta manana 11:05",
-        )
-        _scheduler.add_job(
-            _job_recibos_email_tarde_1705,
-            CronTrigger(hour=17, minute=5, timezone=SCHEDULER_TZ),
-            id="recibos_email_tarde_1705",
-            name="Recibos: email estado cuenta tarde 17:05",
-        )
-        _scheduler.add_job(
-            _job_recibos_email_noche_2355,
-            CronTrigger(hour=23, minute=55, timezone=SCHEDULER_TZ),
-            id="recibos_email_noche_2355",
-            name="Recibos: email estado cuenta noche 23:55",
+            _job_recibos_email_1500,
+            CronTrigger(hour=15, minute=0, timezone=SCHEDULER_TZ),
+            id="recibos_email_1500",
+            name="Recibos: email estado cuenta 15:00 (24h hasta 15:00)",
         )
     _scheduler.start()
     _caches_notif_log = ""

@@ -1,6 +1,6 @@
 """API admin: Recibos (vista previa de pagos en ventana y ejecución manual)."""
 
-from typing import Literal, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.core.deps import require_admin
 from app.services.cuota_estado import hoy_negocio, parse_fecha_referencia_negocio
 from app.services.recibos_conciliacion_email_job import (
-    RecibosSlot,
+    RECIBOS_VENTANA_SLOT,
     ejecutar_recibos_envio_slot,
 )
 from app.services.recibos_conciliacion_listado_ui import listar_recibos_ventana_con_ui
@@ -19,7 +19,6 @@ router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 class RecibosEjecutarBody(BaseModel):
-    slot: Literal["manana", "tarde", "noche"]
     fecha_caracas: Optional[str] = Field(
         None,
         description=(
@@ -43,7 +42,6 @@ class RecibosEjecutarBody(BaseModel):
 
 @router.get("/listado")
 def get_recibos_listado(
-    slot: RecibosSlot = Query(..., description="Franja: manana | tarde | noche"),
     fecha_caracas: Optional[str] = Query(
         None,
         description="Día de referencia Caracas (YYYY-MM-DD). Omisión = hoy.",
@@ -58,12 +56,10 @@ def get_recibos_listado(
         raise HTTPException(status_code=422, detail=str(e)) from e
     if d is None:
         d = hoy_negocio()
-    filas, kpis, total_pagos, cedulas_dist = listar_recibos_ventana_con_ui(
-        db, fecha_dia=d, slot=slot
-    )
+    filas, kpis, total_pagos, cedulas_dist = listar_recibos_ventana_con_ui(db, fecha_dia=d)
     return {
         "fecha_dia": d.isoformat(),
-        "slot": slot,
+        "slot": RECIBOS_VENTANA_SLOT,
         "total_pagos": total_pagos,
         "cedulas_distintas": cedulas_dist,
         "kpis": kpis,
@@ -105,7 +101,6 @@ def post_recibos_ejecutar(body: RecibosEjecutarBody, db: Session = Depends(get_d
     return ejecutar_recibos_envio_slot(
         db,
         fecha_dia=d,
-        slot=body.slot,
         solo_simular=body.solo_simular,
         permite_envio_real_fecha_no_hoy=permite_pasado,
     )

@@ -7,8 +7,8 @@ from app.core.database import Base
 
 class RecibosEmailEnvio(Base):
     """
-    Evita reenviar el mismo lote: una fila por (cédula normalizada, día Caracas, franja).
-    Franjas: manana | tarde | noche (ventanas de fecha_registro en pagos).
+    Evita reenviar el mismo lote: una fila por (cédula normalizada, día Caracas de corte, slot).
+    Slot actual: ``hasta_15_24h`` (ventana fecha_registro: 24 h hasta las 15:00 de ese día en Caracas).
     """
 
     __tablename__ = "recibos_email_envio"

@@ -215,12 +215,13 @@ class Settings(BaseSettings):
             "Valor vacío en .env se sustituye por recuerda@rapicreditca.com en el holder SMTP."
         ),
     )
-    # Submódulo Recibos: estado de cuenta por correo tras pagos conciliados (scheduler 11:05 / 17:05 / 23:55 Caracas).
+    # Submódulo Recibos: estado de cuenta por correo tras pagos conciliados (scheduler 15:00 Caracas).
     ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS: bool = Field(
         default=False,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler envía correos Recibos "
-            "a las 11:05, 17:05 y 23:55 (America/Caracas). Por defecto False."
+            "todos los días a las 15:00 (America/Caracas): pagos con fecha_registro en las últimas 24 h hasta ese corte. "
+            "Por defecto False."
         ),
     )
     RECIBOS_FROM_EMAIL: str = Field(
