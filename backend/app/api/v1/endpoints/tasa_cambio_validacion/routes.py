@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Patch para mejorar validación de tasas de cambio.
 Agrega endpoint para validación clara antes de procesar pagos.
