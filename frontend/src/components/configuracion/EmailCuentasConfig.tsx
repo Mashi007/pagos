@@ -128,7 +128,7 @@ export function EmailCuentasConfig() {
 
         cuentas: Array.from({ length: CUENTAS_COUNT }, emptyCuenta),
 
-        asignacion: { cobros: 1, estado_cuenta: 2, notificaciones_tab: {} },
+        asignacion: { cobros: 1, estado_cuenta: 2, notificaciones_tab: {}, recibos: 3 },
       })
 
       setAsignacion({})
@@ -197,6 +197,12 @@ export function EmailCuentasConfig() {
       label: 'Notificaciones (plantillas a clientes)',
       cuenta: 3,
     },
+
+    {
+      key: 'email_activo_recibos',
+      label: 'Recibos (estado de cuenta tras conciliación, jobs 11:05 / 17:05 / 23:55)',
+      cuenta: 3,
+    },
   ]
 
   const handleSave = async () => {
@@ -218,6 +224,8 @@ export function EmailCuentasConfig() {
           estado_cuenta: data.asignacion?.estado_cuenta ?? 2,
 
           notificaciones_tab: asignacion,
+
+          recibos: data.asignacion?.recibos ?? 3,
         },
 
         modo_pruebas: data.modo_pruebas,
@@ -242,6 +250,8 @@ export function EmailCuentasConfig() {
 
         email_activo_tickets: data.email_activo_tickets,
 
+        email_activo_recibos: data.email_activo_recibos,
+
         modo_pruebas_notificaciones: data.modo_pruebas_notificaciones,
 
         modo_pruebas_informe_pagos: data.modo_pruebas_informe_pagos,
@@ -255,6 +265,8 @@ export function EmailCuentasConfig() {
         modo_pruebas_campanas: data.modo_pruebas_campanas,
 
         modo_pruebas_tickets: data.modo_pruebas_tickets,
+
+        modo_pruebas_recibos: data.modo_pruebas_recibos,
 
         tickets_notify_emails: data.tickets_notify_emails,
       })
@@ -536,6 +548,26 @@ export function EmailCuentasConfig() {
                 className="rounded border-gray-300"
               />
             </label>
+            <label className="flex items-center justify-between gap-2 rounded border border-amber-100 bg-white/60 p-2">
+              <span className="text-sm">Recibos (post-conciliación) → pruebas</span>
+              <input
+                type="checkbox"
+                checked={(data?.modo_pruebas_recibos ?? 'false') === 'true'}
+                onChange={e =>
+                  setData(
+                    data
+                      ? {
+                          ...data,
+                          modo_pruebas_recibos: e.target.checked
+                            ? 'true'
+                            : 'false',
+                        }
+                      : data
+                  )
+                }
+                className="rounded border-gray-300"
+              />
+            </label>
           </div>
           <div className="flex justify-end pt-2">
             <Button
@@ -672,6 +704,49 @@ export function EmailCuentasConfig() {
           </CardContent>
         </Card>
       ))}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Asignación: Recibos</CardTitle>
+          <CardDescription>
+            Correos automáticos con PDF de estado de cuenta (servicio <code>recibos</code>). Por
+            defecto Cuenta 3; puede usar la misma cuenta que Notificaciones o la de Estado de cuenta.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex max-w-md flex-col gap-2">
+            <Label htmlFor="asig-recibos-cuenta">Cuenta SMTP para Recibos</Label>
+            <select
+              id="asig-recibos-cuenta"
+              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={data?.asignacion?.recibos ?? 3}
+              onChange={e => {
+                const v = Number(e.target.value)
+                setData(d =>
+                  d
+                    ? {
+                        ...d,
+                        asignacion: {
+                          cobros: d.asignacion?.cobros ?? 1,
+                          estado_cuenta: d.asignacion?.estado_cuenta ?? 2,
+                          notificaciones_tab: {
+                            ...(d.asignacion?.notificaciones_tab ?? {}),
+                          },
+                          recibos: v,
+                        },
+                      }
+                    : d
+                )
+              }}
+            >
+              <option value={1}>Cuenta 1</option>
+              <option value={2}>Cuenta 2</option>
+              <option value={3}>Cuenta 3</option>
+              <option value={4}>Cuenta 4</option>
+            </select>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

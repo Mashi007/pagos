@@ -12,8 +12,8 @@ from app.services.cuota_estado import hoy_negocio, parse_fecha_referencia_negoci
 from app.services.recibos_conciliacion_email_job import (
     RecibosSlot,
     ejecutar_recibos_envio_slot,
-    listar_pagos_recibos_ventana,
 )
+from app.services.recibos_conciliacion_listado_ui import listar_recibos_ventana_con_ui
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -50,14 +50,16 @@ def get_recibos_listado(
         raise HTTPException(status_code=422, detail=str(e)) from e
     if d is None:
         d = hoy_negocio()
-    pagos = listar_pagos_recibos_ventana(db, fecha_dia=d, slot=slot)
-    cedulas = sorted({(p.get("cedula_normalizada") or "").strip() for p in pagos if p.get("cedula_normalizada")})
+    filas, kpis, total_pagos, cedulas_dist = listar_recibos_ventana_con_ui(
+        db, fecha_dia=d, slot=slot
+    )
     return {
         "fecha_dia": d.isoformat(),
         "slot": slot,
-        "total_pagos": len(pagos),
-        "cedulas_distintas": len(cedulas),
-        "pagos": pagos,
+        "total_pagos": total_pagos,
+        "cedulas_distintas": cedulas_dist,
+        "kpis": kpis,
+        "pagos": filas,
     }
 
 

@@ -411,6 +411,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       liquidados: { enviados: 0, rebotados: 0 },
 
       d_2_antes_vencimiento: { enviados: 0, rebotados: 0 },
+
+      recibos: { enviados: 0, rebotados: 0 },
     } as EstadisticasPorTab,
   })
 

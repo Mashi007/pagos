@@ -43,6 +43,7 @@ _DEFAULTS_EMAIL_V2_GLOBALS: dict[str, Any] = {
     "email_activo_cobros": "true",
     "email_activo_campanas": "true",
     "email_activo_tickets": "true",
+    "email_activo_recibos": "true",
     "modo_pruebas_notificaciones": "false",
     "modo_pruebas_informe_pagos": "false",
     "modo_pruebas_estado_cuenta": "false",
@@ -50,6 +51,7 @@ _DEFAULTS_EMAIL_V2_GLOBALS: dict[str, Any] = {
     "modo_pruebas_cobros": "false",
     "modo_pruebas_campanas": "false",
     "modo_pruebas_tickets": "false",
+    "modo_pruebas_recibos": "false",
     "tickets_notify_emails": "",
 }
 
@@ -149,6 +151,7 @@ class EmailCuentasUpdate(BaseModel):
     email_activo_cobros: Optional[str] = None
     email_activo_campanas: Optional[str] = None
     email_activo_tickets: Optional[str] = None
+    email_activo_recibos: Optional[str] = None
     tickets_notify_emails: Optional[str] = None
     modo_pruebas_notificaciones: Optional[str] = None
     modo_pruebas_informe_pagos: Optional[str] = None
@@ -157,6 +160,7 @@ class EmailCuentasUpdate(BaseModel):
     modo_pruebas_cobros: Optional[str] = None
     modo_pruebas_campanas: Optional[str] = None
     modo_pruebas_tickets: Optional[str] = None
+    modo_pruebas_recibos: Optional[str] = None
     emails_pruebas: Optional[List[str]] = None
 
 
@@ -201,10 +205,14 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
     if len(cuentas) < NUM_CUENTAS:
         cuentas = list(cuentas) + [{} for _ in range(NUM_CUENTAS - len(cuentas))]
     cuentas = cuentas[:NUM_CUENTAS]
-    asignacion = payload.asignacion or ASIGNACION_DEFAULT
-    if "notificaciones_tab" not in asignacion:
-        asignacion = dict(asignacion)
-        asignacion["notificaciones_tab"] = ASIGNACION_DEFAULT["notificaciones_tab"]
+    raw_asig = dict(payload.asignacion or {})
+    asignacion = {**ASIGNACION_DEFAULT, **raw_asig}
+    nt_default = dict(ASIGNACION_DEFAULT.get("notificaciones_tab") or {})
+    nt_in = raw_asig.get("notificaciones_tab")
+    if isinstance(nt_in, dict):
+        asignacion["notificaciones_tab"] = {**nt_default, **nt_in}
+    else:
+        asignacion["notificaciones_tab"] = nt_default
 
     cuentas_dict: List[dict] = []
     for i, c in enumerate(cuentas):

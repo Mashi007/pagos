@@ -31,6 +31,7 @@ from app.core.email_config_holder import get_email_activo_servicio
 from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
+from app.models.envio_notificacion import EnvioNotificacion
 from app.models.recibos_email_envio import RecibosEmailEnvio
 from app.services.cuota_estado import TZ_NEGOCIO, hoy_negocio
 from app.services.documentos_cliente_centro import (
@@ -329,14 +330,41 @@ def ejecutar_recibos_envio_slot(
 
         fname = f"estado_cuenta_{cedula_display.replace('-', '_')}.pdf"
 
+        to_list = [e.strip() for e in emails if e and isinstance(e, str) and "@" in e.strip()]
+        smtp_meta: Dict[str, Any] = {}
         ok, err = send_email(
-            [e.strip() for e in emails if e and isinstance(e, str) and "@" in e.strip()],
+            to_list,
             asunto,
             body,
             attachments=[(fname, pdf_bytes)],
             servicio="recibos",
             tipo_tab="recibos",
             respetar_destinos_manuales=True,
+            smtp_session_metadata=smtp_meta,
+        )
+        email_log = ", ".join(to_list)[:255] if to_list else ""
+        pid_log: Optional[int] = None
+        pl = datos.get("prestamos_list") or []
+        if pl and isinstance(pl[0], dict):
+            try:
+                raw_id = pl[0].get("id")
+                pid_log = int(raw_id) if raw_id is not None else None
+            except (TypeError, ValueError):
+                pid_log = None
+        db.add(
+            EnvioNotificacion(
+                tipo_tab="recibos",
+                asunto=(asunto or "")[:500],
+                email=email_log,
+                nombre=(nombre or "")[:255],
+                cedula=(cedula_display or cedula_norm)[:50],
+                exito=bool(ok),
+                error_mensaje=None if ok else (err or "")[:5000],
+                prestamo_id=pid_log,
+                correlativo=None,
+                mensaje_texto=(body or "")[:8000] if body else None,
+                metadata_tecnica=smtp_meta if smtp_meta else None,
+            )
         )
         if ok:
             enviados += 1

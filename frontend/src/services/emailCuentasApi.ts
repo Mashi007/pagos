@@ -56,6 +56,9 @@ export interface EmailCuentasResponse {
 
     estado_cuenta: number
 
+    /** Índice 1–4: cuenta SMTP para envíos automáticos Recibos (post-conciliación). */
+    recibos?: number
+
     notificaciones_tab?: Record<string, number>
   }
 
@@ -79,6 +82,8 @@ export interface EmailCuentasResponse {
 
   email_activo_tickets?: string
 
+  email_activo_recibos?: string
+
   modo_pruebas_notificaciones?: string
 
   modo_pruebas_informe_pagos?: string
@@ -92,6 +97,8 @@ export interface EmailCuentasResponse {
   modo_pruebas_campanas?: string
 
   modo_pruebas_tickets?: string
+
+  modo_pruebas_recibos?: string
 
   tickets_notify_emails?: string
 
@@ -132,6 +139,8 @@ export const emailCuentasApi = {
 
     email_activo_tickets?: string
 
+    email_activo_recibos?: string
+
     modo_pruebas_notificaciones?: string
 
     modo_pruebas_informe_pagos?: string
@@ -145,6 +154,8 @@ export const emailCuentasApi = {
     modo_pruebas_campanas?: string
 
     modo_pruebas_tickets?: string
+
+    modo_pruebas_recibos?: string
 
     tickets_notify_emails?: string
 

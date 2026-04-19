@@ -1359,6 +1359,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "prejudicial": {"enviados": 0, "rebotados": 0},
         "masivos": {"enviados": 0, "rebotados": 0},
         "liquidados": {"enviados": 0, "rebotados": 0},
+        "recibos": {"enviados": 0, "rebotados": 0},
     }
     try:
         for tipo in (
@@ -1372,6 +1373,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
             "prejudicial",
             "masivos",
             "liquidados",
+            "recibos",
         ):
             env = db.scalar(
                 select(func.count(EnvioNotificacion.id)).where(
@@ -1402,6 +1404,7 @@ TIPOS_TAB_NOTIFICACIONES = (
     "prejudicial",
     "masivos",
     "liquidados",
+    "recibos",
 )
 
 

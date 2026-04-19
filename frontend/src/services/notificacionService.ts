@@ -336,6 +336,22 @@ export interface EstadisticasPorTab {
   /** Submenú 2 días antes (PAGO_2_DIAS_ANTES_PENDIENTE). */
 
   d_2_antes_vencimiento: EstadisticasTabItem
+
+  /** Correos estado de cuenta «Recibos» (tipo_tab recibos en envios_notificacion). */
+
+  recibos?: EstadisticasTabItem
+}
+
+/** Fila del listado Recibos (pago conciliado + contexto cuota/cliente como notificaciones). */
+
+export type ReciboConciliacionFila = ClienteRetrasadoItem & {
+  pago_id: number
+
+  cedula_normalizada?: string
+
+  fecha_registro?: string | null
+
+  monto_pagado?: number
 }
 
 /** Un registro del historial de envíos por cédula (para reportes/legales). */
@@ -1275,13 +1291,8 @@ class NotificacionService {
     slot: string
     total_pagos: number
     cedulas_distintas: number
-    pagos: Array<{
-      pago_id: number
-      cedula: string
-      cedula_normalizada: string
-      fecha_registro: string | null
-      monto_pagado: number
-    }>
+    kpis: { correos_enviados: number; correos_rebotados: number }
+    pagos: ReciboConciliacionFila[]
   }> {
     const q = new URLSearchParams()
     q.set('slot', params.slot)
