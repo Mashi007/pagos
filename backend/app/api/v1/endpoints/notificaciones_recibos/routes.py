@@ -40,7 +40,11 @@ def get_recibos_listado(
     db: Session = Depends(get_db),
 ):
     """Pagos conciliados PAGADO con fecha_registro en la ventana y vínculo a cuotas."""
-    d = parse_fecha_referencia_negocio(fecha_caracas) if fecha_caracas else hoy_negocio()
+    raw_fc = (fecha_caracas or "").strip()
+    try:
+        d = parse_fecha_referencia_negocio(raw_fc) if raw_fc else hoy_negocio()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     if d is None:
         d = hoy_negocio()
     pagos = listar_pagos_recibos_ventana(db, fecha_dia=d, slot=slot)

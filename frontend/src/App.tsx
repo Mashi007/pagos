@@ -171,6 +171,8 @@ import Notificaciones from './pages/Notificaciones'
 
 import NotificacionesClientesDrive from './pages/NotificacionesClientesDrive'
 
+import NotificacionesRecibosPage from './pages/NotificacionesRecibosPage'
+
 import ActualizacionesPrestamosDrivePage from './pages/ActualizacionesPrestamosDrivePage'
 
 import Analistas from './pages/Analistas'
@@ -536,6 +538,15 @@ function App() {
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
                   <NotificacionesClientesDrive />
+                </SimpleProtectedRoute>
+              }
+            />
+
+            <Route
+              path="notificaciones/recibos"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <NotificacionesRecibosPage />
                 </SimpleProtectedRoute>
               }
             />

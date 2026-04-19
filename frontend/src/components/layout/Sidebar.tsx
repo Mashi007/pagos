@@ -38,6 +38,7 @@ import {
   TrendingUp,
   LayoutList,
   Calendar,
+  Receipt,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -239,6 +240,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: '10 días de atraso',
           href: '/notificaciones/atraso-10-dias',
           icon: Clock,
+        },
+        {
+          title: 'Recibos',
+          href: '/notificaciones/recibos',
+          icon: Receipt,
         },
       ],
     },

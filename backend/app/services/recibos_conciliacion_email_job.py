@@ -6,10 +6,10 @@ Criterio de negocio (alineado a BD real):
 - Vínculo con cuotas: ``cuotas.pago_id = pagos.id`` o fila en ``cuota_pagos`` (pagos aplicados a cuotas).
 - Ventanas por **fecha_registro** en America/Caracas (naive = reloj Caracas, coherente con cuota_estado).
 
-Franjas diarias:
-- ``manana``: 01:00 <= fecha_registro < 11:01  → envío programado 11:05
-- ``tarde``:  11:01 <= fecha_registro < 17:01 → envío programado 17:05
-- ``noche``:  17:01 <= fecha_registro <= 23:45 del mismo día → envío programado 23:55
+Franjas diarias (mismo día Caracas, ``fecha_registro`` inclusive en fin de ventana):
+- ``manana``: 01:00–11:00:59 → envío programado 11:05
+- ``tarde``:  11:01–17:00:59 → envío programado 17:05
+- ``noche``:  17:01–23:45:59 → envío programado 23:55
 
 PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``).
 """
@@ -136,14 +136,23 @@ def ejecutar_recibos_envio_slot(
     Por cada cédula distinta con pagos en ventana: genera estado de cuenta y envía a correos del cliente.
     Si ``solo_simular`` es True, no persiste ``recibos_email_envio`` ni envía SMTP.
     """
-    if not solo_simular and not get_email_activo_servicio("recibos"):
+    pagos = listar_pagos_recibos_ventana(db, fecha_dia=fecha_dia, slot=slot)
+    cedulas = _cedulas_distintas_desde_pagos(pagos)
+
+    if not pagos or not cedulas:
+        logger.info(
+            "recibos: sin casos en ventana (no se envía correo a nadie): fecha_dia=%s slot=%s pagos=%s",
+            fecha_dia.isoformat(),
+            slot,
+            len(pagos),
+        )
         return {
             "fecha_dia": fecha_dia.isoformat(),
             "slot": slot,
             "solo_simular": solo_simular,
-            "error": "email_activo_recibos_desactivado",
-            "pagos_en_ventana": 0,
-            "cedulas_distintas": 0,
+            "sin_casos_en_ventana": True,
+            "pagos_en_ventana": len(pagos),
+            "cedulas_distintas": len(cedulas),
             "enviados": 0,
             "fallidos": 0,
             "omitidos_sin_email": 0,
@@ -153,8 +162,23 @@ def ejecutar_recibos_envio_slot(
             "detalles": [],
         }
 
-    pagos = listar_pagos_recibos_ventana(db, fecha_dia=fecha_dia, slot=slot)
-    cedulas = _cedulas_distintas_desde_pagos(pagos)
+    if not solo_simular and not get_email_activo_servicio("recibos"):
+        return {
+            "fecha_dia": fecha_dia.isoformat(),
+            "slot": slot,
+            "solo_simular": solo_simular,
+            "sin_casos_en_ventana": False,
+            "error": "email_activo_recibos_desactivado",
+            "pagos_en_ventana": len(pagos),
+            "cedulas_distintas": len(cedulas),
+            "enviados": 0,
+            "fallidos": 0,
+            "omitidos_sin_email": 0,
+            "omitidos_ya_enviado": 0,
+            "omitidos_desistimiento": 0,
+            "omitidos_sin_datos": 0,
+            "detalles": [],
+        }
     enviados = 0
     fallidos = 0
     omitidos_sin_email = 0
@@ -262,6 +286,7 @@ def ejecutar_recibos_envio_slot(
         "fecha_dia": fecha_dia.isoformat(),
         "slot": slot,
         "solo_simular": solo_simular,
+        "sin_casos_en_ventana": False,
         "pagos_en_ventana": len(pagos),
         "cedulas_distintas": len(cedulas),
         "enviados": enviados,

@@ -1384,6 +1384,48 @@ class EmailConfigService {
       { timeout: 60000 }
     )
   }
+
+  /** Submódulo Recibos: vista previa de pagos conciliados en la franja (fecha_registro en Caracas). */
+  async listarRecibosConciliacion(params: {
+    slot: 'manana' | 'tarde' | 'noche'
+    fecha_caracas?: string
+  }): Promise<{
+    fecha_dia: string
+    slot: string
+    total_pagos: number
+    cedulas_distintas: number
+    pagos: Array<{
+      pago_id: number
+      cedula: string
+      cedula_normalizada: string
+      fecha_registro: string | null
+      monto_pagado: number
+    }>
+  }> {
+    const q = new URLSearchParams()
+    q.set('slot', params.slot)
+    if (params.fecha_caracas) q.set('fecha_caracas', params.fecha_caracas)
+    return await apiClient.get(
+      `${API_V1}/notificaciones/recibos/listado?${q.toString()}`
+    )
+  }
+
+  /** Ejecuta envío Recibos (mismo criterio que el job programado). */
+  async ejecutarRecibosEnvio(body: {
+    slot: 'manana' | 'tarde' | 'noche'
+    fecha_caracas?: string
+    solo_simular?: boolean
+  }): Promise<Record<string, unknown>> {
+    return await apiClient.post(
+      `${API_V1}/notificaciones/recibos/ejecutar`,
+      {
+        slot: body.slot,
+        fecha_caracas: body.fecha_caracas,
+        solo_simular: body.solo_simular ?? false,
+      },
+      { timeout: TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL }
+    )
+  }
 }
 
 export interface WhatsAppConfig {
