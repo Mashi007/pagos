@@ -104,25 +104,52 @@ type DriveEditDraftState = {
   comentario: string
 }
 
-/** Permite guardar desde el modal si el borrador cumple reglas mínimas y la cédula sigue siendo la de la fila Drive. */
+function _trim(s: string | undefined | null): string {
+  return (s ?? '').trim()
+}
+
+/**
+ * Alineado a la lista (cédula E, D, G, F) + Pydantic: sin duplicar cédula en hoja; cédula del formulario = `cedula_cmp`;
+ * si nombre, correo o teléfono siguen igual que en el snapshot, deben cumplir `nombres_valido` / `email_valido` /
+ * `telefono_valida` del candidato; si el usuario los cambia, formato válido (duplicados en BD solo los confirma el servidor).
+ */
 function edicionPuedeGuardarEnClientes(
   draft: DriveEditDraftState,
   source: DriveCandidate | undefined
 ): boolean {
   if (!source) return false
   if (source.duplicada_en_hoja) return false
+
   const cmpEsperado = (source.cedula_cmp || '').trim().toUpperCase()
+  const vced = normalizarCedulaParaProcesar(draft.cedula)
+  if (!vced.valido || !vced.valorParaEnviar) return false
   const cmpIngresada = cedulaCmpDesdeInputFormulario(draft.cedula)
   if (!cmpIngresada || cmpIngresada !== cmpEsperado) return false
-  if (!(draft.nombres || '').trim()) return false
-  if (!emailFormularioBasicoValido(draft.email)) return false
-  const sec = (draft.email_secundario || '').trim()
+
+  const nom = _trim(draft.nombres)
+  if (!nom) return false
+  const nomSnap = _trim(source.defaults?.nombres)
+  if (nom === nomSnap && source.nombres_valido === false) return false
+
+  const em = _trim(draft.email)
+  if (!emailFormularioBasicoValido(em)) return false
+  const emSnap = _trim(source.defaults?.email).toLowerCase()
+  if (em.toLowerCase() === emSnap && source.email_valido === false) return false
+
+  const sec = _trim(draft.email_secundario)
   if (sec && !emailFormularioBasicoValido(sec)) return false
+  if (sec && sec.toLowerCase() === em.toLowerCase()) return false
+
   const telNorm = normalizarTelefonoColumnaDrive(draft.telefono)
+  const telSnap = normalizarTelefonoColumnaDrive(source.col_f_telefono ?? source.defaults?.telefono ?? '')
+  if (telNorm === telSnap && source.telefono_valida === false) return false
   if (!telefonoColumnaFDriveValidoTrasNormalizar(telNorm)) return false
-  if (!(draft.direccion || '').trim()) return false
-  if (!(draft.ocupacion || '').trim()) return false
-  if (!(draft.fecha_nacimiento || '').trim()) return false
+
+  if (!_trim(draft.direccion)) return false
+  if (!_trim(draft.ocupacion)) return false
+  if (!_trim(draft.fecha_nacimiento)) return false
+  if (!_trim(draft.estado)) return false
+
   return true
 }
 
@@ -1220,7 +1247,7 @@ export default function NotificacionesClientesDrive() {
                   disabled={savingRowId === editDraft.sheet_row_number || !puedeGuardarEdicion}
                   title={
                     !puedeGuardarEdicion
-                      ? 'Revise: cédula debe coincidir con la columna E de esta fila, teléfono F válido (04/02…), correo con formato válido, nombre y campos obligatorios. Si la cédula está duplicada en la hoja Drive, corríjala allí.'
+                      ? 'Activo solo si cumple todos los validadores: cédula E válida y misma clave que la fila, sin duplicar cédula en hoja, nombre D y correo G (si no los cambió: sin duplicar en clientes), teléfono F (04/02…), correo 1 ≠ 2, dirección, fecha, ocupación y estado.'
                       : undefined
                   }
                 >
