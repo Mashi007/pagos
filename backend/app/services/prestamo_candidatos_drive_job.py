@@ -1,9 +1,14 @@
 """
 Refresco del snapshot `prestamo_candidatos_drive` desde la tabla `drive` (post sync CONCILIACIÓN).
 
-Criterio (v1): la cédula en columna E de la hoja, normalizada igual que carga masiva / check-cédulas,
-no aparece en ningún `prestamos.cedula` con la misma normalización. No infiere segundo crédito
-misma cédula (fila adicional en Drive con titular ya en cartera).
+Criterio de filas en snapshot (columna E, misma normalización que carga masiva / check-cédulas):
+ningún préstamo previo en `prestamos` con esa cédula normalizada (candidatos = titular sin cartera aún).
+
+Validadores en cada payload:
+1) formato (`validate_cedula` / `cedula_valida`);
+2) cédula tipo **V**: a lo sumo un préstamo en tabla `prestamos` con esa cédula normalizada
+   (`validador_v_max_un_prestamo_ok`; en candidatos sin préstamo previo queda en true);
+3) no duplicada en hoja (`duplicada_en_hoja` / `validador_sin_duplicado_en_hoja_ok`).
 
 Job: domingo y miércoles 04:05 America/Caracas (tras sync hoja 04:00).
 """
@@ -18,8 +23,11 @@ from sqlalchemy.orm import Session
 
 from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.models.drive import DriveRow
-from app.models.prestamo import Prestamo
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
+from app.services.prestamo_candidatos_drive_validadores import (
+    cedula_cmp_es_tipo_venezolano_v,
+    conteo_prestamos_por_cedula_norm,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +60,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     meta = db.get(ConciliacionSheetMeta, 1)
     drive_synced_at = meta.synced_at if meta else None
 
-    en_prest: set[str] = set()
-    for c in db.execute(select(Prestamo.cedula)).scalars().all() or []:
-        n = _normalizar_cedula_carga_masiva(c or "")
-        if n:
-            en_prest.add(n)
+    prestamo_counts = conteo_prestamos_por_cedula_norm(db)
 
     drive_rows: List[DriveRow] = list(
         db.execute(select(DriveRow).order_by(DriveRow.sheet_row_number.asc())).scalars().all()
@@ -110,13 +114,16 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     to_insert: List[PrestamoCandidatoDrive] = []
 
     for r, cmp_e in tmp:
-        if cmp_e in en_prest:
+        n_prest = int(prestamo_counts.get(cmp_e, 0) or 0)
+        es_v = cedula_cmp_es_tipo_venezolano_v(cmp_e)
+        if n_prest >= 1:
             continue
         raw_e = _cell(getattr(r, "col_e", None))
         dup_sheet = conteos.get(cmp_e, 0) > 1
         vced = validate_cedula(raw_e)
         cedula_valida = bool(vced.get("valido"))
         cedula_error = None if cedula_valida else (vced.get("error") or "Cédula inválida")
+        validador_v_max_un_prestamo_ok = not (es_v and n_prest >= 1)
 
         payload: Dict[str, Any] = {
             "col_e_cedula": raw_e or None,
@@ -132,6 +139,11 @@ def ejecutar_refresh_prestamo_candidatos_drive(
             "cedula_valida": cedula_valida,
             "cedula_error": cedula_error,
             "duplicada_en_hoja": dup_sheet,
+            "prestamos_misma_cedula_norm_count": n_prest,
+            "cedula_es_tipo_v_venezolano": es_v,
+            "validador_formato_cedula_ok": cedula_valida,
+            "validador_v_max_un_prestamo_ok": validador_v_max_un_prestamo_ok,
+            "validador_sin_duplicado_en_hoja_ok": not dup_sheet,
             "drive_synced_at": drive_synced_at.isoformat() if drive_synced_at else None,
         }
 

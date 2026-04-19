@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.schemas.auth import UserResponse
+from app.services.prestamo_candidatos_drive_guardar import (
+    ejecutar_guardar_candidatos_drive_validados_100,
+)
 from app.services.prestamo_candidatos_drive_job import (
     ejecutar_refresh_prestamo_candidatos_drive,
     listar_prestamo_candidatos_drive_snapshot,
@@ -34,6 +37,17 @@ def get_prestamos_candidatos_drive_snapshot(
     return listar_prestamo_candidatos_drive_snapshot(
         db, limit=limit, offset=offset, cedula_q=cedula_q
     )
+
+
+@router.post(
+    "/guardar-validados-100",
+    summary="Crear préstamos solo para candidatos al 100% de validadores (sin selección manual)",
+)
+def post_prestamos_candidatos_drive_guardar_validados_100(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(require_admin),
+):
+    return ejecutar_guardar_candidatos_drive_validados_100(db, current_user=current_user)
 
 
 @router.post("/refrescar", summary="Recalcular snapshot ahora (misma lógica que el cron)")

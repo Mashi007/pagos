@@ -4512,14 +4512,15 @@ def conciliar_amortizacion_masiva(
 
 
 
-@router.post("", response_model=PrestamoResponse, status_code=201)
-
-def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
-
-    """Crea un préstamo en BD. Valida que cliente_id exista. cedula/nombres se toman del Cliente.
-
-    Automáticamente genera las cuotas de amortización."""
-
+def crear_prestamo_servicio_interno(
+    db: Session,
+    payload: PrestamoCreate,
+    current_user: UserResponse,
+) -> PrestamoResponse:
+    """
+    Misma lógica que POST /prestamos (sin Depends).
+    Usada por el endpoint público y por guardado masivo desde candidatos Drive.
+    """
     cliente = db.get(Cliente, payload.cliente_id)
 
     if not cliente:
@@ -4672,7 +4673,18 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
     return PrestamoResponse.model_validate(row)
 
 
+@router.post("", response_model=PrestamoResponse, status_code=201)
 
+def create_prestamo(
+    payload: PrestamoCreate,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Crea un préstamo en BD. Valida que cliente_id exista. cedula/nombres se toman del Cliente.
+
+    Automáticamente genera las cuotas de amortización."""
+
+    return crear_prestamo_servicio_interno(db, payload, current_user)
 
 
 @router.put("/{prestamo_id}", response_model=PrestamoResponse)

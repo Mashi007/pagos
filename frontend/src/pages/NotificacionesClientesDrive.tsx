@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { Download, Edit2, RefreshCw, Save, Trash2, User } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Edit2, RefreshCw, Save, Trash2, User } from 'lucide-react'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
@@ -13,12 +13,27 @@ import { useEstadosCliente } from '../hooks/useEstadosCliente'
 import { clienteService } from '../services/clienteService'
 import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
-import { getErrorMessage } from '../types/errors'
+import { getErrorMessage, isAxiosError } from '../types/errors'
 
 const QK = ['notificaciones', 'clientes-drive', 'candidatos'] as const
 const QK_AUD = ['notificaciones', 'clientes-drive', 'auditoria'] as const
 
 const STORAGE_HIDDEN = 'notificaciones-drive-candidatos-ocultos'
+const EMAIL_PLACEHOLDER_DRIVE = 'revisar@email.com'
+const CANDIDATOS_PAGE_SIZE = 20
+const CANDIDATOS_PAGE_BUTTONS = 5
+
+function candidatosPageWindow(current: number, total: number, maxButtons: number): number[] {
+  if (total <= 0) return []
+  if (total <= maxButtons) return Array.from({ length: total }, (_, i) => i + 1)
+  let start = Math.max(1, current - Math.floor(maxButtons / 2))
+  let end = start + maxButtons - 1
+  if (end > total) {
+    end = total
+    start = Math.max(1, end - maxButtons + 1)
+  }
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+}
 
 type DriveCandidate = NonNullable<
   Awaited<ReturnType<typeof clienteService.getDriveImportCandidatos>>['candidatos']
@@ -35,6 +50,39 @@ function fechaInputFromDefaults(iso: string | undefined): string {
     /* ignore */
   }
   return '1990-01-01'
+}
+
+/** Origen del estado en lista (antes de importar a `clientes`). */
+function etiquetaValidadorPantalla(r: DriveCandidate): string {
+  if (!r.cedula_valida) {
+    return 'Validador: validate_cedula (backend /validadores, formato V|E|G|J + 6–11 dígitos)'
+  }
+  if (r.duplicada_en_hoja) {
+    return 'Regla: cédula normalizada repetida en más de una fila del snapshot Drive (columna E)'
+  }
+  return 'Pantalla OK: cédula válida y única en hoja · al guardar: ClienteCreate + anti-duplicados en clientes'
+}
+
+function mensajeErrorImportCliente(error: unknown, contexto: string): string {
+  const base = getErrorMessage(error) || 'Error desconocido'
+  if (!isAxiosError(error)) return `${contexto}: ${base}`
+  const st = error.response?.status
+  if (st === 409) {
+    return `${contexto} — 409 en BD (cédula, nombre completo o correo ya usado por otro cliente): ${base}`
+  }
+  if (st === 422) {
+    return `${contexto} — 422 validación ClienteCreate / Pydantic: ${base}`
+  }
+  if (st === 400) {
+    return `${contexto} — 400 (p. ej. cédula no coincide con fila Drive o fila no importable): ${base}`
+  }
+  if (st === 404) {
+    return `${contexto} — 404 (fila ya no está entre candidatos): ${base}`
+  }
+  if (st === 502 || st === 503) {
+    return `${contexto} — error de servidor/red (${st ?? '—'}): ${base}`
+  }
+  return `${contexto} (${st ?? '—'}): ${base}`
 }
 
 function buildImportarFilaPayload(
@@ -63,6 +111,7 @@ export default function NotificacionesClientesDrive() {
   const [selected, setSelected] = useState<Record<number, boolean>>({})
   const [comentario, setComentario] = useState('')
   const [audPage, setAudPage] = useState(1)
+  const [candidatosPage, setCandidatosPage] = useState(1)
   const [hiddenRows, setHiddenRows] = useState<Set<number>>(() => new Set())
   const [savingRowId, setSavingRowId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState<{
@@ -123,6 +172,26 @@ export default function NotificacionesClientesDrive() {
     () => visibleRows.filter(r => r.seleccionable),
     [visibleRows]
   )
+
+  const totalCandidatosVisibles = visibleRows.length
+  const totalCandidatosPages =
+    totalCandidatosVisibles === 0 ? 0 : Math.ceil(totalCandidatosVisibles / CANDIDATOS_PAGE_SIZE)
+
+  useEffect(() => {
+    if (totalCandidatosPages === 0) return
+    setCandidatosPage(p => Math.min(Math.max(1, p), totalCandidatosPages))
+  }, [totalCandidatosPages])
+
+  const candidatosPageNumbers = useMemo(
+    () => candidatosPageWindow(candidatosPage, totalCandidatosPages, CANDIDATOS_PAGE_BUTTONS),
+    [candidatosPage, totalCandidatosPages]
+  )
+
+  const pagedVisibleRows = useMemo(() => {
+    if (!visibleRows.length) return []
+    const start = (candidatosPage - 1) * CANDIDATOS_PAGE_SIZE
+    return visibleRows.slice(start, start + CANDIDATOS_PAGE_SIZE)
+  }, [visibleRows, candidatosPage])
 
   const toggle = useCallback((sheetRow: number, checked: boolean) => {
     setSelected(prev => ({ ...prev, [sheetRow]: checked }))
@@ -187,11 +256,25 @@ export default function NotificacionesClientesDrive() {
         toast.success(
           `Proceso terminado: ${res.insertados_ok} insertado(s), ${res.errores} error(es). Lote ${res.batch_id}`
         )
+        if (res.errores > 0 && Array.isArray(res.resultados)) {
+          const fallos = res.resultados.filter(x => !x.ok).slice(0, 4)
+          const partes = fallos.map(f => {
+            const err = String(f.error ?? 'Error')
+            const short = err.length > 140 ? `${err.slice(0, 140)}…` : err
+            return `Fila ${f.sheet_row_number}: ${short}`
+          })
+          toast.warning(
+            `Fallos por fila (${res.errores}): ${partes.join(' · ')}${res.errores > fallos.length ? ' …' : ''}`,
+            { duration: 14000 }
+          )
+        }
         setSelected({})
         setComentario('')
         await refetchCandidatosYAuditoria()
       } catch (e) {
-        toast.error(getErrorMessage(e) || 'No se pudo importar')
+        toast.error(
+          mensajeErrorImportCliente(e, 'Importación masiva (POST /clientes/drive-import/importar)')
+        )
       } finally {
         setSaving(false)
       }
@@ -273,7 +356,9 @@ export default function NotificacionesClientesDrive() {
     try {
       await postImportarFila(buildImportarFilaPayload(r, comentario))
     } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo guardar la fila')
+      toast.error(
+        mensajeErrorImportCliente(e, 'Guardar fila (POST /clientes/drive-import/importar-fila)')
+      )
     } finally {
       setSavingRowId(null)
     }
@@ -298,7 +383,9 @@ export default function NotificacionesClientesDrive() {
         comentario: editDraft.comentario.trim() || null,
       })
     } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo guardar')
+      toast.error(
+        mensajeErrorImportCliente(e, 'Guardar desde edición (POST /clientes/drive-import/importar-fila)')
+      )
     } finally {
       setSavingRowId(null)
     }
@@ -407,7 +494,7 @@ export default function NotificacionesClientesDrive() {
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map(r => {
+                {pagedVisibleRows.map(r => {
                   const blocked = !r.seleccionable
                   const chk = !!selected[r.sheet_row_number]
                   const busy = savingRowId === r.sheet_row_number
@@ -434,15 +521,28 @@ export default function NotificacionesClientesDrive() {
                       <td className="px-3 py-2 align-top">{r.defaults.telefono || '—'}</td>
                       <td className="px-3 py-2 align-top break-all">{r.defaults.email}</td>
                       <td className="px-3 py-2 align-top text-xs">
-                        {!r.cedula_valida && (
-                          <span className="text-red-600">Inválida: {r.cedula_error}</span>
-                        )}
-                        {r.cedula_valida && r.duplicada_en_hoja && (
-                          <span className="text-amber-700">Repetida en hoja (no importable)</span>
-                        )}
-                        {r.cedula_valida && !r.duplicada_en_hoja && (
-                          <span className="text-emerald-700">Listo para revisión</span>
-                        )}
+                        <div className="space-y-1">
+                          {!r.cedula_valida && (
+                            <div className="font-medium text-red-600">Inválida: {r.cedula_error}</div>
+                          )}
+                          {r.cedula_valida && r.duplicada_en_hoja && (
+                            <div className="font-medium text-amber-700">
+                              Repetida en hoja (no importable)
+                            </div>
+                          )}
+                          {r.cedula_valida && !r.duplicada_en_hoja && (
+                            <div className="font-medium text-emerald-700">Listo para revisión</div>
+                          )}
+                          <p className="text-[11px] leading-snug text-muted-foreground">
+                            {etiquetaValidadorPantalla(r)}
+                          </p>
+                          {r.defaults.email === EMAIL_PLACEHOLDER_DRIVE && (
+                            <p className="text-[11px] leading-snug text-amber-800/90 dark:text-amber-200/90">
+                              Columna G: el correo no pasó la validación básica en servidor; se propone
+                              placeholder hasta corregir en edición.
+                            </p>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2 align-top">
                         <div className="flex flex-wrap gap-1">
@@ -508,6 +608,51 @@ export default function NotificacionesClientesDrive() {
               </tbody>
             </table>
           </div>
+
+          {totalCandidatosPages > 0 && (
+            <div className="flex flex-col items-center gap-2 py-1">
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 rounded-md border-border"
+                  disabled={candidatosPage <= 1 || manualSyncing || refreshing || saving}
+                  onClick={() => setCandidatosPage(p => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
+                  Anterior
+                </Button>
+                {candidatosPageNumbers.map(n => (
+                  <Button
+                    key={n}
+                    type="button"
+                    variant={n === candidatosPage ? 'default' : 'outline'}
+                    size="sm"
+                    className="min-w-9 rounded-md px-2"
+                    disabled={manualSyncing || refreshing || saving}
+                    onClick={() => setCandidatosPage(n)}
+                  >
+                    {n}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 rounded-md border-border"
+                  disabled={candidatosPage >= totalCandidatosPages || manualSyncing || refreshing || saving}
+                  onClick={() => setCandidatosPage(p => Math.min(totalCandidatosPages, p + 1))}
+                >
+                  Siguiente
+                  <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
+                </Button>
+              </div>
+              <p className="text-center text-sm text-muted-foreground">
+                Página {candidatosPage} de {totalCandidatosPages}
+              </p>
+            </div>
+          )}
 
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">

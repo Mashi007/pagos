@@ -42,3 +42,20 @@ export async function postPrestamosCandidatosDriveRefrescar(options?: {
   const url = forzar ? `${BASE}/refrescar?forzar=true` : `${BASE}/refrescar`
   return apiClient.post<Record<string, unknown>>(url, {})
 }
+
+export type PrestamoCandidatosDriveGuardarValidados100Response = {
+  insertados_ok: number
+  omitidos_no_100: number
+  errores_al_guardar: number
+  omitidos: Array<{ sheet_row_number: number; cedula_cmp: string; motivos: string[] }>
+  errores: Array<{ sheet_row_number: number; cedula_cmp: string; error: string }>
+  mensaje: string
+}
+
+/** Crea préstamos solo para filas del snapshot al 100% de validadores (sin selección manual). */
+export async function postPrestamosCandidatosDriveGuardarValidados100(): Promise<PrestamoCandidatosDriveGuardarValidados100Response> {
+  return apiClient.post<PrestamoCandidatosDriveGuardarValidados100Response>(
+    `${BASE}/guardar-validados-100`,
+    {}
+  )
+}

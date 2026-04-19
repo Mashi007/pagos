@@ -5,8 +5,8 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
   Download,
+  Edit2,
   Loader2,
-  Pencil,
   RefreshCw,
   Save,
   Trash2,
@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import {
   getPrestamosCandidatosDriveSnapshot,
+  postPrestamosCandidatosDriveGuardarValidados100,
   postPrestamosCandidatosDriveRefrescar,
   type PrestamoCandidatoDriveFila,
 } from '../services/prestamosCandidatosDriveService'
@@ -43,10 +44,26 @@ function escapeCsvCell(s: string): string {
   return t
 }
 
+/** 1 formato cédula · 2 regla V vs tabla préstamos · 3 sin duplicado en hoja */
+function validadoresTresFlags(p: PrestamoCandidatoDriveFila['payload']) {
+  const formatoOk = (p.validador_formato_cedula_ok ?? p.cedula_valida) === true
+  const hojaOk = (p.validador_sin_duplicado_en_hoja_ok ?? p.duplicada_en_hoja !== true) === true
+  const nPrest = Number(p.prestamos_misma_cedula_norm_count ?? 0)
+  const esV = p.cedula_es_tipo_v_venezolano === true
+  const tablaVOk =
+    (p.validador_v_max_un_prestamo_ok ?? !(esV && nPrest >= 1)) === true
+  return { formatoOk, tablaVOk, hojaOk, nPrest, esV }
+}
+
 function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
   const headers = [
     'fila',
     'cedula_e',
+    'prestamos_misma_cedula_n',
+    'es_tipo_v',
+    'val_formato',
+    'val_tabla_v',
+    'val_hoja',
     'producto',
     'total_n',
     'modalidad_s',
@@ -60,15 +77,23 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
   const lines = [headers.join(',')]
   for (const r of filas) {
     const p = r.payload
+    const { formatoOk, tablaVOk, hojaOk, nPrest, esV } = validadoresTresFlags(p)
     const ok = p.cedula_valida === true
     const dup = p.duplicada_en_hoja === true
     let estado = 'revisión'
     if (!ok) estado = `inválida: ${String(p.cedula_error ?? '')}`
     else if (dup) estado = 'repetida_hoja'
+    else if (!tablaVOk) estado = 'tipo_V: ya hay préstamo en tabla'
+    else estado = 'listo'
     lines.push(
       [
         r.sheet_row_number,
         strPayload(p, 'col_e_cedula'),
+        String(nPrest),
+        esV ? 'si' : 'no',
+        formatoOk ? 'ok' : 'no',
+        tablaVOk ? 'ok' : 'no',
+        hojaOk ? 'ok' : 'no',
         strPayload(p, 'producto'),
         strPayload(p, 'col_n_total_financiamiento'),
         strPayload(p, 'col_s_modalidad_pago'),
@@ -95,11 +120,15 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
 /** Cuadrícula de acciones (iconos en botones cuadrados), alineada al patrón UI de revisión por fila. */
 function AccionesIconGrid({
   onActualizacionManual,
+  onGuardarValidos100,
   manualUpdating,
+  guardarValidosSaving,
   disabled,
 }: {
   onActualizacionManual: () => void
+  onGuardarValidos100: () => void
   manualUpdating: boolean
+  guardarValidosSaving: boolean
   disabled: boolean
 }) {
   const iconBtn =
@@ -119,19 +148,23 @@ function AccionesIconGrid({
           disabled={disabled}
           onClick={() => toast.message('Edición de fila: próximamente.')}
         >
-          <Pencil className="h-4 w-4 text-foreground" strokeWidth={2} aria-hidden />
+          <Edit2 className="h-4 w-4 text-foreground" strokeWidth={2} aria-hidden />
         </Button>
         <Button
           type="button"
           variant="outline"
           size="icon"
           className={iconBtn}
-          title="Guardar en préstamos (próximamente)"
-          aria-label="Guardar"
-          disabled={disabled}
-          onClick={() => toast.message('Guardar en préstamos: próximamente.')}
+          title="Guardar en préstamos solo filas al 100% de validadores (sin marcar filas)"
+          aria-label="Guardar válidos al 100%"
+          disabled={disabled || guardarValidosSaving}
+          onClick={() => onGuardarValidos100()}
         >
-          <Save className="h-4 w-4 text-foreground" strokeWidth={2} aria-hidden />
+          <Save
+            className={`h-4 w-4 text-foreground ${guardarValidosSaving ? 'animate-pulse' : ''}`}
+            strokeWidth={2}
+            aria-hidden
+          />
         </Button>
         <Button
           type="button"
@@ -171,7 +204,7 @@ function TableSkeletonRows({ n = 6 }: { n?: number }) {
     <>
       {Array.from({ length: n }).map((_, i) => (
         <tr key={i} className="border-t">
-          {Array.from({ length: 11 }).map((__, j) => (
+          {Array.from({ length: 12 }).map((__, j) => (
             <td key={j} className="px-3 py-2">
               <div className="h-4 animate-pulse rounded bg-muted" />
             </td>
@@ -188,6 +221,7 @@ export default function ActualizacionesPrestamosDrivePage() {
   const [cedulaDebounced, setCedulaDebounced] = useState('')
   const [forzarVacio, setForzarVacio] = useState(false)
   const [manualUpdating, setManualUpdating] = useState(false)
+  const [guardarValidosSaving, setGuardarValidosSaving] = useState(false)
 
   useEffect(() => {
     const t = window.setTimeout(() => setCedulaDebounced(cedulaInput.trim()), 400)
@@ -252,6 +286,28 @@ export default function ActualizacionesPrestamosDrivePage() {
 
   const refetchLista = infinite.refetch
 
+  const onGuardarValidos100 = useCallback(async () => {
+    setGuardarValidosSaving(true)
+    try {
+      const res = await postPrestamosCandidatosDriveGuardarValidados100()
+      const ins = Number(res.insertados_ok ?? 0)
+      const om = Number(res.omitidos_no_100 ?? 0)
+      const err = Number(res.errores_al_guardar ?? 0)
+      if (err > 0) {
+        toast.warning(res.mensaje || `Creados: ${ins}. Omitidos: ${om}. Errores: ${err}.`)
+      } else if (ins > 0) {
+        toast.success(res.mensaje || `${ins} préstamo(s) creado(s) (solo 100% validadores).`)
+      } else {
+        toast.message(res.mensaje || 'Ninguna fila cumplió el 100% de validadores; no se guardó nada.')
+      }
+      await qc.resetQueries({ queryKey: [...QK_BASE, cedulaDebounced] })
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo guardar')
+    } finally {
+      setGuardarValidosSaving(false)
+    }
+  }, [qc, cedulaDebounced])
+
   const onRefrescarLista = useCallback(async () => {
     try {
       await refetchLista()
@@ -275,17 +331,23 @@ export default function ActualizacionesPrestamosDrivePage() {
   }, [])
 
   const estadoFila = useCallback((p: PrestamoCandidatoDriveFila['payload']) => {
-    const ok = p.cedula_valida === true
-    const dup = p.duplicada_en_hoja === true
-    if (!ok) {
+    const { formatoOk, tablaVOk, hojaOk } = validadoresTresFlags(p)
+    if (!formatoOk) {
       return (
         <span className="text-red-600">
-          Cédula: {String(p.cedula_error ?? 'inválida')}
+          (1) Formato: {String(p.cedula_error ?? 'cédula inválida')}
         </span>
       )
     }
-    if (dup) return <span className="text-amber-700">Repetida en hoja</span>
-    return <span className="text-emerald-700">Listo para revisión</span>
+    if (!hojaOk) return <span className="text-amber-700">(3) Repetida en hoja</span>
+    if (!tablaVOk) {
+      return (
+        <span className="text-red-600">
+          (2) Cédula V: ya hay préstamo en tabla (máximo uno)
+        </span>
+      )
+    }
+    return <span className="text-emerald-700">Listo (validadores 1·2·3 OK)</span>
   }, [])
 
   const showSkeleton = infinite.isPending && !infinite.data
@@ -329,16 +391,32 @@ export default function ActualizacionesPrestamosDrivePage() {
                 <p>
                   Use <strong>Actualización manual</strong> para volver a calcular el snapshot desde la tabla{' '}
                   <code className="rounded bg-white/80 px-1">drive</code> (mismo proceso que el cron). Use{' '}
-                  <strong>Refrescar lista</strong> solo para releer en pantalla lo ya guardado. En{' '}
-                  <strong>Acciones</strong> puede usar el mismo recálculo desde el icono de refresco.
+                  <strong>Refrescar lista</strong> solo para releer en pantalla lo ya guardado.{' '}
+                  <strong>Guardar (100%)</strong> crea préstamos solo para filas que cumplen todos los validadores, sin
+                  marcar filas en la tabla. Validadores resumidos en columna <strong>Val. 1·2·3</strong>: (1) formato de
+                  cédula, (2) tipo V — a lo sumo un préstamo en tabla <code className="rounded bg-white/80 px-1">prestamos</code>, (3) no
+                  duplicada en la hoja. En <strong>Acciones</strong> puede usar el mismo recálculo desde el icono de
+                  refresco o el icono de guardar.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   size="sm"
+                  onClick={() => void onGuardarValidos100()}
+                  disabled={manualUpdating || guardarValidosSaving || isBusy}
+                >
+                  <Save
+                    className={`mr-2 h-4 w-4 ${guardarValidosSaving ? 'animate-pulse' : ''}`}
+                    aria-hidden
+                  />
+                  Guardar (100%)
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
                   onClick={() => void onRecalcular()}
-                  disabled={manualUpdating || isBusy}
+                  disabled={manualUpdating || guardarValidosSaving || isBusy}
                 >
                   <RefreshCw
                     className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
@@ -351,7 +429,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                   variant="outline"
                   size="sm"
                   onClick={() => void onRefrescarLista()}
-                  disabled={manualUpdating || listRefreshing}
+                  disabled={manualUpdating || guardarValidosSaving || listRefreshing}
                 >
                   <Loader2 className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
                   Refrescar lista
@@ -361,7 +439,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                   variant="outline"
                   size="sm"
                   onClick={() => exportarCsvVistaActual(rows)}
-                  disabled={rows.length === 0 || manualUpdating || isBusy}
+                  disabled={rows.length === 0 || manualUpdating || guardarValidosSaving || isBusy}
                 >
                   <Download className="mr-2 h-4 w-4" aria-hidden />
                   Exportar CSV
@@ -370,8 +448,10 @@ export default function ActualizacionesPrestamosDrivePage() {
             </div>
             <AccionesIconGrid
               onActualizacionManual={() => void onRecalcular()}
+              onGuardarValidos100={() => void onGuardarValidos100()}
               manualUpdating={manualUpdating}
-              disabled={manualUpdating || isBusy}
+              guardarValidosSaving={guardarValidosSaving}
+              disabled={manualUpdating || guardarValidosSaving || isBusy}
             />
           </div>
 
@@ -413,11 +493,17 @@ export default function ActualizacionesPrestamosDrivePage() {
           )}
 
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[1040px] text-left text-sm">
+            <table className="w-full min-w-[1120px] text-left text-sm">
               <thead className="bg-muted/60">
                 <tr>
                   <th className="px-3 py-2">Fila</th>
                   <th className="px-3 py-2">Cédula (E)</th>
+                  <th
+                    className="px-3 py-2 whitespace-nowrap"
+                    title="1 formato · 2 tabla préstamos (V) · 3 hoja"
+                  >
+                    Val. 1·2·3
+                  </th>
                   <th className="px-3 py-2">Producto</th>
                   <th className="px-3 py-2">Total (N)</th>
                   <th className="px-3 py-2">Modalidad (S)</th>
@@ -432,31 +518,42 @@ export default function ActualizacionesPrestamosDrivePage() {
               <tbody>
                 {showSkeleton && <TableSkeletonRows />}
                 {!showSkeleton &&
-                  rows.map(r => (
-                    <tr key={`${r.id}-${r.sheet_row_number}`} className="border-t">
-                      <td className="px-3 py-2 font-mono">{r.sheet_row_number}</td>
-                      <td className="px-3 py-2 font-mono">{strPayload(r.payload, 'col_e_cedula')}</td>
-                      <td className="px-3 py-2 text-xs">{strPayload(r.payload, 'producto')}</td>
-                      <td className="px-3 py-2">{strPayload(r.payload, 'col_n_total_financiamiento')}</td>
-                      <td className="px-3 py-2">{strPayload(r.payload, 'col_s_modalidad_pago')}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {strPayload(r.payload, 'col_q_fecha')}
-                      </td>
-                      <td className="px-3 py-2">{strPayload(r.payload, 'col_r_numero_cuotas')}</td>
-                      <td className="px-3 py-2">{strPayload(r.payload, 'col_j_analista')}</td>
-                      <td className="px-3 py-2">{strPayload(r.payload, 'col_k_concesionario')}</td>
-                      <td
-                        className="px-3 py-2 max-w-[140px] truncate"
-                        title={strPayload(r.payload, 'col_i_modelo_vehiculo')}
-                      >
-                        {strPayload(r.payload, 'col_i_modelo_vehiculo')}
-                      </td>
-                      <td className="px-3 py-2 text-xs">{estadoFila(r.payload)}</td>
-                    </tr>
-                  ))}
+                  rows.map(r => {
+                    const { formatoOk, tablaVOk, hojaOk } = validadoresTresFlags(r.payload)
+                    const mk = (x: boolean) => (
+                      <span className={x ? 'text-emerald-700' : 'text-red-600'}>{x ? '✓' : '✗'}</span>
+                    )
+                    return (
+                      <tr key={`${r.id}-${r.sheet_row_number}`} className="border-t">
+                        <td className="px-3 py-2 font-mono">{r.sheet_row_number}</td>
+                        <td className="px-3 py-2 font-mono">{strPayload(r.payload, 'col_e_cedula')}</td>
+                        <td className="px-3 py-2 font-mono text-xs" title="1 formato · 2 tabla V · 3 hoja">
+                          {mk(formatoOk)}
+                          {mk(tablaVOk)}
+                          {mk(hojaOk)}
+                        </td>
+                        <td className="px-3 py-2 text-xs">{strPayload(r.payload, 'producto')}</td>
+                        <td className="px-3 py-2">{strPayload(r.payload, 'col_n_total_financiamiento')}</td>
+                        <td className="px-3 py-2">{strPayload(r.payload, 'col_s_modalidad_pago')}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {strPayload(r.payload, 'col_q_fecha')}
+                        </td>
+                        <td className="px-3 py-2">{strPayload(r.payload, 'col_r_numero_cuotas')}</td>
+                        <td className="px-3 py-2">{strPayload(r.payload, 'col_j_analista')}</td>
+                        <td className="px-3 py-2">{strPayload(r.payload, 'col_k_concesionario')}</td>
+                        <td
+                          className="px-3 py-2 max-w-[140px] truncate"
+                          title={strPayload(r.payload, 'col_i_modelo_vehiculo')}
+                        >
+                          {strPayload(r.payload, 'col_i_modelo_vehiculo')}
+                        </td>
+                        <td className="px-3 py-2 text-xs">{estadoFila(r.payload)}</td>
+                      </tr>
+                    )
+                  })}
                 {!showSkeleton && !infinite.isPending && rows.length === 0 && (
                   <tr>
-                    <td className="px-3 py-6 text-muted-foreground" colSpan={11}>
+                    <td className="px-3 py-6 text-muted-foreground" colSpan={12}>
                       No hay candidatos: todas las cédulas del Drive ya tienen al menos un préstamo, o el
                       snapshot está vacío. Verifique la sincronización de CONCILIACIÓN en Configuración (Google)
                       y el job automático (dom/mié 04:00 sync + 04:05 snapshot si está activo en servidor).
