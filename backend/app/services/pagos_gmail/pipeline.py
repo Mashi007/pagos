@@ -23,7 +23,8 @@ Si hay remitente en clientes pero la columna cédula queda en **ERROR EMAIL** (s
 Si falla la consulta a clientes: mismo bloqueo que remitente sin match (sin digitalizar ni Excel); Gmail **solo ERROR EMAIL**.
 Etiqueta Gmail **OTROS** (solo esa en su llamada a Gmail, salvo **PAGINAS**/**CALIDAD**/**TEXTO** aparte si aplica): unicamente si hay candidatos, remitente en clientes, **ningun** comprobante digitalizado OK como plantilla **A**/**B**/**C**/**D** (MERCANTIL/BNC/BINANCE/BNV) y ninguna otra etiqueta de clasificacion del pipeline se aplico ya en ese mensaje.
 Si en cualquier archivo falta requisito o no es plantilla valida: no etiquetas de plantilla segun reglas; el mensaje que **entraba no leido** queda **leido** tras procesarlo en el escaneo (no se modifican estrellas: las deja el usuario). No inventar datos: Gemini ya devuelve NA si no hay certeza.
-Excel: GET /pagos/gmail/download-excel.
+Excel: GET /pagos/gmail/download-excel (filtros `solo_duplicados_documento` / `excluir_duplicados_documento` para plantilla banco A–D vs `pagos.numero_documento`).
+Reglas de negocio A/B/C/D (autoconciliado, cascada cuotas, duplicados): ver `plantilla_abcd_proceso_negocio.py`.
 Cedula: en flujo normal solo desde tabla clientes por email del De (From): `email` y `email_secundario` (no desde la imagen).
 Re-lectura cédula en imagen (Mercantil/BNC, plantillas **A** y **B**): solo si **scan_filter=error_email_rescan**. Gemini en modo A/B con cédula
 desde imagen o columna **ERROR**; si sigue ilegible, etiqueta **CALIDAD**.
@@ -40,6 +41,14 @@ from sqlalchemy.orm import Session
 from app.models.cliente import Cliente
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
+from app.services.pagos_gmail.pago_abcd_auto_service import (
+    crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd,
+)
+from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+    es_plantilla_banco_abcd,
+    item_sync_abcd_candidato_revision_duplicado,
+    resumen_log_linea_plantilla_abcd,
+)
 from app.services.pagos_gmail.gmail_service import (
     add_message_user_labels_only,
     build_gmail_service,
@@ -804,9 +813,65 @@ def run_pipeline(
                                                 comprobante_reuse_por_sha256[k] = (uid, link_url)
                                         files_ok += 1
                                         had_complete_digitalization = True
-                                        fmt = p["fmt"]
-                                        if fmt in ("A", "B", "C", "D", "NR"):
-                                            bank_fmts_digitized.append(fmt)
+                                        fmt_row = p["fmt"]
+                                        if fmt_row in ("A", "B", "C", "D", "NR"):
+                                            bank_fmts_digitized.append(fmt_row)
+                                        if es_plantilla_banco_abcd(fmt_row):
+                                            try:
+                                                dup_doc = (
+                                                    item_sync_abcd_candidato_revision_duplicado(
+                                                        fmt=fmt_row,
+                                                        banco_excel=p.get(
+                                                            "banco_excel"
+                                                        ),
+                                                        referencia=p.get("r"),
+                                                        db=db,
+                                                    )
+                                                )
+                                                logger.info(
+                                                    "[PAGOS_GMAIL] [REGLA_ABCD] Plantilla %s archivo=%s | %s | "
+                                                    "serial_ya_en_pagos_o_pagos_con_errores=%s",
+                                                    fmt_row,
+                                                    p.get("filename"),
+                                                    resumen_log_linea_plantilla_abcd(),
+                                                    dup_doc,
+                                                )
+                                                if not dup_doc:
+                                                    res_abcd = (
+                                                        crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
+                                                            db,
+                                                            cedula_columna=p.get("c")
+                                                            or "",
+                                                            fecha_pago_str=p.get("f")
+                                                            or "",
+                                                            monto_str=p.get("m") or "",
+                                                            numero_referencia=p.get("r")
+                                                            or "",
+                                                            institucion_bancaria=p.get(
+                                                                "banco_excel"
+                                                            ),
+                                                            link_comprobante=link_url,
+                                                            fmt=fmt_row,
+                                                            filename=p.get("filename"),
+                                                        )
+                                                    )
+                                                    if res_abcd.get("ok"):
+                                                        logger.info(
+                                                            "[PAGOS_GMAIL] [ABCD_PAGO] Alta pagos+cuotas OK: %s",
+                                                            res_abcd,
+                                                        )
+                                                    else:
+                                                        logger.warning(
+                                                            "[PAGOS_GMAIL] [ABCD_PAGO] Sin alta automatica: "
+                                                            "motivo=%s detalle=%s",
+                                                            res_abcd.get("motivo"),
+                                                            (res_abcd.get("detalle") or "")[:160],
+                                                        )
+                                            except Exception as dup_exc:
+                                                logger.warning(
+                                                    "[PAGOS_GMAIL] [REGLA_ABCD] Evaluacion duplicado documento: %s",
+                                                    dup_exc,
+                                                )
                                 except Exception as upd_err:
                                     logger.warning(
                                         "[PAGOS_GMAIL] Error commit filas + comprobante en BD: %s",

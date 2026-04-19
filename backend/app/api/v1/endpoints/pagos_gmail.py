@@ -4,7 +4,7 @@ Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF e
 Solo si el remitente coincide con `clientes.email` o `email_secundario`: digitalizacion (Gemini), filas Excel/BD y comprobante en `pago_comprobante_imagen`; etiquetas MERCANTIL/BNC/BINANCE/BNV segun plantilla. Sin match (o error BD al consultar clientes): solo etiqueta ERROR EMAIL en Gmail, sin filas ni comprobante. Sin subidas a Google Drive.
 Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no las toca el pipeline).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
-- GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD)
+- GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD); query opcional plantilla A–D vs duplicado `pagos.numero_documento`
 - GET /pagos/gmail/status: ultima ejecucion; escaneo automatico cada N h (solo pending_identification) si esta habilitado en settings
 - POST /pagos/gmail/confirmar-dia: confirmacion si/no; si si, borrado de datos acumulados
 """
@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, delete, desc, select
@@ -319,6 +319,44 @@ def _excluir_filas_cedula_error_email(items: list) -> list:
     ]
 
 
+def _filtrar_items_excel_duplicado_documento_abcd(
+    db: Session,
+    items: list,
+    *,
+    solo_duplicados_documento: bool,
+    excluir_duplicados_documento: bool,
+) -> list:
+    """
+    Plantilla banco A–D (columna `banco`): filtra por serial ya presente en `pagos` /
+    `pagos_con_errores` (misma normalización que alta de pagos). Ver `plantilla_abcd_proceso_negocio`.
+    """
+    from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+        item_sync_abcd_candidato_revision_duplicado,
+    )
+
+    if solo_duplicados_documento:
+        return [
+            it
+            for it in items
+            if item_sync_abcd_candidato_revision_duplicado(
+                banco_excel=getattr(it, "banco", None),
+                referencia=getattr(it, "numero_referencia", None),
+                db=db,
+            )
+        ]
+    if excluir_duplicados_documento:
+        return [
+            it
+            for it in items
+            if not item_sync_abcd_candidato_revision_duplicado(
+                banco_excel=getattr(it, "banco", None),
+                referencia=getattr(it, "numero_referencia", None),
+                db=db,
+            )
+        ]
+    return items
+
+
 def _get_latest_date_with_data(db: Session) -> Optional[str]:
     """Devuelve la fecha del correo (YYYY-MM-DD) del ítem más reciente en BD, para guiar al usuario."""
     from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
@@ -334,7 +372,18 @@ def _get_latest_date_with_data(db: Session) -> Optional[str]:
 
 
 @router.get("/download-excel")
-def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
+def download_excel(
+    fecha: Optional[str] = None,
+    solo_duplicados_documento: bool = Query(
+        False,
+        description="Solo filas banco plantilla A–D cuyo serial ya existe en pagos o pagos_con_errores (revisión manual).",
+    ),
+    excluir_duplicados_documento: bool = Query(
+        False,
+        description="Excluye esas filas duplicadas; el resto (incl. NR y no-ABCD) sigue en el Excel.",
+    ),
+    db: Session = Depends(get_db),
+):
     """
     Genera y devuelve un Excel con los ítems procesados (solo lectura en BD).
     No borra ni modifica filas: el acumulado sigue en el servidor para siguientes descargas y nuevos procesamientos.
@@ -344,11 +393,18 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     Si no hay datos devuelve 404 (no se genera Excel vacío).
     Columnas: Banco, Cedula, Fecha, Monto, Serial documento, Correo Pagador.
     No incluye filas cuya cédula sea la literal **ERROR EMAIL** (reservada para fallo de remitente en clientes).
+    Filtros opcionales (plantilla banco A–D, columna Banco): `solo_duplicados_documento`, `excluir_duplicados_documento`
+    (no usar ambos a la vez).
     Para vaciar tablas usar POST /pagos/gmail/confirmar-dia con confirmado=true.
     """
     from openpyxl import Workbook
     items: list = []
     sheet_date: Optional[datetime] = None
+    if solo_duplicados_documento and excluir_duplicados_documento:
+        raise HTTPException(
+            status_code=400,
+            detail="No combine solo_duplicados_documento y excluir_duplicados_documento en la misma petición.",
+        )
     logger.info("[PAGOS_GMAIL] [ETAPA] download-excel inicio fecha=%s", fecha or "(sin fecha = toda la bandeja)")
 
     if fecha and fecha.strip():
@@ -363,6 +419,12 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
         _, sheet_date, items = _find_most_recent_data(db)
 
     items = _excluir_filas_cedula_error_email(items)
+    items = _filtrar_items_excel_duplicado_documento_abcd(
+        db,
+        items,
+        solo_duplicados_documento=solo_duplicados_documento,
+        excluir_duplicados_documento=excluir_duplicados_documento,
+    )
     if not items:
         raise HTTPException(
             status_code=404,
@@ -371,6 +433,11 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
                 "Pulse «Generar Excel desde Gmail» para procesar correos no leídos con adjuntos (imagen/PDF) "
                 "y vuelva a descargar. Verifique que GEMINI_API_KEY esté configurado en el servidor."
                 + (f" (buscado: {fecha})" if fecha else "")
+                + (
+                    " Si usó filtros de duplicado por documento (plantilla A–D), pruebe sin ellos."
+                    if (solo_duplicados_documento or excluir_duplicados_documento)
+                    else ""
+                )
             ),
         )
 
@@ -421,22 +488,52 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
 
 
 @router.get("/download-excel-temporal")
-def download_excel_temporal(db: Session = Depends(get_db)):
+def download_excel_temporal(
+    solo_duplicados_documento: bool = Query(
+        False,
+        description="Solo filas banco plantilla A–D cuyo serial ya existe en pagos o pagos_con_errores (revisión manual).",
+    ),
+    excluir_duplicados_documento: bool = Query(
+        False,
+        description="Excluye esas filas duplicadas; el resto sigue en el Excel.",
+    ),
+    db: Session = Depends(get_db),
+):
     """
     Genera Excel desde la tabla temporal gmail_temporal (cada procesamiento Gmail inserta a continuacion).
     Excluye filas con cédula **ERROR EMAIL** (no deben exportarse).
+    Filtros opcionales (misma semántica que download-excel): `solo_duplicados_documento`, `excluir_duplicados_documento`.
     NO vacia la tabla: los datos solo se borran al usar el boton "Vaciar tabla (Generar Excel desde Gmail)". Si no hay datos devuelve 404.
     """
     from openpyxl import Workbook
+
+    if solo_duplicados_documento and excluir_duplicados_documento:
+        raise HTTPException(
+            status_code=400,
+            detail="No combine solo_duplicados_documento y excluir_duplicados_documento en la misma petición.",
+        )
 
     items = db.execute(
         select(GmailTemporal).order_by(GmailTemporal.created_at)
     ).scalars().all()
     items = _excluir_filas_cedula_error_email(list(items))
+    items = _filtrar_items_excel_duplicado_documento_abcd(
+        db,
+        items,
+        solo_duplicados_documento=solo_duplicados_documento,
+        excluir_duplicados_documento=excluir_duplicados_documento,
+    )
     if not items:
         raise HTTPException(
             status_code=404,
-            detail="Sin datos en tabla temporal. Procese correos Gmail primero; cada procesamiento se almacena a continuacion en gmail_temporal.",
+            detail=(
+                "Sin datos en tabla temporal. Procese correos Gmail primero; cada procesamiento se almacena a continuacion en gmail_temporal."
+                + (
+                    " Si usó filtros de duplicado por documento, pruebe sin ellos."
+                    if (solo_duplicados_documento or excluir_duplicados_documento)
+                    else ""
+                )
+            ),
         )
     try:
         wb = Workbook()

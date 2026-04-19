@@ -75,6 +75,9 @@ function filaCumpleValidadoresImportacion(r: DriveCandidate | undefined): r is D
 /** Origen del estado en lista (antes de importar a `clientes`). */
 function etiquetaValidadorPantalla(r: DriveCandidate): string {
   if (!r.cedula_valida) {
+    if (r.cedula_solo_digitos_sin_letra_hoja) {
+      return 'Regla hoja CONCILIACIÓN: en la columna E debe figurar la letra V, E, G o J además del número (no solo dígitos).'
+    }
     return 'Validador: validate_cedula (backend /validadores, formato V|E|G|J + 6–11 dígitos)'
   }
   if (r.duplicada_en_hoja) {
@@ -485,11 +488,7 @@ export default function NotificacionesClientesDrive() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
-      <ModulePageHeader
-        title="Clientes (Drive)"
-        description="Cédulas en la pestaña CONCILIACIÓN (columna E) que aún no están en la tabla clientes. Origen: snapshot en BD (D=nombres, F=teléfono, G=email). Regla fija: solo filas en verde (cédula válida y única en E, teléfono F con validate_phone 04xx/02xx —no correo en F—) pueden guardarse en clientes; el resto en rojo o ámbar hasta corregir en Drive y sincronizar. Puede exportar a Excel (borra esas filas del snapshot en BD hasta el próximo sync). «Actualización manual» trae la hoja desde Google; «Actualizar lista» recalcula desde el snapshot en BD. Solo administradores."
-        icon={User}
-      />
+      <ModulePageHeader title="Clientes (Drive)" icon={User} />
 
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
@@ -805,14 +804,6 @@ export default function NotificacionesClientesDrive() {
               />
             </div>
             <div className="flex flex-col justify-end gap-2">
-              <p className="text-sm text-muted-foreground">
-                Se aplican las mismas reglas que «Nuevo cliente» / POST /clientes (duplicados por
-                cédula, nombre, correo, teléfono). Además, en esta pantalla no se permite guardar ninguna
-                fila que no esté en verde: cédula válida y única en E, teléfono F válido (04xx/02xx, sin
-                correo en F). Si una fila del lote no cumple, no se envía el lote entero hasta que quite
-                esas filas de la selección. Cada fila puede editarse u ocultarse en esta sesión; el botón
-                guardar por fila solo actúa si la fila cumple el 100% de validadores de hoja.
-              </p>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <Button
                   type="button"
@@ -956,10 +947,6 @@ export default function NotificacionesClientesDrive() {
               <CardTitle id="drive-edit-title" className="text-lg">
                 Editar fila {editDraft.sheet_row_number}
               </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                La cédula debe seguir correspondiendo a la columna E de la hoja (normalización del sistema). El
-                guardado usa las mismas validaciones que «Nuevo cliente».
-              </p>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1">

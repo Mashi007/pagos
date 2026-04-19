@@ -529,6 +529,7 @@ class ClienteService {
       cedula_cmp: string
       cedula_valida: boolean
       cedula_error: string | null
+      cedula_solo_digitos_sin_letra_hoja?: boolean
       cedula_para_crear: string | null
       duplicada_en_hoja: boolean
       telefono_valida?: boolean

@@ -75,6 +75,18 @@ def _cedula_cmp_unificada(raw: str) -> str:
     return _normalizar_cedula_carga_masiva(s)
 
 
+def _cedula_columna_e_sin_letra_explicita(raw: str) -> bool:
+    """
+    True si en la celda E solo aparecen dígitos (6–11) y separadores, sin V/E/G/J escrita.
+    El validador asumiría V por defecto, pero en CONCILIACIÓN exigimos la letra en la hoja
+    para poder marcar la fila y evitar confusiones (p. ej. cédula vs fecha en 8 dígitos).
+    """
+    from app.api.v1.endpoints.validadores import _sanear_cedula_ingresada
+
+    c = _sanear_cedula_ingresada(_cell(raw))
+    return bool(c) and bool(re.fullmatch(r"\d{6,11}", c))
+
+
 def _cedula_texto_columna_drive(raw: str, vced: Dict[str, Any]) -> str:
     """Texto mostrado para columna E: formato V-… cuando aplica (igual que validadores con V implícita)."""
     s = _cell(raw)
@@ -184,14 +196,28 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
         raw_e = _cell(getattr(r, "col_e", None))
         dup_sheet = conteos.get(cmp_e, 0) > 1
         vced = validate_cedula(raw_e)
-        cedula_valida = bool(vced.get("valido"))
-        cedula_error = None if cedula_valida else (vced.get("error") or "Cédula inválida")
+        validador_cedula_ok = bool(vced.get("valido"))
+        solo_digitos_sin_letra = _cedula_columna_e_sin_letra_explicita(raw_e)
+        cedula_valida = validador_cedula_ok and not solo_digitos_sin_letra
+        if not validador_cedula_ok:
+            cedula_error = vced.get("error") or "Cédula inválida"
+        elif solo_digitos_sin_letra:
+            cedula_error = (
+                "En la columna E debe escribirse la letra del documento (V, E, G o J), no solo el número. "
+                f"Ejemplo sugerido: {str(vced.get('valor_formateado') or '').strip() or 'V-…'}."
+            )
+        else:
+            cedula_error = None
         valor_fmt = str(vced.get("valor_formateado") or raw_e).strip()
         cedula_sugerida_bd = _cedula_para_bd_desde_validacion(valor_fmt) if cedula_valida else ""
 
         email_propuesto = raw_g if _validate_email_basic(raw_g) else _PLACEHOLDER_EMAIL
         nombres_propuesto = raw_d if raw_d else "Revisar Nombres"
-        col_e_mostrar = _cedula_texto_columna_drive(raw_e, vced)
+        col_e_mostrar = (
+            (str(vced.get("valor_formateado") or "").strip() or _cedula_texto_columna_drive(raw_e, vced))
+            if validador_cedula_ok
+            else _cedula_texto_columna_drive(raw_e, vced)
+        )
         tel_norm = _telefono_normalizado_drive_col_f(raw_f)
         tel_ok, tel_val, tel_err = _telefono_col_f_validacion_estricta(raw_f)
         tel_display = tel_val if tel_ok else (tel_norm or raw_f or None)
@@ -206,6 +232,7 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
                 "cedula_cmp": cmp_e,
                 "cedula_valida": cedula_valida,
                 "cedula_error": cedula_error,
+                "cedula_solo_digitos_sin_letra_hoja": solo_digitos_sin_letra,
                 "cedula_para_crear": cedula_sugerida_bd if cedula_valida else None,
                 "duplicada_en_hoja": dup_sheet,
                 "telefono_valida": tel_ok,

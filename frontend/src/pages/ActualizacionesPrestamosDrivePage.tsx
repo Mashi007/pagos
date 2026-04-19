@@ -189,11 +189,12 @@ const FILA_TONE_TR: Record<FilaCandidatoDriveTono, string> = {
   plain: 'border-b border-border bg-background hover:bg-muted/25',
 }
 
+/** Fondos opacos en la celda sticky para que no se transparente el texto de la columna anterior al hacer scroll. */
 const FILA_TONE_STICKY_TD: Record<FilaCandidatoDriveTono, string> = {
-  red: 'bg-red-50/98 backdrop-blur-sm',
-  amber: 'bg-amber-50/98 backdrop-blur-sm',
-  green: 'bg-emerald-50/98 backdrop-blur-sm',
-  plain: 'bg-background/98 backdrop-blur-sm',
+  red: 'bg-red-50',
+  amber: 'bg-amber-50',
+  green: 'bg-emerald-50',
+  plain: 'bg-background',
 }
 
 function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
@@ -283,7 +284,7 @@ function AccionesPorFilaCandidatoDrive({
     : `No se puede guardar: la fila debe cumplir el 100% de validadores (debe verse en verde).`
 
   return (
-    <div className="flex flex-nowrap items-center justify-end gap-1">
+    <div className="flex min-w-0 flex-nowrap items-center justify-center gap-0.5 sm:gap-1">
       <Button
         type="button"
         variant="outline"
@@ -338,7 +339,7 @@ function TableSkeletonRows({ n = 6 }: { n?: number }) {
       {Array.from({ length: n }).map((_, i) => (
         <tr key={i} className="border-t">
           {Array.from({ length: 12 }).map((__, j) => (
-            <td key={j} className="px-3 py-2">
+            <td key={j} className="px-2 py-2 align-middle">
               <div className="h-4 animate-pulse rounded bg-muted" />
             </td>
           ))}
@@ -551,78 +552,57 @@ export default function ActualizacionesPrestamosDrivePage() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-4 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
-            <div className="min-w-0 space-y-3">
-              <div className="space-y-1 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Actualización</p>
-                <p>
-                  Use <strong>Actualización manual</strong> para volver a calcular el snapshot desde la tabla{' '}
-                  <code className="rounded bg-white/80 px-1">drive</code> (mismo proceso que el cron). Use{' '}
-                  <strong>Refrescar lista</strong> solo para releer en pantalla lo ya guardado.{' '}
-                  <strong>Guardar (100%)</strong> recorre <strong>todo</strong> el snapshot y crea préstamos solo para
-                  las filas que cumplen el 100% de validadores (el servidor valida cada una; si falla un validador, esa
-                  fila no se guarda). <strong>Guardar por fila</strong> (icono disco) solo está activo en filas{' '}
-                  <strong>verdes</strong>. Validadores resumidos en columna <strong>Val. 1·2·3</strong>: (1) formato de
-                  cédula, (2) tipo <strong>V</strong> o <strong>E</strong> — a lo sumo un préstamo en tabla{' '}
-                  <code className="rounded bg-white/80 px-1">prestamos</code> (más de uno no cumple); tipo{' '}
-                  <strong>J</strong> puede tener dos o más préstamos (sin ese tope), (3) no duplicada en la hoja; además
-                  la fecha de aprobación en <strong>Q</strong> no puede superar 30 días (misma regla que el fondo rojo).
-                  La columna <strong>Acciones</strong> incluye editar y quitar (en desarrollo).
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => void onGuardarValidos100()}
-                  disabled={guardarMasivoDeshabilitado}
-                  title={
-                    total === 0
-                      ? 'No hay candidatos en el snapshot.'
-                      : 'Inserta en préstamos cada fila del snapshot que cumpla el 100% de validadores (las demás se omiten).'
-                  }
-                >
-                  <Save
-                    className={`mr-2 h-4 w-4 ${guardarValidosSaving ? 'animate-pulse' : ''}`}
-                    aria-hidden
-                  />
-                  Guardar (100%)
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => void onRecalcular()}
-                  disabled={accionesGlobalesDeshabilitadas}
-                >
-                  <RefreshCw
-                    className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
-                    aria-hidden
-                  />
-                  Actualización manual
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void onRefrescarLista()}
-                  disabled={accionesGlobalesDeshabilitadas || listRefreshing}
-                >
-                  <Loader2 className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
-                  Refrescar lista
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  title="Exporta solo las filas de la página actual"
-                  onClick={() => exportarCsvVistaActual(rows)}
-                  disabled={rows.length === 0 || accionesGlobalesDeshabilitadas}
-                >
-                  <Download className="mr-2 h-4 w-4" aria-hidden />
-                  Exportar CSV
-                </Button>
-              </div>
-            </div>
+          <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-muted/30 p-3">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void onGuardarValidos100()}
+              disabled={guardarMasivoDeshabilitado}
+              title={
+                total === 0
+                  ? 'No hay candidatos en el snapshot.'
+                  : 'Inserta en préstamos cada fila del snapshot que cumpla el 100% de validadores (las demás se omiten).'
+              }
+            >
+              <Save
+                className={`mr-2 h-4 w-4 ${guardarValidosSaving ? 'animate-pulse' : ''}`}
+                aria-hidden
+              />
+              Guardar (100%)
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void onRecalcular()}
+              disabled={accionesGlobalesDeshabilitadas}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
+                aria-hidden
+              />
+              Actualización manual
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void onRefrescarLista()}
+              disabled={accionesGlobalesDeshabilitadas || listRefreshing}
+            >
+              <Loader2 className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
+              Refrescar lista
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              title="Exporta solo las filas de la página actual"
+              onClick={() => exportarCsvVistaActual(rows)}
+              disabled={rows.length === 0 || accionesGlobalesDeshabilitadas}
+            >
+              <Download className="mr-2 h-4 w-4" aria-hidden />
+              Exportar CSV
+            </Button>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -672,26 +652,40 @@ export default function ActualizacionesPrestamosDrivePage() {
           </p>
 
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[1120px] text-left text-sm">
+            <table className="w-full min-w-[1280px] table-fixed text-left text-sm">
+              <colgroup>
+                <col style={{ width: '3%' }} />
+                <col style={{ width: '9%' }} />
+                <col style={{ width: '5%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '4%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '9%' }} />
+                <col style={{ width: '13%' }} />
+                <col style={{ width: '11%' }} />
+              </colgroup>
               <thead className="bg-muted/60">
                 <tr>
-                  <th className="px-3 py-2">Fila</th>
-                  <th className="px-3 py-2">Cédula (E)</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Fila</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Cédula (E)</th>
                   <th
-                    className="px-3 py-2 whitespace-nowrap"
+                    className="px-2 py-2.5 align-middle text-xs font-semibold whitespace-nowrap"
                     title="1 formato · 2 tabla préstamos (V/E máx. 1; J puede varios) · 3 hoja"
                   >
                     Val. 1·2·3
                   </th>
-                  <th className="px-3 py-2">Total (N)</th>
-                  <th className="px-3 py-2">Modalidad (S)</th>
-                  <th className="px-3 py-2">Fecha (Q)</th>
-                  <th className="px-3 py-2">Cuotas (R)</th>
-                  <th className="px-3 py-2">Analista (J)</th>
-                  <th className="px-3 py-2">Concesionario (K)</th>
-                  <th className="px-3 py-2">Modelo (I)</th>
-                  <th className="px-3 py-2">Estado</th>
-                  <th className="sticky right-0 z-[1] bg-muted/95 px-3 py-2 text-right shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Total (N)</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Modalidad (S)</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Fecha (Q)</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Cuotas (R)</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Analista (J)</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Conces. (K)</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Modelo (I)</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Estado</th>
+                  <th className="sticky right-0 z-20 min-w-[7.5rem] border-l border-border bg-muted px-1 py-2.5 text-center align-middle text-xs font-semibold shadow-[-6px_0_12px_-8px_rgba(0,0,0,0.12)]">
                     Acciones
                   </th>
                 </tr>
@@ -709,30 +703,60 @@ export default function ActualizacionesPrestamosDrivePage() {
                     )
                     return (
                       <tr key={`${r.id}-${r.sheet_row_number}`} className={trTone}>
-                        <td className="px-3 py-2 font-mono">{r.sheet_row_number}</td>
-                        <td className="px-3 py-2 font-mono">{strPayload(r.payload, 'col_e_cedula')}</td>
-                        <td className="px-3 py-2 font-mono text-xs" title="1 formato · 2 tabla (V/E; J exento) · 3 hoja">
-                          {mk(formatoOk)}
-                          {mk(tablaVOk)}
-                          {mk(hojaOk)}
+                        <td className="px-2 py-2 align-middle font-mono text-xs tabular-nums">
+                          {r.sheet_row_number}
                         </td>
-                        <td className="px-3 py-2">{strPayload(r.payload, 'col_n_total_financiamiento')}</td>
-                        <td className="px-3 py-2">{strPayload(r.payload, 'col_s_modalidad_pago')}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">
+                        <td className="px-2 py-2 align-middle font-mono text-xs whitespace-nowrap">
+                          {strPayload(r.payload, 'col_e_cedula')}
+                        </td>
+                        <td
+                          className="px-2 py-2 align-middle text-center font-mono text-xs"
+                          title="1 formato · 2 tabla (V/E; J exento) · 3 hoja"
+                        >
+                          <span className="inline-flex gap-0.5">
+                            {mk(formatoOk)}
+                            {mk(tablaVOk)}
+                            {mk(hojaOk)}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 align-middle font-mono text-xs whitespace-nowrap tabular-nums">
+                          {strPayload(r.payload, 'col_n_total_financiamiento')}
+                        </td>
+                        <td
+                          className="max-w-0 overflow-hidden text-ellipsis px-2 py-2 align-middle whitespace-nowrap"
+                          title={strPayload(r.payload, 'col_s_modalidad_pago')}
+                        >
+                          {strPayload(r.payload, 'col_s_modalidad_pago')}
+                        </td>
+                        <td className="px-2 py-2 align-middle whitespace-nowrap">
                           {strPayload(r.payload, 'col_q_fecha')}
                         </td>
-                        <td className="px-3 py-2">{strPayload(r.payload, 'col_r_numero_cuotas')}</td>
-                        <td className="px-3 py-2">{strPayload(r.payload, 'col_j_analista')}</td>
-                        <td className="px-3 py-2">{strPayload(r.payload, 'col_k_concesionario')}</td>
+                        <td className="px-2 py-2 align-middle text-center tabular-nums">
+                          {strPayload(r.payload, 'col_r_numero_cuotas')}
+                        </td>
                         <td
-                          className="px-3 py-2 max-w-[140px] truncate"
+                          className="max-w-0 overflow-hidden text-ellipsis px-2 py-2 align-middle whitespace-nowrap"
+                          title={strPayload(r.payload, 'col_j_analista')}
+                        >
+                          {strPayload(r.payload, 'col_j_analista')}
+                        </td>
+                        <td
+                          className="max-w-0 overflow-hidden text-ellipsis px-2 py-2 align-middle whitespace-nowrap"
+                          title={strPayload(r.payload, 'col_k_concesionario')}
+                        >
+                          {strPayload(r.payload, 'col_k_concesionario')}
+                        </td>
+                        <td
+                          className="max-w-0 overflow-hidden text-ellipsis px-2 py-2 align-middle whitespace-nowrap"
                           title={strPayload(r.payload, 'col_i_modelo_vehiculo')}
                         >
                           {strPayload(r.payload, 'col_i_modelo_vehiculo')}
                         </td>
-                        <td className="px-3 py-2 text-xs">{estadoFila(r.payload)}</td>
+                        <td className="max-w-0 overflow-hidden px-2 py-2 align-middle text-xs leading-snug">
+                          <div className="line-clamp-2 break-words">{estadoFila(r.payload)}</div>
+                        </td>
                         <td
-                          className={`sticky right-0 z-[1] border-l border-border px-2 py-1.5 text-right shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)] ${stickyTone}`}
+                          className={`sticky right-0 z-10 min-w-[7.5rem] border-l border-border px-1 py-1.5 text-center align-middle shadow-[-6px_0_12px_-8px_rgba(0,0,0,0.08)] ${stickyTone}`}
                         >
                           <AccionesPorFilaCandidatoDrive
                             fila={r}
