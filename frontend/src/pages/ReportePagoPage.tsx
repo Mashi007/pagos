@@ -16,7 +16,7 @@
 
 
 
- * fecha (obligatoria, no futura, desde calendario), institución y nº documento (longitud), archivo (JPG/PNG/PDF, máx 5 MB).
+ * fecha (obligatoria, no futura, desde calendario), institución y nº documento (longitud), archivo (PDF, JPEG, PNG, HEIC/HEIF, WebP; máx 5 MB).
 
 
 
@@ -78,8 +78,40 @@ const ALLOWED_FILE_TYPES = [
   'image/jpeg',
   'image/jpg',
   'image/png',
+  'image/webp',
+  'image/gif',
+  'image/heic',
+  'image/heif',
   'application/pdf',
 ]
+
+function _extensionArchivoLower(file: File): string {
+  const n = (file.name || '').toLowerCase()
+  const i = n.lastIndexOf('.')
+  return i >= 0 ? n.slice(i) : ''
+}
+
+/** Misma idea que backend `mime_efectivo_comprobante_web` (iPhone suele mandar octet-stream). */
+function _mimeEfectivoCliente(file: File): string {
+  let t = (file.type || '').split(';')[0].trim().toLowerCase()
+  const ext = _extensionArchivoLower(file)
+  if (!t || t === 'application/octet-stream' || t === 'binary/octet-stream') {
+    const map: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.pdf': 'application/pdf',
+      '.heic': 'image/heic',
+      '.heif': 'image/heif',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif',
+    }
+    const inf = map[ext]
+    if (inf) t = inf
+  }
+  if (t === 'image/jpg') t = 'image/jpeg'
+  return t
+}
 
 const MAX_LENGTH_INSTITUCION = 100
 
@@ -237,17 +269,18 @@ function validarArchivo(file: File | null): {
   if (!file)
     return {
       valido: false,
-      error: 'Seleccione un archivo de comprobante (JPG, PNG o PDF).',
+      error: 'Seleccione un archivo de comprobante (PDF, JPEG, PNG, HEIC o WebP).',
     }
 
-  const type = (file.type || '').toLowerCase()
+  const type = _mimeEfectivoCliente(file)
 
-  const okType = ALLOWED_FILE_TYPES.some(
-    t => type === t || (t === 'image/jpg' && type === 'image/jpeg')
-  )
+  const okType = ALLOWED_FILE_TYPES.includes(type)
 
   if (!okType) {
-    return { valido: false, error: 'Solo se permiten archivos JPG, PNG o PDF.' }
+    return {
+      valido: false,
+      error: 'Solo se permiten archivos PDF, JPEG, PNG, HEIC, HEIF o WebP.',
+    }
   }
 
   if (file.size > MAX_FILE_SIZE) {
@@ -802,7 +835,7 @@ export default function ReportePagoPage({
           {
             icon: 'file' as const,
             text: 'Comprobante',
-            desc: 'JPG, PNG o PDF, máx. 5 MB',
+            desc: 'PDF, JPEG, PNG, HEIC o WebP, máx. 5 MB',
           },
           {
             icon: 'check' as const,
@@ -824,7 +857,7 @@ export default function ReportePagoPage({
           {
             icon: 'file' as const,
             text: 'Comprobante',
-            desc: 'JPG, PNG o PDF, máx. 5 MB',
+            desc: 'PDF, JPEG, PNG, HEIC o WebP, máx. 5 MB',
           },
           {
             icon: 'check' as const,
@@ -1681,7 +1714,7 @@ export default function ReportePagoPage({
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                JPG, PNG o PDF. Máximo 5 MB.
+                PDF, JPEG, PNG, HEIC (iPhone), WebP. Máximo 5 MB.
               </p>
             </CardHeader>
 
@@ -1719,7 +1752,7 @@ export default function ReportePagoPage({
                 <Input
                   type="file"
                   className="min-h-[48px] touch-manipulation file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
-                  accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                  accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.gif,application/pdf,image/jpeg,image/png,image/heic,image/heif,image/webp,image/gif"
                   onChange={e => setArchivo(e.target.files?.[0] || null)}
                 />
               )}
