@@ -21,6 +21,7 @@ import {
   Mail,
   RefreshCw,
   Settings,
+  TestTube,
   X,
 } from 'lucide-react'
 
@@ -833,7 +834,7 @@ export default function NotificacionesRecibosPage() {
                   {simulacionEnCurso ? (
                     <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
                   ) : (
-                    <FlaskConical className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                    <TestTube className="mr-2 h-4 w-4 shrink-0" aria-hidden />
                   )}
                   {simulacionEnCurso ? 'Simulando…' : 'Simular'}
                 </Button>
