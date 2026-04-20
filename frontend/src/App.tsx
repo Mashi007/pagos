@@ -16,7 +16,7 @@ import { useSimpleAuth } from './store/simpleAuthStore'
 
 import { getFiniquitoAccessToken } from './services/finiquitoService'
 
-import { BASE_PATH, PUBLIC_FLOW_SESSION_KEY } from './config/env'
+import { BASE_PATH } from './config/env'
 
 import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
@@ -30,29 +30,18 @@ import {
  * Acceso publico SIN login de personal: estas URLs siguen abiertas (formulario cobros, etc.).
  * No se impide entrar a /rapicredit-cobros ni a rapicredit-estadocuenta por URL directa.
  *
- * La raiz pathname '/' NO esta aqui: si alguien va a /pagos/ sin sesion, debe pasar por /login
- * (RedirectRootToLogin). Eso no quita el acceso publico al formulario; solo corta el atajo por la raiz.
+ * La raiz pathname '/' (URL real: /pagos o /pagos/) muestra solo enlaces de cliente; el login
+ * de personal queda en /login?personal=1 para no exponer credenciales en la misma entrada publica.
  *
  * Un usuario en rapicredit-cobros no puede abrir dashboard, clientes, etc. sin autenticarse.
  */
 const PUBLIC_PATHS = [
+  '/',
   '/login',
   '/acceso-limitado',
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
 ]
-
-/**
- * Solo para pathname '/': envia a /login. Limpia marca de flujo publico en sessionStorage para
- * que en login no queden restos de "estaba en formulario publico" al haber pasado por la raiz.
- */
-function RedirectRootToLogin() {
-  if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.removeItem(PUBLIC_FLOW_SESSION_KEY)
-    sessionStorage.removeItem(`${PUBLIC_FLOW_SESSION_KEY}_path`)
-  }
-  return <Navigate to="/login" replace />
-}
 
 /**
  * En rutas publicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
@@ -86,9 +75,6 @@ function RootLayoutWrapper() {
   // Esto previene que intenten acceder al dashboard quitando /infopagos de la URL
 
   if (!isLoading && !isAuthenticated) {
-    if (pathnameFromRouter === '/') {
-      return <RedirectRootToLogin />
-    }
     return <Navigate to="/login" replace />
   }
 
@@ -235,6 +221,8 @@ import { AdminTasaCambioPage } from './pages/AdminTasaCambioPage'
 
 import AccesoLimitadoPage from './pages/AccesoLimitadoPage'
 
+import { PublicBasenameIndexPage } from './pages/PublicBasenameIndexPage'
+
 // Todas las pginas ahora estn importadas desde archivos reales
 
 const NotFound = () => (
@@ -316,7 +304,7 @@ function App() {
           {/* Una sola raz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
 
           <Route path="/" element={<RootLayoutWrapper />}>
-            {/* Raz /pagos/ sin token ? pedir usuario y clave (login) */}
+            {/* Raíz /pagos: clientes eligen servicio público; personal usa /login?personal=1 */}
 
             <Route
               index
@@ -324,7 +312,7 @@ function App() {
                 isAuthenticated ? (
                   <Navigate to={defaultHomePathForRol(user?.rol)} replace />
                 ) : (
-                  <Navigate to="/login" replace />
+                  <PublicBasenameIndexPage />
                 )
               }
             />

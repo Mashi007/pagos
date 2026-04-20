@@ -11,7 +11,7 @@ const DEFAULT_APP_VERSION = '1.0.0'
  * - Aqui: BASE_PATH = '/pagos' (sin barra final)
  * - main.tsx: <BrowserRouter basename={BASE_PATH || '/'}>
  * - server.js: FRONTEND_BASE = '/pagos'
- * - App.tsx: rutas publicas por pathname relativo al basename: '/' y '/login'
+ * - App.tsx: rutas publicas por pathname relativo al basename: '/', cobros, estado cuenta, '/login'
  */
 function getBasePath(): string {
   const fromVite = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || ''
