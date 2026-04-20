@@ -27,37 +27,36 @@
       padding: 0;
       position: relative;
       overflow: hidden;
-      min-height: 110px;
     }
     .header-red-bar {
       position: absolute;
       top: 0; left: 0;
-      width: 7px;
+      width: 6px;
       height: 100%;
       background: #e63946;
     }
     .header-accent-circle {
       position: absolute;
-      top: -50px; right: -50px;
-      width: 220px; height: 220px;
+      top: -28px; right: -28px;
+      width: 120px; height: 120px;
       border-radius: 50%;
-      border: 40px solid rgba(230,57,70,0.08);
+      border: 22px solid rgba(230,57,70,0.08);
     }
     .header-accent-circle2 {
       position: absolute;
-      bottom: -30px; right: 120px;
-      width: 100px; height: 100px;
+      bottom: -16px; right: 42%;
+      width: 56px; height: 56px;
       border-radius: 50%;
-      border: 20px solid rgba(255,255,255,0.04);
+      border: 12px solid rgba(255,255,255,0.04);
     }
     .header-inner {
       position: relative;
       z-index: 2;
-      padding: 26px 36px 26px 44px;
+      padding: 12px 32px 12px 40px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 20px;
+      gap: 16px;
     }
     .header-left {
       display: flex;
@@ -91,7 +90,7 @@
       text-transform: uppercase;
     }
     .header-tagline .tag-bottom {
-      font-size: 13px;
+      font-size: 12px;
       font-family: 'Montserrat', sans-serif;
       font-weight: 500;
       color: rgba(255,255,255,0.65);
@@ -100,7 +99,7 @@
     .header-brand {
       font-family: 'Montserrat', sans-serif;
       font-weight: 900;
-      font-size: 28px;
+      font-size: 24px;
       color: #fff;
       letter-spacing: -1px;
       line-height: 1;
@@ -108,16 +107,16 @@
     .header-brand .r-red { color: #e63946; }
     .header-brand .brand-sub {
       display: block;
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 500;
       color: rgba(255,255,255,0.35);
-      letter-spacing: 3px;
+      letter-spacing: 2px;
       text-transform: uppercase;
       text-align: right;
-      margin-top: 2px;
+      margin-top: 1px;
     }
     .header-divider {
-      height: 3px;
+      height: 2px;
       background: linear-gradient(90deg, #e63946 0%, #e63946 30%, rgba(255,255,255,0.06) 100%);
     }
 
@@ -267,43 +266,44 @@
 
     /* ── SIGNATURE / FOOTER ── */
     .signature {
-      background: #0d1b2a;
+      background: linear-gradient(165deg, #132238 0%, #0d1b2a 42%, #0a1522 100%);
       padding: 0;
       position: relative;
       overflow: hidden;
     }
     .sig-red-top {
-      height: 4px;
-      background: #e63946;
+      height: 3px;
+      background: linear-gradient(90deg, #ff4d5e 0%, #e63946 35%, #c1121f 100%);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.12);
     }
     .sig-inner {
-      padding: 28px 36px 30px;
+      padding: 16px 28px 18px;
       position: relative;
       z-index: 2;
     }
     .sig-deco-circle {
       position: absolute;
-      bottom: -60px; right: -60px;
-      width: 200px; height: 200px;
+      bottom: -36px; right: -36px;
+      width: 120px; height: 120px;
       border-radius: 50%;
-      border: 40px solid rgba(230,57,70,0.07);
+      border: 22px solid rgba(230,57,70,0.10);
       z-index: 1;
     }
     .sig-deco-circle2 {
       position: absolute;
-      top: -20px; left: 200px;
-      width: 80px; height: 80px;
+      top: 8px; left: 55%;
+      width: 48px; height: 48px;
       border-radius: 50%;
-      border: 16px solid rgba(255,255,255,0.03);
+      border: 10px solid rgba(255,255,255,0.05);
       z-index: 1;
     }
     .sig-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 22px;
-      padding-bottom: 20px;
-      border-bottom: 1px solid rgba(255,255,255,0.10);
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.16);
     }
     .sig-brand-block {
       display: flex;
@@ -324,25 +324,26 @@
     .sig-brand-text .sig-name {
       font-family: 'Montserrat', sans-serif;
       font-weight: 900;
-      font-size: 20px;
-      color: #fff;
+      font-size: 19px;
+      color: #ffffff;
       letter-spacing: -0.5px;
-      line-height: 1;
+      line-height: 1.05;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
     }
-    .sig-brand-text .sig-name span { color: #e63946; }
+    .sig-brand-text .sig-name span { color: #ff4d5e; }
     .sig-brand-text .sig-dept {
       font-size: 11px;
-      color: rgba(255,255,255,0.38);
-      font-weight: 500;
-      letter-spacing: 2px;
+      color: #b8c9dc;
+      font-weight: 600;
+      letter-spacing: 1.8px;
       text-transform: uppercase;
-      margin-top: 3px;
+      margin-top: 4px;
     }
     .sig-tagline {
       font-family: 'Montserrat', sans-serif;
       font-size: 11px;
       font-weight: 600;
-      color: rgba(255,255,255,0.22);
+      color: rgba(255,255,255,0.35);
       letter-spacing: 2px;
       text-transform: uppercase;
       text-align: right;
@@ -351,51 +352,58 @@
     .sig-tagline strong {
       display: block;
       font-size: 12px;
-      color: rgba(255,255,255,0.35);
+      color: rgba(255,255,255,0.5);
     }
     .sig-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0;
+      gap: 12px;
     }
     .sig-item {
       display: flex;
       align-items: flex-start;
       gap: 12px;
-      padding: 12px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 12px 14px;
+      margin: 0;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
-    .sig-item:nth-child(odd) { padding-right: 20px; border-right: 1px solid rgba(255,255,255,0.06); }
-    .sig-item:nth-child(even) { padding-left: 20px; }
-    .sig-item:nth-last-child(-n+2) { border-bottom: none; }
     .s-icon-box {
       width: 32px; height: 32px;
-      background: rgba(230,57,70,0.15);
+      background: rgba(230,57,70,0.22);
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-size: 14px;
       flex-shrink: 0;
-      border: 1px solid rgba(230,57,70,0.25);
+      border: 1px solid rgba(255,107,122,0.45);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
     }
     .sig-item .s-label {
       font-size: 10px;
-      color: rgba(255,255,255,0.35);
+      color: #9eb3cc;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 1.2px;
       display: block;
-      margin-bottom: 2px;
+      margin-bottom: 4px;
     }
     .sig-item .s-value {
-      font-size: 12.5px;
-      color: rgba(255,255,255,0.80);
-      font-weight: 500;
-      line-height: 1.4;
+      font-size: 13px;
+      color: #f1f5f9;
+      font-weight: 600;
+      line-height: 1.45;
     }
     .sig-item a.s-value {
-      color: #ff6b7a;
+      color: #ffc9cf;
       text-decoration: none;
+      border-bottom: 1px solid rgba(255,201,207,0.45);
     }
-    .sig-item a.s-value:hover { text-decoration: underline; }
+    .sig-item a.s-value:hover {
+      color: #ffffff;
+      border-bottom-color: rgba(255,255,255,0.7);
+    }
 
     /* ── LEGAL ── */
     .legal {
