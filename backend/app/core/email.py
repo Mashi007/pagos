@@ -581,8 +581,8 @@ def send_email(
         msg["To"] = ", ".join(to_emails)
         if cc_list:
             msg["Cc"] = ", ".join(cc_list)
-        if bcc_list:
-            msg["Bcc"] = ", ".join(bcc_list)
+        # CCO/BCC: no escribir cabecera "Bcc" en el RFC822. Va solo en el sobre SMTP (sendmail RCPT TO).
+        # Incluir Bcc en el mensaje compartido rompe privacidad y en Gmail a veces la copia CCO no llega.
 
         if has_attachments:
             for filename, content in attachments_norm:
