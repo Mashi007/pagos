@@ -907,10 +907,8 @@ export async function historicoPorCliente(
 /** Abre el comprobante (imagen/PDF) en nueva pesta├â┬▒a. Usa auth del apiClient. */
 
 export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
-  const data = await apiClient.get<Blob>(
-    `${BASE_COBROS}/pagos-reportados/${pagoId}/comprobante`,
-    { responseType: 'blob' }
-  )
+  const path = `${BASE_COBROS}/pagos-reportados/${pagoId}/comprobante`
+  const data = await apiClient.getBlob(path)
 
   const url = URL.createObjectURL(data)
 
@@ -920,10 +918,8 @@ export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
 /** Abre o descarga el recibo PDF. Usa auth del apiClient. */
 
 export async function openReciboPdfInNewTab(pagoId: number): Promise<void> {
-  const data = await apiClient.get<Blob>(
-    `${BASE_COBROS}/pagos-reportados/${pagoId}/recibo.pdf`,
-    { responseType: 'blob' }
-  )
+  const path = `${BASE_COBROS}/pagos-reportados/${pagoId}/recibo.pdf`
+  const data = await apiClient.getBlob(path)
 
   const url = URL.createObjectURL(data)
 

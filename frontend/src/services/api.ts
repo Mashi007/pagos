@@ -814,6 +814,7 @@ class ApiClient {
       url.includes('/ml-impago/modelos') ||
       url.includes('/ml-riesgo/modelos') ||
       url.includes('/ai/training/') ||
+      url.includes('/cobros/') ||
       url.includes('/cobranzas/') ||
       url.includes('/auditoria/prestamos/cartera') ||
       url.includes('/pagos/kpis') ||
@@ -925,10 +926,17 @@ class ApiClient {
    * Útil para `<img>` cuando la URL directa devolvería 401 (p. ej. comprobante-imagen).
    */
   async getBlob(url: string, config?: AxiosRequestConfig): Promise<Blob> {
+    // Comprobantes / recibos pueden ser MB grandes + Render frío → 30s suele cortar con ECONNABORTED.
+    const isCobrosPagoReportadoBlob =
+      url.includes('/cobros/pagos-reportados/') &&
+      (url.includes('/comprobante') || url.includes('/recibo.pdf'))
+    const defaultBlobTimeout = isCobrosPagoReportadoBlob
+      ? 120000
+      : Math.max(DEFAULT_TIMEOUT_MS, 60000)
     const response = await this.client.get(url, {
       ...config,
       responseType: 'blob',
-      timeout: config?.timeout ?? Math.max(DEFAULT_TIMEOUT_MS, 60000),
+      timeout: config?.timeout ?? defaultBlobTimeout,
     })
     if (response.status >= 400 && response.status < 500) {
       let backendMessage = `Request failed with status ${response.status}`
@@ -1192,10 +1200,17 @@ class ApiClient {
     data?: unknown,
     config?: AxiosRequestConfig
   ): Promise<T> {
+    const isCobrosPagoReportadoPatch = url.includes('/cobros/pagos-reportados/')
+    const patchTimeoutMs =
+      config?.timeout ??
+      (isCobrosPagoReportadoPatch ? 120000 : DEFAULT_TIMEOUT_MS)
     const response: AxiosResponse<T> = await this.client.patch(
       url,
       data,
-      config
+      {
+        ...config,
+        timeout: patchTimeoutMs,
+      }
     )
 
     // validateStatus permite 4xx sin lanzar en axios; igual que delete(), fallar aquí
