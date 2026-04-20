@@ -293,7 +293,9 @@ def _autorizados_bs_claves_cached(db: Session) -> frozenset:
         return data
 
 
-_PAGOS_DOC_CANONICOS_CACHE_TTL_SEC = 60.0
+# Lectura de toda la tabla `pagos` (numero_documento + referencia_pago) es costosa en cartera grande.
+# Invalidación explícita al importar/aprobar; TTL largo evita repetir el escaneo en cada lote del listado.
+_PAGOS_DOC_CANONICOS_CACHE_TTL_SEC = 300.0
 _pagos_doc_canonicos_cache: Optional[Tuple[float, frozenset]] = None
 
 

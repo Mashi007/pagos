@@ -415,14 +415,16 @@ def crear_pago_reportado_con_referencia_o_retry(
 
     pr: Optional[PagoReportado] = None
     referencia: Optional[str] = None
-    for attempt in range(2):
+    # Colisiones RPC-…-00001 bajo concurrencia: el bloqueo debe ser fiable; nunca continuar sin lock en PostgreSQL.
+    for attempt in range(4):
         try:
-            try:
+            bind = db.get_bind()
+            if bind.dialect.name == "postgresql":
                 hoy_int = int(fecha_hoy_caracas().strftime("%Y%m%d"))
-                db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": hoy_int})
-            except Exception:
-                db.rollback()
-
+                db.execute(
+                    text("SELECT pg_advisory_xact_lock(887766551, :k)"),
+                    {"k": hoy_int},
+                )
             referencia = generar_referencia_interna(db)
             nombres, apellidos = nombres_y_apellidos_desde_cliente_nombres(cliente_nombres)
             stored = persistir_comprobante_gmail_en_bd(db, content, ctype)
@@ -459,9 +461,12 @@ def crear_pago_reportado_con_referencia_o_retry(
         except IntegrityError as ie:
             db.rollback()
             err_msg = str(ie.orig) if getattr(ie, "orig", None) else str(ie)
-            if attempt == 0 and "referencia_interna" in err_msg:
+            if "referencia_interna" in err_msg and attempt < 3:
                 logger.warning(
-                    "[%s] Duplicate referencia_interna, retrying once: %s", log_tag_duplicate, ie
+                    "[%s] Duplicate referencia_interna, reintentando (intento %s): %s",
+                    log_tag_duplicate,
+                    attempt + 1,
+                    ie,
                 )
                 continue
             dup_msg = (
