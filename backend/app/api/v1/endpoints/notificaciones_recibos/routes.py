@@ -1,5 +1,6 @@
 """API admin: Recibos (vista previa de pagos en ventana y ejecución manual)."""
 
+import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,9 +16,12 @@ from app.services.recibos_conciliacion_email_job import (
     RECIBOS_VENTANA_SLOT,
     _cuerpo_html_recibos_confirmacion,
     ejecutar_recibos_envio_slot,
+    persistir_plantilla_recibos_html_en_bd,
     ruta_archivo_plantilla_recibos_confirmacion,
 )
 from app.services.recibos_conciliacion_listado_ui import listar_recibos_ventana_con_ui
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -31,13 +35,13 @@ class RecibosPlantillaHtmlBody(BaseModel):
 
 
 @router.get("/plantilla-correo-html", response_class=HTMLResponse)
-def get_recibos_plantilla_correo_html():
+def get_recibos_plantilla_correo_html(db: Session = Depends(get_db)):
     """
-    Contenido **crudo** del archivo ``recibos_confirmacion_pago_email.html`` (sin pasar por el pipeline
-    de ``send_email``). Sirve para cargar el editor; la vista previa idéntica al SMTP se obtiene con
-    ``POST /plantilla-html-preview`` sobre ese texto.
+    Contenido **crudo** de la plantilla Recibos (sin pasar por el pipeline de ``send_email``): primero
+    la copia guardada en ``configuracion`` (admin «Guardar plantilla»); si no hay, el archivo en disco.
+    Sirve para cargar el editor; la vista previa idéntica al SMTP se obtiene con ``POST /plantilla-html-preview``.
     """
-    raw = _cuerpo_html_recibos_confirmacion()
+    raw = _cuerpo_html_recibos_confirmacion(db)
     return HTMLResponse(content=raw, media_type="text/html; charset=utf-8")
 
 
@@ -53,8 +57,10 @@ def post_recibos_plantilla_html_preview(payload: RecibosPlantillaHtmlBody) -> di
 
 
 @router.put("/plantilla-correo-html")
-def put_recibos_plantilla_correo_html(payload: RecibosPlantillaHtmlBody) -> dict[str, Any]:
-    """Persiste la plantilla en disco (misma ruta que usa el job y la prueba cuando no hay override)."""
+def put_recibos_plantilla_correo_html(
+    payload: RecibosPlantillaHtmlBody, db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    """Persiste la plantilla en BD (todas las réplicas) y, si se puede, en disco local del worker."""
     html = payload.html
     low = html.lower()
     if "<html" not in low and "<!doctype" not in low:
@@ -62,9 +68,23 @@ def put_recibos_plantilla_correo_html(payload: RecibosPlantillaHtmlBody) -> dict
             status_code=422,
             detail="El contenido no parece un documento HTML (falta <!DOCTYPE o <html>).",
         )
+    persistir_plantilla_recibos_html_en_bd(db, html)
+    db.commit()
     path = ruta_archivo_plantilla_recibos_confirmacion()
-    path.write_text(html, encoding="utf-8")
-    return {"ok": True, "ruta": str(path), "bytes_utf8": len(html.encode("utf-8"))}
+    try:
+        path.write_text(html, encoding="utf-8")
+    except OSError as e:
+        logger.warning(
+            "recibos plantilla: guardada en BD; no se pudo escribir archivo local %s: %s",
+            path,
+            e,
+        )
+    return {
+        "ok": True,
+        "ruta": str(path),
+        "bytes_utf8": len(html.encode("utf-8")),
+        "persistido_bd": True,
+    }
 
 
 class RecibosEjecutarBody(BaseModel):

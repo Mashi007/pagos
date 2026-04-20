@@ -347,7 +347,10 @@ class ProbarEmailRequest(BaseModel):
     recibos_html_plantilla: Optional[str] = Field(
         None,
         max_length=1_800_000,
-        description="HTML crudo del cuerpo Recibos (editor admin). Vacío = archivo en disco.",
+        description=(
+            "Opcional. HTML crudo Recibos para esta prueba solamente. "
+            "Omisión = misma plantilla que job/envío masivo (BD recibos_plantilla_correo_html o archivo)."
+        ),
     )
 
 

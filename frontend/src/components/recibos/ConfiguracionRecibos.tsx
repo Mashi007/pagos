@@ -301,7 +301,10 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     setGuardandoPlantillaCorreo(true)
     try {
       await notificacionService.guardarPlantillaRecibosHtml(editorHtml)
-      toast.success('Plantilla guardada en el servidor. El job de Recibos usará este archivo.')
+      toast.success(
+        'Plantilla guardada en el servidor (BD). Prueba SMTP, envío manual y job usarán esta versión.'
+      )
+      await cargarPlantillaDesdeServidor()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -326,7 +329,8 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           servicio: 'recibos',
           tipo_tab: 'recibos',
           recibos_prueba_datos_reales: true,
-          recibos_html_plantilla: editorHtml,
+          // Sin recibos_html_plantilla: el backend usa la misma plantilla que el job/envío masivo
+          // (BD `recibos_plantilla_correo_html` o archivo). Evita divergencias editor ≠ guardado.
         },
         { timeout: 120_000 }
       )
@@ -335,7 +339,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
       if (ok) {
         toast.success(
           msg ||
-            'Muestra Recibos enviada: mismo HTML que la vista previa (editor) + PDF, primer cliente en ventana.'
+            'Muestra Recibos enviada: mismo HTML que el envío masivo (plantilla guardada) + PDF, primer cliente en ventana.'
         )
       } else {
         toast.error(msg || 'No se pudo enviar la muestra Recibos.')
@@ -592,10 +596,12 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 HTML del correo Recibos y vista previa
               </CardTitle>
               <CardDescription className="mt-1">
-                Pegue o edite HTML abajo: la vista previa se actualiza con el <strong>mismo pipeline que SMTP</strong>{' '}
-                (logo URL, saneado). <strong>Enviar prueba</strong> usa exactamente ese HTML del editor. Para
-                el envío automático del job, pulse <strong>Guardar plantilla</strong> (escribe el archivo en el
-                servidor).
+                La vista previa aplica al HTML del cuadro el <strong>mismo pipeline que SMTP</strong> (p. ej.{' '}
+                <code className="text-[11px]">{'{{LOGO_URL}}'}</code>, data URLs).{' '}
+                <strong>Enviar prueba</strong>, el <strong>envío manual</strong> y el <strong>job</strong> usan
+                solo la plantilla <strong>guardada</strong> en servidor (BD; si no hay, archivo del código).
+                Guarde con el botón verde antes de probar o enviar masivo para que lo guardado coincida con lo
+                que edita; tras guardar, el editor se recarga desde el servidor.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -649,7 +655,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
 
           <div className="flex flex-col gap-2">
             <label htmlFor="recibos-html-editor" className="text-xs font-medium text-gray-700">
-              HTML (pegue aquí; la vista previa y la prueba SMTP usan este contenido)
+              HTML (borrador: la vista previa usa este texto; prueba y envíos masivos usan lo guardado en BD)
             </label>
             <Textarea
               id="recibos-html-editor"
@@ -691,9 +697,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           </CardTitle>
 
           <CardDescription>
-            Usa el HTML del cuadro de arriba (misma versión que la vista previa) más el PDF de estado de cuenta
-            del primer cliente válido en la ventana de hoy (Caracas). Solo se envía a «Correo destino». CCO
-            Recibos según configuración. Para el lote automático, guarde la plantilla con el botón verde.
+            Un solo correo de muestra: plantilla HTML <strong>ya guardada</strong> (misma que el envío masivo)
+            más PDF de estado de cuenta del primer cliente válido en la ventana (Caracas). Destino: solo el
+            correo que indique abajo. CCO según Recibos. Guarde la plantilla antes si acaba de editarla.
           </CardDescription>
         </CardHeader>
 

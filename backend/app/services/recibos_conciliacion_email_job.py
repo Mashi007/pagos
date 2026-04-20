@@ -81,12 +81,40 @@ def ruta_archivo_plantilla_recibos_confirmacion() -> Path:
     return Path(__file__).resolve().with_name("recibos_confirmacion_pago_email.html")
 
 
-def _cuerpo_html_recibos_confirmacion() -> str:
-    """Plantilla HTML fija del correo Recibos (confirmación de pago + estado de cuenta adjunto).
+# Clave en ``configuracion.valor`` (Text): HTML crudo guardado desde admin. Prioridad sobre archivo en disco
+# para que job y API en varias réplicas usen la misma plantilla (p. ej. cloud sin FS compartido).
+RECIBOS_PLANTILLA_HTML_CLAVE = "recibos_plantilla_correo_html"
 
-    Sin caché en memoria: cada envío y la vista previa en admin leen el archivo en disco para que
-    los cambios en ``recibos_confirmacion_pago_email.html`` se reflejen sin reiniciar el servidor.
+
+def persistir_plantilla_recibos_html_en_bd(db: Session, html: str) -> None:
+    """Inserta o actualiza la plantilla Recibos en la tabla ``configuracion``."""
+    from app.models.configuracion import Configuracion
+
+    row = db.get(Configuracion, RECIBOS_PLANTILLA_HTML_CLAVE)
+    if row:
+        row.valor = html
+    else:
+        db.add(Configuracion(clave=RECIBOS_PLANTILLA_HTML_CLAVE, valor=html))
+
+
+def _cuerpo_html_recibos_confirmacion(db: Optional[Session] = None) -> str:
+    """HTML del correo Recibos (confirmación + adjunto).
+
+    Orden: si ``db`` está disponible y existe fila ``recibos_plantilla_correo_html`` no vacía en
+    ``configuracion``, se usa (misma copia en todos los workers). Si no, se lee el archivo en disco
+    empaquetado con el código (fallback / desarrollo local).
     """
+    if db is not None:
+        try:
+            from app.models.configuracion import Configuracion
+
+            row = db.get(Configuracion, RECIBOS_PLANTILLA_HTML_CLAVE)
+            if isinstance(row, Configuracion):
+                v = (row.valor or "").strip()
+                if v:
+                    return v
+        except Exception:
+            logger.exception("recibos: error leyendo plantilla HTML desde configuracion; se usa archivo")
     return ruta_archivo_plantilla_recibos_confirmacion().read_text(encoding="utf-8")
 
 
@@ -377,7 +405,7 @@ def ejecutar_recibos_envio_slot(
             fecha_corte_d = fecha_corte if isinstance(fecha_corte, date) else fecha_dia
 
         asunto = f"Estado de cuenta - {fecha_corte_d.isoformat()} (Recibos)"
-        html_body = _cuerpo_html_recibos_confirmacion()
+        html_body = _cuerpo_html_recibos_confirmacion(db)
         body_plain = (
             "Confirmación de pago – RapiCredit. Adjunto: estado de cuenta actualizado (PDF). "
             f"Cédula: {cedula_pdf}. Fecha de corte: {fecha_corte_d.isoformat()}."
@@ -558,12 +586,16 @@ def enviar_correo_prueba_recibos_datos_reales(
     html_plantilla_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Correo de prueba desde Configuración Recibos: mismo HTML (plantilla en disco o ``html_plantilla_override``
-    si viene relleno) y PDF de estado de cuenta que el envío real, tomando el **primer** cliente en orden
-    de lote (cédulas distintas en ventana) que
-    cumpla las mismas validaciones que el job (datos EC, email en ficha, no desistimiento, cédula alineada).
-    El mensaje se envía **solo** a ``email_destino`` (p. ej. itmaster@…), no a los correos del cliente.
-    No escribe ``recibos_email_envio`` ni ``envios_notificacion``.
+    Correo de prueba desde Configuración Recibos: mismo PDF y mismas reglas que el envío real, tomando el
+    **primer** cliente en orden de lote (cédulas distintas en ventana) que cumpla validaciones del job.
+
+    HTML: si ``html_plantilla_override`` viene relleno (API avanzada), se usa tal cual; si no, **la misma
+    plantilla que ``ejecutar_recibos_envio_slot``** — ``_cuerpo_html_recibos_confirmacion(db)`` (BD
+    ``recibos_plantilla_correo_html`` o archivo). Tras ``send_email``, el cuerpo pasa por
+    ``preparar_body_html_para_mime`` (igual que la vista previa admin).
+
+    El mensaje se envía **solo** a ``email_destino``, no a los correos del cliente. No escribe
+    ``recibos_email_envio`` ni ``envios_notificacion`` (un solo SMTP de muestra).
     """
     dest = (email_destino or "").strip()
     if not dest or "@" not in dest:
@@ -634,7 +666,7 @@ def enviar_correo_prueba_recibos_datos_reales(
 
         asunto = f"[Prueba] Estado de cuenta - {fecha_corte_d.isoformat()} (Recibos)"
         raw_ov = (html_plantilla_override or "").strip()
-        html_body = raw_ov if raw_ov else _cuerpo_html_recibos_confirmacion()
+        html_body = raw_ov if raw_ov else _cuerpo_html_recibos_confirmacion(db)
         body_plain = (
             "Confirmación de pago – RapiCredit. Adjunto: estado de cuenta actualizado (PDF). "
             f"Cédula: {cedula_pdf}. Fecha de corte: {fecha_corte_d.isoformat()}."
