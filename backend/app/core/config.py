@@ -34,7 +34,8 @@ class Settings(BaseSettings):
             "snapshot candidatos préstamo desde drive dom/mié 04:05 si aplica, "
             "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
-            "Los envios de notificaciones a clientes son solo manuales (POST desde la UI); no hay cron de correo. "
+            "Los envíos masivos por pestaña de Notificaciones son manuales (POST desde la UI); el único cron de correo "
+            "opcional es Recibos (ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS). "
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
     )
@@ -215,13 +216,12 @@ class Settings(BaseSettings):
             "Valor vacío en .env se sustituye por recuerda@rapicreditca.com en el holder SMTP."
         ),
     )
-    # Submódulo Recibos: estado de cuenta por correo tras pagos conciliados (scheduler 15:00 Caracas).
+    # Submódulo Recibos: reservado; el envío masivo es manual (Notificaciones → Recibos, POST ejecutar).
     ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS: bool = Field(
         default=False,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler envía correos Recibos "
-            "todos los días a las 15:00 (America/Caracas): pagos con fecha_registro en las últimas 24 h hasta ese corte. "
-            "Por defecto False."
+            "Reservado. No registra cron en APScheduler: los correos Recibos se envían solo de forma manual "
+            "desde la UI (o POST /notificaciones/recibos/ejecutar). Dejar False. Por defecto False."
         ),
     )
     RECIBOS_FROM_EMAIL: str = Field(

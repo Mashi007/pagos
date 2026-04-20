@@ -8,7 +8,8 @@ from app.core.database import Base
 class RecibosEmailEnvio(Base):
     """
     Evita reenviar el mismo lote: una fila por (cédula normalizada, día Caracas de corte, slot).
-    Slot actual: ``hasta_15_24h`` (ventana fecha_registro: 24 h hasta las 15:00 de ese día en Caracas).
+    Slot actual típico: ``dia_00_2345`` (ventana ``fecha_registro`` ese día Caracas 00:00–23:45).
+    Puede existir histórico ``hasta_15_24h`` (regla anterior); el backend los trata como envío ya cubierto.
     """
 
     __tablename__ = "recibos_email_envio"

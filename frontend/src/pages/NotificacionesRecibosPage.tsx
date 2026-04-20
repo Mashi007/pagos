@@ -45,6 +45,7 @@ import {
 import { apiClient } from '../services/api'
 import { pathApiComprobanteImagenDesdeHref } from '../utils/comprobanteImagenAuth'
 import { prestamoService } from '../services/prestamoService'
+import { NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX } from '../constants/queryKeys'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../types/errors'
 import {
@@ -276,7 +277,7 @@ export default function NotificacionesRecibosPage() {
   const [paginaRecibosListado, setPaginaRecibosListado] = useState(1)
 
   const listadoKey = useMemo(
-    () => ['notificaciones', 'recibos', 'listado', fechaCaracas || 'hoy'],
+    () => [...NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX, fechaCaracas || 'hoy'],
     [fechaCaracas]
   )
 
@@ -546,7 +547,7 @@ export default function NotificacionesRecibosPage() {
   const ejecutar = async () => {
     if (data !== undefined && totalPagosListado === 0) {
       toast.warning(
-        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie fecha/franja.'
+        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00–23:45 Caracas).'
       )
       return
     }
@@ -582,7 +583,7 @@ export default function NotificacionesRecibosPage() {
   const ejecutarLotePasadoReal = async () => {
     if (data !== undefined && totalPagosListado === 0) {
       toast.warning(
-        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie fecha/franja.'
+        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00–23:45 Caracas).'
       )
       return
     }
@@ -595,7 +596,7 @@ export default function NotificacionesRecibosPage() {
       return
     }
     const ok = window.confirm(
-      `¿Enviar correo REAL de Recibos?\n\nDía de corte (Caracas): ${fechaCaracasTrim}\nVentana: 24 h hasta las 15:00 de ese día.\n\n` +
+      `¿Enviar correo REAL de Recibos?\n\nDía de corte (Caracas): ${fechaCaracasTrim}\nVentana: fecha_registro ese día 00:00–23:45 (America/Caracas).\n\n` +
         'Se respeta idempotencia (recibos_email_envio por cédula y día). Los destinatarios son los del cliente.'
     )
     if (!ok) return
@@ -641,9 +642,9 @@ export default function NotificacionesRecibosPage() {
                 <Label htmlFor="fecha-rec">Día de corte Caracas (YYYY-MM-DD)</Label>
                 <Input
                   id="fecha-rec"
-                  placeholder="Vacío = hoy — ventana: 24 h hasta las 15:00 de ese día"
+                  placeholder="Vacío = hoy — ventana: 00:00 a 23:45 Caracas de ese día"
                   value={fechaCaracas}
-                  title="Define el fin de la ventana (15:00 Caracas de ese día); el inicio es 24 h antes."
+                  title="Incluye pagos con fecha_registro ese día calendario Caracas desde 00:00 hasta 23:45 inclusive."
                   onChange={e => setFechaCaracas(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -652,9 +653,11 @@ export default function NotificacionesRecibosPage() {
               </div>
               <p className="text-sm text-muted-foreground">
                 La tabla muestra solo pagos de clientes a los que <strong>aún no</strong> se les ha
-                registrado el correo Recibos para la fecha y franja elegidas (tras envío manual, job
-                programado o lote pasado, esas cédulas dejan de aparecer). El envío manual usa la misma
-                lógica que el job; respete modo pruebas y correo activo en Configuración Recibos.
+                registrado el correo Recibos para el día de corte elegido (tras «Envío manual» o lote
+                pasado, esas cédulas dejan de aparecer). El envío es <strong>solo manual</strong> desde
+                esta pantalla; no hay cron en servidor. Tras conciliar o procesar en{' '}
+                <strong>Pagos</strong> (incl. Gmail manual), la lista se refresca al volver aquí o al
+                pulsar «Actualizar listado». Respete modo pruebas y correo activo en Configuración Recibos.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -720,8 +723,8 @@ export default function NotificacionesRecibosPage() {
 
               {data ? (
                 <p className="text-sm text-muted-foreground">
-                  <strong>Fecha:</strong> {data.fecha_dia} · <strong>Franja:</strong> {data.slot} ·{' '}
-                  <strong>Pagos:</strong> {data.total_pagos} · <strong>Cédulas distintas:</strong>{' '}
+                  <strong>Fecha:</strong> {data.fecha_dia} · <strong>Id. ventana (BD):</strong> {data.slot} ·{' '}
+                  <strong>Pagos pendientes:</strong> {data.total_pagos} · <strong>Cédulas distintas:</strong>{' '}
                   {data.cedulas_distintas}
                 </p>
               ) : null}

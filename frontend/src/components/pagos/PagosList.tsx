@@ -170,6 +170,9 @@ export function PagosList() {
     stopPolling: stopGmailPolling,
   } = useGmailPipeline({
     onStatusUpdate: s => setGmailStatus(s),
+    onDone: () => {
+      void invalidatePagosPrestamosRevisionYCuotas(queryClient)
+    },
   })
 
   // Cargar estado Gmail al montar

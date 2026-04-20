@@ -14,7 +14,8 @@ Cuando esta activo:
 - 04:00  Limpieza codigos estado de cuenta.
 - todos los dias cada hora a :30 entre 06:30 y 19:30  Gmail pendientes (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
 - lunes a sabado 03:40  Snapshot candidatos préstamo desde `drive` -> prestamo_candidatos_drive (UI /actualizaciones/prestamos), si ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY (hueco tras auditoría 03:00).
-- todos los dias 15:00  Recibos: correo con estado de cuenta (pagos conciliados, ventana 24h hasta 15:00 fecha_registro), si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS=true.
+- Recibos (correo estado de cuenta tras pagos conciliados): **solo envío manual** desde Notificaciones → Recibos
+  (POST /notificaciones/recibos/ejecutar). No hay cron en este scheduler.
 
 Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
 
@@ -251,21 +252,6 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
         db.close()
 
 
-def _job_recibos_email_1500() -> None:
-    """15:00 Caracas: Recibos (fecha_registro en las 24 h hasta las 15:00 de hoy)."""
-    if not getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
-        return
-    db = SessionLocal()
-    try:
-        from app.services.recibos_conciliacion_email_job import job_recibos_1500
-
-        job_recibos_1500(db)
-    except Exception as e:
-        logger.exception("Error en job recibos_email_1500: %s", e)
-    finally:
-        db.close()
-
-
 def _job_pagos_gmail_pending_scan() -> None:
     """Todos los dias cada hora :30 entre 06:30 y 19:30 (America/Caracas): pipeline Gmail correos pendientes de identificacion."""
     from datetime import datetime, timedelta
@@ -440,13 +426,8 @@ def start_scheduler() -> None:
         _gmail_log = (
             "; Gmail pagos pendientes todos los dias cada hora :30 entre 06:30 y 19:30"
         )
-    if getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
-        _scheduler.add_job(
-            _job_recibos_email_1500,
-            CronTrigger(hour=15, minute=0, timezone=SCHEDULER_TZ),
-            id="recibos_email_1500",
-            name="Recibos: email estado cuenta 15:00 (24h hasta 15:00)",
-        )
+    # Envío de correos a clientes (Notificaciones por pestaña, Recibos, etc.): **solo manual**
+    # (POST desde la UI). No hay ningún job programado aquí que llame a send_email / lotes de notificación.
     _scheduler.start()
     _caches_notif_log = ""
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):

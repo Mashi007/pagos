@@ -1,10 +1,10 @@
 """
-Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana 24h hasta 15:00 (Caracas),
-con nombre/cédula, fecha de registro, monto pagado, comprobante (misma resolución de URL que GET /pagos)
-y préstamo para PDF.
+Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana del día Caracas
+(``fecha_registro`` 00:00–23:45), con nombre/cédula, fecha de registro, monto pagado, comprobante
+(misma resolución de URL que GET /pagos) y préstamo para PDF.
 
 Se excluyen filas cuya cédula ya tiene envío Recibos registrado en ``recibos_email_envio`` para ese
-``fecha_dia`` y el slot de ventana (misma regla que el envío real / job): en pantalla solo queda lo
+``fecha_dia`` y slot de idempotencia (misma regla que el envío real / job): en pantalla solo queda lo
 pendiente de enviar.
 KPIs de correos desde envios_notificacion tipo_tab=recibos.
 """
@@ -32,7 +32,7 @@ from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_pago_reportado,
 )
 from app.services.recibos_conciliacion_email_job import (
-    bounds_fecha_registro_recibos_24h_hasta_15,
+    bounds_fecha_registro_recibos_dia_caracas_00_2345,
     cedulas_recibos_ya_enviadas_en_fecha,
     _pago_aplicado_a_cuota_exists,
 )
@@ -40,7 +40,7 @@ from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 
 def _fetch_pagos_recibos_ventana_orm(db: Session, *, fecha_dia: date) -> List[Pago]:
-    start_naive, end_naive = bounds_fecha_registro_recibos_24h_hasta_15(fecha_dia)
+    start_naive, end_naive = bounds_fecha_registro_recibos_dia_caracas_00_2345(fecha_dia)
     return list(
         db.execute(
             select(Pago)

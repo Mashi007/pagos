@@ -39,6 +39,13 @@ export const NOTIFICACIONES_D2_ANTES_QUERY_KEY = [
   'notificaciones-d2-antes-vencimiento',
 ] as const
 
+/** Listado Recibos (Notificaciones → Recibos); invalidar tras cambios en Pagos / conciliación / Gmail. */
+export const NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX = [
+  'notificaciones',
+  'recibos',
+  'listado',
+] as const
+
 /** Mismo nombre en todas las pestañas del origen (sync listas de mora). */
 export const NOTIFICACIONES_MORA_BROADCAST_CHANNEL =
   'pagos-notificaciones-mora-v1' as const
@@ -137,6 +144,10 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
       exact: false,
     }),
     queryClient.invalidateQueries({ queryKey: ['prestamos'], exact: false }),
+    queryClient.invalidateQueries({
+      queryKey: [...NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX],
+      exact: false,
+    }),
     queryClient.invalidateQueries({
       queryKey: [REVISION_MANUAL_PRESTAMOS_QUERY_PREFIX],
       exact: false,

@@ -6,9 +6,11 @@ Criterio de negocio (alineado a BD real):
 - Vínculo con cuotas: ``cuotas.pago_id = pagos.id`` o fila en ``cuota_pagos`` (pagos aplicados a cuotas).
 - Ventana por **fecha_registro** (recepción/registro en sistema) en America/Caracas (naive = reloj Caracas).
 
-Ventana única (por día de referencia ``fecha_dia``): **desde las 15:00 del día anterior hasta las 15:00
-del día de referencia** (24 horas, fin inclusive). El job programado corre **todos los días a las 15:00**
-Caracas con ``fecha_dia = hoy_negocio()`` (últimas 24 h hasta ese corte).
+Ventana (por día de referencia ``fecha_dia`` en America/Caracas): **``fecha_registro`` del mismo día
+calendario desde 00:00 hasta 23:45 inclusive**. El envío masivo Recibos es **manual** (UI admin o POST
+``/notificaciones/recibos/ejecutar``); no hay cron en APScheduler. Los registros con hora de recepción
+**después de 23:45** ese día quedan fuera de la ventana de ese ``fecha_dia`` (no se reinterpretan al día
+siguiente en esta lógica).
 
 Regla: el **envío real** (no simulación) solo corre si ``fecha_dia`` es **hoy** ``hoy_negocio()``,
 salvo reenvío admin con ``permite_envio_real_fecha_no_hoy``.
@@ -52,8 +54,11 @@ from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 logger = logging.getLogger(__name__)
 
-# Valor fijo en recibos_email_envio.slot (misma ventana 24h hasta 15:00; antes existían manana/tarde/noche).
-RECIBOS_VENTANA_SLOT = "hasta_15_24h"
+# Slot actual en recibos_email_envio (ventana día calendario 00:00–23:45 Caracas).
+RECIBOS_VENTANA_SLOT = "dia_00_2345"
+# Ventana histórica (24 h hasta 15:00). Se sigue considerando al decidir «ya enviado» para no duplicar.
+RECIBOS_VENTANA_SLOT_LEGACY = "hasta_15_24h"
+RECIBOS_VENTANA_SLOTS_IDEMPOTENCIA = (RECIBOS_VENTANA_SLOT, RECIBOS_VENTANA_SLOT_LEGACY)
 
 # PDF adjunto: enlaces «Ver recibo» (GET …/estado-cuenta/public/recibo-pago) requieren URL absoluta + JWT.
 # La base pública se resuelve con ``get_effective_api_public_base_url()`` (BACKEND_PUBLIC_URL u orígenes de
@@ -118,15 +123,15 @@ def _cuerpo_html_recibos_confirmacion(db: Optional[Session] = None) -> str:
     return ruta_archivo_plantilla_recibos_confirmacion().read_text(encoding="utf-8")
 
 
-def bounds_fecha_registro_recibos_24h_hasta_15(fecha_dia: date) -> Tuple[datetime, datetime]:
+def bounds_fecha_registro_recibos_dia_caracas_00_2345(fecha_dia: date) -> Tuple[datetime, datetime]:
     """
-    Inicio y fin inclusive (naive Caracas) para ``pagos.fecha_registro``:
-    [fecha_dia 15:00 - 24h, fecha_dia 15:00].
+    Inicio y fin inclusive (naive reloj Caracas) para ``pagos.fecha_registro`` en el día calendario
+    ``fecha_dia``: [00:00:00, 23:45:00].
     """
     tz = ZoneInfo(TZ_NEGOCIO)
-    end = datetime.combine(fecha_dia, time(15, 0, 0), tzinfo=tz)
-    start = end - timedelta(hours=24)
-    return start.replace(tzinfo=None), end.replace(tzinfo=None)
+    start = datetime.combine(fecha_dia, time(0, 0, 0), tzinfo=tz).replace(tzinfo=None)
+    end = datetime.combine(fecha_dia, time(23, 45, 0), tzinfo=tz).replace(tzinfo=None)
+    return start, end
 
 
 def _pago_aplicado_a_cuota_exists():
@@ -136,11 +141,11 @@ def _pago_aplicado_a_cuota_exists():
 
 
 def cedulas_recibos_ya_enviadas_en_fecha(db: Session, fecha_dia: date) -> set[str]:
-    """Cédulas (normalizadas) con envío Recibos persistido para ``fecha_dia`` y slot fijo de ventana."""
+    """Cédulas (normalizadas) con envío Recibos persistido para ``fecha_dia`` (slot actual o legado)."""
     rows = db.execute(
         select(RecibosEmailEnvio.cedula_normalizada).where(
             RecibosEmailEnvio.fecha_dia == fecha_dia,
-            RecibosEmailEnvio.slot == RECIBOS_VENTANA_SLOT,
+            RecibosEmailEnvio.slot.in_(RECIBOS_VENTANA_SLOTS_IDEMPOTENCIA),
         )
     ).scalars().all()
     return {(str(x) or "").strip() for x in rows if x and str(x).strip()}
@@ -152,13 +157,13 @@ def listar_pagos_recibos_ventana(
     fecha_dia: date,
     excluir_cedulas_ya_enviadas: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Pagos conciliados PAGADO en la ventana 24h hasta 15:00 Caracas del día de referencia.
+    """Pagos conciliados PAGADO en la ventana 00:00–23:45 Caracas del día de referencia.
 
     Si ``excluir_cedulas_ya_enviadas`` es True, omite filas cuya cédula ya tiene fila en
-    ``recibos_email_envio`` para ese ``fecha_dia`` y ``RECIBOS_VENTANA_SLOT`` (listado y envío real
+    ``recibos_email_envio`` para ese ``fecha_dia`` y algún slot de idempotencia (listado y envío real
     solo pendientes). La simulación (``solo_simular``) usa False para seguir viendo toda la ventana.
     """
-    start_naive, end_naive = bounds_fecha_registro_recibos_24h_hasta_15(fecha_dia)
+    start_naive, end_naive = bounds_fecha_registro_recibos_dia_caracas_00_2345(fecha_dia)
     rows = db.execute(
         select(Pago)
         .where(
@@ -209,7 +214,7 @@ def _ya_enviado_recibo(db: Session, cedula_norm: str, fecha_dia: date) -> bool:
         select(RecibosEmailEnvio.id).where(
             RecibosEmailEnvio.cedula_normalizada == cedula_norm,
             RecibosEmailEnvio.fecha_dia == fecha_dia,
-            RecibosEmailEnvio.slot == RECIBOS_VENTANA_SLOT,
+            RecibosEmailEnvio.slot.in_(RECIBOS_VENTANA_SLOTS_IDEMPOTENCIA),
         ).limit(1)
     ).scalar_one_or_none()
     return row is not None
@@ -232,7 +237,7 @@ def ejecutar_recibos_envio_slot(
 
     Envío real: por defecto ``fecha_dia`` debe ser ``hoy_negocio()`` (jobs programados). El endpoint
     admin puede pasar ``permite_envio_real_fecha_no_hoy=True`` para reenviar un lote de recepción de
-    un día anterior (misma ventana ``fecha_registro`` de 24h hasta las 15:00 de ese día).
+    un día anterior (misma ventana ``fecha_registro`` 00:00–23:45 Caracas de ese día).
     """
     hoy = hoy_negocio()
     if (
@@ -753,6 +758,11 @@ def enviar_correo_prueba_recibos_datos_reales(
     }
 
 
-def job_recibos_1500(db: Session) -> None:
-    """15:00 Caracas: Recibos (fecha_registro en las 24 h hasta las 15:00 de hoy)."""
+def job_recibos_programado_caracas(db: Session) -> None:
+    """Misma lógica que un envío manual del día hoy (Caracas); útil para scripts o pruebas sin cron."""
     ejecutar_recibos_envio_slot(db, fecha_dia=hoy_negocio(), solo_simular=False)
+
+
+def job_recibos_1500(db: Session) -> None:
+    """Compatibilidad: antes 15:00; delega al job diario actual."""
+    job_recibos_programado_caracas(db)
