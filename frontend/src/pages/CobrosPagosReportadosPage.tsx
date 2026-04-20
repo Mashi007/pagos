@@ -948,57 +948,57 @@ export default function CobrosPagosReportadosPage() {
               <table className="w-full min-w-0 table-fixed text-sm">
                 <colgroup>
                   <col style={{ width: '8%' }} />
-                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '14%' }} />
                   <col style={{ width: '8%' }} />
-                  <col style={{ width: '7%' }} />
-                  <col style={{ width: '10%' }} />
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '9%' }} />
-                  <col style={{ width: '24%' }} />
                   <col style={{ width: '9%' }} />
                   <col style={{ width: '12%' }} />
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '8%' }} />
                 </colgroup>
 
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      Cédula
+                      <span className="block overflow-hidden text-ellipsis">Cédula</span>
                     </th>
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      Banco
+                      <span className="block overflow-hidden text-ellipsis">Banco</span>
                     </th>
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-right text-xs font-semibold sm:text-sm">
-                      Monto
+                      <span className="block overflow-hidden text-ellipsis">Monto</span>
                     </th>
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      Fecha pago
+                      <span className="block overflow-hidden text-ellipsis">Fecha pago</span>
                     </th>
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      Nº operación
+                      <span className="block overflow-hidden text-ellipsis">Nº operación</span>
                     </th>
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      Fecha reporte
+                      <span className="block overflow-hidden text-ellipsis">Fecha reporte</span>
                     </th>
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-center text-xs font-semibold sm:text-sm">
-                      Comprobante
+                      <span className="block overflow-hidden text-ellipsis">Comprobante</span>
                     </th>
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      Observación
+                      <span className="block overflow-hidden text-ellipsis">Observación</span>
                     </th>
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      Estado
+                      <span className="block overflow-hidden text-ellipsis">Estado</span>
                     </th>
 
                     <th className="whitespace-nowrap px-2 py-2 text-right text-xs font-semibold sm:text-sm">
-                      Acciones
+                      <span className="block overflow-hidden text-ellipsis">Acciones</span>
                     </th>
                   </tr>
                 </thead>
@@ -1012,24 +1012,24 @@ export default function CobrosPagosReportadosPage() {
                       <td
                         className={
                           'whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm ' +
-                          (/c[eé]dula/i.test(row.observacion || '')
+                          ((row.observacion || '').trim().length > 0
                             ? 'bg-destructive/10 font-medium text-destructive'
                             : '')
                         }
                         title={
-                          /c[eé]dula/i.test(row.observacion || '')
+                          (row.observacion || '').trim().length > 0
                             ? 'Observación: ' + (row.observacion || '')
                             : undefined
                         }
                       >
-                        {/c[eé]dula/i.test(row.observacion || '') && (
+                        {(row.observacion || '').trim().length > 0 && (
                           <AlertCircle
                             className="mr-1 inline-block h-4 w-4 align-middle"
                             aria-hidden
                           />
                         )}
 
-                        {row.cedula_display}
+                        <span className="block truncate">{row.cedula_display}</span>
                       </td>
 
                       <td className="min-w-0 px-2 py-2 align-middle">
@@ -1073,7 +1073,7 @@ export default function CobrosPagosReportadosPage() {
                       </td>
 
                       <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
-                        {row.fecha_pago}
+                        <span className="block truncate">{row.fecha_pago}</span>
                       </td>
 
                       <td
@@ -1095,7 +1095,9 @@ export default function CobrosPagosReportadosPage() {
                       </td>
 
                       <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
-                        {new Date(row.fecha_reporte).toLocaleDateString()}
+                        <span className="block truncate">
+                          {new Date(row.fecha_reporte).toLocaleDateString()}
+                        </span>
                       </td>
 
                       <td className="px-2 py-2 align-middle">
@@ -1135,7 +1137,12 @@ export default function CobrosPagosReportadosPage() {
                       </td>
 
                       <td
-                        className="min-w-0 px-2 py-2 align-middle"
+                        className={
+                          'min-w-0 px-2 py-2 align-middle ' +
+                          ((row.observacion || '').trim().length > 0
+                            ? 'bg-destructive/10'
+                            : '')
+                        }
                         title={
                           /NO CLIENTES/i.test(row.observacion || '')
                             ? 'NO CLIENTES: la cédula del reporte (' +
@@ -1154,11 +1161,9 @@ export default function CobrosPagosReportadosPage() {
                           <div
                             className={
                               'text-xs ' +
-                              (/NO CLIENTES/i.test(row.observacion || '')
+                              ((row.observacion || '').trim().length > 0
                                 ? 'font-medium text-destructive'
-                                : /DUPLICADO/i.test(row.observacion || '')
-                                  ? 'font-semibold text-destructive'
-                                  : 'text-muted-foreground')
+                                : 'text-muted-foreground')
                             }
                           >
                             {(row.observacion || '')
