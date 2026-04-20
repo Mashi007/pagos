@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { Link } from 'react-router-dom'
 
@@ -166,11 +166,15 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
   const [recibosBcc1, setRecibosBcc1] = useState('')
   const [recibosBcc2, setRecibosBcc2] = useState('')
 
-  /** HTML que edita el usuario (también fuente de la vista previa). */
+  /** Plantilla en disco (texto); puede divergir del cuadro si el usuario edita sin traer del servidor. */
   const [editorHtml, setEditorHtml] = useState('')
+  /**
+   * HTML exacto de la parte text/html del SMTP (mismo pipeline que send_email: logo URL, saneado).
+   * La vista previa del iframe usa solo esto, no el editor en vivo, para coincidir con el correo enviado.
+   */
+  const [htmlVistaSmtp, setHtmlVistaSmtp] = useState('')
   const [plantillaCargando, setPlantillaCargando] = useState(false)
   const [plantillaError, setPlantillaError] = useState<string | null>(null)
-  const htmlVistaPrevia = useDeferredValue(editorHtml)
 
   const cargarPlantillaDesdeServidor = useCallback(async () => {
     setPlantillaCargando(true)
@@ -178,6 +182,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     try {
       const html = await notificacionService.obtenerPlantillaHtmlRecibos()
       setEditorHtml(html)
+      setHtmlVistaSmtp(html)
     } catch (e) {
       setPlantillaError(getErrorMessage(e))
     } finally {
@@ -524,10 +529,11 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 HTML del correo Recibos y vista previa
               </CardTitle>
               <CardDescription className="mt-1">
-                La vista previa inferior refleja <strong>lo que escriba o pegue</strong> en el cuadro de
-                texto. «Traer del servidor» reemplaza el editor con la plantilla actual del backend (la que
-                usa el envío real SMTP); los cambios aquí son solo locales hasta que actualice el archivo en
-                el servidor.
+                El iframe <strong>«Vista previa (igual al SMTP)»</strong> muestra el HTML que realmente va en
+                el correo (plantilla del archivo + mismo saneado que el servidor aplica al enviar: logo URL,
+                etc.). El cuadro de texto copia esa versión al pulsar «Traer del servidor»; si edita el
+                texto, la vista previa <strong>no</strong> cambia hasta volver a traer del servidor tras
+                guardar el archivo en el backend.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -550,9 +556,10 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 variant="ghost"
                 size="sm"
                 className="shrink-0 text-slate-600"
-                disabled={!editorHtml.trim()}
+                disabled={!editorHtml.trim() && !htmlVistaSmtp.trim()}
                 onClick={() => {
                   setEditorHtml('')
+                  setHtmlVistaSmtp('')
                   setPlantillaError(null)
                 }}
                 title="Vacía el editor y la vista previa"
@@ -569,32 +576,34 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
 
           <div className="flex flex-col gap-2">
             <label htmlFor="recibos-html-editor" className="text-xs font-medium text-gray-700">
-              HTML (vista previa en vivo)
+              HTML (plantilla / edición local; no altera el envío hasta actualizar el archivo en el backend)
             </label>
             <Textarea
               id="recibos-html-editor"
               spellCheck={false}
               value={editorHtml}
               onChange={e => setEditorHtml(e.target.value)}
-              placeholder="Pegue o escriba HTML… Use «Traer del servidor» para cargar la plantilla actual."
+              placeholder="Pulse «Traer del servidor» para cargar la misma versión que usa SMTP."
               className="min-h-[220px] max-h-[min(50vh,420px)] resize-y font-mono text-xs leading-relaxed"
             />
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-gray-600">Vista previa</p>
-            {htmlVistaPrevia.trim() ? (
+            <p className="mb-2 text-xs font-medium text-gray-600">
+              Vista previa (igual al SMTP, parte HTML del mensaje)
+            </p>
+            {htmlVistaSmtp.trim() ? (
               <iframe
-                title="Vista previa correo Recibos (contenido del editor)"
+                title="Vista previa correo Recibos: mismo HTML que la parte text/html del envío"
                 sandbox="allow-same-origin allow-popups"
                 className="h-[min(720px,80vh)] w-full max-w-full rounded-md border border-slate-200 bg-slate-100"
-                srcDoc={htmlVistaPrevia}
+                srcDoc={htmlVistaSmtp}
               />
             ) : (
               <p className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-gray-500">
-                {plantillaCargando && !editorHtml
+                {plantillaCargando
                   ? 'Cargando plantilla del servidor…'
-                  : 'Escriba HTML arriba o pulse «Traer del servidor» para ver la vista previa.'}
+                  : 'Pulse «Traer del servidor» para cargar la vista previa idéntica al HTML del correo enviado.'}
               </p>
             )}
           </div>

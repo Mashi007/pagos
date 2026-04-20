@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import require_admin
+from app.core.email import preparar_body_html_para_mime
 from app.services.cuota_estado import hoy_negocio, parse_fecha_referencia_negocio
 from app.services.recibos_conciliacion_email_job import (
     RECIBOS_VENTANA_SLOT,
@@ -23,13 +24,13 @@ router = APIRouter(dependencies=[Depends(require_admin)])
 @router.get("/plantilla-correo-html", response_class=HTMLResponse)
 def get_recibos_plantilla_correo_html():
     """
-    Devuelve el HTML exacto del correo Recibos (archivo en disco).
-    Sirve de vista previa en la pantalla de configuración Recibos del frontend.
+    HTML del cuerpo del correo Recibos **tal como lo prepara SMTP** (plantilla en disco + mismo pipeline
+    que ``send_email``: UTF-8, logo URL, sustitución de data URLs largas, etc.). Debe coincidir con la
+    parte ``text/html`` del mensaje enviado (sin adjuntos).
     """
-    return HTMLResponse(
-        content=_cuerpo_html_recibos_confirmacion(),
-        media_type="text/html; charset=utf-8",
-    )
+    raw = _cuerpo_html_recibos_confirmacion()
+    final = preparar_body_html_para_mime(raw) or ""
+    return HTMLResponse(content=final, media_type="text/html; charset=utf-8")
 
 
 class RecibosEjecutarBody(BaseModel):

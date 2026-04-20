@@ -166,6 +166,30 @@ def _sanitize_html_for_email(html: str, logo_url: str) -> str:
     return html
 
 
+def preparar_body_html_para_mime(body_html: Optional[str]) -> Optional[str]:
+    """
+    Misma transformación que ``send_email`` aplica al HTML antes de ``MIMEText``:
+    normalización UTF-8 y ``_sanitize_html_for_email`` (logo URL, {{LOGO_URL}}, data URLs largas).
+
+    La vista previa admin del correo Recibos debe usar esto sobre la plantilla en disco para coincidir
+    con el cuerpo HTML real del mensaje SMTP.
+    """
+    if body_html is None:
+        return None
+    if isinstance(body_html, bytes):
+        try:
+            body_html = body_html.decode("utf-8")
+        except UnicodeDecodeError:
+            body_html = body_html.decode("cp1252", errors="replace")
+    else:
+        try:
+            body_html.encode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            body_html = body_html.encode("utf-8", errors="replace").decode("utf-8")
+    logo_url = _logo_url_for_email()
+    return _sanitize_html_for_email(body_html, logo_url)
+
+
 def _sanitize_imap_error(exc: Exception) -> str:
     """Mensaje seguro para mostrar al usuario al fallar conexi�n IMAP (sin contrase�as ni rutas)."""
     msg = str(exc).strip()
@@ -522,21 +546,9 @@ def send_email(
         # Si el caller envió HTML solo en body_text (sin body_html), detectar y enviar como HTML
         if body_html is None and body_text and cuerpo_parece_html(body_text):
             body_html = body_text
-        # Asegurar body_html es str y UTF-8 valido (evita HTML corrupto por encoding BD/plantilla)
+        # Asegurar body_html es str UTF-8 válido + mismo saneado que la vista previa admin (logo URL, etc.)
         if body_html is not None:
-            if isinstance(body_html, bytes):
-                try:
-                    body_html = body_html.decode("utf-8")
-                except UnicodeDecodeError:
-                    body_html = body_html.decode("cp1252", errors="replace")
-            else:
-                try:
-                    body_html.encode("utf-8")
-                except (UnicodeEncodeError, UnicodeDecodeError):
-                    body_html = body_html.encode("utf-8", errors="replace").decode("utf-8")
-            # Evitar mensaje corrupto al cargar: base64 -> logo URL, {{LOGO_URL}} -> URL real, src con " o '
-            logo_url = _logo_url_for_email()
-            body_html = _sanitize_html_for_email(body_html, logo_url)
+            body_html = preparar_body_html_para_mime(body_html)
 
         # Gmail: si body_text es HTML, usar version solo texto para text/plain (evita ver codigo+base64)
         if body_html and body_text and ("<" in body_text and ">" in body_text):
