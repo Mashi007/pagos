@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, and_, case, delete, text
+from sqlalchemy import select, func, or_, and_, case, delete, text, update
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
 from app.core.database import get_db
@@ -576,25 +576,18 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int
         )
     except Exception:
         return
+    ids_colision_importado: List[int] = []
     for pid in ids:
         try:
             pr = db.get(PagoReportado, pid)
             if pr is None:
                 continue
             # Si ya existe un Pago con este comprobante, no ejecutar validadores de listado (muy costosos)
-            # ni intentar_importar en cada GET: marca cierre y evita decenas de segundos por request.
+            # ni intentar_importar en cada GET: se agrupan al final en un solo UPDATE + commit.
             if getattr(pr, "estado", None) in ("en_revision", "aprobado") and pago_reportado_colisiona_tabla_pagos(
                 db, pr
             ):
-                pr.estado = "importado"
-                db.add(pr)
-                db.commit()
-                logger.info(
-                    "[COBROS_COLA_REGULARIZA] Reportado id=%s ref=%s marcado importado: "
-                    "ya existe pago con el mismo comprobante (omitido en listados posteriores).",
-                    pr.id,
-                    (pr.referencia_interna or "").strip() or str(pr.id),
-                )
+                ids_colision_importado.append(pid)
                 continue
             if reportado_falla_validadores_cobros(db, pr):
                 continue
@@ -606,6 +599,23 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int
                 db.refresh(pr)
             if getattr(pr, "estado", None) == "aprobado":
                 cpr.intentar_importar_reportado_automatico(db, pr, ref, "COBROS_COLA_REGULARIZA")
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if ids_colision_importado:
+        try:
+            db.execute(
+                update(PagoReportado)
+                .where(PagoReportado.id.in_(ids_colision_importado))
+                .values(estado="importado", updated_at=func.now())
+            )
+            db.commit()
+            logger.info(
+                "[COBROS_COLA_REGULARIZA] Marcados %s reportados como importado (comprobante ya en pagos).",
+                len(ids_colision_importado),
+            )
         except Exception:
             try:
                 db.rollback()
