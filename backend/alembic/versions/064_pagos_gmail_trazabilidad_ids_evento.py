@@ -22,20 +22,38 @@ def upgrade() -> None:
     insp = inspect(bind)
 
     if "pagos_gmail_sync_item" in insp.get_table_names():
-        with op.batch_alter_table("pagos_gmail_sync_item") as batch:
-            batch.add_column(sa.Column("gmail_message_id", sa.String(length=100), nullable=True))
-            batch.add_column(sa.Column("gmail_thread_id", sa.String(length=100), nullable=True))
-        op.create_index(
-            "ix_pagos_gmail_sync_item_gmail_message_id",
-            "pagos_gmail_sync_item",
-            ["gmail_message_id"],
-            unique=False,
-        )
+        cols_item = {c["name"] for c in insp.get_columns("pagos_gmail_sync_item")}
+        if "gmail_message_id" not in cols_item:
+            op.add_column(
+                "pagos_gmail_sync_item",
+                sa.Column("gmail_message_id", sa.String(length=100), nullable=True),
+            )
+        if "gmail_thread_id" not in cols_item:
+            op.add_column(
+                "pagos_gmail_sync_item",
+                sa.Column("gmail_thread_id", sa.String(length=100), nullable=True),
+            )
+        idx_names = {ix["name"] for ix in inspect(bind).get_indexes("pagos_gmail_sync_item")}
+        if "ix_pagos_gmail_sync_item_gmail_message_id" not in idx_names:
+            op.create_index(
+                "ix_pagos_gmail_sync_item_gmail_message_id",
+                "pagos_gmail_sync_item",
+                ["gmail_message_id"],
+                unique=False,
+            )
 
     if "gmail_temporal" in insp.get_table_names():
-        with op.batch_alter_table("gmail_temporal") as batch:
-            batch.add_column(sa.Column("gmail_message_id", sa.String(length=100), nullable=True))
-            batch.add_column(sa.Column("gmail_thread_id", sa.String(length=100), nullable=True))
+        cols_tmp = {c["name"] for c in insp.get_columns("gmail_temporal")}
+        if "gmail_message_id" not in cols_tmp:
+            op.add_column(
+                "gmail_temporal",
+                sa.Column("gmail_message_id", sa.String(length=100), nullable=True),
+            )
+        if "gmail_thread_id" not in cols_tmp:
+            op.add_column(
+                "gmail_temporal",
+                sa.Column("gmail_thread_id", sa.String(length=100), nullable=True),
+            )
 
     if "pagos_gmail_pipeline_evento" not in insp.get_table_names():
         op.create_table(
@@ -94,12 +112,18 @@ def downgrade() -> None:
         op.drop_table("pagos_gmail_pipeline_evento")
 
     if "gmail_temporal" in insp.get_table_names():
-        with op.batch_alter_table("gmail_temporal") as batch:
-            batch.drop_column("gmail_thread_id")
-            batch.drop_column("gmail_message_id")
+        cols_tmp = {c["name"] for c in insp.get_columns("gmail_temporal")}
+        if "gmail_thread_id" in cols_tmp:
+            op.drop_column("gmail_temporal", "gmail_thread_id")
+        if "gmail_message_id" in cols_tmp:
+            op.drop_column("gmail_temporal", "gmail_message_id")
 
     if "pagos_gmail_sync_item" in insp.get_table_names():
-        op.drop_index("ix_pagos_gmail_sync_item_gmail_message_id", table_name="pagos_gmail_sync_item")
-        with op.batch_alter_table("pagos_gmail_sync_item") as batch:
-            batch.drop_column("gmail_thread_id")
-            batch.drop_column("gmail_message_id")
+        idx_names = {ix["name"] for ix in insp.get_indexes("pagos_gmail_sync_item")}
+        if "ix_pagos_gmail_sync_item_gmail_message_id" in idx_names:
+            op.drop_index("ix_pagos_gmail_sync_item_gmail_message_id", table_name="pagos_gmail_sync_item")
+        cols_item = {c["name"] for c in insp.get_columns("pagos_gmail_sync_item")}
+        if "gmail_thread_id" in cols_item:
+            op.drop_column("pagos_gmail_sync_item", "gmail_thread_id")
+        if "gmail_message_id" in cols_item:
+            op.drop_column("pagos_gmail_sync_item", "gmail_message_id")

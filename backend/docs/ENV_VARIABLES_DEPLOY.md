@@ -11,6 +11,8 @@ Referencia de todas las variables usadas por la aplicación (según `app/core/co
 | `DATABASE_URL` | URL PostgreSQL (ej. `postgresql://user:pass@host:5432/db`) |
 | `SECRET_KEY` | Clave JWT (mín. 32 caracteres, aleatoria) |
 
+Tras cada despliegue que incluya cambios en modelos SQLAlchemy, ejecute migraciones en el mismo entorno que usa `DATABASE_URL`, por ejemplo: `cd backend && alembic upgrade head`. Si en logs aparece `column "gmail_message_id" of relation "gmail_temporal" does not exist`, la base está por debajo de la revisión **064** (`064_pagos_gmail_trazabilidad_ids_evento`); aplicar migraciones corrige el error.
+
 ## Base de datos (pool SQLAlchemy, opcional)
 
 Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en paralelo agotan conexiones (`QueuePool limit ... overflow ... reached`), subir estos valores sin superar `max_connections` de Postgres (aprox. `workers × (DATABASE_POOL_SIZE + DATABASE_MAX_OVERFLOW)`).
