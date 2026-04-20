@@ -246,7 +246,6 @@ export default function NotificacionesRecibosPage() {
   }, [])
 
   const [fechaCaracas, setFechaCaracas] = useState('')
-  const [soloSimular, setSoloSimular] = useState(true)
   const [filtroCedula, setFiltroCedula] = useState('')
   const [sortCol, setSortCol] = useState<NotificacionesCuotasSortCol | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -499,26 +498,26 @@ export default function NotificacionesRecibosPage() {
   const fechaCaracasTrim = fechaCaracas.trim()
 
   const ejecutar = async () => {
-    if (!soloSimular && data !== undefined && totalPagosListado === 0) {
+    if (data !== undefined && totalPagosListado === 0) {
       toast.warning(
         'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie fecha/franja.'
       )
       return
     }
-    if (!soloSimular && fechaCaracasTrim && fechaCaracasTrim > hoyCaracasIso) {
+    if (fechaCaracasTrim && fechaCaracasTrim > hoyCaracasIso) {
       toast.error('No se permite envío real para una fecha futura (Caracas).')
       return
     }
-    if (!soloSimular && fechaCaracasTrim && fechaCaracasTrim < hoyCaracasIso) {
+    if (fechaCaracasTrim && fechaCaracasTrim < hoyCaracasIso) {
       toast.warning(
-        'Para envío real de un día pasado use el botón «Enviar lote pasado (real)» (confirmación explícita).'
+        'Para un día pasado use «Enviar lote pasado (real)» (confirmación explícita).'
       )
       return
     }
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
         fecha_caracas: fechaCaracasTrim || undefined,
-        solo_simular: soloSimular,
+        solo_simular: false,
         forzar_envio_fecha_pasada: false,
       })
       if (out.sin_casos_en_ventana === true) {
@@ -527,9 +526,7 @@ export default function NotificacionesRecibosPage() {
         return
       }
       const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)}`
-      toast.success(
-        soloSimular ? `Simulación: ${resumen}` : `Ejecución: ${resumen}`
-      )
+      toast.success(`Envío manual: ${resumen}`)
       void refetch()
     } catch (e) {
       toast.error(getErrorMessage(e))
@@ -537,7 +534,6 @@ export default function NotificacionesRecibosPage() {
   }
 
   const ejecutarLotePasadoReal = async () => {
-    if (soloSimular) return
     if (data !== undefined && totalPagosListado === 0) {
       toast.warning(
         'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie fecha/franja.'
@@ -576,7 +572,7 @@ export default function NotificacionesRecibosPage() {
     }
   }
 
-  const esFechaPasadaReal = !soloSimular && Boolean(fechaCaracasTrim && fechaCaracasTrim < hoyCaracasIso)
+  const esFechaPasadaReal = Boolean(fechaCaracasTrim && fechaCaracasTrim < hoyCaracasIso)
 
   return (
     <div className="space-y-6">
@@ -608,16 +604,10 @@ export default function NotificacionesRecibosPage() {
                   Hoy (Caracas): <span className="font-mono">{hoyCaracasIso}</span>
                 </p>
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={soloSimular}
-                  onChange={e => {
-                    setSoloSimular(e.target.checked)
-                  }}
-                />
-                Solo simular (PDF real; sin tabla recibos_email_envio; SMTP solo si modo pruebas Recibos)
-              </label>
+              <p className="text-sm text-muted-foreground">
+                El envío manual usa SMTP real a los correos del cliente (misma lógica que el job del día
+                en curso). Respete modo pruebas / correo activo en Configuración Recibos.
+              </p>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -635,7 +625,7 @@ export default function NotificacionesRecibosPage() {
                   onClick={() => void ejecutar()}
                   disabled={
                     isFetching ||
-                    (!soloSimular && data !== undefined && totalPagosListado === 0) ||
+                    (data !== undefined && totalPagosListado === 0) ||
                     esFechaPasadaReal
                   }
                   title={
@@ -645,26 +635,24 @@ export default function NotificacionesRecibosPage() {
                   }
                 >
                   <Mail className="mr-2 h-4 w-4" />
-                  {soloSimular ? 'Simular envío' : 'Ejecutar envío'}
+                  Envío manual
                 </Button>
-                {!soloSimular ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
-                    onClick={() => void ejecutarLotePasadoReal()}
-                    disabled={
-                      isFetching ||
-                      (data !== undefined && totalPagosListado === 0) ||
-                      !fechaCaracasTrim ||
-                      fechaCaracasTrim >= hoyCaracasIso
-                    }
-                    title="SMTP real para la fecha y franja seleccionadas (día anterior a hoy en Caracas)."
-                  >
-                    <Mail className="mr-2 h-4 w-4" />
-                    Enviar lote pasado (real)
-                  </Button>
-                ) : null}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                  onClick={() => void ejecutarLotePasadoReal()}
+                  disabled={
+                    isFetching ||
+                    (data !== undefined && totalPagosListado === 0) ||
+                    !fechaCaracasTrim ||
+                    fechaCaracasTrim >= hoyCaracasIso
+                  }
+                  title="SMTP real para la fecha y franja seleccionadas (día anterior a hoy en Caracas)."
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Enviar lote pasado (real)
+                </Button>
               </div>
 
               {data ? (
