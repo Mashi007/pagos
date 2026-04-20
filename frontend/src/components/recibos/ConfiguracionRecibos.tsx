@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Link } from 'react-router-dom'
 
@@ -175,14 +175,15 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
   const [htmlVistaSmtp, setHtmlVistaSmtp] = useState('')
   const [plantillaCargando, setPlantillaCargando] = useState(false)
   const [plantillaError, setPlantillaError] = useState<string | null>(null)
+  const [guardandoPlantillaCorreo, setGuardandoPlantillaCorreo] = useState(false)
+  const previewSeq = useRef(0)
 
   const cargarPlantillaDesdeServidor = useCallback(async () => {
     setPlantillaCargando(true)
     setPlantillaError(null)
     try {
-      const html = await notificacionService.obtenerPlantillaHtmlRecibos()
-      setEditorHtml(html)
-      setHtmlVistaSmtp(html)
+      const raw = await notificacionService.obtenerPlantillaHtmlRecibos()
+      setEditorHtml(raw)
     } catch (e) {
       setPlantillaError(getErrorMessage(e))
     } finally {
@@ -193,6 +194,41 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
   useEffect(() => {
     void cargarPlantillaDesdeServidor()
   }, [cargarPlantillaDesdeServidor])
+
+  /** Vista previa = mismo pipeline que send_email (POST), actualizado al pegar/editar con debounce. */
+  useEffect(() => {
+    const seq = ++previewSeq.current
+    const ac = new AbortController()
+    const t = window.setTimeout(() => {
+      void (async () => {
+        if (!editorHtml.trim()) {
+          if (seq === previewSeq.current && !ac.signal.aborted) {
+            setHtmlVistaSmtp('')
+            setPlantillaError(null)
+          }
+          return
+        }
+        try {
+          const { html } = await notificacionService.previsualizarPlantillaRecibosHtml(editorHtml, {
+            signal: ac.signal,
+          })
+          if (seq === previewSeq.current && !ac.signal.aborted) {
+            setHtmlVistaSmtp(html)
+            setPlantillaError(null)
+          }
+        } catch (e: unknown) {
+          if (ac.signal.aborted) return
+          if (seq === previewSeq.current) {
+            setPlantillaError(getErrorMessage(e))
+          }
+        }
+      })()
+    }, 400)
+    return () => {
+      ac.abort()
+      window.clearTimeout(t)
+    }
+  }, [editorHtml])
 
   useEffect(() => {
     if (!data) return
@@ -210,13 +246,16 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     if (emergencyResetSeq <= 0) return
     setGuardando(false)
     setProbando(false)
+    setGuardandoPlantillaCorreo(false)
   }, [emergencyResetSeq])
 
-  const puedeCancelarEmergencia = guardando || probando || isFetching
+  const puedeCancelarEmergencia =
+    guardando || probando || isFetching || guardandoPlantillaCorreo || plantillaCargando
 
   const cancelarEmergenciaConfig = () => {
     setGuardando(false)
     setProbando(false)
+    setGuardandoPlantillaCorreo(false)
     toast.info('Operación en pantalla restablecida. Si un envío sigue en el servidor, espere unos segundos.')
   }
 
@@ -254,6 +293,22 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     refetch,
   ])
 
+  const guardarPlantillaCorreoEnServidor = async () => {
+    if (!editorHtml.trim()) {
+      toast.warning('No hay HTML para guardar.')
+      return
+    }
+    setGuardandoPlantillaCorreo(true)
+    try {
+      await notificacionService.guardarPlantillaRecibosHtml(editorHtml)
+      toast.success('Plantilla guardada en el servidor. El job de Recibos usará este archivo.')
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setGuardandoPlantillaCorreo(false)
+    }
+  }
+
   const probarCorreo = async () => {
     const to = emailPrueba.trim()
     if (!to || !to.includes('@')) {
@@ -267,13 +322,21 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
         undefined,
         undefined,
         undefined,
-        { servicio: 'recibos', tipo_tab: 'recibos', recibos_prueba_datos_reales: true },
+        {
+          servicio: 'recibos',
+          tipo_tab: 'recibos',
+          recibos_prueba_datos_reales: true,
+          recibos_html_plantilla: editorHtml,
+        },
         { timeout: 120_000 }
       )
       const ok = Boolean((res as { success?: boolean })?.success)
       const msg = String((res as { mensaje?: string })?.mensaje || '').trim()
       if (ok) {
-        toast.success(msg || 'Muestra Recibos enviada (HTML + PDF, datos reales del primer cliente en ventana).')
+        toast.success(
+          msg ||
+            'Muestra Recibos enviada: mismo HTML que la vista previa (editor) + PDF, primer cliente en ventana.'
+        )
       } else {
         toast.error(msg || 'No se pudo enviar la muestra Recibos.')
       }
@@ -529,11 +592,10 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 HTML del correo Recibos y vista previa
               </CardTitle>
               <CardDescription className="mt-1">
-                El iframe <strong>«Vista previa (igual al SMTP)»</strong> muestra el HTML que realmente va en
-                el correo (plantilla del archivo + mismo saneado que el servidor aplica al enviar: logo URL,
-                etc.). El cuadro de texto copia esa versión al pulsar «Traer del servidor»; si edita el
-                texto, la vista previa <strong>no</strong> cambia hasta volver a traer del servidor tras
-                guardar el archivo en el backend.
+                Pegue o edite HTML abajo: la vista previa se actualiza con el <strong>mismo pipeline que SMTP</strong>{' '}
+                (logo URL, saneado). <strong>Enviar prueba</strong> usa exactamente ese HTML del editor. Para
+                el envío automático del job, pulse <strong>Guardar plantilla</strong> (escribe el archivo en el
+                servidor).
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -550,6 +612,17 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                   aria-hidden
                 />
                 {plantillaCargando ? 'Cargando…' : 'Traer del servidor'}
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="shrink-0 bg-emerald-700 text-white hover:bg-emerald-800"
+                disabled={guardandoPlantillaCorreo || !editorHtml.trim()}
+                onClick={() => void guardarPlantillaCorreoEnServidor()}
+              >
+                <Save className={`mr-2 h-4 w-4 ${guardandoPlantillaCorreo ? 'animate-pulse' : ''}`} aria-hidden />
+                {guardandoPlantillaCorreo ? 'Guardando plantilla…' : 'Guardar plantilla'}
               </Button>
               <Button
                 type="button"
@@ -576,7 +649,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
 
           <div className="flex flex-col gap-2">
             <label htmlFor="recibos-html-editor" className="text-xs font-medium text-gray-700">
-              HTML (plantilla / edición local; no altera el envío hasta actualizar el archivo en el backend)
+              HTML (pegue aquí; la vista previa y la prueba SMTP usan este contenido)
             </label>
             <Textarea
               id="recibos-html-editor"
@@ -603,7 +676,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
               <p className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-gray-500">
                 {plantillaCargando
                   ? 'Cargando plantilla del servidor…'
-                  : 'Pulse «Traer del servidor» para cargar la vista previa idéntica al HTML del correo enviado.'}
+                  : 'Escriba HTML arriba o pulse «Traer del servidor». La vista previa aparece al poco tiempo (mismo HTML que el envío).'}
               </p>
             )}
           </div>
@@ -618,9 +691,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           </CardTitle>
 
           <CardDescription>
-            Mismo HTML y PDF que el envío Recibos, con datos reales del primer cliente válido en la ventana de
-            hoy (Caracas). Solo se envía a «Correo destino»; el cliente no recibe To. Se aplican los CCO Recibos
-            guardados arriba.
+            Usa el HTML del cuadro de arriba (misma versión que la vista previa) más el PDF de estado de cuenta
+            del primer cliente válido en la ventana de hoy (Caracas). Solo se envía a «Correo destino». CCO
+            Recibos según configuración. Para el lote automático, guarde la plantilla con el botón verde.
           </CardDescription>
         </CardHeader>
 

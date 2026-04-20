@@ -1327,12 +1327,31 @@ class NotificacionService {
     )
   }
 
-  /** HTML de la plantilla fija del correo Recibos (mismo archivo que el backend al enviar SMTP). */
+  /** HTML crudo del archivo de plantilla Recibos (editor; sin pipeline send_email). */
   async obtenerPlantillaHtmlRecibos(): Promise<string> {
     return await apiClient.get<string>(
       `${API_V1}/notificaciones/recibos/plantilla-correo-html`,
       { responseType: 'text' }
     )
+  }
+
+  /** Mismo HTML que iría en text/html tras el pipeline SMTP (logo URL, etc.). */
+  async previsualizarPlantillaRecibosHtml(
+    html: string,
+    opts?: { signal?: AbortSignal }
+  ): Promise<{ html: string }> {
+    return await apiClient.post(
+      `${API_V1}/notificaciones/recibos/plantilla-html-preview`,
+      { html },
+      { signal: opts?.signal }
+    )
+  }
+
+  /** Persiste la plantilla en el servidor (mismo archivo que usa el job). */
+  async guardarPlantillaRecibosHtml(html: string): Promise<{ ok: boolean }> {
+    return await apiClient.put(`${API_V1}/notificaciones/recibos/plantilla-correo-html`, {
+      html,
+    })
   }
 }
 
@@ -1376,6 +1395,8 @@ class EmailConfigService {
       /** Recibos: HTML plantilla + PDF estado de cuenta del primer cliente en ventana; To = emailDestino. */
       recibos_prueba_datos_reales?: boolean
       fecha_caracas?: string
+      /** Recibos: HTML crudo del editor; mismo cuerpo que la vista previa (POST preview). Vacío = archivo en disco. */
+      recibos_html_plantilla?: string
     },
     axiosConfig?: { timeout?: number }
   ): Promise<any> {
@@ -1396,6 +1417,10 @@ class EmailConfigService {
     if (opts?.recibos_prueba_datos_reales) body.recibos_prueba_datos_reales = true
 
     if (opts?.fecha_caracas?.trim()) body.fecha_caracas = opts.fecha_caracas.trim()
+
+    if (opts?.recibos_html_plantilla != null && opts.recibos_html_plantilla !== '') {
+      body.recibos_html_plantilla = opts.recibos_html_plantilla
+    }
 
     return await apiClient.post(
       `${this.baseUrl}/email/probar`,

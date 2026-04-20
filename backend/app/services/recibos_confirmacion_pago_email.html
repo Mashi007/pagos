@@ -27,70 +27,50 @@
       padding: 0;
       position: relative;
       overflow: hidden;
+      min-height: 110px;
     }
     .header-red-bar {
       position: absolute;
       top: 0; left: 0;
-      width: 6px;
+      width: 7px;
       height: 100%;
       background: #e63946;
     }
     .header-accent-circle {
       position: absolute;
-      top: -28px; right: -28px;
-      width: 120px; height: 120px;
+      top: -50px; right: -50px;
+      width: 220px; height: 220px;
       border-radius: 50%;
-      border: 22px solid rgba(230,57,70,0.08);
+      border: 40px solid rgba(230,57,70,0.08);
     }
     .header-accent-circle2 {
       position: absolute;
-      bottom: -16px; right: 42%;
-      width: 56px; height: 56px;
+      bottom: -30px; right: 120px;
+      width: 100px; height: 100px;
       border-radius: 50%;
-      border: 12px solid rgba(255,255,255,0.04);
+      border: 20px solid rgba(255,255,255,0.04);
     }
     .header-inner {
       position: relative;
       z-index: 2;
-      padding: 12px 32px 12px 40px;
+      padding: 26px 36px 26px 44px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      gap: 20px;
     }
     .header-left {
       display: flex;
       align-items: center;
       gap: 18px;
     }
-    .logo-icon {
-      width: 58px; height: 58px;
-      background: #e63946;
-      border-radius: 14px;
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 900;
-      font-size: 30px;
-      color: #fff;
-      letter-spacing: -1px;
-      flex-shrink: 0;
-      border: 2px solid rgba(255,255,255,0.15);
-    }
     .header-tagline {
       display: flex;
       flex-direction: column;
       gap: 3px;
     }
-    .header-tagline .tag-top {
-      font-size: 11px;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 600;
-      color: rgba(255,255,255,0.40);
-      letter-spacing: 3px;
-      text-transform: uppercase;
-    }
     .header-tagline .tag-bottom {
-      font-size: 12px;
+      font-size: 13px;
       font-family: 'Montserrat', sans-serif;
       font-weight: 500;
       color: rgba(255,255,255,0.65);
@@ -99,7 +79,7 @@
     .header-brand {
       font-family: 'Montserrat', sans-serif;
       font-weight: 900;
-      font-size: 24px;
+      font-size: 28px;
       color: #fff;
       letter-spacing: -1px;
       line-height: 1;
@@ -107,18 +87,22 @@
     .header-brand .r-red { color: #e63946; }
     .header-brand .brand-sub {
       display: block;
-      font-size: 9px;
+      font-size: 10px;
       font-weight: 500;
       color: rgba(255,255,255,0.35);
-      letter-spacing: 2px;
+      letter-spacing: 3px;
       text-transform: uppercase;
       text-align: right;
-      margin-top: 1px;
+      margin-top: 2px;
+    }
+    .header-divider {
+      height: 3px;
+      background: linear-gradient(90deg, #e63946 0%, #e63946 30%, rgba(255,255,255,0.06) 100%);
     }
 
     /* ── SUCCESS BANNER ── */
     .success-banner {
-      background: linear-gradient(90deg, #2ecc71, #27ae60);
+      background: linear-gradient(90deg, #0f3460, #185FA5);
       padding: 14px 36px;
       display: flex;
       align-items: center;
@@ -222,10 +206,10 @@
       background: #25D366;
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 24px;
       flex-shrink: 0;
       box-shadow: 0 4px 12px rgba(37,211,102,0.30);
     }
+    .wa-icon svg { display: block; }
     .cta-box .cta-text p {
       font-size: 13px;
       color: #555;
@@ -260,170 +244,120 @@
       margin: 28px 0;
     }
 
-    /* ── SIGNATURE / FOOTER (verde + negro, bloque contacto estrecho) ── */
+    /* ── SIGNATURE / FOOTER ── */
     .signature {
-      background: linear-gradient(180deg, #030806 0%, #06140c 45%, #020403 100%);
+      background: #0d1b2a;
       padding: 0;
       position: relative;
       overflow: hidden;
     }
-    .sig-accent-top {
+    .sig-accent-bar {
       height: 3px;
-      background: linear-gradient(90deg, #14532d 0%, #22c55e 40%, #4ade80 70%, #166534 100%);
+      background: linear-gradient(90deg, #e63946 0%, #185FA5 60%, transparent 100%);
     }
     .sig-inner {
-      padding: 14px 20px 18px;
+      padding: 28px 36px 30px;
       position: relative;
       z-index: 2;
     }
     .sig-deco-circle {
       position: absolute;
-      bottom: -40px; right: -20px;
-      width: 100px; height: 100px;
+      top: -80px; right: -80px;
+      width: 260px; height: 260px;
       border-radius: 50%;
-      border: 18px solid rgba(34, 197, 94, 0.12);
+      border: 55px solid rgba(24,95,165,0.08);
       z-index: 1;
     }
     .sig-deco-circle2 {
       position: absolute;
-      top: 6px; left: 8%;
-      width: 40px; height: 40px;
+      bottom: -40px; left: 30px;
+      width: 120px; height: 120px;
       border-radius: 50%;
-      border: 8px solid rgba(74, 222, 128, 0.08);
+      border: 25px solid rgba(230,57,70,0.06);
       z-index: 1;
     }
-    .sig-header {
+    .sig-layout {
       display: flex;
       align-items: center;
-      justify-content: center;
-      text-align: center;
-      margin-bottom: 12px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(34, 197, 94, 0.28);
+      gap: 0;
     }
-    .sig-brand-block {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
+    .sig-left {
+      flex: 1;
+      padding-right: 28px;
+      border-right: 1px solid rgba(255,255,255,0.12);
     }
-    .sig-logo {
-      width: 46px; height: 46px;
-      background: #15803d;
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
+    .sig-dept-label {
+      font-size: 10px;
       font-family: 'Montserrat', sans-serif;
-      font-weight: 900;
-      font-size: 24px;
-      color: #fff;
-      flex-shrink: 0;
-    }
-    .sig-brand-text .sig-name {
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 900;
-      font-size: 19px;
-      color: #f8fafc;
-      letter-spacing: -0.5px;
-      line-height: 1.05;
-    }
-    .sig-brand-text .sig-name span { color: #4ade80; }
-    .sig-brand-text .sig-dept {
-      font-size: 11px;
-      color: #bbf7d0;
-      font-weight: 600;
-      letter-spacing: 1.6px;
+      font-weight: 700;
+      color: #e63946;
+      letter-spacing: 3px;
       text-transform: uppercase;
-      margin-top: 5px;
+      margin-bottom: 6px;
     }
-    .sig-tagline {
+    .sig-team-name {
       font-family: 'Montserrat', sans-serif;
-      font-size: 11px;
-      font-weight: 600;
-      color: rgba(187, 247, 208, 0.45);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      text-align: right;
+      font-weight: 800;
+      font-size: 20px;
+      color: #ffffff;
+      letter-spacing: -0.3px;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+    .sig-divider-line {
+      width: 36px;
+      height: 2px;
+      background: #e63946;
+      border-radius: 2px;
+      margin-bottom: 10px;
+    }
+    .sig-tagline-text {
+      font-size: 12px;
+      color: rgba(255,255,255,0.50);
+      font-family: 'Open Sans', sans-serif;
       line-height: 1.5;
     }
-    .sig-tagline strong {
-      display: block;
-      font-size: 12px;
-      color: rgba(187, 247, 208, 0.65);
+    .sig-right {
+      padding-left: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 220px;
     }
-    /* Contenedor fijo: acota el ancho real de las cajas (también en clientes caprichosos con grid). */
-    .sig-contact-wrap {
-      max-width: 292px;
-      width: 86%;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .sig-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-      width: 100%;
-      max-width: 100%;
-    }
-    .sig-item {
+    .sig-contact-row {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 10px 12px;
-      margin: 0;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
-      border-radius: 10px;
-      background: linear-gradient(145deg, #050a08 0%, #0c1812 100%);
-      border: 1px solid rgba(34, 197, 94, 0.35);
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 4px 14px rgba(0,0,0,0.35);
     }
-    .sig-item.sig-item-wa {
-      border-color: rgba(37, 211, 102, 0.45);
-      background: linear-gradient(145deg, #041008 0%, #0a1f14 100%);
-    }
-    .s-icon-box {
+    .sig-icon-wrap {
       width: 36px; height: 36px;
-      background: rgba(22, 101, 52, 0.65);
-      border-radius: 8px;
+      border-radius: 9px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 15px;
       flex-shrink: 0;
-      border: 1px solid rgba(74, 222, 128, 0.5);
+      font-size: 16px;
     }
-    .sig-item-wa .s-icon-box {
-      background: #128C7E;
-      border: 1px solid #25D366;
-    }
-    .sig-item-body {
-      flex: 1;
-      min-width: 0;
-    }
-    .sig-item .s-label {
-      font-size: 10px;
-      color: #86efac;
+    .sig-icon-wrap.blue { background: rgba(24,95,165,0.30); border: 1px solid rgba(24,95,165,0.55); }
+    .sig-icon-wrap.green { background: rgba(37,211,102,0.18); border: 1px solid rgba(37,211,102,0.40); }
+    .sig-icon-wrap svg { display: block; }
+    .sig-contact-row .c-label {
+      font-size: 9.5px;
+      font-family: 'Montserrat', sans-serif;
       font-weight: 700;
+      color: rgba(255,255,255,0.40);
+      letter-spacing: 1.5px;
       text-transform: uppercase;
-      letter-spacing: 1.1px;
       display: block;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
-    .sig-item .s-value {
+    .sig-contact-row a {
       font-size: 13px;
-      color: #ecfdf5;
-      font-weight: 600;
-      line-height: 1.4;
-      overflow-wrap: anywhere;
-    }
-    .sig-item a.s-value {
-      color: #d1fae5;
-      text-decoration: none;
-      border-bottom: 1px solid rgba(134, 239, 172, 0.55);
-    }
-    .sig-item a.s-value:hover {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
       color: #ffffff;
-      border-bottom-color: #4ade80;
+      text-decoration: none;
+      letter-spacing: 0.1px;
     }
+    .sig-contact-row a:hover { color: #ff8f99; }
 
     /* ── LEGAL ── */
     .legal {
@@ -457,6 +391,7 @@
         <span class="brand-sub">C.A. Venezuela</span>
       </div>
     </div>
+    <div class="header-divider"></div>
   </div>
 
   <!-- SUCCESS BANNER -->
@@ -493,7 +428,12 @@
 
     <div class="section-title">¿Tiene alguna duda?</div>
     <div class="cta-box">
-      <div class="wa-icon">📲</div>
+      <div class="wa-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.121 1.532 5.852L.057 23.57a.75.75 0 0 0 .916.919l5.82-1.49A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.88 0-3.645-.5-5.17-1.373l-.37-.217-3.827.98.998-3.735-.24-.386A9.944 9.944 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+        </svg>
+      </div>
       <div class="cta-text">
         <p>Si necesita ayuda o alguna aclaración, escríbanos a nuestro Call Center vía WhatsApp:</p>
         <a href="https://wa.me/584244579934">+58 424-4579934</a>
@@ -509,33 +449,35 @@
 
   <!-- SIGNATURE -->
   <div class="signature">
-    <div class="sig-accent-top"></div>
+    <div class="sig-accent-bar"></div>
     <div class="sig-deco-circle"></div>
     <div class="sig-deco-circle2"></div>
     <div class="sig-inner">
-      <div class="sig-header">
-        <div class="sig-brand-block">
-          <div class="sig-brand-text">
-            <div class="sig-name"><span>R</span>APICREDIT</div>
-            <div class="sig-dept">Departamento de Cobranza</div>
-          </div>
+      <div class="sig-layout">
+        <div class="sig-left">
+          <div class="sig-dept-label">Departamento de Cobranza</div>
+          <div class="sig-team-name">Equipo RapiCredit</div>
+          <div class="sig-divider-line"></div>
+          <div class="sig-tagline-text">Estamos aquí para ayudarle.<br/>No dude en contactarnos.</div>
         </div>
-
-      </div>
-      <div class="sig-contact-wrap">
-        <div class="sig-grid">
-          <div class="sig-item">
-            <div class="s-icon-box">✉️</div>
-            <div class="sig-item-body">
-              <span class="s-label">Email</span>
-              <a class="s-value" href="mailto:cobranza@rapicreditca.com">cobranza@rapicreditca.com</a>
+        <div class="sig-right">
+          <div class="sig-contact-row">
+            <div class="sig-icon-wrap blue">✉️</div>
+            <div>
+              <span class="c-label">Email</span>
+              <a href="mailto:cobranza@rapicreditca.com">cobranza@rapicreditca.com</a>
             </div>
           </div>
-          <div class="sig-item sig-item-wa">
-            <div class="s-icon-box">📲</div>
-            <div class="sig-item-body">
-              <span class="s-label">WhatsApp</span>
-              <a class="s-value" href="https://wa.me/584244579934">+58 424-4579934</a>
+          <div class="sig-contact-row">
+            <div class="sig-icon-wrap green">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#25D366" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.121 1.532 5.852L.057 23.57a.75.75 0 0 0 .916.919l5.82-1.49A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.88 0-3.645-.5-5.17-1.373l-.37-.217-3.827.98.998-3.735-.24-.386A9.944 9.944 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+              </svg>
+            </div>
+            <div>
+              <span class="c-label">WhatsApp</span>
+              <a href="https://wa.me/584244579934">+58 424-4579934</a>
             </div>
           </div>
         </div>

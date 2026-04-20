@@ -18,7 +18,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -344,6 +344,11 @@ class ProbarEmailRequest(BaseModel):
     # Recibos: enviar muestra con HTML + PDF reales (primer cliente en ventana), solo a email_destino.
     recibos_prueba_datos_reales: bool = False
     fecha_caracas: Optional[str] = None
+    recibos_html_plantilla: Optional[str] = Field(
+        None,
+        max_length=1_800_000,
+        description="HTML crudo del cuerpo Recibos (editor admin). Vacío = archivo en disco.",
+    )
 
 
 def _destino_prueba(cfg: dict[str, Any], payload: ProbarEmailRequest) -> str:
@@ -416,7 +421,13 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
             raise HTTPException(status_code=422, detail=str(e)) from e
         if d is None:
             d = hoy_negocio()
-        out = enviar_correo_prueba_recibos_datos_reales(db, email_destino=destino, fecha_dia=d)
+        ov = (payload.recibos_html_plantilla or "").strip()
+        out = enviar_correo_prueba_recibos_datos_reales(
+            db,
+            email_destino=destino,
+            fecha_dia=d,
+            html_plantilla_override=ov or None,
+        )
         if not out.get("success"):
             logger.warning("Recibos prueba datos reales: %s", out.get("mensaje"))
             return {

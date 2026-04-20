@@ -1,6 +1,6 @@
 """API admin: Recibos (vista previa de pagos en ventana y ejecución manual)."""
 
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
@@ -15,22 +15,56 @@ from app.services.recibos_conciliacion_email_job import (
     RECIBOS_VENTANA_SLOT,
     _cuerpo_html_recibos_confirmacion,
     ejecutar_recibos_envio_slot,
+    ruta_archivo_plantilla_recibos_confirmacion,
 )
 from app.services.recibos_conciliacion_listado_ui import listar_recibos_ventana_con_ui
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
+_MAX_PLANTILLA_CHARS = 1_800_000
+
+
+class RecibosPlantillaHtmlBody(BaseModel):
+    """Cuerpo HTML de la plantilla Recibos (crudo: puede incluir {{LOGO_URL}}; el envío lo sanea como send_email)."""
+
+    html: str = Field(..., max_length=_MAX_PLANTILLA_CHARS)
+
 
 @router.get("/plantilla-correo-html", response_class=HTMLResponse)
 def get_recibos_plantilla_correo_html():
     """
-    HTML del cuerpo del correo Recibos **tal como lo prepara SMTP** (plantilla en disco + mismo pipeline
-    que ``send_email``: UTF-8, logo URL, sustitución de data URLs largas, etc.). Debe coincidir con la
-    parte ``text/html`` del mensaje enviado (sin adjuntos).
+    Contenido **crudo** del archivo ``recibos_confirmacion_pago_email.html`` (sin pasar por el pipeline
+    de ``send_email``). Sirve para cargar el editor; la vista previa idéntica al SMTP se obtiene con
+    ``POST /plantilla-html-preview`` sobre ese texto.
     """
     raw = _cuerpo_html_recibos_confirmacion()
-    final = preparar_body_html_para_mime(raw) or ""
-    return HTMLResponse(content=final, media_type="text/html; charset=utf-8")
+    return HTMLResponse(content=raw, media_type="text/html; charset=utf-8")
+
+
+@router.post("/plantilla-html-preview")
+def post_recibos_plantilla_html_preview(payload: RecibosPlantillaHtmlBody) -> dict[str, Any]:
+    """
+    Devuelve el HTML tal como lo prepara ``send_email`` (UTF-8 + ``preparar_body_html_para_mime``) a partir
+    del texto pegado en el admin. Debe coincidir con la parte ``text/html`` del mensaje si ese mismo
+    cuerpo se envía como prueba con ``recibos_html_plantilla``.
+    """
+    out = preparar_body_html_para_mime(payload.html)
+    return {"html": out or ""}
+
+
+@router.put("/plantilla-correo-html")
+def put_recibos_plantilla_correo_html(payload: RecibosPlantillaHtmlBody) -> dict[str, Any]:
+    """Persiste la plantilla en disco (misma ruta que usa el job y la prueba cuando no hay override)."""
+    html = payload.html
+    low = html.lower()
+    if "<html" not in low and "<!doctype" not in low:
+        raise HTTPException(
+            status_code=422,
+            detail="El contenido no parece un documento HTML (falta <!DOCTYPE o <html>).",
+        )
+    path = ruta_archivo_plantilla_recibos_confirmacion()
+    path.write_text(html, encoding="utf-8")
+    return {"ok": True, "ruta": str(path), "bytes_utf8": len(html.encode("utf-8"))}
 
 
 class RecibosEjecutarBody(BaseModel):

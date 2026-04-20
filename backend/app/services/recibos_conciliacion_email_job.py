@@ -76,14 +76,18 @@ def _recibo_token_para_pdf_recibos(cedula_lookup_norm: str) -> Optional[str]:
     return create_recibo_token(ced, expire_hours=168)
 
 
+def ruta_archivo_plantilla_recibos_confirmacion() -> Path:
+    """Ruta absoluta de ``recibos_confirmacion_pago_email.html`` (mismo directorio que este módulo)."""
+    return Path(__file__).resolve().with_name("recibos_confirmacion_pago_email.html")
+
+
 def _cuerpo_html_recibos_confirmacion() -> str:
     """Plantilla HTML fija del correo Recibos (confirmación de pago + estado de cuenta adjunto).
 
     Sin caché en memoria: cada envío y la vista previa en admin leen el archivo en disco para que
     los cambios en ``recibos_confirmacion_pago_email.html`` se reflejen sin reiniciar el servidor.
     """
-    path = Path(__file__).resolve().with_name("recibos_confirmacion_pago_email.html")
-    return path.read_text(encoding="utf-8")
+    return ruta_archivo_plantilla_recibos_confirmacion().read_text(encoding="utf-8")
 
 
 def bounds_fecha_registro_recibos_24h_hasta_15(fecha_dia: date) -> Tuple[datetime, datetime]:
@@ -551,10 +555,12 @@ def enviar_correo_prueba_recibos_datos_reales(
     *,
     email_destino: str,
     fecha_dia: date,
+    html_plantilla_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Correo de prueba desde Configuración Recibos: mismo HTML (plantilla fija) y PDF de estado de cuenta
-    que el envío real, tomando el **primer** cliente en orden de lote (cédulas distintas en ventana) que
+    Correo de prueba desde Configuración Recibos: mismo HTML (plantilla en disco o ``html_plantilla_override``
+    si viene relleno) y PDF de estado de cuenta que el envío real, tomando el **primer** cliente en orden
+    de lote (cédulas distintas en ventana) que
     cumpla las mismas validaciones que el job (datos EC, email en ficha, no desistimiento, cédula alineada).
     El mensaje se envía **solo** a ``email_destino`` (p. ej. itmaster@…), no a los correos del cliente.
     No escribe ``recibos_email_envio`` ni ``envios_notificacion``.
@@ -627,7 +633,8 @@ def enviar_correo_prueba_recibos_datos_reales(
             fecha_corte_d = fecha_corte if isinstance(fecha_corte, date) else fecha_dia
 
         asunto = f"[Prueba] Estado de cuenta - {fecha_corte_d.isoformat()} (Recibos)"
-        html_body = _cuerpo_html_recibos_confirmacion()
+        raw_ov = (html_plantilla_override or "").strip()
+        html_body = raw_ov if raw_ov else _cuerpo_html_recibos_confirmacion()
         body_plain = (
             "Confirmación de pago – RapiCredit. Adjunto: estado de cuenta actualizado (PDF). "
             f"Cédula: {cedula_pdf}. Fecha de corte: {fecha_corte_d.isoformat()}."
