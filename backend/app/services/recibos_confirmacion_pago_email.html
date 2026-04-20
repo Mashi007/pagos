@@ -1,495 +1,127 @@
-<!DOCTYPE html>
-<html lang="es">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es">
 <head>
-  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Confirmación de Pago – RapiCredit</title>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #f0f2f5;
-      font-family: 'Open Sans', sans-serif;
-      color: #333;
-    }
-    .wrapper {
-      max-width: 620px;
-      margin: 40px auto;
-      background: #fff;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.10);
-    }
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&amp;family=Open+Sans:wght@400;600&amp;display=swap" rel="stylesheet"/>
+  <style type="text/css">
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-collapse: collapse !important; }
+    body { height: 100% !important; margin: 0 !important; padding: 0 !important; width: 100% !important; background-color: #f0f2f5; font-family: 'Open Sans', Arial, sans-serif; }
+    img { border: 0; line-height: 100%; outline: none; text-decoration: none; }
 
-    /* ── HEADER ── */
-    .header {
-      background: #0d1b2a;
-      padding: 0;
-      position: relative;
-      overflow: hidden;
-      min-height: 110px;
-    }
-    .header-red-bar {
-      position: absolute;
-      top: 0; left: 0;
-      width: 7px;
-      height: 100%;
-      background: #e63946;
-    }
-    .header-accent-circle {
-      position: absolute;
-      top: -50px; right: -50px;
-      width: 220px; height: 220px;
-      border-radius: 50%;
-      border: 40px solid rgba(230,57,70,0.08);
-    }
-    .header-accent-circle2 {
-      position: absolute;
-      bottom: -30px; right: 120px;
-      width: 100px; height: 100px;
-      border-radius: 50%;
-      border: 20px solid rgba(255,255,255,0.04);
-    }
-    .header-inner {
-      position: relative;
-      z-index: 2;
-      padding: 26px 36px 26px 44px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-    }
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 18px;
-    }
-    .header-tagline {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-    .header-tagline .tag-bottom {
-      font-size: 13px;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 500;
-      color: rgba(255,255,255,0.65);
-      letter-spacing: 0.3px;
-    }
-    .header-brand {
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 900;
-      font-size: 28px;
-      color: #fff;
-      letter-spacing: -1px;
-      line-height: 1;
-    }
-    .header-brand .r-red { color: #e63946; }
-    .header-brand .brand-sub {
-      display: block;
-      font-size: 10px;
-      font-weight: 500;
-      color: rgba(255,255,255,0.35);
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      text-align: right;
-      margin-top: 2px;
-    }
-    .header-divider {
-      height: 3px;
-      background: linear-gradient(90deg, #e63946 0%, #e63946 30%, rgba(255,255,255,0.06) 100%);
-    }
-
-    /* ── SUCCESS BANNER ── */
-    .success-banner {
-      background: linear-gradient(90deg, #0f3460, #185FA5);
-      padding: 14px 36px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .success-banner .check-icon {
-      width: 28px; height: 28px;
-      background: rgba(255,255,255,0.25);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px;
-      flex-shrink: 0;
-    }
-    .success-banner p {
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-      font-size: 13px;
-      color: #fff;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-    }
-
-    /* ── BODY ── */
-    .body {
-      padding: 36px 36px 28px;
-    }
-    .greeting {
-      font-family: 'Montserrat', sans-serif;
-      font-size: 15px;
-      font-weight: 600;
-      color: #1a1a2e;
-      margin-bottom: 14px;
-    }
-    .body p {
-      font-size: 14.5px;
-      line-height: 1.75;
-      color: #444;
-      margin-bottom: 22px;
-    }
-
-    /* ── CHECKLIST ── */
-    .section-title {
-      font-family: 'Montserrat', sans-serif;
-      font-size: 13px;
-      font-weight: 700;
-      color: #1a1a2e;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-bottom: 14px;
-      padding-bottom: 8px;
-      border-bottom: 2px solid #f0f2f5;
-    }
-    .checklist {
-      list-style: none;
-      margin-bottom: 28px;
-    }
-    .checklist li {
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      padding: 14px 18px;
-      border-radius: 10px;
-      background: #f8f9fb;
-      margin-bottom: 10px;
-      border-left: 4px solid #2ecc71;
-      transition: background 0.2s;
-    }
-    .checklist li .icon {
-      font-size: 20px;
-      line-height: 1;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-    .checklist li .text strong {
-      font-family: 'Montserrat', sans-serif;
-      font-size: 13.5px;
-      font-weight: 700;
-      color: #1a1a2e;
-      display: block;
-      margin-bottom: 2px;
-    }
-    .checklist li .text span {
-      font-size: 13px;
-      color: #666;
-      line-height: 1.5;
-    }
-
-    /* ── WHATSAPP CTA ── */
-    .cta-box {
-      background: linear-gradient(135deg, #f8f9fb, #eef0f4);
-      border: 1px solid #e2e6ea;
-      border-radius: 12px;
-      padding: 20px 22px;
-      display: flex;
-      align-items: center;
-      gap: 18px;
-      margin-bottom: 28px;
-    }
-    .wa-icon {
-      width: 48px; height: 48px;
-      background: #25D366;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      box-shadow: 0 4px 12px rgba(37,211,102,0.30);
-    }
-    .wa-icon svg { display: block; }
-    .cta-box .cta-text p {
-      font-size: 13px;
-      color: #555;
-      margin-bottom: 4px;
-      line-height: 1.4;
-    }
-    .cta-box .cta-text a {
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-      font-size: 15px;
-      color: #0f3460;
-      text-decoration: none;
-      letter-spacing: 0.5px;
-    }
-    .cta-box .cta-text a:hover { text-decoration: underline; }
-
-    .closing {
-      font-size: 14px;
-      color: #444;
-      line-height: 1.7;
-      margin-bottom: 0;
-    }
-    .closing strong {
-      color: #1a1a2e;
-      font-weight: 600;
-    }
-
-    /* ── DIVIDER ── */
-    .divider {
-      height: 1px;
-      background: linear-gradient(90deg, transparent, #dde1e7, transparent);
-      margin: 28px 0;
-    }
-
-    /* ── SIGNATURE / FOOTER ── */
-    .signature {
-      background: #0d1b2a;
-      padding: 0;
-      position: relative;
-      overflow: hidden;
-    }
-    .sig-accent-bar {
-      height: 3px;
-      background: linear-gradient(90deg, #e63946 0%, #185FA5 60%, transparent 100%);
-    }
-    .sig-inner {
-      padding: 28px 36px 30px;
-      position: relative;
-      z-index: 2;
-    }
-    .sig-deco-circle {
-      position: absolute;
-      top: -80px; right: -80px;
-      width: 260px; height: 260px;
-      border-radius: 50%;
-      border: 55px solid rgba(24,95,165,0.08);
-      z-index: 1;
-    }
-    .sig-deco-circle2 {
-      position: absolute;
-      bottom: -40px; left: 30px;
-      width: 120px; height: 120px;
-      border-radius: 50%;
-      border: 25px solid rgba(230,57,70,0.06);
-      z-index: 1;
-    }
-    .sig-layout {
-      display: flex;
-      align-items: center;
-      gap: 0;
-    }
-    .sig-left {
-      flex: 1;
-      padding-right: 28px;
-      border-right: 1px solid rgba(255,255,255,0.12);
-    }
-    .sig-dept-label {
-      font-size: 10px;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-      color: #e63946;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      margin-bottom: 6px;
-    }
-    .sig-team-name {
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 800;
-      font-size: 20px;
-      color: #ffffff;
-      letter-spacing: -0.3px;
-      line-height: 1.1;
-      margin-bottom: 8px;
-    }
-    .sig-divider-line {
-      width: 36px;
-      height: 2px;
-      background: #e63946;
-      border-radius: 2px;
-      margin-bottom: 10px;
-    }
-    .sig-tagline-text {
-      font-size: 12px;
-      color: rgba(255,255,255,0.50);
-      font-family: 'Open Sans', sans-serif;
-      line-height: 1.5;
-    }
-    .sig-right {
-      padding-left: 28px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      min-width: 220px;
-    }
-    .sig-contact-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .sig-icon-wrap {
-      width: 36px; height: 36px;
-      border-radius: 9px;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      font-size: 16px;
-    }
-    .sig-icon-wrap.blue { background: rgba(24,95,165,0.30); border: 1px solid rgba(24,95,165,0.55); }
-    .sig-icon-wrap.green { background: rgba(37,211,102,0.18); border: 1px solid rgba(37,211,102,0.40); }
-    .sig-icon-wrap svg { display: block; }
-    .sig-contact-row .c-label {
-      font-size: 9.5px;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-      color: rgba(255,255,255,0.40);
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      display: block;
-      margin-bottom: 2px;
-    }
-    .sig-contact-row a {
-      font-size: 13px;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-      color: #ffffff;
-      text-decoration: none;
-      letter-spacing: 0.1px;
-    }
-    .sig-contact-row a:hover { color: #ff8f99; }
-
-    /* ── LEGAL ── */
-    .legal {
-      padding: 16px 36px;
-      background: #f8f9fb;
-      text-align: center;
-    }
-    .legal p {
-      font-size: 11px;
-      color: #aaa;
-      line-height: 1.6;
+    @media screen and (max-width: 600px) {
+      .wrapper { width: 100% !important; }
+      .responsive-td { display: block !important; width: 100% !important; padding: 0 !important; border: none !important; }
+      .logo { width: 240px !important; max-width: 92% !important; height: auto !important; }
     }
   </style>
 </head>
 <body>
-<div class="wrapper">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#f0f2f5">
+    <tr>
+      <td align="center" style="padding: 20px 0;">
+        <table border="0" cellpadding="0" cellspacing="0" width="600" class="wrapper" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="header-red-bar"></div>
-    <div class="header-accent-circle"></div>
-    <div class="header-accent-circle2"></div>
-    <div class="header-inner">
-      <div class="header-left">
-        <div class="header-tagline">
-          <span class="tag-bottom">Departamento de Cobranza</span>
-        </div>
-      </div>
-      <div class="header-brand">
-        <span class="r-red">R</span>APICREDIT
-        <span class="brand-sub">C.A. Venezuela</span>
-      </div>
-    </div>
-    <div class="header-divider"></div>
-  </div>
+          <tr>
+            <td bgcolor="#ffffff" align="center" style="padding: 35px 40px 30px 40px; border-bottom: 4px solid #2b4181;">
+              <a href="https://rapicreditca.com" target="_blank" style="text-decoration: none;">
+                <!-- {{LOGO_URL}} se reemplaza al enviar por la URL pública del logo (FRONTEND…/logos/rapicredit-public.png). -->
+                <img class="logo"
+                     src="{{LOGO_URL}}"
+                     alt="RapiCredit"
+                     width="320"
+                     style="display: block; width: 320px; max-width: 100%; height: auto; font-family: 'Montserrat', Arial, sans-serif; color: #2b4181; font-size: 24px; font-weight: bold;"
+                     border="0" />
+              </a>
+            </td>
+          </tr>
 
-  <!-- SUCCESS BANNER -->
-  <div class="success-banner">
-    <div class="check-icon">✔</div>
-    <p>Pago recibido exitosamente</p>
-  </div>
+          <tr>
+            <td bgcolor="#2b4181" style="padding: 14px 40px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td width="28" style="color: #ffffff; font-size: 16px; font-weight: bold;">&#10003;</td>
+                  <td style="font-family: 'Montserrat', Arial, sans-serif; font-weight: 700; font-size: 13px; color: #ffffff; text-transform: uppercase; letter-spacing: 1.5px;">
+                    Pago recibido exitosamente
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-  <!-- BODY -->
-  <div class="body">
-    <p class="greeting">Estimado cliente,</p>
-    <p>
-      Hemos recibido su pago con éxito. Adjunto a este correo encontrará su
-      <strong>Estado de Cuenta</strong> actualizado para su revisión.
-    </p>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 15px 0; font-family: 'Montserrat', sans-serif; font-size: 16px; font-weight: 600; color: #2b4181;">Estimado cliente,</p>
+              <p style="margin: 0 0 25px 0; font-size: 15px; line-height: 1.6; color: #444444;">
+                Confirmamos que su pago ha sido procesado. Adjunto encontrará su <strong>Estado de Cuenta</strong> detallado.
+              </p>
 
-    <div class="section-title">¿Qué debe revisar?</div>
-    <ul class="checklist">
-      <li>
-        <div class="icon">✅</div>
-        <div class="text">
-          <strong>Tabla de Pagos</strong>
-          <span>Allí podrá ver reflejados sus pagos más recientes.</span>
-        </div>
-      </li>
-      <li>
-        <div class="icon">✅</div>
-        <div class="text">
-          <strong>Sus Recibos</strong>
-          <span>Recuerde que cada pago realizado tiene su recibo correspondiente disponible para descarga.</span>
-        </div>
-      </li>
-    </ul>
+              <div style="border-bottom: 2px solid #f0f2f5; padding-bottom: 8px; margin-bottom: 20px; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700; color: #2b4181; text-transform: uppercase;">Resumen de revisión:</div>
 
-    <div class="section-title">¿Tiene alguna duda?</div>
-    <div class="cta-box">
-      <div class="wa-icon">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.121 1.532 5.852L.057 23.57a.75.75 0 0 0 .916.919l5.82-1.49A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.88 0-3.645-.5-5.17-1.373l-.37-.217-3.827.98.998-3.735-.24-.386A9.944 9.944 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
-        </svg>
-      </div>
-      <div class="cta-text">
-        <p>Si necesita ayuda o alguna aclaración, escríbanos a nuestro Call Center vía WhatsApp:</p>
-        <a href="https://wa.me/584244579934">+58 424-4579934</a>
-      </div>
-    </div>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td bgcolor="#f8f9fb" style="padding: 15px; border-left: 4px solid #ff6a28; border-radius: 0 8px 8px 0;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td width="30" valign="top" style="font-size: 18px;">✅</td>
+                        <td style="font-family: 'Open Sans', Arial, sans-serif; font-size: 13px; color: #666;">
+                          <strong style="color: #2b4181; font-family: 'Montserrat', sans-serif;">Movimientos</strong>
+                          Verifique la aplicación de su abono en la tabla de pagos.
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
 
-    <div class="divider"></div>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 30px;">
+                <tr>
+                  <td bgcolor="#f8f9fb" style="padding: 20px; border: 1px solid #e2e6ea; border-radius: 12px;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td width="45" align="center">
+                          <img src="https://cdn-icons-png.flaticon.com/512/733/733585.png" width="30" height="30" style="display:block;" alt="WhatsApp" />
+                        </td>
+                        <td style="padding-left: 15px; font-family: 'Open Sans', Arial, sans-serif; font-size: 13px; color: #555;">
+                          Atención inmediata vía WhatsApp:<br/>
+                          <a href="https://wa.me/584244579934" style="font-family: 'Montserrat', sans-serif; font-weight: 700; color: #ff6a28; text-decoration: none; font-size: 15px;">+58 424-4579934</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-    <p class="closing">
-      Atentamente,<br/><br/>
-    </p>
-  </div>
+          <tr>
+            <td bgcolor="#2b4181" style="padding: 35px 40px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td valign="top" class="responsive-td" style="border-right: 1px solid rgba(255,255,255,0.12); padding-right: 20px;">
+                    <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; color: #ff6a28; font-weight: 700; text-transform: uppercase;">Cobranzas</div>
+                    <div style="font-family: 'Montserrat', sans-serif; font-size: 18px; color: #ffffff; font-weight: 800; margin: 5px 0;">Equipo RapiCredit</div>
+                    <div style="font-size: 11px; color: rgba(255,255,255,0.6);">Soluciones financieras rápidas.</div>
+                  </td>
+                  <td valign="top" class="responsive-td" style="padding-left: 20px; padding-top: 15px;">
+                    <a href="mailto:cobranza@rapicreditca.com" style="color: #ffffff; text-decoration: none; font-size: 12px; font-family: 'Montserrat', sans-serif; font-weight: 700; display: block; margin-bottom: 8px;">✉ cobranza@rapicreditca.com</a>
+                    <a href="https://wa.me/584244579934" style="color: #ffffff; text-decoration: none; font-size: 12px; font-family: 'Montserrat', sans-serif; font-weight: 700; display: block;">✆ +58 424-4579934</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-  <!-- SIGNATURE -->
-  <div class="signature">
-    <div class="sig-accent-bar"></div>
-    <div class="sig-deco-circle"></div>
-    <div class="sig-deco-circle2"></div>
-    <div class="sig-inner">
-      <div class="sig-layout">
-        <div class="sig-left">
-          <div class="sig-dept-label">Departamento de Cobranza</div>
-          <div class="sig-team-name">Equipo RapiCredit</div>
-          <div class="sig-divider-line"></div>
-          <div class="sig-tagline-text">Estamos aquí para ayudarle.<br/>No dude en contactarnos.</div>
-        </div>
-        <div class="sig-right">
-          <div class="sig-contact-row">
-            <div class="sig-icon-wrap blue">✉️</div>
-            <div>
-              <span class="c-label">Email</span>
-              <a href="mailto:cobranza@rapicreditca.com">cobranza@rapicreditca.com</a>
-            </div>
-          </div>
-          <div class="sig-contact-row">
-            <div class="sig-icon-wrap green">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#25D366" xmlns="http://www.w3.org/2000/svg">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.121 1.532 5.852L.057 23.57a.75.75 0 0 0 .916.919l5.82-1.49A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.88 0-3.645-.5-5.17-1.373l-.37-.217-3.827.98.998-3.735-.24-.386A9.944 9.944 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
-              </svg>
-            </div>
-            <div>
-              <span class="c-label">WhatsApp</span>
-              <a href="https://wa.me/584244579934">+58 424-4579934</a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- LEGAL -->
-  <div class="legal">
-    <p>Este correo y sus adjuntos son confidenciales y están dirigidos exclusivamente al destinatario. Si recibió este mensaje por error, por favor notifíquenos y elimínelo de inmediato. © 2025 RapiCredit C.A. Todos los derechos reservados.</p>
-  </div>
-
-</div>
+          <tr>
+            <td bgcolor="#f8f9fb" style="padding: 20px 40px; text-align: center; font-size: 10px; color: #aaaaaa; font-family: Arial, sans-serif;">
+              © 2026 RapiCredit C.A. Rif: J-XXXXXXXXX. Todos los derechos reservados.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
