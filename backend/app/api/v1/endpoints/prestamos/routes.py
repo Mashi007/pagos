@@ -5969,6 +5969,7 @@ def get_estado_cuenta_prestamo_pdf(
     """Genera PDF de estado de cuenta para un prestamo especifico."""
 
     from app.services.documentos_cliente_centro import (
+        base_url_y_token_recibo_para_pdf_estado_cuenta,
         generar_pdf_estado_cuenta,
         obtener_datos_estado_cuenta_prestamo,
     )
@@ -6026,8 +6027,6 @@ def get_estado_cuenta_prestamo_pdf(
 
         from app.api.v1.endpoints.validadores import validate_cedula
 
-        from app.core.security import create_recibo_token
-
         cedula_lookup = ""
 
         if cedula_display:
@@ -6040,13 +6039,9 @@ def get_estado_cuenta_prestamo_pdf(
 
                 cedula_lookup = vf
 
-        recibo_token = (
-
-            create_recibo_token(cedula_lookup, expire_hours=2) if cedula_lookup else None
-
+        base_url, recibo_token = base_url_y_token_recibo_para_pdf_estado_cuenta(
+            cedula_lookup, request=request, token_expire_hours=2
         )
-
-        base_url = str(request.base_url).rstrip("/")
 
         pdf_bytes = generar_pdf_estado_cuenta(
 

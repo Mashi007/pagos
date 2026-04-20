@@ -73,7 +73,7 @@ from app.models.pago import Pago
 
 from app.api.v1.endpoints.validadores import validate_cedula
 
-from app.core.security import create_recibo_token, decode_token
+from app.core.security import decode_token
 
 from app.core.email import send_email
 
@@ -94,6 +94,7 @@ from app.services.cobros.recibo_pdf import _formato_decimal_ve, _formato_monto_v
 from app.services.cobros.pago_reportado_documento import texto_numero_documento_recibo_desde_pago_cartera
 from app.services.cobros.recibo_pago_cartera_pdf import generar_recibo_pago_cartera_pdf
 from app.services.documentos_cliente_centro import (
+    base_url_y_token_recibo_para_pdf_estado_cuenta,
     generar_pdf_estado_cuenta,
     obtener_datos_estado_cuenta_cliente,
 )
@@ -1162,9 +1163,9 @@ def verificar_codigo_estado_cuenta(
 
         recibos = []
 
-        recibo_token = create_recibo_token(cedula_lookup, expire_hours=2)
-
-        base_url = str(request.base_url).rstrip("/")
+        base_url, recibo_token = base_url_y_token_recibo_para_pdf_estado_cuenta(
+            cedula_lookup, request=request, token_expire_hours=2
+        )
 
         pdf_bytes = generar_pdf_estado_cuenta(
 
@@ -1397,9 +1398,9 @@ def solicitar_estado_cuenta(
 
     recibos = []
 
-    base_url = str(request.base_url).rstrip("/")
-
-    recibo_token = create_recibo_token(cedula_lookup, expire_hours=2)
+    base_url, recibo_token = base_url_y_token_recibo_para_pdf_estado_cuenta(
+        cedula_lookup, request=request, token_expire_hours=2
+    )
 
     pdf_bytes = generar_pdf_estado_cuenta(
 

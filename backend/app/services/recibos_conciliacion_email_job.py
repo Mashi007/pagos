@@ -16,8 +16,9 @@ salvo reenvío admin con ``permite_envio_real_fecha_no_hoy``.
 Idempotencia en BD: columna ``slot`` fija ``RECIBOS_VENTANA_SLOT`` (histórico puede tener valores antiguos).
 
 PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``),
-con ``recibo_token`` y ``base_url`` desde ``BACKEND_PUBLIC_URL`` para que la columna «Recibo» tenga enlaces
-como en la descarga tras OTP (si la variable no está definida, el PDF va sin esos enlaces).
+con ``base_url`` y ``recibo_token`` resueltos por ``base_url_y_token_recibo_para_pdf_estado_cuenta`` (sin
+``Request``: URL pública vía ``get_effective_api_public_base_url()``). Si no hay base resolvible, el PDF va
+sin enlaces «Ver recibo».
 """
 from __future__ import annotations
 
@@ -40,6 +41,7 @@ from app.models.envio_notificacion import EnvioNotificacion
 from app.models.recibos_email_envio import RecibosEmailEnvio
 from app.services.cuota_estado import TZ_NEGOCIO, hoy_negocio
 from app.services.documentos_cliente_centro import (
+    base_url_y_token_recibo_para_pdf_estado_cuenta,
     generar_pdf_estado_cuenta,
     obtener_datos_estado_cuenta_cliente,
     obtener_recibos_cliente_estado_cuenta,
@@ -52,14 +54,15 @@ logger = logging.getLogger(__name__)
 # Valor fijo en recibos_email_envio.slot (misma ventana 24h hasta 15:00; antes existían manana/tarde/noche).
 RECIBOS_VENTANA_SLOT = "hasta_15_24h"
 
-# PDF adjunto: enlaces «Ver recibo» (GET …/estado-cuenta/public/recibo-pago) requieren URL absoluta + JWT,
-# igual que en verificar-código del portal. Sin BACKEND_PUBLIC_URL los enlaces no pueden armarse (Render: definir .env).
+# PDF adjunto: enlaces «Ver recibo» (GET …/estado-cuenta/public/recibo-pago) requieren URL absoluta + JWT.
+# La base pública se resuelve con ``get_effective_api_public_base_url()`` (BACKEND_PUBLIC_URL u orígenes de
+# FRONTEND_PUBLIC_URL / GOOGLE_REDIRECT_URI en el mismo host).
 
 
 def _base_url_publico_recibos_pdf() -> str:
-    from app.core.config import settings
+    from app.core.config import get_effective_api_public_base_url
 
-    return (getattr(settings, "BACKEND_PUBLIC_URL", None) or "").strip().rstrip("/")
+    return get_effective_api_public_base_url()
 
 
 def _recibo_token_para_pdf_recibos(cedula_lookup_norm: str) -> Optional[str]:
@@ -346,12 +349,11 @@ def ejecutar_recibos_envio_slot(
             f"Cédula: {cedula_pdf}. Fecha de corte: {fecha_corte_d.isoformat()}."
         )
 
-        base_pdf = _base_url_publico_recibos_pdf()
-        tok_pdf = _recibo_token_para_pdf_recibos(cedula_norm) if base_pdf else None
+        base_pdf, tok_pdf = base_url_y_token_recibo_para_pdf_estado_cuenta(cedula_norm)
         if not base_pdf and not recibos_pdf_sin_base_url_logged:
             logger.info(
-                "recibos: BACKEND_PUBLIC_URL no definido: el PDF adjunto no incluirá enlaces «Ver recibo» "
-                "(defina la URL pública del backend en el entorno, p. ej. https://su-servicio.onrender.com)."
+                "recibos: sin URL pública de API resolvible (BACKEND_PUBLIC_URL, o mismo host desde "
+                "FRONTEND_PUBLIC_URL / GOOGLE_REDIRECT_URI): el PDF adjunto no incluirá enlaces «Ver recibo»."
             )
             recibos_pdf_sin_base_url_logged = True
 
@@ -597,11 +599,10 @@ def enviar_correo_prueba_recibos_datos_reales(
             f"Cédula: {cedula_pdf}. Fecha de corte: {fecha_corte_d.isoformat()}."
         )
 
-        base_pdf = _base_url_publico_recibos_pdf()
-        tok_pdf = _recibo_token_para_pdf_recibos(cedula_norm) if base_pdf else None
+        base_pdf, tok_pdf = base_url_y_token_recibo_para_pdf_estado_cuenta(cedula_norm)
         if not base_pdf and not prueba_pdf_sin_base_logged:
             logger.info(
-                "recibos (prueba PDF): BACKEND_PUBLIC_URL no definido: sin enlaces «Ver recibo» en el adjunto."
+                "recibos (prueba PDF): sin URL pública de API resolvible; sin enlaces «Ver recibo» en el adjunto."
             )
             prueba_pdf_sin_base_logged = True
 

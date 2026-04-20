@@ -446,3 +446,38 @@ class Settings(BaseSettings):
 
 # Instancia global de settings
 settings = Settings()
+
+
+def get_effective_api_public_base_url() -> str:
+    """
+    URL pública del API sin barra final (p. ej. https://servicio.onrender.com), para enlaces en PDF
+    y columnas Excel cuando no hay objeto Request.
+
+    Orden: ``BACKEND_PUBLIC_URL``; si falta, el origen (scheme + host) de ``FRONTEND_PUBLIC_URL``;
+    si falta, el de ``GOOGLE_REDIRECT_URI`` (suele apuntar al mismo host en Render).
+
+    Si el front y el back viven en hosts distintos, defina siempre ``BACKEND_PUBLIC_URL``.
+    """
+    from urllib.parse import urlparse
+
+    bu = (getattr(settings, "BACKEND_PUBLIC_URL", None) or "").strip().rstrip("/")
+    if bu:
+        return bu
+
+    for raw in (
+        getattr(settings, "FRONTEND_PUBLIC_URL", None) or "",
+        getattr(settings, "GOOGLE_REDIRECT_URI", None) or "",
+    ):
+        s = raw.strip()
+        if not s:
+            continue
+        if "://" not in s:
+            s = "https://" + s.lstrip("/")
+        try:
+            p = urlparse(s)
+            if p.scheme and p.netloc:
+                return f"{p.scheme}://{p.netloc}".rstrip("/")
+        except Exception:
+            continue
+
+    return ""

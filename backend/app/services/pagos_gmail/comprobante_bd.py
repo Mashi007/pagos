@@ -46,8 +46,10 @@ def _normalizar_mime(mime: Optional[str]) -> str:
 
 
 def url_comprobante_imagen_absoluta(imagen_id: str) -> str:
-    """Ruta API lista para guardar en drive_link (absoluta si hay BACKEND_PUBLIC_URL)."""
-    base = (getattr(settings, "BACKEND_PUBLIC_URL", None) or "").strip().rstrip("/")
+    """Ruta API lista para guardar en drive_link (absoluta si hay URL pública resolvible)."""
+    from app.core.config import get_effective_api_public_base_url
+
+    base = get_effective_api_public_base_url()
     path = f"{settings.API_V1_STR}/pagos/comprobante-imagen/{imagen_id}"
     return f"{base}{path}" if base else path
 
@@ -95,10 +97,10 @@ def persistir_comprobante_gmail_en_bd(
     row = PagoComprobanteImagen(id=uid, content_type=ct, imagen_data=body)
     db.add(row)
     url = url_comprobante_imagen_absoluta(uid)
-    if not (getattr(settings, "BACKEND_PUBLIC_URL", None) or "").strip():
+    if not url.lower().startswith("http"):
         logger.info(
-            "[PAGOS_GMAIL] BACKEND_PUBLIC_URL no definido: link de comprobante sera relativo (%s…); "
-            "defina BACKEND_PUBLIC_URL en .env para hipervinculos absolutos en Excel.",
+            "[PAGOS_GMAIL] Sin URL pública de API (BACKEND_PUBLIC_URL / FRONTEND_PUBLIC_URL / "
+            "origen de GOOGLE_REDIRECT_URI): link de comprobante sera relativo (%s…).",
             url[:48],
         )
     return (uid, url)

@@ -435,7 +435,12 @@ def _pago_reportado_list_items_from_rows(
 
     items: List[PagoReportadoListItem] = []
     for i, r in enumerate(rows):
-        obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
+        # Si Gemini ya dijo coincidencia exacta, no mezclar el comentario de Gemini en la observación:
+        # evita que texto informativo dispare "falla validadores" y bloquee auto-import / cola.
+        if _gemini_coincide_exacto_ok(getattr(r, "gemini_coincide_exacto", None)):
+            obs_gemini = None
+        else:
+            obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
         partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
         partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
         observacion = " / ".join(partes_final) if partes_final else None
@@ -498,6 +503,70 @@ def _query_reportados_falla_validadores_pendientes_exportar(
     return list(db.execute(q).scalars().all())
 
 
+def _gemini_coincide_exacto_ok(val: Optional[str]) -> bool:
+    """True si Gemini indicó coincidencia exacta (valores habituales en BD: true, 1)."""
+    g = (val or "").strip().lower()
+    return g in ("true", "1")
+
+
+def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int = 24) -> None:
+    """
+    Al listar Cobros: si un reporte ya cumple validadores (misma regla que la cola), pasa a aprobado
+    e intenta importar a `pagos` + cuotas como en el flujo público.
+
+    Candidatos: Gemini OK (`true`/`1`) o Gemini `false` sin comentario (falso negativo frecuente);
+    en ambos casos `reportado_falla_validadores_cobros` debe ser False (p. ej. sin DUPLICADO).
+    Errores de API (`error`) no se regularizan aquí.
+    """
+    from app.services.cobros import cobros_publico_reporte_service as cpr
+
+    gem_col = func.lower(func.trim(func.coalesce(PagoReportado.gemini_coincide_exacto, "")))
+    com_trim = func.trim(func.coalesce(PagoReportado.gemini_comentario, ""))
+    candidatos_regularizar = or_(
+        gem_col.in_(("true", "1")),
+        and_(gem_col == "false", com_trim == ""),
+    )
+    try:
+        ids = list(
+            db.execute(
+                select(PagoReportado.id)
+                .where(
+                    PagoReportado.estado.in_(("en_revision", "aprobado")),
+                    candidatos_regularizar,
+                )
+                .order_by(PagoReportado.id.desc())
+                .limit(max_ids)
+            ).scalars().all()
+        )
+    except Exception:
+        return
+    touched = False
+    for pid in ids:
+        try:
+            pr = db.get(PagoReportado, pid)
+            if pr is None:
+                continue
+            if reportado_falla_validadores_cobros(db, pr):
+                continue
+            ref = (pr.referencia_interna or "").strip() or str(pr.id)
+            if getattr(pr, "estado", None) == "en_revision":
+                pr.estado = "aprobado"
+                db.add(pr)
+                db.commit()
+                db.refresh(pr)
+                touched = True
+            if getattr(pr, "estado", None) == "aprobado":
+                cpr.intentar_importar_reportado_automatico(db, pr, ref, "COBROS_COLA_REGULARIZA")
+                touched = True
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if touched:
+        _invalidate_pagos_documentos_canonicos_cache()
+
+
 def _estado_label_excel(estado: str) -> str:
     m = {
         "pendiente": "Pendiente",
@@ -513,16 +582,24 @@ def _item_falla_validadores_cobros_excel(it: PagoReportadoListItem) -> bool:
     """
     True = requiere análisis manual (cola en pantalla / Excel "no validan").
 
-    Falla si: Gemini NO o error, **o** hay observación de reglas (DUPLICADO, NO CLIENTES, etc.).
-    Si Gemini es explícitamente true y no hay observación, **cumple** y no debe listarse en cola
-    (sigue el flujo automático fuera de esta pantalla).
+    Si Gemini marcó coincidencia exacta (`true`/`1`), solo falla si queda observación de **reglas**
+    (DUPLICADO, NO CLIENTES, etc.); el texto residual de Gemini no cuenta en ese caso (se omite al armar la observación).
+
+    Si Gemini respondió `false` pero la observación armada está vacía (sin reglas ni columnas
+    deducidas del comentario), no se exige paso manual: suele ser falso negativo con comentario vacío
+    cuando los validadores determinísticos ya cuadran.
+
+    `error` (fallo de API / sin clave) sigue exigiendo revisión manual.
     """
+    obs = (it.observacion or "").strip()
+    if _gemini_coincide_exacto_ok(it.gemini_coincide_exacto):
+        return bool(obs)
     gem = (it.gemini_coincide_exacto or "").strip().lower()
-    if gem in ("false", "error"):
+    if gem == "error":
         return True
-    if gem == "true" and not (it.observacion or "").strip():
-        return False
-    return bool((it.observacion or "").strip())
+    if gem == "false":
+        return bool(obs)
+    return bool(obs)
 
 
 def reportado_falla_validadores_cobros(db: Session, pr: PagoReportado) -> bool:
@@ -628,6 +705,7 @@ def _list_pagos_reportados_payload(
     incluir_exportados: bool = False,
 ) -> dict:
     """Misma lógica que GET /pagos-reportados (reutilizada por listado-y-kpis)."""
+    _regularizar_reportados_gemini_ok_sin_falla_manual(db, max_ids=24)
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
     filtros = _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,
@@ -653,7 +731,7 @@ def _list_pagos_reportados_payload(
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 
     # Cola manual: pendiente / en_revision / aprobado que NO cumplen validadores (misma regla que Excel Cobros).
-    # Cumplen 100% (Gemini true sin observación) → no entran aquí; siguen el flujo automático fuera de la cola.
+    # Cumplen 100% (reglas OK; Gemini true o false sin observación) → no entran aquí; flujo automático fuera de la cola.
     q = select(PagoReportado)
     if estado == "aprobado":
         q = q.where(PagoReportado.estado == "aprobado")

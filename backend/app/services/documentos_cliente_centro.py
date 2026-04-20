@@ -16,9 +16,13 @@ from app.services.estado_cuenta_datos import (
     obtener_recibos_cliente_estado_cuenta,
     serializar_estado_cuenta_payload_json,
 )
-from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
+from app.services.estado_cuenta_pdf import (
+    base_url_y_token_recibo_para_pdf_estado_cuenta,
+    generar_pdf_estado_cuenta,
+)
 
 __all__ = [
+    "base_url_y_token_recibo_para_pdf_estado_cuenta",
     "generar_pdf_estado_cuenta",
     "generar_recibo_pdf_desde_pago_reportado",
     "kwargs_recibo_pago_reportado",

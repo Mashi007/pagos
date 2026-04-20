@@ -12,7 +12,7 @@ from datetime import date
 
 from pathlib import Path
 
-from typing import List, Optional
+from typing import Any, List, Optional, Tuple
 
 from app.services.cuota_estado import etiqueta_estado_cuota
 
@@ -40,6 +40,39 @@ COLOR_BORDER = "#cbd5e1"
 COLOR_TEXT_MUTED = "#64748b"
 
 COLOR_SURFACE = "#f8fafc"
+
+
+def base_url_y_token_recibo_para_pdf_estado_cuenta(
+    cedula_para_sub_jwt: str,
+    *,
+    request: Optional[Any] = None,
+    token_expire_hours: int = 168,
+) -> Tuple[str, Optional[str]]:
+    """
+    ``base_url`` + JWT ``type=recibo`` para enlaces «Ver recibo» en el PDF.
+
+    - **Con ``request``** (descarga desde el sistema / portal): se usa ``request.base_url``; por eso
+      esos PDF suelen llevar la columna Recibo bien aunque no exista ``BACKEND_PUBLIC_URL``.
+    - **Sin ``request``** (adjunto enviado por notificación Recibos u otros jobs): no hay URL del
+      navegador; se usa ``get_effective_api_public_base_url()`` (``BACKEND_PUBLIC_URL`` u origen de
+      ``FRONTEND_PUBLIC_URL`` / ``GOOGLE_REDIRECT_URI``).
+    """
+    from app.core.config import get_effective_api_public_base_url
+    from app.core.security import create_recibo_token
+
+    if request is not None:
+        try:
+            base = str(request.base_url).rstrip("/")
+        except Exception:
+            base = get_effective_api_public_base_url()
+    else:
+        base = get_effective_api_public_base_url()
+
+    ced = (cedula_para_sub_jwt or "").strip()
+    if not base or not ced:
+        return base or "", None
+    return base, create_recibo_token(ced, expire_hours=token_expire_hours)
+
 
 def generar_pdf_estado_cuenta(
     cedula: str,
@@ -831,6 +864,7 @@ __all__ = [
     "COLOR_SURFACE",
     "COLOR_TEXT_MUTED",
     "ESTADOS_PRESTAMO_TABLA_AMORTIZACION",
+    "base_url_y_token_recibo_para_pdf_estado_cuenta",
     "generar_pdf_estado_cuenta",
     "obtener_datos_estado_cuenta_cliente",
     "obtener_datos_estado_cuenta_prestamo",
