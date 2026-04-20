@@ -267,6 +267,11 @@ _CEDULAS_CLIENTES_CACHE_TTL_SEC = 120.0
 _cedulas_clientes_cache: Optional[Tuple[float, frozenset]] = None
 _autorizados_bs_cache: Optional[Tuple[float, frozenset]] = None
 _cobros_list_aux_lock = threading.Lock()
+_REGULARIZA_MIN_INTERVAL_SEC = 90.0
+_REGULARIZA_TIME_BUDGET_MS = 350.0
+_REGULARIZA_MAX_IDS_PER_RUN = 8
+_regulariza_last_run_monotonic = 0.0
+_regulariza_lock = threading.Lock()
 
 
 def _cedulas_en_clientes_set_cached(db: Session) -> frozenset:
@@ -545,7 +550,9 @@ def _gemini_coincide_exacto_ok(val: Optional[str]) -> bool:
     return g in ("true", "1")
 
 
-def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int = 24) -> None:
+def _regularizar_reportados_gemini_ok_sin_falla_manual(
+    db: Session, max_ids: int = 24, deadline_monotonic: Optional[float] = None
+) -> None:
     """
     Al listar Cobros: si un reporte ya cumple validadores (misma regla que la cola), pasa a aprobado
     e intenta importar a `pagos` + cuotas como en el flujo público.
@@ -578,6 +585,8 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int
         return
     ids_colision_importado: List[int] = []
     for pid in ids:
+        if deadline_monotonic is not None and time.monotonic() > deadline_monotonic:
+            break
         try:
             pr = db.get(PagoReportado, pid)
             if pr is None:
@@ -598,6 +607,8 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int
                 db.commit()
                 db.refresh(pr)
             if getattr(pr, "estado", None) == "aprobado":
+                if deadline_monotonic is not None and time.monotonic() > deadline_monotonic:
+                    break
                 cpr.intentar_importar_reportado_automatico(db, pr, ref, "COBROS_COLA_REGULARIZA")
         except Exception:
             try:
@@ -621,6 +632,34 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int
                 db.rollback()
             except Exception:
                 pass
+
+
+def _regularizar_reportados_guarded(db: Session) -> None:
+    """
+    Ejecuta regularización con control de impacto en requests de lectura:
+    - un solo runner por proceso (lock no bloqueante),
+    - cooldown entre ejecuciones,
+    - presupuesto de tiempo por request.
+    """
+    global _regulariza_last_run_monotonic
+    now = time.monotonic()
+    if now - _regulariza_last_run_monotonic < _REGULARIZA_MIN_INTERVAL_SEC:
+        return
+    if not _regulariza_lock.acquire(blocking=False):
+        return
+    try:
+        now_inside = time.monotonic()
+        if now_inside - _regulariza_last_run_monotonic < _REGULARIZA_MIN_INTERVAL_SEC:
+            return
+        _regulariza_last_run_monotonic = now_inside
+        deadline = now_inside + (_REGULARIZA_TIME_BUDGET_MS / 1000.0)
+        _regularizar_reportados_gemini_ok_sin_falla_manual(
+            db,
+            max_ids=_REGULARIZA_MAX_IDS_PER_RUN,
+            deadline_monotonic=deadline,
+        )
+    finally:
+        _regulariza_lock.release()
 
 
 def _estado_label_excel(estado: str) -> str:
@@ -821,7 +860,7 @@ def _list_pagos_reportados_payload(
     pendiente+en_revision+aprobado), se añade `_manual_kpi_counts` al dict de retorno
     para evitar un segundo barrido completo en listado-y-kpis (solo uso interno).
     """
-    _regularizar_reportados_gemini_ok_sin_falla_manual(db, max_ids=24)
+    _regularizar_reportados_guarded(db)
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
     filtros = _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,
