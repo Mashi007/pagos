@@ -996,6 +996,16 @@ class PagoService {
     return res
   }
 
+  /** Gmail: mueve pendientes no autoconciliados a `pagos_con_errores` (A/B sin limbo). */
+  async migrarPendientesGmailAConErrores(): Promise<{
+    migrados: number
+    omitidos: number
+    eliminados_temporal: number
+    mensaje: string
+  }> {
+    return await apiClient.post(`${this.baseUrl}/gmail/migrar-pendientes-a-con-errores`)
+  }
+
   /** Pagos Gmail: descargar Excel (solo lectura en servidor). No borra datos; las filas se siguen acumulando. */
 
   async downloadGmailExcel(fecha?: string): Promise<void> {

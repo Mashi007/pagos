@@ -29,9 +29,12 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user
+from app.core.documento import compose_numero_documento_almacenado, normalize_documento
+from app.models.pago_con_error import PagoConError
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
 from app.models.pagos_gmail_pipeline_evento import PagosGmailPipelineEvento
+from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
 from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_ERROR_EMAIL
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
@@ -358,6 +361,19 @@ class ConfirmarDiaBody(BaseModel):
     fecha: Optional[str] = None  # YYYY-MM-DD; si no se envía, se usa el día actual (misma lógica que download)
 
 
+def _parse_fecha_pago_gmail_temporal(raw_fecha: Optional[str], fallback_dt: datetime) -> datetime:
+    """Convierte fecha textual de gmail_temporal a datetime (00:00:00)."""
+    txt = (raw_fecha or "").strip()
+    if txt:
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"):
+            try:
+                d = datetime.strptime(txt, fmt)
+                return d.replace(hour=0, minute=0, second=0, microsecond=0)
+            except ValueError:
+                continue
+    return fallback_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 @router.post("/confirmar-dia", response_model=dict)
 def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_db)):
     """
@@ -413,6 +429,103 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
             "pipeline_running": run is not None,
             "blocking_sync_id": run.id if run is not None else None,
         }
+
+
+@router.post("/migrar-pendientes-a-con-errores", response_model=dict)
+def migrar_pendientes_a_con_errores(db: Session = Depends(get_db)):
+    """
+    Mueve pendientes no autoconciliados de `gmail_temporal` a `pagos_con_errores`.
+    Garantiza que, tras "Procesar manualmente", todo quede en A (pagos) o B (pendientes de revisión).
+    """
+    try:
+        filas = db.execute(
+            select(GmailTemporal).order_by(GmailTemporal.id.asc())
+        ).scalars().all()
+        if not filas:
+            return {
+                "migrados": 0,
+                "omitidos": 0,
+                "eliminados_temporal": 0,
+                "mensaje": "Sin pendientes en gmail_temporal.",
+            }
+
+        migrados = 0
+        omitidos = 0
+        eliminados_temporal = 0
+
+        for row in filas:
+            try:
+                with db.begin_nested():
+                    fallback_created = row.created_at or datetime.utcnow()
+                    fecha_pago = _parse_fecha_pago_gmail_temporal(
+                        row.fecha_pago, fallback_created
+                    )
+                    cedula = formatear_cedula(row.cedula or "")
+                    monto_txt = format_monto_excel_pagos_gmail(row.monto or "")
+                    try:
+                        monto_num = float(monto_txt) if monto_txt else 0.0
+                    except ValueError:
+                        monto_num = 0.0
+
+                    numero_base = normalize_documento(row.numero_referencia)
+                    numero_doc = compose_numero_documento_almacenado(
+                        numero_base or f"GMAILTMP-{row.id}", None
+                    )
+
+                    if numero_doc and numero_documento_ya_registrado(db, numero_doc):
+                        db.execute(
+                            delete(GmailTemporal).where(GmailTemporal.id == row.id)
+                        )
+                        eliminados_temporal += 1
+                        omitidos += 1
+                        continue
+
+                    observaciones = "Pendiente desde Gmail (no autoconciliado)"
+                    if monto_num <= 0:
+                        observaciones = (
+                            f"{observaciones}; monto no interpretable: {(row.monto or '').strip() or 'vacío'}"
+                        )[:255]
+
+                    nuevo = PagoConError(
+                        prestamo_id=None,
+                        cedula_cliente=cedula or None,
+                        fecha_pago=fecha_pago,
+                        monto_pagado=monto_num,
+                        numero_documento=numero_doc,
+                        institucion_bancaria=(row.banco or None),
+                        estado="PENDIENTE",
+                        conciliado=False,
+                        usuario_registro="GMAIL_PIPELINE",
+                        notas=(
+                            f"Asunto: {(row.asunto or '').strip()} | "
+                            f"Correo: {(row.correo_origen or '').strip()}"
+                        )[:1000],
+                        referencia_pago=(numero_base or f"GMAILTMP-{row.id}")[:100],
+                        observaciones=observaciones,
+                    )
+                    db.add(nuevo)
+                    db.flush()
+                    db.execute(delete(GmailTemporal).where(GmailTemporal.id == row.id))
+                    eliminados_temporal += 1
+                    migrados += 1
+            except Exception:
+                omitidos += 1
+                continue
+
+        db.commit()
+        return {
+            "migrados": migrados,
+            "omitidos": omitidos,
+            "eliminados_temporal": eliminados_temporal,
+            "mensaje": (
+                f"Migración completada: {migrados} a pagos_con_errores, "
+                f"{omitidos} omitidos, {eliminados_temporal} removidos de gmail_temporal."
+            ),
+        }
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error migrando gmail_temporal -> pagos_con_errores: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _find_most_recent_data(db: Session) -> tuple[Optional[str], Optional[datetime], list]:

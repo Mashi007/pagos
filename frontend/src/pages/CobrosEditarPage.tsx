@@ -18,7 +18,7 @@
 
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 import { useParams, useNavigate } from 'react-router-dom'
 
@@ -36,7 +36,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import toast from 'react-hot-toast'
 
-import { Loader2 } from 'lucide-react'
+import { Loader2, Eye } from 'lucide-react'
+import {
+  aplicarSufijoVistoADocumento,
+  collectTokensSufijoVistoArchivoDesdeFilas,
+  SUFIJO_VISTO_ARCHIVO_RE,
+} from '../utils/documentoSufijoVisto'
 
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
@@ -64,6 +69,7 @@ export default function CobrosEditarPage() {
   const [saving, setSaving] = useState(false)
 
   const [otroInstitucion, setOtroInstitucion] = useState('')
+  const tokensSufijoUsadosRef = useRef<Set<string>>(new Set())
 
   const [form, setForm] = useState({
     nombres: '',
@@ -131,6 +137,9 @@ export default function CobrosEditarPage() {
 
         observacion: res.observacion || res.gemini_comentario || '',
       })
+      tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas(
+        [{ numero_documento: res.numero_operacion || '' }]
+      )
 
       const inst = res.institucion_financiera || ''
 
@@ -142,6 +151,29 @@ export default function CobrosEditarPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleAplicarSufijoOperacion = (letter: 'A' | 'P') => {
+    const actual = form.numero_operacion.trim()
+    if (!actual) {
+      toast.error('Primero escriba un número de operación.')
+      return
+    }
+    if (SUFIJO_VISTO_ARCHIVO_RE.test(actual)) {
+      toast.error('Este número de operación ya tiene sufijo admin.')
+      return
+    }
+    const nuevo = aplicarSufijoVistoADocumento(
+      actual,
+      letter,
+      tokensSufijoUsadosRef.current
+    )
+    if (!nuevo || nuevo === actual) {
+      toast.error('No se pudo asignar sufijo.')
+      return
+    }
+    setForm(f => ({ ...f, numero_operacion: nuevo }))
+    toast.success(`Sufijo _${letter}#### aplicado al número de operación.`)
   }
 
   useEffect(() => {
@@ -433,13 +465,35 @@ export default function CobrosEditarPage() {
                 Número de operación
               </label>
 
-              <Input
-                value={form.numero_operacion}
-                onChange={e =>
-                  setForm(f => ({ ...f, numero_operacion: e.target.value }))
-                }
-                placeholder="Referencia / serial"
-              />
+              <div className="space-y-2">
+                <Input
+                  value={form.numero_operacion}
+                  onChange={e =>
+                    setForm(f => ({ ...f, numero_operacion: e.target.value }))
+                  }
+                  placeholder="Referencia / serial"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleAplicarSufijoOperacion('A')}
+                    title="Asignar sufijo único _A#### (mismo crédito/carga)"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Agregar sufijo A
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleAplicarSufijoOperacion('P')}
+                    title="Asignar sufijo único _P#### (otro préstamo)"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Agregar sufijo P
+                  </Button>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

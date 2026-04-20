@@ -159,6 +159,8 @@ export function PagosList() {
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
   const [revisionPage, setRevisionPage] = useState(1)
+  const [revisionCedulaInput, setRevisionCedulaInput] = useState('')
+  const [revisionCedulaFiltro, setRevisionCedulaFiltro] = useState('')
   const [editingRevisionId, setEditingRevisionId] = useState<number | null>(null)
   const [revisionObservacionDraft, setRevisionObservacionDraft] = useState('')
   const [savingRevisionId, setSavingRevisionId] = useState<number | null>(null)
@@ -175,8 +177,28 @@ export function PagosList() {
     stopPolling: stopGmailPolling,
   } = useGmailPipeline({
     onStatusUpdate: s => setGmailStatus(s),
-    onDone: () => {
-      void invalidatePagosPrestamosRevisionYCuotas(queryClient)
+    onDone: async s => {
+      try {
+        const invalidos =
+          typeof s?.last_run_summary?.pagos_invalidos_pendientes_revision ===
+          'number'
+            ? s.last_run_summary.pagos_invalidos_pendientes_revision
+            : 0
+        if (invalidos > 0) {
+          const mig = await pagoService.migrarPendientesGmailAConErrores()
+          if (mig.migrados > 0) {
+            toast.success(
+              `${mig.migrados} pago(s) no válido(s) enviados a Pendientes de revisión`
+            )
+          }
+        }
+      } catch (e) {
+        toast.error(
+          'La corrida Gmail terminó, pero falló el envío de pendientes a revisión.'
+        )
+      } finally {
+        void invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      }
     },
   })
 
@@ -474,8 +496,11 @@ export function PagosList() {
     isLoading: isLoadingRevision,
     isError: isRevisionError,
   } = useQuery({
-    queryKey: ['pagos-con-errores-tab', revisionPage, perPage],
-    queryFn: () => pagoConErrorService.getAll(revisionPage, perPage),
+    queryKey: ['pagos-con-errores-tab', revisionPage, perPage, revisionCedulaFiltro],
+    queryFn: () =>
+      pagoConErrorService.getAll(revisionPage, perPage, {
+        cedula: revisionCedulaFiltro || undefined,
+      }),
     staleTime: 15_000,
     refetchOnWindowFocus: false,
   })
@@ -526,6 +551,19 @@ export function PagosList() {
   const handleEditarRevision = (pago: PagoConError) => {
     setEditingRevisionId(pago.id)
     setRevisionObservacionDraft((pago.observaciones ?? '').trim())
+  }
+  const handleAbrirEditorPagoRevision = (pago: PagoConError) => {
+    setPagoEditando(pago)
+    setShowRegistrarPago(true)
+  }
+  const handleBuscarRevisionPorCedula = () => {
+    setRevisionCedulaFiltro(revisionCedulaInput.trim())
+    setRevisionPage(1)
+  }
+  const handleLimpiarRevisionCedula = () => {
+    setRevisionCedulaInput('')
+    setRevisionCedulaFiltro('')
+    setRevisionPage(1)
   }
   const handleGuardarRevision = async (id: number) => {
     if (editingRevisionId !== id) return
@@ -1233,6 +1271,44 @@ export function PagosList() {
               </p>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Filtrar por cédula
+                  </label>
+                  <Input
+                    placeholder="Ej: V12345678"
+                    value={revisionCedulaInput}
+                    onChange={e => setRevisionCedulaInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleBuscarRevisionPorCedula()
+                      }
+                    }}
+                    className="max-w-md"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleBuscarRevisionPorCedula}
+                  >
+                    Buscar
+                  </Button>
+                  {revisionCedulaFiltro && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={handleLimpiarRevisionCedula}
+                    >
+                      <X className="mr-1 h-4 w-4" />
+                      Limpiar
+                    </Button>
+                  )}
+                </div>
+              </div>
               {isLoadingRevision ? (
                 <div className="py-8 text-center text-sm text-gray-500">
                   Cargando pendientes de revisión...
@@ -1298,10 +1374,18 @@ export function PagosList() {
                                 <Button
                                   size="icon"
                                   variant="outline"
-                                  title="Editar fila"
-                                  onClick={() => handleEditarRevision(pago)}
+                                  title="Editar pago"
+                                  onClick={() => handleAbrirEditorPagoRevision(pago)}
                                 >
                                   <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  title="Editar observación"
+                                  onClick={() => handleEditarRevision(pago)}
+                                >
+                                  <FileText className="h-4 w-4" />
                                 </Button>
                                 <Button
                                   size="icon"
@@ -2033,8 +2117,10 @@ export function PagosList() {
       {showRegistrarPago && (
         <RegistrarPagoForm
           pagoId={pagoEditando?.id}
-          modoGuardarYProcesar={filters.sin_prestamo === 'si'}
-          esPagoConError={esRevisarPagos}
+          modoGuardarYProcesar={
+            filters.sin_prestamo === 'si' || activeTab === 'revision'
+          }
+          esPagoConError={esRevisarPagos || activeTab === 'revision'}
           pagoInicial={
             pagoEditando
               ? {
