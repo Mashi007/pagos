@@ -984,6 +984,15 @@ class ApiClient {
     config?: AxiosRequestConfig
   ): Promise<T> {
     try {
+      // Cobros: aprobar/rechazar/enviar recibo/re-analizar generan PDF, SMTP, import a pagos — en Render suele >30s.
+      const isCobrosPagosReportadosHeavyPost =
+        (url.includes('/cobros/pagos-reportados/') &&
+          (url.includes('/aprobar') ||
+            url.includes('/rechazar') ||
+            url.includes('/enviar-recibo') ||
+            url.includes('/re-analizar-gemini'))) ||
+        url.includes('/cobros/pagos-reportados/marcar-exportados')
+
       // Detectar endpoints lentos (entrenamiento ML, etc.) y usar timeout extendido
 
       const isSlowEndpoint =
@@ -1018,7 +1027,9 @@ class ApiClient {
       )
 
       let defaultTimeout = DEFAULT_TIMEOUT_MS
-      if (isAuditoriaCarteraCorregir) {
+      if (isCobrosPagosReportadosHeavyPost) {
+        defaultTimeout = 180000 // 3 min: PDF + SMTP + import; PATCH detalle ya visto ~35s en producción
+      } else if (isAuditoriaCarteraCorregir) {
         defaultTimeout = 300000 // 5 min
       } else if (isAuditoriaCarteraEjecutar) {
         defaultTimeout = 180000 // 3 min

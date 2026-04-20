@@ -1956,6 +1956,36 @@ def _normalizar_cedula_editar(tipo: Optional[str], numero: Optional[str]) -> Tup
     return t[:1] if t else "V", n
 
 
+def _snapshot_recibo_pdf_inputs(pr: PagoReportado) -> Tuple[Any, ...]:
+    """
+    Tupla de valores que determinan el contenido del PDF de recibo cobros.
+
+    Evita llamar a generar_recibo_pdf_desde_pago_reportado en cada PATCH cuando solo cambian
+    observacion/correo_enviado_a (la generación embebe el comprobante y puede tardar decenas de segundos).
+    """
+    mon = ((getattr(pr, "moneda", None) or "") or "").strip().upper()
+    if mon == "USDT":
+        mon = "USD"
+    try:
+        monto_f = float(pr.monto or 0)
+    except (TypeError, ValueError):
+        monto_f = 0.0
+    return (
+        (getattr(pr, "referencia_interna", None) or "").strip(),
+        (getattr(pr, "nombres", None) or "").strip(),
+        (getattr(pr, "apellidos", None) or "").strip(),
+        (getattr(pr, "tipo_cedula", None) or "").strip(),
+        (getattr(pr, "numero_cedula", None) or "").strip(),
+        pr.fecha_pago,
+        (getattr(pr, "institucion_financiera", None) or "").strip(),
+        (getattr(pr, "numero_operacion", None) or "").strip(),
+        round(monto_f, 2),
+        mon,
+        (getattr(pr, "comprobante_imagen_id", None) or "").strip(),
+        (getattr(pr, "comprobante_nombre", None) or "").strip(),
+    )
+
+
 @router.patch("/pagos-reportados/{pago_id}")
 def editar_pago_reportado(
     pago_id: int,
@@ -1971,6 +2001,7 @@ def editar_pago_reportado(
         raise HTTPException(status_code=400, detail="No se puede editar un pago ya aprobado o importado a pagos.")
     ref = pr.referencia_interna
     try:
+        key_recibo_antes = _snapshot_recibo_pdf_inputs(pr)
         estado_previo = pr.estado
         usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
         # rechazado: permitir corregir datos (monto, referencia, etc.) y volver a cola de revisión
@@ -2043,10 +2074,11 @@ def editar_pago_reportado(
                 "Datos guardados. El reporte pasó a pendiente: ya puede aprobarlo o rechazarlo de nuevo desde el detalle."
             )
 
-        # Misma generación que GET recibo público / staff: alinear snapshot en BD con el comprobante
-        # actual (pago_comprobante_imagen), no solo cuando ya existía recibo_pdf.
+        # PDF de recibo: regenerar solo si cambian datos que afectan el documento (comprobante, monto, cédula, etc.).
+        # Evita ~30s+ en PATCH cuando solo se ajusta observacion/correo_enviado_a.
+        key_recibo_despues = _snapshot_recibo_pdf_inputs(pr)
         _img_id = (getattr(pr, "comprobante_imagen_id", None) or "").strip()
-        if pr.recibo_pdf or _img_id:
+        if (pr.recibo_pdf or _img_id) and key_recibo_antes != key_recibo_despues:
             pr.recibo_pdf = generar_recibo_pdf_desde_pago_reportado(db, pr)
         db.commit()
         logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
